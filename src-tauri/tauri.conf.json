@@ -30,13 +30,23 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "KeyVault",
+    "copyright": "© 2026 KeyVault",
+    "category": "Utility",
+    "shortDescription": "专业、紧凑、信息密度高的 KeePass 桌面客户端",
+    "longDescription": "KeyVault 是一个专业、紧凑、信息密度高的 KeePass 客户端，基于 Svelte 5 + Tauri 2 + Rust 构建，本地优先、无同步上传。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "template": "windows/installer.nsi"
+      }
+    }
   }
 }
