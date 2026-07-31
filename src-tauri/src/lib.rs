@@ -169,6 +169,7 @@ fn delete_group(
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let project_dir = std::env::current_exe()
                 .ok()

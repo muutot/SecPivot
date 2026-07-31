@@ -2,6 +2,8 @@
   import type { VaultEntry } from "$lib/types/vault";
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
+  import { isTauriRuntime } from "$lib/services/settings";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
 
@@ -41,9 +43,13 @@
     }
   }
 
-  function openUrl(): void {
+  function openUrlExternal(): void {
     if (!entry.url) return;
-    window.open(entry.url, "_blank", "noopener,noreferrer");
+    if (isTauriRuntime()) {
+      void openUrl(entry.url);
+    } else {
+      window.open(entry.url, "_blank", "noopener,noreferrer");
+    }
   }
 
   function formatTime(value?: string): string {
@@ -115,7 +121,7 @@
       <div class="field-block">
         <span class="field-label">网址</span>
         <div class="field-value">
-          <button class="url-link" onclick={openUrl} title={entry.url}>
+          <button class="url-link" onclick={openUrlExternal} title={entry.url}>
             <AppIcon name="globe" size={13} />
             <span class="field-text link">{entry.url}</span>
           </button>
