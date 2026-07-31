@@ -9,6 +9,8 @@
     depth: number;
     selected: string | null;
     expanded: Set<string>;
+    showIcon?: boolean;
+    showChevron?: boolean;
     onselect: (uuid: string) => void;
     ontoggle: (uuid: string) => void;
     onaddsubgroup: (parentUuid: string) => void;
@@ -21,6 +23,8 @@
     depth,
     selected,
     expanded,
+    showIcon = true,
+    showChevron = true,
     onselect,
     ontoggle,
     onaddsubgroup,
@@ -98,12 +102,42 @@
       </button>
     </div>
   {:else}
-    <button class="group-row" onclick={handleRowClick} oncontextmenu={openMenu} title={group.name}>
-      <span class="group-name">{group.name}</span>
-      {#if count > 0}
-        <span class="group-count">{count}</span>
+    <div class="group-row">
+      {#if showChevron}
+        <span
+          class="chevron-btn"
+          class:leaf={!hasChildren}
+          class:open={isExpanded}
+          role="button"
+          tabindex={hasChildren ? 0 : -1}
+          aria-label={isExpanded ? "折叠分组" : "展开分组"}
+          title={hasChildren ? (isExpanded ? "折叠" : "展开") : ""}
+          onclick={() => ontoggle(group.uuid)}
+          onkeydown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              ontoggle(group.uuid);
+            }
+          }}
+        >
+          <AppIcon name="chevron-down" size={13} />
+        </span>
       {/if}
-    </button>
+      <button
+        class="group-select"
+        onclick={handleRowClick}
+        oncontextmenu={openMenu}
+        title={group.name}
+      >
+        {#if showIcon}
+          <AppIcon name="folder" size={13} />
+        {/if}
+        <span class="group-name">{group.name}</span>
+        {#if count > 0}
+          <span class="group-count">{count}</span>
+        {/if}
+      </button>
+    </div>
   {/if}
 </div>
 
@@ -114,6 +148,8 @@
       depth={depth + 1}
       {selected}
       {expanded}
+      {showIcon}
+      {showChevron}
       {onselect}
       {ontoggle}
       {onaddsubgroup}
@@ -143,12 +179,50 @@
   .group-row {
     display: flex;
     align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding-right: 4px;
+  }
+
+  .chevron-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--group-radius, var(--settings-control-radius, 6px));
+    color: var(--text-faint);
+    cursor: pointer;
+  }
+
+  .chevron-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .chevron-btn.leaf {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .chevron-btn svg {
+    transition: transform 0.15s ease;
+  }
+
+  .chevron-btn.open svg {
+    transform: rotate(90deg);
+  }
+
+  .group-select {
+    display: flex;
+    align-items: center;
     gap: 6px;
-    width: 100%;
+    flex: 1;
     min-width: 0;
     padding: var(--group-pad-y, 6px) 6px;
     border: 1px solid transparent;
-    border-radius: var(--settings-control-radius, 6px);
+    border-radius: var(--group-radius, var(--settings-control-radius, 6px));
     color: var(--text-secondary);
     background: transparent;
     font-size: var(--font-size-secondary, 11px);
@@ -157,13 +231,13 @@
     cursor: pointer;
   }
 
-  .group-node.selected .group-row {
+  .group-node.selected .group-select {
     border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
     color: var(--text-primary);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
-  .group-row:hover {
+  .group-select:hover {
     background: var(--hover-bg);
   }
 

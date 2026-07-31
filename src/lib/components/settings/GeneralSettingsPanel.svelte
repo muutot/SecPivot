@@ -49,7 +49,7 @@
   ];
 
   const densitySliders: {
-    key: "groupGap" | "groupPaddingY" | "groupIndent";
+    key: "groupGap" | "groupPaddingY" | "groupIndent" | "groupRadius";
     label: string;
     description: string;
     min: number;
@@ -64,6 +64,13 @@
       max: 16,
     },
     { key: "groupIndent", label: "分组缩进", description: "每级子分组的缩进距离", min: 4, max: 32 },
+    {
+      key: "groupRadius",
+      label: "分组选中圆角",
+      description: "分组选中背景的圆角半径",
+      min: 0,
+      max: 12,
+    },
   ];
 
   const customColorFields: { key: keyof ThemeColors; label: string }[] = [
@@ -300,6 +307,52 @@
         />
       </section>
     {/each}
+
+    <section class="setting-card toggle-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+        <div>
+          <strong>显示分组图标</strong>
+          <p>在分组名称前显示文件夹图标</p>
+        </div>
+      </div>
+      <button
+        class="toggle-switch"
+        class:active={s.general.density.showGroupIcon}
+        role="switch"
+        aria-checked={s.general.density.showGroupIcon}
+        onclick={() =>
+          change("density", {
+            ...s.general.density,
+            showGroupIcon: !s.general.density.showGroupIcon,
+          })}
+      >
+        <span class="toggle-knob"></span>
+      </button>
+    </section>
+
+    <section class="setting-card toggle-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="chevron-down" size={17} /></span>
+        <div>
+          <strong>显示折叠箭头</strong>
+          <p>在可展开分组前显示折叠箭头</p>
+        </div>
+      </div>
+      <button
+        class="toggle-switch"
+        class:active={s.general.density.showGroupChevron}
+        role="switch"
+        aria-checked={s.general.density.showGroupChevron}
+        onclick={() =>
+          change("density", {
+            ...s.general.density,
+            showGroupChevron: !s.general.density.showGroupChevron,
+          })}
+      >
+        <span class="toggle-knob"></span>
+      </button>
+    </section>
 
     {#each fontSliders as slider (slider.key)}
       <section class="setting-card">

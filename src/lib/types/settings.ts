@@ -36,6 +36,9 @@ export interface DensitySettings {
   groupGap: number;
   groupPaddingY: number;
   groupIndent: number;
+  groupRadius: number;
+  showGroupIcon: boolean;
+  showGroupChevron: boolean;
 }
 
 export interface GeneralSettings {

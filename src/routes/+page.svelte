@@ -310,6 +310,7 @@
   style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
   style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
   style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
+  style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
 >
   {#if currentVault}
     <header
@@ -374,6 +375,8 @@
         <GroupTree
           root={currentVault.root}
           selected={selectedGroup}
+          showIcon={compactMode ? groupDensity.showGroupIcon : true}
+          showChevron={compactMode ? groupDensity.showGroupChevron : true}
           onselect={(uuid: string | null) => {
             selectedGroup = uuid;
             selectedEntry = null;

@@ -7,13 +7,24 @@
   interface Props {
     root: VaultGroup;
     selected: string | null;
+    showIcon?: boolean;
+    showChevron?: boolean;
     onselect: (uuid: string | null) => void;
     onaddsubgroup: (parentUuid: string | null) => void;
     onrename: (uuid: string, name: string) => void;
     ondelete: (uuid: string) => void;
   }
 
-  let { root, selected, onselect, onaddsubgroup, onrename, ondelete }: Props = $props();
+  let {
+    root,
+    selected,
+    showIcon = true,
+    showChevron = true,
+    onselect,
+    onaddsubgroup,
+    onrename,
+    ondelete,
+  }: Props = $props();
 
   function collectUuids(group: VaultGroup, into: Set<string>): void {
     into.add(group.uuid);
@@ -79,6 +90,8 @@
         depth={0}
         {selected}
         {expanded}
+        {showIcon}
+        {showChevron}
         onselect={(uuid: string) => onselect(uuid)}
         ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}

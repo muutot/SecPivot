@@ -20,7 +20,14 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   themeColors: { ...DARK_THEME_COLORS },
   customPresets: [],
   compactMode: false,
-  density: { groupGap: 2, groupPaddingY: 3, groupIndent: 12 },
+  density: {
+    groupGap: 2,
+    groupPaddingY: 3,
+    groupIndent: 12,
+    groupRadius: 6,
+    showGroupIcon: true,
+    showGroupChevron: true,
+  },
   showDescriptions: true,
   fontSizes: { base: 14, secondary: 11, cardTitle: 13, cardPreview: 11 },
   windowEffect: "off",
@@ -135,6 +142,20 @@ export function normalizeSettings(
         32,
         12,
       ),
+      groupRadius: clampInt(
+        g.density?.groupRadius ?? fallback.general.density.groupRadius,
+        0,
+        12,
+        6,
+      ),
+      showGroupIcon:
+        typeof g.density?.showGroupIcon === "boolean"
+          ? g.density.showGroupIcon
+          : fallback.general.density.showGroupIcon,
+      showGroupChevron:
+        typeof g.density?.showGroupChevron === "boolean"
+          ? g.density.showGroupChevron
+          : fallback.general.density.showGroupChevron,
     },
     windowOpacity: clampInt(g.windowOpacity ?? fallback.general.windowOpacity, 40, 100, 100),
     language:
