@@ -46,6 +46,12 @@ export interface GroupInput {
   name: string;
 }
 
+export interface TotpCode {
+  code: string;
+  validFor: number;
+  period: number;
+}
+
 export interface OpenVaultRequest {
   path: string;
   password: string;

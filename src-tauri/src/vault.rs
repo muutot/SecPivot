@@ -4,11 +4,13 @@
 
 use chrono::NaiveDateTime;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
-use keepass::db::{EntryId, EntryMut, EntryRef, GroupId, GroupRef, Value};
+use keepass::db::{EntryId, EntryMut, EntryRef, GroupId, GroupRef, Value, TOTP};
 use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::path::Path;
+use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 /// Virtual root group id used by the frontend; maps to the DB root group.
@@ -96,6 +98,17 @@ pub struct EntryInput {
 pub struct GroupInput {
     pub parent_uuid: Option<String>,
     pub name: String,
+}
+
+/// A computed one-time code for display with a local countdown.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TotpCode {
+    pub code: String,
+    /// Seconds until this code expires (1..=period).
+    pub valid_for: u64,
+    /// Total period in seconds (usually 30).
+    pub period: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +233,17 @@ impl VaultSession {
         }
         self.mark_dirty();
         self.snapshot()
+    }
+
+    /// Compute the current TOTP code for an entry that carries an `otp` seed.
+    pub fn totp_code(&self, uuid: &str) -> Result<TotpCode, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        let seed = entry
+            .get_raw_otp_value()
+            .ok_or_else(|| "该条目没有 TOTP 种子".to_owned())?;
+        compute_totp_now(seed)
     }
 
     pub fn add_group(&mut self, input: &GroupInput) -> Result<VaultState, String> {
@@ -463,6 +487,39 @@ fn resolve_group_id(db: &Database, uuid: &str) -> Result<GroupId, String> {
     } else {
         Err("目标分组不存在".to_owned())
     }
+}
+
+/// Keepass `TOTP` parses `otpauth://` URIs only. Raw Base32 keys are wrapped
+/// into a URI with RFC 6238 defaults (SHA-1, 6 digits, 30s period).
+fn normalize_totp_seed(seed: &str) -> String {
+    let trimmed = seed.trim();
+    if trimmed.to_ascii_lowercase().starts_with("otpauth://") {
+        trimmed.to_owned()
+    } else {
+        let secret = trimmed.replace([' ', '-'], "").to_uppercase();
+        format!("otpauth://totp/KeyVault?secret={secret}&digits=6&period=30")
+    }
+}
+
+/// Compute the code at a specific unix timestamp (deterministic; used by tests).
+fn compute_totp_at(seed: &str, unix_time: u64) -> Result<TotpCode, String> {
+    let totp =
+        TOTP::from_str(&normalize_totp_seed(seed)).map_err(|e| format!("TOTP 种子无效: {e}"))?;
+    let code = totp.value_at(unix_time);
+    Ok(TotpCode {
+        code: code.code,
+        valid_for: code.valid_for.as_secs(),
+        period: code.period.as_secs(),
+    })
+}
+
+/// Compute the code for the current time.
+fn compute_totp_now(seed: &str) -> Result<TotpCode, String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("读取系统时间失败: {e}"))?
+        .as_secs();
+    compute_totp_at(seed, now)
 }
 
 fn classify_open_error<E: std::fmt::Display>(e: E) -> String {
@@ -865,5 +922,99 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(nested.parent_uuid.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn totp_computes_rfc6238_vector_codes() {
+        // RFC 6238 Appendix B: secret = ASCII "12345678901234567890".
+        let seed =
+            "otpauth://totp/RFC6238:test?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&period=30";
+        let at_59 = compute_totp_at(seed, 59).unwrap();
+        assert_eq!(at_59.code, "94287082");
+        assert_eq!(at_59.period, 30);
+        assert_eq!(at_59.valid_for, 1);
+        let at_2e9 = compute_totp_at(seed, 2_000_000_000).unwrap();
+        assert_eq!(at_2e9.code, "69279037");
+    }
+
+    #[test]
+    fn totp_accepts_raw_base32_seed() {
+        // Same secret as above, provided as a raw Base32 key → SHA-1 / 6 digits.
+        let at_59 = compute_totp_at("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59).unwrap();
+        assert_eq!(at_59.code, "287082");
+        assert_eq!(at_59.period, 30);
+        assert_eq!(at_59.valid_for, 1);
+    }
+
+    #[test]
+    fn totp_rejects_invalid_seed() {
+        let err = compute_totp_at("INVALID!", 59).unwrap_err();
+        assert!(err.contains("TOTP"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn totp_code_requires_totp_field() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Plain".into(),
+                username: "".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+        let err = session.totp_code(&uuid).unwrap_err();
+        assert!(err.contains("TOTP"));
+    }
+
+    #[test]
+    fn totp_code_session_returns_current_code() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "2FA".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: Some("JBSWY3DPEHPK3PXP".into()),
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+        let code = session.totp_code(&uuid).unwrap();
+        assert_eq!(code.code.len(), 6);
+        assert_eq!(code.period, 30);
+        assert!((1..=code.period).contains(&code.valid_for));
+    }
+
+    #[test]
+    fn totp_code_wire_format_uses_camel_case() {
+        let code = compute_totp_at("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59).unwrap();
+        let json = serde_json::to_value(&code).unwrap();
+        let obj = json.as_object().unwrap();
+        for key in ["code", "validFor", "period"] {
+            assert!(obj.contains_key(key), "missing TotpCode key {key}");
+        }
     }
 }

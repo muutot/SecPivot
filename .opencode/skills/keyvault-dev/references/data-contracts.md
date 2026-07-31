@@ -43,11 +43,12 @@ The root group is the virtual top-level (uuid `"root"`); it is not persisted as 
 | `add_entry`       | `input: EntryInput`                        | `VaultState`         |                                   |
 | `update_entry`    | `uuid, input: EntryInput`                  | `VaultState`         |                                   |
 | `delete_entry`    | `uuid`                                     | `VaultState`         |                                   |
+| `totp_code`       | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`      |
 | `add_group`       | `input: GroupInput`                        | `VaultState`         | parentUuid null → root            |
 | `rename_group`    | `uuid, name`                               | `VaultState`         |                                   |
 | `delete_group`    | `uuid`                                     | `VaultState`         | Entries/children bubble to root   |
 
-Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session.
+Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session. `totp_code` is read-only: it computes the current one-time code via `keepass::db::TOTP` (`TotpCode { code, validFor, period }`), accepting either an `otpauth://` URI or a raw Base32 key (wrapped with SHA-1 / 6 digits / 30s defaults). The frontend `TotpWidget` counts down locally and refetches at each period boundary.
 
 ### Browser fallback
 

@@ -32,7 +32,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ## Stage 4 — Search & productivity
 
-- [ ] TOTP display with countdown for `otp`/`totp` fields
+- [x] TOTP display with countdown for `otp`/`totp` fields (`totp_code` command + `TotpWidget`)
 - [ ] Password strength meter in entry editor
 - [ ] URL quick-open, autotype sequence runner (roadmap reserved)
 - [ ] Favorite/pin entries with `--warning-color` accent

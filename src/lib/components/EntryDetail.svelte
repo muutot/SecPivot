@@ -3,6 +3,7 @@
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import TotpWidget from "$lib/components/TotpWidget.svelte";
 
   interface Props {
     entry: VaultEntry;
@@ -124,9 +125,9 @@
 
     {#if entry.totp}
       <div class="field-block">
-        <span class="field-label">TOTP 种子</span>
+        <span class="field-label">TOTP 验证码</span>
         <div class="field-value">
-          <span class="field-text mono">{entry.totp}</span>
+          <TotpWidget seed={entry.totp} entryUuid={entry.uuid} />
         </div>
       </div>
     {/if}

@@ -8,9 +8,11 @@ import type {
   EntryInput,
   GroupInput,
   CreateVaultRequest,
+  TotpCode,
 } from "$lib/types/vault";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
+import { computeTotp } from "$lib/utils/totp";
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
@@ -22,6 +24,7 @@ interface VaultStore {
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
+  totpCode: (uuid: string) => Promise<TotpCode>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
@@ -64,6 +67,17 @@ function findGroup(root: VaultGroup, uuid: string): VaultGroup | null {
   if (root.uuid === uuid) return root;
   for (const child of root.children) {
     const found = findGroup(child, uuid);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findEntry(root: VaultGroup, uuid: string): VaultEntry | null {
+  for (const entry of root.entries) {
+    if (entry.uuid === uuid) return entry;
+  }
+  for (const child of root.children) {
+    const found = findEntry(child, uuid);
     if (found) return found;
   }
   return null;
@@ -275,6 +289,17 @@ export const vault: VaultStore = {
     });
     state.set(result);
     return result;
+  },
+
+  async totpCode(uuid: string): Promise<TotpCode> {
+    if (isTauriRuntime()) {
+      return backendInvoke<TotpCode>("totp_code", { uuid });
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    const entry = findEntry(current.root, uuid);
+    if (!entry) throw new Error("entry not found");
+    if (!entry.totp) throw new Error("该条目没有 TOTP 种子");
+    return computeTotp(entry.totp);
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

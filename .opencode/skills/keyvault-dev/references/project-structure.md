@@ -25,6 +25,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/types/vault.ts`                   | `VaultState`, `VaultGroup`, `VaultEntry`, request/input shapes                                       |
 | `src/lib/utils/theme.ts`                   | `ThemeColors` → CSS-variable mapping                                                                 |
 | `src/lib/utils/password.ts`                | Password generator, entropy estimate, strength label                                                 |
+| `src/lib/utils/totp.ts`                    | Browser-fallback TOTP (RFC 6238, WebCrypto); desktop uses backend `totp_code`                        |
 | `src/lib/utils/clipboard.ts`               | Clipboard copy + scheduled clear (`clipboardClearSeconds`)                                           |
 | `src/lib/services/settings.ts`             | `appSettings` store, defaults, normalization, debounced persistence                                  |
 | `src/lib/services/settings-bootstrap.ts`   | Apply settings to document (theme colors, font vars, window effect)                                  |
@@ -36,6 +37,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/components/settings/*`            | General / Security / Database / About panels                                                         |
 | `src/lib/components/VaultWelcome.svelte`   | Welcome/unlock + open/create database modal flows                                                    |
 | `src/lib/components/LockScreen.svelte`     | Lock screen: reopen remembered path with password, or switch to another database                     |
+| `src/lib/components/TotpWidget.svelte`     | TOTP code readout with countdown bar; refetches per period                                           |
 
 ## Backend ownership
 

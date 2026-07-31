@@ -2,7 +2,7 @@ pub mod config;
 pub mod vault;
 
 use crate::config::ConfigStore;
-use crate::vault::{EntryInput, GroupInput, VaultSession, VaultState};
+use crate::vault::{EntryInput, GroupInput, TotpCode, VaultSession, VaultState};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -117,6 +117,17 @@ fn delete_entry(
 }
 
 #[tauri::command]
+fn totp_code(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<TotpCode, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .totp_code(&uuid)
+}
+
+#[tauri::command]
 fn add_group(
     session: tauri::State<'_, Mutex<VaultSession>>,
     input: GroupInput,
@@ -183,6 +194,7 @@ pub fn run() {
             add_entry,
             update_entry,
             delete_entry,
+            totp_code,
             add_group,
             rename_group,
             delete_group
