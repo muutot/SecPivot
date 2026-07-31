@@ -64,6 +64,7 @@
   }
 
   const compactMode = $derived(get(appSettings).general.compactMode);
+  const groupDensity = $derived(get(appSettings).general.density);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && get(appSettings).general.rememberLastDatabase,
   );
@@ -303,7 +304,13 @@
   <title>KeyVault</title>
 </svelte:head>
 
-<main class="app-shell" class:compact={compactMode}>
+<main
+  class="app-shell"
+  class:compact={compactMode}
+  style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
+  style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
+  style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
+>
   {#if currentVault}
     <header
       class="search-header"

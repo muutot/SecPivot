@@ -32,12 +32,19 @@ export interface SecuritySettings {
   lockAfterAction: boolean;
 }
 
+export interface DensitySettings {
+  groupGap: number;
+  groupPaddingY: number;
+  groupIndent: number;
+}
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
   themeColors: ThemeColors;
   customPresets: ThemeColors[];
   compactMode: boolean;
+  density: DensitySettings;
   showDescriptions: boolean;
   fontSizes: {
     base: number;

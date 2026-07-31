@@ -72,7 +72,7 @@
 <div
   class="group-node"
   class:selected={selected === group.uuid}
-  style:padding-left={`${8 + depth * 14}px`}
+  style:padding-left={`calc(8px + (var(--group-indent, 14px) * ${depth}))`}
 >
   {#if renaming}
     <div class="rename-row">
@@ -155,6 +155,7 @@
   .group-node {
     display: flex;
     flex-direction: column;
+    margin-bottom: var(--group-gap, 0px);
   }
 
   .group-row {
@@ -171,13 +172,13 @@
     gap: 6px;
     min-width: 0;
     flex: 1;
-    height: 26px;
-    padding: 0 6px;
+    padding: var(--group-pad-y, 6px) 6px;
     border: 1px solid transparent;
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-secondary);
     background: transparent;
     font-size: var(--font-size-secondary, 11px);
+    line-height: 1.3;
     text-align: left;
     cursor: pointer;
   }

@@ -48,6 +48,24 @@
     { key: "cardTitle", label: "标题字号", description: "条目标题与卡片标题", min: 11, max: 18 },
   ];
 
+  const densitySliders: {
+    key: "groupGap" | "groupPaddingY" | "groupIndent";
+    label: string;
+    description: string;
+    min: number;
+    max: number;
+  }[] = [
+    { key: "groupGap", label: "分组间距", description: "分组之间的垂直间距", min: 0, max: 16 },
+    {
+      key: "groupPaddingY",
+      label: "分组上下边距",
+      description: "分组文字与边框的上下间距",
+      min: 0,
+      max: 16,
+    },
+    { key: "groupIndent", label: "分组缩进", description: "每级子分组的缩进距离", min: 4, max: 32 },
+  ];
+
   const customColorFields: { key: keyof ThemeColors; label: string }[] = [
     { key: "accent", label: "强调色" },
     { key: "selectionColor", label: "选中色" },
@@ -250,6 +268,38 @@
         <span class="toggle-knob"></span>
       </button>
     </section>
+
+    {#each densitySliders as slider (slider.key)}
+      <section class="setting-card">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
+          <div class="heading-inline">
+            <div>
+              <strong>{slider.label}</strong>
+              <p>{slider.description}</p>
+            </div>
+            <span class="value-label">{s.general.density[slider.key]}px</span>
+          </div>
+        </div>
+        <input
+          type="range"
+          class="transparency-slider"
+          min={slider.min}
+          max={slider.max}
+          value={s.general.density[slider.key]}
+          style:--slider-pct={sliderPercentage(
+            s.general.density[slider.key],
+            slider.min,
+            slider.max,
+          )}
+          oninput={(e) =>
+            change("density", {
+              ...s.general.density,
+              [slider.key]: Number((e.currentTarget as HTMLInputElement).value),
+            })}
+        />
+      </section>
+    {/each}
 
     {#each fontSliders as slider (slider.key)}
       <section class="setting-card">
