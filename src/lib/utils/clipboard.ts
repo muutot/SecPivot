@@ -23,13 +23,16 @@ export function scheduleClipboardClear(): void {
   const seconds = get(appSettings).security.clipboardClearSeconds;
   if (seconds <= 0) return;
   if (clearTimer) clearTimeout(clearTimer);
-  clearTimer = setTimeout(async () => {
-    try {
-      await copyRaw("");
-    } catch {
-      // clipboard unavailable; nothing to clear
-    }
-  }, seconds * 1000);
+  clearTimer = setTimeout(() => void clearClipboard(), seconds * 1000);
+}
+
+/** Immediately wipe the clipboard (used by lock when `clearOnLock` is enabled). */
+export async function clearClipboard(): Promise<void> {
+  try {
+    await copyRaw("");
+  } catch {
+    // clipboard unavailable; nothing to clear
+  }
 }
 
 async function copyRaw(text: string): Promise<void> {

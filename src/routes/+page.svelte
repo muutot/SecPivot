@@ -6,6 +6,7 @@
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
+  import { armIdleLock, installAutoLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
   import type { EntryInput, VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -37,9 +38,14 @@
         selectedEntry = null;
         editorOpen = false;
       }
+      armIdleLock();
     });
     void vault.refresh();
-    return unsubscribe;
+    const stopAutoLock = installAutoLock();
+    return () => {
+      unsubscribe();
+      stopAutoLock();
+    };
   });
 
   function flash(message: string): void {
@@ -160,7 +166,7 @@
   }
 
   async function handleLock(): Promise<void> {
-    await vault.close();
+    await lockVault();
     flash("数据库已锁定");
   }
 
@@ -251,9 +257,13 @@
     };
   }
 
-  async function copyEntryValue(value: string, label: string): Promise<void> {
+  async function copyEntryValue(value: string, label: string, sensitive = false): Promise<void> {
     try {
-      await copyText(value);
+      if (sensitive) {
+        await copySensitive(value);
+      } else {
+        await copyText(value);
+      }
       flash(`已复制${label}`);
     } catch {
       flash("复制失败");
@@ -399,7 +409,7 @@
                     title="复制密码"
                     onclick={(e) => {
                       e.stopPropagation();
-                      if (row.entry.password) void copyEntryValue(row.entry.password, "密码");
+                      if (row.entry.password) void copyEntryValue(row.entry.password, "密码", true);
                     }}
                   >
                     <AppIcon name="copy" size={12} />

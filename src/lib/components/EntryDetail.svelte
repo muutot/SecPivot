@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { VaultEntry } from "$lib/types/vault";
   import { copyText } from "$lib/utils/clipboard";
+  import { copySensitive } from "$lib/services/security";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -26,9 +27,13 @@
     }, 1200);
   }
 
-  async function handleCopy(value: string, kind: string): Promise<void> {
+  async function handleCopy(value: string, kind: string, sensitive = false): Promise<void> {
     try {
-      await copyText(value);
+      if (sensitive) {
+        await copySensitive(value);
+      } else {
+        await copyText(value);
+      }
       flash(kind);
     } catch {
       flash("error");
@@ -90,7 +95,7 @@
         <span class="field-text mono">{revealPassword ? entry.password : "••••••••••••"}</span>
         <button
           class="copy-btn"
-          onclick={() => handleCopy(entry.password, "password")}
+          onclick={() => handleCopy(entry.password, "password", true)}
           title="复制密码"
         >
           <AppIcon name="copy" size={13} />
