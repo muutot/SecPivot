@@ -10,11 +10,12 @@
   interface Props {
     entry: VaultEntry;
     groupPath: string;
+    onfavorite: (entry: VaultEntry) => void;
     onedit: (entry: VaultEntry) => void;
     ondelete: (entry: VaultEntry) => void;
   }
 
-  let { entry, groupPath, onedit, ondelete }: Props = $props();
+  let { entry, groupPath, onfavorite, onedit, ondelete }: Props = $props();
 
   let revealPassword = $state(false);
   let copied = $state("");
@@ -70,6 +71,14 @@
       </div>
     </div>
     <div class="detail-actions">
+      <button
+        class="detail-btn"
+        class:star-active={entry.favorite}
+        onclick={() => onfavorite(entry)}
+        title={entry.favorite ? "取消收藏" : "收藏条目"}
+      >
+        <AppIcon name="star" size={15} />
+      </button>
       <button class="detail-btn" onclick={() => onedit(entry)} title="编辑条目">
         <AppIcon name="edit" size={15} />
       </button>
@@ -245,6 +254,15 @@
   .detail-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .detail-btn.star-active {
+    color: var(--warning-color);
+    border-color: color-mix(in srgb, var(--warning-color) 40%, transparent);
+  }
+
+  .detail-btn.star-active:hover {
+    color: var(--warning-color);
   }
 
   .detail-btn.danger:hover {

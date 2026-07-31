@@ -127,6 +127,7 @@
         result.push({ entry, groupPath: pathOf(entry.groupUuid) });
       }
     }
+    result.sort((a, b) => Number(b.entry.favorite) - Number(a.entry.favorite));
     return result;
   });
 
@@ -151,6 +152,17 @@
 
   function selectEntry(entry: VaultEntry | null): void {
     selectedEntry = entry;
+  }
+
+  async function toggleFavorite(entry: VaultEntry): Promise<void> {
+    try {
+      const saved = await vault.toggleFavorite(entry.uuid);
+      if (selectedEntry?.uuid === entry.uuid) {
+        selectedEntry = findEntryByUuid(saved, entry.uuid);
+      }
+    } catch (e) {
+      flash(`收藏失败：${e}`);
+    }
   }
 
   async function handleSave(): Promise<void> {
@@ -405,6 +417,17 @@
                 <div class="entry-row-actions">
                   <button
                     class="row-btn"
+                    class:star-active={row.entry.favorite}
+                    title={row.entry.favorite ? "取消收藏" : "收藏条目"}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      void toggleFavorite(row.entry);
+                    }}
+                  >
+                    <AppIcon name="star" size={12} />
+                  </button>
+                  <button
+                    class="row-btn"
                     title="复制用户名"
                     onclick={(e) => {
                       e.stopPropagation();
@@ -435,6 +458,7 @@
           <EntryDetail
             entry={selectedEntry}
             groupPath={pathOf(selectedEntry.groupUuid)}
+            onfavorite={toggleFavorite}
             onedit={openEditEntry}
             ondelete={askDeleteEntry}
           />
@@ -865,6 +889,14 @@
   .row-btn:hover {
     color: var(--text-primary);
     background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  }
+
+  .row-btn.star-active {
+    color: var(--warning-color);
+  }
+
+  .row-btn.star-active:hover {
+    color: var(--warning-color);
   }
 
   .detail-panel {

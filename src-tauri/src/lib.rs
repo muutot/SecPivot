@@ -128,6 +128,17 @@ fn totp_code(
 }
 
 #[tauri::command]
+fn toggle_favorite(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .toggle_favorite(&uuid)
+}
+
+#[tauri::command]
 fn add_group(
     session: tauri::State<'_, Mutex<VaultSession>>,
     input: GroupInput,
@@ -196,6 +207,7 @@ pub fn run() {
             update_entry,
             delete_entry,
             totp_code,
+            toggle_favorite,
             add_group,
             rename_group,
             delete_group

@@ -25,6 +25,7 @@ interface VaultStore {
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
+  toggleFavorite: (uuid: string) => Promise<VaultState>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
@@ -300,6 +301,21 @@ export const vault: VaultStore = {
     if (!entry) throw new Error("entry not found");
     if (!entry.totp) throw new Error("该条目没有 TOTP 种子");
     return computeTotp(entry.totp);
+  },
+
+  async toggleFavorite(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("toggle_favorite", { uuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const entry = findEntry(draft.root, uuid);
+      if (!entry) throw new Error("entry not found");
+      entry.favorite = !entry.favorite;
+    });
+    state.set(result);
+    return result;
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

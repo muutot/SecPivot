@@ -34,8 +34,9 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] TOTP display with countdown for `otp`/`totp` fields (`totp_code` command + `TotpWidget`)
 - [ ] Password strength meter in entry editor
-- [ ] URL quick-open, autotype sequence runner (roadmap reserved)
-- [ ] Favorite/pin entries with `--warning-color` accent
+- [x] URL quick-open via `@tauri-apps/plugin-opener` (detail + list rows)
+- [ ] Autotype sequence runner (roadmap reserved)
+- [x] Favorite/pin entries with `--warning-color` accent (`toggle_favorite` + `KeyVault.Favorite` field)
 
 ## Stage 5 — Packaging & release
 

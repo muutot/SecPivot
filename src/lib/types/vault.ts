@@ -11,6 +11,7 @@ export interface VaultEntry {
   created?: string;
   modified?: string;
   tags?: string;
+  favorite?: boolean;
 }
 
 export interface VaultGroup {

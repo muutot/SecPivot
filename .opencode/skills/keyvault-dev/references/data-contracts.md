@@ -23,11 +23,11 @@ The vault session is held in backend managed state and returned to the frontend 
 
 ### Shared types (Rust serde ↔ `src/lib/types/vault.ts`)
 
-| Type         | Fields                                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `VaultEntry` | `uuid`, `groupUuid`, `title`, `username`, `password`, `url`, `notes`, `totp?`, `icon?`, `created?`, `modified?`, `tags?` |
-| `VaultGroup` | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `children: VaultGroup[]`, `entries: VaultEntry[]`                 |
-| `VaultState` | `path`, `fileName`, `password`, `root: VaultGroup`, `dirty: bool`, `modifiedAt`                                          |
+| Type         | Fields                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VaultEntry` | `uuid`, `groupUuid`, `title`, `username`, `password`, `url`, `notes`, `totp?`, `icon?`, `created?`, `modified?`, `tags?`, `favorite: bool` |
+| `VaultGroup` | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `children: VaultGroup[]`, `entries: VaultEntry[]`                                   |
+| `VaultState` | `path`, `fileName`, `password`, `root: VaultGroup`, `dirty: bool`, `modifiedAt`                                                            |
 
 The root group is the virtual top-level (uuid `"root"`); it is not persisted as a KeePass group — its `children` map to top-level groups and its `entries` map to the DB root group entries.
 
@@ -43,12 +43,13 @@ The root group is the virtual top-level (uuid `"root"`); it is not persisted as 
 | `add_entry`       | `input: EntryInput`                        | `VaultState`         |                                   |
 | `update_entry`    | `uuid, input: EntryInput`                  | `VaultState`         |                                   |
 | `delete_entry`    | `uuid`                                     | `VaultState`         |                                   |
+| `toggle_favorite` | `uuid`                                     | `VaultState`         | Flips the pinned marker           |
 | `totp_code`       | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`      |
 | `add_group`       | `input: GroupInput`                        | `VaultState`         | parentUuid null → root            |
 | `rename_group`    | `uuid, name`                               | `VaultState`         |                                   |
 | `delete_group`    | `uuid`                                     | `VaultState`         | Entries/children bubble to root   |
 
-Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session. `totp_code` is read-only: it computes the current one-time code via `keepass::db::TOTP` (`TotpCode { code, validFor, period }`), accepting either an `otpauth://` URI or a raw Base32 key (wrapped with SHA-1 / 6 digits / 30s defaults). The frontend `TotpWidget` counts down locally and refetches at each period boundary.
+Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session. `favorite` is always present on `VaultEntry` and is persisted as a custom field `KeyVault.Favorite = "true"` (absent when not pinned); the browser fallback mirrors the same boolean on the demo state. `totp_code` is read-only: it computes the current one-time code via `keepass::db::TOTP` (`TotpCode { code, validFor, period }`), accepting either an `otpauth://` URI or a raw Base32 key (wrapped with SHA-1 / 6 digits / 30s defaults). The frontend `TotpWidget` counts down locally and refetches at each period boundary.
 
 ### Browser fallback
 

@@ -23,6 +23,9 @@ const FIELD_PASSWORD: &str = "Password";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
 const FIELD_OTP: &str = "otp";
+/// Custom field used to mark an entry as pinned/favorite.
+const FIELD_FAVORITE: &str = "KeyVault.Favorite";
+const FIELD_FAVORITE_TRUE: &str = "true";
 
 // Argon2 parameters for newly created vaults (OWASP-recommended).
 const ARGON2_ITERATIONS: u64 = 3;
@@ -55,6 +58,7 @@ pub struct VaultEntry {
     pub modified: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
+    pub favorite: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -230,6 +234,25 @@ impl VaultSession {
             let id = parse_entry_id(uuid)?;
             let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             entry.remove();
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Toggle the favorite/pin marker on an entry (persisted as a custom field).
+    pub fn toggle_favorite(&mut self, uuid: &str) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            if entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE) {
+                entry.fields.remove(FIELD_FAVORITE);
+            } else {
+                entry.set(
+                    FIELD_FAVORITE,
+                    Value::unprotected(FIELD_FAVORITE_TRUE.to_owned()),
+                );
+            }
         }
         self.mark_dirty();
         self.snapshot()
@@ -431,6 +454,7 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         } else {
             Some(entry.tags.join(", "))
         },
+        favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
     }
 }
 
@@ -892,6 +916,8 @@ mod tests {
         // Optional fields absent on the entry are skipped entirely (not null).
         assert!(entry.get("icon").is_none());
         assert!(entry.get("tags").is_none());
+        // Favorite is always present and a boolean.
+        assert!(entry["favorite"].is_boolean());
     }
 
     #[test]
@@ -1016,5 +1042,72 @@ mod tests {
         for key in ["code", "validFor", "period"] {
             assert!(obj.contains_key(key), "missing TotpCode key {key}");
         }
+    }
+
+    #[test]
+    fn toggle_favorite_round_trips_field() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+
+        assert!(!session.snapshot().unwrap().root.children[0].entries[0].favorite);
+        session.toggle_favorite(&uuid).unwrap();
+        assert!(session.snapshot().unwrap().root.children[0].entries[0].favorite);
+        // Second toggle removes the marker again.
+        session.toggle_favorite(&uuid).unwrap();
+        assert!(!session.snapshot().unwrap().root.children[0].entries[0].favorite);
+    }
+
+    #[test]
+    fn favorite_persists_after_save_and_reopen() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+        session.toggle_favorite(&uuid).unwrap();
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let _ = reopened
+            .open(&dir.path().join("test.kdbx"), "master-password")
+            .unwrap();
+        let favorite = reopened.snapshot().unwrap().root.children[0].entries[0].favorite;
+        assert!(favorite);
     }
 }
