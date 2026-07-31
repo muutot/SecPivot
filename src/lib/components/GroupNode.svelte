@@ -82,7 +82,7 @@
 <div
   class="group-node"
   class:selected={selected === group.uuid}
-  style:padding-left={`calc(14px + (var(--group-indent, 14px) * ${depth}))`}
+  style:padding-left={`calc(10px + (var(--group-indent, 14px) * ${depth}))`}
 >
   {#if renaming}
     <div class="rename-row">
@@ -125,6 +125,7 @@
       {/if}
       <button
         class="group-select"
+        class:no-icon={!showIcon}
         onclick={handleRowClick}
         oncontextmenu={openMenu}
         title={group.name}
@@ -179,7 +180,7 @@
   .group-row {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0;
     min-width: 0;
     padding-right: 4px;
   }
@@ -189,7 +190,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 18px;
+    width: 16px;
     height: 18px;
     border-radius: var(--group-radius, var(--settings-control-radius, 6px));
     color: var(--text-faint);
@@ -239,6 +240,10 @@
 
   .group-select:hover {
     background: var(--hover-bg);
+  }
+
+  .group-select.no-icon {
+    padding-left: 0;
   }
 
   .group-name {
