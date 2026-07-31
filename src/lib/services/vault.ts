@@ -1,0 +1,334 @@
+import { writable, get } from "svelte/store";
+import { invoke } from "@tauri-apps/api/core";
+import { isTauriRuntime } from "$lib/services/settings";
+import type {
+  VaultState,
+  VaultGroup,
+  VaultEntry,
+  EntryInput,
+  GroupInput,
+  CreateVaultRequest,
+} from "$lib/types/vault";
+import { ROOT_GROUP_NAME } from "$lib/types/vault";
+import { buildDemoVaultState } from "$lib/data/demo-vault";
+
+interface VaultStore {
+  subscribe: typeof state.subscribe;
+  get: () => VaultState | null;
+  open: (path: string, password: string) => Promise<VaultState>;
+  create: (request: CreateVaultRequest) => Promise<VaultState>;
+  close: () => Promise<void>;
+  save: () => Promise<VaultState>;
+  addEntry: (input: EntryInput) => Promise<VaultState>;
+  updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
+  deleteEntry: (uuid: string) => Promise<VaultState>;
+  addGroup: (input: GroupInput) => Promise<VaultState>;
+  renameGroup: (uuid: string, name: string) => Promise<VaultState>;
+  deleteGroup: (uuid: string) => Promise<VaultState>;
+  refresh: () => Promise<void>;
+}
+
+const state = writable<VaultState | null>(null);
+
+const BROWSER_KEY = "keyvault-browser-vault";
+
+let browserState: VaultState | null = null;
+let initialized = false;
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function applyEdit(mutator: (draft: VaultState) => void): VaultState {
+  const current = browserState ?? buildDemoVaultState();
+  const next = deepClone(current);
+  next.dirty = true;
+  next.modifiedAt = new Date().toISOString();
+  mutator(next);
+  browserState = next;
+  return deepClone(next);
+}
+
+function findGroup(root: VaultGroup, uuid: string): VaultGroup | null {
+  if (root.uuid === uuid) return root;
+  for (const child of root.children) {
+    const found = findGroup(child, uuid);
+    if (found) return found;
+  }
+  return null;
+}
+
+function collectGroups(root: VaultGroup, out: VaultGroup[]): void {
+  out.push(root);
+  for (const child of root.children) collectGroups(child, out);
+}
+
+function moveEntriesToRoot(draft: VaultState, group: VaultGroup): void {
+  for (const entry of group.entries) {
+    entry.groupUuid = draft.root.uuid;
+    draft.root.entries.push(entry);
+  }
+  for (const child of group.children) moveEntriesToRoot(draft, child);
+}
+
+function pushEntry(group: VaultGroup, entry: VaultEntry): void {
+  group.entries.push(entry);
+}
+
+async function browserLoad(): Promise<VaultState | null> {
+  try {
+    const raw = localStorage.getItem(BROWSER_KEY);
+    if (raw) return JSON.parse(raw) as VaultState;
+  } catch {
+    // ignore corrupted demo persistence
+  }
+  return null;
+}
+
+async function browserPersist(value: VaultState): Promise<void> {
+  try {
+    localStorage.setItem(BROWSER_KEY, JSON.stringify(value));
+  } catch {
+    // storage unavailable; in-memory only
+  }
+}
+
+function newUuid(): string {
+  return crypto.randomUUID();
+}
+
+async function backendInvoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+  return invoke<T>(command, args);
+}
+
+async function refreshInternal(): Promise<VaultState | null> {
+  if (isTauriRuntime()) {
+    const value = await backendInvoke<VaultState | null>("get_vault_state");
+    state.set(value);
+    return value;
+  }
+  const value = browserState ? deepClone(browserState) : null;
+  state.set(value);
+  return value;
+}
+
+async function ensureBrowserLoaded(): Promise<VaultState> {
+  if (browserState) return browserState;
+  browserState = (await browserLoad()) ?? buildDemoVaultState();
+  return browserState;
+}
+
+export const vault: VaultStore = {
+  subscribe: state.subscribe,
+
+  get(): VaultState | null {
+    return get(state);
+  },
+
+  async open(path, password): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("open_vault", { path, password });
+      state.set(result);
+      return result;
+    }
+    browserState = (await browserLoad()) ?? buildDemoVaultState();
+    browserState.password = password;
+    browserState.path = path;
+    browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
+    const result = deepClone(browserState);
+    state.set(result);
+    return result;
+  },
+
+  async create(request: CreateVaultRequest): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("create_vault", { ...request });
+      state.set(result);
+      return result;
+    }
+    const fresh = buildDemoVaultState();
+    fresh.password = request.password;
+    fresh.path = request.path;
+    fresh.fileName = request.path.split(/[\\/]/).pop() ?? "vault.kdbx";
+    fresh.dirty = false;
+    browserState = fresh;
+    const result = deepClone(fresh);
+    state.set(result);
+    await browserPersist(result);
+    return result;
+  },
+
+  async close(): Promise<void> {
+    if (isTauriRuntime()) {
+      await backendInvoke("close_vault");
+    }
+    browserState = null;
+    state.set(null);
+  },
+
+  async save(): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("save_vault");
+      state.set(result);
+      return result;
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    const saved = deepClone(current);
+    saved.dirty = false;
+    browserState = saved;
+    state.set(saved);
+    await browserPersist(saved);
+    return saved;
+  },
+
+  async addEntry(input: EntryInput): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("add_entry", { input });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, input.groupUuid);
+      if (!group) throw new Error("target group not found");
+      pushEntry(group, {
+        uuid: newUuid(),
+        groupUuid: input.groupUuid,
+        title: input.title,
+        username: input.username,
+        password: input.password,
+        url: input.url,
+        notes: input.notes,
+        totp: input.totp || undefined,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      });
+    });
+    state.set(result);
+    return result;
+  },
+
+  async updateEntry(uuid: string, input: EntryInput): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_entry", { uuid, input });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const groups: VaultGroup[] = [];
+      collectGroups(draft.root, groups);
+      for (const group of groups) {
+        const entry = group.entries.find((e) => e.uuid === uuid);
+        if (entry) {
+          Object.assign(entry, input, {
+            groupUuid: input.groupUuid,
+            modified: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+      throw new Error("entry not found");
+    });
+    state.set(result);
+    return result;
+  },
+
+  async deleteEntry(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("delete_entry", { uuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const groups: VaultGroup[] = [];
+      collectGroups(draft.root, groups);
+      for (const group of groups) {
+        const index = group.entries.findIndex((e) => e.uuid === uuid);
+        if (index >= 0) {
+          group.entries.splice(index, 1);
+          return;
+        }
+      }
+      throw new Error("entry not found");
+    });
+    state.set(result);
+    return result;
+  },
+
+  async addGroup(input: GroupInput): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("add_group", { input });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const parent = input.parentUuid ? findGroup(draft.root, input.parentUuid) : draft.root;
+      if (!parent) throw new Error("parent group not found");
+      parent.children.push({
+        uuid: newUuid(),
+        parentUuid: parent.uuid,
+        name: input.name,
+        children: [],
+        entries: [],
+      });
+    });
+    state.set(result);
+    return result;
+  },
+
+  async renameGroup(uuid: string, name: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("rename_group", { uuid, name });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, uuid);
+      if (!group) throw new Error("group not found");
+      group.name = name;
+    });
+    state.set(result);
+    return result;
+  },
+
+  async deleteGroup(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("delete_group", { uuid });
+      state.set(result);
+      return result;
+    }
+    if (uuid === "root") throw new Error("cannot delete root");
+    const result = applyEdit((draft) => {
+      const groups: VaultGroup[] = [];
+      collectGroups(draft.root, groups);
+      for (const group of groups) {
+        const index = group.children.findIndex((c) => c.uuid === uuid);
+        if (index >= 0) {
+          moveEntriesToRoot(draft, group.children[index]);
+          group.children.splice(index, 1);
+          return;
+        }
+      }
+      throw new Error("group not found");
+    });
+    state.set(result);
+    return result;
+  },
+
+  async refresh(): Promise<void> {
+    if (!initialized) {
+      initialized = true;
+      if (!isTauriRuntime()) {
+        browserState = await browserLoad();
+      }
+    }
+    await refreshInternal();
+  },
+};
+
+export function countEntries(root: VaultGroup): number {
+  let total = root.entries.length;
+  for (const child of root.children) total += countEntries(child);
+  return total;
+}
+
+export { ROOT_GROUP_NAME };

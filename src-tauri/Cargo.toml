@@ -1,0 +1,34 @@
+[package]
+name = "keyvault-desktop"
+version = "0.1.0"
+description = "A professional, compact KeePass client built with Tauri and Rust"
+authors = []
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "keyvault_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+keepass = { version = "0.13", features = ["save_kdbx4", "totp"] }
+# NOTE: keepass 0.13's KdfConfig::Argon2id.version uses rust-argon2 v3's
+# `argon2::Version` type, so the crate name here must match that version.
+rust-argon2 = "3"
+uuid = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"

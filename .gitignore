@@ -1,0 +1,29 @@
+# Config
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules
+/package
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode
+.qoder
+
+# Output
+/.svelte-kit
+export
+/build
+/src-tauri/target
+/src-tauri/gen
+/app-icon.png

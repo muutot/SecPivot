@@ -1,0 +1,142 @@
+# Project-wide UI Style and Theming
+
+This is the authoritative style reference for KeyVault UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
+
+## Style source-of-truth order
+
+1. `src/routes/+page.svelte` and the settings shell define the product's visual language.
+2. `src/lib/types/theme.ts::{DARK_THEME_COLORS,LIGHT_THEME_COLORS}` defines preset values.
+3. `src/lib/utils/theme.ts::applyThemeColors` defines the ThemeColors → CSS-variable mapping.
+4. `src/app.css` provides root defaults, global reset, font variables, focus/accessibility rules, and imports shared settings CSS.
+5. `src/lib/styles/settings-shared.css` owns reusable settings-panel primitives.
+6. `SettingsDialog.svelte` owns settings-shell layout and panel-specific styles.
+7. Component-scoped CSS owns only component-specific layout/visual behavior.
+
+When these disagree, inspect the rendered target and current code, fix the narrow source of divergence, and update this reference if the approved rule changes.
+
+## Approved compact visual language
+
+Preserve these characteristics unless the task explicitly requests a redesign:
+
+- Dense desktop utility layout with one continuous neutral surface, subtle borders, compact spacing, and restrained radii.
+- Near-black/dark-neutral surfaces with high-legibility primary text and progressively quieter secondary, muted, and faint text.
+- Red `--accent` for product/focus emphasis, blue `--selection-color` for selection/current state, and semantic success/danger/warning colors.
+- Large, lightweight, borderless search input at the top; compact icon buttons below it for open/save/lock/entry/group actions.
+- Three-pane main layout: group tree (left) → entry list (center) → detail (right). Rows are transparent at rest, use `--hover-bg` on hover/focus, and mix selection color into the selected state.
+- Status bar is a low-contrast footer separated by one subtle border; popovers/dialogs are elevated surfaces with a border plus shadow.
+- Motion is short and functional. Respect the global reduced-motion rule.
+
+## Theme color contract
+
+The `ThemeColors` interface has 20 semantic values (identical names to Clipboard):
+
+| CSS variable          | ThemeColors key    | Purpose                           |
+| --------------------- | ------------------ | --------------------------------- |
+| `--bg-app`            | `bg`               | application/body background       |
+| `--bg-settings`       | `settingsBg`       | main/settings shell background    |
+| `--accent`            | `accent`           | product/focus accent              |
+| `--text-primary`      | `textPrimary`      | primary content                   |
+| `--text-secondary`    | `textSecondary`    | secondary content                 |
+| `--text-muted`        | `textMuted`        | descriptions/metadata             |
+| `--text-faint`        | `textFaint`        | lowest-emphasis text/icons        |
+| `--placeholder-color` | `placeholderColor` | placeholders                      |
+| `--border-color`      | `border`           | regular borders                   |
+| `--border-subtle`     | `borderSubtle`     | dividers/quiet borders            |
+| `--card-bg`           | `cardBg`           | card/elevated controls            |
+| `--surface-bg`        | `surfaceBg`        | popovers/panels                   |
+| `--statusbar-bg`      | `statusBarBg`      | footer/status bar                 |
+| `--hover-bg`          | `hoverBg`          | hover and quiet selected surfaces |
+| `--input-bg`          | `inputBg`          | inputs and inset surfaces         |
+| `--selection-color`   | `selectionColor`   | selection/current state           |
+| `--success-color`     | `successColor`     | successful state                  |
+| `--danger-color`      | `dangerColor`      | destructive/error state           |
+| `--warning-color`     | `warningColor`     | caution/favorite emphasis         |
+| `--scrollbar-color`   | `scrollbarColor`   | scroll thumb                      |
+
+Use these variables for reusable surfaces, text, borders, controls, and status states. Derive translucency with `color-mix` instead of inventing parallel shades.
+
+## Global font and display variables
+
+| Variable                  | Current default | Use                   |
+| ------------------------- | --------------- | --------------------- |
+| `--font-size-base`        | `14px`          | general UI/body       |
+| `--font-size-secondary`   | `11px`          | metadata/descriptions |
+| `--font-size-tiny`        | `10px`          | smallest notes        |
+| `--font-size-cardTitle`   | `13px`          | card title            |
+| `--font-size-cardPreview` | `11px`          | card preview          |
+
+`settings-bootstrap.ts` applies these and the 20 theme variables at startup. Live settings panels must update the same contract; do not create alternate variable names for the same meaning.
+
+## Settings semantic metrics
+
+The settings shell defines the settings scope variables consumed by shell and child panels:
+
+| Variable                                                                           | Standard fallback/use                           |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `--settings-page-title-size`                                                       | base + 4px; standalone panel `h2`               |
+| `--settings-heading-size`                                                          | card-title size; card/section heading           |
+| `--settings-description-size`                                                      | secondary size; descriptions                    |
+| `--settings-note-size`                                                             | tiny size; notes/counts                         |
+| `--settings-control-size`                                                          | secondary size; buttons/inputs/select/list rows |
+| `--settings-feedback-size`                                                         | description size                                |
+| `--settings-feedback-radius`                                                       | 7px                                             |
+| `--settings-card-radius`                                                           | 9px                                             |
+| `--settings-control-radius`                                                        | 6px                                             |
+| `--settings-icon-radius`                                                           | 7px                                             |
+| `--settings-close-size` / `--settings-close-radius` / `--settings-close-font-size` | 28px / 7px / 19px                               |
+
+## Shared settings primitives
+
+`settings-shared.css` currently owns:
+
+- standalone `header`, `.eyebrow`, `h2`, header description, and `.close-button`;
+- `.settings-scroll` and scrollbar treatment;
+- `.setting-card`, `.toggle-card`, `.setting-heading`, `.setting-icon`, `.heading-inline`, `.value-label`;
+- `.toggle-switch`, `.toggle-knob` and active/disabled states;
+- `.transparency-slider` including WebKit and Firefox tracks/thumbs;
+- `.settings-input` / `.settings-select` control styles;
+- `.settings-feedback` success/error states;
+- `.auto-save-note` and the default pointer cursor for buttons.
+
+`src/app.css` imports this file globally. Child panels must rely on these primitives and add only their panel-specific layout.
+
+## CSS ownership decision
+
+Before adding a rule, place it at the narrowest correct stable level:
+
+- Theme color or global accessibility/reset → `app.css`, `ThemeColors`, presets, and `theme.ts` together.
+- Shared settings card/control/feedback primitive → `settings-shared.css`.
+- Settings shell/navigation layout → `SettingsDialog.svelte`.
+- One reusable component's unique layout → that component's scoped `<style>`.
+
+Do not use a parent scoped selector to style inside a child Svelte component. Pass props/classes or move the shared rule into a global/shared stylesheet.
+
+## Form and control conventions
+
+- Toggle card: label/icon/description on the left, switch on the right in one row.
+- Slider card: heading/value on one row, unwrapped `input[type="range"].transparency-slider` below, and `--slider-pct` updated from the current value.
+- Number input: use textfield appearance and hide WebKit spin buttons.
+- Select: keep the native affordance unless a replacement is deliberately handled; use settings control size/radius/colors.
+- Feedback: use `.settings-feedback` with `.success`; keep it dismissible by time and accessible.
+- Buttons and inputs need visible focus. Never remove outline without a replacement.
+- Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.
+
+## Fixed layer order
+
+| Layer                   | Current z-index |
+| ----------------------- | --------------- |
+| modal backdrop / dialog | 50              |
+| context menu / popover  | 9999            |
+
+Check the complete stacking context before changing a value; do not solve one overlap by arbitrary escalation.
+
+## Style change gate
+
+1. Identify whether the task changes the main page, settings, or a niche surface.
+2. Inspect the target plus sibling components that use the same primitive.
+3. Confirm token/ownership placement using this reference.
+4. Search for duplicate selectors and raw colors/metrics before adding new declarations.
+5. Keep markup hierarchy, keyboard focus, overflow, narrow-window behavior, and reduced/high-contrast behavior intact.
+6. Run `npm run check` and `npm run build`.
+7. Perform rendered/runtime comparison in dark and light/custom theme when the change affects theme-facing UI; test the target window size and a narrow size.
+8. Run the documentation currency gate before commit.

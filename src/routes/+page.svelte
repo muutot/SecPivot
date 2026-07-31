@@ -1,0 +1,1063 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { get } from "svelte/store";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { vault } from "$lib/services/vault";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
+  import { copyText } from "$lib/utils/clipboard";
+  import type { EntryInput, VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
+  import AppIcon from "$lib/components/AppIcon.svelte";
+  import VaultWelcome from "$lib/components/VaultWelcome.svelte";
+  import GroupTree from "$lib/components/GroupTree.svelte";
+  import EntryDetail from "$lib/components/EntryDetail.svelte";
+  import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
+
+  let currentVault = $state<VaultState | null>(null);
+  let search = $state("");
+  let selectedGroup = $state<string | null>(null);
+  let selectedEntry = $state<VaultEntry | null>(null);
+  let editorOpen = $state(false);
+  let editorMode: "create" | "edit" = $state("create");
+  let editEntry: VaultEntry | null = $state(null);
+  let groupModalOpen = $state(false);
+  let groupModalParent = $state<string | null>(null);
+  let newGroupName = $state("");
+  let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
+  let statusMsg = $state("");
+  let busy = $state(false);
+
+  let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
+
+  onMount(() => {
+    const unsubscribe = vault.subscribe((value) => {
+      currentVault = value;
+      if (!value) {
+        selectedEntry = null;
+        editorOpen = false;
+      }
+    });
+    void vault.refresh();
+    return unsubscribe;
+  });
+
+  function flash(message: string): void {
+    statusMsg = message;
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => {
+      statusMsg = "";
+      statusTimer = undefined;
+    }, 1800);
+  }
+
+  const compactMode = $derived(get(appSettings).general.compactMode);
+  $effect(() => {
+    syncCompactShellClass(compactMode);
+  });
+
+  const allGroups = $derived.by((): VaultGroup[] => {
+    if (!currentVault) return [];
+    const list: VaultGroup[] = [];
+    function walk(group: VaultGroup): void {
+      list.push(group);
+      for (const child of group.children) walk(child);
+    }
+    walk(currentVault.root);
+    return list;
+  });
+
+  const parentMap = $derived.by((): Map<string, VaultGroup> => {
+    const map = new Map<string, VaultGroup>();
+    for (const group of allGroups) {
+      for (const child of group.children) map.set(child.uuid, group);
+    }
+    return map;
+  });
+
+  function pathOf(groupUuid: string): string {
+    const parts: string[] = [];
+    let current = allGroups.find((g) => g.uuid === groupUuid);
+    let guard = 0;
+    while (current && current.uuid !== currentVault?.root.uuid && guard < 50) {
+      parts.unshift(current.name);
+      current = parentMap.get(current.uuid);
+      guard++;
+    }
+    return parts.join(" / ");
+  }
+
+  const selectedSubtree = $derived.by((): VaultGroup[] => {
+    if (!currentVault) return [];
+    if (selectedGroup === null) return allGroups;
+    const group = allGroups.find((g) => g.uuid === selectedGroup);
+    if (!group) return allGroups;
+    const list: VaultGroup[] = [];
+    function collect(g: VaultGroup): void {
+      list.push(g);
+      for (const child of g.children) collect(child);
+    }
+    collect(group);
+    return list;
+  });
+
+  const filteredEntries = $derived.by((): { entry: VaultEntry; groupPath: string }[] => {
+    if (!currentVault) return [];
+    const query = search.trim().toLowerCase();
+    const result: { entry: VaultEntry; groupPath: string }[] = [];
+    for (const group of selectedSubtree) {
+      for (const entry of group.entries) {
+        const text = [entry.title, entry.username, entry.url, entry.notes].join(" ").toLowerCase();
+        if (query && !text.includes(query)) continue;
+        result.push({ entry, groupPath: pathOf(entry.groupUuid) });
+      }
+    }
+    return result;
+  });
+
+  function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
+    if (!state || !uuid) return null;
+    for (const group of allGroupsOf(state.root)) {
+      const found = group.entries.find((e) => e.uuid === uuid);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function allGroupsOf(root: VaultGroup): VaultGroup[] {
+    const list: VaultGroup[] = [];
+    function walk(group: VaultGroup): void {
+      list.push(group);
+      for (const child of group.children) walk(child);
+    }
+    walk(root);
+    return list;
+  }
+
+  function selectEntry(entry: VaultEntry | null): void {
+    selectedEntry = entry;
+  }
+
+  async function handleSave(): Promise<void> {
+    if (!currentVault || !currentVault.dirty) {
+      flash("没有需要保存的修改");
+      return;
+    }
+    busy = true;
+    try {
+      const saved = await vault.save();
+      selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
+      flash("已保存到数据库");
+    } catch (e) {
+      flash(`保存失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function openSettings(): void {
+    void goto("/settings");
+  }
+
+  async function handleLock(): Promise<void> {
+    await vault.close();
+    flash("数据库已锁定");
+  }
+
+  function openCreateEntry(): void {
+    editorMode = "create";
+    editEntry = null;
+    editorOpen = true;
+  }
+
+  function openEditEntry(entry: VaultEntry): void {
+    editorMode = "edit";
+    editEntry = entry;
+    editorOpen = true;
+  }
+
+  async function handleEditorSave(input: EntryInput): Promise<void> {
+    try {
+      if (editorMode === "create") {
+        const state = await vault.addEntry(input);
+        selectedEntry = findEntryByUuid(state, null);
+        editorOpen = false;
+        flash("已创建条目");
+      } else if (editEntry) {
+        const state = await vault.updateEntry(editEntry.uuid, input);
+        selectedEntry = findEntryByUuid(state, editEntry.uuid);
+        editorOpen = false;
+        flash("已保存修改");
+      }
+    } catch (e) {
+      flash(`操作失败：${e}`);
+    }
+  }
+
+  function openGroupModal(parentUuid: string | null): void {
+    groupModalParent = parentUuid;
+    newGroupName = "";
+    groupModalOpen = true;
+  }
+
+  async function confirmCreateGroup(): Promise<void> {
+    const name = newGroupName.trim();
+    if (!name) return;
+    try {
+      await vault.addGroup({ parentUuid: groupModalParent, name });
+      groupModalOpen = false;
+      flash("已创建分组");
+    } catch (e) {
+      flash(`创建失败：${e}`);
+    }
+  }
+
+  async function renameGroup(uuid: string, name: string): Promise<void> {
+    try {
+      await vault.renameGroup(uuid, name);
+      flash("已重命名分组");
+    } catch (e) {
+      flash(`重命名失败：${e}`);
+    }
+  }
+
+  function askDeleteGroup(uuid: string): void {
+    confirmState = {
+      message: "删除该分组？其下条目将移动到根分组。",
+      onconfirm: async () => {
+        try {
+          await vault.deleteGroup(uuid);
+          if (selectedGroup === uuid) selectedGroup = null;
+          flash("已删除分组");
+        } catch (e) {
+          flash(`删除失败：${e}`);
+        }
+      },
+    };
+  }
+
+  function askDeleteEntry(entry: VaultEntry): void {
+    confirmState = {
+      message: `删除条目「${entry.title || "未命名"}」？`,
+      onconfirm: async () => {
+        try {
+          await vault.deleteEntry(entry.uuid);
+          if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
+          flash("已删除条目");
+        } catch (e) {
+          flash(`删除失败：${e}`);
+        }
+      },
+    };
+  }
+
+  async function copyEntryValue(value: string, label: string): Promise<void> {
+    try {
+      await copyText(value);
+      flash(`已复制${label}`);
+    } catch {
+      flash("复制失败");
+    }
+  }
+
+  function dragRegion(event: MouseEvent): void {
+    if (!isTauriRuntime()) return;
+    if (event.target === event.currentTarget) {
+      void getCurrentWindow().startDragging();
+    }
+  }
+</script>
+
+<svelte:head>
+  <title>KeyVault</title>
+</svelte:head>
+
+<main class="app-shell" class:compact={compactMode}>
+  {#if currentVault}
+    <header
+      class="search-header"
+      role="presentation"
+      onmousedown={dragRegion}
+      data-tauri-drag-region
+    >
+      <div class="search-box" data-tauri-drag-region>
+        <span class="search-icon"><AppIcon name="search" size={16} /></span>
+        <input
+          class="search-input"
+          type="search"
+          placeholder="搜索标题、用户名、网址或备注…"
+          bind:value={search}
+          aria-label="搜索条目"
+        />
+        {#if search}
+          <button class="clear-button" onclick={() => (search = "")} aria-label="清除搜索">×</button
+          >
+        {/if}
+      </div>
+      <button class="icon-action" onclick={openSettings} title="设置">
+        <AppIcon name="settings" size={17} />
+      </button>
+    </header>
+
+    <div class="toolbar" role="presentation" data-tauri-drag-region>
+      <div class="toolbar-left">
+        <button class="tool-button primary" onclick={openCreateEntry} title="新建条目 (Ctrl+N)">
+          <AppIcon name="plus" size={14} />条目
+        </button>
+        <button class="tool-button" onclick={() => openGroupModal(selectedGroup)} title="新建分组">
+          <AppIcon name="folder-plus" size={14} />分组
+        </button>
+        <span class="toolbar-sep"></span>
+        <span class="vault-name" title={currentVault.path}>
+          <AppIcon name="database" size={13} />
+          <span class="vault-name-text">{currentVault.fileName}</span>
+        </span>
+      </div>
+      <div class="toolbar-right">
+        {#if currentVault.dirty}
+          <span class="dirty-badge">未保存</span>
+        {/if}
+        <button
+          class="tool-button"
+          onclick={handleSave}
+          disabled={busy || !currentVault.dirty}
+          title="保存数据库 (Ctrl+S)"
+        >
+          <AppIcon name="save" size={14} />保存
+        </button>
+        <button class="tool-button" onclick={handleLock} title="锁定数据库">
+          <AppIcon name="lock" size={14} />锁定
+        </button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <section class="group-panel">
+        <GroupTree
+          root={currentVault.root}
+          selected={selectedGroup}
+          onselect={(uuid: string | null) => {
+            selectedGroup = uuid;
+            selectedEntry = null;
+          }}
+          onaddsubgroup={openGroupModal}
+          onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
+          ondelete={askDeleteGroup}
+        />
+      </section>
+
+      <section class="entry-panel">
+        <div class="entry-head">
+          <span class="entry-count">{filteredEntries.length} 个条目</span>
+          {#if selectedGroup !== null}
+            <span class="entry-group-filter">筛选于 {pathOf(selectedGroup)}</span>
+          {/if}
+        </div>
+
+        <div class="entry-list" role="listbox" aria-label="条目列表">
+          {#if filteredEntries.length === 0}
+            <div class="empty-state">
+              <span class="empty-icon"><AppIcon name="key" size={20} /></span>
+              <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
+              <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
+            </div>
+          {:else}
+            {#each filteredEntries as row (row.entry.uuid)}
+              <div
+                class="entry-row"
+                class:selected={selectedEntry?.uuid === row.entry.uuid}
+                role="option"
+                aria-selected={selectedEntry?.uuid === row.entry.uuid}
+                tabindex="0"
+                onclick={() => selectEntry(row.entry)}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") selectEntry(row.entry);
+                }}
+              >
+                <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
+                <div class="entry-row-main">
+                  <span class="entry-row-title">{row.entry.title || "未命名条目"}</span>
+                  {#if currentVault && get(appSettings).general.showDescriptions}
+                    <span class="entry-row-sub">
+                      {row.entry.username || row.entry.url || row.groupPath}
+                    </span>
+                  {/if}
+                </div>
+                <div class="entry-row-actions">
+                  <button
+                    class="row-btn"
+                    title="复制用户名"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
+                    }}
+                  >
+                    <AppIcon name="user" size={12} />
+                  </button>
+                  <button
+                    class="row-btn"
+                    title="复制密码"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      if (row.entry.password) void copyEntryValue(row.entry.password, "密码");
+                    }}
+                  >
+                    <AppIcon name="copy" size={12} />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </section>
+
+      <section class="detail-panel">
+        {#if selectedEntry}
+          <EntryDetail
+            entry={selectedEntry}
+            groupPath={pathOf(selectedEntry.groupUuid)}
+            onedit={openEditEntry}
+            ondelete={askDeleteEntry}
+          />
+        {:else}
+          <div class="detail-empty">
+            <AppIcon name="eye" size={22} />
+            <p>选择条目查看详情</p>
+          </div>
+        {/if}
+      </section>
+    </div>
+
+    <footer class="status-bar" role="status" aria-live="polite">
+      <span class="status-left">
+        <span class="result-count">{filteredEntries.length} 条</span>
+        {#if currentVault.dirty}
+          <span class="status-dirty"><i></i>未保存的修改</span>
+        {/if}
+      </span>
+      <span class="status-msg">{statusMsg}</span>
+      <span class="status-right">
+        {#if currentVault.path}
+          <span class="status-path" title={currentVault.path}>{currentVault.fileName}</span>
+        {/if}
+      </span>
+    </footer>
+  {:else}
+    <VaultWelcome onopened={() => void vault.refresh()} />
+  {/if}
+</main>
+
+{#if editorOpen}
+  <EntryEditorDialog
+    mode={editorMode}
+    groups={allGroups}
+    groupUuid={selectedGroup ?? currentVault?.root.uuid ?? "root"}
+    entry={editEntry}
+    onclose={() => (editorOpen = false)}
+    onsaved={(input) => void handleEditorSave(input)}
+  />
+{/if}
+
+{#if groupModalOpen}
+  <div class="modal-backdrop" role="presentation">
+    <div class="group-modal" role="dialog" aria-modal="true" aria-label="新建分组">
+      <div class="modal-head">
+        <span class="modal-icon"><AppIcon name="folder-plus" size={18} /></span>
+        <div>
+          <strong>新建分组</strong>
+          <p>在{groupModalParent ? pathOf(groupModalParent) : "根"}下创建子分组</p>
+        </div>
+      </div>
+      <input
+        class="text-input"
+        type="text"
+        bind:value={newGroupName}
+        placeholder="分组名称"
+        onkeydown={(e) => {
+          if (e.key === "Enter") void confirmCreateGroup();
+          if (e.key === "Escape") groupModalOpen = false;
+        }}
+      />
+      <div class="modal-actions">
+        <button class="modal-button" onclick={() => (groupModalOpen = false)}>取消</button>
+        <button
+          class="modal-button primary"
+          onclick={() => void confirmCreateGroup()}
+          disabled={!newGroupName.trim()}
+        >
+          创建
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if confirmState}
+  <div class="modal-backdrop" role="presentation">
+    <div class="group-modal confirm-modal" role="dialog" aria-modal="true" aria-label="确认操作">
+      <div class="modal-head">
+        <span class="modal-icon danger"><AppIcon name="trash" size={18} /></span>
+        <div>
+          <strong>确认删除</strong>
+          <p>{confirmState.message}</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-button" onclick={() => (confirmState = null)}>取消</button>
+        <button
+          class="modal-button danger"
+          onclick={() => {
+            const state = confirmState;
+            if (!state) return;
+            const action = state.onconfirm;
+            confirmState = null;
+            action();
+          }}
+        >
+          删除
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .app-shell {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    width: 100%;
+    height: 100vh;
+    min-width: 760px;
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-settings) 98.5%, transparent);
+  }
+
+  .app-shell.compact {
+    min-width: 680px;
+  }
+
+  .search-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .search-icon {
+    display: inline-flex;
+    color: var(--text-faint);
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    color: var(--text-primary);
+    background: transparent;
+    font-size: clamp(16px, 2.4vw, 19px);
+    font-weight: 350;
+    letter-spacing: -0.02em;
+  }
+
+  .search-input::placeholder {
+    color: var(--placeholder-color);
+  }
+
+  .search-input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .clear-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--text-muted);
+    background: transparent;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .clear-button:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--card-bg);
+    cursor: pointer;
+  }
+
+  .icon-action:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .tool-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .tool-button:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .tool-button.primary {
+    border-color: color-mix(in srgb, var(--selection-color) 45%, transparent);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--selection-color) 16%, var(--card-bg));
+  }
+
+  .tool-button.primary:hover {
+    background: color-mix(in srgb, var(--selection-color) 24%, var(--card-bg));
+  }
+
+  .tool-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .toolbar-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--border-subtle);
+  }
+
+  .vault-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .vault-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+
+  .dirty-badge {
+    padding: 2px 7px;
+    border: 1px solid color-mix(in srgb, var(--warning-color) 45%, transparent);
+    border-radius: 10px;
+    color: var(--warning-color);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .main-content {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 300px;
+    min-height: 0;
+  }
+
+  .group-panel {
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--border-subtle);
+    background: var(--surface-bg);
+  }
+
+  .entry-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .entry-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px 6px;
+    flex: 0 0 auto;
+  }
+
+  .entry-count {
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .entry-group-filter {
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entry-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 8px 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .entry-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--settings-control-radius, 6px);
+    cursor: pointer;
+  }
+
+  .app-shell.compact .entry-row {
+    height: 34px;
+  }
+
+  .entry-row:hover {
+    background: var(--hover-bg);
+  }
+
+  .entry-row.selected {
+    border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
+  }
+
+  .entry-row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-icon-radius, 7px);
+    color: var(--warning-color);
+    background: var(--input-bg);
+  }
+
+  .entry-row-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .entry-row-title {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entry-row-sub {
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entry-row-actions {
+    display: none;
+    gap: 2px;
+    flex: 0 0 auto;
+  }
+
+  .entry-row:hover .entry-row-actions,
+  .entry-row.selected .entry-row-actions {
+    display: flex;
+  }
+
+  .row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-faint);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .row-btn:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  }
+
+  .detail-panel {
+    position: relative;
+    min-height: 0;
+    min-width: 0;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--card-bg);
+  }
+
+  .detail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100%;
+    color: var(--text-faint);
+  }
+
+  .detail-empty p {
+    margin: 0;
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 40px 20px;
+    color: var(--text-faint);
+    text-align: center;
+  }
+
+  .empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-bottom: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-card-radius, 9px);
+    background: var(--card-bg);
+  }
+
+  .empty-state strong {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 560;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 26px;
+    padding: 4px 14px;
+    border-top: 1px solid var(--border-subtle);
+    color: var(--text-faint);
+    background: var(--statusbar-bg);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .status-left,
+  .status-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .result-count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status-dirty {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--warning-color);
+  }
+
+  .status-dirty i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--warning-color);
+  }
+
+  .status-msg {
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, #000 45%, transparent);
+  }
+
+  .group-modal {
+    width: min(340px, calc(100% - 40px));
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 13px;
+    background: var(--surface-bg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .confirm-modal {
+    width: min(380px, calc(100% - 40px));
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-icon-radius, 7px);
+    color: var(--selection-color);
+    background: var(--hover-bg);
+  }
+
+  .modal-icon.danger {
+    color: var(--danger-color);
+  }
+
+  .modal-head strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 560;
+  }
+
+  .modal-head p {
+    margin: 2px 0 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .text-input {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-primary);
+    background: var(--input-bg);
+    font-size: 12px;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .modal-button {
+    height: 30px;
+    padding: 0 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .modal-button:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .modal-button.primary {
+    border-color: var(--selection-color);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
+  }
+
+  .modal-button.danger {
+    border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
+    color: color-mix(in srgb, var(--danger-color) 80%, white);
+    background: color-mix(in srgb, var(--danger-color) 14%, var(--card-bg));
+  }
+
+  .modal-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+</style>
