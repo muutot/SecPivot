@@ -15,7 +15,39 @@
 
   let { root, selected, onselect, onaddsubgroup, onrename, ondelete }: Props = $props();
 
-  let expanded = $state<Set<string>>(new Set([root.uuid]));
+  function collectUuids(group: VaultGroup, into: Set<string>): void {
+    into.add(group.uuid);
+    for (const child of group.children) collectUuids(child, into);
+  }
+
+  function findParent(group: VaultGroup, uuid: string): VaultGroup | null {
+    for (const child of group.children) {
+      if (child.uuid === uuid) return group;
+      const found = findParent(child, uuid);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const initialExpanded = new Set<string>();
+  collectUuids(root, initialExpanded);
+
+  let expanded = $state<Set<string>>(initialExpanded);
+
+  let knownUuids = new Set(initialExpanded);
+
+  $effect(() => {
+    const uuids = new Set<string>();
+    collectUuids(root, uuids);
+    for (const uuid of uuids) {
+      if (!knownUuids.has(uuid)) {
+        expanded.add(uuid);
+        const parent = findParent(root, uuid);
+        if (parent) expanded.add(parent.uuid);
+      }
+    }
+    knownUuids = new Set(uuids);
+  });
 
   const total = $derived(countEntries(root));
 </script>
