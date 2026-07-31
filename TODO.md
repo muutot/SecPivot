@@ -23,12 +23,12 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Rust tests: round-trip save, CRUD, wrong-password rejection, session clear
 - [x] Wire `src/lib/services/vault.ts` to real commands behind `isTauriRuntime()`
 
-## Stage 3 — Lock & clipboard security
+## Stage 3 — Lock & clipboard security (delivered)
 
-- [ ] Idle auto-lock timer driven by `autoLockMinutes`
-- [ ] Lock clears clipboard when `clearOnLock`
-- [ ] `lockAfterAction` after password copy
-- [ ] Frontend lock screen + reopen with remembered path only
+- [x] Idle auto-lock timer driven by `autoLockMinutes` (`armIdleLock`/`installAutoLock`, `src/lib/services/security.ts`)
+- [x] Lock clears clipboard when `clearOnLock` (`lockVault`)
+- [x] `lockAfterAction` after password copy (`copySensitive`, wired for password copies only)
+- [x] Frontend lock screen + reopen with remembered path only (`LockScreen.svelte`, `vault.remembered`)
 
 ## Stage 4 — Search & productivity
 

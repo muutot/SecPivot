@@ -15,10 +15,12 @@ KeyVault stores credentials in standard KDBX 4.0 files. This reference documents
 Lock happens on:
 
 - explicit lock action (`close_vault`);
-- idle timeout when `autoLockMinutes > 0` (not yet implemented; see `TODO.md`);
-- `lockAfterAction` immediately after a password copy (config field reserved; not yet wired).
+- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`, reset on vault open, skipped when 0 or no vault open);
+- `lockAfterAction` immediately after a password copy.
 
-After lock, the frontend `vault` store is cleared and the UI returns to the welcome screen. The optional last-database path (`rememberLastDatabase`) may persist the path but never the password.
+The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes the session by calling `vault.close()`, and clears the clipboard first when `clearOnLock` is enabled. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes.
+
+After lock, the frontend `vault` store is cleared and the UI shows the lock screen (`LockScreen.svelte`) when a last-database path is remembered (`rememberLastDatabase`); otherwise it returns to the welcome screen. The remembered path (`vault.remembered`) is set on open/create and cleared only via "use another database"; the password is never persisted or remembered.
 
 ## KeePass strengths
 

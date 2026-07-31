@@ -26,9 +26,20 @@ interface VaultStore {
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   refresh: () => Promise<void>;
+  remembered: typeof remembered.subscribe;
+  getRemembered: () => RememberedVault | null;
+  clearRemembered: () => void;
+}
+
+export interface RememberedVault {
+  path: string;
+  fileName: string;
 }
 
 const state = writable<VaultState | null>(null);
+
+/** Last opened/created vault path, kept across lock so the lock screen can offer a quick reopen. */
+const remembered = writable<RememberedVault | null>(null);
 
 const BROWSER_KEY = "keyvault-browser-vault";
 
@@ -125,10 +136,19 @@ export const vault: VaultStore = {
     return get(state);
   },
 
+  remembered: remembered.subscribe,
+  getRemembered(): RememberedVault | null {
+    return get(remembered);
+  },
+  clearRemembered(): void {
+    remembered.set(null);
+  },
+
   async open(path, password): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("open_vault", { path, password });
       state.set(result);
+      remembered.set({ path: result.path, fileName: result.fileName });
       return result;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
@@ -137,6 +157,7 @@ export const vault: VaultStore = {
     browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
     const result = deepClone(browserState);
     state.set(result);
+    remembered.set({ path: result.path, fileName: result.fileName });
     return result;
   },
 
@@ -144,6 +165,7 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("create_vault", { ...request });
       state.set(result);
+      remembered.set({ path: result.path, fileName: result.fileName });
       return result;
     }
     const fresh = buildDemoVaultState();
@@ -154,6 +176,7 @@ export const vault: VaultStore = {
     browserState = fresh;
     const result = deepClone(fresh);
     state.set(result);
+    remembered.set({ path: result.path, fileName: result.fileName });
     await browserPersist(result);
     return result;
   },

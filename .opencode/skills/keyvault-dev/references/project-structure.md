@@ -28,12 +28,14 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/utils/clipboard.ts`               | Clipboard copy + scheduled clear (`clipboardClearSeconds`)                                           |
 | `src/lib/services/settings.ts`             | `appSettings` store, defaults, normalization, debounced persistence                                  |
 | `src/lib/services/settings-bootstrap.ts`   | Apply settings to document (theme colors, font vars, window effect)                                  |
-| `src/lib/services/vault.ts`                | `vault` store: open/create/close/save + entry/group CRUD (Tauri + browser fallback)                  |
+| `src/lib/services/security.ts`             | `lockVault`/`copySensitive`/`armIdleLock`/`installAutoLock` (lock lifecycle, clipboard-clear gating) |
+| `src/lib/services/vault.ts`                | `vault` store: open/create/close/save + entry/group CRUD + `remembered` path (Tauri + browser)       |
 | `src/lib/data/demo-vault.ts`               | Browser-preview fallback data; not proof of desktop KDBX behavior                                    |
 | `src/lib/components/AppIcon.svelte`        | Hand-written inline SVG icon set (stroke `currentColor`)                                             |
 | `src/lib/components/SettingsDialog.svelte` | Settings shell: sidebar nav + content pane + panels                                                  |
 | `src/lib/components/settings/*`            | General / Security / Database / About panels                                                         |
 | `src/lib/components/VaultWelcome.svelte`   | Welcome/unlock + open/create database modal flows                                                    |
+| `src/lib/components/LockScreen.svelte`     | Lock screen: reopen remembered path with password, or switch to another database                     |
 
 ## Backend ownership
 

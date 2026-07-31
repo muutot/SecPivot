@@ -11,11 +11,13 @@
   import type { EntryInput, VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
+  import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
 
   let currentVault = $state<VaultState | null>(null);
+  let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
   let selectedGroup = $state<string | null>(null);
   let selectedEntry = $state<VaultEntry | null>(null);
@@ -40,10 +42,14 @@
       }
       armIdleLock();
     });
+    const unsubRemembered = vault.remembered((value) => {
+      rememberedPath = value;
+    });
     void vault.refresh();
     const stopAutoLock = installAutoLock();
     return () => {
       unsubscribe();
+      unsubRemembered();
       stopAutoLock();
     };
   });
@@ -58,6 +64,9 @@
   }
 
   const compactMode = $derived(get(appSettings).general.compactMode);
+  const showLockScreen = $derived(
+    !currentVault && rememberedPath !== null && get(appSettings).general.rememberLastDatabase,
+  );
   $effect(() => {
     syncCompactShellClass(compactMode);
   });
@@ -452,6 +461,12 @@
         {/if}
       </span>
     </footer>
+  {:else if showLockScreen}
+    <LockScreen
+      remembered={rememberedPath}
+      onopened={() => void vault.refresh()}
+      onswitch={() => vault.clearRemembered()}
+    />
   {:else}
     <VaultWelcome onopened={() => void vault.refresh()} />
   {/if}
