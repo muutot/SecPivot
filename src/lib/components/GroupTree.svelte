@@ -55,9 +55,6 @@
 <div class="group-tree">
   <div class="tree-head">
     <span class="tree-label">分组</span>
-    <button class="tree-add" onclick={() => onaddsubgroup(null)} title="在根新建分组">
-      <AppIcon name="plus" size={13} />
-    </button>
   </div>
 
   <div class="tree-list">
@@ -100,25 +97,6 @@
     font-size: var(--font-size-tiny, 10px);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-
-  .tree-add {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-faint);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .tree-add:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
   }
 
   .tree-list {

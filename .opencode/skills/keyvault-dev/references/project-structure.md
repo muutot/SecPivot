@@ -36,6 +36,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/services/vault.ts`                | `vault` store: open/create/close/save + entry/group CRUD + `remembered` path (Tauri + browser)       |
 | `src/lib/data/demo-vault.ts`               | Browser-preview fallback data; not proof of desktop KDBX behavior                                    |
 | `src/lib/components/AppIcon.svelte`        | Hand-written inline SVG icon set (stroke `currentColor`)                                             |
+| `src/lib/components/ContextMenu.svelte`    | Viewport-fixed right-click menu (items, destructive style, click-outside/Escape close)               |
 | `src/lib/components/SettingsDialog.svelte` | Settings shell: sidebar nav + content pane + panels                                                  |
 | `src/lib/components/settings/*`            | General / Security / Database / About panels                                                         |
 | `src/lib/components/VaultWelcome.svelte`   | Welcome/unlock + open/create database modal flows                                                    |

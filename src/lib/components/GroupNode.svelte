@@ -2,6 +2,7 @@
   import type { VaultGroup } from "$lib/types/vault";
   import { countEntries } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
 
   interface Props {
     group: VaultGroup;
@@ -20,10 +21,17 @@
   let renaming = $state(false);
   let nameInput = $state(group.name);
   let inputEl: HTMLInputElement | undefined = $state();
+  let menu = $state<{ x: number; y: number } | null>(null);
 
   const count = $derived(countEntries(group));
   const isExpanded = $derived(expanded.has(group.uuid));
   const hasChildren = $derived(group.children.length > 0);
+
+  const menuItems: ContextMenuItem[] = [
+    { id: "add-subgroup", label: "新建子分组", icon: "folder-plus" },
+    { id: "rename", label: "重命名", icon: "edit" },
+    { id: "delete", label: "删除分组", icon: "trash", destructive: true },
+  ];
 
   $effect(() => {
     if (renaming) inputEl?.focus();
@@ -36,6 +44,22 @@
     else next.add(group.uuid);
     expanded.clear();
     for (const item of next) expanded.add(item);
+  }
+
+  function openMenu(event: MouseEvent): void {
+    event.preventDefault();
+    onselect(group.uuid);
+    menu = { x: event.clientX, y: event.clientY };
+  }
+
+  function closeMenu(): void {
+    menu = null;
+  }
+
+  function handleMenuAction(id: string): void {
+    if (id === "add-subgroup") onaddsubgroup(group.uuid);
+    else if (id === "rename") renaming = true;
+    else if (id === "delete") ondelete(group.uuid);
   }
 
   function commitRename(): void {
@@ -86,26 +110,18 @@
       >
         <AppIcon name="chevron-down" size={13} />
       </span>
-      <button class="group-select" onclick={() => onselect(group.uuid)} title={group.name}>
+      <button
+        class="group-select"
+        onclick={() => onselect(group.uuid)}
+        oncontextmenu={openMenu}
+        title={group.name}
+      >
         <AppIcon name="folder" size={13} />
         <span class="group-name">{group.name}</span>
         {#if count > 0}
           <span class="group-count">{count}</span>
         {/if}
       </button>
-      {#if selected === group.uuid}
-        <span class="group-actions">
-          <button class="mini-btn" onclick={() => onaddsubgroup(group.uuid)} title="新建子分组">
-            <AppIcon name="folder-plus" size={13} />
-          </button>
-          <button class="mini-btn" onclick={() => (renaming = true)} title="重命名">
-            <AppIcon name="edit" size={13} />
-          </button>
-          <button class="mini-btn danger" onclick={() => ondelete(group.uuid)} title="删除分组">
-            <AppIcon name="trash" size={13} />
-          </button>
-        </span>
-      {/if}
     </div>
   {/if}
 </div>
@@ -123,6 +139,16 @@
       {ondelete}
     />
   {/each}
+{/if}
+
+{#if menu}
+  <ContextMenu
+    x={menu.x}
+    y={menu.y}
+    items={menuItems}
+    onclose={closeMenu}
+    onaction={handleMenuAction}
+  />
 {/if}
 
 <style>
@@ -206,36 +232,6 @@
   .chevron-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
-  }
-
-  .group-actions {
-    display: flex;
-    gap: 2px;
-    flex: 0 0 auto;
-  }
-
-  .mini-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-muted);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .mini-btn:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .mini-btn.danger:hover {
-    color: var(--danger-color);
-    background: color-mix(in srgb, var(--danger-color) 14%, var(--hover-bg));
   }
 
   .rename-row {
