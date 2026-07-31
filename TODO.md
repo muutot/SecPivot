@@ -18,10 +18,10 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ## Stage 2 — Backend vault engine
 
-- [ ] `open_vault` / `create_vault` / `save_vault` / `close_vault` via `keepass` crate (KDBX 4.0)
-- [ ] Entry and group CRUD commands with in-memory session
-- [ ] Rust tests: round-trip save, CRUD, wrong-password rejection, session clear
-- [ ] Wire `src/lib/services/vault.ts` to real commands behind `isTauriRuntime()`
+- [x] `open_vault` / `create_vault` / `save_vault` / `close_vault` via `keepass` crate (KDBX 4.0)
+- [x] Entry and group CRUD commands with in-memory session
+- [x] Rust tests: round-trip save, CRUD, wrong-password rejection, session clear
+- [x] Wire `src/lib/services/vault.ts` to real commands behind `isTauriRuntime()`
 
 ## Stage 3 — Lock & clipboard security
 

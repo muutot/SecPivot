@@ -777,4 +777,93 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("kdf"));
     }
+
+    #[test]
+    fn dto_wire_format_uses_camel_case() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Web".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "GitHub".into(),
+                username: "alice".into(),
+                password: "s3cret".into(),
+                url: "https://github.com".into(),
+                notes: "work".into(),
+                totp: Some("JBSWY3DPEHPK3PXP".into()),
+            })
+            .unwrap();
+
+        let json = serde_json::to_value(&state).unwrap();
+        let obj = json.as_object().unwrap();
+        for key in [
+            "path",
+            "fileName",
+            "password",
+            "root",
+            "dirty",
+            "modifiedAt",
+        ] {
+            assert!(obj.contains_key(key), "missing VaultState key {key}");
+        }
+        let root = json["root"].as_object().unwrap();
+        for key in ["uuid", "parentUuid", "name", "children", "entries"] {
+            assert!(root.contains_key(key), "missing VaultGroup key {key}");
+        }
+        let group = &json["root"]["children"][0];
+        assert_eq!(group["parentUuid"].as_str(), Some(ROOT_GROUP_UUID));
+        let entry = &group["entries"][0];
+        for key in [
+            "uuid",
+            "groupUuid",
+            "title",
+            "username",
+            "password",
+            "url",
+            "notes",
+        ] {
+            assert!(entry.get(key).is_some(), "missing VaultEntry key {key}");
+        }
+        assert!(entry["totp"].is_string());
+        // Optional fields absent on the entry are skipped entirely (not null).
+        assert!(entry.get("icon").is_none());
+        assert!(entry.get("tags").is_none());
+    }
+
+    #[test]
+    fn inputs_deserialize_from_camel_case() {
+        let entry: EntryInput = serde_json::from_value(serde_json::json!({
+            "groupUuid": "g1",
+            "title": "T",
+            "username": "u",
+            "password": "p",
+            "url": "https://x",
+            "notes": "n",
+            "totp": null,
+        }))
+        .unwrap();
+        assert_eq!(entry.group_uuid, "g1");
+        assert_eq!(entry.totp, None);
+
+        let group: GroupInput = serde_json::from_value(serde_json::json!({
+            "parentUuid": null,
+            "name": "Root",
+        }))
+        .unwrap();
+        assert_eq!(group.parent_uuid, None);
+
+        let nested: GroupInput = serde_json::from_value(serde_json::json!({
+            "parentUuid": "abc",
+            "name": "Web",
+        }))
+        .unwrap();
+        assert_eq!(nested.parent_uuid.as_deref(), Some("abc"));
+    }
 }
