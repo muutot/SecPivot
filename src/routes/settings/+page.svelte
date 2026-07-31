@@ -1,13 +1,9 @@
 <script lang="ts">
   import SettingsDialog from "$lib/components/SettingsDialog.svelte";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { goto } from "$app/navigation";
 
   function handleClose(): void {
-    if ("__TAURI_INTERNALS__" in window) {
-      void getCurrentWindow().close();
-    } else {
-      history.back();
-    }
+    void goto("/");
   }
 </script>
 
