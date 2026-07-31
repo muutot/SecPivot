@@ -10,13 +10,23 @@
     selected: string | null;
     expanded: Set<string>;
     onselect: (uuid: string) => void;
+    ontoggle: (uuid: string) => void;
     onaddsubgroup: (parentUuid: string) => void;
     onrename: (uuid: string, name: string) => void;
     ondelete: (uuid: string) => void;
   }
 
-  let { group, depth, selected, expanded, onselect, onaddsubgroup, onrename, ondelete }: Props =
-    $props();
+  let {
+    group,
+    depth,
+    selected,
+    expanded,
+    onselect,
+    ontoggle,
+    onaddsubgroup,
+    onrename,
+    ondelete,
+  }: Props = $props();
 
   let renaming = $state(false);
   let nameInput = $state(group.name);
@@ -37,13 +47,9 @@
     if (renaming) inputEl?.focus();
   });
 
-  function toggle(): void {
-    if (!hasChildren) return;
-    const next = new Set(expanded);
-    if (next.has(group.uuid)) next.delete(group.uuid);
-    else next.add(group.uuid);
-    expanded.clear();
-    for (const item of next) expanded.add(item);
+  function handleRowClick(): void {
+    onselect(group.uuid);
+    if (hasChildren) ontoggle(group.uuid);
   }
 
   function openMenu(event: MouseEvent): void {
@@ -72,7 +78,7 @@
 <div
   class="group-node"
   class:selected={selected === group.uuid}
-  style:padding-left={`calc(8px + (var(--group-indent, 14px) * ${depth}))`}
+  style:padding-left={`calc(14px + (var(--group-indent, 14px) * ${depth}))`}
 >
   {#if renaming}
     <div class="rename-row">
@@ -92,37 +98,12 @@
       </button>
     </div>
   {:else}
-    <div class="group-row">
-      <span
-        class="chevron-btn"
-        class:leaf={!hasChildren}
-        class:open={isExpanded}
-        role="button"
-        tabindex={hasChildren ? 0 : -1}
-        onclick={toggle}
-        onkeydown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggle();
-          }
-        }}
-        aria-label={isExpanded ? "折叠" : "展开"}
-      >
-        <AppIcon name="chevron-down" size={13} />
-      </span>
-      <button
-        class="group-select"
-        onclick={() => onselect(group.uuid)}
-        oncontextmenu={openMenu}
-        title={group.name}
-      >
-        <AppIcon name="folder" size={13} />
-        <span class="group-name">{group.name}</span>
-        {#if count > 0}
-          <span class="group-count">{count}</span>
-        {/if}
-      </button>
-    </div>
+    <button class="group-row" onclick={handleRowClick} oncontextmenu={openMenu} title={group.name}>
+      <span class="group-name">{group.name}</span>
+      {#if count > 0}
+        <span class="group-count">{count}</span>
+      {/if}
+    </button>
   {/if}
 </div>
 
@@ -134,6 +115,7 @@
       {selected}
       {expanded}
       {onselect}
+      {ontoggle}
       {onaddsubgroup}
       {onrename}
       {ondelete}
@@ -161,17 +143,9 @@
   .group-row {
     display: flex;
     align-items: center;
-    gap: 2px;
-    min-width: 0;
-    padding-right: 4px;
-  }
-
-  .group-select {
-    display: flex;
-    align-items: center;
     gap: 6px;
+    width: 100%;
     min-width: 0;
-    flex: 1;
     padding: var(--group-pad-y, 6px) 6px;
     border: 1px solid transparent;
     border-radius: var(--settings-control-radius, 6px);
@@ -183,56 +157,28 @@
     cursor: pointer;
   }
 
-  .group-node.selected .group-select {
+  .group-node.selected .group-row {
     border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
     color: var(--text-primary);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
-  .group-select:hover {
+  .group-row:hover {
     background: var(--hover-bg);
   }
 
   .group-name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .group-count {
-    margin-left: auto;
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
     font-variant-numeric: tabular-nums;
-  }
-
-  .chevron-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 20px;
-    flex: 0 0 auto;
-    color: var(--text-faint);
-    cursor: pointer;
-    border-radius: 4px;
-  }
-
-  .chevron-btn.leaf {
-    visibility: hidden;
-  }
-
-  .chevron-btn .app-icon {
-    transition: transform 100ms ease;
-  }
-
-  .chevron-btn.open .app-icon {
-    transform: rotate(90deg);
-  }
-
-  .chevron-btn:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
   }
 
   .rename-row {

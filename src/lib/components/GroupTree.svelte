@@ -36,16 +36,26 @@
 
   let knownUuids = new Set(initialExpanded);
 
+  function toggleGroup(uuid: string): void {
+    const next = new Set(expanded);
+    if (next.has(uuid)) next.delete(uuid);
+    else next.add(uuid);
+    expanded = next;
+  }
+
   $effect(() => {
     const uuids = new Set<string>();
     collectUuids(root, uuids);
+    let next: Set<string> | null = null;
     for (const uuid of uuids) {
       if (!knownUuids.has(uuid)) {
-        expanded.add(uuid);
+        next ??= new Set(expanded);
+        next.add(uuid);
         const parent = findParent(root, uuid);
-        if (parent) expanded.add(parent.uuid);
+        if (parent) next.add(parent.uuid);
       }
     }
+    if (next) expanded = next;
     knownUuids = new Set(uuids);
   });
 
@@ -70,6 +80,7 @@
         {selected}
         {expanded}
         onselect={(uuid: string) => onselect(uuid)}
+        ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}
         {onrename}
         {ondelete}
