@@ -40,6 +40,6 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ## Stage 5 — Packaging & release
 
-- [ ] App icons, window branding, NSIS installer template
-- [ ] GitHub Actions CI mirroring `npm run verify`
-- [ ] Release workflow via version-release skill (like sibling projects)
+- [x] App icons (committed `src-tauri/icons/*`), bundle branding metadata (`publisher`/`copyright`/descriptions), custom NSIS template (`src-tauri/windows/installer.nsi`) — verified: `tauri build` produced `KeyVault_0.1.0_x64-setup.exe`
+- [ ] GitHub Actions CI mirroring `npm run verify` (`.github/workflows/ci.yml` added; unverified in this environment — no `origin` remote to run it)
+- [ ] Release workflow via version-release skill (`.opencode/skills/version-release` + `scripts/*.mjs` added; `release.mjs --dry-run` verified through step 3, tag/push unverified — no remote)

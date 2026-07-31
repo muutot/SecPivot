@@ -46,3 +46,11 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 ## Documentation currency gate
 
 Before every commit, inspect the staged diff and update `SKILL.md`/`references/*` if the change affects routes, components, services, backend modules, IPC/serialization, config defaults, security invariants, theme tokens, settings primitives, or any approved pattern or stable rule. State the outcome explicitly in the commit report ("docs: no update needed" or what changed).
+
+## Version bump and release
+
+Use the sibling `version-release` skill (`.opencode/skills/version-release/SKILL.md`) when bumping the version, releasing, or regenerating a release. It drives `scripts/release.mjs` through a two-pass flow (script bumps + changelog, LLM curates `RELEASE.md`, script commits/tags/pushes). Before any release, run `npm run verify` and commit all non-release changes separately so the release commit contains only version files.
+
+## Packaging verification
+
+`npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/KeyVault_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; they require a configured `origin` remote and GitHub to provide runtime evidence, so their TODO items stay unchecked until a real CI run passes.
