@@ -40,6 +40,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowWidth: 1100,
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
+  globalAutoTypeShortcut: "",
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {

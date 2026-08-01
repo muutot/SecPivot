@@ -1,6 +1,7 @@
 pub mod autotype;
 pub mod config;
 pub mod credential;
+pub mod focus;
 pub mod remote;
 pub mod vault;
 
@@ -14,6 +15,10 @@ use crate::vault::{
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+/// Sequence replayed by the global auto-type hotkey.
+const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 
 // ---------------------------------------------------------------------------
 // Config commands
@@ -27,9 +32,74 @@ fn get_config(store: tauri::State<'_, ConfigStore>) -> Result<config::AppConfig,
 #[tauri::command]
 fn set_config(
     store: tauri::State<'_, ConfigStore>,
+    app: tauri::AppHandle,
     config: config::AppConfig,
 ) -> Result<config::AppConfig, String> {
-    store.set(config)
+    let saved = store.set(config)?;
+    register_global_hotkey(&app, &saved.general.global_auto_type_shortcut);
+    Ok(saved)
+}
+
+// ---------------------------------------------------------------------------
+// Global auto-type hotkey
+// ---------------------------------------------------------------------------
+
+/// Register (or replace) the global hotkey from `shortcut`; empty disables it.
+/// Failure to register is logged, never fatal: the app stays usable.
+fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
+    let global = app.global_shortcut();
+    if let Err(e) = global.unregister_all() {
+        eprintln!("failed to unregister global shortcuts: {e}");
+        return;
+    }
+    let shortcut = shortcut.trim();
+    if shortcut.is_empty() {
+        return;
+    }
+    let result = global.on_shortcut(shortcut, |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            handle_global_hotkey(app);
+        }
+    });
+    if let Err(e) = result {
+        eprintln!("failed to register global auto-type hotkey `{shortcut}`: {e}");
+    }
+}
+
+/// Replay the auto-type sequence of the entry matching the focused window.
+/// Runs on a background thread; failures are logged only.
+fn handle_global_hotkey(app: &tauri::AppHandle) {
+    let Some(window_title) = focus::foreground_window_title() else {
+        return;
+    };
+    let Some(session) = app.try_state::<Mutex<VaultSession>>() else {
+        return;
+    };
+    let ctx = {
+        let session = match session.lock() {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let uuid = match session.autotype_match(&window_title) {
+            Ok(uuid) => uuid,
+            Err(e) => {
+                eprintln!("global auto-type: {e}");
+                return;
+            }
+        };
+        match session.autotype_context(&uuid) {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                eprintln!("global auto-type: {e}");
+                return;
+            }
+        }
+    };
+    std::thread::spawn(move || {
+        if let Err(e) = autotype::run_sequence(GLOBAL_AUTOTYPE_SEQUENCE, &ctx) {
+            eprintln!("global auto-type: {e}");
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +527,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let project_dir = std::env::current_exe()
                 .ok()
@@ -467,6 +538,8 @@ pub fn run() {
                         .unwrap_or_else(|_| PathBuf::from("."))
                 });
             let store = ConfigStore::load(project_dir)?;
+            let config = store.get()?;
+            register_global_hotkey(app.handle(), &config.general.global_auto_type_shortcut);
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             Ok(())

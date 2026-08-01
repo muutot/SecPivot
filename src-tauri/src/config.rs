@@ -163,6 +163,9 @@ pub struct GeneralSettings {
     pub window_height: i32,
     /// User-resizable pane widths in the main view, remembered across restarts.
     pub panel_widths: PanelWidths,
+    /// Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A").
+    /// Empty means the hotkey is disabled.
+    pub global_auto_type_shortcut: String,
 }
 
 /// Resizable pane widths of the main view: group tree, detail panel, and the
@@ -205,6 +208,7 @@ impl Default for GeneralSettings {
             window_width: 1100,
             window_height: 720,
             panel_widths: PanelWidths::default(),
+            global_auto_type_shortcut: String::new(),
         }
     }
 }

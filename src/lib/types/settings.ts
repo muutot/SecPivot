@@ -91,6 +91,8 @@ export interface GeneralSettings {
   windowWidth: number;
   windowHeight: number;
   panelWidths: PanelWidths;
+  /** Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A"); empty disables it. */
+  globalAutoTypeShortcut: string;
 }
 
 export interface AppSettings {

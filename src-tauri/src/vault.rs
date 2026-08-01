@@ -904,6 +904,23 @@ impl VaultSession {
         })
     }
 
+    /// Best-matching entry for global auto-type given the title of the window
+    /// in focus. Matches the URL host or the entry title against the window
+    /// title (case-insensitive); entries inside the recycle bin are skipped.
+    /// Returns the entry UUID.
+    pub fn autotype_match(&self, window_title: &str) -> Result<String, String> {
+        let db = self.require_db()?;
+        let lower = window_title.to_lowercase();
+        if lower.trim().is_empty() {
+            return Err("目标窗口标题为空".to_owned());
+        }
+        let bin_id = recycle_bin_id(db);
+        let mut best: Option<(i32, String)> = None;
+        walk_match(db.root(), bin_id, &lower, &mut best);
+        best.map(|(_, uuid)| uuid)
+            .ok_or_else(|| "没有找到匹配的条目".to_owned())
+    }
+
     pub fn add_group(&mut self, input: &GroupInput) -> Result<VaultState, String> {
         let name = input.name.trim();
         if name.is_empty() {
@@ -1394,6 +1411,46 @@ fn parse_group_id(s: &str) -> Result<GroupId, String> {
 /// The recycle bin group id, when the database has one.
 fn recycle_bin_id(db: &Database) -> Option<GroupId> {
     db.meta.recyclebin_uuid.map(GroupId::from_uuid)
+}
+
+/// Lower-cased host part of a URL, without scheme, port, or path.
+fn url_host(url: &str) -> String {
+    let rest = url.split("://").nth(1).unwrap_or(url);
+    rest.split(['/', ':', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_lowercase()
+}
+
+/// Depth-first scan of `group`'s subtree for an auto-type match; the recycle
+/// bin subtree is skipped entirely.
+fn walk_match(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    window_title: &str,
+    best: &mut Option<(i32, String)>,
+) {
+    if bin_id == Some(group.id()) {
+        return;
+    }
+    for entry in group.entries() {
+        let mut score = 0;
+        let host = url_host(entry.get(FIELD_URL).unwrap_or_default());
+        if !host.is_empty() && window_title.contains(&host) {
+            score += 2;
+        }
+        let title = entry.get_title().unwrap_or_default().to_lowercase();
+        if !title.is_empty() && window_title.contains(&title) {
+            score += 1;
+        }
+        if score > 0 && best.as_ref().is_none_or(|(s, _)| score > *s) {
+            *best = Some((score, entry.id().uuid().to_string()));
+        }
+    }
+    for child in group.groups() {
+        walk_match(child, bin_id, window_title, best);
+    }
 }
 
 /// Return the recycle bin group id, creating the group under root on first use.
@@ -3350,5 +3407,74 @@ mod tests {
         session.close();
         assert!(!session.is_open());
         assert!(session.state().unwrap().is_none());
+    }
+
+    #[test]
+    fn autotype_match_ranks_url_host_above_title_and_skips_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let entry = |title: &str, url: &str| EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: title.into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: url.into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        };
+        let state = session.add_entry(&entry("GitHub", "https://github.com")).unwrap();
+        let github = state.root.entries[0].uuid.clone();
+        session.add_entry(&entry("GitHub", "https://example.com")).unwrap();
+        session.add_entry(&entry("Notebook", "https://notes.dev")).unwrap();
+
+        // URL host wins over title when both match.
+        assert_eq!(
+            session.autotype_match("GitHub - Home · github.com").unwrap(),
+            github
+        );
+        // Title-only match still works.
+        assert_eq!(
+            session.autotype_match("Log in to Notebook").unwrap().len(),
+            36
+        );
+        // No match.
+        let err = session.autotype_match("Random app").unwrap_err();
+        assert!(err.contains("没有找到匹配"));
+
+        // Trashed entries are never matched.
+        let trash = session.delete_entry(&github).unwrap();
+        let bin = &trash.root.children[0];
+        assert_eq!(bin.name, "回收站");
+        session
+            .add_entry(&EntryInput {
+                group_uuid: bin.uuid.clone(),
+                title: "Trashy".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "https://github.com".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let err = session.autotype_match("Trashy dashboard").unwrap_err();
+        assert!(err.contains("没有找到匹配"));
+    }
+
+    #[test]
+    fn url_host_strips_scheme_port_and_path() {
+        assert_eq!(url_host("https://github.com/login"), "github.com");
+        assert_eq!(url_host("http://a.b.c:8080/x?y=1"), "a.b.c");
+        assert_eq!(url_host("plain-host"), "plain-host");
+        assert_eq!(url_host(""), "");
     }
 }
