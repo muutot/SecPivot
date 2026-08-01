@@ -110,8 +110,6 @@ pub struct AttachmentInfo {
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentInput {
     pub name: String,
-    #[serde(default)]
-    pub size: usize,
     /// Base64-encoded content. Absent when the attachment already exists and
     /// should be kept as-is.
     #[serde(default)]
@@ -2938,7 +2936,6 @@ mod tests {
                 ],
                 attachments: vec![AttachmentInput {
                     name: "note.txt".into(),
-                    size: data.len(),
                     data: Some(data),
                 }],
             })
@@ -2980,12 +2977,10 @@ mod tests {
                     attachments: vec![
                         AttachmentInput {
                             name: "note.txt".into(),
-                            size: 0,
                             data: None,
                         },
                         AttachmentInput {
                             name: "second.bin".into(),
-                            size: 0,
                             data: Some(BASE64.encode([1u8, 2, 3, 4].as_slice())),
                         },
                     ],
@@ -3094,7 +3089,6 @@ mod tests {
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
                     name: "blob.bin".into(),
-                    size: payload.len(),
                     data: Some(BASE64.encode(payload.clone())),
                 }],
             })
@@ -3480,7 +3474,6 @@ mod tests {
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
                     name: "a.bin".into(),
-                    size: 0,
                     data: Some("!!!not-base64!!!".into()),
                 }],
             })
@@ -3532,7 +3525,6 @@ mod tests {
             custom_fields: vec![],
             attachments: vec![AttachmentInput {
                 name: "a.bin".into(),
-                size: 0,
                 data: Some("@@@".into()),
             }],
         };

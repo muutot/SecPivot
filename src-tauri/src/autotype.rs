@@ -310,10 +310,8 @@ pub fn parse_sequence(
             '}' => {
                 if chars.peek() == Some(&'}') {
                     chars.next();
-                    literal.push('}');
-                } else {
-                    literal.push('}');
                 }
+                literal.push('}');
             }
             _ => literal.push(c),
         }

@@ -44,7 +44,7 @@
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
   let attachments = $state<AttachmentInput[]>(
-    entry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
+    entry?.attachments?.map((a) => ({ name: a.name })) ?? [],
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
 

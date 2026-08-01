@@ -713,7 +713,6 @@ pub fn run() {
             close_tcato_overlay,
             add_group,
             rename_group,
-            delete_group,
             get_entry_password,
             security_report,
             export_csv,

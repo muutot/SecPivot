@@ -36,7 +36,6 @@ export interface AttachmentInfo {
  * only for new or replaced attachments; existing ones are kept by name. */
 export interface AttachmentInput {
   name: string;
-  size: number;
   data?: string;
 }
 
