@@ -274,7 +274,7 @@
       {/if}
     </div>
 
-    <p class="welcome-hint">主密码只在你本地使用，绝不存储或上传</p>
+    <p class="welcome-hint">主密码只在你本地使用；远程库仅上传加密后的数据库</p>
 
     {#if recentFiles.length > 0}
       <div class="recent-section">
@@ -556,6 +556,8 @@
 
   .welcome-actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 10px;
     margin-top: 28px;
   }
@@ -563,9 +565,9 @@
   .welcome-button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    height: 36px;
-    padding: 0 16px;
+    gap: 7px;
+    height: 34px;
+    padding: 0 13px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-secondary);

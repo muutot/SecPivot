@@ -52,7 +52,7 @@
     <label class="field-label" for="remote-endpoint">服务地址</label>
     <input
       id="remote-endpoint"
-      class="field-input"
+      class="settings-input"
       type="text"
       value={remote.endpoint}
       placeholder="https://s3.amazonaws.com"
@@ -63,7 +63,7 @@
         <label class="field-label" for="remote-region">区域</label>
         <input
           id="remote-region"
-          class="field-input"
+          class="settings-input"
           type="text"
           value={remote.region}
           placeholder="us-east-1"
@@ -74,7 +74,7 @@
         <label class="field-label" for="remote-bucket">存储桶</label>
         <input
           id="remote-bucket"
-          class="field-input"
+          class="settings-input"
           type="text"
           value={remote.bucket}
           placeholder="my-bucket"
@@ -95,7 +95,7 @@
     <label class="field-label" for="remote-access-key">Access Key</label>
     <input
       id="remote-access-key"
-      class="field-input"
+      class="settings-input"
       type="text"
       autocomplete="off"
       spellcheck="false"
@@ -106,7 +106,7 @@
     <label class="field-label" for="remote-secret-key">Secret Key</label>
     <input
       id="remote-secret-key"
-      class="field-input"
+      class="settings-input"
       type="password"
       autocomplete="off"
       spellcheck="false"
@@ -131,7 +131,7 @@
     <label class="field-label" for="remote-prefix">对象前缀(可选)</label>
     <input
       id="remote-prefix"
-      class="field-input"
+      class="settings-input"
       type="text"
       value={remote.prefix}
       placeholder="vaults/"
@@ -140,7 +140,7 @@
     <label class="field-label" for="remote-local-dir">本地镜像目录</label>
     <input
       id="remote-local-dir"
-      class="field-input"
+      class="settings-input"
       type="text"
       value={remote.localDir}
       placeholder="remote"
@@ -183,23 +183,6 @@
     margin: 10px 0 5px;
     color: var(--text-muted);
     font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
-  }
-
-  .field-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    font-variant-numeric: tabular-nums;
-  }
-
-  .field-input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
   }
 
   .field-row {
