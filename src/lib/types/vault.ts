@@ -10,6 +10,8 @@ export interface VaultEntry {
   notes: string;
   totp?: string;
   icon?: number;
+  /** `#RRGGBB` background color tag. */
+  color?: string;
   created?: string;
   modified?: string;
   expires?: string;
@@ -84,6 +86,10 @@ export interface EntryInput {
   totp?: string;
   /** ISO-8601 expiry datetime; empty/absent disables expiry. */
   expires?: string;
+  /** Built-in KeePass icon index (0-68); absent = default icon. */
+  icon?: number;
+  /** `#RRGGBB` background color; empty/absent clears it. */
+  color?: string;
   customFields?: CustomField[];
   attachments?: AttachmentInput[];
 }
@@ -91,6 +97,8 @@ export interface EntryInput {
 export interface GroupInput {
   parentUuid: string | null;
   name: string;
+  /** Built-in KeePass icon index; absent = default icon. */
+  icon?: number;
 }
 
 export interface TotpCode {

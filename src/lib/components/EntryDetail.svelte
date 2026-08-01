@@ -8,6 +8,8 @@ import type { HistoryVersion } from "$lib/types/vault";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import type { IconName } from "$lib/components/AppIcon.svelte";
+  import { KEEPASS_ICONS, ENTRY_DEFAULT_ICON } from "$lib/utils/keepass-icons";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
 
   interface Props {
@@ -22,6 +24,11 @@ import type { HistoryVersion } from "$lib/types/vault";
 
   let { entry, groupPath, inRecycleBin = false, onfavorite, onedit, ondelete, onrestore }: Props =
     $props();
+
+  const iconName = $derived(
+    ((entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined) ??
+      ENTRY_DEFAULT_ICON) as IconName,
+  );
 
   let revealPassword = $state(false);
   let fetchedPassword = $state("");
@@ -186,7 +193,7 @@ import type { HistoryVersion } from "$lib/types/vault";
 <div class="detail">
   <header class="detail-head">
     <div class="detail-title-row">
-      <span class="entry-icon"><AppIcon name="key" size={15} /></span>
+      <span class="entry-icon" style:--entry-color={entry.color}><AppIcon name={iconName} size={15} /></span>
       <div class="detail-titles">
         <h3 class="detail-title">{entry.title || "未命名条目"}</h3>
         <p class="detail-path">{groupPath}</p>
@@ -507,6 +514,12 @@ import type { HistoryVersion } from "$lib/types/vault";
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--warning-color);
     background: var(--hover-bg);
+  }
+
+  .entry-icon[style*="--entry-color"] {
+    color: var(--entry-color);
+    border-color: color-mix(in srgb, var(--entry-color) 45%, transparent);
+    background: color-mix(in srgb, var(--entry-color) 12%, transparent);
   }
 
   .detail-titles {

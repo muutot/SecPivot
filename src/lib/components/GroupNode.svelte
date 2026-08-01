@@ -2,6 +2,8 @@
   import type { VaultGroup } from "$lib/types/vault";
   import { countEntries } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import type { IconName } from "$lib/components/AppIcon.svelte";
+  import { KEEPASS_ICONS, GROUP_DEFAULT_ICON } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
 
   interface Props {
@@ -47,6 +49,10 @@
   const isExpanded = $derived(expanded.has(group.uuid));
   const hasChildren = $derived(group.children.length > 0);
   const isBin = $derived(group.isRecycleBin);
+  const iconName = $derived(
+    ((group.icon !== undefined ? (KEEPASS_ICONS[group.icon] as string | undefined) : undefined) ??
+      GROUP_DEFAULT_ICON) as IconName,
+  );
 
   const menuItems: ContextMenuItem[] = $derived(
     isBin
@@ -140,7 +146,7 @@
           {/if}
         {/if}
         {#if showIcon}
-          <AppIcon name={isBin ? "trash" : "folder"} size={13} />
+          <AppIcon name={isBin ? "trash" : iconName} size={13} />
         {/if}
         <span class="group-name">{group.name}</span>
         {#if count > 0}

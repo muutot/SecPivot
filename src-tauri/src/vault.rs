@@ -9,7 +9,7 @@ use base64::Engine;
 use chrono::NaiveDateTime;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{
-    Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value, TOTP,
+    Color, Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value, TOTP,
 };
 use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
@@ -84,6 +84,9 @@ pub struct VaultEntry {
     pub expired: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
+    /// Built-in KeePass icon index (0-68); absent = default icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub favorite: bool,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
@@ -152,6 +155,12 @@ pub struct EntryInput {
     /// ISO-8601 expiry datetime; empty/absent disables expiry.
     #[serde(default)]
     pub expires: Option<String>,
+    /// Built-in KeePass icon index; absent = default icon.
+    #[serde(default)]
+    pub icon: Option<u32>,
+    /// `#RRGGBB` background color; empty/absent clears it.
+    #[serde(default)]
+    pub color: Option<String>,
     #[serde(default)]
     pub custom_fields: Vec<CustomField>,
     #[serde(default)]
@@ -163,6 +172,9 @@ pub struct EntryInput {
 pub struct GroupInput {
     pub parent_uuid: Option<String>,
     pub name: String,
+    /// Built-in KeePass icon index; absent = default icon.
+    #[serde(default)]
+    pub icon: Option<u32>,
 }
 
 /// A computed one-time code for display with a local countdown.
@@ -861,6 +873,10 @@ impl VaultSession {
             };
             let mut group = parent.add_group();
             group.name = name.to_owned();
+            match input.icon {
+                Some(icon_id) => group.set_icon_builtin(icon_id as usize),
+                None => group.set_icon_none(),
+            }
         }
         self.mark_dirty();
         self.snapshot()
@@ -1082,7 +1098,10 @@ fn build_group(
         uuid: uuid.clone(),
         parent_uuid: Some(parent_uuid.to_owned()),
         name: group.name.clone(),
-        icon: None,
+        icon: match group.icon() {
+            Some(Icon::BuiltIn(id)) => Some(*id as u32),
+            _ => None,
+        },
         is_recycle_bin: Some(group.id().uuid()) == recyclebin_uuid,
         children: group
             .groups()
@@ -1101,7 +1120,10 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
         notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
         totp: entry.get_raw_otp_value().map(str::to_owned),
-        icon: None,
+        icon: match entry.icon() {
+            Some(Icon::BuiltIn(id)) => Some(*id as u32),
+            _ => None,
+        },
         created: entry.times.creation.map(format_iso),
         modified: entry.times.last_modification.map(format_iso),
         tags: if entry.tags.is_empty() {
@@ -1110,6 +1132,7 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
             Some(entry.tags.join(", "))
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+        color: entry.background_color.as_ref().map(ToString::to_string),
         expires: entry.times.expiry.map(format_iso),
         expired: entry
             .times
@@ -1225,6 +1248,19 @@ fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
             entry.times.expires = Some(false);
         }
     }
+    // Icon: a built-in KeePass index; absent = default icon.
+    match input.icon {
+        Some(icon_id) => entry.set_icon_builtin(icon_id as usize),
+        None => entry.set_icon_none(),
+    }
+    // Background color tags the entry row; foreground is left unset.
+    entry.background_color = parse_color(input.color.as_deref());
+    entry.foreground_color = None;
+}
+
+/// Parse a `#RRGGBB` color string; `None` for empty/absent or invalid input.
+fn parse_color(value: Option<&str>) -> Option<Color> {
+    value?.trim().parse().ok()
 }
 
 /// Parse an ISO-8601 expiry string (optionally with `Z` suffix) into a
@@ -1611,6 +1647,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "  Web  ".into(),
             })
             .unwrap();
@@ -1628,6 +1665,8 @@ mod tests {
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1655,6 +1694,8 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
+                    icon: None,
+                    color: None,
                     custom_fields: vec![],
                     attachments: vec![],
                 },
@@ -1686,6 +1727,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1701,6 +1744,8 @@ mod tests {
             notes: "".into(),
             totp: None,
             expires: None,
+            icon: None,
+            color: None,
             custom_fields: vec![],
             attachments: vec![],
         };
@@ -1746,6 +1791,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1764,6 +1811,8 @@ mod tests {
                         notes: "".into(),
                         totp: None,
                         expires: None,
+                        icon: None,
+                        color: None,
                         custom_fields: vec![],
                         attachments: vec![],
                     },
@@ -1777,12 +1826,103 @@ mod tests {
     }
 
     #[test]
+    fn entry_icon_and_color_round_trip_and_clear() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Iconic".into(),
+                username: "".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(1),
+                color: Some("#FF8800".into()),
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.icon, Some(1));
+        assert_eq!(entry.color.as_deref(), Some("#FF8800"));
+
+        // Clearing icon/color reverts to defaults.
+        let state = session
+            .update_entry(
+                &entry.uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: "Iconic".into(),
+                    username: "".into(),
+                    password: "pw".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+        assert_eq!(state.root.entries[0].icon, None);
+        assert_eq!(state.root.entries[0].color, None);
+
+        // Icon survives a save/reopen round trip.
+        let state = session
+            .update_entry(
+                &entry.uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: "Iconic".into(),
+                    username: "".into(),
+                    password: "pw".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: Some(3),
+                    color: Some("#2288FF".into()),
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+        assert_eq!(state.root.entries[0].icon, Some(3));
+        session.save().unwrap();
+        drop(session);
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert_eq!(state.root.entries[0].icon, Some(3));
+        assert_eq!(state.root.entries[0].color.as_deref(), Some("#2288FF"));
+    }
+
+    #[test]
+    fn group_icon_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Mail".into(),
+                icon: Some(4),
+            })
+            .unwrap();
+        assert_eq!(state.root.children[0].icon, Some(4));
+    }
+
+    #[test]
     fn save_clears_dirty_and_persists() {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Mail".into(),
             })
             .unwrap();
@@ -1810,6 +1950,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: Some("2020-01-01T00:00:00Z".to_owned()),
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1831,6 +1973,8 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
+                    icon: None,
+                    color: None,
                     custom_fields: vec![],
                     attachments: vec![],
                 },
@@ -1853,6 +1997,8 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: Some("2099-12-31T23:59:59Z".to_owned()),
+                    icon: None,
+                    color: None,
                     custom_fields: vec![],
                     attachments: vec![],
                 },
@@ -1882,6 +2028,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1923,6 +2071,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1947,6 +2097,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Parent".into(),
             })
             .unwrap();
@@ -1955,6 +2106,7 @@ mod tests {
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(parent_uuid.clone()),
+                icon: None,
                 name: "Child".into(),
             })
             .unwrap();
@@ -1969,6 +2121,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2017,6 +2171,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2078,6 +2234,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2112,6 +2270,7 @@ mod tests {
         let err = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "   ".into(),
             })
             .unwrap_err();
@@ -2120,6 +2279,7 @@ mod tests {
         let err = session
             .add_group(&GroupInput {
                 parent_uuid: Some("not-a-uuid".into()),
+                icon: None,
                 name: "X".into(),
             })
             .unwrap_err();
@@ -2138,6 +2298,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2159,6 +2321,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Web".into(),
             })
             .unwrap();
@@ -2173,6 +2336,8 @@ mod tests {
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2274,6 +2439,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2288,6 +2454,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2304,6 +2472,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2318,6 +2487,8 @@ mod tests {
                 notes: "".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2346,6 +2517,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2360,6 +2532,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2381,6 +2555,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2395,6 +2570,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2419,6 +2596,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2435,6 +2613,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![
                     CustomField {
                         name: "PIN".into(),
@@ -2480,6 +2660,8 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
+                    icon: None,
+                    color: None,
                     custom_fields: vec![CustomField {
                         name: "PIN".into(),
                         value: "9999".into(),
@@ -2530,6 +2712,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2544,6 +2727,8 @@ mod tests {
                 notes: "n".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![
                     CustomField {
                         name: FIELD_OTP.to_owned(),
@@ -2577,6 +2762,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2592,6 +2778,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
                     name: "blob.bin".into(),
@@ -2641,6 +2829,7 @@ mod tests {
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Mail".into(),
             })
             .unwrap();
@@ -2701,6 +2890,8 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2715,6 +2906,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2732,6 +2924,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "G".into(),
             })
             .unwrap();
@@ -2766,6 +2959,7 @@ mod tests {
         let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Web".into(),
             })
             .unwrap();
@@ -2780,6 +2974,8 @@ mod tests {
                 notes: "line1\nline2".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
+                icon: None,
+                color: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2835,6 +3031,7 @@ mod tests {
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Web".into(),
             })
             .unwrap();
@@ -2880,6 +3077,7 @@ mod tests {
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Mail".into(),
             })
             .unwrap();
@@ -2979,6 +3177,7 @@ mod tests {
         session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
                 name: "Web".into(),
             })
             .unwrap();

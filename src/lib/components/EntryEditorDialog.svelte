@@ -11,6 +11,13 @@
   import { vault } from "$lib/services/vault";
   import { generatePassword, estimateEntropy, entropyLabel } from "$lib/utils/password";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import type { IconName } from "$lib/components/AppIcon.svelte";
+  import {
+    KEEPASS_ICONS,
+    KEEPASS_COLORS,
+    ICON_PICKER_COUNT,
+    ENTRY_DEFAULT_ICON,
+  } from "$lib/utils/keepass-icons";
 
   interface Props {
     mode: "create" | "edit";
@@ -31,6 +38,8 @@
   let notes = $state(entry?.notes ?? "");
   let totp = $state(entry?.totp ?? "");
   let expiresLocal = $state(entry?.expires ? toLocalInput(entry.expires) : "");
+  let iconIndex = $state<number | null>(entry?.icon ?? null);
+  let colorHex = $state(entry?.color ?? "");
   let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
@@ -131,6 +140,10 @@
     )}:${pad(date.getMinutes())}`;
   }
 
+  function keepassIconName(index: number): IconName {
+    return (KEEPASS_ICONS[index] ?? ENTRY_DEFAULT_ICON) as IconName;
+  }
+
   function submit(): void {
     if (!title.trim() && !username.trim() && !password) return;
     onsaved({
@@ -142,6 +155,8 @@
       notes,
       totp: totp.trim() || undefined,
       expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
+      icon: iconIndex ?? undefined,
+      color: colorHex || undefined,
       customFields: customFields
         .map((f) => ({ name: f.name.trim(), value: f.value }))
         .filter((f) => f.name !== ""),
@@ -238,6 +253,53 @@
         <input class="text-input" type="datetime-local" bind:value={expiresLocal} />
         <span class="field-hint">到期后条目标记为已过期</span>
       </label>
+
+      <section class="field full">
+        <span class="section-title">图标</span>
+        <div class="icon-grid">
+          {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
+            <button
+              type="button"
+              class="icon-option"
+              class:selected={iconIndex === index}
+              onclick={() => (iconIndex = iconIndex === index ? null : index)}
+              title={`内置图标 ${index}`}
+              aria-pressed={iconIndex === index}
+            >
+              <AppIcon name={keepassIconName(index)} size={16} />
+            </button>
+          {/each}
+        </div>
+      </section>
+
+      <section class="field full">
+        <span class="section-title">颜色标记</span>
+        <div class="color-row">
+          {#each KEEPASS_COLORS as color (color)}
+            <button
+              type="button"
+              class="color-option"
+              class:selected={colorHex.toUpperCase() === color}
+              style:background={color}
+              onclick={() => (colorHex = colorHex.toUpperCase() === color ? "" : color)}
+              title={color}
+              aria-label={`颜色 ${color}`}
+            ></button>
+          {/each}
+          <input
+            class="color-input"
+            type="color"
+            value={colorHex || "#000000"}
+            oninput={(e) => (colorHex = e.currentTarget.value.toUpperCase())}
+            title="自定义颜色"
+          />
+          {#if colorHex}
+            <button type="button" class="icon-btn" onclick={() => (colorHex = "")} title="清除颜色">
+              <AppIcon name="x" size={13} />
+            </button>
+          {/if}
+        </div>
+      </section>
 
       <section class="field full">
         <span class="section-title">自定义字段</span>
@@ -588,6 +650,66 @@
 
   .file-input {
     display: none;
+  }
+
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 4px;
+  }
+
+  .icon-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    cursor: pointer;
+  }
+
+  .icon-option:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .icon-option.selected {
+    color: var(--accent-color, var(--primary-color));
+    border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  }
+
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .color-option {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    cursor: pointer;
+  }
+
+  .color-option.selected {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 2px var(--hover-bg) inset;
+  }
+
+  .color-input {
+    width: 32px;
+    height: 24px;
+    padding: 1px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    cursor: pointer;
   }
 
   .modal-actions {

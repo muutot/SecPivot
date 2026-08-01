@@ -18,6 +18,8 @@
     SecurityReport,
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import type { IconName } from "$lib/components/AppIcon.svelte";
+  import { KEEPASS_ICONS, ENTRY_DEFAULT_ICON, GROUP_DEFAULT_ICON, ICON_PICKER_COUNT } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
@@ -41,6 +43,7 @@
   let groupModalOpen = $state(false);
   let groupModalParent = $state<string | null>(null);
   let newGroupName = $state("");
+  let groupIconIndex = $state<number | null>(null);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let statusMsg = $state("");
   let busy = $state(false);
@@ -54,6 +57,15 @@
     let count = group.entries.filter((e) => e.expired).length;
     for (const child of group.children) count += countExpiredEntries(child);
     return count;
+  }
+
+  function entryIconName(entry: VaultEntry): IconName {
+    const mapped = entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined;
+    return (mapped ?? ENTRY_DEFAULT_ICON) as IconName;
+  }
+
+  function groupIconName(index: number): IconName {
+    return (KEEPASS_ICONS[index] ?? GROUP_DEFAULT_ICON) as IconName;
   }
 
   onMount(() => {
@@ -636,6 +648,7 @@
   function openGroupModal(parentUuid: string | null): void {
     groupModalParent = parentUuid;
     newGroupName = "";
+    groupIconIndex = null;
     groupModalOpen = true;
   }
 
@@ -643,7 +656,7 @@
     const name = newGroupName.trim();
     if (!name) return;
     try {
-      await vault.addGroup({ parentUuid: groupModalParent, name });
+      await vault.addGroup({ parentUuid: groupModalParent, name, icon: groupIconIndex ?? undefined });
       groupModalOpen = false;
       flash("已创建分组");
     } catch (e) {
@@ -1009,6 +1022,7 @@
                   class="entry-row"
                   class:selected={selectedUuids.has(row.entry.uuid)}
                   class:expired-row={row.entry.expired}
+                  style:--row-color={row.entry.color ?? "transparent"}
                   role="option"
                   aria-selected={selectedUuids.has(row.entry.uuid)}
                   tabindex="0"
@@ -1018,7 +1032,10 @@
                     if (e.key === "Enter") setSingleSelection(row.entry);
                   }}
                 >
-                  <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
+                  {#if row.entry.color}
+                    <span class="entry-row-color-bar" aria-hidden="true"></span>
+                  {/if}
+                  <span class="entry-row-icon"><AppIcon name={entryIconName(row.entry)} size={13} /></span>
                   <div class="entry-row-main">
                     <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
                       >{row.entry.title || "未命名条目"}{#if row.entry.expired}
@@ -1176,6 +1193,21 @@
           if (e.key === "Escape") groupModalOpen = false;
         }}
       />
+      <span class="group-icon-label">图标</span>
+      <div class="group-icon-grid">
+        {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
+          <button
+            type="button"
+            class="icon-option"
+            class:selected={groupIconIndex === index}
+            onclick={() => (groupIconIndex = groupIconIndex === index ? null : index)}
+            title={`内置图标 ${index}`}
+            aria-pressed={groupIconIndex === index}
+          >
+            <AppIcon name={groupIconName(index)} size={16} />
+          </button>
+        {/each}
+      </div>
       <div class="modal-actions">
         <button class="modal-button" onclick={() => (groupModalOpen = false)}>取消</button>
         <button
@@ -1532,6 +1564,7 @@
   }
 
   .entry-row {
+    position: relative;
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) var(--col-totp, 96px) var(--col-url, 200px) 70px;
     align-items: center;
@@ -1539,6 +1572,16 @@
     height: 40px;
     padding: 0 10px;
     cursor: pointer;
+  }
+
+  .entry-row-color-bar {
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--row-color);
   }
 
   .app-shell.compact .entry-row {
@@ -1819,6 +1862,43 @@
     border-radius: 13px;
     background: var(--surface-bg);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .group-icon-label {
+    display: block;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .group-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 4px;
+  }
+
+  .group-modal .icon-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    cursor: pointer;
+  }
+
+  .group-modal .icon-option:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .group-modal .icon-option.selected {
+    color: var(--accent-color, var(--primary-color));
+    border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   }
 
   .confirm-modal {
