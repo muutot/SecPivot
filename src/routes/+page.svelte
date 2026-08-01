@@ -48,10 +48,24 @@
   let securityReport = $state<SecurityReport | null>(null);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
+  let expiredNotifiedPath = $state<string | null>(null);
+
+  function countExpiredEntries(group: VaultGroup): number {
+    let count = group.entries.filter((e) => e.expired).length;
+    for (const child of group.children) count += countExpiredEntries(child);
+    return count;
+  }
 
   onMount(() => {
     const unsubscribe = vault.subscribe((value) => {
       currentVault = value;
+      if (value && value.path !== expiredNotifiedPath) {
+        expiredNotifiedPath = value.path;
+        const expired = countExpiredEntries(value.root);
+        if (expired > 0) {
+          setTimeout(() => flash(`有 ${expired} 个条目已过期,请及时更新密码`), 300);
+        }
+      }
       if (!value) {
         selectedEntry = null;
         selectedUuids = new Set();
@@ -992,6 +1006,7 @@
                 <div
                   class="entry-row"
                   class:selected={selectedUuids.has(row.entry.uuid)}
+                  class:expired-row={row.entry.expired}
                   role="option"
                   aria-selected={selectedUuids.has(row.entry.uuid)}
                   tabindex="0"
@@ -1003,7 +1018,11 @@
                 >
                   <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
                   <div class="entry-row-main">
-                    <span class="entry-row-title">{row.entry.title || "未命名条目"}</span>
+                    <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
+                      >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                        <span class="expired-flag">已过期</span>
+                      {/if}</span
+                    >
                     {#if showDescriptions}
                       <span class="entry-row-sub">{row.entry.username}</span>
                     {/if}
@@ -1558,6 +1577,23 @@
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .entry-row.expired-row .entry-row-title {
+    color: color-mix(in srgb, var(--danger-color) 80%, var(--text-primary));
+  }
+
+  .expired-flag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border: 1px solid color-mix(in srgb, var(--danger-color) 40%, transparent);
+    border-radius: 4px;
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+    font-size: 9px;
+    line-height: 1.4;
+    vertical-align: 1px;
   }
 
   .entry-row-sub {

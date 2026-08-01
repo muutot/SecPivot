@@ -30,6 +30,7 @@
   let url = $state(entry?.url ?? "");
   let notes = $state(entry?.notes ?? "");
   let totp = $state(entry?.totp ?? "");
+  let expiresLocal = $state(entry?.expires ? toLocalInput(entry.expires) : "");
   let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
@@ -120,6 +121,16 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  /** Convert an ISO-8601 UTC timestamp to the `datetime-local` input format. */
+  function toLocalInput(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+      date.getHours(),
+    )}:${pad(date.getMinutes())}`;
+  }
+
   function submit(): void {
     if (!title.trim() && !username.trim() && !password) return;
     onsaved({
@@ -130,6 +141,7 @@
       url: url.trim(),
       notes,
       totp: totp.trim() || undefined,
+      expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
       customFields: customFields
         .map((f) => ({ name: f.name.trim(), value: f.value }))
         .filter((f) => f.name !== ""),
@@ -219,6 +231,12 @@
           bind:value={totp}
           placeholder="Base32 密钥或 otpauth URI"
         />
+      </label>
+
+      <label class="field">
+        <span>过期时间</span>
+        <input class="text-input" type="datetime-local" bind:value={expiresLocal} />
+        <span class="field-hint">到期后条目标记为已过期</span>
       </label>
 
       <section class="field full">
@@ -373,6 +391,13 @@
 
   .field.full {
     grid-column: 1 / -1;
+  }
+
+  .field-hint {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-faint);
+    font-size: 10px;
   }
 
   .field > span {

@@ -12,6 +12,8 @@ export interface VaultEntry {
   icon?: number;
   created?: string;
   modified?: string;
+  expires?: string;
+  expired?: boolean;
   tags?: string;
   favorite?: boolean;
   customFields?: CustomField[];
@@ -80,6 +82,8 @@ export interface EntryInput {
   url: string;
   notes: string;
   totp?: string;
+  /** ISO-8601 expiry datetime; empty/absent disables expiry. */
+  expires?: string;
   customFields?: CustomField[];
   attachments?: AttachmentInput[];
 }

@@ -316,6 +316,17 @@
         </div>
       </div>
 
+      {#if entry.expires}
+        <div class="field-block">
+          <span class="field-label">过期时间</span>
+          <div class="field-value">
+            <span class="field-text" class:expired-text={entry.expired}>
+              {formatTime(entry.expires)}{entry.expired ? " · 已过期" : ""}
+            </span>
+          </div>
+        </div>
+      {/if}
+
       {#if entry.tags}
         <div class="field-block">
           <span class="field-label">标签</span>
@@ -553,6 +564,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .field-text.expired-text {
+    color: var(--danger-color);
   }
 
   .field-text.mono {

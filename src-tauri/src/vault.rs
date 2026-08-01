@@ -78,6 +78,9 @@ pub struct VaultEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+    pub expired: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
     pub favorite: bool,
     pub custom_fields: Vec<CustomField>,
@@ -144,6 +147,9 @@ pub struct EntryInput {
     pub notes: String,
     #[serde(default)]
     pub totp: Option<String>,
+    /// ISO-8601 expiry datetime; empty/absent disables expiry.
+    #[serde(default)]
+    pub expires: Option<String>,
     #[serde(default)]
     pub custom_fields: Vec<CustomField>,
     #[serde(default)]
@@ -981,6 +987,11 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
             Some(entry.tags.join(", "))
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+        expires: entry.times.expiry.map(format_iso),
+        expired: entry
+            .times
+            .expiry
+            .is_some_and(|expiry| expiry < chrono::Utc::now().naive_utc()),
         custom_fields: {
             let mut fields: Vec<CustomField> = entry
                 .fields
@@ -1059,6 +1070,28 @@ fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
             entry.fields.remove(FIELD_OTP);
         }
     }
+    // Expiry: an ISO datetime enables expiry; an empty/absent value clears it.
+    match parse_expiry(input.expires.as_deref()) {
+        Some(expiry) => {
+            entry.times.expiry = Some(expiry);
+            entry.times.expires = Some(true);
+        }
+        None => {
+            entry.times.expiry = None;
+            entry.times.expires = Some(false);
+        }
+    }
+}
+
+/// Parse an ISO-8601 expiry string (optionally with `Z` suffix) into a
+/// `NaiveDateTime`. Returns `None` for empty input; rejects invalid formats.
+fn parse_expiry(value: Option<&str>) -> Option<NaiveDateTime> {
+    let raw = value?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let normalized = raw.strip_suffix('Z').unwrap_or(raw);
+    NaiveDateTime::parse_from_str(normalized, "%Y-%m-%dT%H:%M:%S").ok()
 }
 
 /// Replace the entry's custom fields with the given list, keeping standard
@@ -1450,6 +1483,7 @@ mod tests {
                 url: "https://github.com".into(),
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1476,6 +1510,7 @@ mod tests {
                     url: "".into(),
                     notes: "".into(),
                     totp: None,
+                    expires: None,
                     custom_fields: vec![],
                     attachments: vec![],
                 },
@@ -1514,6 +1549,78 @@ mod tests {
     }
 
     #[test]
+    fn entry_expiry_roundtrip_and_clear() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Expiring".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: Some("2020-01-01T00:00:00Z".to_owned()),
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.expires.as_deref(), Some("2020-01-01T00:00:00Z"));
+        assert!(entry.expired, "past expiry should be flagged");
+
+        // Clearing the expiry marks the entry as not expired.
+        let state = session
+            .update_entry(
+                &entry.uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: "Expiring".into(),
+                    username: "u".into(),
+                    password: "p".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+        let entry = &state.root.entries[0];
+        assert!(entry.expires.is_none());
+        assert!(!entry.expired);
+
+        // A future expiry persists across save/reopen.
+        session
+            .update_entry(
+                &entry.uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: "Expiring".into(),
+                    username: "u".into(),
+                    password: "p".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: Some("2099-12-31T23:59:59Z".to_owned()),
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.expires.as_deref(), Some("2099-12-31T23:59:59Z"));
+        assert!(!entry.expired);
+    }
+
+    #[test]
     fn change_master_key_reencrypts_and_reopens_with_new_credentials() {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
@@ -1526,6 +1633,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1566,6 +1674,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1611,6 +1720,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1658,6 +1768,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1718,6 +1829,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1777,6 +1889,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1811,6 +1924,7 @@ mod tests {
                 url: "https://github.com".into(),
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1925,6 +2039,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1954,6 +2069,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1995,6 +2111,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2029,6 +2146,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2068,6 +2186,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![
                     CustomField {
                         name: "PIN".into(),
@@ -2112,6 +2231,7 @@ mod tests {
                     url: "".into(),
                     notes: "".into(),
                     totp: None,
+                    expires: None,
                     custom_fields: vec![CustomField {
                         name: "PIN".into(),
                         value: "9999".into(),
@@ -2175,6 +2295,7 @@ mod tests {
                 url: "".into(),
                 notes: "n".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![
                     CustomField {
                         name: FIELD_OTP.to_owned(),
@@ -2222,6 +2343,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
                     name: "blob.bin".into(),
@@ -2330,6 +2452,7 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -2408,6 +2531,7 @@ mod tests {
                 url: "https://x".into(),
                 notes: "line1\nline2".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                expires: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
