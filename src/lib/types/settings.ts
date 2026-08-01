@@ -24,6 +24,23 @@ export interface DatabaseDefaults {
   generator: PasswordGeneratorSettings;
 }
 
+/** S3-compatible remote vault settings. Access keys are stored plaintext in
+ * `config.json` by design — a secondary credential, never a vault master
+ * password (see `security-model.md`). */
+export interface RemoteSettings {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKey: string;
+  secretKey: string;
+  /** Optional key prefix (folder) used by the remote file browser. */
+  prefix: string;
+  /** Subdirectory under `Storage/remote/` for local copies ("保存到本地" mode). */
+  localDir: string;
+  /** Number of timestamped `.bak` backups kept beside the local copy; 0 disables. */
+  backupCount: number;
+}
+
 export interface SecuritySettings {
   autoLockMinutes: number;
   clipboardClearSeconds: number;
@@ -68,4 +85,5 @@ export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
+  remote: RemoteSettings;
 }

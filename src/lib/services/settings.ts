@@ -5,6 +5,7 @@ import type {
   GeneralSettings,
   SecuritySettings,
   DatabaseDefaults,
+  RemoteSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
@@ -63,10 +64,22 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
   },
 };
 
+export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
+  endpoint: "https://s3.amazonaws.com",
+  region: "us-east-1",
+  bucket: "",
+  accessKey: "",
+  secretKey: "",
+  prefix: "",
+  localDir: "remote",
+  backupCount: 3,
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
+  remote: DEFAULT_REMOTE_SETTINGS,
 };
 
 const hexColor = /^#[0-9a-fA-F]{6}$/;
@@ -103,6 +116,32 @@ export function normalizeThemeColors(value: unknown, fallback: ThemeColors): The
     base[key] = validHex(String(source[key] ?? base[key]), base[key]);
   }
   return base;
+}
+
+export function normalizeRemoteSettings(
+  source: Partial<RemoteSettings> | undefined,
+  fallback: RemoteSettings = DEFAULT_REMOTE_SETTINGS,
+): RemoteSettings {
+  const r = source ?? {};
+  const str = (key: keyof RemoteSettings, fb: string): string => {
+    const value = typeof r[key] === "string" ? String(r[key]).trim() : "";
+    return value || fb;
+  };
+  return {
+    endpoint: str("endpoint", fallback.endpoint),
+    region: str("region", fallback.region),
+    bucket: str("bucket", fallback.bucket),
+    accessKey: str("accessKey", fallback.accessKey),
+    secretKey: str("secretKey", fallback.secretKey),
+    prefix: str("prefix", fallback.prefix),
+    localDir: str("localDir", fallback.localDir),
+    backupCount: clampInt(
+      typeof r.backupCount === "number" ? r.backupCount : fallback.backupCount,
+      0,
+      10,
+      3,
+    ),
+  };
 }
 
 export function normalizeSettings(
@@ -209,7 +248,12 @@ export function normalizeSettings(
     },
   };
 
-  return { general, security, database };
+  return {
+    general,
+    security,
+    database,
+    remote: normalizeRemoteSettings(source.remote, fallback.remote),
+  };
 }
 
 interface AppSettingsStore {
@@ -218,6 +262,7 @@ interface AppSettingsStore {
   updateGeneral: <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => void;
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
+  updateRemote: <K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
@@ -328,6 +373,11 @@ export const appSettings: AppSettingsStore = {
 
   updateDatabase(key, value): void {
     settings.update((s) => ({ ...s, database: { ...s.database, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateRemote(key, value): void {
+    settings.update((s) => ({ ...s, remote: { ...s.remote, [key]: value } }));
     schedulePersist();
   },
 

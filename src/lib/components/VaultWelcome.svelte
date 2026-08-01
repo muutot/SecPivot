@@ -4,6 +4,7 @@
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
+  import type { RemoteMode, RemoteObject } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -14,7 +15,10 @@
 
   const recentFiles = $derived(get(appSettings).general.recentFiles);
 
-  type Modal = "none" | "open" | "create";
+  const remoteLocalDir = $derived(get(appSettings).remote.localDir || "remote");
+
+  type Modal = "none" | "open" | "create" | "remote";
+  type RemoteTab = "open" | "create";
 
   let modal: Modal = $state("none");
   let busy = $state(false);
@@ -25,6 +29,110 @@
   let keyfilePath = $state("");
   let showPassword = $state(false);
   let isDemo = $state(false);
+
+  let remoteTab: RemoteTab = $state("open");
+  let remoteObjects: RemoteObject[] = $state([]);
+  let remoteKey = $state("");
+  let remoteMode: RemoteMode = $state("memory");
+  let remoteLoading = $state(false);
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function handleRemoteOpen(): Promise<void> {
+    remoteTab = "open";
+    remoteKey = "";
+    remoteMode = "memory";
+    keyfilePath = "";
+    password = "";
+    error = "";
+    modal = "remote";
+    await loadRemoteObjects();
+  }
+
+  async function loadRemoteObjects(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    remoteLoading = true;
+    error = "";
+    try {
+      remoteObjects = await vault.listRemoteObjects();
+      if (remoteObjects.length === 0) {
+        error = "未找到远程数据库文件，请检查设置中的存储桶与对象前缀";
+      }
+    } catch (e) {
+      error = String(e);
+    } finally {
+      remoteLoading = false;
+    }
+  }
+
+  function switchRemoteTab(tab: RemoteTab): void {
+    remoteTab = tab;
+    remoteKey = "";
+    password = "";
+    confirm = "";
+    error = "";
+  }
+
+  async function confirmRemoteOpen(): Promise<void> {
+    if (!remoteKey) {
+      error = "请选择远程数据库文件";
+      return;
+    }
+    if (!password) {
+      error = "请输入主密码";
+      return;
+    }
+    busy = true;
+    error = "";
+    try {
+      await vault.openRemote(remoteKey, password, keyfilePath || undefined, remoteMode);
+      modal = "none";
+      onopened();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function confirmRemoteCreate(): Promise<void> {
+    if (!remoteKey) {
+      error = "请输入远程对象键";
+      return;
+    }
+    if (!password) {
+      error = "请输入主密码";
+      return;
+    }
+    if (password !== confirm) {
+      error = "两次输入的密码不一致";
+      return;
+    }
+    busy = true;
+    error = "";
+    try {
+      const settings = get(appSettings);
+      await vault.createRemote(
+        remoteKey,
+        password,
+        settings.database.kdf,
+        settings.database.cipher,
+        settings.database.compression,
+        keyfilePath || undefined,
+        remoteMode,
+      );
+      modal = "none";
+      onopened();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
 
   async function handleOpen(): Promise<void> {
     if (isTauriRuntime()) {
@@ -159,6 +267,11 @@
       <button class="welcome-button" onclick={handleCreate} disabled={busy}>
         <AppIcon name="plus" size={16} />新建数据库
       </button>
+      {#if isTauriRuntime()}
+        <button class="welcome-button" onclick={handleRemoteOpen} disabled={busy}>
+          <AppIcon name="cloud" size={16} />远程数据库
+        </button>
+      {/if}
     </div>
 
     <p class="welcome-hint">主密码只在你本地使用，绝不存储或上传</p>
@@ -183,17 +296,36 @@
       class="password-modal"
       role="dialog"
       aria-modal="true"
-      aria-label={modal === "open" ? "解锁数据库" : "新建数据库"}
+      aria-label={modal === "open"
+        ? "解锁数据库"
+        : modal === "create"
+          ? "新建数据库"
+          : "远程数据库"}
     >
       <div class="modal-head">
         <span class="modal-icon"
-          ><AppIcon name={modal === "open" ? "lock" : "folder-plus"} size={18} /></span
+          ><AppIcon
+            name={modal === "open" ? "lock" : modal === "create" ? "folder-plus" : "cloud"}
+            size={18}
+          /></span
         >
         <div>
           <strong
-            >{modal === "open" ? (isDemo ? "打开演示数据库" : "解锁数据库") : "新建数据库"}</strong
+            >{modal === "open"
+              ? isDemo
+                ? "打开演示数据库"
+                : "解锁数据库"
+              : modal === "create"
+                ? "新建数据库"
+                : "远程数据库 (S3)"}</strong
           >
-          <p>{modal === "open" ? path : "选择一个位置并设置主密码"}</p>
+          <p>
+            {modal === "open"
+              ? path
+              : modal === "create"
+                ? "选择一个位置并设置主密码"
+                : "从 S3 打开或创建数据库"}
+          </p>
         </div>
       </div>
 
@@ -215,6 +347,90 @@
             {/if}
           </div>
         </label>
+      {/if}
+
+      {#if modal === "remote"}
+        <div class="remote-tabs" role="tablist" aria-label="远程操作">
+          <button
+            class="remote-tab"
+            class:active={remoteTab === "open"}
+            onclick={() => switchRemoteTab("open")}
+          >
+            打开
+          </button>
+          <button
+            class="remote-tab"
+            class:active={remoteTab === "create"}
+            onclick={() => switchRemoteTab("create")}
+          >
+            新建
+          </button>
+        </div>
+
+        {#if remoteTab === "open"}
+          <div class="field">
+            <span>选择远程文件</span>
+            <div class="remote-list">
+              {#if remoteLoading}
+                <p class="remote-empty">正在加载…</p>
+              {:else if remoteObjects.length === 0}
+                <p class="remote-empty">暂无文件</p>
+              {:else}
+                {#each remoteObjects as obj (obj.key)}
+                  <button
+                    class="remote-item"
+                    class:active={remoteKey === obj.key}
+                    onclick={() => (remoteKey = obj.key)}
+                  >
+                    <AppIcon name="file" size={13} />
+                    <span class="remote-item-name" title={obj.key}>{obj.key}</span>
+                    <span class="remote-item-size">{formatBytes(obj.size)}</span>
+                  </button>
+                {/each}
+              {/if}
+            </div>
+            <button
+              class="remote-refresh"
+              onclick={loadRemoteObjects}
+              disabled={remoteLoading || busy}
+            >
+              <AppIcon name="refresh" size={13} />刷新列表
+            </button>
+          </div>
+        {:else}
+          <label class="field">
+            <span>远程对象键</span>
+            <input
+              class="text-input"
+              type="text"
+              bind:value={remoteKey}
+              placeholder="vaults/new.kdbx"
+              spellcheck="false"
+            />
+          </label>
+        {/if}
+
+        <div class="field">
+          <span>保存方式</span>
+          <div class="remote-mode" role="radiogroup" aria-label="保存方式">
+            <button
+              class="remote-mode-option"
+              class:active={remoteMode === "memory"}
+              onclick={() => (remoteMode = "memory")}
+            >
+              <strong>仅在内存</strong>
+              <small>保存时只上传回 S3</small>
+            </button>
+            <button
+              class="remote-mode-option"
+              class:active={remoteMode === "local"}
+              onclick={() => (remoteMode = "local")}
+            >
+              <strong>保存到本地</strong>
+              <small>镜像到 Storage/remote/{remoteLocalDir} 并轮换备份</small>
+            </button>
+          </div>
+        </div>
       {/if}
 
       <label class="field">
@@ -271,10 +487,24 @@
         <button class="modal-button" onclick={() => (modal = "none")} disabled={busy}>取消</button>
         <button
           class="modal-button primary"
-          onclick={modal === "open" ? confirmOpen : confirmCreate}
+          onclick={modal === "open"
+            ? confirmOpen
+            : modal === "create"
+              ? confirmCreate
+              : remoteTab === "open"
+                ? confirmRemoteOpen
+                : confirmRemoteCreate}
           disabled={busy}
         >
-          {busy ? "处理中…" : modal === "open" ? "解锁" : "创建"}
+          {busy
+            ? "处理中…"
+            : modal === "open"
+              ? "解锁"
+              : modal === "create"
+                ? "创建"
+                : remoteTab === "open"
+                  ? "解锁"
+                  : "创建"}
         </button>
       </div>
     </div>
@@ -559,5 +789,152 @@
   .modal-button:disabled {
     cursor: wait;
     opacity: 0.6;
+  }
+
+  .remote-tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .remote-tab {
+    height: 28px;
+    padding: 0 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .remote-tab.active {
+    border-color: var(--selection-color);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--input-bg));
+  }
+
+  .remote-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    margin-top: 5px;
+    padding: 6px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+  }
+
+  .remote-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--settings-control-radius, 5px);
+    color: var(--text-secondary);
+    background: transparent;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .remote-item:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .remote-item.active {
+    border-color: var(--selection-color);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
+  }
+
+  .remote-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .remote-item-size {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .remote-empty {
+    margin: 0;
+    padding: 10px 8px;
+    color: var(--text-faint);
+    font-size: var(--font-size-secondary, 11px);
+    text-align: center;
+  }
+
+  .remote-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    margin-top: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--card-bg);
+    font-size: var(--font-size-tiny, 10px);
+    cursor: pointer;
+  }
+
+  .remote-refresh:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .remote-refresh:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+
+  .remote-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 5px;
+  }
+
+  .remote-mode-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--input-bg);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .remote-mode-option.active {
+    border-color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--input-bg));
+  }
+
+  .remote-mode-option strong {
+    font-size: var(--font-size-secondary, 11px);
+    font-weight: 560;
+  }
+
+  .remote-mode-option small {
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    line-height: 1.4;
   }
 </style>

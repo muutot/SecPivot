@@ -4,9 +4,10 @@
   import GeneralSettingsPanel from "$lib/components/settings/GeneralSettingsPanel.svelte";
   import SecuritySettingsPanel from "$lib/components/settings/SecuritySettingsPanel.svelte";
   import DatabaseSettingsPanel from "$lib/components/settings/DatabaseSettingsPanel.svelte";
+  import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
-  type Section = "general" | "security" | "database" | "about";
+  type Section = "general" | "security" | "database" | "remote" | "about";
   type GeneralTab = "appearance" | "display" | "compact";
 
   interface Props {
@@ -22,7 +23,7 @@
   const sections: {
     id: Section;
     label: string;
-    icon: "sliders" | "shield" | "database" | "info";
+    icon: "sliders" | "shield" | "database" | "cloud" | "info";
     description: string;
     tabs?: { id: GeneralTab; label: string }[];
     title: string;
@@ -52,6 +53,13 @@
       icon: "database",
       title: "数据库",
       description: "新建数据库的加密默认值与密码生成规则。",
+    },
+    {
+      id: "remote",
+      label: "远程",
+      icon: "cloud",
+      title: "远程",
+      description: "S3 兼容对象存储的连接、凭据与本地镜像设置。",
     },
     {
       id: "about",
@@ -90,7 +98,7 @@
       {/each}
     </nav>
     <div class="sidebar-foot">
-      <p class="sidebar-hint">本地加密存储 · 零同步上传</p>
+      <p class="sidebar-hint">本地加密存储 · 远程同步可选</p>
     </div>
   </aside>
 
@@ -133,6 +141,8 @@
       <SecuritySettingsPanel {onclose} showHeader={false} />
     {:else if active === "database"}
       <DatabaseSettingsPanel {onclose} showHeader={false} />
+    {:else if active === "remote"}
+      <RemoteSettingsPanel {onclose} showHeader={false} />
     {:else if active === "about"}
       <AboutSettingsPanel {onclose} showHeader={false} {appVersion} />
     {/if}

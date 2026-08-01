@@ -111,4 +111,15 @@ export interface CreateVaultRequest {
   keyfile?: string;
 }
 
+/** S3 object listed by the remote browser (`s3_list_objects`). */
+export interface RemoteObject {
+  key: string;
+  size: number;
+  modified?: string;
+}
+
+/** Remote save semantics: `memory` uploads back to S3 only; `local` also
+ * mirrors the file under `Storage/remote/<local_dir>` with rotated backups. */
+export type RemoteMode = "memory" | "local";
+
 export const ROOT_GROUP_NAME = "Root";

@@ -10,6 +10,8 @@ import type {
   CreateVaultRequest,
   TotpCode,
   SecurityReport,
+  RemoteObject,
+  RemoteMode,
 } from "$lib/types/vault";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
@@ -21,6 +23,22 @@ interface VaultStore {
   get: () => VaultState | null;
   open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
   create: (request: CreateVaultRequest) => Promise<VaultState>;
+  listRemoteObjects: () => Promise<RemoteObject[]>;
+  openRemote: (
+    key: string,
+    password: string,
+    keyfile: string | undefined,
+    mode: RemoteMode,
+  ) => Promise<VaultState>;
+  createRemote: (
+    key: string,
+    password: string,
+    kdf: string,
+    cipher: string,
+    compression: string,
+    keyfile: string | undefined,
+    mode: RemoteMode,
+  ) => Promise<VaultState>;
   close: () => Promise<void>;
   save: () => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
@@ -129,9 +147,10 @@ function newUuid(): string {
   return crypto.randomUUID();
 }
 
-/** Move a successfully opened/created vault path to the front of the recent list. */
+/** Move a successfully opened/created vault path to the front of the recent list.
+ * Remote (`s3://`) paths are excluded — the local open flow cannot reopen them. */
 function rememberRecent(path: string): void {
-  if (!path) return;
+  if (!path || path.startsWith("s3://")) return;
   const current = get(appSettings).general.recentFiles;
   const next = [path, ...current.filter((p) => p !== path)].slice(0, RECENT_FILES_MAX);
   if (next.length === current.length && next.every((p, i) => p === current[i])) return;
@@ -230,6 +249,42 @@ export const vault: VaultStore = {
     }
     browserState = null;
     state.set(null);
+  },
+
+  async listRemoteObjects(): Promise<RemoteObject[]> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    return backendInvoke<RemoteObject[]>("s3_list_objects", { cfg: get(appSettings).remote });
+  },
+
+  async openRemote(key, password, keyfile, mode): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    const result = await backendInvoke<VaultState>("open_remote_vault", {
+      cfg: get(appSettings).remote,
+      key,
+      password,
+      keyfile: keyfile || null,
+      mode,
+    });
+    state.set(result);
+    rememberRecent(result.path);
+    return result;
+  },
+
+  async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    const result = await backendInvoke<VaultState>("create_remote_vault", {
+      cfg: get(appSettings).remote,
+      key,
+      password,
+      kdf,
+      cipher,
+      compression,
+      keyfile: keyfile || null,
+      mode,
+    });
+    state.set(result);
+    rememberRecent(result.path);
+    return result;
   },
 
   async save(): Promise<VaultState> {

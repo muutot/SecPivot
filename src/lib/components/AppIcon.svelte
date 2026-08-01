@@ -39,6 +39,7 @@
     | "link"
     | "download"
     | "upload"
+    | "cloud"
     | "widgets";
 
   interface Props {
@@ -102,6 +103,7 @@
     link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path>',
     download: '<path d="M12 4v12"></path><path d="m6 11 6 6 6-6"></path><path d="M5 21h14"></path>',
     upload: '<path d="M12 20V8"></path><path d="m6 14 6-6 6 6"></path><path d="M5 3h14"></path>',
+    cloud: '<path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.6 12.5 4 4 0 0 0 6.5 19z"></path>',
     widgets:
       '<rect x="4" y="4" width="7" height="6" rx="1"></rect><rect x="13" y="4" width="7" height="6" rx="1"></rect><rect x="4" y="14" width="7" height="6" rx="1"></rect><rect x="13" y="14" width="7" height="6" rx="1"></rect>',
   };
