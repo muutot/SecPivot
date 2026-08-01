@@ -980,6 +980,9 @@ impl VaultSession {
 
     // -- internals ----------------------------------------------------------
 
+    /// Replace the session with a freshly opened/created local database. Any
+    /// remote target from a previous session is dropped: saving a local vault
+    /// must never upload to a stale S3 target.
     fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
         self.path = Some(path.to_string_lossy().into_owned());
         self.password = Some(password.to_owned());
@@ -987,6 +990,7 @@ impl VaultSession {
         self.db = Some(db);
         self.dirty = false;
         self.modified_at = now_iso();
+        self.remote = None;
     }
 
     fn mark_dirty(&mut self) {
@@ -3373,6 +3377,53 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().ends_with(".kdbx.bak"))
             .collect();
         assert_eq!(backups.len(), 1);
+    }
+
+    #[test]
+    fn opening_local_vault_clears_stale_remote_target() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("local");
+
+        let mut session = VaultSession::default();
+        session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+
+        let local_path = dir.path().join("local.kdbx");
+        session
+            .create(&local_path, "pw", "Aes", "Aes256", "None", None)
+            .unwrap();
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "LocalOnly".into(),
+            })
+            .unwrap();
+        session.save().unwrap();
+
+        let remote_bytes = storage.get("vaults/seed.kdbx").unwrap();
+        let remote_db =
+            Database::parse(&remote_bytes, DatabaseKey::new().with_password("pw")).unwrap();
+        assert_eq!(
+            remote_db.root().groups().count(),
+            0,
+            "remote target must not receive local vault data"
+        );
+
+        let local_bytes = std::fs::read(&local_path).unwrap();
+        let local_db =
+            Database::parse(&local_bytes, DatabaseKey::new().with_password("pw")).unwrap();
+        assert_eq!(local_db.root().groups().count(), 1);
     }
 
     #[test]
