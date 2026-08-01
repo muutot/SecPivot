@@ -41,6 +41,7 @@ interface VaultStore {
   ) => Promise<VaultState>;
   close: () => Promise<void>;
   save: () => Promise<VaultState>;
+  changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
@@ -300,6 +301,18 @@ export const vault: VaultStore = {
     state.set(saved);
     await browserPersist(saved);
     return saved;
+  },
+
+  async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("change_master_key", {
+        password,
+        keyfile,
+      });
+      state.set(result);
+      return result;
+    }
+    return vault.save();
   },
 
   async addEntry(input: EntryInput): Promise<VaultState> {

@@ -420,11 +420,42 @@ impl VaultSession {
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
-        let db = self.require_db()?;
         let password = self.require_password()?;
         let key = build_database_key(password, self.keyfile.as_deref())?;
+        self.save_with_key(&key)?;
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.snapshot()
+    }
+
+    /// Re-encrypt and persist the vault with a new master key (password
+    /// and/or keyfile). The session continues with the new key.
+    pub fn change_master_key(
+        &mut self,
+        password: &str,
+        keyfile: Option<&Path>,
+    ) -> Result<VaultState, String> {
+        let keyfile_bytes = match keyfile {
+            Some(keyfile_path) => {
+                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
+            }
+            None => None,
+        };
+        let key = build_database_key(password, keyfile_bytes.as_deref())?;
+        self.save_with_key(&key)?;
+        self.password = Some(password.to_owned());
+        self.keyfile = keyfile_bytes;
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.snapshot()
+    }
+
+    /// Serialize the database with `key` and persist to the remote target or
+    /// the local path of the current session.
+    fn save_with_key(&self, key: &DatabaseKey) -> Result<(), String> {
+        let db = self.require_db()?;
         let mut buffer = Vec::new();
-        db.save(&mut Cursor::new(&mut buffer), key)
+        db.save(&mut Cursor::new(&mut buffer), key.clone())
             .map_err(|e| format!("序列化数据库失败: {e}"))?;
         if let Some(remote) = &self.remote {
             remote
@@ -440,15 +471,10 @@ impl VaultSession {
                 )
                 .map_err(|e| format!("保存本地副本失败: {e}"))?;
             }
-            self.dirty = false;
-            self.modified_at = now_iso();
-            return self.snapshot();
+            return Ok(());
         }
         let path = self.require_path()?.to_owned();
-        write_database_bytes(Path::new(&path), &buffer)?;
-        self.dirty = false;
-        self.modified_at = now_iso();
-        self.snapshot()
+        write_database_bytes(Path::new(&path), &buffer)
     }
 
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
@@ -1345,6 +1371,75 @@ mod tests {
         let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
+    }
+
+    #[test]
+    fn change_master_key_reencrypts_and_reopens_with_new_credentials() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Loopback".into(),
+                username: "root".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let state = session.change_master_key("new-password", None).unwrap();
+        assert!(!state.dirty);
+        assert_eq!(state.root.entries.len(), 1);
+        drop(session);
+
+        // The old password no longer opens the vault.
+        let mut wrong = VaultSession::default();
+        assert!(wrong.open(&path, "master-password", None).is_err());
+        // The new password does, and the entry is intact.
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "new-password", None).unwrap();
+        assert_eq!(state.root.entries.len(), 1);
+        assert_eq!(state.root.entries[0].title, "Loopback");
+    }
+
+    #[test]
+    fn change_master_key_supports_keyfile_only_and_keeps_session_alive() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let keyfile = dir.path().join("keyfile.key");
+        std::fs::write(&keyfile, b"0123456789abcdef0123456789abcdef").unwrap();
+
+        let state = session
+            .change_master_key("", Some(&keyfile))
+            .expect("keyfile-only vault should save");
+        assert!(!state.dirty);
+        // Session continues to work with the new key in memory.
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "After".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        assert_eq!(state.root.entries.len(), 1);
+        let saved = session.save().unwrap();
+        assert!(!saved.dirty);
+        drop(session);
+
+        // Reopens with the keyfile only.
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "", Some(&keyfile)).unwrap();
+        assert_eq!(state.root.entries.len(), 1);
+        assert_eq!(state.root.entries[0].title, "After");
     }
 
     #[test]
