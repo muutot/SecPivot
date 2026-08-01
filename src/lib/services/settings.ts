@@ -10,6 +10,8 @@ import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/ty
 
 export const PERSIST_DEBOUNCE_MS = 120;
 
+export const RECENT_FILES_MAX = 8;
+
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -33,6 +35,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowEffect: "off",
   windowOpacity: 100,
   rememberLastDatabase: true,
+  recentFiles: [],
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -74,6 +77,21 @@ function clampInt(value: number, min: number, max: number, fallback: number): nu
 
 function validHex(value: string, fallback: string): string {
   return typeof value === "string" && hexColor.test(value) ? value : fallback;
+}
+
+/** Trim, dedup (keep first occurrence), and cap the recent-files list. */
+export function normalizeRecentFiles(files: unknown): string[] {
+  if (!Array.isArray(files)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const file of files) {
+    const trimmed = String(file).trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+    if (out.length >= RECENT_FILES_MAX) break;
+  }
+  return out;
 }
 
 export function normalizeThemeColors(value: unknown, fallback: ThemeColors): ThemeColors {
@@ -159,6 +177,7 @@ export function normalizeSettings(
           : fallback.general.density.showGroupChevron,
     },
     windowOpacity: clampInt(g.windowOpacity ?? fallback.general.windowOpacity, 40, 100, 100),
+    recentFiles: normalizeRecentFiles(g.recentFiles),
     language:
       g.language === "en" || g.language === "zh-CN" ? g.language : fallback.general.language,
     windowEffect:

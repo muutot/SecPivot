@@ -59,6 +59,7 @@ export interface GeneralSettings {
   windowEffect: WindowEffect;
   windowOpacity: number;
   rememberLastDatabase: boolean;
+  recentFiles: string[];
 }
 
 export interface AppSettings {

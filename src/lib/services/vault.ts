@@ -1,6 +1,6 @@
 import { writable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { isTauriRuntime } from "$lib/services/settings";
+import { isTauriRuntime, appSettings, RECENT_FILES_MAX } from "$lib/services/settings";
 import type {
   VaultState,
   VaultGroup,
@@ -125,6 +125,15 @@ function newUuid(): string {
   return crypto.randomUUID();
 }
 
+/** Move a successfully opened/created vault path to the front of the recent list. */
+function rememberRecent(path: string): void {
+  if (!path) return;
+  const current = get(appSettings).general.recentFiles;
+  const next = [path, ...current.filter((p) => p !== path)].slice(0, RECENT_FILES_MAX);
+  if (next.length === current.length && next.every((p, i) => p === current[i])) return;
+  appSettings.updateGeneral("recentFiles", next);
+}
+
 async function backendInvoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   return invoke<T>(command, args);
 }
@@ -166,6 +175,7 @@ export const vault: VaultStore = {
       const result = await backendInvoke<VaultState>("open_vault", { path, password });
       state.set(result);
       remembered.set({ path: result.path, fileName: result.fileName });
+      rememberRecent(result.path);
       return result;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
@@ -175,6 +185,7 @@ export const vault: VaultStore = {
     const result = deepClone(browserState);
     state.set(result);
     remembered.set({ path: result.path, fileName: result.fileName });
+    rememberRecent(result.path);
     return result;
   },
 
@@ -183,6 +194,7 @@ export const vault: VaultStore = {
       const result = await backendInvoke<VaultState>("create_vault", { ...request });
       state.set(result);
       remembered.set({ path: result.path, fileName: result.fileName });
+      rememberRecent(result.path);
       return result;
     }
     const fresh = buildDemoVaultState();
@@ -194,6 +206,7 @@ export const vault: VaultStore = {
     const result = deepClone(fresh);
     state.set(result);
     remembered.set({ path: result.path, fileName: result.fileName });
+    rememberRecent(result.path);
     await browserPersist(result);
     return result;
   },

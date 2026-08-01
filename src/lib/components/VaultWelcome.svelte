@@ -11,6 +11,8 @@
 
   let { onopened }: Props = $props();
 
+  const recentFiles = $derived(get(appSettings).general.recentFiles);
+
   type Modal = "none" | "open" | "create";
 
   let modal: Modal = $state("none");
@@ -60,6 +62,13 @@
     } finally {
       busy = false;
     }
+  }
+
+  function openRecent(file: string): void {
+    path = file;
+    isDemo = false;
+    error = "";
+    modal = "open";
   }
 
   function handleCreate(): void {
@@ -137,6 +146,18 @@
     </div>
 
     <p class="welcome-hint">主密码只在你本地使用，绝不存储或上传</p>
+
+    {#if recentFiles.length > 0}
+      <div class="recent-section">
+        <p class="recent-label">最近打开</p>
+        {#each recentFiles as file (file)}
+          <button class="recent-item" onclick={() => openRecent(file)} title={file}>
+            <AppIcon name="clock" size={12} />
+            <span class="recent-name">{file.split(/[\\/]/).pop() || file}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -313,6 +334,52 @@
     margin: 18px 0 0;
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
+  }
+
+  .recent-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    margin-top: 20px;
+  }
+
+  .recent-label {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-align: left;
+  }
+
+  .recent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .recent-item:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .recent-item:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+
+  .recent-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .modal-backdrop {

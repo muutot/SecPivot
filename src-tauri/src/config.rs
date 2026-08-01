@@ -9,6 +9,7 @@ use std::sync::Mutex;
 
 const CONFIG_SUBDIR: &str = "conf";
 const CONFIG_FILE: &str = "config.json";
+const RECENT_FILES_MAX: usize = 8;
 
 // ---------------------------------------------------------------------------
 // Serde shapes (camelCase on the wire)
@@ -155,6 +156,7 @@ pub struct GeneralSettings {
     pub window_effect: String,
     pub window_opacity: i32,
     pub remember_last_database: bool,
+    pub recent_files: Vec<String>,
 }
 
 impl Default for GeneralSettings {
@@ -171,6 +173,7 @@ impl Default for GeneralSettings {
             window_effect: "off".into(),
             window_opacity: 100,
             remember_last_database: true,
+            recent_files: Vec::new(),
         }
     }
 }
@@ -332,6 +335,15 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         clamp_i32(config.general.density.group_padding_y, 0, 16, 3);
     config.general.density.group_indent = clamp_i32(config.general.density.group_indent, 4, 32, 12);
     config.general.density.group_radius = clamp_i32(config.general.density.group_radius, 0, 12, 6);
+
+    let recent = std::mem::take(&mut config.general.recent_files);
+    let mut seen = std::collections::HashSet::new();
+    config.general.recent_files = recent
+        .into_iter()
+        .map(|p| p.trim().to_owned())
+        .filter(|p| !p.is_empty() && seen.insert(p.clone()))
+        .take(RECENT_FILES_MAX)
+        .collect();
 
     config.security.auto_lock_minutes = clamp_i32(config.security.auto_lock_minutes, 0, 240, 5);
     config.security.clipboard_clear_seconds =
@@ -503,6 +515,57 @@ mod tests {
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
         assert!(again.security.lock_on_focus_loss);
+    }
+
+    #[test]
+    fn recent_files_survive_deserialize_write_reload() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.general.recent_files = vec![
+            "C:/vault-a.kdbx".into(),
+            "C:/vault-b.kdbx".into(),
+        ];
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"recentFiles\""));
+        assert!(text.contains("C:/vault-a.kdbx"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(
+            again.general.recent_files,
+            vec!["C:/vault-a.kdbx".to_owned(), "C:/vault-b.kdbx".to_owned()]
+        );
+    }
+
+    #[test]
+    fn recent_files_normalize_trims_dedups_and_caps() {
+        let mut config = AppConfig::default();
+        config.general.recent_files = vec![
+            "  dup.kdbx ".into(),
+            "dup.kdbx".into(),
+            "".into(),
+            "  ".into(),
+            "keep.kdbx".into(),
+        ];
+        (0..RECENT_FILES_MAX).for_each(|i| config.general.recent_files.push(format!("f{i}.kdbx")));
+
+        let normalized = normalize_config(config);
+        assert_eq!(
+            normalized.general.recent_files,
+            vec![
+                "dup.kdbx".to_owned(),
+                "keep.kdbx".to_owned(),
+                "f0.kdbx".to_owned(),
+                "f1.kdbx".to_owned(),
+                "f2.kdbx".to_owned(),
+                "f3.kdbx".to_owned(),
+                "f4.kdbx".to_owned(),
+                "f5.kdbx".to_owned(),
+            ]
+        );
     }
 
     #[test]
