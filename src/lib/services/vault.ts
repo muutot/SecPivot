@@ -26,6 +26,7 @@ interface VaultStore {
   deleteEntry: (uuid: string) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
+  autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
@@ -319,6 +320,11 @@ export const vault: VaultStore = {
     });
     state.set(result);
     return result;
+  },
+
+  async autoType(uuid: string, sequence: string): Promise<void> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持自动填充");
+    await backendInvoke<void>("auto_type", { uuid, sequence });
   },
 
   async saveAttachment(uuid: string, name: string, dest: string): Promise<void> {

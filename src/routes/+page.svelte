@@ -474,6 +474,7 @@
       { id: "copy-username", label: "复制用户名", icon: "user", disabled: !entry.username },
       { id: "copy-password", label: "复制密码", icon: "copy", disabled: !entry.password },
       { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
+      { id: "autotype", label: "自动填充", icon: "keyboard" },
       { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
       { id: "delete", label: "删除条目", icon: "trash", destructive: true },
     ];
@@ -495,8 +496,21 @@
     else if (id === "copy-password" && entry.password)
       void copyEntryValue(entry.password, "密码", true);
     else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
+    else if (id === "autotype") void runAutoType(entry);
     else if (id === "favorite") void toggleFavorite(entry);
     else if (id === "delete") askDeleteEntry(entry);
+  }
+
+  /** KeePass-standard default auto-type sequence. */
+  const AUTOTYPE_SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
+
+  async function runAutoType(entry: VaultEntry): Promise<void> {
+    try {
+      await vault.autoType(entry.uuid, AUTOTYPE_SEQUENCE);
+      flash("已触发自动填充，请切换到目标窗口");
+    } catch (e) {
+      flash(`自动填充失败：${e}`);
+    }
   }
 
   function handleBlankMenuAction(id: string): void {

@@ -4,16 +4,16 @@ This reference is a source map, not a substitute for reading the current files. 
 
 ## Runtime surfaces
 
-| Surface             | Entry point                                                  | Responsibility                                                                 |
-| ------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Main desktop window | `src/routes/+page.svelte`                                    | Welcome/unlock, group tree, entry list, detail, search, editor dialogs, status |
-| Settings window     | `src/routes/settings/+page.svelte` → `SettingsDialog.svelte` | Standalone settings page, theme/font application, settings navigation/panels   |
-| Frontend services   | `src/lib/services/*`                                         | Settings store + bootstrap, vault IPC wrapper + browser fallback               |
-| GUI backend         | `src-tauri/src/lib.rs`                                       | Tauri setup, managed config + vault session, commands                          |
-| Backend modules     | `src-tauri/src/config.rs`, `src-tauri/src/vault.rs`          | Config persistence; KeePass open/create/edit/save session                      |
-| Release automation  | `scripts/version.mjs`, `changelog.mjs`, `release.mjs`        | Atomic version bump, gitmoji changelog, two-pass release orchestration         |
-| CI / CD             | `.github/workflows/ci.yml`, `release.yml`                    | `npm run verify` on push/PR; tagged multi-platform build + draft release       |
-| Windows installer   | `src-tauri/windows/installer.nsi`                            | Custom NSIS template wired via `bundle.windows.nsis.template`                  |
+| Surface             | Entry point                                                                      | Responsibility                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Main desktop window | `src/routes/+page.svelte`                                                        | Welcome/unlock, group tree, entry list, detail, search, editor dialogs, status                       |
+| Settings window     | `src/routes/settings/+page.svelte` → `SettingsDialog.svelte`                     | Standalone settings page, theme/font application, settings navigation/panels                         |
+| Frontend services   | `src/lib/services/*`                                                             | Settings store + bootstrap, vault IPC wrapper + browser fallback                                     |
+| GUI backend         | `src-tauri/src/lib.rs`                                                           | Tauri setup, managed config + vault session, commands                                                |
+| Backend modules     | `src-tauri/src/config.rs`, `src-tauri/src/vault.rs`, `src-tauri/src/autotype.rs` | Config persistence; KeePass open/create/edit/save session; auto-type sequence parsing + enigo replay |
+| Release automation  | `scripts/version.mjs`, `changelog.mjs`, `release.mjs`                            | Atomic version bump, gitmoji changelog, two-pass release orchestration                               |
+| CI / CD             | `.github/workflows/ci.yml`, `release.yml`                                        | `npm run verify` on push/PR; tagged multi-platform build + draft release                             |
+| Windows installer   | `src-tauri/windows/installer.nsi`                                                | Custom NSIS template wired via `bundle.windows.nsis.template`                                        |
 
 SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits `appSettings.initialize()` before route load. `+layout.svelte` imports global CSS and applies settings to the document.
 
@@ -45,11 +45,12 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 ## Backend ownership
 
-| Path                      | Ownership                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `src-tauri/src/lib.rs`    | Tauri builder, managed state (`AppState`), command registration, setup               |
-| `src-tauri/src/config.rs` | `config.json` schema, defaults, normalization, atomic persistence                    |
-| `src-tauri/src/vault.rs`  | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization |
+| Path                        | Ownership                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `src-tauri/src/lib.rs`      | Tauri builder, managed state (`AppState`), command registration, setup               |
+| `src-tauri/src/config.rs`   | `config.json` schema, defaults, normalization, atomic persistence                    |
+| `src-tauri/src/vault.rs`    | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization |
+| `src-tauri/src/autotype.rs` | KeePass-style auto-type sequence parser + `enigo` keystroke replay                   |
 
 ## Persistent layout
 

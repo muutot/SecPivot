@@ -1,6 +1,8 @@
+pub mod autotype;
 pub mod config;
 pub mod vault;
 
+use crate::autotype::AutotypeContext;
 use crate::config::ConfigStore;
 use crate::vault::{EntryInput, GroupInput, TotpCode, VaultSession, VaultState};
 use std::path::{Path, PathBuf};
@@ -151,6 +153,21 @@ fn toggle_favorite(
         .toggle_favorite(&uuid)
 }
 
+/// Resolve and replay a KeePass-style auto-type sequence for an entry.
+/// Executes on a background thread; returns once parsing succeeds.
+#[tauri::command]
+fn auto_type(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    sequence: String,
+) -> Result<(), String> {
+    let ctx: AutotypeContext = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .autotype_context(&uuid)?;
+    autotype::run_sequence(&sequence, &ctx).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn add_group(
     session: tauri::State<'_, Mutex<VaultSession>>,
@@ -222,6 +239,7 @@ pub fn run() {
             save_attachment,
             totp_code,
             toggle_favorite,
+            auto_type,
             add_group,
             rename_group,
             delete_group

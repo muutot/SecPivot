@@ -35,7 +35,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] TOTP display with countdown for `otp`/`totp` fields (`totp_code` command + `TotpWidget`)
 - [x] Password strength meter in entry editor (`estimateEntropy`/`entropyLabel`, `password.ts`)
 - [x] URL quick-open via `@tauri-apps/plugin-opener` (detail + list rows)
-- [ ] Autotype sequence runner (roadmap reserved)
+- [x] Autotype sequence runner (`auto_type` + `autotype.rs`: KeePass placeholders/keys, `enigo` replay, 7 parser tests)
 - [x] Favorite/pin entries with `--warning-color` accent (`toggle_favorite` + `KeyVault.Favorite` field)
 
 ## Stage 5 — Packaging & release

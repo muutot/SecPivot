@@ -2,6 +2,7 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
+use crate::autotype::AutotypeContext;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -329,6 +330,20 @@ impl VaultSession {
             .get_raw_otp_value()
             .ok_or_else(|| "该条目没有 TOTP 种子".to_owned())?;
         compute_totp_now(seed)
+    }
+
+    /// Collect the fields an auto-type sequence can substitute, for the given entry.
+    pub fn autotype_context(&self, uuid: &str) -> Result<AutotypeContext, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(AutotypeContext {
+            username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+            password: entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
+            title: entry.get_title().unwrap_or_default().to_owned(),
+            url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
+            notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
+        })
     }
 
     pub fn add_group(&mut self, input: &GroupInput) -> Result<VaultState, String> {

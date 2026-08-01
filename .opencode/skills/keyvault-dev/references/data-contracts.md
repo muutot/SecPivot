@@ -9,7 +9,7 @@ This reference defines the frontend ↔ backend contract. Update it together wit
 | Rust field | TypeScript         | Notes                                                                                                                                                                                                                                                                                        |
 | ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `general`  | `GeneralSettings`  | `language`, `theme`, `themeColors`, `customPresets`, `compactMode`, `density{groupGap,groupPaddingY,groupIndent,groupRadius,showGroupIcon,showGroupChevron}`, `showDescriptions`, `fontSizes{base,secondary,cardTitle,cardPreview}`, `windowEffect`, `windowOpacity`, `rememberLastDatabase` |
-| `security` | `SecuritySettings` | `autoLockMinutes`, `clipboardClearSeconds`, `minimizeToTray`, `clearOnLock`, `lockAfterAction`                                                                                                                                                                                               |
+| `security` | `SecuritySettings` | `autoLockMinutes`, `clipboardClearSeconds`, `minimizeToTray`, `clearOnLock`, `lockAfterAction`, `lockOnFocusLoss` |
 | `database` | `DatabaseDefaults` | `kdf` (`Argon2id`/`Argon2`/`Aes`), `cipher` (`Aes256`/`ChaCha20`), `compression` (`None`/`Gzip`), `generator{length,includeUpper,includeLower,includeDigits,includeSymbols,excludeSimilar,excludeAmbiguous}`                                                                                 |
 
 - `get_config() -> AppConfig`: read + normalize; returns defaults on first run.
@@ -37,23 +37,26 @@ The root group is the virtual top-level (uuid `"root"`); it is not persisted as 
 
 ### Commands
 
-| Command           | Args                                       | Result               | Notes                             |
-| ----------------- | ------------------------------------------ | -------------------- | --------------------------------- |
-| `open_vault`      | `path: String, password: String`           | `VaultState`         | Opens KDBX with password key      |
-| `create_vault`    | `path, password, kdf, cipher, compression` | `VaultState`         | Creates empty vault and saves     |
-| `close_vault`     | –                                          | `()`                 | Clears session; zeroizes password |
-| `get_vault_state` | –                                          | `Option<VaultState>` | null when no session              |
-| `save_vault`      | –                                          | `VaultState`         | Persists session DB; resets dirty |
-| `add_entry`       | `input: EntryInput`                        | `VaultState`         |                                   |
-| `update_entry`    | `uuid, input: EntryInput`                  | `VaultState`         |                                   |
-| `delete_entry`    | `uuid`                                     | `VaultState`         |                                   |
-| `toggle_favorite` | `uuid`                                     | `VaultState`         | Flips the pinned marker           |
-| `totp_code`       | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`      |
-| `add_group`       | `input: GroupInput`                        | `VaultState`         | parentUuid null → root            |
-| `rename_group`    | `uuid, name`                               | `VaultState`         |                                   |
-| `delete_group`    | `uuid`                                     | `VaultState`         | Entries/children bubble to root   |
+| Command           | Args                                       | Result               | Notes                                                                                                                                                          |
+| ----------------- | ------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open_vault`      | `path: String, password: String`           | `VaultState`         | Opens KDBX with password key                                                                                                                                   |
+| `create_vault`    | `path, password, kdf, cipher, compression` | `VaultState`         | Creates empty vault and saves                                                                                                                                  |
+| `close_vault`     | –                                          | `()`                 | Clears session; zeroizes password                                                                                                                              |
+| `get_vault_state` | –                                          | `Option<VaultState>` | null when no session                                                                                                                                           |
+| `save_vault`      | –                                          | `VaultState`         | Persists session DB; resets dirty                                                                                                                              |
+| `add_entry`       | `input: EntryInput`                        | `VaultState`         |                                                                                                                                                                |
+| `update_entry`    | `uuid, input: EntryInput`                  | `VaultState`         |                                                                                                                                                                |
+| `delete_entry`    | `uuid`                                     | `VaultState`         |                                                                                                                                                                |
+| `toggle_favorite` | `uuid`                                     | `VaultState`         | Flips the pinned marker                                                                                                                                        |
+| `auto_type`       | `uuid, sequence`                           | `()`                 | Replays a KeePass auto-type sequence for the entry on a background thread; resolves fields server-side from the vault session, never from the frontend payload |
+| `totp_code`       | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`                                                                                                                                   |
+| `add_group`       | `input: GroupInput`                        | `VaultState`         | parentUuid null → root                                                                                                                                         |
+| `rename_group`    | `uuid, name`                               | `VaultState`         |                                                                                                                                                                |
+| `delete_group`    | `uuid`                                     | `VaultState`         | Entries/children bubble to root                                                                                                                                |
 
 Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session. `favorite` is always present on `VaultEntry` and is persisted as a custom field `KeyVault.Favorite = "true"` (absent when not pinned); the browser fallback mirrors the same boolean on the demo state. `totp_code` is read-only: it computes the current one-time code via `keepass::db::TOTP` (`TotpCode { code, validFor, period }`), accepting either an `otpauth://` URI or a raw Base32 key (wrapped with SHA-1 / 6 digits / 30s defaults). The frontend `TotpWidget` counts down locally and refetches at each period boundary.
+
+`auto_type` follows the KeePass sequence syntax (implemented in `src-tauri/src/autotype.rs`): placeholders `{USERNAME}` `{PASSWORD}` `{TITLE}` `{URL}` `{NOTES}`, special keys `{TAB}` `{ENTER}` `{SPACE}` `{BACKSPACE}` `{DELETE}` `{ESC}` `{UP}` `{DOWN}` `{LEFT}` `{RIGHT}` `{HOME}` `{END}` `{PAGEUP}` `{PAGEDOWN}`, `{{`/`}}` escapes, and literal text. Parsing is pure and unit-tested; keystrokes are replayed via `enigo` 0.6 (`Keyboard::text`/`key`) after a 300 ms grace period on a spawned thread, so the frontend gets the error only if parsing fails — execution failures are logged. The browser fallback rejects `autoType` with a dedicated message.
 
 ### Browser fallback
 

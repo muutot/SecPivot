@@ -16,7 +16,8 @@ Lock happens on:
 
 - explicit lock action (`close_vault`);
 - idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`, reset on vault open, skipped when 0 or no vault open);
-- `lockAfterAction` immediately after a password copy.
+- `lockAfterAction` immediately after a password copy;
+- focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open).
 
 The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes the session by calling `vault.close()`, and clears the clipboard first when `clearOnLock` is enabled. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes.
 
@@ -33,7 +34,8 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCh
 ## Threat notes / accepted trade-offs
 
 - No keyfile, Windows Hello, or hardware-token unlock yet (roadmap).
-- No auto-type, TOTP compute, or clipboard watcher yet (roadmap).
+- Auto-type replays entry fields as keystrokes via `enigo`; fields are resolved server-side from the vault session (the frontend never sends the password in the `auto_type` payload), a 300 ms grace period lets the user focus the target window, and execution runs on a background thread. The sequence itself may still be observed by other applications on the same machine — an accepted trade-off of the feature.
+- No TOTP compute or clipboard watcher yet (roadmap).
 - The WebView clipboard write relies on platform clipboard; scheduled clearing uses a timer and cannot guarantee clearing if the process exits before the timer fires.
 
 ## Verification for security changes
