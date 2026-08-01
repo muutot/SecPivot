@@ -341,7 +341,8 @@ fn clamp_i32(value: i32, min: i32, max: i32, fallback: i32) -> i32 {
 
 fn valid_hex(value: &str, fallback: &str) -> String {
     let bytes = value.as_bytes();
-    if bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(|b| b.is_ascii_hexdigit()) {
+    let valid_len = bytes.len() == 7 || bytes.len() == 9;
+    if valid_len && bytes[0] == b'#' && bytes[1..].iter().all(|b| b.is_ascii_hexdigit()) {
         value.to_owned()
     } else {
         fallback.to_owned()

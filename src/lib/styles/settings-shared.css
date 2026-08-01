@@ -337,6 +337,53 @@ header p {
   width: 200px;
 }
 
+/* ── color rows (custom theme) ── */
+.color-list {
+  margin-top: 10px;
+}
+
+.color-swatch {
+  padding: 0;
+  border-color: var(--border-color);
+  background-color: transparent;
+  background-image: repeating-conic-gradient(
+    color-mix(in srgb, var(--text-faint) 22%, transparent) 0% 25%,
+    transparent 0% 50%
+  );
+  background-size: 10px 10px;
+}
+
+.color-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.color-input {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--settings-control-radius, 6px);
+  background: var(--input-bg);
+  cursor: pointer;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-hex-input {
+  width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── feedback ── */
 .settings-feedback {
   position: absolute;

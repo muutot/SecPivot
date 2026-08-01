@@ -73,12 +73,12 @@
     },
   ];
 
-  const customColorFields: { key: keyof ThemeColors; label: string }[] = [
-    { key: "accent", label: "强调色" },
-    { key: "selectionColor", label: "选中色" },
-    { key: "bg", label: "背景" },
-    { key: "cardBg", label: "卡片" },
-    { key: "border", label: "边框" },
+  const customColorFields: { key: keyof ThemeColors; label: string; description: string }[] = [
+    { key: "accent", label: "强调色", description: "主按钮与高亮" },
+    { key: "selectionColor", label: "选中色", description: "选中项与焦点边框" },
+    { key: "bg", label: "背景", description: "窗口与整体底色" },
+    { key: "cardBg", label: "卡片", description: "卡片与面板底色" },
+    { key: "border", label: "边框", description: "分隔线与控件描边" },
   ];
 </script>
 
@@ -139,35 +139,53 @@
               <strong>自定义配色</strong>
               <p>直接修改主题语义色，即时预览</p>
             </div>
-            <button
-              class="reset-button"
-              onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>恢复默认</button
-            >
+            <div class="preset-row">
+              <button
+                class="preset-button"
+                onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>深色预设</button
+              >
+              <button
+                class="preset-button"
+                onclick={() => change("themeColors", { ...LIGHT_THEME_COLORS })}>浅色预设</button
+              >
+              <button
+                class="reset-button"
+                onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>恢复默认</button
+              >
+            </div>
           </div>
         </div>
-        <div class="color-grid">
+        <div class="color-list">
           {#each customColorFields as field (field.key)}
-            <label class="color-field">
-              <span>{field.label}</span>
-              <input
-                type="color"
-                class="color-input"
-                value={s.general.themeColors[field.key]}
-                oninput={(e) => updateColor(field.key, e.currentTarget.value)}
-              />
-              <code>{s.general.themeColors[field.key]}</code>
-            </label>
+            <div class="setting-row">
+              <div class="setting-heading">
+                <span
+                  class="setting-icon color-swatch"
+                  style:background-color={s.general.themeColors[field.key]}
+                ></span>
+                <div>
+                  <strong>{field.label}</strong>
+                  <p>{field.description}</p>
+                </div>
+              </div>
+              <div class="color-control">
+                <input
+                  type="color"
+                  class="color-input"
+                  value={s.general.themeColors[field.key].slice(0, 7)}
+                  oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                />
+                <input
+                  class="settings-input color-hex-input"
+                  type="text"
+                  spellcheck="false"
+                  value={s.general.themeColors[field.key]}
+                  placeholder="#RRGGBBAA"
+                  oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                />
+              </div>
+            </div>
           {/each}
-        </div>
-        <div class="preset-row">
-          <button
-            class="preset-button"
-            onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>深色预设</button
-          >
-          <button
-            class="preset-button"
-            onclick={() => change("themeColors", { ...LIGHT_THEME_COLORS })}>浅色预设</button
-          >
         </div>
       </section>
     {/if}
@@ -437,52 +455,15 @@
     background: conic-gradient(var(--accent), var(--selection-color), var(--success-color));
   }
 
-  .color-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .color-field {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    color: var(--text-muted);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-  }
-
-  .color-field code {
-    margin-left: auto;
-    color: var(--text-faint);
-    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
-    font-variant-numeric: tabular-nums;
-  }
-
-  .color-input {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    background: var(--input-bg);
-    cursor: pointer;
-  }
-
-  .color-input::-webkit-color-swatch-wrapper {
-    padding: 2px;
-  }
-
-  .color-input::-webkit-color-swatch {
-    border: none;
-    border-radius: 4px;
-  }
-
   .preset-row {
     display: flex;
     gap: 6px;
     margin-top: 10px;
+  }
+
+  .heading-inline .preset-row {
+    flex-shrink: 0;
+    margin-top: 0;
   }
 
   .reset-button,

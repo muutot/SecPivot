@@ -85,7 +85,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   remote: DEFAULT_REMOTE_SETTINGS,
 };
 
-const hexColor = /^#[0-9a-fA-F]{6}$/;
+const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
 
 function clampInt(value: number, min: number, max: number, fallback: number): number {
   if (typeof value !== "number" || Number.isNaN(value)) return fallback;
