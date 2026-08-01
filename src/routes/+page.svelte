@@ -8,7 +8,7 @@
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
-  import { armIdleLock, installAutoLock, lockVault, copySensitive } from "$lib/services/security";
+  import { armIdleLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
   import type {
     EntryInput,
@@ -102,7 +102,6 @@
       rememberedPath = value;
     });
     void vault.refresh();
-    const stopAutoLock = installAutoLock();
     const rememberWindowSize = (): void => {
       if (!currentVault) return;
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
@@ -115,7 +114,6 @@
     return () => {
       unsubscribe();
       unsubRemembered();
-      stopAutoLock();
       window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
     };
