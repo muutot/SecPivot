@@ -491,47 +491,51 @@
           </label>
         {/if}
 
-        <div class="field">
-          <span>保存方式</span>
-          <div class="remote-mode" role="radiogroup" aria-label="保存方式">
-            <button
-              class="remote-mode-option"
-              class:active={remoteMode === "memory"}
-              onclick={() => (remoteMode = "memory")}
-            >
-              <strong>仅在内存</strong>
-              <small>保存时只上传回 S3</small>
-            </button>
-            <button
-              class="remote-mode-option"
-              class:active={remoteMode === "local"}
-              onclick={() => (remoteMode = "local")}
-            >
-              <strong>保存到本地</strong>
-              <small>镜像到 Storage/remote/{remoteLocalDir} 并轮换备份</small>
-            </button>
+        {#if remoteTab !== "config"}
+          <div class="field">
+            <span>保存方式</span>
+            <div class="remote-mode" role="radiogroup" aria-label="保存方式">
+              <button
+                class="remote-mode-option"
+                class:active={remoteMode === "memory"}
+                onclick={() => (remoteMode = "memory")}
+              >
+                <strong>仅在内存</strong>
+                <small>保存时只上传回 S3</small>
+              </button>
+              <button
+                class="remote-mode-option"
+                class:active={remoteMode === "local"}
+                onclick={() => (remoteMode = "local")}
+              >
+                <strong>保存到本地</strong>
+                <small>镜像到 Storage/remote/{remoteLocalDir} 并轮换备份</small>
+              </button>
+            </div>
           </div>
-        </div>
+        {/if}
       {/if}
 
-      <label class="field">
-        <span>主密码</span>
-        <div class="path-row">
-          <input
-            class="text-input"
-            type={showPassword ? "text" : "password"}
-            bind:value={password}
-            placeholder={isDemo ? "演示模式可留空" : "必填"}
-          />
-          <button
-            class="browse-button"
-            onclick={() => (showPassword = !showPassword)}
-            title="显示密码"
-          >
-            <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
-          </button>
-        </div>
-      </label>
+      {#if !(modal === "remote" && remoteTab === "config")}
+        <label class="field">
+          <span>主密码</span>
+          <div class="path-row">
+            <input
+              class="text-input"
+              type={showPassword ? "text" : "password"}
+              bind:value={password}
+              placeholder={isDemo ? "演示模式可留空" : "必填"}
+            />
+            <button
+              class="browse-button"
+              onclick={() => (showPassword = !showPassword)}
+              title="显示密码"
+            >
+              <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
+            </button>
+          </div>
+        </label>
+      {/if}
 
       {#if modal === "create"}
         <label class="field">
@@ -542,7 +546,7 @@
         </label>
       {/if}
 
-      {#if isTauriRuntime()}
+      {#if isTauriRuntime() && !(modal === "remote" && remoteTab === "config")}
         <label class="field">
           <span>密钥文件(可选)</span>
           <div class="path-row">
