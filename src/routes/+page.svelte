@@ -479,10 +479,7 @@
     { id: "refresh", label: "刷新", icon: "refresh" },
   ]);
 
-  function handleEntryMenuAction(id: string): void {
-    const menu = entryMenu;
-    if (!menu) return;
-    const entry = menu.entry;
+  function handleEntryMenuAction(id: string, entry: VaultEntry): void {
     if (id === "edit") openEditEntry(entry);
     else if (id === "copy-username" && entry.username)
       void copyEntryValue(entry.username, "用户名");
@@ -852,8 +849,9 @@
     items={entryMenuItems(entryMenu.entry)}
     onclose={() => (entryMenu = null)}
     onaction={(id) => {
+      const menuEntry = entryMenu!.entry;
       entryMenu = null;
-      handleEntryMenuAction(id);
+      handleEntryMenuAction(id, menuEntry);
     }}
   />
 {/if}
