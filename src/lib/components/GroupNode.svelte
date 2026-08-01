@@ -82,7 +82,7 @@
 <div
   class="group-node"
   class:selected={selected === group.uuid}
-  style:padding-left={`calc(10px + (var(--group-indent, 14px) * ${depth}))`}
+  style:padding-left={`calc(var(--group-indent, 14px) * ${depth})`}
 >
   {#if renaming}
     <div class="rename-row">
