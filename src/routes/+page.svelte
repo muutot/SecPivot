@@ -610,13 +610,6 @@
       ></span>
 
       <section class="entry-panel">
-        <div class="entry-head">
-          <span class="entry-count">{filteredEntries.length} 个条目</span>
-          {#if selectedGroup !== null}
-            <span class="entry-group-filter">筛选于 {pathOf(selectedGroup)}</span>
-          {/if}
-        </div>
-
         <div class="entry-table" style={`--col-url: ${colWidths.url}px`}>
           <div class="entry-table-head" role="row">
             <div class="head-cell head-title">
@@ -764,7 +757,12 @@
 
     <footer class="status-bar" role="status" aria-live="polite">
       <span class="status-left">
-        <span class="result-count">{filteredEntries.length} 条</span>
+        <span class="result-count">{filteredEntries.length} 个条目</span>
+        {#if selectedGroup !== null}
+          <span class="status-group-filter" title={pathOf(selectedGroup)}>
+            筛选于 {pathOf(selectedGroup)}
+          </span>
+        {/if}
         {#if currentVault.dirty}
           <span class="status-dirty"><i></i>未保存的修改</span>
         {/if}
@@ -1069,29 +1067,6 @@
     flex-direction: column;
     min-height: 0;
     min-width: 0;
-  }
-
-  .entry-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 12px 6px;
-    flex: 0 0 auto;
-  }
-
-  .entry-count {
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .entry-group-filter {
-    overflow: hidden;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .entry-table {
@@ -1403,6 +1378,13 @@
 
   .result-count {
     font-variant-numeric: tabular-nums;
+  }
+
+  .status-group-filter {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status-dirty {
