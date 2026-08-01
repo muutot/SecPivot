@@ -103,26 +103,6 @@
     </div>
   {:else}
     <div class="group-row">
-      {#if showChevron}
-        <span
-          class="chevron-btn"
-          class:leaf={!hasChildren}
-          class:open={isExpanded}
-          role="button"
-          tabindex={hasChildren ? 0 : -1}
-          aria-label={isExpanded ? "折叠分组" : "展开分组"}
-          title={hasChildren ? (isExpanded ? "折叠" : "展开") : ""}
-          onclick={() => ontoggle(group.uuid)}
-          onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              ontoggle(group.uuid);
-            }
-          }}
-        >
-          <AppIcon name="chevron-down" size={13} />
-        </span>
-      {/if}
       <button
         class="group-select"
         class:no-icon={!showIcon}
@@ -130,6 +110,15 @@
         oncontextmenu={openMenu}
         title={group.name}
       >
+        {#if showChevron}
+          {#if hasChildren}
+            <span class="chevron" class:open={isExpanded} aria-hidden="true">
+              <AppIcon name="chevron-down" size={13} />
+            </span>
+          {:else}
+            <span class="leaf-dot" aria-hidden="true"></span>
+          {/if}
+        {/if}
         {#if showIcon}
           <AppIcon name="folder" size={13} />
         {/if}
@@ -185,34 +174,43 @@
     padding-right: 4px;
   }
 
-  .chevron-btn {
+  .chevron {
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     width: 16px;
-    height: 18px;
-    border-radius: var(--group-radius, var(--settings-control-radius, 6px));
+    height: 16px;
+    margin-right: -4px;
     color: var(--text-faint);
-    cursor: pointer;
-  }
-
-  .chevron-btn:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .chevron-btn.leaf {
-    visibility: hidden;
-    pointer-events: none;
-  }
-
-  .chevron-btn svg {
     transition: transform 0.15s ease;
   }
 
-  .chevron-btn.open svg {
+  .group-select:hover .chevron,
+  .group-select:focus-visible .chevron {
+    color: var(--text-primary);
+  }
+
+  .chevron.open {
     transform: rotate(90deg);
+  }
+
+  .leaf-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-right: -4px;
+  }
+
+  .leaf-dot::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--text-faint);
   }
 
   .group-select {
@@ -227,7 +225,7 @@
     color: var(--text-secondary);
     background: transparent;
     font-size: var(--font-size-secondary, 11px);
-    line-height: 1.3;
+    line-height: 1;
     text-align: left;
     cursor: pointer;
   }
