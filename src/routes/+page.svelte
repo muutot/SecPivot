@@ -2,9 +2,8 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { vault } from "$lib/services/vault";
-  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings } from "$lib/services/settings";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, installAutoLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
@@ -65,6 +64,7 @@
 
   const compactMode = $derived(get(appSettings).general.compactMode);
   const groupDensity = $derived(get(appSettings).general.density);
+  const showDescriptions = $derived(get(appSettings).general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && get(appSettings).general.rememberLastDatabase,
   );
@@ -117,20 +117,69 @@
     return list;
   });
 
-  const filteredEntries = $derived.by((): { entry: VaultEntry; groupPath: string }[] => {
+  const filteredEntries = $derived.by((): { entry: VaultEntry }[] => {
     if (!currentVault) return [];
     const query = search.trim().toLowerCase();
-    const result: { entry: VaultEntry; groupPath: string }[] = [];
+    const result: { entry: VaultEntry }[] = [];
     for (const group of selectedSubtree) {
       for (const entry of group.entries) {
         const text = [entry.title, entry.username, entry.url, entry.notes].join(" ").toLowerCase();
         if (query && !text.includes(query)) continue;
-        result.push({ entry, groupPath: pathOf(entry.groupUuid) });
+        result.push({ entry });
       }
     }
     result.sort((a, b) => Number(b.entry.favorite) - Number(a.entry.favorite));
     return result;
   });
+
+  type SortCol = "title" | "url";
+  let sortCol = $state<SortCol>("title");
+  let sortDir = $state<"asc" | "desc">("asc");
+  let colWidths = $state<{ url: number }>({ url: 200 });
+
+  const sortedEntries = $derived.by(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const col = sortCol;
+    return [...filteredEntries].sort((a, b) => {
+      const fav = Number(b.entry.favorite) - Number(a.entry.favorite);
+      if (fav !== 0) return fav;
+      const av = a.entry[col] ?? "";
+      const bv = b.entry[col] ?? "";
+      return av.localeCompare(bv, "zh-CN", { numeric: true }) * dir;
+    });
+  });
+
+  function cycleSort(col: SortCol): void {
+    if (sortCol === col) {
+      sortDir = sortDir === "asc" ? "desc" : "asc";
+    } else {
+      sortCol = col;
+      sortDir = "asc";
+    }
+  }
+
+  function startResize(e: PointerEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = colWidths.url;
+    document.body.classList.add("resizing-column");
+    const onMove = (ev: PointerEvent): void => {
+      colWidths.url = Math.min(400, Math.max(100, startW - (ev.clientX - startX)));
+    };
+    const onUp = (ev: PointerEvent): void => {
+      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.classList.remove("resizing-column");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
     if (!state || !uuid) return null;
@@ -291,13 +340,6 @@
       flash("复制失败");
     }
   }
-
-  function dragRegion(event: MouseEvent): void {
-    if (!isTauriRuntime()) return;
-    if (event.target === event.currentTarget) {
-      void getCurrentWindow().startDragging();
-    }
-  }
 </script>
 
 <svelte:head>
@@ -313,31 +355,6 @@
   style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
 >
   {#if currentVault}
-    <header
-      class="search-header"
-      role="presentation"
-      onmousedown={dragRegion}
-      data-tauri-drag-region
-    >
-      <div class="search-box" data-tauri-drag-region>
-        <span class="search-icon"><AppIcon name="search" size={16} /></span>
-        <input
-          class="search-input"
-          type="search"
-          placeholder="搜索标题、用户名、网址或备注…"
-          bind:value={search}
-          aria-label="搜索条目"
-        />
-        {#if search}
-          <button class="clear-button" onclick={() => (search = "")} aria-label="清除搜索">×</button
-          >
-        {/if}
-      </div>
-      <button class="icon-action" onclick={openSettings} title="设置">
-        <AppIcon name="settings" size={17} />
-      </button>
-    </header>
-
     <div class="toolbar" role="presentation" data-tauri-drag-region>
       <div class="toolbar-left">
         <button class="tool-button primary" onclick={openCreateEntry} title="新建条目 (Ctrl+N)">
@@ -346,16 +363,33 @@
         <button class="tool-button" onclick={() => openGroupModal(selectedGroup)} title="新建分组">
           <AppIcon name="folder-plus" size={14} />分组
         </button>
-        <span class="toolbar-sep"></span>
-        <span class="vault-name" title={currentVault.path}>
-          <AppIcon name="database" size={13} />
-          <span class="vault-name-text">{currentVault.fileName}</span>
-        </span>
       </div>
+
+      <div class="toolbar-center">
+        <div class="search-box">
+          <span class="search-icon"><AppIcon name="search" size={13} /></span>
+          <input
+            class="search-input"
+            type="search"
+            placeholder="搜索…"
+            bind:value={search}
+            aria-label="搜索条目"
+          />
+          {#if search}
+            <button class="clear-button" onclick={() => (search = "")} aria-label="清除搜索"
+              >×</button
+            >
+          {/if}
+        </div>
+      </div>
+
       <div class="toolbar-right">
         {#if currentVault.dirty}
           <span class="dirty-badge">未保存</span>
         {/if}
+        <button class="icon-action" onclick={openSettings} title="设置">
+          <AppIcon name="settings" size={16} />
+        </button>
         <button
           class="tool-button"
           onclick={handleSave}
@@ -395,71 +429,112 @@
           {/if}
         </div>
 
-        <div class="entry-list" role="listbox" aria-label="条目列表">
-          {#if filteredEntries.length === 0}
-            <div class="empty-state">
-              <span class="empty-icon"><AppIcon name="key" size={20} /></span>
-              <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
-              <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
-            </div>
-          {:else}
-            {#each filteredEntries as row (row.entry.uuid)}
-              <div
-                class="entry-row"
-                class:selected={selectedEntry?.uuid === row.entry.uuid}
-                role="option"
-                aria-selected={selectedEntry?.uuid === row.entry.uuid}
-                tabindex="0"
-                onclick={() => selectEntry(row.entry)}
-                onkeydown={(e) => {
-                  if (e.key === "Enter") selectEntry(row.entry);
-                }}
+        <div class="entry-table" style={`--col-url: ${colWidths.url}px`}>
+          <div class="entry-table-head" role="row">
+            <div class="head-cell head-title">
+              <button
+                class="head-button"
+                type="button"
+                onclick={() => cycleSort("title")}
+                title="点击排序"
               >
-                <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
-                <div class="entry-row-main">
-                  <span class="entry-row-title">{row.entry.title || "未命名条目"}</span>
-                  {#if currentVault && get(appSettings).general.showDescriptions}
-                    <span class="entry-row-sub">
-                      {row.entry.username || row.entry.url || row.groupPath}
-                    </span>
-                  {/if}
-                </div>
-                <div class="entry-row-actions">
-                  <button
-                    class="row-btn"
-                    class:star-active={row.entry.favorite}
-                    title={row.entry.favorite ? "取消收藏" : "收藏条目"}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      void toggleFavorite(row.entry);
-                    }}
-                  >
-                    <AppIcon name="star" size={12} />
-                  </button>
-                  <button
-                    class="row-btn"
-                    title="复制用户名"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
-                    }}
-                  >
-                    <AppIcon name="user" size={12} />
-                  </button>
-                  <button
-                    class="row-btn"
-                    title="复制密码"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      if (row.entry.password) void copyEntryValue(row.entry.password, "密码", true);
-                    }}
-                  >
-                    <AppIcon name="copy" size={12} />
-                  </button>
-                </div>
+                <span class="head-label">标题</span>
+                {#if sortCol === "title"}
+                  <span class="sort-arrow" aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>
+                {/if}
+              </button>
+              <span
+                class="resize-handle"
+                role="separator"
+                aria-orientation="vertical"
+                title="调整列宽"
+                onpointerdown={(e) => startResize(e)}
+              ></span>
+            </div>
+            <div class="head-cell head-url">
+              <button
+                class="head-button"
+                type="button"
+                onclick={() => cycleSort("url")}
+                title="点击排序"
+              >
+                <span class="head-label">网址</span>
+                {#if sortCol === "url"}
+                  <span class="sort-arrow" aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>
+                {/if}
+              </button>
+            </div>
+            <div class="head-actions"></div>
+          </div>
+
+          <div class="entry-list" role="listbox" aria-label="条目列表">
+            {#if filteredEntries.length === 0}
+              <div class="empty-state">
+                <span class="empty-icon"><AppIcon name="key" size={20} /></span>
+                <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
+                <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
               </div>
-            {/each}
-          {/if}
+            {:else}
+              {#each sortedEntries as row (row.entry.uuid)}
+                <div
+                  class="entry-row"
+                  class:selected={selectedEntry?.uuid === row.entry.uuid}
+                  role="option"
+                  aria-selected={selectedEntry?.uuid === row.entry.uuid}
+                  tabindex="0"
+                  onclick={() => selectEntry(row.entry)}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter") selectEntry(row.entry);
+                  }}
+                >
+                  <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
+                  <div class="entry-row-main">
+                    <span class="entry-row-title">{row.entry.title || "未命名条目"}</span>
+                    {#if showDescriptions}
+                      <span class="entry-row-sub">{row.entry.username}</span>
+                    {/if}
+                  </div>
+                  <span class="entry-row-col col-url" title={row.entry.url || undefined}>
+                    {row.entry.url}
+                  </span>
+                  <div class="entry-row-actions">
+                    <button
+                      class="row-btn"
+                      class:star-active={row.entry.favorite}
+                      title={row.entry.favorite ? "取消收藏" : "收藏条目"}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        void toggleFavorite(row.entry);
+                      }}
+                    >
+                      <AppIcon name="star" size={12} />
+                    </button>
+                    <button
+                      class="row-btn"
+                      title="复制用户名"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
+                      }}
+                    >
+                      <AppIcon name="user" size={12} />
+                    </button>
+                    <button
+                      class="row-btn"
+                      title="复制密码"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        if (row.entry.password)
+                          void copyEntryValue(row.entry.password, "密码", true);
+                      }}
+                    >
+                      <AppIcon name="copy" size={12} />
+                    </button>
+                  </div>
+                </div>
+              {/each}
+            {/if}
+          </div>
         </div>
       </section>
 
@@ -583,7 +658,7 @@
 <style>
   .app-shell {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     width: 100%;
     height: 100vh;
     min-width: 760px;
@@ -595,19 +670,44 @@
     min-width: 680px;
   }
 
-  .search-header {
+  .toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .toolbar-left,
+  .toolbar-center,
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .toolbar-center {
+    flex: 1;
+    justify-content: center;
   }
 
   .search-box {
     display: flex;
     align-items: center;
-    flex: 1;
-    gap: 10px;
-    min-width: 0;
+    gap: 6px;
+    width: min(340px, 100%);
+    height: 28px;
+    padding: 0 9px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+  }
+
+  .search-box:focus-within {
+    border-color: var(--selection-color);
   }
 
   .search-icon {
@@ -620,11 +720,10 @@
     min-width: 0;
     padding: 0;
     border: 0;
+    outline: none;
     color: var(--text-primary);
     background: transparent;
-    font-size: clamp(16px, 2.4vw, 19px);
-    font-weight: 350;
-    letter-spacing: -0.02em;
+    font-size: var(--font-size-secondary, 11px);
   }
 
   .search-input::placeholder {
@@ -639,14 +738,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     padding: 0;
     border: 0;
     border-radius: 50%;
     color: var(--text-muted);
     background: transparent;
-    font-size: 15px;
+    font-size: 13px;
     line-height: 1;
     cursor: pointer;
   }
@@ -660,8 +759,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     flex: 0 0 auto;
     padding: 0;
     border: 1px solid var(--border-color);
@@ -674,24 +773,6 @@
   .icon-action:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 6px 14px;
-    border-top: 1px solid var(--border-subtle);
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .toolbar-left,
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
   }
 
   .tool-button {
@@ -726,29 +807,6 @@
   .tool-button:disabled {
     cursor: not-allowed;
     opacity: 0.55;
-  }
-
-  .toolbar-sep {
-    width: 1px;
-    height: 18px;
-    margin: 0 4px;
-    background: var(--border-subtle);
-  }
-
-  .vault-name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-  }
-
-  .vault-name-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 180px;
   }
 
   .dirty-badge {
@@ -802,23 +860,110 @@
     white-space: nowrap;
   }
 
+  .entry-table {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .entry-table-head {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) 70px;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+    height: 28px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-bg);
+  }
+
+  .head-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny, 10px);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .head-title {
+    grid-column: 1 / 3;
+  }
+
+  .head-cell:hover {
+    color: var(--text-primary);
+  }
+
+  .head-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .head-button:hover {
+    color: var(--text-primary);
+  }
+
+  .head-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sort-arrow {
+    flex: 0 0 auto;
+    color: var(--selection-color);
+    font-size: 9px;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -5px;
+    z-index: 2;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .head-actions {
+    min-width: 0;
+  }
+
   .entry-list {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 0 8px 16px;
+    padding: 0 0 16px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .entry-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) 70px;
     align-items: center;
     gap: 9px;
     height: 40px;
     padding: 0 10px;
-    border: 1px solid transparent;
-    border-radius: var(--settings-control-radius, 6px);
     cursor: pointer;
   }
 
@@ -831,7 +976,6 @@
   }
 
   .entry-row.selected {
-    border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
@@ -871,15 +1015,30 @@
     white-space: nowrap;
   }
 
+  .entry-row-col {
+    overflow: hidden;
+    min-width: 0;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .col-url {
+    color: var(--text-faint);
+  }
+
   .entry-row-actions {
-    display: none;
+    display: flex;
+    justify-content: flex-end;
     gap: 2px;
-    flex: 0 0 auto;
+    min-width: 0;
+    opacity: 0;
   }
 
   .entry-row:hover .entry-row-actions,
-  .entry-row.selected .entry-row-actions {
-    display: flex;
+  .entry-row.selected .entry-row-actions,
+  .entry-row:focus-within .entry-row-actions {
+    opacity: 1;
   }
 
   .row-btn {
@@ -1126,5 +1285,10 @@
   .modal-button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  :global(body.resizing-column) {
+    cursor: col-resize !important;
+    user-select: none;
   }
 </style>

@@ -21,8 +21,9 @@ Preserve these characteristics unless the task explicitly requests a redesign:
 - Dense desktop utility layout with one continuous neutral surface, subtle borders, compact spacing, and restrained radii.
 - Near-black/dark-neutral surfaces with high-legibility primary text and progressively quieter secondary, muted, and faint text.
 - Red `--accent` for product/focus emphasis, blue `--selection-color` for selection/current state, and semantic success/danger/warning colors.
-- Large, lightweight, borderless search input at the top; compact icon buttons below it for open/save/lock/entry/group actions.
+- Toolbar row (the top chrome, itself the drag region) owns compact action buttons on the left (entry/group), a **centered compact search box** (`--input-bg`, subtle border, muted placeholder) in the middle, and settings/save/lock on the right. Search is intentionally low-emphasis: this is a password manager, so it must not dominate the header. The vault file name lives in the status bar, not the toolbar.
 - Three-pane main layout: group tree (left) → entry list (center) → detail (right). Rows are transparent at rest, use `--hover-bg` on hover/focus, and mix selection color into the selected state.
+- Entry list rows are a grid: icon → title (with username subtitle) → URL column → hover actions. The URL column width is user-adjustable via the header divider (clamped 100–400px), and clicking the 标题/网址 header cycles sort by that column. The username subtitle is gated by the `showDescriptions` setting; the URL column stays visible on narrow windows so the title column never collapses.
 - Status bar is a low-contrast footer separated by one subtle border; popovers/dialogs are elevated surfaces with a border plus shadow.
 - Motion is short and functional. Respect the global reduced-motion rule.
 
