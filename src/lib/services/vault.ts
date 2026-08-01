@@ -175,9 +175,25 @@ async function browserLoad(): Promise<VaultState | null> {
   return null;
 }
 
+/** Strip secrets (passwords, TOTP seeds) from a structural clone so the
+ * browser-demo persistence never writes them to localStorage. On reload the
+ * entries keep their metadata but passwords/tokens are gone. */
+function withoutSecrets(value: VaultState): VaultState {
+  const clone = deepClone(value);
+  const strip = (group: VaultGroup): void => {
+    for (const entry of group.entries) {
+      delete entry.password;
+      delete entry.totp;
+    }
+    for (const child of group.children) strip(child);
+  };
+  strip(clone.root);
+  return clone;
+}
+
 async function browserPersist(value: VaultState): Promise<void> {
   try {
-    localStorage.setItem(BROWSER_KEY, JSON.stringify(value));
+    localStorage.setItem(BROWSER_KEY, JSON.stringify(withoutSecrets(value)));
   } catch {
     // storage unavailable; in-memory only
   }
