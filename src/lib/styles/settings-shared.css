@@ -312,6 +312,31 @@ header p {
   background: color-mix(in srgb, var(--warning-color) 8%, var(--card-bg));
 }
 
+/* ── row layout: icon + heading on the left, control on the right ── */
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.setting-row + .setting-row {
+  margin-top: 10px;
+}
+
+.setting-row .setting-heading {
+  flex: 1;
+}
+
+.setting-row .setting-heading > div {
+  min-width: 0;
+}
+
+.setting-row-input {
+  flex: 0 0 200px;
+  width: 200px;
+}
+
 /* ── feedback ── */
 .settings-feedback {
   position: absolute;

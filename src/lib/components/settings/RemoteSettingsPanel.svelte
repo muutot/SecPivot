@@ -42,78 +42,98 @@
 
 <div class="settings-scroll">
   <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
-      <div>
-        <strong>连接</strong>
-        <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
+        <div>
+          <strong>服务地址</strong>
+          <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
+        </div>
       </div>
+      <input
+        id="remote-endpoint"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.endpoint}
+        placeholder="https://s3.amazonaws.com"
+        oninput={(e) => change("endpoint", e.currentTarget.value)}
+      />
     </div>
-    <label class="settings-label" for="remote-endpoint">服务地址</label>
-    <input
-      id="remote-endpoint"
-      class="settings-input"
-      type="text"
-      value={remote.endpoint}
-      placeholder="https://s3.amazonaws.com"
-      oninput={(e) => change("endpoint", e.currentTarget.value)}
-    />
-    <div class="settings-row">
-      <div>
-        <label class="settings-label" for="remote-region">区域</label>
-        <input
-          id="remote-region"
-          class="settings-input"
-          type="text"
-          value={remote.region}
-          placeholder="us-east-1"
-          oninput={(e) => change("region", e.currentTarget.value)}
-        />
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div>
+          <strong>区域</strong>
+          <p>存储桶所在的地域</p>
+        </div>
       </div>
-      <div>
-        <label class="settings-label" for="remote-bucket">存储桶</label>
-        <input
-          id="remote-bucket"
-          class="settings-input"
-          type="text"
-          value={remote.bucket}
-          placeholder="my-bucket"
-          oninput={(e) => change("bucket", e.currentTarget.value)}
-        />
+      <input
+        id="remote-region"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.region}
+        placeholder="us-east-1"
+        oninput={(e) => change("region", e.currentTarget.value)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+        <div>
+          <strong>存储桶</strong>
+          <p>对象存储的桶名称</p>
+        </div>
       </div>
+      <input
+        id="remote-bucket"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.bucket}
+        placeholder="my-bucket"
+        oninput={(e) => change("bucket", e.currentTarget.value)}
+      />
     </div>
   </section>
 
   <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="key" size={17} /></span>
-      <div>
-        <strong>访问凭据</strong>
-        <p>明文保存在 config.json，仅用于访问远程存储，与主密码无关</p>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="key" size={17} /></span>
+        <div>
+          <strong>Access Key</strong>
+          <p>远程存储的访问密钥 ID</p>
+        </div>
       </div>
+      <input
+        id="remote-access-key"
+        class="settings-input setting-row-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        value={remote.accessKey}
+        placeholder="AKIA..."
+        oninput={(e) => change("accessKey", e.currentTarget.value)}
+      />
     </div>
-    <label class="settings-label" for="remote-access-key">Access Key</label>
-    <input
-      id="remote-access-key"
-      class="settings-input"
-      type="text"
-      autocomplete="off"
-      spellcheck="false"
-      value={remote.accessKey}
-      placeholder="AKIA..."
-      oninput={(e) => change("accessKey", e.currentTarget.value)}
-    />
-    <label class="settings-label" for="remote-secret-key">Secret Key</label>
-    <input
-      id="remote-secret-key"
-      class="settings-input"
-      type="password"
-      autocomplete="off"
-      spellcheck="false"
-      value={remote.secretKey}
-      placeholder="••••••••"
-      oninput={(e) => change("secretKey", e.currentTarget.value)}
-    />
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
+        <div>
+          <strong>Secret Key</strong>
+          <p>与 Access Key 配对的私钥</p>
+        </div>
+      </div>
+      <input
+        id="remote-secret-key"
+        class="settings-input setting-row-input"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        value={remote.secretKey}
+        placeholder="••••••••"
+        oninput={(e) => change("secretKey", e.currentTarget.value)}
+      />
+    </div>
     <p class="settings-note warn">
       风险提示：凭据以明文写入
       config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
@@ -121,31 +141,40 @@
   </section>
 
   <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-      <div>
-        <strong>文件浏览与本地镜像</strong>
-        <p>远程文件列表前缀与“保存到本地”模式的落盘目录</p>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="filter" size={17} /></span>
+        <div>
+          <strong>对象前缀</strong>
+          <p>远程文件列表的前缀过滤（可选）</p>
+        </div>
       </div>
+      <input
+        id="remote-prefix"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.prefix}
+        placeholder="vaults/"
+        oninput={(e) => change("prefix", e.currentTarget.value)}
+      />
     </div>
-    <label class="settings-label" for="remote-prefix">对象前缀(可选)</label>
-    <input
-      id="remote-prefix"
-      class="settings-input"
-      type="text"
-      value={remote.prefix}
-      placeholder="vaults/"
-      oninput={(e) => change("prefix", e.currentTarget.value)}
-    />
-    <label class="settings-label" for="remote-local-dir">本地镜像目录</label>
-    <input
-      id="remote-local-dir"
-      class="settings-input"
-      type="text"
-      value={remote.localDir}
-      placeholder="remote"
-      oninput={(e) => change("localDir", e.currentTarget.value)}
-    />
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="download" size={17} /></span>
+        <div>
+          <strong>本地镜像目录</strong>
+          <p>“保存到本地”模式的落盘目录</p>
+        </div>
+      </div>
+      <input
+        id="remote-local-dir"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.localDir}
+        placeholder="remote"
+        oninput={(e) => change("localDir", e.currentTarget.value)}
+      />
+    </div>
     <p class="settings-note">
       本地副本保存在 Storage/remote/{remote.localDir || "remote"}/ 下，仅允许字母、数字、- 与 _。
     </p>
