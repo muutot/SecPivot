@@ -522,10 +522,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let mut config = AppConfig::default();
-        config.general.recent_files = vec![
-            "C:/vault-a.kdbx".into(),
-            "C:/vault-b.kdbx".into(),
-        ];
+        config.general.recent_files = vec!["C:/vault-a.kdbx".into(), "C:/vault-b.kdbx".into()];
         store.set(config.clone()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();

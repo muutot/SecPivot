@@ -61,15 +61,9 @@
 
     <div class="summary-row">
       <span class="summary-chip"><b>{totals.entries}</b>总条目</span>
-      <span class="summary-chip" class:issue={totals.empty > 0}
-        ><b>{totals.empty}</b>空密码</span
-      >
-      <span class="summary-chip" class:issue={totals.dupes > 0}
-        ><b>{totals.dupes}</b>重复密码</span
-      >
-      <span class="summary-chip" class:issue={totals.weak > 0}
-        ><b>{totals.weak}</b>弱密码</span
-      >
+      <span class="summary-chip" class:issue={totals.empty > 0}><b>{totals.empty}</b>空密码</span>
+      <span class="summary-chip" class:issue={totals.dupes > 0}><b>{totals.dupes}</b>重复密码</span>
+      <span class="summary-chip" class:issue={totals.weak > 0}><b>{totals.weak}</b>弱密码</span>
     </div>
 
     {#if totals.empty === 0 && totals.dupes === 0 && totals.weak === 0}
@@ -100,7 +94,9 @@
               <AppIcon name="copy" size={12} />
               <span class="issue-title">{password.replace(/./g, "•")}</span>
               <span class="issue-count">{group.length} 个条目</span>
-              <span class="issue-path" title={group.map((r) => r.entry.title || "未命名").join("、")}
+              <span
+                class="issue-path"
+                title={group.map((r) => r.entry.title || "未命名").join("、")}
                 >{group.map((r) => r.entry.title || "未命名").join("、")}</span
               >
             </li>
@@ -117,7 +113,8 @@
             <li class="issue-row">
               <AppIcon name="key" size={12} />
               <span class="issue-title">{row.entry.title || "未命名条目"}</span>
-              <span class="strength-label {entropyLabel(estimateEntropy(row.entry.password)).className}"
+              <span
+                class="strength-label {entropyLabel(estimateEntropy(row.entry.password)).className}"
                 >{entropyLabel(estimateEntropy(row.entry.password)).label}</span
               >
               <span class="issue-path" title={row.path}>{row.path}</span>
