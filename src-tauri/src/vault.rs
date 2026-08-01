@@ -566,6 +566,54 @@ impl VaultSession {
         self.snapshot()
     }
 
+    /// Move an entry into another group (used by drag-and-drop).
+    pub fn move_entry(&mut self, uuid: &str, group_uuid: &str) -> Result<VaultState, String> {
+        let id = parse_entry_id(uuid)?;
+        let target = resolve_group_id(self.require_db()?, group_uuid)?;
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            if entry.parent_mut().id() != target {
+                entry
+                    .move_to(target)
+                    .map_err(|e| format!("移动条目失败: {e}"))?;
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Move several entries into the recycle bin (or permanently delete them
+    /// when they are already inside the recycle bin).
+    pub fn delete_entries(&mut self, uuids: &[String]) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let bin_id = ensure_recycle_bin(db)?;
+            for uuid in uuids {
+                let id = parse_entry_id(uuid)?;
+                let in_bin = {
+                    let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+                    entry.parent().id() == bin_id
+                };
+                if in_bin {
+                    let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                    entry.remove();
+                } else {
+                    let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                    if entry.get(FIELD_ORIGINAL_GROUP).is_none() {
+                        let original = entry.parent_mut().id().uuid().to_string();
+                        entry.set(FIELD_ORIGINAL_GROUP, Value::unprotected(original));
+                    }
+                    entry
+                        .move_to(bin_id)
+                        .map_err(|e| format!("移入回收站失败: {e}"))?;
+                }
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
     /// Move an entry to the recycle bin (or permanently delete it when it is
     /// already inside the recycle bin).
     pub fn delete_entry(&mut self, uuid: &str) -> Result<VaultState, String> {
@@ -1913,6 +1961,89 @@ mod tests {
             })
             .unwrap();
         assert_eq!(state.root.children[0].icon, Some(4));
+    }
+
+    #[test]
+    fn move_entry_between_groups() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "A".into(),
+                icon: None,
+            })
+            .unwrap();
+        let group_a = state.root.children[0].uuid.clone();
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "B".into(),
+                icon: None,
+            })
+            .unwrap();
+        let group_b = state.root.children[1].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: group_a.clone(),
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry_uuid = state.root.children[0].entries[0].uuid.clone();
+
+        let state = session.move_entry(&entry_uuid, &group_b).unwrap();
+        assert_eq!(state.root.children[0].entries.len(), 0);
+        assert_eq!(state.root.children[1].entries.len(), 1);
+        assert_eq!(state.root.children[1].entries[0].uuid, entry_uuid);
+        assert_eq!(state.root.children[1].entries[0].group_uuid, group_b);
+
+        // Moving into the same group is a no-op.
+        let state = session.move_entry(&entry_uuid, &group_b).unwrap();
+        assert_eq!(state.root.children[1].entries.len(), 1);
+    }
+
+    #[test]
+    fn delete_entries_moves_all_to_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let mut uuids = Vec::new();
+        for i in 0..3 {
+            let state = session
+                .add_entry(&EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: format!("E{i}"),
+                    username: "".into(),
+                    password: "pw".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                })
+                .unwrap();
+            uuids.push(state.root.entries.last().unwrap().uuid.clone());
+        }
+        let state = session.delete_entries(&uuids).unwrap();
+        assert!(state.root.entries.is_empty());
+        assert_eq!(state.root.children[0].entries.len(), 3);
+        assert!(state.root.children[0].is_recycle_bin);
+
+        // Second pass permanently deletes the recycled entries.
+        let state = session.delete_entries(&uuids).unwrap();
+        assert_eq!(state.root.children[0].entries.len(), 0);
     }
 
     #[test]

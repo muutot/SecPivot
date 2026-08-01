@@ -172,6 +172,29 @@ fn delete_entry(
 }
 
 #[tauri::command]
+fn move_entry(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    group_uuid: String,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .move_entry(&uuid, &group_uuid)
+}
+
+#[tauri::command]
+fn delete_entries(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuids: Vec<String>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .delete_entries(&uuids)
+}
+
+#[tauri::command]
 fn get_entry_history(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
@@ -460,6 +483,8 @@ pub fn run() {
             add_entry,
             update_entry,
             delete_entry,
+            delete_entries,
+            move_entry,
             get_entry_history,
             restore_entry_version,
             restore_entry,

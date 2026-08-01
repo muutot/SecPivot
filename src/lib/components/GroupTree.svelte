@@ -15,6 +15,7 @@
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
+    ondropentry?: (groupUuid: string, uuids: string[]) => void;
   }
 
   let {
@@ -28,6 +29,7 @@
     ondelete,
     onrestore,
     onemptybin,
+    ondropentry,
   }: Props = $props();
 
   function collectUuids(group: VaultGroup, into: Set<string>): void {
@@ -103,6 +105,7 @@
         {ondelete}
         {onrestore}
         {onemptybin}
+        {ondropentry}
       />
     {/each}
   </div>

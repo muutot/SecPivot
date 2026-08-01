@@ -747,6 +747,39 @@
     };
   }
 
+  function askDeleteEntries(): void {
+    const uuids = Array.from(selectedUuids);
+    if (uuids.length === 0) return;
+    const allInBin = uuids.every((uuid) => entryInBin(uuid));
+    confirmState = {
+      message: allInBin
+        ? `永久删除所选 ${uuids.length} 个条目？此操作无法撤销。`
+        : `删除所选 ${uuids.length} 个条目？可从回收站恢复。`,
+      onconfirm: async () => {
+        try {
+          await vault.deleteEntries(uuids);
+          selectedUuids = new Set();
+          selectedEntry = null;
+          flash(allInBin ? "已永久删除所选条目" : "所选条目已移入回收站");
+        } catch (e) {
+          flash(`删除失败：${e}`);
+        }
+      },
+    };
+  }
+
+  async function moveEntriesTo(groupUuid: string, uuids: string[]): Promise<void> {
+    if (!currentVault || uuids.length === 0) return;
+    try {
+      for (const uuid of uuids) {
+        await vault.moveEntry(uuid, groupUuid);
+      }
+      flash(`已移动 ${uuids.length} 个条目`);
+    } catch (e) {
+      flash(`移动失败：${e}`);
+    }
+  }
+
   async function copyEntryValue(value: string, label: string, sensitive = false): Promise<void> {
     try {
       if (sensitive) {
@@ -791,7 +824,18 @@
   }
 
   function entryMenuItems(entry: VaultEntry): ContextMenuItem[] {
-    return [
+    const multi = selectedUuids.size > 1;
+    const items: ContextMenuItem[] = [
+      ...(multi
+        ? [
+            {
+              id: "delete-selected",
+              label: `删除所选条目 (${selectedUuids.size})`,
+              icon: "trash" as const,
+              destructive: true,
+            },
+          ]
+        : []),
       { id: "edit", label: "编辑条目", icon: "edit" },
       { id: "copy-username", label: "复制用户名", icon: "user", disabled: !entry.username },
       {
@@ -805,6 +849,7 @@
       { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
       { id: "delete", label: "删除条目", icon: "trash", destructive: true },
     ];
+    return items;
   }
 
   const blankMenuItems = $derived<ContextMenuItem[]>([
@@ -826,6 +871,7 @@
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "favorite") void toggleFavorite(entry);
     else if (id === "delete") askDeleteEntry(entry);
+    else if (id === "delete-selected") askDeleteEntries();
   }
 
   /** KeePass-standard default auto-type sequence. */
@@ -949,6 +995,7 @@
           ondelete={askDeleteGroup}
           onrestore={(uuid: string) => void restoreGroup(uuid)}
           onemptybin={askEmptyRecycleBin}
+          ondropentry={(groupUuid: string, uuids: string[]) => void moveEntriesTo(groupUuid, uuids)}
         />
       </section>
 
@@ -1026,6 +1073,17 @@
                   role="option"
                   aria-selected={selectedUuids.has(row.entry.uuid)}
                   tabindex="0"
+                  draggable="true"
+                  ondragstart={(e) => {
+                    const targets = selectedUuids.has(row.entry.uuid)
+                      ? Array.from(selectedUuids)
+                      : [row.entry.uuid];
+                    e.dataTransfer?.setData(
+                      "application/x-keyvault-entries",
+                      JSON.stringify(targets),
+                    );
+                    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+                  }}
                   onclick={(e) => handleRowClick(e, row.entry)}
                   oncontextmenu={(e) => openEntryMenu(e, row.entry)}
                   onkeydown={(e) => {

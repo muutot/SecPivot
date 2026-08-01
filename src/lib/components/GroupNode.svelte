@@ -21,6 +21,7 @@
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
+    ondropentry?: (groupUuid: string, uuids: string[]) => void;
   }
 
   let {
@@ -38,12 +39,14 @@
     ondelete,
     onrestore,
     onemptybin,
+    ondropentry,
   }: Props = $props();
 
   let renaming = $state(false);
   let nameInput = $state(group.name);
   let inputEl: HTMLInputElement | undefined = $state();
   let menu = $state<{ x: number; y: number } | null>(null);
+  let dragActive = $state(false);
 
   const count = $derived(countEntries(group));
   const isExpanded = $derived(expanded.has(group.uuid));
@@ -54,7 +57,9 @@
       GROUP_DEFAULT_ICON) as IconName,
   );
 
-  const menuItems: ContextMenuItem[] = $derived(
+  const DRAG_MIME = "application/x-keyvault-entries";
+
+const menuItems: ContextMenuItem[] = $derived(
     isBin
       ? count > 0
         ? [{ id: "empty-bin", label: "清空回收站", icon: "trash", destructive: true }]
@@ -132,9 +137,27 @@
       <button
         class="group-select"
         class:no-icon={!showIcon}
+        class:drop-target={dragActive}
         onclick={handleRowClick}
         oncontextmenu={openMenu}
         title={group.name}
+        ondragover={(e) => {
+          const transfer = e.dataTransfer;
+          if (!isBin && transfer?.types.includes(DRAG_MIME)) {
+            e.preventDefault();
+            transfer.dropEffect = "move";
+            dragActive = true;
+          }
+        }}
+        ondragleave={() => (dragActive = false)}
+        ondrop={(e) => {
+          dragActive = false;
+          if (isBin || !e.dataTransfer) return;
+          e.preventDefault();
+          const raw = e.dataTransfer.getData(DRAG_MIME);
+          if (!raw) return;
+          ondropentry?.(group.uuid, JSON.parse(raw) as string[]);
+        }}
       >
         {#if showChevron}
           {#if hasChildren}
@@ -174,6 +197,7 @@
       {ondelete}
       {onrestore}
       {onemptybin}
+      {ondropentry}
     />
   {/each}
 {/if}
@@ -267,6 +291,11 @@
 
   .group-select:hover {
     background: var(--hover-bg);
+  }
+
+  .group-select.drop-target {
+    border-color: color-mix(in srgb, var(--selection-color) 60%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
   .group-select.no-icon {

@@ -46,6 +46,8 @@ interface VaultStore {
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
+  deleteEntries: (uuids: string[]) => Promise<VaultState>;
+  moveEntry: (uuid: string, groupUuid: string) => Promise<VaultState>;
   restoreEntry: (uuid: string) => Promise<VaultState>;
   getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
   restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
@@ -506,6 +508,44 @@ export const vault: VaultStore = {
       const bin = ensureBinGroup(draft.root);
       entry.groupUuid = bin.uuid;
       bin.entries.push(entry);
+    });
+    state.set(result);
+    return result;
+  },
+
+  async deleteEntries(uuids: string[]): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("delete_entries", { uuids });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const bin = ensureBinGroup(draft.root);
+      for (const uuid of uuids) {
+        const entry = findEntry(draft.root, uuid);
+        if (!entry) continue;
+        removeEntryFromGroup(draft.root, uuid);
+        entry.groupUuid = bin.uuid;
+        bin.entries.push(entry);
+      }
+    });
+    state.set(result);
+    return result;
+  },
+
+  async moveEntry(uuid: string, groupUuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("move_entry", { uuid, groupUuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const entry = findEntry(draft.root, uuid);
+      if (!entry) throw new Error("entry not found");
+      removeEntryFromGroup(draft.root, uuid);
+      entry.groupUuid = groupUuid;
+      const target = findGroup(draft.root, groupUuid);
+      if (target) target.entries.push(entry);
     });
     state.set(result);
     return result;
