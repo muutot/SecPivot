@@ -15,3 +15,4 @@
 ## 构建产物
 
 - **NSIS 安装包**: `KeyVault_x.x.x_x64-setup.exe`
+- **便携版 ZIP**: `dist/KeyVault-x.x.x-portable.zip`(由 `scripts/package-portable.ps1` 生成,解压即用,配置存于 exe 旁 `conf/`)
