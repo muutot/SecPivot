@@ -21,6 +21,8 @@
   let search = $state("");
   let selectedGroup = $state<string | null>(null);
   let selectedEntry = $state<VaultEntry | null>(null);
+  let selectedUuids = $state<Set<string>>(new Set());
+  let selectionAnchor = $state<string | null>(null);
   let editorOpen = $state(false);
   let editorMode: "create" | "edit" = $state("create");
   let editEntry: VaultEntry | null = $state(null);
@@ -38,6 +40,8 @@
       currentVault = value;
       if (!value) {
         selectedEntry = null;
+        selectedUuids = new Set();
+        selectionAnchor = null;
         editorOpen = false;
       }
       armIdleLock();
@@ -249,8 +253,38 @@
     return list;
   }
 
-  function selectEntry(entry: VaultEntry | null): void {
+  function setSingleSelection(entry: VaultEntry | null): void {
+    selectedUuids = entry ? new Set([entry.uuid]) : new Set();
+    selectionAnchor = entry?.uuid ?? null;
     selectedEntry = entry;
+  }
+
+  function handleRowClick(event: MouseEvent, entry: VaultEntry): void {
+    if (event.shiftKey && selectionAnchor) {
+      const uuids = sortedEntries.map((r) => r.entry.uuid);
+      const start = uuids.indexOf(selectionAnchor);
+      const end = uuids.indexOf(entry.uuid);
+      if (start !== -1 && end !== -1) {
+        const [lo, hi] = start <= end ? [start, end] : [end, start];
+        selectedUuids = new Set(uuids.slice(lo, hi + 1));
+        selectionAnchor = entry.uuid;
+        selectedEntry = entry;
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) {
+      const next = new Set(selectedUuids);
+      if (next.has(entry.uuid)) {
+        next.delete(entry.uuid);
+      } else {
+        next.add(entry.uuid);
+      }
+      selectedUuids = next;
+      selectionAnchor = entry.uuid;
+      selectedEntry = entry;
+      return;
+    }
+    setSingleSelection(entry);
   }
 
   async function toggleFavorite(entry: VaultEntry): Promise<void> {
@@ -306,12 +340,12 @@
     try {
       if (editorMode === "create") {
         const state = await vault.addEntry(input);
-        selectedEntry = findEntryByUuid(state, null);
+        setSingleSelection(findEntryByUuid(state, null));
         editorOpen = false;
         flash("已创建条目");
       } else if (editEntry) {
         const state = await vault.updateEntry(editEntry.uuid, input);
-        selectedEntry = findEntryByUuid(state, editEntry.uuid);
+        setSingleSelection(findEntryByUuid(state, editEntry.uuid));
         editorOpen = false;
         flash("已保存修改");
       }
@@ -369,6 +403,11 @@
         try {
           await vault.deleteEntry(entry.uuid);
           if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
+          if (selectedUuids.has(entry.uuid)) {
+            const next = new Set(selectedUuids);
+            next.delete(entry.uuid);
+            selectedUuids = next;
+          }
           flash("已删除条目");
         } catch (e) {
           flash(`删除失败：${e}`);
@@ -397,7 +436,8 @@
     event.preventDefault();
     event.stopPropagation();
     blankMenu = null;
-    selectEntry(entry);
+    if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
+    selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
   }
 
@@ -405,6 +445,18 @@
     event.preventDefault();
     entryMenu = null;
     blankMenu = { x: event.clientX, y: event.clientY };
+  }
+
+  function selectAllEntries(): void {
+    selectedUuids = new Set(sortedEntries.map((r) => r.entry.uuid));
+    selectionAnchor = null;
+    selectedEntry = sortedEntries[0]?.entry ?? null;
+  }
+
+  function clearSelection(): void {
+    selectedUuids = new Set();
+    selectionAnchor = null;
+    selectedEntry = null;
   }
 
   function entryMenuItems(entry: VaultEntry): ContextMenuItem[] {
@@ -421,6 +473,7 @@
   const blankMenuItems = $derived<ContextMenuItem[]>([
     { id: "new-entry", label: "新建条目", icon: "plus" },
     { id: "new-group", label: "新建分组", icon: "folder-plus" },
+    { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
@@ -443,6 +496,7 @@
   function handleBlankMenuAction(id: string): void {
     if (id === "new-entry") openCreateEntry();
     else if (id === "new-group") openGroupModal(selectedGroup);
+    else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
@@ -524,6 +578,8 @@
           onselect={(uuid: string | null) => {
             selectedGroup = uuid;
             selectedEntry = null;
+            selectedUuids = new Set();
+            selectionAnchor = null;
           }}
           onaddsubgroup={openGroupModal}
           onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
@@ -589,6 +645,7 @@
             class="entry-list"
             role="listbox"
             aria-label="条目列表"
+            aria-multiselectable="true"
             tabindex="-1"
             oncontextmenu={openBlankMenu}
           >
@@ -602,14 +659,14 @@
               {#each sortedEntries as row (row.entry.uuid)}
                 <div
                   class="entry-row"
-                  class:selected={selectedEntry?.uuid === row.entry.uuid}
+                  class:selected={selectedUuids.has(row.entry.uuid)}
                   role="option"
-                  aria-selected={selectedEntry?.uuid === row.entry.uuid}
+                  aria-selected={selectedUuids.has(row.entry.uuid)}
                   tabindex="0"
-                  onclick={() => selectEntry(row.entry)}
+                  onclick={(e) => handleRowClick(e, row.entry)}
                   oncontextmenu={(e) => openEntryMenu(e, row.entry)}
                   onkeydown={(e) => {
-                    if (e.key === "Enter") selectEntry(row.entry);
+                    if (e.key === "Enter") setSingleSelection(row.entry);
                   }}
                 >
                   <span class="entry-row-icon"><AppIcon name="key" size={13} /></span>
