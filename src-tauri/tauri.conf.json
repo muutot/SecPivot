@@ -16,8 +16,8 @@
         "title": "KeyVault",
         "width": 1100,
         "height": 720,
-        "minWidth": 900,
-        "minHeight": 600,
+        "minWidth": 560,
+        "minHeight": 420,
         "center": true,
         "resizable": true,
         "maximizable": true

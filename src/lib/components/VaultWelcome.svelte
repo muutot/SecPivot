@@ -556,18 +556,19 @@
 
   .welcome-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 10px;
+    gap: 6px;
     margin-top: 28px;
   }
 
   .welcome-button {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    white-space: nowrap;
+    gap: 6px;
     height: 34px;
-    padding: 0 13px;
+    padding: 0 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-secondary);

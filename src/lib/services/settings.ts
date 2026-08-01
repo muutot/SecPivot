@@ -37,6 +37,9 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowOpacity: 100,
   rememberLastDatabase: true,
   recentFiles: [],
+  windowWidth: 1100,
+  windowHeight: 720,
+  panelWidths: { group: 200, detail: 300, urlCol: 200 },
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -217,6 +220,15 @@ export function normalizeSettings(
           : fallback.general.density.showGroupChevron,
     },
     windowOpacity: clampInt(g.windowOpacity ?? fallback.general.windowOpacity, 40, 100, 100),
+    windowWidth: clampInt(g.windowWidth ?? fallback.general.windowWidth, 560, 2560, 1100),
+    windowHeight: clampInt(g.windowHeight ?? fallback.general.windowHeight, 420, 1600, 720),
+    panelWidths: {
+      ...fallback.general.panelWidths,
+      ...(g.panelWidths ?? {}),
+      group: clampInt(g.panelWidths?.group ?? fallback.general.panelWidths.group, 140, 320, 200),
+      detail: clampInt(g.panelWidths?.detail ?? fallback.general.panelWidths.detail, 260, 640, 300),
+      urlCol: clampInt(g.panelWidths?.urlCol ?? fallback.general.panelWidths.urlCol, 30, 400, 200),
+    },
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:
       g.language === "en" || g.language === "zh-CN" ? g.language : fallback.general.language,

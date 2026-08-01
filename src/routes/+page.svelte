@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
@@ -64,10 +65,21 @@
     });
     void vault.refresh();
     const stopAutoLock = installAutoLock();
+    const rememberWindowSize = (): void => {
+      if (!currentVault) return;
+      if (windowResizeTimer) clearTimeout(windowResizeTimer);
+      windowResizeTimer = setTimeout(() => {
+        appSettings.updateGeneral("windowWidth", window.innerWidth);
+        appSettings.updateGeneral("windowHeight", window.innerHeight);
+      }, 300);
+    };
+    window.addEventListener("resize", rememberWindowSize);
     return () => {
       unsubscribe();
       unsubRemembered();
       stopAutoLock();
+      window.removeEventListener("resize", rememberWindowSize);
+      if (windowResizeTimer) clearTimeout(windowResizeTimer);
     };
   });
 
@@ -88,6 +100,22 @@
   );
   $effect(() => {
     syncCompactShellClass(compactMode);
+  });
+
+  const WELCOME_WINDOW_SIZE = { width: 620, height: 480 };
+  let lastAppliedSize = $state("");
+  let windowResizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const g = get(appSettings).general;
+    const view = currentVault === null ? (showLockScreen ? "lock" : "welcome") : "main";
+    if (!isTauriRuntime() || view === "lock") return;
+    const width = view === "welcome" ? WELCOME_WINDOW_SIZE.width : g.windowWidth;
+    const height = view === "welcome" ? WELCOME_WINDOW_SIZE.height : g.windowHeight;
+    const key = `${width}x${height}`;
+    if (lastAppliedSize === key) return;
+    lastAppliedSize = key;
+    void getCurrentWindow().setSize(new LogicalSize(width, height));
   });
 
   const allGroups = $derived.by((): VaultGroup[] => {
@@ -163,10 +191,19 @@
   type SortCol = "title" | "url";
   let sortCol = $state<SortCol>("title");
   let sortDir = $state<"asc" | "desc">("asc");
-  let colWidths = $state<{ url: number }>({ url: 200 });
-  let groupWidth = $state(200);
-  let detailWidth = $state(300);
+  /** URL column floor: header chars ("网址") × 10px font + 10px — matches config.rs clamp. */
+  const URL_COL_MIN = "网址".length * 10 + 10;
+  let colWidths = $state<{ url: number }>({ url: get(appSettings).general.panelWidths.urlCol });
+  let groupWidth = $state(get(appSettings).general.panelWidths.group);
+  let detailWidth = $state(get(appSettings).general.panelWidths.detail);
   let detailVisible = $state(false);
+
+  $effect(() => {
+    const p = get(appSettings).general.panelWidths;
+    groupWidth = p.group;
+    detailWidth = p.detail;
+    colWidths.url = p.urlCol;
+  });
 
   $effect(() => {
     if (selectedEntry) {
@@ -206,7 +243,7 @@
     const startW = colWidths.url;
     document.body.classList.add("resizing-column");
     const onMove = (ev: PointerEvent): void => {
-      colWidths.url = Math.min(400, Math.max(100, startW - (ev.clientX - startX)));
+      colWidths.url = Math.min(400, Math.max(URL_COL_MIN, startW - (ev.clientX - startX)));
     };
     const onUp = (ev: PointerEvent): void => {
       if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
@@ -214,6 +251,7 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
+      savePanelWidths();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -237,6 +275,7 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
+      savePanelWidths();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -260,10 +299,19 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
+      savePanelWidths();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+  }
+
+  function savePanelWidths(): void {
+    appSettings.updateGeneral("panelWidths", {
+      group: groupWidth,
+      detail: detailWidth,
+      urlCol: colWidths.url,
+    });
   }
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
@@ -713,6 +761,7 @@
 <main
   class="app-shell"
   class:compact={compactMode}
+  class:standalone={!currentVault}
   style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
   style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
   style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
@@ -1117,6 +1166,11 @@
 
   .app-shell.compact {
     min-width: 680px;
+  }
+
+  /* Welcome / lock views render in the smaller standalone window. */
+  .app-shell.standalone {
+    min-width: 0;
   }
 
   .toolbar {

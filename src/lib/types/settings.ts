@@ -61,6 +61,14 @@ export interface DensitySettings {
   showGroupChevron: boolean;
 }
 
+/** User-resizable pane widths of the main view, remembered across restarts. */
+export interface PanelWidths {
+  group: number;
+  detail: number;
+  /** URL column; floor is header chars × 10px + 10px ("网址" → 30). */
+  urlCol: number;
+}
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
@@ -79,6 +87,10 @@ export interface GeneralSettings {
   windowOpacity: number;
   rememberLastDatabase: boolean;
   recentFiles: string[];
+  /** Main-window size remembered from the user's resize; the welcome screen uses a smaller fixed size. */
+  windowWidth: number;
+  windowHeight: number;
+  panelWidths: PanelWidths;
 }
 
 export interface AppSettings {

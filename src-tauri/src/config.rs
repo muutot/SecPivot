@@ -157,6 +157,34 @@ pub struct GeneralSettings {
     pub window_opacity: i32,
     pub remember_last_database: bool,
     pub recent_files: Vec<String>,
+    /// Main-window size remembered from the user's resize; the welcome screen
+    /// uses a smaller fixed size instead.
+    pub window_width: i32,
+    pub window_height: i32,
+    /// User-resizable pane widths in the main view, remembered across restarts.
+    pub panel_widths: PanelWidths,
+}
+
+/// Resizable pane widths of the main view: group tree, detail panel, and the
+/// URL column of the entry table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PanelWidths {
+    pub group: i32,
+    pub detail: i32,
+    /// URL column; the floor is derived from the header text ("网址"
+    /// 2 chars × 10px font + 10px) — keep in sync with the frontend clamp.
+    pub url_col: i32,
+}
+
+impl Default for PanelWidths {
+    fn default() -> Self {
+        Self {
+            group: 200,
+            detail: 300,
+            url_col: 200,
+        }
+    }
 }
 
 impl Default for GeneralSettings {
@@ -174,6 +202,9 @@ impl Default for GeneralSettings {
             window_opacity: 100,
             remember_last_database: true,
             recent_files: Vec::new(),
+            window_width: 1100,
+            window_height: 720,
+            panel_widths: PanelWidths::default(),
         }
     }
 }
@@ -369,6 +400,13 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.font_sizes.card_preview =
         clamp_i32(config.general.font_sizes.card_preview, 9, 16, 11);
     config.general.window_opacity = clamp_i32(config.general.window_opacity, 40, 100, 100);
+    config.general.window_width = clamp_i32(config.general.window_width, 560, 2560, 1100);
+    config.general.window_height = clamp_i32(config.general.window_height, 420, 1600, 720);
+    config.general.panel_widths.group = clamp_i32(config.general.panel_widths.group, 140, 320, 200);
+    config.general.panel_widths.detail =
+        clamp_i32(config.general.panel_widths.detail, 260, 640, 300);
+    config.general.panel_widths.url_col =
+        clamp_i32(config.general.panel_widths.url_col, 30, 400, 200);
     config.general.density.group_gap = clamp_i32(config.general.density.group_gap, 0, 16, 2);
     config.general.density.group_padding_y =
         clamp_i32(config.general.density.group_padding_y, 0, 16, 3);
@@ -675,6 +713,48 @@ mod tests {
                 "f5.kdbx".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn window_and_panel_sizes_survive_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.general.window_width = 1024;
+        config.general.window_height = 768;
+        config.general.panel_widths.group = 220;
+        config.general.panel_widths.detail = 360;
+        config.general.panel_widths.url_col = 260;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"panelWidths\""));
+        assert!(text.contains("\"urlCol\": 260"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(again.general.window_width, 1024);
+        assert_eq!(again.general.window_height, 768);
+        assert_eq!(again.general.panel_widths.group, 220);
+        assert_eq!(again.general.panel_widths.detail, 360);
+        assert_eq!(again.general.panel_widths.url_col, 260);
+    }
+
+    #[test]
+    fn window_and_panel_sizes_are_clamped() {
+        let mut config = AppConfig::default();
+        config.general.window_width = 300;
+        config.general.window_height = 99_999;
+        config.general.panel_widths.group = 100;
+        config.general.panel_widths.detail = 999;
+        config.general.panel_widths.url_col = 1;
+
+        let normalized = normalize_config(config);
+        assert_eq!(normalized.general.window_width, 1100);
+        assert_eq!(normalized.general.window_height, 720);
+        assert_eq!(normalized.general.panel_widths.group, 200);
+        assert_eq!(normalized.general.panel_widths.detail, 300);
+        assert_eq!(normalized.general.panel_widths.url_col, 200);
     }
 
     #[test]
