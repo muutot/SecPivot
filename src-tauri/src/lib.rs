@@ -171,6 +171,17 @@ fn delete_entry(
 }
 
 #[tauri::command]
+fn restore_entry(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .restore_entry(&uuid)
+}
+
+#[tauri::command]
 fn save_attachment(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
@@ -252,6 +263,25 @@ fn delete_group(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .delete_group(&uuid)
+}
+
+#[tauri::command]
+fn restore_group(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .restore_group(&uuid)
+}
+
+#[tauri::command]
+fn empty_recycle_bin(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .empty_recycle_bin()
 }
 
 /// Fetch one entry's password on demand; passwords are never part of `VaultState`.
@@ -406,6 +436,10 @@ pub fn run() {
             add_entry,
             update_entry,
             delete_entry,
+            restore_entry,
+            delete_group,
+            restore_group,
+            empty_recycle_bin,
             save_attachment,
             totp_code,
             toggle_favorite,

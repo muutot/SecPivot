@@ -45,6 +45,7 @@ interface VaultStore {
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
+  restoreEntry: (uuid: string) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
   securityReport: () => Promise<SecurityReport>;
@@ -54,6 +55,8 @@ interface VaultStore {
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
+  restoreGroup: (uuid: string) => Promise<VaultState>;
+  emptyRecycleBin: () => Promise<VaultState>;
   refresh: () => Promise<void>;
   remembered: typeof remembered.subscribe;
   getRemembered: () => RememberedVault | null;
@@ -112,6 +115,37 @@ function findEntry(root: VaultGroup, uuid: string): VaultEntry | null {
 function collectGroups(root: VaultGroup, out: VaultGroup[]): void {
   out.push(root);
   for (const child of root.children) collectGroups(child, out);
+}
+
+function findBinGroup(root: VaultGroup): VaultGroup | null {
+  for (const child of root.children) {
+    if (child.isRecycleBin) return child;
+  }
+  return null;
+}
+
+function ensureBinGroup(root: VaultGroup): VaultGroup {
+  const existing = findBinGroup(root);
+  if (existing) return existing;
+  const bin: VaultGroup = {
+    uuid: newUuid(),
+    parentUuid: root.uuid,
+    name: "回收站",
+    isRecycleBin: true,
+    children: [],
+    entries: [],
+  };
+  root.children.push(bin);
+  return bin;
+}
+
+function removeEntryFromGroup(root: VaultGroup, uuid: string): void {
+  const index = root.entries.findIndex((e) => e.uuid === uuid);
+  if (index >= 0) {
+    root.entries.splice(index, 1);
+    return;
+  }
+  for (const child of root.children) removeEntryFromGroup(child, uuid);
 }
 
 function moveEntriesToRoot(draft: VaultState, group: VaultGroup): void {
@@ -368,28 +402,6 @@ export const vault: VaultStore = {
     return result;
   },
 
-  async deleteEntry(uuid: string): Promise<VaultState> {
-    if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("delete_entry", { uuid });
-      state.set(result);
-      return result;
-    }
-    const result = applyEdit((draft) => {
-      const groups: VaultGroup[] = [];
-      collectGroups(draft.root, groups);
-      for (const group of groups) {
-        const index = group.entries.findIndex((e) => e.uuid === uuid);
-        if (index >= 0) {
-          group.entries.splice(index, 1);
-          return;
-        }
-      }
-      throw new Error("entry not found");
-    });
-    state.set(result);
-    return result;
-  },
-
   async totpCode(uuid: string): Promise<TotpCode> {
     if (isTauriRuntime()) {
       return backendInvoke<TotpCode>("totp_code", { uuid });
@@ -454,6 +466,7 @@ export const vault: VaultStore = {
         uuid: newUuid(),
         parentUuid: parent.uuid,
         name: input.name,
+        isRecycleBin: false,
         children: [],
         entries: [],
       });
@@ -477,6 +490,43 @@ export const vault: VaultStore = {
     return result;
   },
 
+  async deleteEntry(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("delete_entry", { uuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const entry = findEntry(draft.root, uuid);
+      if (!entry) throw new Error("entry not found");
+      removeEntryFromGroup(draft.root, uuid);
+      const bin = ensureBinGroup(draft.root);
+      entry.groupUuid = bin.uuid;
+      bin.entries.push(entry);
+    });
+    state.set(result);
+    return result;
+  },
+
+  async restoreEntry(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("restore_entry", { uuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const bin = findBinGroup(draft.root);
+      if (!bin) throw new Error("recycle bin not found");
+      const index = bin.entries.findIndex((e) => e.uuid === uuid);
+      if (index < 0) throw new Error("entry not in recycle bin");
+      const [entry] = bin.entries.splice(index, 1);
+      entry.groupUuid = draft.root.uuid;
+      draft.root.entries.push(entry);
+    });
+    state.set(result);
+    return result;
+  },
+
   async deleteGroup(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("delete_group", { uuid });
@@ -485,17 +535,55 @@ export const vault: VaultStore = {
     }
     if (uuid === "root") throw new Error("cannot delete root");
     const result = applyEdit((draft) => {
+      const bin = ensureBinGroup(draft.root);
       const groups: VaultGroup[] = [];
       collectGroups(draft.root, groups);
       for (const group of groups) {
         const index = group.children.findIndex((c) => c.uuid === uuid);
         if (index >= 0) {
-          moveEntriesToRoot(draft, group.children[index]);
-          group.children.splice(index, 1);
+          const [removed] = group.children.splice(index, 1);
+          removed.parentUuid = bin.uuid;
+          bin.children.push(removed);
           return;
         }
       }
       throw new Error("group not found");
+    });
+    state.set(result);
+    return result;
+  },
+
+  async restoreGroup(uuid: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("restore_group", { uuid });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const bin = findBinGroup(draft.root);
+      if (!bin) throw new Error("recycle bin not found");
+      const index = bin.children.findIndex((c) => c.uuid === uuid);
+      if (index < 0) throw new Error("group not in recycle bin");
+      const [removed] = bin.children.splice(index, 1);
+      removed.parentUuid = draft.root.uuid;
+      draft.root.children.push(removed);
+    });
+    state.set(result);
+    return result;
+  },
+
+  async emptyRecycleBin(): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("empty_recycle_bin");
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const bin = findBinGroup(draft.root);
+      if (bin) {
+        bin.entries = [];
+        bin.children = [];
+      }
     });
     state.set(result);
     return result;

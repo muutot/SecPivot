@@ -12,17 +12,20 @@ export function buildDemoVaultState(): VaultState {
       uuid: "root",
       parentUuid: null,
       name: "Root",
+      isRecycleBin: false,
       children: [
         {
           uuid: "grp-web",
           parentUuid: "root",
           name: "Web",
+          isRecycleBin: false,
           entries: [],
           children: [
             {
               uuid: "grp-email",
               parentUuid: "grp-web",
               name: "Email",
+              isRecycleBin: false,
               children: [],
               entries: [
                 {
@@ -54,6 +57,7 @@ export function buildDemoVaultState(): VaultState {
               uuid: "grp-social",
               parentUuid: "grp-web",
               name: "Social",
+              isRecycleBin: false,
               children: [],
               entries: [
                 {
@@ -75,6 +79,7 @@ export function buildDemoVaultState(): VaultState {
           uuid: "grp-finance",
           parentUuid: "root",
           name: "Finance",
+          isRecycleBin: false,
           children: [],
           entries: [
             {
@@ -105,12 +110,14 @@ export function buildDemoVaultState(): VaultState {
           uuid: "grp-work",
           parentUuid: "root",
           name: "Work",
+          isRecycleBin: false,
           entries: [],
           children: [
             {
               uuid: "grp-infra",
               parentUuid: "grp-work",
               name: "Infrastructure",
+              isRecycleBin: false,
               children: [],
               entries: [
                 {
@@ -143,6 +150,7 @@ export function buildDemoVaultState(): VaultState {
           uuid: "grp-personal",
           parentUuid: "root",
           name: "Personal",
+          isRecycleBin: false,
           children: [],
           entries: [
             {

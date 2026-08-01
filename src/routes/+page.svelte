@@ -129,6 +129,13 @@
     return list;
   });
 
+  const allEntries = $derived.by((): VaultEntry[] => {
+    if (!currentVault) return [];
+    const list: VaultEntry[] = [];
+    for (const group of allGroups) list.push(...group.entries);
+    return list;
+  });
+
   const reportEntries = $derived.by(() => {
     const rows: { entry: VaultEntry; path: string }[] = [];
     for (const group of allGroups) {
@@ -157,6 +164,28 @@
       guard++;
     }
     return parts.join(" / ");
+  }
+
+  /** Whether the given group uuid is the recycle bin or nested inside it. */
+  function groupInBin(groupUuid: string): boolean {
+    let current = allGroups.find((g) => g.uuid === groupUuid);
+    let guard = 0;
+    while (current && current.uuid !== currentVault?.root.uuid && guard < 50) {
+      if (current.isRecycleBin) return true;
+      current = parentMap.get(current.uuid);
+      guard++;
+    }
+    return false;
+  }
+
+  function selectedGroupInBin(uuid: string): boolean {
+    return groupInBin(uuid);
+  }
+
+  function entryInBin(entryUuid: string): boolean {
+    const entry = allEntries.find((e) => e.uuid === entryUuid);
+    if (!entry) return false;
+    return groupInBin(entry.groupUuid);
   }
 
   const selectedSubtree = $derived.by((): VaultGroup[] => {
@@ -616,13 +645,16 @@
   }
 
   function askDeleteGroup(uuid: string): void {
+    const inBin = selectedGroupInBin(uuid);
     confirmState = {
-      message: "删除该分组？其下条目将移动到根分组。",
+      message: inBin
+        ? "永久删除该分组及其全部内容？此操作无法撤销。"
+        : "删除该分组？其下条目将移动到回收站。",
       onconfirm: async () => {
         try {
           await vault.deleteGroup(uuid);
           if (selectedGroup === uuid) selectedGroup = null;
-          flash("已删除分组");
+          flash(inBin ? "已永久删除分组" : "已移入回收站");
         } catch (e) {
           flash(`删除失败：${e}`);
         }
@@ -630,9 +662,45 @@
     };
   }
 
-  function askDeleteEntry(entry: VaultEntry): void {
+  function askEmptyRecycleBin(): void {
     confirmState = {
-      message: `删除条目「${entry.title || "未命名"}」？`,
+      message: "清空回收站？其中的条目和分组将被永久删除，此操作无法撤销。",
+      onconfirm: async () => {
+        try {
+          await vault.emptyRecycleBin();
+          flash("已清空回收站");
+        } catch (e) {
+          flash(`清空失败：${e}`);
+        }
+      },
+    };
+  }
+
+  async function restoreGroup(uuid: string): Promise<void> {
+    try {
+      await vault.restoreGroup(uuid);
+      flash("已恢复分组");
+    } catch (e) {
+      flash(`恢复失败：${e}`);
+    }
+  }
+
+  async function restoreEntry(entry: VaultEntry): Promise<void> {
+    try {
+      await vault.restoreEntry(entry.uuid);
+      if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
+      flash("已恢复条目");
+    } catch (e) {
+      flash(`恢复失败：${e}`);
+    }
+  }
+
+  function askDeleteEntry(entry: VaultEntry): void {
+    const inBin = entryInBin(entry.uuid);
+    confirmState = {
+      message: inBin
+        ? `永久删除条目「${entry.title || "未命名"}」？此操作无法撤销。`
+        : `删除条目「${entry.title || "未命名"}」？可从回收站恢复。`,
       onconfirm: async () => {
         try {
           await vault.deleteEntry(entry.uuid);
@@ -642,7 +710,7 @@
             next.delete(entry.uuid);
             selectedUuids = next;
           }
-          flash("已删除条目");
+          flash(inBin ? "已永久删除条目" : "已移入回收站");
         } catch (e) {
           flash(`删除失败：${e}`);
         }
@@ -850,6 +918,8 @@
           onaddsubgroup={openGroupModal}
           onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
           ondelete={askDeleteGroup}
+          onrestore={(uuid: string) => void restoreGroup(uuid)}
+          onemptybin={askEmptyRecycleBin}
         />
       </section>
 
@@ -1000,9 +1070,11 @@
             <EntryDetail
               entry={selectedEntry}
               groupPath={pathOf(selectedEntry.groupUuid)}
+              inRecycleBin={groupInBin(selectedEntry.groupUuid)}
               onfavorite={toggleFavorite}
               onedit={openEditEntry}
               ondelete={askDeleteEntry}
+              onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
             />
           {:else}
             <div class="detail-empty">

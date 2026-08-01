@@ -32,10 +32,13 @@ const FIELD_OTP: &str = "otp";
 /// Custom field used to mark an entry as pinned/favorite.
 const FIELD_FAVORITE: &str = "KeyVault.Favorite";
 const FIELD_FAVORITE_TRUE: &str = "true";
+/// Custom field recording the group an entry lived in before being recycled,
+/// so it can be restored to its original location.
+const FIELD_ORIGINAL_GROUP: &str = "KeyVault.OriginalGroup";
 
 /// Standard fields that are surfaced through the entry's own columns and must
 /// not leak into the custom-fields list.
-const RESERVED_FIELDS: [&str; 7] = [
+const RESERVED_FIELDS: [&str; 8] = [
     FIELD_TITLE,
     FIELD_USERNAME,
     FIELD_PASSWORD,
@@ -43,6 +46,7 @@ const RESERVED_FIELDS: [&str; 7] = [
     FIELD_NOTES,
     FIELD_OTP,
     FIELD_FAVORITE,
+    FIELD_ORIGINAL_GROUP,
 ];
 
 // Argon2 parameters for newly created vaults (OWASP-recommended).
@@ -114,6 +118,7 @@ pub struct VaultGroup {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
+    pub is_recycle_bin: bool,
     pub children: Vec<VaultGroup>,
     pub entries: Vec<VaultEntry>,
 }
@@ -515,12 +520,141 @@ impl VaultSession {
         self.snapshot()
     }
 
+    /// Move an entry to the recycle bin (or permanently delete it when it is
+    /// already inside the recycle bin).
     pub fn delete_entry(&mut self, uuid: &str) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
-            let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            entry.remove();
+            let bin_id = ensure_recycle_bin(db)?;
+            let in_bin = {
+                let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+                entry.parent().id() == bin_id
+            };
+            if in_bin {
+                let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                entry.remove();
+            } else {
+                let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                if entry.get(FIELD_ORIGINAL_GROUP).is_none() {
+                    let original = entry.parent_mut().id().uuid().to_string();
+                    entry.set(FIELD_ORIGINAL_GROUP, Value::unprotected(original));
+                }
+                entry
+                    .move_to(bin_id)
+                    .map_err(|e| format!("移入回收站失败: {e}"))?;
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Restore a recycled entry to its original group (or root when the
+    /// original group no longer exists).
+    pub fn restore_entry(&mut self, uuid: &str) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let bin_id = recycle_bin_id(db).ok_or_else(|| "回收站不存在".to_owned())?;
+            let (in_bin, original_group) = {
+                let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+                (
+                    entry.parent().id() == bin_id,
+                    entry
+                        .get(FIELD_ORIGINAL_GROUP)
+                        .map(|value| value.to_owned())
+                        .and_then(|uuid| parse_group_id(&uuid).ok()),
+                )
+            };
+            if !in_bin {
+                return Err("只有回收站中的条目可以恢复".to_owned());
+            }
+            let target = match original_group {
+                Some(group_id) if db.group(group_id).is_some() => group_id,
+                _ => db.root().id(),
+            };
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            entry
+                .move_to(target)
+                .map_err(|e| format!("恢复条目失败: {e}"))?;
+            entry.fields.remove(FIELD_ORIGINAL_GROUP);
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Delete a group: move the whole subtree to the recycle bin, or
+    /// permanently delete it when it is already inside the recycle bin.
+    pub fn delete_group(&mut self, uuid: &str) -> Result<VaultState, String> {
+        if uuid == ROOT_GROUP_UUID {
+            return Err("不能删除根分组".to_owned());
+        }
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_group_id(uuid)?;
+            let bin_id = ensure_recycle_bin(db)?;
+            if id == bin_id {
+                return Err("请先清空或移动回收站内容,再删除回收站".to_owned());
+            }
+            if group_contains(db, bin_id, id) {
+                let group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+                group.remove();
+            } else {
+                let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+                group
+                    .move_to(bin_id)
+                    .map_err(|e| format!("移入回收站失败: {e}"))?;
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Restore a recycled group back to the root.
+    pub fn restore_group(&mut self, uuid: &str) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_group_id(uuid)?;
+            let bin_id = recycle_bin_id(db).ok_or_else(|| "回收站不存在".to_owned())?;
+            if !group_contains(db, bin_id, id) {
+                return Err("只有回收站中的分组可以恢复".to_owned());
+            }
+            if id == bin_id {
+                return Err("回收站本身不能恢复".to_owned());
+            }
+            let root_id = db.root().id();
+            let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            group
+                .move_to(root_id)
+                .map_err(|e| format!("恢复分组失败: {e}"))?;
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Permanently delete every entry and group inside the recycle bin,
+    /// keeping the empty recycle bin group itself.
+    pub fn empty_recycle_bin(&mut self) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let bin_id = recycle_bin_id(db).ok_or_else(|| "回收站不存在".to_owned())?;
+            let (entries, children) = {
+                let bin = db.group(bin_id).ok_or_else(|| "回收站不存在".to_owned())?;
+                (
+                    bin.entries().map(|e| e.id()).collect::<Vec<EntryId>>(),
+                    bin.groups().map(|g| g.id()).collect::<Vec<GroupId>>(),
+                )
+            };
+            for entry_id in entries {
+                if let Some(entry) = db.entry_mut(entry_id) {
+                    entry.remove();
+                }
+            }
+            for child_id in children {
+                if let Some(group) = db.group_mut(child_id) {
+                    group.remove();
+                }
+            }
         }
         self.mark_dirty();
         self.snapshot()
@@ -616,45 +750,6 @@ impl VaultSession {
             let id = parse_group_id(uuid)?;
             let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
             group.name = name.to_owned();
-        }
-        self.mark_dirty();
-        self.snapshot()
-    }
-
-    /// Delete a group; its entries and child groups bubble up to the root.
-    pub fn delete_group(&mut self, uuid: &str) -> Result<VaultState, String> {
-        if uuid == ROOT_GROUP_UUID {
-            return Err("不能删除根分组".to_owned());
-        }
-        {
-            let db = self.require_db_mut()?;
-            let id = parse_group_id(uuid)?;
-            let root_id = db.root().id();
-            let (entries, children) = {
-                let group = db.group(id).ok_or_else(|| "分组不存在".to_owned())?;
-                (
-                    group.entries().map(|e| e.id()).collect::<Vec<EntryId>>(),
-                    group.groups().map(|g| g.id()).collect::<Vec<GroupId>>(),
-                )
-            };
-            for entry_id in entries {
-                let mut entry = db
-                    .entry_mut(entry_id)
-                    .ok_or_else(|| "条目不存在".to_owned())?;
-                entry
-                    .move_to(root_id)
-                    .map_err(|e| format!("移动条目失败: {e}"))?;
-            }
-            for child_id in children {
-                let mut child = db
-                    .group_mut(child_id)
-                    .ok_or_else(|| "子分组不存在".to_owned())?;
-                child
-                    .move_to(root_id)
-                    .map_err(|e| format!("移动分组失败: {e}"))?;
-            }
-            let group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
-            group.remove();
         }
         self.mark_dirty();
         self.snapshot()
@@ -836,9 +931,10 @@ fn build_group_tree(db: &Database) -> VaultGroup {
         parent_uuid: None,
         name: ROOT_GROUP_NAME.to_owned(),
         icon: None,
+        is_recycle_bin: false,
         children: root_ref
             .groups()
-            .map(|g| build_group(&g, ROOT_GROUP_UUID))
+            .map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
             .collect(),
         entries: root_ref
             .entries()
@@ -847,14 +943,22 @@ fn build_group_tree(db: &Database) -> VaultGroup {
     }
 }
 
-fn build_group(group: &GroupRef<'_>, parent_uuid: &str) -> VaultGroup {
+fn build_group(
+    group: &GroupRef<'_>,
+    parent_uuid: &str,
+    recyclebin_uuid: Option<Uuid>,
+) -> VaultGroup {
     let uuid = group.id().uuid().to_string();
     VaultGroup {
         uuid: uuid.clone(),
         parent_uuid: Some(parent_uuid.to_owned()),
         name: group.name.clone(),
         icon: None,
-        children: group.groups().map(|g| build_group(&g, &uuid)).collect(),
+        is_recycle_bin: Some(group.id().uuid()) == recyclebin_uuid,
+        children: group
+            .groups()
+            .map(|g| build_group(&g, &uuid, recyclebin_uuid))
+            .collect(),
         entries: group.entries().map(|e| build_entry(&e, &uuid)).collect(),
     }
 }
@@ -1024,6 +1128,42 @@ fn parse_group_id(s: &str) -> Result<GroupId, String> {
     Uuid::parse_str(s)
         .map(GroupId::from_uuid)
         .map_err(|_| format!("无效的分组 UUID: {s}"))
+}
+
+/// The recycle bin group id, when the database has one.
+fn recycle_bin_id(db: &Database) -> Option<GroupId> {
+    db.meta.recyclebin_uuid.map(GroupId::from_uuid)
+}
+
+/// Return the recycle bin group id, creating the group under root on first use.
+fn ensure_recycle_bin(db: &mut Database) -> Result<GroupId, String> {
+    if let Some(id) = recycle_bin_id(db) {
+        if db.group(id).is_some() {
+            return Ok(id);
+        }
+    }
+    let bin_id = {
+        let mut root = db.root_mut();
+        let mut bin = root.add_group();
+        bin.name = "回收站".to_owned();
+        bin.id()
+    };
+    db.meta.recyclebin_uuid = Some(bin_id.uuid());
+    Ok(bin_id)
+}
+
+/// Whether `group_id` is `ancestor` itself or nested inside it.
+fn group_contains(db: &Database, ancestor: GroupId, group_id: GroupId) -> bool {
+    let mut current = Some(group_id);
+    while let Some(id) = current {
+        if id == ancestor {
+            return true;
+        }
+        current = db
+            .group(id)
+            .and_then(|group| group.parent().map(|p| p.id()));
+    }
+    false
 }
 
 /// Map the virtual `"root"` id to the DB root group id, validating the rest.
@@ -1443,7 +1583,7 @@ mod tests {
     }
 
     #[test]
-    fn delete_group_bubbles_entries_and_children_to_root() {
+    fn delete_group_moves_whole_subtree_to_recycle_bin_and_restores() {
         let dir = TempDir::new().unwrap();
         let (mut session, _) = create_session(&dir);
 
@@ -1455,18 +1595,14 @@ mod tests {
             .unwrap();
         let parent_uuid = state.root.children[0].uuid.clone();
 
-        let state = session
+        session
             .add_group(&GroupInput {
                 parent_uuid: Some(parent_uuid.clone()),
                 name: "Child".into(),
             })
             .unwrap();
-        let child_uuid = session.state().unwrap().unwrap().root.children[0].children[0]
-            .uuid
-            .clone();
-        let _ = state;
 
-        let state = session
+        session
             .add_entry(&EntryInput {
                 group_uuid: parent_uuid.clone(),
                 title: "Loopback".into(),
@@ -1482,21 +1618,130 @@ mod tests {
         let entry_uuid = session.state().unwrap().unwrap().root.children[0].entries[0]
             .uuid
             .clone();
-        let _ = state;
 
         session.delete_group(&parent_uuid).unwrap();
         let root = session.state().unwrap().unwrap().root;
-        // The entry bubbled to root.
-        assert!(
-            root.entries.iter().any(|e| e.uuid == entry_uuid),
-            "entry should have bubbled to root"
-        );
-        // The child group bubbled to root.
-        assert!(
-            root.children.iter().any(|g| g.uuid == child_uuid),
-            "child group should have bubbled to root"
-        );
+        // The whole subtree now lives under the recycle bin.
+        let bin = root
+            .children
+            .iter()
+            .find(|g| g.is_recycle_bin)
+            .expect("recycle bin should exist");
+        assert_eq!(bin.children.len(), 1);
+        assert_eq!(bin.children[0].name, "Parent");
+        assert_eq!(bin.children[0].children[0].name, "Child");
+        assert_eq!(bin.children[0].entries[0].uuid, entry_uuid);
         assert!(!root.children.iter().any(|g| g.uuid == parent_uuid));
+
+        // Restoring brings the group (with its subtree) back to root.
+        session.restore_group(&parent_uuid).unwrap();
+        let root = session.state().unwrap().unwrap().root;
+        let parent = root
+            .children
+            .iter()
+            .find(|g| g.uuid == parent_uuid)
+            .unwrap();
+        assert_eq!(parent.children[0].name, "Child");
+        assert_eq!(parent.entries[0].uuid, entry_uuid);
+    }
+
+    #[test]
+    fn recycle_bin_deletes_entry_then_restores_and_empties() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Loopback".into(),
+                username: "root".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry_uuid = session.state().unwrap().unwrap().root.entries[0]
+            .uuid
+            .clone();
+
+        // Deleting an entry moves it to the recycle bin.
+        session.delete_entry(&entry_uuid).unwrap();
+        let root = session.state().unwrap().unwrap().root;
+        assert!(root.entries.is_empty());
+        let bin = root.children.iter().find(|g| g.is_recycle_bin).unwrap();
+        assert_eq!(bin.entries.len(), 1);
+        assert_eq!(bin.entries[0].uuid, entry_uuid);
+
+        // Restoring returns it to its original group.
+        session.restore_entry(&entry_uuid).unwrap();
+        let root = session.state().unwrap().unwrap().root;
+        assert_eq!(root.entries[0].uuid, entry_uuid);
+
+        // Deleting again, then emptying the bin permanently removes it.
+        session.delete_entry(&entry_uuid).unwrap();
+        session.empty_recycle_bin().unwrap();
+        let state = session.state().unwrap().unwrap();
+        let bin = state
+            .root
+            .children
+            .iter()
+            .find(|g| g.is_recycle_bin)
+            .unwrap();
+        assert!(bin.entries.is_empty());
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert!(state.root.entries.is_empty());
+        let bin = state
+            .root
+            .children
+            .iter()
+            .find(|g| g.is_recycle_bin)
+            .unwrap();
+        assert!(bin.entries.is_empty());
+    }
+
+    #[test]
+    fn recycle_bin_is_persisted_across_reopen() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Loopback".into(),
+                username: "root".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry_uuid = session.state().unwrap().unwrap().root.entries[0]
+            .uuid
+            .clone();
+        session.delete_entry(&entry_uuid).unwrap();
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        let bin = state
+            .root
+            .children
+            .iter()
+            .find(|g| g.is_recycle_bin)
+            .unwrap();
+        assert_eq!(bin.entries.len(), 1);
+        // The recycled entry is still restorable after reopen.
+        reopened.restore_entry(&entry_uuid).unwrap();
+        let state = reopened.state().unwrap().unwrap();
+        assert!(state.root.entries.iter().any(|e| e.uuid == entry_uuid));
     }
 
     #[test]

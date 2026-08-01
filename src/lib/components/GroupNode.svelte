@@ -11,11 +11,14 @@
     expanded: Set<string>;
     showIcon?: boolean;
     showChevron?: boolean;
+    inRecycleBin?: boolean;
     onselect: (uuid: string) => void;
     ontoggle: (uuid: string) => void;
     onaddsubgroup: (parentUuid: string) => void;
     onrename: (uuid: string, name: string) => void;
     ondelete: (uuid: string) => void;
+    onrestore?: (uuid: string) => void;
+    onemptybin?: () => void;
   }
 
   let {
@@ -25,11 +28,14 @@
     expanded,
     showIcon = true,
     showChevron = true,
+    inRecycleBin = false,
     onselect,
     ontoggle,
     onaddsubgroup,
     onrename,
     ondelete,
+    onrestore,
+    onemptybin,
   }: Props = $props();
 
   let renaming = $state(false);
@@ -40,12 +46,24 @@
   const count = $derived(countEntries(group));
   const isExpanded = $derived(expanded.has(group.uuid));
   const hasChildren = $derived(group.children.length > 0);
+  const isBin = $derived(group.isRecycleBin);
 
-  const menuItems: ContextMenuItem[] = [
-    { id: "add-subgroup", label: "新建子分组", icon: "folder-plus" },
-    { id: "rename", label: "重命名", icon: "edit" },
-    { id: "delete", label: "删除分组", icon: "trash", destructive: true },
-  ];
+  const menuItems: ContextMenuItem[] = $derived(
+    isBin
+      ? count > 0
+        ? [{ id: "empty-bin", label: "清空回收站", icon: "trash", destructive: true }]
+        : []
+      : inRecycleBin
+        ? [
+            { id: "restore", label: "恢复分组", icon: "undo" },
+            { id: "delete", label: "永久删除", icon: "trash", destructive: true },
+          ]
+        : [
+            { id: "add-subgroup", label: "新建子分组", icon: "folder-plus" },
+            { id: "rename", label: "重命名", icon: "edit" },
+            { id: "delete", label: "删除分组", icon: "trash", destructive: true },
+          ],
+  );
 
   $effect(() => {
     if (renaming) inputEl?.focus();
@@ -70,6 +88,8 @@
     if (id === "add-subgroup") onaddsubgroup(group.uuid);
     else if (id === "rename") renaming = true;
     else if (id === "delete") ondelete(group.uuid);
+    else if (id === "restore") onrestore?.(group.uuid);
+    else if (id === "empty-bin") onemptybin?.();
   }
 
   function commitRename(): void {
@@ -120,7 +140,7 @@
           {/if}
         {/if}
         {#if showIcon}
-          <AppIcon name="folder" size={13} />
+          <AppIcon name={isBin ? "trash" : "folder"} size={13} />
         {/if}
         <span class="group-name">{group.name}</span>
         {#if count > 0}
@@ -140,11 +160,14 @@
       {expanded}
       {showIcon}
       {showChevron}
+      inRecycleBin={isBin || inRecycleBin}
       {onselect}
       {ontoggle}
       {onaddsubgroup}
       {onrename}
       {ondelete}
+      {onrestore}
+      {onemptybin}
     />
   {/each}
 {/if}

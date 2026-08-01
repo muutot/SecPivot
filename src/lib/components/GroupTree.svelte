@@ -13,6 +13,8 @@
     onaddsubgroup: (parentUuid: string | null) => void;
     onrename: (uuid: string, name: string) => void;
     ondelete: (uuid: string) => void;
+    onrestore?: (uuid: string) => void;
+    onemptybin?: () => void;
   }
 
   let {
@@ -24,6 +26,8 @@
     onaddsubgroup,
     onrename,
     ondelete,
+    onrestore,
+    onemptybin,
   }: Props = $props();
 
   function collectUuids(group: VaultGroup, into: Set<string>): void {
@@ -97,6 +101,8 @@
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}
         {onrename}
         {ondelete}
+        {onrestore}
+        {onemptybin}
       />
     {/each}
   </div>

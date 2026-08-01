@@ -41,6 +41,7 @@ export interface VaultGroup {
   parentUuid: string | null;
   name: string;
   icon?: number;
+  isRecycleBin: boolean;
   children: VaultGroup[];
   entries: VaultEntry[];
 }

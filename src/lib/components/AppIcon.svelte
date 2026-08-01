@@ -12,6 +12,7 @@
     | "eye-off"
     | "edit"
     | "trash"
+    | "undo"
     | "folder"
     | "folder-plus"
     | "save"
@@ -69,6 +70,7 @@
     edit: '<path d="M4 20h4L20 8l-4-4L4 16v4z"></path>',
     trash:
       '<path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path><path d="M10 11v6M14 11v6"></path>',
+    undo: '<path d="M8 5 3 10l5 5"></path><path d="M3 10h11a7 7 0 0 1 0 14h-3"></path>',
     folder:
       '<path d="M3 6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z"></path>',
     "folder-plus":

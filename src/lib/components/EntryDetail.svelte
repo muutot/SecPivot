@@ -12,12 +12,15 @@
   interface Props {
     entry: VaultEntry;
     groupPath: string;
+    inRecycleBin?: boolean;
     onfavorite: (entry: VaultEntry) => void;
     onedit: (entry: VaultEntry) => void;
     ondelete: (entry: VaultEntry) => void;
+    onrestore?: (entry: VaultEntry) => void;
   }
 
-  let { entry, groupPath, onfavorite, onedit, ondelete }: Props = $props();
+  let { entry, groupPath, inRecycleBin = false, onfavorite, onedit, ondelete, onrestore }: Props =
+    $props();
 
   let revealPassword = $state(false);
   let fetchedPassword = $state("");
@@ -153,6 +156,11 @@
       </div>
     </div>
     <div class="detail-actions">
+      {#if inRecycleBin && onrestore}
+        <button class="detail-btn restore" onclick={() => onrestore(entry)} title="恢复条目">
+          <AppIcon name="undo" size={15} />
+        </button>
+      {/if}
       <button
         class="detail-btn"
         class:star-active={entry.favorite}
@@ -462,6 +470,15 @@
   .detail-btn.danger:hover {
     color: var(--danger-color);
     border-color: color-mix(in srgb, var(--danger-color) 40%, transparent);
+  }
+
+  .detail-btn.restore {
+    color: var(--success-color);
+    border-color: color-mix(in srgb, var(--success-color) 40%, transparent);
+  }
+
+  .detail-btn.restore:hover {
+    background: color-mix(in srgb, var(--success-color) 10%, var(--hover-bg));
   }
 
   .detail-tabs {
