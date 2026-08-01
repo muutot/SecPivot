@@ -16,6 +16,7 @@ Recurring traps discovered while developing KeyVault. Read before touching the r
 ## Backend / vault
 
 - **KDBX passwords never enter `config.json` or error strings.** Keep key material inside the session state; error messages must be generic on auth failure.
+- **Never use `WDA_MONITOR` (0x1) for the screen-capture guard.** `SetWindowDisplayAffinity(WDA_MONITOR)` renders the window as a solid **black box on the physical display** — after unlocking a vault the whole window appears black. Use `WDA_EXCLUDEFROMCAPTURE` (0x11, Windows 10 2004+) instead: the window stays fully visible while screenshots/recordings/sharing omit it (see `shield.rs`).
 - **Keyfile bytes live in the session, never the frontend or config.** `open_vault`/`create_vault` take a user-picked path; the backend reads and holds the raw bytes for save and clears them on `close_vault`. A passwordless vault is valid only with a keyfile (KeePass-compatible).
 - **The root group is virtual.** Frontend `VaultState.root` maps to the DB's root group; keep `children`/`entries` split consistent or save will be wrong.
 - **UUIDs must be stable across the session.** Render KDBX uuid bytes as hex and reuse them as the frontend `uuid`; regenerating on each mutation breaks selection/editing.
