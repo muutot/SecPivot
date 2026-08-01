@@ -19,7 +19,7 @@
   const remoteLocalDir = $derived(get(appSettings).remote.localDir || "remote");
 
   type Modal = "none" | "open" | "create" | "remote";
-  type RemoteTab = "open" | "create";
+  type RemoteTab = "open" | "create" | "config";
 
   let modal: Modal = $state("none");
   let busy = $state(false);
@@ -36,7 +36,6 @@
   let remoteKey = $state("");
   let remoteMode: RemoteMode = $state("memory");
   let remoteLoading = $state(false);
-  let remoteConfigOpen = $state(false);
 
   const remote = $derived(get(appSettings).remote);
   const remoteConfigured = $derived(
@@ -54,15 +53,14 @@
   }
 
   async function handleRemoteOpen(): Promise<void> {
-    remoteTab = "open";
+    remoteTab = remoteConfigured ? "open" : "config";
     remoteKey = "";
     remoteMode = "memory";
     keyfilePath = "";
     password = "";
     error = "";
-    remoteConfigOpen = !remoteConfigured;
     modal = "remote";
-    await loadRemoteObjects();
+    if (remoteConfigured) await loadRemoteObjects();
   }
 
   async function loadRemoteObjects(): Promise<void> {
@@ -87,6 +85,7 @@
     password = "";
     confirm = "";
     error = "";
+    if (tab === "open") void loadRemoteObjects();
   }
 
   async function confirmRemoteOpen(): Promise<void> {
@@ -362,86 +361,6 @@
       {/if}
 
       {#if modal === "remote"}
-        <div class="remote-config">
-          <button
-            class="remote-config-toggle"
-            type="button"
-            aria-expanded={remoteConfigOpen}
-            onclick={() => (remoteConfigOpen = !remoteConfigOpen)}
-          >
-            <AppIcon name="cloud" size={13} />
-            <span>S3 连接配置</span>
-            <span class="remote-config-status">{remoteConfigured ? "已配置" : "未配置"}</span>
-            <AppIcon name={remoteConfigOpen ? "chevron-down" : "chevron-right"} size={12} />
-          </button>
-          {#if remoteConfigOpen}
-            <div class="remote-config-body">
-              <div class="field">
-                <span>服务地址</span>
-                <input
-                  class="text-input"
-                  type="text"
-                  value={remote.endpoint}
-                  placeholder="https://s3.amazonaws.com"
-                  spellcheck="false"
-                  oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
-                />
-              </div>
-              <div class="remote-config-grid">
-                <div class="field">
-                  <span>区域</span>
-                  <input
-                    class="text-input"
-                    type="text"
-                    value={remote.region}
-                    placeholder="us-east-1"
-                    spellcheck="false"
-                    oninput={(e) => changeRemote("region", e.currentTarget.value)}
-                  />
-                </div>
-                <div class="field">
-                  <span>存储桶</span>
-                  <input
-                    class="text-input"
-                    type="text"
-                    value={remote.bucket}
-                    placeholder="my-bucket"
-                    spellcheck="false"
-                    oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
-                  />
-                </div>
-              </div>
-              <div class="field">
-                <span>Access Key</span>
-                <input
-                  class="text-input"
-                  type="text"
-                  value={remote.accessKey}
-                  placeholder="AKIA..."
-                  autocomplete="off"
-                  spellcheck="false"
-                  oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
-                />
-              </div>
-              <div class="field">
-                <span>Secret Key</span>
-                <input
-                  class="text-input"
-                  type="password"
-                  value={remote.secretKey}
-                  placeholder="••••••••"
-                  autocomplete="off"
-                  spellcheck="false"
-                  oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
-                />
-              </div>
-              <p class="remote-config-note">
-                凭据明文保存在 config.json，仅用于访问远程存储；修改后点「刷新列表」生效。
-              </p>
-            </div>
-          {/if}
-        </div>
-
         <div class="remote-tabs" role="tablist" aria-label="远程操作">
           <button
             class="remote-tab"
@@ -457,9 +376,79 @@
           >
             新建
           </button>
+          <button
+            class="remote-tab"
+            class:active={remoteTab === "config"}
+            onclick={() => switchRemoteTab("config")}
+          >
+            配置
+          </button>
         </div>
 
-        {#if remoteTab === "open"}
+        {#if remoteTab === "config"}
+          <div class="field">
+            <span>服务地址</span>
+            <input
+              class="text-input"
+              type="text"
+              value={remote.endpoint}
+              placeholder="https://s3.amazonaws.com"
+              spellcheck="false"
+              oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
+            />
+          </div>
+          <div class="remote-config-grid">
+            <div class="field">
+              <span>区域</span>
+              <input
+                class="text-input"
+                type="text"
+                value={remote.region}
+                placeholder="us-east-1"
+                spellcheck="false"
+                oninput={(e) => changeRemote("region", e.currentTarget.value)}
+              />
+            </div>
+            <div class="field">
+              <span>存储桶</span>
+              <input
+                class="text-input"
+                type="text"
+                value={remote.bucket}
+                placeholder="my-bucket"
+                spellcheck="false"
+                oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
+              />
+            </div>
+          </div>
+          <div class="field">
+            <span>Access Key</span>
+            <input
+              class="text-input"
+              type="text"
+              value={remote.accessKey}
+              placeholder="AKIA..."
+              autocomplete="off"
+              spellcheck="false"
+              oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
+            />
+          </div>
+          <div class="field">
+            <span>Secret Key</span>
+            <input
+              class="text-input"
+              type="password"
+              value={remote.secretKey}
+              placeholder="••••••••"
+              autocomplete="off"
+              spellcheck="false"
+              oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
+            />
+          </div>
+          <p class="remote-config-note">
+            凭据明文保存在 config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
+          </p>
+        {:else if remoteTab === "open"}
           <div class="field">
             <span>选择远程文件</span>
             <div class="remote-list">
@@ -577,27 +566,29 @@
 
       <div class="modal-actions">
         <button class="modal-button" onclick={() => (modal = "none")} disabled={busy}>取消</button>
-        <button
-          class="modal-button primary"
-          onclick={modal === "open"
-            ? confirmOpen
-            : modal === "create"
-              ? confirmCreate
-              : remoteTab === "open"
-                ? confirmRemoteOpen
-                : confirmRemoteCreate}
-          disabled={busy}
-        >
-          {busy
-            ? "处理中…"
-            : modal === "open"
-              ? "解锁"
+        {#if !(modal === "remote" && remoteTab === "config")}
+          <button
+            class="modal-button primary"
+            onclick={modal === "open"
+              ? confirmOpen
               : modal === "create"
-                ? "创建"
+                ? confirmCreate
                 : remoteTab === "open"
-                  ? "解锁"
-                  : "创建"}
-        </button>
+                  ? confirmRemoteOpen
+                  : confirmRemoteCreate}
+            disabled={busy}
+          >
+            {busy
+              ? "处理中…"
+              : modal === "open"
+                ? "解锁"
+                : modal === "create"
+                  ? "创建"
+                  : remoteTab === "open"
+                    ? "解锁"
+                    : "创建"}
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -1031,50 +1022,6 @@
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
     line-height: 1.4;
-  }
-
-  .remote-config {
-    margin-top: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    background: var(--input-bg);
-  }
-
-  .remote-config-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    height: 30px;
-    padding: 0 10px;
-    border: none;
-    border-radius: inherit;
-    color: var(--text-secondary);
-    background: transparent;
-    font-size: var(--font-size-secondary, 11px);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .remote-config-toggle:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .remote-config-status {
-    flex: 1;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    text-align: right;
-  }
-
-  .remote-config-body {
-    padding: 2px 10px 10px;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .remote-config-body .field {
-    margin-top: 8px;
   }
 
   .remote-config-grid {
