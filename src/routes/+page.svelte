@@ -28,7 +28,12 @@
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
+  import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
+
+  /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
+  const isTcatoOverlay =
+    typeof window !== "undefined" && window.location.hash.startsWith("#/tcato");
 
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
@@ -846,6 +851,12 @@
       },
       { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
       { id: "autotype", label: "自动填充", icon: "keyboard" },
+      {
+        id: "tcato",
+        label: "TCATO 覆盖层填充",
+        icon: "shield",
+        disabled: !isTauriRuntime(),
+      },
       { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
       { id: "delete", label: "删除条目", icon: "trash", destructive: true },
     ];
@@ -869,6 +880,7 @@
     else if (id === "copy-password") void copyEntryPassword(entry);
     else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
     else if (id === "autotype") void runAutoType(entry);
+    else if (id === "tcato") void openTcatoOverlay(entry);
     else if (id === "favorite") void toggleFavorite(entry);
     else if (id === "delete") askDeleteEntry(entry);
     else if (id === "delete-selected") askDeleteEntries();
@@ -883,6 +895,15 @@
       flash("已触发自动填充，请切换到目标窗口");
     } catch (e) {
       flash(`自动填充失败：${e}`);
+    }
+  }
+
+  /** Open the always-on-top two-channel overlay for manual channel injection. */
+  async function openTcatoOverlay(entry: VaultEntry): Promise<void> {
+    try {
+      await invoke("open_tcato_overlay", { uuid: entry.uuid });
+    } catch (e) {
+      flash(`TCATO 覆盖层打开失败：${e}`);
     }
   }
 
@@ -901,6 +922,9 @@
   <title>KeyVault</title>
 </svelte:head>
 
+{#if isTcatoOverlay}
+  <TcatoOverlay />
+{:else}
 <main
   class="app-shell"
   class:compact={compactMode}
@@ -1211,6 +1235,7 @@
     <VaultWelcome onopened={() => void vault.refresh()} />
   {/if}
 </main>
+{/if}
 
 {#if editorOpen}
   <EntryEditorDialog
