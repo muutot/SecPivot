@@ -2084,6 +2084,7 @@ dependencies = [
 name = "keyvault-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "keepass",
  "rust-argon2",

@@ -3,7 +3,9 @@
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
   import { isTauriRuntime } from "$lib/services/settings";
+  import { vault } from "$lib/services/vault";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
 
@@ -58,6 +60,45 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "—";
     return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+  }
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function toastMessage(): string {
+    switch (copied) {
+      case "error":
+        return "操作失败";
+      case "attachment":
+        return "附件已保存";
+      case "username":
+        return "已复制用户名";
+      case "password":
+        return "已复制密码";
+      case "url":
+        return "已复制网址";
+      default:
+        return "已复制到剪贴板";
+    }
+  }
+
+  async function saveAttachment(name: string): Promise<void> {
+    try {
+      let dest: string | null = null;
+      if (isTauriRuntime()) {
+        dest = await saveDialog({ defaultPath: name });
+      } else {
+        throw new Error("browser");
+      }
+      if (!dest) return;
+      await vault.saveAttachment(entry.uuid, name, dest);
+      flash("attachment");
+    } catch {
+      flash("error");
+    }
   }
 </script>
 
@@ -154,6 +195,48 @@
       </div>
     {/if}
 
+    {#if entry.customFields?.length}
+      {#each entry.customFields as field}
+        <div class="field-block">
+          <span class="field-label">{field.name}</span>
+          <div class="field-value">
+            <span class="field-text" title={field.value}>{field.value || "—"}</span>
+            {#if field.value}
+              <button
+                class="copy-btn"
+                onclick={() => handleCopy(field.value, "custom")}
+                title="复制字段值"
+              >
+                <AppIcon name="copy" size={13} />
+              </button>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    {/if}
+
+    {#if entry.attachments?.length}
+      <div class="field-block">
+        <span class="field-label">附件</span>
+        <div class="attachment-list">
+          {#each entry.attachments as attachment}
+            <div class="attachment-item" title={attachment.name}>
+              <AppIcon name="file" size={14} />
+              <span class="attachment-name">{attachment.name}</span>
+              <span class="attachment-size">{formatSize(attachment.size)}</span>
+              <button
+                class="copy-btn"
+                onclick={() => saveAttachment(attachment.name)}
+                title="保存附件"
+              >
+                <AppIcon name="download" size={13} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     <div class="field-block meta">
       <span class="field-label">创建 / 修改</span>
       <div class="field-value meta-values">
@@ -165,7 +248,7 @@
 
   {#if copied}
     <p class="copy-toast" class:error={copied === "error"} aria-live="polite">
-      {copied === "error" ? "复制失败" : "已复制到剪贴板"}
+      {toastMessage()}
     </p>
   {/if}
 </div>
@@ -344,6 +427,39 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .attachment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--hover-bg);
+  }
+
+  .attachment-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-size {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    font-variant-numeric: tabular-nums;
   }
 
   .copy-btn {

@@ -26,6 +26,7 @@ interface VaultStore {
   deleteEntry: (uuid: string) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
+  saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
@@ -237,6 +238,8 @@ export const vault: VaultStore = {
         url: input.url,
         notes: input.notes,
         totp: input.totp || undefined,
+        customFields: input.customFields,
+        attachments: input.attachments?.map((a) => ({ name: a.name, size: a.size })),
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
       });
@@ -316,6 +319,10 @@ export const vault: VaultStore = {
     });
     state.set(result);
     return result;
+  },
+
+  async saveAttachment(uuid: string, name: string, dest: string): Promise<void> {
+    await backendInvoke<void>("save_attachment", { uuid, name, dest });
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

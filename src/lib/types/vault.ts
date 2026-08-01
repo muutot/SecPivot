@@ -12,6 +12,26 @@ export interface VaultEntry {
   modified?: string;
   tags?: string;
   favorite?: boolean;
+  customFields?: CustomField[];
+  attachments?: AttachmentInfo[];
+}
+
+export interface CustomField {
+  name: string;
+  value: string;
+}
+
+export interface AttachmentInfo {
+  name: string;
+  size: number;
+}
+
+/** Attachment payload sent when saving an entry. `data` (base64) is present
+ * only for new or replaced attachments; existing ones are kept by name. */
+export interface AttachmentInput {
+  name: string;
+  size: number;
+  data?: string;
 }
 
 export interface VaultGroup {
@@ -40,6 +60,8 @@ export interface EntryInput {
   url: string;
   notes: string;
   totp?: string;
+  customFields?: CustomField[];
+  attachments?: AttachmentInput[];
 }
 
 export interface GroupInput {

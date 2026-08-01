@@ -1,6 +1,12 @@
 <script lang="ts">
   import { get } from "svelte/store";
-  import type { EntryInput, VaultEntry, VaultGroup } from "$lib/types/vault";
+  import type {
+    EntryInput,
+    VaultEntry,
+    VaultGroup,
+    CustomField,
+    AttachmentInput,
+  } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
   import { generatePassword, estimateEntropy, entropyLabel } from "$lib/utils/password";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -24,6 +30,11 @@
   let totp = $state(entry?.totp ?? "");
   let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
   let showPassword = $state(false);
+  let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
+  let attachments = $state<AttachmentInput[]>(
+    entry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
+  );
+  let fileInputEl: HTMLInputElement | undefined = $state();
 
   const entries = $derived.by(() => {
     const list: { name: string; uuid: string }[] = [];
@@ -44,6 +55,52 @@
     showPassword = true;
   }
 
+  function addCustomField(): void {
+    customFields = [...customFields, { name: "", value: "" }];
+  }
+
+  function updateCustomField(index: number, patch: Partial<CustomField>): void {
+    customFields = customFields.map((f, i) => (i === index ? { ...f, ...patch } : f));
+  }
+
+  function removeCustomField(index: number): void {
+    customFields = customFields.filter((_, i) => i !== index);
+  }
+
+  function pickFiles(): void {
+    fileInputEl?.click();
+  }
+
+  function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFiles(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement;
+    const files = input.files ? Array.from(input.files) : [];
+    input.value = "";
+    if (!files.length) return;
+    for (const file of files) {
+      const data = await readFileAsBase64(file);
+      attachments = [...attachments, { name: file.name, size: file.size, data }];
+    }
+  }
+
+  function removeAttachment(index: number): void {
+    attachments = attachments.filter((_, i) => i !== index);
+  }
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   function submit(): void {
     if (!title.trim() && !username.trim() && !password) return;
     onsaved({
@@ -54,6 +111,12 @@
       url: url.trim(),
       notes,
       totp: totp.trim() || undefined,
+      customFields: customFields
+        .map((f) => ({ name: f.name.trim(), value: f.value }))
+        .filter((f) => f.name !== ""),
+      attachments: attachments.map((a) =>
+        a.data ? { name: a.name, size: a.size, data: a.data } : { name: a.name, size: a.size },
+      ),
     });
   }
 </script>
@@ -136,6 +199,76 @@
           placeholder="Base32 密钥或 otpauth URI"
         />
       </label>
+
+      <section class="field full">
+        <span class="section-title">自定义字段</span>
+        {#if customFields.length === 0}
+          <p class="section-empty">暂无自定义字段</p>
+        {/if}
+        {#each customFields as field, i (i)}
+          <div class="custom-field-row">
+            <input
+              class="text-input"
+              type="text"
+              placeholder="字段名"
+              value={field.name}
+              oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
+            />
+            <input
+              class="text-input"
+              type="text"
+              placeholder="值"
+              value={field.value}
+              oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
+            />
+            <button
+              class="icon-btn"
+              onclick={() => removeCustomField(i)}
+              aria-label="删除字段"
+              title="删除字段"
+            >
+              <AppIcon name="x" size={13} />
+            </button>
+          </div>
+        {/each}
+        <button class="add-row-btn" onclick={addCustomField}>
+          <AppIcon name="plus" size={12} />添加字段
+        </button>
+      </section>
+
+      <section class="field full">
+        <span class="section-title">附件</span>
+        {#if attachments.length === 0}
+          <p class="section-empty">暂无附件</p>
+        {/if}
+        {#each attachments as attachment, i (attachment.name + i)}
+          <div class="attachment-row">
+            <AppIcon name="file" size={14} />
+            <span class="attachment-name" title={attachment.name}>{attachment.name}</span>
+            <span class="attachment-size">{formatSize(attachment.size)}</span>
+            <button
+              class="icon-btn"
+              onclick={() => removeAttachment(i)}
+              aria-label="移除附件"
+              title="移除附件"
+            >
+              <AppIcon name="x" size={13} />
+            </button>
+          </div>
+        {/each}
+        <button class="add-row-btn" onclick={pickFiles}>
+          <AppIcon name="upload" size={12} />添加附件
+        </button>
+        <input
+          class="file-input"
+          type="file"
+          multiple
+          bind:this={fileInputEl}
+          onchange={handleFiles}
+          tabindex="-1"
+          aria-hidden="true"
+        />
+      </section>
 
       <label class="field full">
         <span>备注</span>
@@ -329,6 +462,86 @@
 
   .strength-label.strong {
     color: var(--success-color);
+  }
+
+  .section-title {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+    font-weight: 560;
+  }
+
+  .section-empty {
+    margin: 0 0 8px;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .custom-field-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .custom-field-row .text-input:first-child {
+    flex: 0 0 42%;
+  }
+
+  .custom-field-row .text-input {
+    flex: 1;
+  }
+
+  .attachment-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+  }
+
+  .attachment-name {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-primary);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-size {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .add-row-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: transparent;
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .add-row-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .file-input {
+    display: none;
   }
 
   .modal-actions {

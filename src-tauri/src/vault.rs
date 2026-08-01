@@ -2,11 +2,14 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use chrono::NaiveDateTime;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{EntryId, EntryMut, EntryRef, GroupId, GroupRef, Value, TOTP};
 use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
 use std::str::FromStr;
@@ -26,6 +29,18 @@ const FIELD_OTP: &str = "otp";
 /// Custom field used to mark an entry as pinned/favorite.
 const FIELD_FAVORITE: &str = "KeyVault.Favorite";
 const FIELD_FAVORITE_TRUE: &str = "true";
+
+/// Standard fields that are surfaced through the entry's own columns and must
+/// not leak into the custom-fields list.
+const RESERVED_FIELDS: [&str; 7] = [
+    FIELD_TITLE,
+    FIELD_USERNAME,
+    FIELD_PASSWORD,
+    FIELD_URL,
+    FIELD_NOTES,
+    FIELD_OTP,
+    FIELD_FAVORITE,
+];
 
 // Argon2 parameters for newly created vaults (OWASP-recommended).
 const ARGON2_ITERATIONS: u64 = 3;
@@ -59,6 +74,34 @@ pub struct VaultEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
     pub favorite: bool,
+    pub custom_fields: Vec<CustomField>,
+    pub attachments: Vec<AttachmentInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomField {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInfo {
+    pub name: String,
+    pub size: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInput {
+    pub name: String,
+    #[serde(default)]
+    pub size: usize,
+    /// Base64-encoded content. Absent when the attachment already exists and
+    /// should be kept as-is.
+    #[serde(default)]
+    pub data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,6 +138,10 @@ pub struct EntryInput {
     pub notes: String,
     #[serde(default)]
     pub totp: Option<String>,
+    #[serde(default)]
+    pub custom_fields: Vec<CustomField>,
+    #[serde(default)]
+    pub attachments: Vec<AttachmentInput>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -206,6 +253,8 @@ impl VaultSession {
             };
             let mut entry = group.add_entry();
             write_fields(&mut entry, input);
+            sync_custom_fields(&mut entry, &input.custom_fields);
+            sync_attachments(&mut entry, &input.attachments)?;
         }
         self.mark_dirty();
         self.snapshot()
@@ -223,6 +272,8 @@ impl VaultSession {
                     .map_err(|e| format!("移动条目失败: {e}"))?;
             }
             write_fields(&mut entry, input);
+            sync_custom_fields(&mut entry, &input.custom_fields);
+            sync_attachments(&mut entry, &input.attachments)?;
         }
         self.mark_dirty();
         self.snapshot()
@@ -237,6 +288,17 @@ impl VaultSession {
         }
         self.mark_dirty();
         self.snapshot()
+    }
+
+    /// Write an entry attachment to an arbitrary destination path.
+    pub fn save_attachment(&self, uuid: &str, name: &str, dest: &str) -> Result<(), String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        let attachment = entry
+            .attachment_by_name(name)
+            .ok_or_else(|| "附件不存在".to_owned())?;
+        std::fs::write(dest, attachment.data.get()).map_err(|e| format!("写入附件失败: {e}"))
     }
 
     /// Toggle the favorite/pin marker on an entry (persisted as a custom field).
@@ -455,6 +517,26 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
             Some(entry.tags.join(", "))
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+        custom_fields: {
+            let mut fields: Vec<CustomField> = entry
+                .fields
+                .iter()
+                .filter(|(name, _)| !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str()))
+                .map(|(name, value)| CustomField {
+                    name: name.clone(),
+                    value: value.get().clone(),
+                })
+                .collect();
+            fields.sort_by(|a, b| a.name.cmp(&b.name));
+            fields
+        },
+        attachments: entry
+            .attachments_named()
+            .map(|(name, attachment)| AttachmentInfo {
+                name: name.to_owned(),
+                size: attachment.data.get().len(),
+            })
+            .collect(),
     }
 }
 
@@ -482,6 +564,59 @@ fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
             entry.fields.remove(FIELD_OTP);
         }
     }
+}
+
+/// Replace the entry's custom fields with the given list, keeping standard
+/// columns (Title, UserName, …) untouched and dropping empty or reserved names.
+fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField]) {
+    let mut desired = HashMap::new();
+    for field in fields {
+        let name = field.name.trim().to_owned();
+        if name.is_empty() || RESERVED_FIELDS.contains(&name.as_str()) {
+            continue;
+        }
+        desired.insert(name, field.value.clone());
+    }
+    let current: Vec<String> = entry.fields.keys().cloned().collect();
+    for name in current {
+        if !RESERVED_FIELDS.contains(&name.as_str()) && !desired.contains_key(&name) {
+            entry.fields.remove(&name);
+        }
+    }
+    for (name, value) in desired {
+        entry.set(name, Value::unprotected(value));
+    }
+}
+
+/// Make the entry's attachment set match the given list. Names that no longer
+/// appear are removed; entries carrying `data` are added or replaced.
+fn sync_attachments(
+    entry: &mut EntryMut<'_>,
+    attachments: &[AttachmentInput],
+) -> Result<(), String> {
+    let desired: Vec<&AttachmentInput> = attachments
+        .iter()
+        .filter(|a| !a.name.trim().is_empty())
+        .collect();
+    let current: Vec<String> = entry
+        .as_ref()
+        .attachments_named()
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    for name in current {
+        if !desired.iter().any(|a| a.name == name) {
+            entry.remove_attachment_by_name(&name);
+        }
+    }
+    for attachment in desired {
+        if let Some(data) = &attachment.data {
+            let bytes = BASE64
+                .decode(data.trim())
+                .map_err(|e| format!("附件数据解码失败: {e}"))?;
+            entry.add_attachment(attachment.name.clone(), Value::protected(bytes));
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +835,8 @@ mod tests {
                 url: "https://github.com".into(),
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let group = &state.root.children[0];
@@ -724,6 +861,8 @@ mod tests {
                     url: "".into(),
                     notes: "".into(),
                     totp: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
                 },
             )
             .unwrap();
@@ -792,6 +931,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let entry_uuid = session.state().unwrap().unwrap().root.children[0].entries[0]
@@ -847,6 +988,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap_err();
         assert!(err.contains("UUID"));
@@ -879,6 +1022,8 @@ mod tests {
                 url: "https://github.com".into(),
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
 
@@ -998,6 +1143,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let uuid = state.root.children[0].entries[0].uuid.clone();
@@ -1025,6 +1172,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let uuid = state.root.children[0].entries[0].uuid.clone();
@@ -1064,6 +1213,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let uuid = state.root.children[0].entries[0].uuid.clone();
@@ -1096,6 +1247,8 @@ mod tests {
                 url: "".into(),
                 notes: "".into(),
                 totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let uuid = state.root.children[0].entries[0].uuid.clone();
@@ -1109,5 +1262,197 @@ mod tests {
             .unwrap();
         let favorite = reopened.snapshot().unwrap().root.children[0].entries[0].favorite;
         assert!(favorite);
+    }
+
+    #[test]
+    fn custom_fields_and_attachments_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+
+        let data = BASE64.encode(b"hello attachment".as_slice());
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: group_uuid.clone(),
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![
+                    CustomField {
+                        name: "PIN".into(),
+                        value: "1234".into(),
+                    },
+                    CustomField {
+                        name: "Question".into(),
+                        value: "Answer".into(),
+                    },
+                ],
+                attachments: vec![AttachmentInput {
+                    name: "note.txt".into(),
+                    size: data.len(),
+                    data: Some(data),
+                }],
+            })
+            .unwrap();
+        let entry = &state.root.children[0].entries[0];
+        assert_eq!(entry.custom_fields.len(), 2);
+        assert_eq!(
+            entry
+                .custom_fields
+                .iter()
+                .find(|f| f.name == "PIN")
+                .map(|f| f.value.as_str()),
+            Some("1234")
+        );
+        assert_eq!(entry.attachments.len(), 1);
+        assert_eq!(entry.attachments[0].name, "note.txt");
+        assert_eq!(entry.attachments[0].size, b"hello attachment".len());
+        let uuid = entry.uuid.clone();
+
+        // Update: drop one field, keep the attachment untouched (no data), add one.
+        let state = session
+            .update_entry(
+                &uuid,
+                &EntryInput {
+                    group_uuid: group_uuid.clone(),
+                    title: "E".into(),
+                    username: "u".into(),
+                    password: "pw".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    custom_fields: vec![CustomField {
+                        name: "PIN".into(),
+                        value: "9999".into(),
+                    }],
+                    attachments: vec![
+                        AttachmentInput {
+                            name: "note.txt".into(),
+                            size: 0,
+                            data: None,
+                        },
+                        AttachmentInput {
+                            name: "second.bin".into(),
+                            size: 0,
+                            data: Some(BASE64.encode([1u8, 2, 3, 4].as_slice())),
+                        },
+                    ],
+                },
+            )
+            .unwrap();
+        let entry = &state.root.children[0].entries[0];
+        assert_eq!(entry.custom_fields.len(), 1);
+        assert_eq!(entry.custom_fields[0].name, "PIN");
+        assert_eq!(entry.custom_fields[0].value, "9999");
+        assert_eq!(entry.attachments.len(), 2);
+        let note = entry
+            .attachments
+            .iter()
+            .find(|a| a.name == "note.txt")
+            .expect("note.txt attachment present");
+        assert_eq!(note.size, b"hello attachment".len());
+
+        // Persist and reopen: everything survives.
+        session.save().unwrap();
+        drop(session);
+        let mut reopened = VaultSession::default();
+        let state = reopened
+            .open(&dir.path().join("test.kdbx"), "master-password")
+            .unwrap();
+        let entry = &state.root.children[0].entries[0];
+        assert_eq!(entry.custom_fields.len(), 1);
+        assert_eq!(entry.attachments.len(), 2);
+    }
+
+    #[test]
+    fn custom_fields_exclude_reserved_names() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "n".into(),
+                totp: None,
+                custom_fields: vec![
+                    CustomField {
+                        name: FIELD_OTP.to_owned(),
+                        value: "should-not-appear".into(),
+                    },
+                    CustomField {
+                        name: FIELD_TITLE.to_owned(),
+                        value: "should-not-appear".into(),
+                    },
+                    CustomField {
+                        name: "   ".into(),
+                        value: "ignored".into(),
+                    },
+                    CustomField {
+                        name: "Nickname".into(),
+                        value: "alice".into(),
+                    },
+                ],
+                attachments: vec![],
+            })
+            .unwrap();
+        let entry = &state.root.children[0].entries[0];
+        assert_eq!(entry.custom_fields.len(), 1);
+        assert_eq!(entry.custom_fields[0].name, "Nickname");
+    }
+
+    #[test]
+    fn save_attachment_writes_file() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let payload = b"\x00\x01binary data\xff".to_vec();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![AttachmentInput {
+                    name: "blob.bin".into(),
+                    size: payload.len(),
+                    data: Some(BASE64.encode(payload.clone())),
+                }],
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+        let dest = dir.path().join("out.bin");
+        session
+            .save_attachment(&uuid, "blob.bin", dest.to_str().unwrap())
+            .unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), payload);
     }
 }

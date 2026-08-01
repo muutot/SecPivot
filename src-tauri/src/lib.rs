@@ -117,6 +117,19 @@ fn delete_entry(
 }
 
 #[tauri::command]
+fn save_attachment(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    name: String,
+    dest: String,
+) -> Result<(), String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .save_attachment(&uuid, &name, &dest)
+}
+
+#[tauri::command]
 fn totp_code(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
@@ -206,6 +219,7 @@ pub fn run() {
             add_entry,
             update_entry,
             delete_entry,
+            save_attachment,
             totp_code,
             toggle_favorite,
             add_group,

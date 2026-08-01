@@ -23,6 +23,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22"
 keepass = { version = "0.13", features = ["save_kdbx4", "totp"] }
 # NOTE: keepass 0.13's KdfConfig::Argon2id.version uses rust-argon2 v3's
 # `argon2::Version` type, so the crate name here must match that version.
