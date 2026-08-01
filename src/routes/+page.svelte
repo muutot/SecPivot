@@ -9,6 +9,7 @@
   import { copyText } from "$lib/utils/clipboard";
   import type { EntryInput, VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
@@ -340,6 +341,64 @@
       flash("复制失败");
     }
   }
+
+  let entryMenu = $state<{ x: number; y: number; entry: VaultEntry } | null>(null);
+  let blankMenu = $state<{ x: number; y: number } | null>(null);
+
+  function openEntryMenu(event: MouseEvent, entry: VaultEntry): void {
+    event.preventDefault();
+    event.stopPropagation();
+    blankMenu = null;
+    selectEntry(entry);
+    entryMenu = { x: event.clientX, y: event.clientY, entry };
+  }
+
+  function openBlankMenu(event: MouseEvent): void {
+    event.preventDefault();
+    entryMenu = null;
+    blankMenu = { x: event.clientX, y: event.clientY };
+  }
+
+  function entryMenuItems(entry: VaultEntry): ContextMenuItem[] {
+    return [
+      { id: "edit", label: "编辑条目", icon: "edit" },
+      { id: "copy-username", label: "复制用户名", icon: "user", disabled: !entry.username },
+      { id: "copy-password", label: "复制密码", icon: "copy", disabled: !entry.password },
+      { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
+      { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
+      { id: "delete", label: "删除条目", icon: "trash", destructive: true },
+    ];
+  }
+
+  const blankMenuItems = $derived<ContextMenuItem[]>([
+    { id: "new-entry", label: "新建条目", icon: "plus" },
+    { id: "new-group", label: "新建分组", icon: "folder-plus" },
+    { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
+    { id: "lock", label: "锁定数据库", icon: "lock" },
+    { id: "refresh", label: "刷新", icon: "refresh" },
+  ]);
+
+  function handleEntryMenuAction(id: string): void {
+    const menu = entryMenu;
+    if (!menu) return;
+    const entry = menu.entry;
+    if (id === "edit") openEditEntry(entry);
+    else if (id === "copy-username" && entry.username)
+      void copyEntryValue(entry.username, "用户名");
+    else if (id === "copy-password" && entry.password)
+      void copyEntryValue(entry.password, "密码", true);
+    else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
+    else if (id === "favorite") void toggleFavorite(entry);
+    else if (id === "delete") askDeleteEntry(entry);
+  }
+
+  function handleBlankMenuAction(id: string): void {
+    if (id === "new-entry") openCreateEntry();
+    else if (id === "new-group") openGroupModal(selectedGroup);
+    else if (id === "save") void handleSave();
+    else if (id === "lock") void handleLock();
+    else if (id === "refresh") void vault.refresh();
+  }
 </script>
 
 <svelte:head>
@@ -467,7 +526,13 @@
             <div class="head-actions"></div>
           </div>
 
-          <div class="entry-list" role="listbox" aria-label="条目列表">
+          <div
+            class="entry-list"
+            role="listbox"
+            aria-label="条目列表"
+            tabindex="-1"
+            oncontextmenu={openBlankMenu}
+          >
             {#if filteredEntries.length === 0}
               <div class="empty-state">
                 <span class="empty-icon"><AppIcon name="key" size={20} /></span>
@@ -483,6 +548,7 @@
                   aria-selected={selectedEntry?.uuid === row.entry.uuid}
                   tabindex="0"
                   onclick={() => selectEntry(row.entry)}
+                  oncontextmenu={(e) => openEntryMenu(e, row.entry)}
                   onkeydown={(e) => {
                     if (e.key === "Enter") selectEntry(row.entry);
                   }}
@@ -653,6 +719,32 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if entryMenu}
+  <ContextMenu
+    x={entryMenu.x}
+    y={entryMenu.y}
+    items={entryMenuItems(entryMenu.entry)}
+    onclose={() => (entryMenu = null)}
+    onaction={(id) => {
+      entryMenu = null;
+      handleEntryMenuAction(id);
+    }}
+  />
+{/if}
+
+{#if blankMenu}
+  <ContextMenu
+    x={blankMenu.x}
+    y={blankMenu.y}
+    items={blankMenuItems}
+    onclose={() => (blankMenu = null)}
+    onaction={(id) => {
+      blankMenu = null;
+      handleBlankMenuAction(id);
+    }}
+  />
 {/if}
 
 <style>
