@@ -5,7 +5,6 @@ pub mod focus;
 pub mod remote;
 pub mod vault;
 
-use crate::autotype::AutotypeContext;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
 use crate::vault::{
@@ -341,11 +340,13 @@ fn auto_type(
     uuid: String,
     sequence: String,
 ) -> Result<(), String> {
-    let ctx: AutotypeContext = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .autotype_context(&uuid)?;
-    autotype::run_sequence(&sequence, &ctx).map_err(|e| e.to_string())
+    let (ctx, expanded) = {
+        let session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let ctx = session.autotype_context(&uuid)?;
+        let expanded = session.expand_autotype_sequence(&sequence)?;
+        (ctx, expanded)
+    };
+    autotype::run_sequence(&expanded, &ctx).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

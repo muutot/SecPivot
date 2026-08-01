@@ -281,7 +281,8 @@
             <strong>全局自动填充热键</strong>
             <p>按快捷键时，把匹配前台窗口的条目自动键入；留空禁用</p>
             <p class="hint">
-              使用 Ctrl/Alt/Shift/Command 加按键组合，如 Ctrl+Shift+A；按窗口标题匹配条目网址域名或标题，回收站内条目不参与
+              使用 Ctrl/Alt/Shift/Command 加按键组合，如
+              Ctrl+Shift+A；按窗口标题匹配条目网址域名或标题，回收站内条目不参与
             </p>
           </div>
         </div>

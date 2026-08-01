@@ -2,7 +2,7 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
-use crate::autotype::AutotypeContext;
+use crate::autotype::{self, AutotypeContext};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
@@ -904,6 +904,19 @@ impl VaultSession {
         })
     }
 
+    /// Expand `{REF:...}` field references in an auto-type sequence against
+    /// the database. Entries inside the recycle bin are not referenceable.
+    pub fn expand_autotype_sequence(&self, sequence: &str) -> Result<String, String> {
+        let db = self.require_db()?;
+        let bin_id = recycle_bin_id(db);
+        autotype::expand_refs(sequence, |spec| {
+            let mut found: Option<String> = None;
+            walk_ref_match(db.root(), bin_id, spec, &mut found);
+            found
+        })
+        .map_err(|e| e.to_string())
+    }
+
     /// Best-matching entry for global auto-type given the title of the window
     /// in focus. Matches the URL host or the entry title against the window
     /// title (case-insensitive); entries inside the recycle bin are skipped.
@@ -1421,6 +1434,77 @@ fn url_host(url: &str) -> String {
         .unwrap_or("")
         .trim()
         .to_lowercase()
+}
+
+/// Depth-first scan of `group`'s subtree for a `{REF:...}` match. First
+/// matching entry wins (KeePass semantics); the recycle bin is skipped.
+fn walk_ref_match(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    spec: autotype::RefSpec<'_>,
+    out: &mut Option<String>,
+) {
+    if bin_id == Some(group.id()) {
+        return;
+    }
+    let needle = spec.text.to_lowercase();
+    for entry in group.entries() {
+        let matched = match spec.search.to_ascii_uppercase().as_str() {
+            "T" => entry
+                .get_title()
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&needle),
+            "U" => entry
+                .get(FIELD_USERNAME)
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&needle),
+            "P" => entry
+                .get(FIELD_PASSWORD)
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&needle),
+            "A" => entry
+                .get(FIELD_URL)
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&needle),
+            "N" => entry
+                .get(FIELD_NOTES)
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&needle),
+            "I" => entry
+                .id()
+                .uuid()
+                .to_string()
+                .replace('-', "")
+                .to_lowercase()
+                .contains(&needle.replace('-', "")),
+            "O" => entry.fields.keys().any(|name| {
+                !RESERVED_FIELDS.contains(&name.as_str())
+                    && name.to_lowercase() == spec.text.to_lowercase()
+            }),
+            _ => false,
+        };
+        if matched {
+            let value = match spec.field.to_ascii_uppercase().as_str() {
+                "T" => entry.get_title().unwrap_or_default().to_owned(),
+                "U" => entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                "P" => entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
+                "A" => entry.get(FIELD_URL).unwrap_or_default().to_owned(),
+                "N" => entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
+                "I" => entry.id().uuid().to_string(),
+                _ => return,
+            };
+            *out = Some(value);
+            return;
+        }
+    }
+    for child in group.groups() {
+        walk_ref_match(child, bin_id, spec, out);
+    }
 }
 
 /// Depth-first scan of `group`'s subtree for an auto-type match; the recycle
@@ -3427,14 +3511,22 @@ mod tests {
             custom_fields: vec![],
             attachments: vec![],
         };
-        let state = session.add_entry(&entry("GitHub", "https://github.com")).unwrap();
+        let state = session
+            .add_entry(&entry("GitHub", "https://github.com"))
+            .unwrap();
         let github = state.root.entries[0].uuid.clone();
-        session.add_entry(&entry("GitHub", "https://example.com")).unwrap();
-        session.add_entry(&entry("Notebook", "https://notes.dev")).unwrap();
+        session
+            .add_entry(&entry("GitHub", "https://example.com"))
+            .unwrap();
+        session
+            .add_entry(&entry("Notebook", "https://notes.dev"))
+            .unwrap();
 
         // URL host wins over title when both match.
         assert_eq!(
-            session.autotype_match("GitHub - Home · github.com").unwrap(),
+            session
+                .autotype_match("GitHub - Home · github.com")
+                .unwrap(),
             github
         );
         // Title-only match still works.
@@ -3476,5 +3568,123 @@ mod tests {
         assert_eq!(url_host("http://a.b.c:8080/x?y=1"), "a.b.c");
         assert_eq!(url_host("plain-host"), "plain-host");
         assert_eq!(url_host(""), "");
+    }
+
+    #[test]
+    fn expand_autotype_sequence_resolves_refs_across_entries() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let entry = |title: &str, username: &str, password: &str, url: &str| EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: title.into(),
+            username: username.into(),
+            password: password.into(),
+            url: url.into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        };
+        let state = session
+            .add_entry(&entry("Bank", "alice", "secret123", "https://bank.example"))
+            .unwrap();
+        let bank_uuid = state.root.entries[0].uuid.clone();
+        session
+            .add_entry(&entry(
+                "Mail",
+                "mail-bot",
+                "mail-pass",
+                "https://mail.example",
+            ))
+            .unwrap();
+
+        // By UUID (case-insensitive, dashes tolerated).
+        let expanded = session
+            .expand_autotype_sequence(&format!(
+                "{{REF:U@I:{bank_uuid}}}{{TAB}}{{REF:P@I:{bank_uuid}}}"
+            ))
+            .unwrap();
+        assert_eq!(expanded, format!("alice{{TAB}}secret123"));
+        // By title / URL substring.
+        assert_eq!(
+            session.expand_autotype_sequence("{REF:P@T:bank}").unwrap(),
+            "secret123"
+        );
+        assert_eq!(
+            session
+                .expand_autotype_sequence("{REF:U@A:mail.example}")
+                .unwrap(),
+            "mail-bot"
+        );
+        // UUID as wanted field.
+        assert_eq!(
+            session.expand_autotype_sequence("{REF:I@T:Bank}").unwrap(),
+            bank_uuid
+        );
+        // Custom-string name as search (O), standard field as target.
+        session
+            .update_entry(
+                &bank_uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: "Bank".into(),
+                    username: "alice".into(),
+                    password: "secret123".into(),
+                    url: "https://bank.example".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: vec![CustomField {
+                        name: "Customer Id".into(),
+                        value: "CUST-42".into(),
+                    }],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            session
+                .expand_autotype_sequence("{REF:U@O:Customer Id}")
+                .unwrap(),
+            "alice"
+        );
+        // Unresolvable reference fails with a Chinese message.
+        let err = session
+            .expand_autotype_sequence("{REF:P@T:missing}")
+            .unwrap_err();
+        assert!(err.contains("未找到匹配条目"));
+    }
+
+    #[test]
+    fn expand_autotype_sequence_skips_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Old".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let old_uuid = state.root.entries[0].uuid.clone();
+        session.delete_entry(&old_uuid).unwrap();
+        let err = session
+            .expand_autotype_sequence(&format!("{{REF:P@I:{old_uuid}}}"))
+            .unwrap_err();
+        assert!(err.contains("未找到匹配条目"));
     }
 }

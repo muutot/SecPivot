@@ -810,16 +810,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let conf = dir.path().join("conf");
         std::fs::create_dir_all(&conf).unwrap();
-        std::fs::write(
-            conf.join("config.json"),
-            r#"{"general":{"theme":"light"}}"#,
-        )
-        .unwrap();
+        std::fs::write(conf.join("config.json"), r#"{"general":{"theme":"light"}}"#).unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
-        assert_eq!(
-            store.get().unwrap().general.global_auto_type_shortcut,
-            ""
-        );
+        assert_eq!(store.get().unwrap().general.global_auto_type_shortcut, "");
     }
 
     #[test]
