@@ -137,6 +137,8 @@
   let sortCol = $state<SortCol>("title");
   let sortDir = $state<"asc" | "desc">("asc");
   let colWidths = $state<{ url: number }>({ url: 200 });
+  let groupWidth = $state(200);
+  let detailWidth = $state(300);
 
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -169,6 +171,52 @@
     document.body.classList.add("resizing-column");
     const onMove = (ev: PointerEvent): void => {
       colWidths.url = Math.min(400, Math.max(100, startW - (ev.clientX - startX)));
+    };
+    const onUp = (ev: PointerEvent): void => {
+      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.classList.remove("resizing-column");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  function startDetailResize(e: PointerEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = detailWidth;
+    document.body.classList.add("resizing-column");
+    const onMove = (ev: PointerEvent): void => {
+      detailWidth = Math.min(640, Math.max(260, startW - (ev.clientX - startX)));
+    };
+    const onUp = (ev: PointerEvent): void => {
+      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.classList.remove("resizing-column");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  function startGroupResize(e: PointerEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = groupWidth;
+    document.body.classList.add("resizing-column");
+    const onMove = (ev: PointerEvent): void => {
+      groupWidth = Math.min(320, Math.max(140, startW + (ev.clientX - startX)));
     };
     const onUp = (ev: PointerEvent): void => {
       if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
@@ -463,7 +511,10 @@
       </div>
     </div>
 
-    <div class="main-content">
+    <div
+      class="main-content"
+      style={`--group-width: ${groupWidth}px; --detail-width: ${detailWidth}px`}
+    >
       <section class="group-panel">
         <GroupTree
           root={currentVault.root}
@@ -479,6 +530,14 @@
           ondelete={askDeleteGroup}
         />
       </section>
+
+      <span
+        class="group-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        title="调整分组宽度"
+        onpointerdown={startGroupResize}
+      ></span>
 
       <section class="entry-panel">
         <div class="entry-head">
@@ -603,6 +662,14 @@
           </div>
         </div>
       </section>
+
+      <span
+        class="detail-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        title="调整详情宽度"
+        onpointerdown={startDetailResize}
+      ></span>
 
       <section class="detail-panel">
         {#if selectedEntry}
@@ -911,8 +978,9 @@
 
   .main-content {
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr) 300px;
+    grid-template-columns: var(--group-width, 200px) minmax(0, 1fr) var(--detail-width, 300px);
     min-height: 0;
+    position: relative;
   }
 
   .group-panel {
@@ -1166,6 +1234,28 @@
     min-width: 0;
     border-left: 1px solid var(--border-subtle);
     background: var(--card-bg);
+  }
+
+  .detail-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--detail-width, 300px) - 5px);
+    z-index: 3;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .group-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--group-width, 200px) - 5px);
+    z-index: 3;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
   }
 
   .detail-empty {
