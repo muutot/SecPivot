@@ -143,6 +143,15 @@
   let colWidths = $state<{ url: number }>({ url: 200 });
   let groupWidth = $state(200);
   let detailWidth = $state(300);
+  let detailVisible = $state(false);
+
+  $effect(() => {
+    if (selectedEntry) {
+      detailVisible = true;
+    } else {
+      detailVisible = false;
+    }
+  });
 
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -545,6 +554,14 @@
         {#if currentVault.dirty}
           <span class="dirty-badge">未保存</span>
         {/if}
+        <button
+          class="icon-action"
+          onclick={() => (detailVisible = !detailVisible)}
+          title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
+          aria-pressed={detailVisible}
+        >
+          <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
+        </button>
         <button class="icon-action" onclick={openSettings} title="设置">
           <AppIcon name="settings" size={16} />
         </button>
@@ -564,7 +581,7 @@
 
     <div
       class="main-content"
-      style={`--group-width: ${groupWidth}px; --detail-width: ${detailWidth}px`}
+      style={`--group-width: ${groupWidth}px; --detail-width: ${detailVisible ? detailWidth : 0}px`}
     >
       <section class="group-panel">
         <GroupTree
@@ -717,30 +734,32 @@
         </div>
       </section>
 
-      <span
-        class="detail-resize-handle"
-        role="separator"
-        aria-orientation="vertical"
-        title="调整详情宽度"
-        onpointerdown={startDetailResize}
-      ></span>
+      {#if detailVisible}
+        <span
+          class="detail-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          title="调整详情宽度"
+          onpointerdown={startDetailResize}
+        ></span>
 
-      <section class="detail-panel">
-        {#if selectedEntry}
-          <EntryDetail
-            entry={selectedEntry}
-            groupPath={pathOf(selectedEntry.groupUuid)}
-            onfavorite={toggleFavorite}
-            onedit={openEditEntry}
-            ondelete={askDeleteEntry}
-          />
-        {:else}
-          <div class="detail-empty">
-            <AppIcon name="eye" size={22} />
-            <p>选择条目查看详情</p>
-          </div>
-        {/if}
-      </section>
+        <section class="detail-panel">
+          {#if selectedEntry}
+            <EntryDetail
+              entry={selectedEntry}
+              groupPath={pathOf(selectedEntry.groupUuid)}
+              onfavorite={toggleFavorite}
+              onedit={openEditEntry}
+              ondelete={askDeleteEntry}
+            />
+          {:else}
+            <div class="detail-empty">
+              <AppIcon name="eye" size={22} />
+              <p>选择条目查看详情</p>
+            </div>
+          {/if}
+        </section>
+      {/if}
     </div>
 
     <footer class="status-bar" role="status" aria-live="polite">
