@@ -1,5 +1,6 @@
 pub mod autotype;
 pub mod config;
+pub mod credential;
 pub mod vault;
 
 use crate::autotype::AutotypeContext;
@@ -24,6 +25,28 @@ fn set_config(
     config: config::AppConfig,
 ) -> Result<config::AppConfig, String> {
     store.set(config)
+}
+
+// ---------------------------------------------------------------------------
+// Credential-store commands (Windows Hello quick unlock)
+// ---------------------------------------------------------------------------
+
+/// Store the master password for a vault path in the OS credential store.
+#[tauri::command]
+fn remember_credential(path: String, password: String) -> Result<(), String> {
+    credential::remember(&path, &password)
+}
+
+/// Fetch the stored master password for a vault path, if any.
+#[tauri::command]
+fn get_saved_credential(path: String) -> Result<Option<String>, String> {
+    credential::get(&path)
+}
+
+/// Remove the stored master password for a vault path.
+#[tauri::command]
+fn clear_saved_credential(path: String) -> Result<(), String> {
+    credential::forget(&path)
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +320,10 @@ pub fn run() {
             get_entry_password,
             security_report,
             export_csv,
-            read_text_file
+            read_text_file,
+            remember_credential,
+            get_saved_credential,
+            clear_saved_credential
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

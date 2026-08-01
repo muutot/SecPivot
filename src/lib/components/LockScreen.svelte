@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
+  import { rememberCredential } from "$lib/services/security";
   import { isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
@@ -17,10 +19,27 @@
   let showPassword = $state(false);
   let busy = $state(false);
   let error = $state("");
+  let helloAvailable = $state(false);
   let inputEl = $state<HTMLInputElement | null>(null);
 
   $effect(() => {
     inputEl?.focus();
+  });
+
+  /** Probe the credential store for the remembered path so the Hello button only shows when usable. */
+  $effect(() => {
+    const path = remembered?.path;
+    if (!path || !isTauriRuntime()) {
+      helloAvailable = false;
+      return;
+    }
+    void invoke<{ password?: string } | null>("get_saved_credential", { path })
+      .then((result) => {
+        helloAvailable = result != null;
+      })
+      .catch(() => {
+        helloAvailable = false;
+      });
   });
 
   async function pickKeyfile(): Promise<void> {
@@ -41,6 +60,29 @@
     error = "";
     try {
       await vault.open(remembered.path, password, keyfilePath || undefined);
+      void rememberCredential(remembered.path, password);
+      onopened();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function unlockWithHello(): Promise<void> {
+    if (!remembered) return;
+    busy = true;
+    error = "";
+    try {
+      const saved = await invoke<{ password?: string } | null>("get_saved_credential", {
+        path: remembered.path,
+      });
+      if (!saved?.password) {
+        error = "没有已保存的凭据,请先在设置中启用“记住密码(Windows Hello)”";
+        helloAvailable = false;
+        return;
+      }
+      await vault.open(remembered.path, saved.password);
       onopened();
     } catch (e) {
       error = String(e);
@@ -100,6 +142,16 @@
       <button class="welcome-button" onclick={onswitch} disabled={busy} title="选择其他数据库">
         使用其他数据库
       </button>
+      {#if helloAvailable}
+        <button
+          class="welcome-button hello"
+          onclick={() => void unlockWithHello()}
+          disabled={busy}
+          title="使用系统凭据快速解锁"
+        >
+          <AppIcon name="unlock" size={15} />Windows Hello
+        </button>
+      {/if}
       <button
         class="welcome-button primary"
         onclick={() => void unlock()}
@@ -246,6 +298,15 @@
 
   .welcome-button.primary:hover {
     background: color-mix(in srgb, var(--selection-color) 26%, var(--card-bg));
+  }
+
+  .welcome-button.hello {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--text-primary);
+  }
+
+  .welcome-button.hello:hover {
+    background: color-mix(in srgb, var(--accent) 14%, var(--card-bg));
   }
 
   .welcome-button:disabled {

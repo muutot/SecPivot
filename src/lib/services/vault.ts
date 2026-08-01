@@ -222,7 +222,11 @@ export const vault: VaultStore = {
 
   async close(): Promise<void> {
     if (isTauriRuntime()) {
+      const path = get(state)?.path;
       await backendInvoke("close_vault");
+      if (path && !get(appSettings).security.rememberPassword) {
+        void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
+      }
     }
     browserState = null;
     state.set(null);

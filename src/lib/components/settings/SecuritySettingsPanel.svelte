@@ -169,5 +169,24 @@
     </button>
   </section>
 
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="key" size={17} /></span>
+      <div>
+        <strong>记住密码(Windows Hello)</strong>
+        <p>将主密码保存到系统凭据管理器,锁定后可用 Windows Hello 快速解锁</p>
+      </div>
+    </div>
+    <button
+      class="toggle-switch"
+      class:active={security.rememberPassword}
+      role="switch"
+      aria-checked={security.rememberPassword}
+      onclick={() => change("rememberPassword", !security.rememberPassword)}
+    >
+      <span class="toggle-knob"></span>
+    </button>
+  </section>
+
   <p class="auto-save-note">修改即时生效并自动保存</p>
 </div>

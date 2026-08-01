@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
-import { appSettings } from "$lib/services/settings";
+import { invoke } from "@tauri-apps/api/core";
+import { appSettings, isTauriRuntime } from "$lib/services/settings";
 import { vault } from "$lib/services/vault";
 import { clearClipboard, copyText } from "$lib/utils/clipboard";
 
@@ -13,6 +14,21 @@ export async function lockVault(): Promise<void> {
     await clearClipboard();
   }
   await vault.close();
+}
+
+/**
+ * Persist the master password in the OS credential store (Windows Hello)
+ * after a successful password unlock, when the setting is enabled.
+ * Non-fatal: a storage failure must never block unlocking.
+ */
+export async function rememberCredential(path: string, password: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  if (!get(appSettings).security.rememberPassword) return;
+  try {
+    await invoke("remember_credential", { path, password });
+  } catch {
+    // best-effort only
+  }
 }
 
 /** Copy a sensitive value (password) and lock immediately when `lockAfterAction` is on. */

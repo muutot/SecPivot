@@ -45,6 +45,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   clearOnLock: true,
   lockAfterAction: false,
   lockOnFocusLoss: false,
+  rememberPassword: false,
 };
 
 export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {

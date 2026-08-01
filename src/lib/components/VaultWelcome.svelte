@@ -2,6 +2,7 @@
   import { get } from "svelte/store";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
@@ -65,6 +66,7 @@
     error = "";
     try {
       await vault.open(path, password, keyfilePath || undefined);
+      void rememberCredential(path, password);
       modal = "none";
       onopened();
     } catch (e) {
@@ -133,6 +135,7 @@
         compression: settings.database.compression,
         keyfile: keyfilePath || undefined,
       });
+      void rememberCredential(target, password);
       modal = "none";
       onopened();
     } catch (e) {

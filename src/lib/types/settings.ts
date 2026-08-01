@@ -31,6 +31,8 @@ export interface SecuritySettings {
   clearOnLock: boolean;
   lockAfterAction: boolean;
   lockOnFocusLoss: boolean;
+  /** Keep the master password in the OS credential store for Windows Hello unlock. */
+  rememberPassword: boolean;
 }
 
 export interface DensitySettings {

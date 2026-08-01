@@ -187,6 +187,7 @@ pub struct SecuritySettings {
     pub clear_on_lock: bool,
     pub lock_after_action: bool,
     pub lock_on_focus_loss: bool,
+    pub remember_password: bool,
 }
 
 impl Default for SecuritySettings {
@@ -198,6 +199,7 @@ impl Default for SecuritySettings {
             clear_on_lock: true,
             lock_after_action: false,
             lock_on_focus_loss: false,
+            remember_password: false,
         }
     }
 }
@@ -499,6 +501,23 @@ mod tests {
         assert_eq!(config.security.clipboard_clear_seconds, 20);
         assert_eq!(config.database.generator.length, 20);
         assert!(!config.security.lock_on_focus_loss);
+        assert!(!config.security.remember_password);
+    }
+
+    #[test]
+    fn remember_password_survives_deserialize_write_reload() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.security.remember_password = true;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"rememberPassword\": true"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert!(again.security.remember_password);
     }
 
     #[test]
