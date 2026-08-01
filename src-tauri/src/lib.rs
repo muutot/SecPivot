@@ -202,6 +202,12 @@ fn delete_group(
         .delete_group(&uuid)
 }
 
+/// Write UTF-8 text to a user-picked path (CSV export).
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
+}
+
 // ---------------------------------------------------------------------------
 // App entry point
 // ---------------------------------------------------------------------------
@@ -242,7 +248,8 @@ pub fn run() {
             auto_type,
             add_group,
             rename_group,
-            delete_group
+            delete_group,
+            write_text_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

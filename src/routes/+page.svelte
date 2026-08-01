@@ -2,8 +2,10 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
+  import { invoke } from "@tauri-apps/api/core";
+  import { save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
-  import { appSettings } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, installAutoLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
@@ -16,6 +18,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
+  import { buildCsv } from "$lib/utils/csv";
 
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
@@ -336,6 +339,42 @@
     }
   }
 
+  async function handleExportCsv(): Promise<void> {
+    if (!currentVault) return;
+    const rows = reportEntries.map(({ entry, path }) => ({
+      group: path,
+      title: entry.title,
+      username: entry.username,
+      password: entry.password,
+      url: entry.url,
+      notes: entry.notes,
+      totp: entry.totp ?? "",
+      favorite: entry.favorite === true,
+    }));
+    const csv = buildCsv(rows);
+    try {
+      if (isTauriRuntime()) {
+        const selected = await save({
+          defaultPath: (currentVault.fileName.replace(/\.kdbx$/i, "") || "keyvault") + ".csv",
+          filters: [{ name: "CSV 文件", extensions: ["csv"] }],
+        });
+        if (!selected) return;
+        await invoke("write_text_file", { path: String(selected), content: csv });
+      } else {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "keyvault-export.csv";
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+      flash("已导出 CSV");
+    } catch (e) {
+      flash(`导出失败：${e}`);
+    }
+  }
+
   function openSettings(): void {
     void goto("/settings");
   }
@@ -590,6 +629,9 @@
         </button>
         <button class="icon-action" onclick={() => (reportOpen = true)} title="安全报告">
           <AppIcon name="shield" size={15} />
+        </button>
+        <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
+          <AppIcon name="download" size={15} />
         </button>
         <button class="icon-action" onclick={openSettings} title="设置">
           <AppIcon name="settings" size={16} />
