@@ -21,6 +21,7 @@
 
   let revealPassword = $state(false);
   let copied = $state("");
+  let activeTab = $state<"fields" | "meta" | "attachments">("fields");
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -129,95 +130,172 @@
     </div>
   </header>
 
-  <div class="detail-body">
-    <div class="field-block">
-      <span class="field-label">用户名</span>
-      <div class="field-value">
-        <span class="field-text">{entry.username || "—"}</span>
-        {#if entry.username}
+  <div class="detail-tabs" role="tablist" aria-label="详情选项卡">
+    <button
+      type="button"
+      role="tab"
+      class="detail-tab"
+      class:active={activeTab === "fields"}
+      aria-selected={activeTab === "fields"}
+      onclick={() => (activeTab = "fields")}
+    >
+      字段
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="detail-tab"
+      class:active={activeTab === "meta"}
+      aria-selected={activeTab === "meta"}
+      onclick={() => (activeTab = "meta")}
+    >
+      元属性
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="detail-tab"
+      class:active={activeTab === "attachments"}
+      aria-selected={activeTab === "attachments"}
+      onclick={() => (activeTab = "attachments")}
+    >
+      附件{#if entry.attachments?.length}
+        ({entry.attachments.length}){/if}
+    </button>
+  </div>
+
+  <div class="detail-body" role="tabpanel">
+    {#if activeTab === "fields"}
+      <div class="field-block">
+        <span class="field-label">用户名</span>
+        <div class="field-value">
+          <span class="field-text">{entry.username || "—"}</span>
+          {#if entry.username}
+            <button
+              class="copy-btn"
+              onclick={() => handleCopy(entry.username, "username")}
+              title="复制用户名"
+            >
+              <AppIcon name="copy" size={13} />
+            </button>
+          {/if}
+        </div>
+      </div>
+
+      <div class="field-block">
+        <span class="field-label">密码</span>
+        <div class="field-value">
+          <span class="field-text mono">{revealPassword ? entry.password : "••••••••••••"}</span>
           <button
             class="copy-btn"
-            onclick={() => handleCopy(entry.username, "username")}
-            title="复制用户名"
+            onclick={() => handleCopy(entry.password, "password", true)}
+            title="复制密码"
           >
             <AppIcon name="copy" size={13} />
           </button>
-        {/if}
-      </div>
-    </div>
-
-    <div class="field-block">
-      <span class="field-label">密码</span>
-      <div class="field-value">
-        <span class="field-text mono">{revealPassword ? entry.password : "••••••••••••"}</span>
-        <button
-          class="copy-btn"
-          onclick={() => handleCopy(entry.password, "password", true)}
-          title="复制密码"
-        >
-          <AppIcon name="copy" size={13} />
-        </button>
-        <button
-          class="copy-btn"
-          onclick={() => (revealPassword = !revealPassword)}
-          title={revealPassword ? "隐藏密码" : "显示密码"}
-        >
-          <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
-        </button>
-      </div>
-    </div>
-
-    {#if entry.url}
-      <div class="field-block">
-        <span class="field-label">网址</span>
-        <div class="field-value">
-          <button class="url-link" onclick={openUrlExternal} title={entry.url}>
-            <AppIcon name="globe" size={13} />
-            <span class="field-text link">{entry.url}</span>
+          <button
+            class="copy-btn"
+            onclick={() => (revealPassword = !revealPassword)}
+            title={revealPassword ? "隐藏密码" : "显示密码"}
+          >
+            <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
           </button>
         </div>
       </div>
-    {/if}
 
-    {#if entry.totp}
-      <div class="field-block">
-        <span class="field-label">TOTP 验证码</span>
-        <div class="field-value">
-          <TotpWidget seed={entry.totp} entryUuid={entry.uuid} />
-        </div>
-      </div>
-    {/if}
-
-    {#if entry.notes}
-      <div class="field-block">
-        <span class="field-label">备注</span>
-        <div class="field-notes">{entry.notes}</div>
-      </div>
-    {/if}
-
-    {#if entry.customFields?.length}
-      {#each entry.customFields as field}
+      {#if entry.url}
         <div class="field-block">
-          <span class="field-label">{field.name}</span>
+          <span class="field-label">网址</span>
           <div class="field-value">
-            <span class="field-text" title={field.value}>{field.value || "—"}</span>
-            {#if field.value}
-              <button
-                class="copy-btn"
-                onclick={() => handleCopy(field.value, "custom")}
-                title="复制字段值"
-              >
-                <AppIcon name="copy" size={13} />
-              </button>
-            {/if}
+            <button class="url-link" onclick={openUrlExternal} title={entry.url}>
+              <AppIcon name="globe" size={13} />
+              <span class="field-text link">{entry.url}</span>
+            </button>
           </div>
         </div>
-      {/each}
-    {/if}
+      {/if}
 
-    {#if entry.attachments?.length}
+      {#if entry.totp}
+        <div class="field-block">
+          <span class="field-label">TOTP 验证码</span>
+          <div class="field-value">
+            <TotpWidget seed={entry.totp} entryUuid={entry.uuid} />
+          </div>
+        </div>
+      {/if}
+
+      {#if entry.notes}
+        <div class="field-block">
+          <span class="field-label">备注</span>
+          <div class="field-notes">{entry.notes}</div>
+        </div>
+      {/if}
+
+      {#if entry.customFields?.length}
+        {#each entry.customFields as field}
+          <div class="field-block">
+            <span class="field-label">{field.name}</span>
+            <div class="field-value">
+              <span class="field-text" title={field.value}>{field.value || "—"}</span>
+              {#if field.value}
+                <button
+                  class="copy-btn"
+                  onclick={() => handleCopy(field.value, "custom")}
+                  title="复制字段值"
+                >
+                  <AppIcon name="copy" size={13} />
+                </button>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    {:else if activeTab === "meta"}
       <div class="field-block">
-        <span class="field-label">附件</span>
+        <span class="field-label">所属分组</span>
+        <div class="field-value">
+          <span class="field-text">{groupPath || "—"}</span>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <span class="field-label">创建时间</span>
+        <div class="field-value">
+          <span class="field-text">{formatTime(entry.created)}</span>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <span class="field-label">修改时间</span>
+        <div class="field-value">
+          <span class="field-text">{formatTime(entry.modified)}</span>
+        </div>
+      </div>
+
+      {#if entry.tags}
+        <div class="field-block">
+          <span class="field-label">标签</span>
+          <div class="field-value">
+            <span class="field-text">{entry.tags}</span>
+          </div>
+        </div>
+      {/if}
+
+      <div class="field-block">
+        <span class="field-label">收藏状态</span>
+        <div class="field-value">
+          <span class="field-text">{entry.favorite ? "已收藏" : "未收藏"}</span>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <span class="field-label">UUID</span>
+        <div class="field-value">
+          <span class="field-text mono uuid-text" title={entry.uuid}>{entry.uuid}</span>
+        </div>
+      </div>
+    {:else}
+      {#if entry.attachments?.length}
         <div class="attachment-list">
           {#each entry.attachments as attachment}
             <div class="attachment-item" title={attachment.name}>
@@ -234,16 +312,13 @@
             </div>
           {/each}
         </div>
-      </div>
+      {:else}
+        <div class="tab-empty">
+          <AppIcon name="file" size={18} />
+          <p>该条目没有附件</p>
+        </div>
+      {/if}
     {/if}
-
-    <div class="field-block meta">
-      <span class="field-label">创建 / 修改</span>
-      <div class="field-value meta-values">
-        <span>{formatTime(entry.created)}</span>
-        <span>{formatTime(entry.modified)}</span>
-      </div>
-    </div>
   </div>
 
   {#if copied}
@@ -351,6 +426,38 @@
   .detail-btn.danger:hover {
     color: var(--danger-color);
     border-color: color-mix(in srgb, var(--danger-color) 40%, transparent);
+  }
+
+  .detail-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 14px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    flex: 0 0 auto;
+  }
+
+  .detail-tab {
+    padding: 5px 12px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: var(--settings-control-radius, 6px) var(--settings-control-radius, 6px) 0 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+    transition:
+      color 80ms ease,
+      border-color 80ms ease;
+  }
+
+  .detail-tab:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .detail-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--selection-color);
   }
 
   .detail-body {
@@ -482,12 +589,24 @@
     background: var(--hover-bg);
   }
 
-  .meta-values {
+  .uuid-text {
+    font-size: var(--font-size-tiny, 10px);
+    word-break: break-all;
+  }
+
+  .tab-empty {
     display: flex;
-    justify-content: space-between;
-    color: var(--text-muted);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 0;
+    color: var(--text-faint);
+  }
+
+  .tab-empty p {
+    margin: 0;
     font-size: var(--font-size-secondary, 11px);
-    font-variant-numeric: tabular-nums;
   }
 
   .copy-toast {
