@@ -3,6 +3,7 @@ pub mod config;
 pub mod credential;
 pub mod focus;
 pub mod remote;
+pub mod shield;
 pub mod vault;
 
 use crate::config::ConfigStore;
@@ -129,23 +130,30 @@ fn clear_saved_credential(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_vault(
+    app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
     password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    session
+    let result = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .open(
             Path::new(&path),
             &password,
             keyfile.as_deref().map(Path::new),
-        )
+        );
+    if result.is_ok() {
+        shield::set_capture_guard(&app, true);
+    }
+    result
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn create_vault(
+    app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
     password: String,
@@ -154,7 +162,7 @@ fn create_vault(
     compression: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    session
+    let result = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .create(
@@ -164,15 +172,23 @@ fn create_vault(
             &cipher,
             &compression,
             keyfile.as_deref().map(Path::new),
-        )
+        );
+    if result.is_ok() {
+        shield::set_capture_guard(&app, true);
+    }
+    result
 }
 
 #[tauri::command]
-fn close_vault(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<(), String> {
+fn close_vault(
+    app: tauri::AppHandle,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<(), String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .close();
+    shield::set_capture_guard(&app, false);
     Ok(())
 }
 
@@ -582,7 +598,7 @@ async fn open_remote_vault(
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    session
+    let result = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .open_remote(
@@ -593,7 +609,11 @@ async fn open_remote_vault(
             mode,
             &local_dir,
             cfg.backup_count.clamp(0, 10) as usize,
-        )
+        );
+    if result.is_ok() {
+        shield::set_capture_guard(&app, true);
+    }
+    result
 }
 
 /// Create an empty vault and upload it to S3 immediately.
@@ -614,7 +634,7 @@ async fn create_remote_vault(
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    session
+    let result = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .create_remote(
@@ -628,7 +648,11 @@ async fn create_remote_vault(
             mode,
             &local_dir,
             cfg.backup_count.clamp(0, 10) as usize,
-        )
+        );
+    if result.is_ok() {
+        shield::set_capture_guard(&app, true);
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------

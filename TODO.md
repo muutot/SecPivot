@@ -63,4 +63,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 条目拖拽移动分组 + 多选批量删除
 - [x] 全局 Auto-Type 热键 (`tauri-plugin-global-shortcut`,按前台窗口标题匹配条目网址域名/标题,回收站条目不参与;设置项 `globalAutoTypeShortcut`)
 - [x] 字段引用 `{REF:...}` 支持 + TCATO (two-channel auto-type;REF 支持 UUID/标准字段/自定义字段名检索,跳过回收站;TCATO 覆盖层窗口 + `WM_CHAR` 通道注入,密码不离开后端)
-- [ ] 防截屏 (窗口守卫)、账户绑定 (Hardware-bound, TPM)、DPAPI、便携版打包
+- [ ] 防截屏 (窗口守卫) ← 进行中:库打开期间主窗口 `WDA_MONITOR` 守卫,锁定/关闭释放 (`shield.rs`)
+- [ ] DPAPI 加密本地配置 (S3 密钥磁盘加密)、便携版打包
