@@ -15,6 +15,7 @@
   import GroupTree from "$lib/components/GroupTree.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
+  import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
 
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
@@ -32,6 +33,7 @@
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let statusMsg = $state("");
   let busy = $state(false);
+  let reportOpen = $state(false);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -86,6 +88,16 @@
     }
     walk(currentVault.root);
     return list;
+  });
+
+  const reportEntries = $derived.by(() => {
+    const rows: { entry: VaultEntry; path: string }[] = [];
+    for (const group of allGroups) {
+      for (const entry of group.entries) {
+        rows.push({ entry, path: pathOf(entry.groupUuid) });
+      }
+    }
+    return rows;
   });
 
   const parentMap = $derived.by((): Map<string, VaultGroup> => {
@@ -576,6 +588,9 @@
         >
           <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
         </button>
+        <button class="icon-action" onclick={() => (reportOpen = true)} title="安全报告">
+          <AppIcon name="shield" size={15} />
+        </button>
         <button class="icon-action" onclick={openSettings} title="设置">
           <AppIcon name="settings" size={16} />
         </button>
@@ -808,6 +823,10 @@
     onclose={() => (editorOpen = false)}
     onsaved={(input) => void handleEditorSave(input)}
   />
+{/if}
+
+{#if reportOpen}
+  <SecurityReportDialog entries={reportEntries} onclose={() => (reportOpen = false)} />
 {/if}
 
 {#if groupModalOpen}
