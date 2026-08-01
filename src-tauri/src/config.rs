@@ -786,6 +786,43 @@ mod tests {
     }
 
     #[test]
+    fn global_auto_type_shortcut_survives_round_trip_and_defaults_empty() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(store.get().unwrap().general.global_auto_type_shortcut, "");
+
+        let mut config = AppConfig::default();
+        config.general.global_auto_type_shortcut = "Ctrl+Shift+A".into();
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"globalAutoTypeShortcut\": \"Ctrl+Shift+A\""));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            reloaded.get().unwrap().general.global_auto_type_shortcut,
+            "Ctrl+Shift+A"
+        );
+    }
+
+    #[test]
+    fn old_config_without_hotkey_field_loads_with_defaults() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        std::fs::create_dir_all(&conf).unwrap();
+        std::fs::write(
+            conf.join("config.json"),
+            r#"{"general":{"theme":"light"}}"#,
+        )
+        .unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            store.get().unwrap().general.global_auto_type_shortcut,
+            ""
+        );
+    }
+
+    #[test]
     fn normalization_clamps_and_fixes_enums() {
         let mut config = AppConfig::default();
         config.general.theme = "neon".into();

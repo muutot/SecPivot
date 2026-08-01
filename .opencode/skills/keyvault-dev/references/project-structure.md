@@ -47,10 +47,11 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 | Path                        | Ownership                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------------ |
-| `src-tauri/src/lib.rs`      | Tauri builder, managed state (`AppState`), command registration, setup               |
+| `src-tauri/src/lib.rs`      | Tauri builder, managed state (`AppState`), command registration, setup, global auto-type hotkey (register/re-register + handler) |
 | `src-tauri/src/config.rs`   | `config.json` schema, defaults, normalization, atomic persistence                    |
-| `src-tauri/src/vault.rs`    | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization |
+| `src-tauri/src/vault.rs`    | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization, auto-type match scoring |
 | `src-tauri/src/autotype.rs` | KeePass-style auto-type sequence parser + `enigo` keystroke replay                   |
+| `src-tauri/src/focus.rs`    | Windows-only foreground-window title reader (Win32) for global auto-type matching   |
 
 ## Persistent layout
 

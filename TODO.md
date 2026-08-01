@@ -52,3 +52,15 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<localDir>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3 objects, open (password + keyfile) and create remote vaults
 - [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport verified only via offline `MemoryStorage` tests — 53 backend tests pass, `npm run verify` green)
+
+## Stage 7 — Feature gap list (priority order)
+
+- [x] 主密钥变更 (`change_master_key`, 支持密码/密钥文件与 Aes/Argon2id/Argon2、解密验证、会话保持)
+- [x] 回收站 (条目/分组删除移入回收站,恢复条目/分组,清空回收站,跨重开持久化)
+- [x] 条目过期提醒 (打开库时 flash 过期数量,列表过期标记,详情过期状态)
+- [x] 条目历史版本 (每次修改自动快照,查看/恢复,最多保留 10 版)
+- [x] 条目/分组图标与颜色标记 (KeePass 内置图标 0–68 + `#RRGGBB` 颜色,树/列表/详情/编辑器)
+- [x] 条目拖拽移动分组 + 多选批量删除
+- [x] 全局 Auto-Type 热键 (`tauri-plugin-global-shortcut`,按前台窗口标题匹配条目网址域名/标题,回收站条目不参与;设置项 `globalAutoTypeShortcut`)
+- [ ] 字段引用 `{REF:...}` 支持 + TCATO (two-channel auto-type)
+- [ ] 防截屏 (窗口守卫)、账户绑定 (Hardware-bound, TPM)、DPAPI、便携版打包
