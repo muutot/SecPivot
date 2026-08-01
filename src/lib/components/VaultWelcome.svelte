@@ -5,6 +5,7 @@
   import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
   import type { RemoteMode, RemoteObject } from "$lib/types/vault";
+  import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -35,6 +36,16 @@
   let remoteKey = $state("");
   let remoteMode: RemoteMode = $state("memory");
   let remoteLoading = $state(false);
+  let remoteConfigOpen = $state(false);
+
+  const remote = $derived(get(appSettings).remote);
+  const remoteConfigured = $derived(
+    Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
+  );
+
+  function changeRemote<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
+    appSettings.updateRemote(key, value);
+  }
 
   function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -49,6 +60,7 @@
     keyfilePath = "";
     password = "";
     error = "";
+    remoteConfigOpen = !remoteConfigured;
     modal = "remote";
     await loadRemoteObjects();
   }
@@ -350,6 +362,86 @@
       {/if}
 
       {#if modal === "remote"}
+        <div class="remote-config">
+          <button
+            class="remote-config-toggle"
+            type="button"
+            aria-expanded={remoteConfigOpen}
+            onclick={() => (remoteConfigOpen = !remoteConfigOpen)}
+          >
+            <AppIcon name="cloud" size={13} />
+            <span>S3 连接配置</span>
+            <span class="remote-config-status">{remoteConfigured ? "已配置" : "未配置"}</span>
+            <AppIcon name={remoteConfigOpen ? "chevron-down" : "chevron-right"} size={12} />
+          </button>
+          {#if remoteConfigOpen}
+            <div class="remote-config-body">
+              <div class="field">
+                <span>服务地址</span>
+                <input
+                  class="text-input"
+                  type="text"
+                  value={remote.endpoint}
+                  placeholder="https://s3.amazonaws.com"
+                  spellcheck="false"
+                  oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
+                />
+              </div>
+              <div class="remote-config-grid">
+                <div class="field">
+                  <span>区域</span>
+                  <input
+                    class="text-input"
+                    type="text"
+                    value={remote.region}
+                    placeholder="us-east-1"
+                    spellcheck="false"
+                    oninput={(e) => changeRemote("region", e.currentTarget.value)}
+                  />
+                </div>
+                <div class="field">
+                  <span>存储桶</span>
+                  <input
+                    class="text-input"
+                    type="text"
+                    value={remote.bucket}
+                    placeholder="my-bucket"
+                    spellcheck="false"
+                    oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
+                  />
+                </div>
+              </div>
+              <div class="field">
+                <span>Access Key</span>
+                <input
+                  class="text-input"
+                  type="text"
+                  value={remote.accessKey}
+                  placeholder="AKIA..."
+                  autocomplete="off"
+                  spellcheck="false"
+                  oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
+                />
+              </div>
+              <div class="field">
+                <span>Secret Key</span>
+                <input
+                  class="text-input"
+                  type="password"
+                  value={remote.secretKey}
+                  placeholder="••••••••"
+                  autocomplete="off"
+                  spellcheck="false"
+                  oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
+                />
+              </div>
+              <p class="remote-config-note">
+                凭据明文保存在 config.json，仅用于访问远程存储；修改后点「刷新列表」生效。
+              </p>
+            </div>
+          {/if}
+        </div>
+
         <div class="remote-tabs" role="tablist" aria-label="远程操作">
           <button
             class="remote-tab"
@@ -939,5 +1031,62 @@
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
     line-height: 1.4;
+  }
+
+  .remote-config {
+    margin-top: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+  }
+
+  .remote-config-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    height: 30px;
+    padding: 0 10px;
+    border: none;
+    border-radius: inherit;
+    color: var(--text-secondary);
+    background: transparent;
+    font-size: var(--font-size-secondary, 11px);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .remote-config-toggle:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .remote-config-status {
+    flex: 1;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-align: right;
+  }
+
+  .remote-config-body {
+    padding: 2px 10px 10px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .remote-config-body .field {
+    margin-top: 8px;
+  }
+
+  .remote-config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .remote-config-note {
+    margin: 8px 0 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    line-height: 1.5;
   }
 </style>
