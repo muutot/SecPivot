@@ -9,10 +9,12 @@ import type {
   GroupInput,
   CreateVaultRequest,
   TotpCode,
+  SecurityReport,
 } from "$lib/types/vault";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
+import { computeSecurityReport } from "$lib/utils/security-report";
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
@@ -25,6 +27,8 @@ interface VaultStore {
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
+  getEntryPassword: (uuid: string) => Promise<string>;
+  securityReport: () => Promise<SecurityReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
@@ -179,7 +183,6 @@ export const vault: VaultStore = {
       return result;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
-    browserState.password = password;
     browserState.path = path;
     browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
     const result = deepClone(browserState);
@@ -198,7 +201,6 @@ export const vault: VaultStore = {
       return result;
     }
     const fresh = buildDemoVaultState();
-    fresh.password = request.password;
     fresh.path = request.path;
     fresh.fileName = request.path.split(/[\\/]/).pop() ?? "vault.kdbx";
     fresh.dirty = false;
@@ -318,6 +320,22 @@ export const vault: VaultStore = {
     if (!entry) throw new Error("entry not found");
     if (!entry.totp) throw new Error("该条目没有 TOTP 种子");
     return computeTotp(entry.totp);
+  },
+
+  async getEntryPassword(uuid: string): Promise<string> {
+    if (isTauriRuntime()) {
+      return backendInvoke<string>("get_entry_password", { uuid });
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    return findEntry(current.root, uuid)?.password ?? "";
+  },
+
+  async securityReport(): Promise<SecurityReport> {
+    if (isTauriRuntime()) {
+      return backendInvoke<SecurityReport>("security_report");
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    return computeSecurityReport(current.root);
   },
 
   async toggleFavorite(uuid: string): Promise<VaultState> {

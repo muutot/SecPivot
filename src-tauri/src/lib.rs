@@ -4,7 +4,7 @@ pub mod vault;
 
 use crate::autotype::AutotypeContext;
 use crate::config::ConfigStore;
-use crate::vault::{EntryInput, GroupInput, TotpCode, VaultSession, VaultState};
+use crate::vault::{EntryInput, GroupInput, SecurityReport, TotpCode, VaultSession, VaultState};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -202,10 +202,36 @@ fn delete_group(
         .delete_group(&uuid)
 }
 
-/// Write UTF-8 text to a user-picked path (CSV export).
+/// Fetch one entry's password on demand; passwords are never part of `VaultState`.
 #[tauri::command]
-fn write_text_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
+fn get_entry_password(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<String, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .get_entry_password(&uuid)
+}
+
+/// Server-side security analysis; no passwords leave the session.
+#[tauri::command]
+fn security_report(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<SecurityReport, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .security_report()
+}
+
+/// Export all entries as CSV to a user-picked path (passwords resolved server-side).
+#[tauri::command]
+fn export_csv(session: tauri::State<'_, Mutex<VaultSession>>, path: String) -> Result<(), String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .export_csv(&path)
 }
 
 /// Read a UTF-8 text file from a user-picked path (CSV import).
@@ -255,7 +281,9 @@ pub fn run() {
             add_group,
             rename_group,
             delete_group,
-            write_text_file,
+            get_entry_password,
+            security_report,
+            export_csv,
             read_text_file
         ])
         .build(tauri::generate_context!())

@@ -3,7 +3,9 @@ export interface VaultEntry {
   groupUuid: string;
   title: string;
   username: string;
-  password: string;
+  /** Absent in the Tauri runtime (fetched on demand via `get_entry_password`);
+   * present only in the browser demo fallback. */
+  password?: string;
   url: string;
   notes: string;
   totp?: string;
@@ -46,10 +48,27 @@ export interface VaultGroup {
 export interface VaultState {
   path: string;
   fileName: string;
-  password: string;
   root: VaultGroup;
   dirty: boolean;
   modifiedAt: string;
+}
+
+/** Server-side security analysis; passwords never cross into the report. */
+export interface SecurityReport {
+  total: number;
+  empty: string[];
+  weak: WeakEntry[];
+  duplicates: DuplicatePasswords[];
+}
+
+export interface WeakEntry {
+  uuid: string;
+  bits: number;
+}
+
+export interface DuplicatePasswords {
+  count: number;
+  uuids: string[];
 }
 
 export interface EntryInput {

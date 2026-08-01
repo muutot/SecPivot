@@ -27,34 +27,39 @@ The vault session is held in backend managed state and returned to the frontend 
 
 ### Shared types (Rust serde ↔ `src/lib/types/vault.ts`)
 
-| Type         | Fields                                                                                                                                     |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VaultEntry` | `uuid`, `groupUuid`, `title`, `username`, `password`, `url`, `notes`, `totp?`, `icon?`, `created?`, `modified?`, `tags?`, `favorite: bool` |
-| `VaultGroup` | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `children: VaultGroup[]`, `entries: VaultEntry[]`                                   |
-| `VaultState` | `path`, `fileName`, `password`, `root: VaultGroup`, `dirty: bool`, `modifiedAt`                                                            |
+| Type             | Fields                                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VaultEntry`     | `uuid`, `groupUuid`, `title`, `username`, `password?` (browser demo only, never in the Tauri runtime), `url`, `notes`, `totp?`, `icon?`, `created?`, `modified?`, `tags?`, `favorite: bool` |
+| `VaultGroup`     | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `children: VaultGroup[]`, `entries: VaultEntry[]`                                                                                    |
+| `VaultState`     | `path`, `fileName`, `root: VaultGroup`, `dirty: bool`, `modifiedAt`                                                                                                                         |
+| `SecurityReport` | `total: number`, `empty: string[]`, `weak: WeakEntry[]`, `duplicates: DuplicatePasswords[]` (server-side analysis; no passwords leave the session)                                          |
+
+`WeakEntry` = `{ uuid, bits }`; `DuplicatePasswords` = `{ count, uuids }`.
 
 The root group is the virtual top-level (uuid `"root"`); it is not persisted as a KeePass group — its `children` map to top-level groups and its `entries` map to the DB root group entries.
 
 ### Commands
 
-| Command           | Args                                       | Result               | Notes                                                                                                                                                          |
-| ----------------- | ------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `open_vault`      | `path: String, password: String`           | `VaultState`         | Opens KDBX with password key                                                                                                                                   |
-| `create_vault`    | `path, password, kdf, cipher, compression` | `VaultState`         | Creates empty vault and saves                                                                                                                                  |
-| `close_vault`     | –                                          | `()`                 | Clears session; zeroizes password                                                                                                                              |
-| `get_vault_state` | –                                          | `Option<VaultState>` | null when no session                                                                                                                                           |
-| `save_vault`      | –                                          | `VaultState`         | Persists session DB; resets dirty                                                                                                                              |
-| `add_entry`       | `input: EntryInput`                        | `VaultState`         |                                                                                                                                                                |
-| `update_entry`    | `uuid, input: EntryInput`                  | `VaultState`         |                                                                                                                                                                |
-| `delete_entry`    | `uuid`                                     | `VaultState`         |                                                                                                                                                                |
-| `toggle_favorite` | `uuid`                                     | `VaultState`         | Flips the pinned marker                                                                                                                                        |
-| `auto_type`       | `uuid, sequence`                           | `()`                 | Replays a KeePass auto-type sequence for the entry on a background thread; resolves fields server-side from the vault session, never from the frontend payload |
-| `totp_code`       | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`                                                                                                                                   |
-| `add_group`       | `input: GroupInput`                        | `VaultState`         | parentUuid null → root                                                                                                                                         |
-| `rename_group`    | `uuid, name`                               | `VaultState`         |                                                                                                                                                                |
-| `delete_group`    | `uuid`                                     | `VaultState`         | Entries/children bubble to root                                                                                                                                |
-| `write_text_file` | `path: String, content: String`            | `()`                 | Writes UTF-8 text to a user-picked path (CSV export); content is built frontend-side from the open `VaultState`                                                |
-| `read_text_file`  | `path: String`                             | `String`             | Reads a UTF-8 text file from a user-picked path (CSV import); parsing and group creation happen frontend-side via `add_group`/`add_entry`                      |
+| Command              | Args                                       | Result               | Notes                                                                                                                                                          |
+| -------------------- | ------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open_vault`         | `path: String, password: String`           | `VaultState`         | Opens KDBX with password key                                                                                                                                   |
+| `create_vault`       | `path, password, kdf, cipher, compression` | `VaultState`         | Creates empty vault and saves                                                                                                                                  |
+| `close_vault`        | –                                          | `()`                 | Clears session; zeroizes password                                                                                                                              |
+| `get_vault_state`    | –                                          | `Option<VaultState>` | null when no session                                                                                                                                           |
+| `save_vault`         | –                                          | `VaultState`         | Persists session DB; resets dirty                                                                                                                              |
+| `add_entry`          | `input: EntryInput`                        | `VaultState`         |                                                                                                                                                                |
+| `update_entry`       | `uuid, input: EntryInput`                  | `VaultState`         |                                                                                                                                                                |
+| `delete_entry`       | `uuid`                                     | `VaultState`         |                                                                                                                                                                |
+| `toggle_favorite`    | `uuid`                                     | `VaultState`         | Flips the pinned marker                                                                                                                                        |
+| `auto_type`          | `uuid, sequence`                           | `()`                 | Replays a KeePass auto-type sequence for the entry on a background thread; resolves fields server-side from the vault session, never from the frontend payload |
+| `totp_code`          | `uuid`                                     | `TotpCode`           | `{ code, validFor, period }`                                                                                                                                   |
+| `add_group`          | `input: GroupInput`                        | `VaultState`         | parentUuid null → root                                                                                                                                         |
+| `rename_group`       | `uuid, name`                               | `VaultState`         |                                                                                                                                                                |
+| `delete_group`       | `uuid`                                     | `VaultState`         | Entries/children bubble to root                                                                                                                                |
+| `get_entry_password` | `uuid`                                     | `String`             | On-demand password fetch; never included in `VaultState`/`VaultEntry`                                                                                          |
+| `security_report`    | –                                          | `SecurityReport`     | Server-side scan for empty/weak/duplicate passwords; no passwords cross into the report                                                                        |
+| `export_csv`         | `path: String`                             | `()`                 | Writes RFC 4180 CSV (UTF-8 BOM) to a user-picked path; passwords/TOTP resolved server-side from the session                                                    |
+| `read_text_file`     | `path: String`                             | `String`             | Reads a UTF-8 text file from a user-picked path (CSV import); parsing and group creation happen frontend-side via `add_group`/`add_entry`                      |
 
 Every mutating command returns the refreshed `VaultState` so the frontend `vault` store stays in sync with the backend session. `favorite` is always present on `VaultEntry` and is persisted as a custom field `KeyVault.Favorite = "true"` (absent when not pinned); the browser fallback mirrors the same boolean on the demo state. `totp_code` is read-only: it computes the current one-time code via `keepass::db::TOTP` (`TotpCode { code, validFor, period }`), accepting either an `otpauth://` URI or a raw Base32 key (wrapped with SHA-1 / 6 digits / 30s defaults). The frontend `TotpWidget` counts down locally and refetches at each period boundary.
 
@@ -67,7 +72,7 @@ Outside Tauri, `services/vault.ts` simulates the same commands on `demo-vault.ts
 ## Serialization rules
 
 - KDBX entry/group uuids are rendered as hex strings; group UUIDs are stable for the session.
-- `password` round-trips only inside the vault session; it never enters config, logs, or the browser fallback except as demo data.
+- `password` never enters `VaultState` or the Tauri `VaultEntry` payload; reveal, copy, edit-prefill, CSV export, and the security report resolve entry passwords server-side (`get_entry_password`, `export_csv`, `security_report`). The browser fallback keeps demo passwords in `VaultEntry.password` for its local simulation. Entry passwords never enter config, logs, or error strings.
 - `modifiedAt` is refreshed on every mutation.
 
 ## Cross-cutting gates

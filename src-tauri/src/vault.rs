@@ -61,7 +61,6 @@ pub struct VaultEntry {
     pub group_uuid: String,
     pub title: String,
     pub username: String,
-    pub password: String,
     pub url: String,
     pub notes: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,7 +121,6 @@ pub struct VaultGroup {
 pub struct VaultState {
     pub path: String,
     pub file_name: String,
-    pub password: String,
     pub root: VaultGroup,
     pub dirty: bool,
     pub modified_at: String,
@@ -161,6 +159,30 @@ pub struct TotpCode {
     pub valid_for: u64,
     /// Total period in seconds (usually 30).
     pub period: u64,
+}
+
+/// Server-side security analysis. Passwords never cross into the report.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecurityReport {
+    pub total: usize,
+    pub empty: Vec<String>,
+    pub weak: Vec<WeakEntry>,
+    pub duplicates: Vec<DuplicatePasswords>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeakEntry {
+    pub uuid: String,
+    pub bits: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicatePasswords {
+    pub count: usize,
+    pub uuids: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -463,7 +485,6 @@ impl VaultSession {
     fn snapshot(&self) -> Result<VaultState, String> {
         let db = self.require_db()?;
         let path = self.require_path()?;
-        let password = self.require_password()?;
         Ok(VaultState {
             path: path.to_owned(),
             file_name: Path::new(path)
@@ -471,11 +492,122 @@ impl VaultSession {
                 .and_then(|s| s.to_str())
                 .unwrap_or(path)
                 .to_owned(),
-            password: password.to_owned(),
             root: build_group_tree(db),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
         })
+    }
+
+    /// Fetch a single entry's password on demand (never part of `VaultState`).
+    pub fn get_entry_password(&self, uuid: &str) -> Result<String, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned())
+    }
+
+    /// Analyze all entries server-side; no passwords leave the session.
+    pub fn security_report(&self) -> Result<SecurityReport, String> {
+        let db = self.require_db()?;
+        let mut total = 0usize;
+        let mut empty: Vec<String> = Vec::new();
+        let mut weak: Vec<WeakEntry> = Vec::new();
+        let mut by_password: HashMap<String, Vec<String>> = HashMap::new();
+
+        fn scan(
+            group: &keepass::db::GroupRef<'_>,
+            total: &mut usize,
+            empty: &mut Vec<String>,
+            weak: &mut Vec<WeakEntry>,
+            by_password: &mut HashMap<String, Vec<String>>,
+        ) {
+            for entry in group.entries() {
+                *total += 1;
+                let password = entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned();
+                if password.is_empty() {
+                    empty.push(entry.id().uuid().to_string());
+                    continue;
+                }
+                let bits = estimate_entropy(&password);
+                if bits < 72 {
+                    weak.push(WeakEntry {
+                        uuid: entry.id().uuid().to_string(),
+                        bits,
+                    });
+                }
+                by_password
+                    .entry(password)
+                    .or_default()
+                    .push(entry.id().uuid().to_string());
+            }
+            for child in group.groups() {
+                scan(&child, total, empty, weak, by_password);
+            }
+        }
+        scan(
+            &db.root(),
+            &mut total,
+            &mut empty,
+            &mut weak,
+            &mut by_password,
+        );
+
+        weak.sort_by_key(|w| w.bits);
+        let mut duplicates: Vec<DuplicatePasswords> = by_password
+            .into_iter()
+            .filter(|(_, uuids)| uuids.len() > 1)
+            .map(|(_, uuids)| {
+                let count = uuids.len();
+                DuplicatePasswords { count, uuids }
+            })
+            .collect();
+        duplicates.sort_by_key(|d| std::cmp::Reverse(d.count));
+
+        Ok(SecurityReport {
+            total,
+            empty,
+            weak,
+            duplicates,
+        })
+    }
+
+    /// Export all entries as CSV (passwords included) straight to a file.
+    pub fn export_csv(&self, path: &str) -> Result<(), String> {
+        let db = self.require_db()?;
+        let mut lines = vec!["Group,Title,Username,Password,URL,Notes,TOTP,Favorite".to_owned()];
+
+        fn walk(group: &keepass::db::GroupRef<'_>, group_path: &str, lines: &mut Vec<String>) {
+            for entry in group.entries() {
+                let favorite = if entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE) {
+                    "true"
+                } else {
+                    "false"
+                };
+                let row = [
+                    escape_csv(group_path),
+                    escape_csv(entry.get_title().unwrap_or_default()),
+                    escape_csv(entry.get(FIELD_USERNAME).unwrap_or_default()),
+                    escape_csv(entry.get(FIELD_PASSWORD).unwrap_or_default()),
+                    escape_csv(entry.get(FIELD_URL).unwrap_or_default()),
+                    escape_csv(entry.get(FIELD_NOTES).unwrap_or_default()),
+                    escape_csv(entry.get_raw_otp_value().unwrap_or_default()),
+                    escape_csv(favorite),
+                ];
+                lines.push(row.join(","));
+            }
+            for child in group.groups() {
+                let child_path = if group_path.is_empty() {
+                    child.name.clone()
+                } else {
+                    format!("{group_path} / {}", child.name)
+                };
+                walk(&child, &child_path, lines);
+            }
+        }
+        walk(&db.root(), "", &mut lines);
+
+        let content = format!("\u{FEFF}{}\r\n", lines.join("\r\n"));
+        std::fs::write(path, content).map_err(|e| format!("写入文件失败: {e}"))
     }
 }
 
@@ -519,7 +651,6 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         group_uuid: group_uuid.to_owned(),
         title: entry.get_title().unwrap_or_default().to_owned(),
         username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
-        password: entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
         url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
         notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
         totp: entry.get_raw_otp_value().map(str::to_owned),
@@ -557,6 +688,37 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
 
 fn format_iso(time: NaiveDateTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// RFC 4180 cell escaping: quote when the value contains separators or quotes.
+fn escape_csv(value: &str) -> String {
+    if value.contains([',', '"', '\r', '\n']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_owned()
+    }
+}
+
+/// Mirror of the frontend `estimateEntropy` (`src/lib/utils/password.ts`).
+fn estimate_entropy(password: &str) -> u32 {
+    let mut pool = 0u32;
+    if password.chars().any(|c| c.is_ascii_uppercase()) {
+        pool += 26;
+    }
+    if password.chars().any(|c| c.is_ascii_lowercase()) {
+        pool += 26;
+    }
+    if password.chars().any(|c| c.is_ascii_digit()) {
+        pool += 10;
+    }
+    if password.chars().any(|c| !c.is_ascii_alphanumeric()) {
+        pool += 32;
+    }
+    if pool == 0 {
+        return 0;
+    }
+    let length = password.chars().count() as f64;
+    (length * (pool as f64).log2()).round() as u32
 }
 
 fn now_iso() -> String {
@@ -858,7 +1020,7 @@ mod tests {
         assert_eq!(group.entries.len(), 1);
         let entry = &group.entries[0];
         assert_eq!(entry.title, "GitHub");
-        assert_eq!(entry.password, "s3cret");
+        assert_eq!(session.get_entry_password(&entry.uuid).unwrap(), "s3cret");
         assert_eq!(entry.totp.as_deref(), Some("JBSWY3DPEHPK3PXP"));
         let entry_uuid = entry.uuid.clone();
         assert!(entry.created.is_some());
@@ -883,7 +1045,7 @@ mod tests {
             .unwrap();
         let entry = &state.root.children[0].entries[0];
         assert_eq!(entry.title, "GitHub (work)");
-        assert_eq!(entry.password, "s3cret2");
+        assert_eq!(session.get_entry_password(&entry_uuid).unwrap(), "s3cret2");
         assert!(entry.totp.is_none());
 
         let state = session.rename_group(&group.uuid, "Accounts").unwrap();
@@ -1044,16 +1206,13 @@ mod tests {
 
         let json = serde_json::to_value(&state).unwrap();
         let obj = json.as_object().unwrap();
-        for key in [
-            "path",
-            "fileName",
-            "password",
-            "root",
-            "dirty",
-            "modifiedAt",
-        ] {
+        for key in ["path", "fileName", "root", "dirty", "modifiedAt"] {
             assert!(obj.contains_key(key), "missing VaultState key {key}");
         }
+        assert!(
+            !obj.contains_key("password"),
+            "master password leaked in VaultState"
+        );
         let root = json["root"].as_object().unwrap();
         for key in ["uuid", "parentUuid", "name", "children", "entries"] {
             assert!(root.contains_key(key), "missing VaultGroup key {key}");
@@ -1061,17 +1220,13 @@ mod tests {
         let group = &json["root"]["children"][0];
         assert_eq!(group["parentUuid"].as_str(), Some(ROOT_GROUP_UUID));
         let entry = &group["entries"][0];
-        for key in [
-            "uuid",
-            "groupUuid",
-            "title",
-            "username",
-            "password",
-            "url",
-            "notes",
-        ] {
+        for key in ["uuid", "groupUuid", "title", "username", "url", "notes"] {
             assert!(entry.get(key).is_some(), "missing VaultEntry key {key}");
         }
+        assert!(
+            entry.get("password").is_none(),
+            "entry password leaked in VaultEntry"
+        );
         assert!(entry["totp"].is_string());
         // Optional fields absent on the entry are skipped entirely (not null).
         assert!(entry.get("icon").is_none());
@@ -1469,5 +1624,115 @@ mod tests {
             .save_attachment(&uuid, "blob.bin", dest.to_str().unwrap())
             .unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), payload);
+    }
+
+    fn add_entry_with_password(
+        session: &mut VaultSession,
+        group_uuid: &str,
+        title: &str,
+        password: &str,
+    ) -> String {
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: group_uuid.to_owned(),
+                title: title.into(),
+                username: "u".into(),
+                password: password.into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        state.root.children[0].entries.last().unwrap().uuid.clone()
+    }
+
+    #[test]
+    fn get_entry_password_returns_field_on_demand() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let uuid = add_entry_with_password(&mut session, &group_uuid, "E", "hunter2");
+        assert_eq!(session.get_entry_password(&uuid).unwrap(), "hunter2");
+        let err = session.get_entry_password("not-a-uuid").unwrap_err();
+        assert!(err.contains("UUID"));
+    }
+
+    #[test]
+    fn security_report_flags_empty_weak_and_duplicate_passwords() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+
+        let empty_uuid = add_entry_with_password(&mut session, &group_uuid, "Empty", "");
+        let weak_uuid = add_entry_with_password(&mut session, &group_uuid, "Weak", "abc");
+        let strong_pw = "StrongPass#1!";
+        let dup_a = add_entry_with_password(&mut session, &group_uuid, "DupA", strong_pw);
+        let dup_b = add_entry_with_password(&mut session, &group_uuid, "DupB", strong_pw);
+
+        let report = session.security_report().unwrap();
+        assert_eq!(report.total, 4);
+        assert_eq!(report.empty, vec![empty_uuid]);
+        assert_eq!(
+            report.weak,
+            vec![WeakEntry {
+                uuid: weak_uuid,
+                bits: 14
+            }]
+        );
+        assert_eq!(report.duplicates.len(), 1);
+        assert_eq!(report.duplicates[0].count, 2);
+        assert!(report.duplicates[0].uuids.contains(&dup_a));
+        assert!(report.duplicates[0].uuids.contains(&dup_b));
+    }
+
+    #[test]
+    fn export_csv_writes_escaped_rows_and_bom() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Web".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Git,Hub".into(),
+                username: "alice".into(),
+                password: "s3cret".into(),
+                url: "https://x".into(),
+                notes: "line1\nline2".into(),
+                totp: Some("JBSWY3DPEHPK3PXP".into()),
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+
+        let dest = dir.path().join("export.csv");
+        session.export_csv(dest.to_str().unwrap()).unwrap();
+        let text = std::fs::read_to_string(&dest).unwrap();
+
+        assert!(text.starts_with('\u{FEFF}'));
+        assert!(text.contains("Group,Title,Username,Password,URL,Notes,TOTP,Favorite\r\n"));
+        assert!(text.contains("\"Git,Hub\""));
+        assert!(text.contains("\"line1\nline2\""));
+        assert!(text.contains("Web,\"Git,Hub\",alice,s3cret,https://x"));
+        assert!(text.contains("JBSWY3DPEHPK3PXP"));
     }
 }

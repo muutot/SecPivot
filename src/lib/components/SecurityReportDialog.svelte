@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { VaultEntry } from "$lib/types/vault";
+  import type { SecurityReport, VaultEntry } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
-  import { estimateEntropy, entropyLabel } from "$lib/utils/password";
+  import { entropyLabel } from "$lib/utils/password";
 
   interface EntryRow {
     entry: VaultEntry;
@@ -9,41 +9,29 @@
   }
 
   interface Props {
+    report: SecurityReport;
     entries: EntryRow[];
     onclose: () => void;
   }
 
-  let { entries, onclose }: Props = $props();
+  let { report, entries, onclose }: Props = $props();
 
-  const report = $derived.by(() => {
-    const empty: EntryRow[] = [];
-    const weak: EntryRow[] = [];
-    const byPassword = new Map<string, EntryRow[]>();
-    for (const row of entries) {
-      const password = row.entry.password;
-      if (!password) {
-        empty.push(row);
-        continue;
-      }
-      const bits = estimateEntropy(password);
-      if (bits < 72) weak.push(row);
-      const group = byPassword.get(password);
-      if (group) group.push(row);
-      else byPassword.set(password, [row]);
-    }
-    const dupes = [...byPassword.entries()]
-      .filter(([, group]) => group.length > 1)
-      .sort((a, b) => b[1].length - a[1].length);
-    weak.sort((a, b) => estimateEntropy(a.entry.password) - estimateEntropy(b.entry.password));
-    return { empty, weak, dupes };
-  });
+  const byUuid = $derived(new Map(entries.map((row) => [row.entry.uuid, row])));
 
   const totals = $derived({
-    entries: entries.length,
+    entries: report.total,
     empty: report.empty.length,
-    dupes: report.dupes.length,
+    dupes: report.duplicates.length,
     weak: report.weak.length,
   });
+
+  function titleOf(uuid: string): string {
+    return byUuid.get(uuid)?.entry.title || "未命名条目";
+  }
+
+  function pathOf(uuid: string): string {
+    return byUuid.get(uuid)?.path ?? "";
+  }
 </script>
 
 <div class="modal-backdrop" role="presentation">
@@ -52,7 +40,7 @@
       <span class="modal-icon"><AppIcon name="shield" size={18} /></span>
       <div>
         <strong>安全报告</strong>
-        <p>基于当前数据库条目的本地分析，不发送任何数据</p>
+        <p>基于当前数据库的服务端分析，不发送任何数据</p>
       </div>
       <button class="close-button" onclick={onclose} title="关闭" aria-label="关闭"
         ><AppIcon name="x" size={14} /></button
@@ -74,31 +62,26 @@
       <section class="report-section">
         <h2 class="section-title">空密码</h2>
         <ul class="issue-list">
-          {#each report.empty as row (row.entry.uuid)}
+          {#each report.empty as uuid (uuid)}
             <li class="issue-row">
               <AppIcon name="key" size={12} />
-              <span class="issue-title">{row.entry.title || "未命名条目"}</span>
-              <span class="issue-path" title={row.path}>{row.path}</span>
+              <span class="issue-title">{titleOf(uuid)}</span>
+              <span class="issue-path" title={pathOf(uuid)}>{pathOf(uuid)}</span>
             </li>
           {/each}
         </ul>
       </section>
     {/if}
 
-    {#if report.dupes.length > 0}
+    {#if report.duplicates.length > 0}
       <section class="report-section">
         <h2 class="section-title">重复密码</h2>
         <ul class="issue-list">
-          {#each report.dupes as [password, group] (password)}
+          {#each report.duplicates as dup (dup.uuids.join("-"))}
             <li class="issue-row">
               <AppIcon name="copy" size={12} />
-              <span class="issue-title">{password.replace(/./g, "•")}</span>
-              <span class="issue-count">{group.length} 个条目</span>
-              <span
-                class="issue-path"
-                title={group.map((r) => r.entry.title || "未命名").join("、")}
-                >{group.map((r) => r.entry.title || "未命名").join("、")}</span
-              >
+              <span class="issue-title">{dup.uuids.map(titleOf).join("、")}</span>
+              <span class="issue-count">{dup.count} 个条目</span>
             </li>
           {/each}
         </ul>
@@ -109,15 +92,14 @@
       <section class="report-section">
         <h2 class="section-title">弱密码</h2>
         <ul class="issue-list">
-          {#each report.weak as row (row.entry.uuid)}
+          {#each report.weak as item (item.uuid)}
             <li class="issue-row">
               <AppIcon name="key" size={12} />
-              <span class="issue-title">{row.entry.title || "未命名条目"}</span>
-              <span
-                class="strength-label {entropyLabel(estimateEntropy(row.entry.password)).className}"
-                >{entropyLabel(estimateEntropy(row.entry.password)).label}</span
+              <span class="issue-title">{titleOf(item.uuid)}</span>
+              <span class="strength-label {entropyLabel(item.bits).className}"
+                >{entropyLabel(item.bits).label}</span
               >
-              <span class="issue-path" title={row.path}>{row.path}</span>
+              <span class="issue-path" title={pathOf(item.uuid)}>{pathOf(item.uuid)}</span>
             </li>
           {/each}
         </ul>

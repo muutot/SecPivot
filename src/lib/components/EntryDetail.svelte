@@ -20,10 +20,50 @@
   let { entry, groupPath, onfavorite, onedit, ondelete }: Props = $props();
 
   let revealPassword = $state(false);
+  let fetchedPassword = $state("");
+  let passwordLoaded = $state(false);
+  let passwordLoading = $state(false);
   let copied = $state("");
   let activeTab = $state<"fields" | "meta" | "attachments">("fields");
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
+
+  $effect(() => {
+    entry.uuid;
+    revealPassword = false;
+    passwordLoaded = false;
+    fetchedPassword = "";
+  });
+
+  /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
+  async function ensurePassword(): Promise<void> {
+    if (passwordLoaded || passwordLoading) return;
+    passwordLoading = true;
+    try {
+      fetchedPassword = await vault.getEntryPassword(entry.uuid);
+      passwordLoaded = true;
+    } finally {
+      passwordLoading = false;
+    }
+  }
+
+  async function copyPassword(): Promise<void> {
+    try {
+      await ensurePassword();
+      await handleCopy(fetchedPassword, "password", true);
+    } catch {
+      flash("error");
+    }
+  }
+
+  async function toggleReveal(): Promise<void> {
+    try {
+      await ensurePassword();
+      revealPassword = !revealPassword;
+    } catch {
+      flash("error");
+    }
+  }
 
   function flash(kind: string): void {
     copied = kind;
@@ -185,17 +225,13 @@
       <div class="field-block">
         <span class="field-label">密码</span>
         <div class="field-value">
-          <span class="field-text mono">{revealPassword ? entry.password : "••••••••••••"}</span>
-          <button
-            class="copy-btn"
-            onclick={() => handleCopy(entry.password, "password", true)}
-            title="复制密码"
-          >
+          <span class="field-text mono">{revealPassword ? fetchedPassword : "••••••••••••"}</span>
+          <button class="copy-btn" onclick={copyPassword} title="复制密码">
             <AppIcon name="copy" size={13} />
           </button>
           <button
             class="copy-btn"
-            onclick={() => (revealPassword = !revealPassword)}
+            onclick={toggleReveal}
             title={revealPassword ? "隐藏密码" : "显示密码"}
           >
             <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />

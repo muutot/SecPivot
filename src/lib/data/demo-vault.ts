@@ -6,7 +6,6 @@ export function buildDemoVaultState(): VaultState {
   return {
     path: DEMO_VAULT_PATH,
     fileName: "vault.kdbx",
-    password: "",
     dirty: false,
     modifiedAt: new Date().toISOString(),
     root: {

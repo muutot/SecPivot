@@ -9,6 +9,7 @@ KeyVault stores credentials in standard KDBX 4.0 files. This reference documents
 - **No persistence of secrets**: config (`config.json`) stores only preferences, never passwords or vault content. The browser demo fallback stores fake demo data only.
 - **Clipboard hygiene**: copying a password schedules an automatic clear after `clipboardClearSeconds` (0 disables). The timer is reset on each copy and skipped when the user copies other content afterward. Lock clears the clipboard when `clearOnLock` is enabled.
 - **No secret logging**: password and vault content must never be written to logs, debug output, or error strings.
+- **Passwords never reach the frontend**: `VaultState`/`VaultEntry` carry no entry passwords in the Tauri runtime. Reveal/copy, editor prefill, CSV export, and the security report resolve secrets server-side (`get_entry_password`, `export_csv`, `security_report`) so plaintext crosses the IPC only on explicit user action. The browser demo fallback keeps fake passwords in `VaultEntry.password` for its local simulation only.
 
 ## Lock lifecycle
 
@@ -34,7 +35,7 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCh
 ## Threat notes / accepted trade-offs
 
 - No keyfile, Windows Hello, or hardware-token unlock yet (roadmap).
-- CSV export writes plaintext credentials (including passwords and TOTP seeds) to a user-chosen file via the save dialog and the `write_text_file` command; the user must keep that file as secure as the vault itself.
+- CSV export writes plaintext credentials (including passwords and TOTP seeds) to a user-chosen file via the save dialog and the `export_csv` command; the user must keep that file as secure as the vault itself. The security report analyzes empty/weak/duplicate passwords entirely server-side — only counts, uuids, and entropy bits cross the IPC.
 - Auto-type replays entry fields as keystrokes via `enigo`; fields are resolved server-side from the vault session (the frontend never sends the password in the `auto_type` payload), a 300 ms grace period lets the user focus the target window, and execution runs on a background thread. The sequence itself may still be observed by other applications on the same machine — an accepted trade-off of the feature.
 - No TOTP compute or clipboard watcher yet (roadmap).
 - The WebView clipboard write relies on platform clipboard; scheduled clearing uses a timer and cannot guarantee clearing if the process exits before the timer fires.
@@ -42,5 +43,5 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCh
 ## Verification for security changes
 
 - Targeted tests for lock/clear/session semantics (Rust).
-- Confirm no password reaches `config.json` or logs by construction and test.
+- Confirm no password reaches `config.json`, logs, or the `VaultState`/`VaultEntry` payload by construction and test.
 - Browser fallback changes are UI-only; do not claim desktop security behavior from them.

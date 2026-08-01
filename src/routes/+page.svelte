@@ -9,7 +9,13 @@
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, installAutoLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
-  import type { EntryInput, VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
+  import type {
+    EntryInput,
+    VaultEntry,
+    VaultGroup,
+    VaultState,
+    SecurityReport,
+  } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
@@ -37,6 +43,7 @@
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
+  let securityReport = $state<SecurityReport | null>(null);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -341,17 +348,6 @@
 
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
-    const rows = reportEntries.map(({ entry, path }) => ({
-      group: path,
-      title: entry.title,
-      username: entry.username,
-      password: entry.password,
-      url: entry.url,
-      notes: entry.notes,
-      totp: entry.totp ?? "",
-      favorite: entry.favorite === true,
-    }));
-    const csv = buildCsv(rows);
     try {
       if (isTauriRuntime()) {
         const selected = await save({
@@ -359,8 +355,19 @@
           filters: [{ name: "CSV 文件", extensions: ["csv"] }],
         });
         if (!selected) return;
-        await invoke("write_text_file", { path: String(selected), content: csv });
+        await invoke("export_csv", { path: String(selected) });
       } else {
+        const rows = reportEntries.map(({ entry, path }) => ({
+          group: path,
+          title: entry.title,
+          username: entry.username,
+          password: entry.password ?? "",
+          url: entry.url,
+          notes: entry.notes,
+          totp: entry.totp ?? "",
+          favorite: entry.favorite === true,
+        }));
+        const csv = buildCsv(rows);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -372,6 +379,28 @@
       flash("已导出 CSV");
     } catch (e) {
       flash(`导出失败：${e}`);
+    }
+  }
+
+  async function handleOpenReport(): Promise<void> {
+    if (reportOpen || busy || !currentVault) return;
+    busy = true;
+    try {
+      securityReport = await vault.securityReport();
+      reportOpen = true;
+    } catch (e) {
+      flash(`安全分析失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function copyEntryPassword(entry: VaultEntry): Promise<void> {
+    try {
+      const password = await vault.getEntryPassword(entry.uuid);
+      await copyEntryValue(password, "密码", true);
+    } catch {
+      flash("复制失败");
     }
   }
 
@@ -619,7 +648,12 @@
     return [
       { id: "edit", label: "编辑条目", icon: "edit" },
       { id: "copy-username", label: "复制用户名", icon: "user", disabled: !entry.username },
-      { id: "copy-password", label: "复制密码", icon: "copy", disabled: !entry.password },
+      {
+        id: "copy-password",
+        label: "复制密码",
+        icon: "copy",
+        disabled: !isTauriRuntime() && !entry.password,
+      },
       { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
       { id: "autotype", label: "自动填充", icon: "keyboard" },
       { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
@@ -641,8 +675,7 @@
     if (id === "edit") openEditEntry(entry);
     else if (id === "copy-username" && entry.username)
       void copyEntryValue(entry.username, "用户名");
-    else if (id === "copy-password" && entry.password)
-      void copyEntryValue(entry.password, "密码", true);
+    else if (id === "copy-password") void copyEntryPassword(entry);
     else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "favorite") void toggleFavorite(entry);
@@ -725,7 +758,7 @@
         >
           <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
         </button>
-        <button class="icon-action" onclick={() => (reportOpen = true)} title="安全报告">
+        <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
           <AppIcon name="shield" size={15} />
         </button>
         <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
@@ -882,8 +915,7 @@
                       title="复制密码"
                       onclick={(e) => {
                         e.stopPropagation();
-                        if (row.entry.password)
-                          void copyEntryValue(row.entry.password, "密码", true);
+                        void copyEntryPassword(row.entry);
                       }}
                     >
                       <AppIcon name="copy" size={12} />
@@ -965,8 +997,12 @@
   />
 {/if}
 
-{#if reportOpen}
-  <SecurityReportDialog entries={reportEntries} onclose={() => (reportOpen = false)} />
+{#if reportOpen && securityReport}
+  <SecurityReportDialog
+    report={securityReport}
+    entries={reportEntries}
+    onclose={() => (reportOpen = false)}
+  />
 {/if}
 
 {#if groupModalOpen}

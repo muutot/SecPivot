@@ -8,6 +8,7 @@
     AttachmentInput,
   } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
+  import { vault } from "$lib/services/vault";
   import { generatePassword, estimateEntropy, entropyLabel } from "$lib/utils/password";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
@@ -24,7 +25,8 @@
 
   let title = $state(entry?.title ?? "");
   let username = $state(entry?.username ?? "");
-  let password = $state(entry?.password ?? "");
+  let password = $state("");
+  let passwordLoading = $state(false);
   let url = $state(entry?.url ?? "");
   let notes = $state(entry?.notes ?? "");
   let totp = $state(entry?.totp ?? "");
@@ -35,6 +37,23 @@
     entry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
+
+  /** In the Tauri runtime the current password must be fetched on demand. */
+  $effect(() => {
+    const targetUuid = entry?.uuid;
+    password = "";
+    if (!targetUuid) return;
+    passwordLoading = true;
+    void vault
+      .getEntryPassword(targetUuid)
+      .then((value) => {
+        password = value;
+        passwordLoading = false;
+      })
+      .catch(() => {
+        passwordLoading = false;
+      });
+  });
 
   const entries = $derived.by(() => {
     const list: { name: string; uuid: string }[] = [];
@@ -164,6 +183,8 @@
             type={showPassword ? "text" : "password"}
             bind:value={password}
             autocomplete="new-password"
+            disabled={passwordLoading}
+            placeholder={passwordLoading ? "加载中…" : ""}
           />
           <button class="icon-btn" onclick={generate} title="生成密码">
             <AppIcon name="refresh" size={14} />
