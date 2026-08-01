@@ -21,6 +21,7 @@
   let path = $state("");
   let password = $state("");
   let confirm = $state("");
+  let keyfilePath = $state("");
   let showPassword = $state(false);
   let isDemo = $state(false);
 
@@ -38,8 +39,17 @@
       isDemo = true;
       password = "";
     }
+    keyfilePath = "";
     error = "";
     modal = "open";
+  }
+
+  async function pickKeyfile(): Promise<void> {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "密钥文件", extensions: ["key", "keyx", "xml", "txt"] }],
+    });
+    if (selected) keyfilePath = String(selected);
   }
 
   async function confirmOpen(): Promise<void> {
@@ -54,7 +64,7 @@
     busy = true;
     error = "";
     try {
-      await vault.open(path, password);
+      await vault.open(path, password, keyfilePath || undefined);
       modal = "none";
       onopened();
     } catch (e) {
@@ -67,6 +77,7 @@
   function openRecent(file: string): void {
     path = file;
     isDemo = false;
+    keyfilePath = "";
     error = "";
     modal = "open";
   }
@@ -75,6 +86,7 @@
     path = "";
     password = "";
     confirm = "";
+    keyfilePath = "";
     error = "";
     modal = "create";
   }
@@ -119,6 +131,7 @@
         kdf: settings.database.kdf,
         cipher: settings.database.cipher,
         compression: settings.database.compression,
+        keyfile: keyfilePath || undefined,
       });
       modal = "none";
       onopened();
@@ -225,6 +238,24 @@
           <span>确认主密码</span>
           <div class="path-row">
             <input class="text-input" type="password" bind:value={confirm} />
+          </div>
+        </label>
+      {/if}
+
+      {#if isTauriRuntime()}
+        <label class="field">
+          <span>密钥文件(可选)</span>
+          <div class="path-row">
+            <input
+              class="text-input"
+              type="text"
+              bind:value={keyfilePath}
+              placeholder="点击右侧选择密钥文件"
+              readonly
+            />
+            <button class="browse-button" onclick={pickKeyfile} title="选择密钥文件">
+              <AppIcon name="folder" size={15} />
+            </button>
           </div>
         </label>
       {/if}

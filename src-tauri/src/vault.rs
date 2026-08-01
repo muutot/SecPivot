@@ -190,14 +190,34 @@ pub struct DuplicatePasswords {
 // ---------------------------------------------------------------------------
 
 /// The currently open vault. `db` holds the decrypted database; `password`
-/// is kept only for save and zeroized on close.
+/// and `keyfile` are kept only for save and cleared on close.
 #[derive(Default)]
 pub struct VaultSession {
     path: Option<String>,
     password: Option<String>,
+    keyfile: Option<Vec<u8>>,
     db: Option<Database>,
     dirty: bool,
     modified_at: String,
+}
+
+/// Combine password and/or keyfile into a `DatabaseKey`. At least one
+/// component must be present.
+fn build_database_key(password: &str, keyfile: Option<&[u8]>) -> Result<DatabaseKey, String> {
+    if password.is_empty() && keyfile.is_none() {
+        return Err("主密码不能为空".to_owned());
+    }
+    let mut key = DatabaseKey::new();
+    if !password.is_empty() {
+        key = key.with_password(password);
+    }
+    if let Some(bytes) = keyfile {
+        let mut cursor = std::io::Cursor::new(bytes);
+        key = key
+            .with_keyfile(&mut cursor)
+            .map_err(|e| format!("读取密钥文件失败: {e}"))?;
+    }
+    Ok(key)
 }
 
 impl VaultSession {
@@ -205,20 +225,28 @@ impl VaultSession {
         self.db.is_some()
     }
 
-    /// Decrypt and open an existing `.kdbx`.
-    pub fn open(&mut self, path: &Path, password: &str) -> Result<VaultState, String> {
-        if password.is_empty() {
-            return Err("主密码不能为空".to_owned());
-        }
+    /// Decrypt and open an existing `.kdbx`, optionally with a keyfile.
+    pub fn open(
+        &mut self,
+        path: &Path,
+        password: &str,
+        keyfile: Option<&Path>,
+    ) -> Result<VaultState, String> {
+        let keyfile_bytes = match keyfile {
+            Some(keyfile_path) => {
+                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
+            }
+            None => None,
+        };
+        let key = build_database_key(password, keyfile_bytes.as_deref())?;
         let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
-        let key = DatabaseKey::new().with_password(password);
         let db = Database::parse(&data, key).map_err(classify_open_error)?;
-        self.replace(db, path, password);
+        self.replace(db, path, password, keyfile_bytes);
         self.snapshot()
     }
 
     /// Create an empty vault with the given KDF / cipher / compression and
-    /// persist it immediately.
+    /// persist it immediately. A keyfile may be attached as a second factor.
     pub fn create(
         &mut self,
         path: &Path,
@@ -226,22 +254,28 @@ impl VaultSession {
         kdf: &str,
         cipher: &str,
         compression: &str,
+        keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        if password.is_empty() {
-            return Err("主密码不能为空".to_owned());
-        }
+        let keyfile_bytes = match keyfile {
+            Some(keyfile_path) => {
+                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
+            }
+            None => None,
+        };
+        let key = build_database_key(password, keyfile_bytes.as_deref())?;
         let mut db = Database::new();
         apply_kdf(&mut db, kdf)?;
         apply_cipher(&mut db, cipher)?;
         apply_compression(&mut db, compression)?;
-        save_database(&db, path, password)?;
-        self.replace(db, path, password);
+        save_database(&db, path, key)?;
+        self.replace(db, path, password, keyfile_bytes);
         self.snapshot()
     }
 
     pub fn close(&mut self) {
         self.path = None;
         self.password = None;
+        self.keyfile = None;
         self.db = None;
         self.dirty = false;
         self.modified_at.clear();
@@ -258,7 +292,8 @@ impl VaultSession {
         let path = self.require_path()?.to_owned();
         let password = self.require_password()?.to_owned();
         let db = self.require_db()?;
-        save_database(db, Path::new(&path), &password)?;
+        let key = build_database_key(&password, self.keyfile.as_deref())?;
+        save_database(db, Path::new(&path), key)?;
         self.dirty = false;
         self.modified_at = now_iso();
         self.snapshot()
@@ -449,9 +484,10 @@ impl VaultSession {
 
     // -- internals ----------------------------------------------------------
 
-    fn replace(&mut self, db: Database, path: &Path, password: &str) {
+    fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
         self.path = Some(path.to_string_lossy().into_owned());
         self.password = Some(password.to_owned());
+        self.keyfile = keyfile;
         self.db = Some(db);
         self.dirty = false;
         self.modified_at = now_iso();
@@ -873,8 +909,7 @@ fn classify_open_error<E: std::fmt::Display>(e: E) -> String {
     }
 }
 
-fn save_database(db: &Database, path: &Path, password: &str) -> Result<(), String> {
-    let key = DatabaseKey::new().with_password(password);
+fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key)
         .map_err(|e| format!("序列化数据库失败: {e}"))?;
@@ -948,9 +983,20 @@ mod tests {
         let path = dir.path().join("test.kdbx");
         let mut session = VaultSession::default();
         session
-            .create(&path, "master-password", "Aes", "Aes256", "None")
+            .create(&path, "master-password", "Aes", "Aes256", "None", None)
             .unwrap();
         (session, path)
+    }
+
+    /// Write a KeePass-style binary keyfile and return its path.
+    fn write_keyfile(dir: &TempDir) -> std::path::PathBuf {
+        let keyfile = dir.path().join("test.key");
+        let mut bytes = Vec::new();
+        for i in 0..64u8 {
+            bytes.push(i.wrapping_mul(7).wrapping_add(3));
+        }
+        std::fs::write(&keyfile, bytes).unwrap();
+        keyfile
     }
 
     #[test]
@@ -964,7 +1010,7 @@ mod tests {
         drop(session);
 
         let mut reopened = VaultSession::default();
-        let state = reopened.open(&path, "master-password").unwrap();
+        let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 0);
         assert!(reopened.is_open());
     }
@@ -975,7 +1021,7 @@ mod tests {
         let (session, path) = create_session(&dir);
         drop(session);
         let mut reopened = VaultSession::default();
-        let err = reopened.open(&path, "wrong").unwrap_err();
+        let err = reopened.open(&path, "wrong", None).unwrap_err();
         assert!(err.contains("密码"), "unexpected error: {err}");
     }
 
@@ -983,7 +1029,7 @@ mod tests {
     fn empty_password_is_rejected() {
         let dir = TempDir::new().unwrap();
         let (_session, path) = create_session(&dir);
-        let err = VaultSession::default().open(&path, "").unwrap_err();
+        let err = VaultSession::default().open(&path, "", None).unwrap_err();
         assert!(err.contains("主密码"));
         assert!(!VaultSession::default().is_open());
     }
@@ -1070,7 +1116,7 @@ mod tests {
         drop(session);
 
         let mut reopened = VaultSession::default();
-        let state = reopened.open(&path, "master-password").unwrap();
+        let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
     }
@@ -1174,7 +1220,7 @@ mod tests {
         // Unknown kdf/cipher/compression rejected at create time.
         let path = dir.path().join("bad.kdbx");
         let err = VaultSession::default()
-            .create(&path, "pw", "scrypt", "Aes256", "None")
+            .create(&path, "pw", "scrypt", "Aes256", "None", None)
             .unwrap_err();
         assert!(err.contains("kdf"));
     }
@@ -1428,7 +1474,7 @@ mod tests {
 
         let mut reopened = VaultSession::default();
         let _ = reopened
-            .open(&dir.path().join("test.kdbx"), "master-password")
+            .open(&dir.path().join("test.kdbx"), "master-password", None)
             .unwrap();
         let favorite = reopened.snapshot().unwrap().root.children[0].entries[0].favorite;
         assert!(favorite);
@@ -1536,7 +1582,7 @@ mod tests {
         drop(session);
         let mut reopened = VaultSession::default();
         let state = reopened
-            .open(&dir.path().join("test.kdbx"), "master-password")
+            .open(&dir.path().join("test.kdbx"), "master-password", None)
             .unwrap();
         let entry = &state.root.children[0].entries[0];
         assert_eq!(entry.custom_fields.len(), 1);
@@ -1624,6 +1670,83 @@ mod tests {
             .save_attachment(&uuid, "blob.bin", dest.to_str().unwrap())
             .unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), payload);
+    }
+
+    #[test]
+    fn keyfile_round_trip_requires_the_keyfile() {
+        let dir = TempDir::new().unwrap();
+        let keyfile = write_keyfile(&dir);
+        let path = dir.path().join("secured.kdbx");
+        let mut session = VaultSession::default();
+        session
+            .create(
+                &path,
+                "master-password",
+                "Aes",
+                "Aes256",
+                "None",
+                Some(&keyfile),
+            )
+            .unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let err = reopened.open(&path, "master-password", None).unwrap_err();
+        assert!(err.contains("密码"), "unexpected error: {err}");
+
+        let mut reopened = VaultSession::default();
+        let state = reopened
+            .open(&path, "master-password", Some(&keyfile))
+            .unwrap();
+        assert!(reopened.is_open());
+        assert_eq!(state.root.name, "Root");
+
+        let mut session = reopened;
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Mail".into(),
+            })
+            .unwrap();
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened
+            .open(&path, "master-password", Some(&keyfile))
+            .unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "Mail");
+    }
+
+    #[test]
+    fn keyfile_only_database_opens_without_password() {
+        let dir = TempDir::new().unwrap();
+        let keyfile = write_keyfile(&dir);
+        let path = dir.path().join("keyonly.kdbx");
+        let mut session = VaultSession::default();
+        session
+            .create(&path, "", "Aes", "Aes256", "None", Some(&keyfile))
+            .unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "", Some(&keyfile)).unwrap();
+        assert!(reopened.is_open());
+        assert_eq!(state.root.name, "Root");
+        let err = reopened.open(&path, "anything", None).unwrap_err();
+        assert!(err.contains("密码"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn missing_keyfile_path_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("nope.key");
+        let path = dir.path().join("x.kdbx");
+        let err = VaultSession::default()
+            .open(&path, "pw", Some(&missing))
+            .unwrap_err();
+        assert!(err.contains("密钥文件"), "unexpected error: {err}");
     }
 
     fn add_entry_with_password(

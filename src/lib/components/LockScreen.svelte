@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { open } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
+  import { isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -11,6 +13,7 @@
   let { remembered, onopened, onswitch }: Props = $props();
 
   let password = $state("");
+  let keyfilePath = $state("");
   let showPassword = $state(false);
   let busy = $state(false);
   let error = $state("");
@@ -20,16 +23,24 @@
     inputEl?.focus();
   });
 
+  async function pickKeyfile(): Promise<void> {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "密钥文件", extensions: ["key", "keyx", "xml", "txt"] }],
+    });
+    if (selected) keyfilePath = String(selected);
+  }
+
   async function unlock(): Promise<void> {
     if (!remembered) return;
-    if (!password) {
-      error = "请输入主密码";
+    if (!password && !keyfilePath) {
+      error = "请输入主密码或选择密钥文件";
       return;
     }
     busy = true;
     error = "";
     try {
-      await vault.open(remembered.path, password);
+      await vault.open(remembered.path, password, keyfilePath || undefined);
       onopened();
     } catch (e) {
       error = String(e);
@@ -64,6 +75,22 @@
         <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
       </button>
     </div>
+
+    {#if isTauriRuntime()}
+      <div class="unlock-row">
+        <input
+          class="text-input"
+          type="text"
+          bind:value={keyfilePath}
+          placeholder="密钥文件(可选)"
+          readonly
+          disabled={busy}
+        />
+        <button class="browse-button" onclick={pickKeyfile} title="选择密钥文件">
+          <AppIcon name="folder" size={15} />
+        </button>
+      </div>
+    {/if}
 
     {#if error}
       <p class="modal-error">{error}</p>

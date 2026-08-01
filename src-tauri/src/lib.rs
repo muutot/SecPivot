@@ -35,11 +35,16 @@ fn open_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
     password: String,
+    keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .open(Path::new(&path), &password)
+        .open(
+            Path::new(&path),
+            &password,
+            keyfile.as_deref().map(Path::new),
+        )
 }
 
 #[tauri::command]
@@ -50,11 +55,19 @@ fn create_vault(
     kdf: String,
     cipher: String,
     compression: String,
+    keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .create(Path::new(&path), &password, &kdf, &cipher, &compression)
+        .create(
+            Path::new(&path),
+            &password,
+            &kdf,
+            &cipher,
+            &compression,
+            keyfile.as_deref().map(Path::new),
+        )
 }
 
 #[tauri::command]

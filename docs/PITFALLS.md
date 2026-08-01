@@ -14,9 +14,10 @@ Recurring traps discovered while developing KeyVault. Read before touching the r
 ## Backend / vault
 
 - **KDBX passwords never enter `config.json` or error strings.** Keep key material inside the session state; error messages must be generic on auth failure.
+- **Keyfile bytes live in the session, never the frontend or config.** `open_vault`/`create_vault` take a user-picked path; the backend reads and holds the raw bytes for save and clears them on `close_vault`. A passwordless vault is valid only with a keyfile (KeePass-compatible).
 - **The root group is virtual.** Frontend `VaultState.root` maps to the DB's root group; keep `children`/`entries` split consistent or save will be wrong.
 - **UUIDs must be stable across the session.** Render KDBX uuid bytes as hex and reuse them as the frontend `uuid`; regenerating on each mutation breaks selection/editing.
-- **Save must re-open with the stored key, not re-derive from a lost password.** Hold `DatabaseKey` or the password in the session for the duration; zeroize on close.
+- **Save must re-open with the stored key, not re-derive from a lost password.** Hold `DatabaseKey` or the password (and keyfile bytes) in the session for the duration; zeroize on close.
 - **Browser demo behavior is not desktop evidence.** Do not check desktop KDBX TODOs from `npm run dev` screenshots or localStorage behavior.
 
 ## Settings / style

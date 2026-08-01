@@ -97,6 +97,8 @@ export interface TotpCode {
 export interface OpenVaultRequest {
   path: string;
   password: string;
+  /** Optional keyfile path; only meaningful in the Tauri runtime. */
+  keyfile?: string;
 }
 
 export interface CreateVaultRequest {
@@ -105,6 +107,8 @@ export interface CreateVaultRequest {
   kdf: string;
   cipher: string;
   compression: string;
+  /** Optional keyfile path; only meaningful in the Tauri runtime. */
+  keyfile?: string;
 }
 
 export const ROOT_GROUP_NAME = "Root";

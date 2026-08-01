@@ -34,7 +34,7 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCh
 
 ## Threat notes / accepted trade-offs
 
-- No keyfile, Windows Hello, or hardware-token unlock yet (roadmap).
+- Keyfile unlock is supported as a second factor: the keyfile path is user-picked, its bytes are read and kept in the session for save, and cleared on close. Keyfile contents never enter config, logs, or the frontend. Windows Hello and hardware-token (challenge-response) unlock remain on the roadmap.
 - CSV export writes plaintext credentials (including passwords and TOTP seeds) to a user-chosen file via the save dialog and the `export_csv` command; the user must keep that file as secure as the vault itself. The security report analyzes empty/weak/duplicate passwords entirely server-side — only counts, uuids, and entropy bits cross the IPC.
 - Auto-type replays entry fields as keystrokes via `enigo`; fields are resolved server-side from the vault session (the frontend never sends the password in the `auto_type` payload), a 300 ms grace period lets the user focus the target window, and execution runs on a background thread. The sequence itself may still be observed by other applications on the same machine — an accepted trade-off of the feature.
 - No TOTP compute or clipboard watcher yet (roadmap).

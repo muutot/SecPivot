@@ -19,7 +19,7 @@ import { computeSecurityReport } from "$lib/utils/security-report";
 interface VaultStore {
   subscribe: typeof state.subscribe;
   get: () => VaultState | null;
-  open: (path: string, password: string) => Promise<VaultState>;
+  open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
   create: (request: CreateVaultRequest) => Promise<VaultState>;
   close: () => Promise<void>;
   save: () => Promise<VaultState>;
@@ -174,9 +174,13 @@ export const vault: VaultStore = {
     remembered.set(null);
   },
 
-  async open(path, password): Promise<VaultState> {
+  async open(path, password, keyfile): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("open_vault", { path, password });
+      const result = await backendInvoke<VaultState>("open_vault", {
+        path,
+        password,
+        keyfile: keyfile || null,
+      });
       state.set(result);
       remembered.set({ path: result.path, fileName: result.fileName });
       rememberRecent(result.path);
@@ -194,7 +198,10 @@ export const vault: VaultStore = {
 
   async create(request: CreateVaultRequest): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("create_vault", { ...request });
+      const result = await backendInvoke<VaultState>("create_vault", {
+        ...request,
+        keyfile: request.keyfile || null,
+      });
       state.set(result);
       remembered.set({ path: result.path, fileName: result.fileName });
       rememberRecent(result.path);
