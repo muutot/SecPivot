@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { appSettings } from "$lib/services/settings";
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -49,7 +49,7 @@
         <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
       </div>
     </div>
-    <label class="field-label" for="remote-endpoint">服务地址</label>
+    <label class="settings-label" for="remote-endpoint">服务地址</label>
     <input
       id="remote-endpoint"
       class="settings-input"
@@ -58,9 +58,9 @@
       placeholder="https://s3.amazonaws.com"
       oninput={(e) => change("endpoint", e.currentTarget.value)}
     />
-    <div class="field-row">
+    <div class="settings-row">
       <div>
-        <label class="field-label" for="remote-region">区域</label>
+        <label class="settings-label" for="remote-region">区域</label>
         <input
           id="remote-region"
           class="settings-input"
@@ -71,7 +71,7 @@
         />
       </div>
       <div>
-        <label class="field-label" for="remote-bucket">存储桶</label>
+        <label class="settings-label" for="remote-bucket">存储桶</label>
         <input
           id="remote-bucket"
           class="settings-input"
@@ -92,7 +92,7 @@
         <p>明文保存在 config.json，仅用于访问远程存储，与主密码无关</p>
       </div>
     </div>
-    <label class="field-label" for="remote-access-key">Access Key</label>
+    <label class="settings-label" for="remote-access-key">Access Key</label>
     <input
       id="remote-access-key"
       class="settings-input"
@@ -103,7 +103,7 @@
       placeholder="AKIA..."
       oninput={(e) => change("accessKey", e.currentTarget.value)}
     />
-    <label class="field-label" for="remote-secret-key">Secret Key</label>
+    <label class="settings-label" for="remote-secret-key">Secret Key</label>
     <input
       id="remote-secret-key"
       class="settings-input"
@@ -114,7 +114,7 @@
       placeholder="••••••••"
       oninput={(e) => change("secretKey", e.currentTarget.value)}
     />
-    <p class="field-note">
+    <p class="settings-note warn">
       风险提示：凭据以明文写入
       config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
     </p>
@@ -128,7 +128,7 @@
         <p>远程文件列表前缀与“保存到本地”模式的落盘目录</p>
       </div>
     </div>
-    <label class="field-label" for="remote-prefix">对象前缀(可选)</label>
+    <label class="settings-label" for="remote-prefix">对象前缀(可选)</label>
     <input
       id="remote-prefix"
       class="settings-input"
@@ -137,7 +137,7 @@
       placeholder="vaults/"
       oninput={(e) => change("prefix", e.currentTarget.value)}
     />
-    <label class="field-label" for="remote-local-dir">本地镜像目录</label>
+    <label class="settings-label" for="remote-local-dir">本地镜像目录</label>
     <input
       id="remote-local-dir"
       class="settings-input"
@@ -146,7 +146,7 @@
       placeholder="remote"
       oninput={(e) => change("localDir", e.currentTarget.value)}
     />
-    <p class="field-note">
+    <p class="settings-note">
       本地副本保存在 Storage/remote/{remote.localDir || "remote"}/ 下，仅允许字母、数字、- 与 _。
     </p>
   </section>
@@ -176,25 +176,3 @@
 
   <p class="auto-save-note">修改即时生效并自动保存</p>
 </div>
-
-<style>
-  .field-label {
-    display: block;
-    margin: 10px 0 5px;
-    color: var(--text-muted);
-    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .field-note {
-    margin: 8px 0 0;
-    color: var(--text-faint);
-    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
-    line-height: 1.5;
-  }
-</style>

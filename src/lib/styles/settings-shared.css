@@ -283,6 +283,35 @@ header p {
   padding-right: 26px;
 }
 
+/* ── form labels, rows and notes ── */
+.settings-label {
+  display: block;
+  margin: 10px 0 5px;
+  color: var(--text-muted);
+  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.settings-note {
+  margin: 8px 0 0;
+  color: var(--text-faint);
+  font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
+  line-height: 1.5;
+}
+
+.settings-note.warn {
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--warning-color) 30%, transparent);
+  border-radius: var(--settings-control-radius, 6px);
+  color: color-mix(in srgb, var(--warning-color) 70%, var(--text-primary));
+  background: color-mix(in srgb, var(--warning-color) 8%, var(--card-bg));
+}
+
 /* ── feedback ── */
 .settings-feedback {
   position: absolute;
