@@ -155,7 +155,7 @@
       <button
         class="welcome-button primary"
         onclick={() => void unlock()}
-        disabled={busy || !password}
+        disabled={busy || (!password && !keyfilePath)}
       >
         {busy ? "解锁中…" : "解锁"}
       </button>
