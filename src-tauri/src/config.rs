@@ -15,7 +15,7 @@ const CONFIG_FILE: &str = "config.json";
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct ThemeColors {
     pub bg: String,
     pub settings_bg: String,
@@ -98,7 +98,7 @@ impl Default for ThemeColors {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct FontSizes {
     pub base: i32,
     pub secondary: i32,
@@ -118,13 +118,38 @@ impl Default for FontSizes {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
+pub struct DensitySettings {
+    pub group_gap: i32,
+    pub group_padding_y: i32,
+    pub group_indent: i32,
+    pub group_radius: i32,
+    pub show_group_icon: bool,
+    pub show_group_chevron: bool,
+}
+
+impl Default for DensitySettings {
+    fn default() -> Self {
+        Self {
+            group_gap: 2,
+            group_padding_y: 3,
+            group_indent: 12,
+            group_radius: 6,
+            show_group_icon: true,
+            show_group_chevron: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct GeneralSettings {
     pub language: String,
     pub theme: String,
     pub theme_colors: ThemeColors,
     pub custom_presets: Vec<ThemeColors>,
     pub compact_mode: bool,
+    pub density: DensitySettings,
     pub show_descriptions: bool,
     pub font_sizes: FontSizes,
     pub window_effect: String,
@@ -140,6 +165,7 @@ impl Default for GeneralSettings {
             theme_colors: ThemeColors::dark(),
             custom_presets: Vec::new(),
             compact_mode: false,
+            density: DensitySettings::default(),
             show_descriptions: true,
             font_sizes: FontSizes::default(),
             window_effect: "off".into(),
@@ -150,7 +176,7 @@ impl Default for GeneralSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct SecuritySettings {
     pub auto_lock_minutes: i32,
     pub clipboard_clear_seconds: i32,
@@ -172,7 +198,7 @@ impl Default for SecuritySettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct PasswordGeneratorSettings {
     pub length: i32,
     pub include_upper: bool,
@@ -198,7 +224,7 @@ impl Default for PasswordGeneratorSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct DatabaseDefaults {
     pub kdf: String,
     pub cipher: String,
@@ -218,7 +244,7 @@ impl Default for DatabaseDefaults {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub general: GeneralSettings,
     pub security: SecuritySettings,
@@ -299,6 +325,11 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.font_sizes.card_preview =
         clamp_i32(config.general.font_sizes.card_preview, 9, 16, 11);
     config.general.window_opacity = clamp_i32(config.general.window_opacity, 40, 100, 100);
+    config.general.density.group_gap = clamp_i32(config.general.density.group_gap, 0, 16, 2);
+    config.general.density.group_padding_y =
+        clamp_i32(config.general.density.group_padding_y, 0, 16, 3);
+    config.general.density.group_indent = clamp_i32(config.general.density.group_indent, 4, 32, 12);
+    config.general.density.group_radius = clamp_i32(config.general.density.group_radius, 0, 12, 6);
 
     config.security.auto_lock_minutes = clamp_i32(config.security.auto_lock_minutes, 0, 240, 5);
     config.security.clipboard_clear_seconds =
@@ -396,6 +427,8 @@ mod tests {
         assert_eq!(defaults.general.theme, "dark");
         assert_eq!(defaults.database.kdf, "Argon2id");
         assert_eq!(defaults.general.font_sizes.base, 14);
+        assert_eq!(defaults.general.density.group_gap, 2);
+        assert_eq!(defaults.general.density.group_radius, 6);
 
         let saved = store.set(defaults.clone()).unwrap();
         assert_eq!(saved.general.theme, "dark");
@@ -404,6 +437,76 @@ mod tests {
         let again = reloaded.get().unwrap();
         assert_eq!(again.general.theme, "dark");
         assert_eq!(again.general.theme_colors.accent, "#ff5050");
+        assert_eq!(again.general.density.group_gap, 2);
+    }
+
+    #[test]
+    fn old_config_without_density_loads_with_defaults() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        fs::create_dir_all(&conf).unwrap();
+        let text = r#"{
+          "general": {
+            "language": "zh-CN",
+            "theme": "light",
+            "themeColors": {},
+            "customPresets": [],
+            "compactMode": true,
+            "showDescriptions": true,
+            "fontSizes": { "base": 14, "secondary": 11, "cardTitle": 13, "cardPreview": 11 },
+            "windowEffect": "off",
+            "windowOpacity": 100,
+            "rememberLastDatabase": true
+          },
+          "security": { "autoLockMinutes": 5, "clipboardClearSeconds": 20, "minimizeToTray": true, "clearOnLock": true, "lockAfterAction": false },
+          "database": { "kdf": "Argon2id", "cipher": "Aes256", "compression": "Gzip", "generator": { "length": 20, "includeUpper": true, "includeLower": true, "includeDigits": true, "includeSymbols": true, "excludeSimilar": false, "excludeAmbiguous": false } }
+        }"#;
+        fs::write(conf.join("config.json"), text).unwrap();
+
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let config = store.get().unwrap();
+        assert_eq!(config.general.theme, "light");
+        assert!(config.general.compact_mode);
+        assert_eq!(config.general.density.group_gap, 2);
+        assert!(config.general.density.show_group_icon);
+    }
+
+    #[test]
+    fn empty_config_object_loads_with_defaults() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        fs::create_dir_all(&conf).unwrap();
+        fs::write(conf.join("config.json"), "{}").unwrap();
+
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let config = store.get().unwrap();
+        assert_eq!(config.general.theme, "dark");
+        assert_eq!(config.general.density.group_gap, 2);
+        assert_eq!(config.security.clipboard_clear_seconds, 20);
+        assert_eq!(config.database.generator.length, 20);
+    }
+
+    #[test]
+    fn density_survives_deserialize_write_reload() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.general.density.group_gap = 8;
+        config.general.density.group_padding_y = 6;
+        config.general.density.group_indent = 20;
+        config.general.density.group_radius = 4;
+        config.general.density.show_group_icon = false;
+        config.general.density.show_group_chevron = false;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"density\""));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(again.general.density.group_gap, 8);
+        assert_eq!(again.general.density.group_indent, 20);
+        assert!(!again.general.density.show_group_chevron);
     }
 
     #[test]
@@ -419,6 +522,8 @@ mod tests {
         config.database.generator.length = 3;
         config.general.font_sizes.base = 5;
         config.general.theme_colors.accent = "not-a-color".into();
+        config.general.density.group_gap = 99;
+        config.general.density.group_indent = 0;
 
         let normalized = normalize_config(config);
         assert_eq!(normalized.general.theme, "dark");
@@ -431,6 +536,8 @@ mod tests {
         assert_eq!(normalized.database.generator.length, 20);
         assert_eq!(normalized.general.font_sizes.base, 14);
         assert_eq!(normalized.general.theme_colors.accent, "#ff5050");
+        assert_eq!(normalized.general.density.group_gap, 2);
+        assert_eq!(normalized.general.density.group_indent, 12);
     }
 
     #[test]

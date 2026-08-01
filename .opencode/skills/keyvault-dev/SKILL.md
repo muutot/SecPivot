@@ -54,7 +54,7 @@ Also read `docs/PITFALLS.md` when relevant.
 ## Cross-cutting change gates
 
 - **Tauri contract:** keep command name, Rust arguments/result, frontend `invoke`, serde casing, error handling, and tests aligned.
-- **Settings contract:** update TypeScript type, defaults, normalization/ranges, Rust config serde/defaults, UI, persistence, cross-window application, and references as applicable.
+- **Settings contract:** update TypeScript type, defaults, normalization/ranges, Rust config serde/defaults, UI, persistence, cross-window application, and references as applicable. Rust serde drops unknown fields silently — a field missing from the Rust config struct survives the session but resets on restart; keep both sides in lockstep and cover the round-trip in a test. Settings structs use container-level `#[serde(default)]` so older `config.json` files load without crashing (`ConfigStore::load` errors would panic the setup hook); keep `Default` impls current and add a load test for each new field (see `data-contracts.md`).
 - **Vault contract:** update frontend `VaultState`/`VaultEntry`/`VaultGroup` mapping, Rust domain serialization, repository behavior, session handling, save/lock semantics, and tests.
 - **Security contract:** password fields never enter the log or config; clipboard clearing follows `clipboardClearSeconds`; lock clears in-memory session; the demo browser fallback is explicitly not proof of desktop persistence or KDBX behavior.
 - **Visual contract:** type/build checks do not prove appearance. Use structural comparison and, when available, rendered/runtime inspection at the target window size and theme.

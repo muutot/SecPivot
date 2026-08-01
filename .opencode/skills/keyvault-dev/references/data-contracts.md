@@ -6,16 +6,20 @@ This reference defines the frontend ↔ backend contract. Update it together wit
 
 `config.rs` persists `conf/config.json` beside the executable/project. The Rust `AppConfig` serde shape mirrors the frontend `AppSettings` (`src/lib/types/settings.ts`):
 
-| Rust field | TypeScript         | Notes                                                                                                                                                                                                        |
-| ---------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `general`  | `GeneralSettings`  | `language`, `theme`, `themeColors`, `customPresets`, `compactMode`, `showDescriptions`, `fontSizes{base,secondary,cardTitle,cardPreview}`, `windowEffect`, `windowOpacity`, `rememberLastDatabase`           |
-| `security` | `SecuritySettings` | `autoLockMinutes`, `clipboardClearSeconds`, `minimizeToTray`, `clearOnLock`, `lockAfterAction`                                                                                                               |
-| `database` | `DatabaseDefaults` | `kdf` (`Argon2id`/`Argon2`/`Aes`), `cipher` (`Aes256`/`ChaCha20`), `compression` (`None`/`Gzip`), `generator{length,includeUpper,includeLower,includeDigits,includeSymbols,excludeSimilar,excludeAmbiguous}` |
+| Rust field | TypeScript         | Notes                                                                                                                                                                                                                                                                                        |
+| ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `general`  | `GeneralSettings`  | `language`, `theme`, `themeColors`, `customPresets`, `compactMode`, `density{groupGap,groupPaddingY,groupIndent,groupRadius,showGroupIcon,showGroupChevron}`, `showDescriptions`, `fontSizes{base,secondary,cardTitle,cardPreview}`, `windowEffect`, `windowOpacity`, `rememberLastDatabase` |
+| `security` | `SecuritySettings` | `autoLockMinutes`, `clipboardClearSeconds`, `minimizeToTray`, `clearOnLock`, `lockAfterAction`                                                                                                                                                                                               |
+| `database` | `DatabaseDefaults` | `kdf` (`Argon2id`/`Argon2`/`Aes`), `cipher` (`Aes256`/`ChaCha20`), `compression` (`None`/`Gzip`), `generator{length,includeUpper,includeLower,includeDigits,includeSymbols,excludeSimilar,excludeAmbiguous}`                                                                                 |
 
 - `get_config() -> AppConfig`: read + normalize; returns defaults on first run.
 - `set_config(config: AppConfig) -> AppConfig`: normalize + atomic save; returns the normalized value.
 
 Frontend normalization lives in `services/settings.ts::normalizeSettings`; the backend must apply the same range/default rules so the round-trip is idempotent. New settings fields require both sides plus tests.
+
+> **Pitfall — serde silently drops unknown fields.** The Rust `AppConfig` structs have no `deny_unknown_fields`, so a frontend field missing from the Rust serde shape is quietly discarded on `set_config`, written to disk, and returned as absent — the UI keeps it in memory via the fallback, but it **resets on the next launch**. Symptom: "my settings don't stick after restart", especially per-sub-item values while a parent toggle (e.g. `compactMode`) persists. Every new settings field must be mirrored in: TypeScript type + defaults + `normalizeSettings` (frontend), Rust serde struct + `Default` + `normalize_config` clamp (backend), and this table. The regression test `density_survives_deserialize_write_reload` guards the round-trip.
+
+> **Pitfall — the read side: missing fields must not crash load.** Deserialization is strict by default: a required field absent from an existing `config.json` (old version, manual edit) makes `ConfigStore::load` fail, which propagates from the setup hook and **panics the app on startup**. All settings structs therefore use container-level `#[serde(default)]` (every struct also impls `Default`), so older files load with defaults for missing fields and `normalize_config` heals them. When adding a field, keep the `Default` impl updated — no per-field `#[serde(default)]` is needed, but a test loading a config without the new field is required. Guarded by `old_config_without_density_loads_with_defaults` and `empty_config_object_loads_with_defaults`.
 
 ## Vault IPC contract
 
