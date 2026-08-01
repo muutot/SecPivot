@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { VaultEntry } from "$lib/types/vault";
+import type { HistoryVersion } from "$lib/types/vault";
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
   import { isTauriRuntime } from "$lib/services/settings";
@@ -27,7 +28,10 @@
   let passwordLoaded = $state(false);
   let passwordLoading = $state(false);
   let copied = $state("");
-  let activeTab = $state<"fields" | "meta" | "attachments">("fields");
+  let activeTab = $state<"fields" | "meta" | "attachments" | "history">("fields");
+  let historyVersions = $state<HistoryVersion[]>([]);
+  let historyLoading = $state(false);
+  let historyLoadedUuid = $state<string | null>(null);
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -36,7 +40,38 @@
     revealPassword = false;
     passwordLoaded = false;
     fetchedPassword = "";
+    historyLoadedUuid = null;
+    historyVersions = [];
   });
+
+  async function loadHistory(force = false): Promise<void> {
+    if (!force && historyLoadedUuid === entry.uuid) return;
+    historyLoading = true;
+    try {
+      historyVersions = await vault.getEntryHistory(entry.uuid);
+      historyLoadedUuid = entry.uuid;
+    } finally {
+      historyLoading = false;
+    }
+  }
+
+  async function restoreVersion(version: HistoryVersion): Promise<void> {
+    const when = version.modified
+      ? new Date(version.modified).toLocaleString("zh-CN")
+      : "未知时间";
+    if (
+      !window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)
+    )
+      return;
+    try {
+      await vault.restoreEntryVersion(entry.uuid, version.index);
+      historyLoadedUuid = null;
+      await loadHistory(true);
+      flash("restored");
+    } catch {
+      flash("error");
+    }
+  }
 
   /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
   async function ensurePassword(): Promise<void> {
@@ -122,6 +157,8 @@
         return "已复制用户名";
       case "password":
         return "已复制密码";
+      case "restored":
+        return "已恢复历史版本";
       case "url":
         return "已复制网址";
       default:
@@ -209,6 +246,20 @@
     >
       附件{#if entry.attachments?.length}
         ({entry.attachments.length}){/if}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="detail-tab"
+      class:active={activeTab === "history"}
+      aria-selected={activeTab === "history"}
+      onclick={() => {
+        activeTab = "history";
+        void loadHistory();
+      }}
+    >
+      历史{#if historyVersions.length > 0 && activeTab === "history"}
+        ({historyVersions.length}){/if}
     </button>
   </div>
 
@@ -349,7 +400,7 @@
           <span class="field-text mono uuid-text" title={entry.uuid}>{entry.uuid}</span>
         </div>
       </div>
-    {:else}
+    {:else if activeTab === "attachments"}
       {#if entry.attachments?.length}
         <div class="attachment-list">
           {#each entry.attachments as attachment}
@@ -372,6 +423,42 @@
           <AppIcon name="file" size={18} />
           <p>该条目没有附件</p>
         </div>
+      {/if}
+    {:else if activeTab === "history"}
+      {#if historyLoading}
+        <div class="tab-empty">
+          <AppIcon name="clock" size={18} />
+          <p>正在加载历史版本…</p>
+        </div>
+      {:else if historyVersions.length === 0}
+        <div class="tab-empty">
+          <AppIcon name="clock" size={18} />
+          <p>该条目没有历史版本</p>
+        </div>
+      {:else}
+        <div class="history-list">
+          {#each historyVersions as version (version.index)}
+            <div class="history-item" title={`${version.username || ""}${version.url ? ` · ${version.url}` : ""}`}>
+              <AppIcon name="clock" size={14} />
+              <div class="history-item-main">
+                <span class="history-time">
+                  {version.modified
+                    ? new Date(version.modified).toLocaleString("zh-CN")
+                    : "未知时间"}
+                </span>
+                <span class="history-title">{version.title || "未命名条目"}</span>
+              </div>
+              <button
+                class="copy-btn"
+                onclick={() => restoreVersion(version)}
+                title="恢复此版本"
+              >
+                <AppIcon name="undo" size={13} />
+              </button>
+            </div>
+          {/each}
+        </div>
+        <p class="history-hint">最多保留最近 10 个版本;恢复操作本身也会记录为新版本。</p>
       {/if}
     {/if}
   </div>
@@ -660,6 +747,51 @@
   .uuid-text {
     font-size: var(--font-size-tiny, 10px);
     word-break: break-all;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--hover-bg);
+    color: var(--text-muted);
+  }
+
+  .history-item-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .history-time {
+    font-size: var(--font-size-tiny, 10px);
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .history-title {
+    font-size: 12px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-hint {
+    margin: 8px 0 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
   }
 
   .tab-empty {

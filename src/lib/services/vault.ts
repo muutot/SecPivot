@@ -9,6 +9,7 @@ import type {
   GroupInput,
   CreateVaultRequest,
   TotpCode,
+  HistoryVersion,
   SecurityReport,
   RemoteObject,
   RemoteMode,
@@ -46,6 +47,8 @@ interface VaultStore {
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
   restoreEntry: (uuid: string) => Promise<VaultState>;
+  getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
+  restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
   securityReport: () => Promise<SecurityReport>;
@@ -525,6 +528,22 @@ export const vault: VaultStore = {
     });
     state.set(result);
     return result;
+  },
+
+  async getEntryHistory(uuid: string): Promise<HistoryVersion[]> {
+    if (isTauriRuntime()) {
+      return backendInvoke<HistoryVersion[]>("get_entry_history", { uuid });
+    }
+    return [];
+  },
+
+  async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("restore_entry_version", { uuid, index });
+      state.set(result);
+      return result;
+    }
+    throw new Error("浏览器模式不支持历史版本恢复");
   },
 
   async deleteGroup(uuid: string): Promise<VaultState> {

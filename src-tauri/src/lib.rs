@@ -8,7 +8,8 @@ use crate::autotype::AutotypeContext;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
 use crate::vault::{
-    EntryInput, GroupInput, RemoteMode, SecurityReport, TotpCode, VaultSession, VaultState,
+    EntryInput, GroupInput, HistoryVersion, RemoteMode, SecurityReport, TotpCode, VaultSession,
+    VaultState,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -168,6 +169,29 @@ fn delete_entry(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .delete_entry(&uuid)
+}
+
+#[tauri::command]
+fn get_entry_history(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<Vec<HistoryVersion>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .get_entry_history(&uuid)
+}
+
+#[tauri::command]
+fn restore_entry_version(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    index: usize,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .restore_entry_version(&uuid, index)
 }
 
 #[tauri::command]
@@ -436,6 +460,8 @@ pub fn run() {
             add_entry,
             update_entry,
             delete_entry,
+            get_entry_history,
+            restore_entry_version,
             restore_entry,
             delete_group,
             restore_group,

@@ -99,6 +99,18 @@ export interface TotpCode {
   period: number;
 }
 
+export interface HistoryVersion {
+  index: number;
+  modified: string | null;
+  title: string;
+  username: string;
+  url: string;
+  notes: string;
+  password: string;
+  expires: string | null;
+  customFields: CustomField[];
+}
+
 export interface OpenVaultRequest {
   path: string;
   password: string;

@@ -71,6 +71,8 @@
         selectedUuids = new Set();
         selectionAnchor = null;
         editorOpen = false;
+      } else {
+        selectedEntry = findEntryByUuid(value, selectedEntry?.uuid ?? null);
       }
       armIdleLock();
     });

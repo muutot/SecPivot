@@ -8,7 +8,9 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
-use keepass::db::{EntryId, EntryMut, EntryRef, GroupId, GroupRef, Value, TOTP};
+use keepass::db::{
+    Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value, TOTP,
+};
 use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -172,6 +174,23 @@ pub struct TotpCode {
     pub valid_for: u64,
     /// Total period in seconds (usually 30).
     pub period: u64,
+}
+
+/// A single historical snapshot of an entry (see `Entry.history`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryVersion {
+    /// Position in the history list (0 = most recent snapshot).
+    pub index: usize,
+    pub modified: Option<String>,
+    pub title: String,
+    pub username: String,
+    pub url: String,
+    pub notes: String,
+    pub password: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+    pub custom_fields: Vec<CustomField>,
 }
 
 /// Server-side security analysis. Passwords never cross into the report.
@@ -518,9 +537,18 @@ impl VaultSession {
                     .move_to(target_group)
                     .map_err(|e| format!("移动条目失败: {e}"))?;
             }
-            write_fields(&mut entry, input);
-            sync_custom_fields(&mut entry, &input.custom_fields);
-            sync_attachments(&mut entry, &input.attachments)?;
+            {
+                // Snapshots the pre-change state into the entry's history on drop.
+                let mut tracked = entry.track_changes();
+                {
+                    let mut current = tracked.as_mut();
+                    write_fields(&mut current, input);
+                    sync_custom_fields(&mut current, &input.custom_fields);
+                    sync_attachments(&mut current, &input.attachments)?;
+                }
+                tracked.times.last_modification = Some(Times::now());
+            }
+            trim_entry_history(&mut entry);
         }
         self.mark_dirty();
         self.snapshot()
@@ -550,6 +578,101 @@ impl VaultSession {
                     .move_to(bin_id)
                     .map_err(|e| format!("移入回收站失败: {e}"))?;
             }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// List the historical snapshots of an entry, newest first. Passwords are
+    /// included so a version can be restored without re-entering them.
+    pub fn get_entry_history(&self, uuid: &str) -> Result<Vec<HistoryVersion>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        let Some(history) = entry.history.as_ref() else {
+            return Ok(Vec::new());
+        };
+        Ok(history
+            .get_entries()
+            .iter()
+            .enumerate()
+            .map(|(index, historical)| HistoryVersion {
+                index,
+                modified: historical.times.last_modification.map(format_iso),
+                title: historical.get_title().unwrap_or_default().to_owned(),
+                username: historical
+                    .get(FIELD_USERNAME)
+                    .unwrap_or_default()
+                    .to_owned(),
+                url: historical.get(FIELD_URL).unwrap_or_default().to_owned(),
+                notes: historical.get(FIELD_NOTES).unwrap_or_default().to_owned(),
+                password: historical
+                    .get(FIELD_PASSWORD)
+                    .unwrap_or_default()
+                    .to_owned(),
+                expires: historical.times.expiry.map(format_iso),
+                custom_fields: {
+                    let mut fields: Vec<CustomField> = historical
+                        .fields
+                        .iter()
+                        .filter(|(name, _)| {
+                            !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str())
+                        })
+                        .map(|(name, value)| CustomField {
+                            name: name.clone(),
+                            value: value.get().clone(),
+                        })
+                        .collect();
+                    fields.sort_by(|a, b| a.name.cmp(&b.name));
+                    fields
+                },
+            })
+            .collect())
+    }
+
+    /// Overwrite an entry with a historical snapshot. The current state is
+    /// itself pushed into the history first, so the restore can be undone.
+    pub fn restore_entry_version(
+        &mut self,
+        uuid: &str,
+        index: usize,
+    ) -> Result<VaultState, String> {
+        let id = parse_entry_id(uuid)?;
+        let version = {
+            let db = self.require_db()?;
+            let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+            let history = entry
+                .history
+                .as_ref()
+                .ok_or_else(|| "该条目没有历史版本".to_owned())?;
+            history
+                .get_entries()
+                .get(index)
+                .ok_or_else(|| "历史版本不存在".to_owned())?
+                .clone()
+        };
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            {
+                let mut tracked = entry.track_changes();
+                {
+                    let mut current = tracked.as_mut();
+                    current.fields.clear();
+                    for (name, value) in &version.fields {
+                        current.fields.insert(name.clone(), value.clone());
+                    }
+                    current.tags = version.tags.clone();
+                    current.times.expiry = version.times.expiry;
+                    current.times.expires = version.times.expires;
+                    match version.icon() {
+                        Some(Icon::BuiltIn(icon_id)) => current.set_icon_builtin(*icon_id),
+                        _ => current.set_icon_none(),
+                    }
+                }
+                tracked.times.last_modification = Some(Times::now());
+            }
+            trim_entry_history(&mut entry);
         }
         self.mark_dirty();
         self.snapshot()
@@ -1017,6 +1140,27 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
 
 fn format_iso(time: NaiveDateTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// Maximum number of historical snapshots kept per entry (KeePass default).
+const MAX_HISTORY_VERSIONS: usize = 10;
+
+/// Drop the oldest snapshots until the history fits within the cap. The
+/// crate exposes no mutable access to the history, so it is rebuilt with the
+/// newest `MAX_HISTORY_VERSIONS` snapshots preserved in their original order.
+fn trim_entry_history(entry: &mut Entry) {
+    if let Some(history) = entry.history.as_mut() {
+        let current = history.get_entries();
+        if current.len() <= MAX_HISTORY_VERSIONS {
+            return;
+        }
+        let kept: Vec<Entry> = current.iter().take(MAX_HISTORY_VERSIONS).cloned().collect();
+        let mut trimmed = History::default();
+        for snapshot in kept.into_iter().rev() {
+            trimmed.add_entry(snapshot);
+        }
+        entry.history = Some(trimmed);
+    }
 }
 
 /// RFC 4180 cell escaping: quote when the value contains separators or quotes.
@@ -1526,6 +1670,110 @@ mod tests {
 
         let state = session.delete_entry(&entry_uuid).unwrap();
         assert_eq!(state.root.children[0].entries.len(), 0);
+    }
+
+    #[test]
+    fn entry_history_tracks_versions_and_restores() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "A".into(),
+                username: "u".into(),
+                password: "p1".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+
+        let input = |title: &str, password: &str| EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: title.into(),
+            username: "u".into(),
+            password: password.into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        };
+
+        assert!(session.get_entry_history(&uuid).unwrap().is_empty());
+        session.update_entry(&uuid, &input("B", "p2")).unwrap();
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].title, "A");
+        assert_eq!(history[0].password, "p1");
+
+        session.update_entry(&uuid, &input("C", "p3")).unwrap();
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].title, "B");
+        assert_eq!(history[0].password, "p2");
+
+        // Restoring the snapshot replaces fields and pushes the pre-restore
+        // state into the history itself.
+        let state = session.restore_entry_version(&uuid, 0).unwrap();
+        assert_eq!(state.root.entries[0].title, "B");
+        assert_eq!(session.get_entry_password(&uuid).unwrap(), "p2");
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].title, "C");
+
+        assert!(session
+            .restore_entry_version(&uuid, 99)
+            .is_err_and(|err| err.contains("历史版本不存在")));
+    }
+
+    #[test]
+    fn entry_history_caps_at_ten_versions() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "v0".into(),
+                username: "".into(),
+                password: "p0".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        for i in 1..=14 {
+            session
+                .update_entry(
+                    &uuid,
+                    &EntryInput {
+                        group_uuid: ROOT_GROUP_UUID.to_owned(),
+                        title: format!("v{i}"),
+                        username: "".into(),
+                        password: format!("p{i}"),
+                        url: "".into(),
+                        notes: "".into(),
+                        totp: None,
+                        expires: None,
+                        custom_fields: vec![],
+                        attachments: vec![],
+                    },
+                )
+                .unwrap();
+        }
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), 10);
+        assert_eq!(history[0].title, "v13");
+        assert_eq!(history[9].title, "v4");
     }
 
     #[test]
