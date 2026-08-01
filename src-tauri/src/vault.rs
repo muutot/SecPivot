@@ -520,6 +520,9 @@ impl VaultSession {
     }
 
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
+        // Decode all attachment payloads before touching the database so a
+        // bad payload aborts the whole mutation (no half-applied entry).
+        let payloads = decode_attachments(&input.attachments)?;
         {
             let db = self.require_db_mut()?;
             let mut group = if input.group_uuid == ROOT_GROUP_UUID {
@@ -532,7 +535,7 @@ impl VaultSession {
             let mut entry = group.add_entry();
             write_fields(&mut entry, input);
             sync_custom_fields(&mut entry, &input.custom_fields);
-            sync_attachments(&mut entry, &input.attachments)?;
+            sync_attachments(&mut entry, &input.attachments, &payloads);
         }
         self.mark_dirty();
         self.snapshot()
@@ -541,6 +544,9 @@ impl VaultSession {
     pub fn update_entry(&mut self, uuid: &str, input: &EntryInput) -> Result<VaultState, String> {
         let id = parse_entry_id(uuid)?;
         let target_group = resolve_group_id(self.require_db()?, &input.group_uuid)?;
+        // Decode attachment payloads up-front; a decode failure must not
+        // leave a half-applied update (fields written, history snapshotted).
+        let payloads = decode_attachments(&input.attachments)?;
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -556,7 +562,7 @@ impl VaultSession {
                     let mut current = tracked.as_mut();
                     write_fields(&mut current, input);
                     sync_custom_fields(&mut current, &input.custom_fields);
-                    sync_attachments(&mut current, &input.attachments)?;
+                    sync_attachments(&mut current, &input.attachments, &payloads);
                 }
                 tracked.times.last_modification = Some(Times::now());
             }
@@ -1383,12 +1389,42 @@ fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField]) {
     }
 }
 
+/// A pre-decoded attachment payload, ready to write.
+struct AttachmentPayload {
+    name: String,
+    data: Vec<u8>,
+}
+
+/// Decode all attachment payloads up-front so a bad base64 payload aborts the
+/// whole entry mutation before anything is written (no partial commit, no
+/// history snapshot pollution, dirty flag stays untouched).
+fn decode_attachments(input: &[AttachmentInput]) -> Result<Vec<AttachmentPayload>, String> {
+    let mut payloads = Vec::new();
+    for attachment in input {
+        if attachment.name.trim().is_empty() {
+            continue;
+        }
+        if let Some(data) = &attachment.data {
+            let bytes = BASE64
+                .decode(data.trim())
+                .map_err(|e| format!("附件数据解码失败: {e}"))?;
+            payloads.push(AttachmentPayload {
+                name: attachment.name.clone(),
+                data: bytes,
+            });
+        }
+    }
+    Ok(payloads)
+}
+
 /// Make the entry's attachment set match the given list. Names that no longer
-/// appear are removed; entries carrying `data` are added or replaced.
+/// appear are removed; entries carrying payloads are added or replaced. All
+/// payloads are already decoded (see [`decode_attachments`]).
 fn sync_attachments(
     entry: &mut EntryMut<'_>,
     attachments: &[AttachmentInput],
-) -> Result<(), String> {
+    payloads: &[AttachmentPayload],
+) {
     let desired: Vec<&AttachmentInput> = attachments
         .iter()
         .filter(|a| !a.name.trim().is_empty())
@@ -1403,15 +1439,12 @@ fn sync_attachments(
             entry.remove_attachment_by_name(&name);
         }
     }
-    for attachment in desired {
-        if let Some(data) = &attachment.data {
-            let bytes = BASE64
-                .decode(data.trim())
-                .map_err(|e| format!("附件数据解码失败: {e}"))?;
-            entry.add_attachment(attachment.name.clone(), Value::protected(bytes));
-        }
+    for payload in payloads {
+        entry.add_attachment(
+            payload.name.clone(),
+            Value::protected(payload.data.clone()),
+        );
     }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -3424,6 +3457,95 @@ mod tests {
         let local_db =
             Database::parse(&local_bytes, DatabaseKey::new().with_password("pw")).unwrap();
         assert_eq!(local_db.root().groups().count(), 1);
+    }
+
+    #[test]
+    fn add_entry_with_invalid_attachment_does_not_partially_commit() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("v.kdbx");
+        let mut session = VaultSession::default();
+        session
+            .create(&path, "pw", "Aes", "Aes256", "None", None)
+            .unwrap();
+
+        let err = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Bad".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![AttachmentInput {
+                    name: "a.bin".into(),
+                    size: 0,
+                    data: Some("!!!not-base64!!!".into()),
+                }],
+            })
+            .unwrap_err();
+        assert!(err.contains("附件数据解码失败"));
+
+        let state = session.state().unwrap().unwrap();
+        assert!(state.root.entries.is_empty(), "no entry must be committed");
+        assert!(!state.dirty, "dirty must not be set after a failed add");
+    }
+
+    #[test]
+    fn update_entry_with_invalid_attachment_keeps_original_and_history() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("v.kdbx");
+        let mut session = VaultSession::default();
+        session
+            .create(&path, "pw", "Aes", "Aes256", "None", None)
+            .unwrap();
+        let added = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Original".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = &added.root.entries[0].uuid;
+
+        let bad = EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Rewritten".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: vec![],
+            attachments: vec![AttachmentInput {
+                name: "a.bin".into(),
+                size: 0,
+                data: Some("@@@".into()),
+            }],
+        };
+        let err = session.update_entry(uuid, &bad).unwrap_err();
+        assert!(err.contains("附件数据解码失败"));
+
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(state.root.entries[0].title, "Original", "title must be unchanged");
+        let history = session.get_entry_history(uuid).unwrap();
+        assert!(history.is_empty(), "history must not be polluted");
     }
 
     #[test]
