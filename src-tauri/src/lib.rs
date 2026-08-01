@@ -1,6 +1,7 @@
 pub mod autotype;
 pub mod config;
 pub mod credential;
+pub mod dpapi;
 pub mod focus;
 pub mod remote;
 pub mod shield;

@@ -472,8 +472,10 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
     let path = config_path(project_dir);
     if path.exists() {
         let text = fs::read_to_string(&path).map_err(|e| format!("读取配置失败: {e}"))?;
-        let value: AppConfig =
+        let mut value: AppConfig =
             serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
+        value.remote.access_key = crate::dpapi::decrypt(&value.remote.access_key);
+        value.remote.secret_key = crate::dpapi::decrypt(&value.remote.secret_key);
         Ok(normalize_config(value))
     } else {
         Ok(AppConfig::default())
@@ -485,7 +487,11 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {e}"))?;
     let path = dir.join(CONFIG_FILE);
     let tmp = dir.join("config.json.tmp");
-    let text = serde_json::to_string_pretty(config).map_err(|e| format!("序列化配置失败: {e}"))?;
+    let mut persisted = config.clone();
+    persisted.remote.access_key = crate::dpapi::encrypt(&persisted.remote.access_key)?;
+    persisted.remote.secret_key = crate::dpapi::encrypt(&persisted.remote.secret_key)?;
+    let text =
+        serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
     fs::write(&tmp, text).map_err(|e| format!("写入配置失败: {e}"))?;
     fs::rename(&tmp, &path).map_err(|e| format!("保存配置失败: {e}"))?;
     Ok(())
@@ -595,7 +601,6 @@ mod tests {
         store.set(config.clone()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
-        assert!(text.contains("\"secretKey\": \"s3cret\""));
         assert!(text.contains("\"backupCount\": 5"));
 
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
@@ -605,6 +610,28 @@ mod tests {
         assert_eq!(again.remote.secret_key, "s3cret");
         assert_eq!(again.remote.local_dir, "backups");
         assert_eq!(again.remote.backup_count, 5);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn remote_secrets_never_persist_in_plaintext() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.remote.access_key = "AKIA-secret-access".into();
+        config.remote.secret_key = "plaintext-s3cret".into();
+        store.set(config).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(!text.contains("AKIA-secret-access"));
+        assert!(!text.contains("plaintext-s3cret"));
+        assert!(text.contains("\"accessKey\": \"dpapi1:"));
+        assert!(text.contains("\"secretKey\": \"dpapi1:"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(again.remote.access_key, "AKIA-secret-access");
+        assert_eq!(again.remote.secret_key, "plaintext-s3cret");
     }
 
     #[test]
