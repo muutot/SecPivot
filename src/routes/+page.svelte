@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
-  import { save } from "@tauri-apps/plugin-dialog";
+  import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
@@ -18,7 +18,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
-  import { buildCsv } from "$lib/utils/csv";
+  import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
 
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
@@ -375,6 +375,102 @@
     }
   }
 
+  function readPickedFile(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv,text/csv";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+      };
+      input.click();
+    });
+  }
+
+  /** Walk a "A / B" group path, creating missing subgroups, and return the leaf uuid. */
+  async function resolveImportGroup(path: string, startState: VaultState): Promise<string> {
+    const parts = path
+      .split("/")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    let state = startState;
+    let parentUuid: string | null = selectedGroup ?? null;
+    for (const name of parts) {
+      const existing = allGroupsOf(state.root).find(
+        (g) => g.parentUuid === parentUuid && g.name === name,
+      );
+      if (existing) {
+        parentUuid = existing.uuid;
+      } else {
+        state = await vault.addGroup({ parentUuid, name });
+        const created = allGroupsOf(state.root).find(
+          (g) => g.parentUuid === parentUuid && g.name === name,
+        );
+        if (!created) throw new Error("创建分组失败");
+        parentUuid = created.uuid;
+      }
+    }
+    return parentUuid ?? state.root.uuid;
+  }
+
+  async function handleImportCsv(): Promise<void> {
+    if (!currentVault) return;
+    let text: string;
+    try {
+      if (isTauriRuntime()) {
+        const selected = await open({
+          multiple: false,
+          filters: [{ name: "CSV 文件", extensions: ["csv"] }],
+        });
+        if (!selected) return;
+        text = await invoke<string>("read_text_file", { path: String(selected) });
+      } else {
+        const picked = await readPickedFile();
+        if (picked === null) return;
+        text = picked;
+      }
+    } catch (e) {
+      flash(`读取文件失败：${e}`);
+      return;
+    }
+    const rows = parseCsvRows(parseCsv(text));
+    if (rows.length === 0) {
+      flash("CSV 中没有可导入的条目");
+      return;
+    }
+    busy = true;
+    try {
+      let state = currentVault;
+      for (const row of rows) {
+        const groupUuid = await resolveImportGroup(row.group, state);
+        state = await vault.addEntry({
+          groupUuid,
+          title: row.title,
+          username: row.username,
+          password: row.password,
+          url: row.url,
+          notes: row.notes,
+          totp: row.totp || undefined,
+          customFields: [],
+          attachments: [],
+        });
+      }
+      flash(`已导入 ${rows.length} 个条目`);
+    } catch (e) {
+      flash(`导入失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
   function openSettings(): void {
     void goto("/settings");
   }
@@ -534,6 +630,7 @@
   const blankMenuItems = $derived<ContextMenuItem[]>([
     { id: "new-entry", label: "新建条目", icon: "plus" },
     { id: "new-group", label: "新建分组", icon: "folder-plus" },
+    { id: "import-csv", label: "导入 CSV", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "lock", label: "锁定数据库", icon: "lock" },
@@ -567,6 +664,7 @@
   function handleBlankMenuAction(id: string): void {
     if (id === "new-entry") openCreateEntry();
     else if (id === "new-group") openGroupModal(selectedGroup);
+    else if (id === "import-csv") void handleImportCsv();
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "lock") void handleLock();

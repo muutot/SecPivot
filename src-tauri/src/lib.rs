@@ -208,6 +208,12 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
 }
 
+/// Read a UTF-8 text file from a user-picked path (CSV import).
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {e}"))
+}
+
 // ---------------------------------------------------------------------------
 // App entry point
 // ---------------------------------------------------------------------------
@@ -249,7 +255,8 @@ pub fn run() {
             add_group,
             rename_group,
             delete_group,
-            write_text_file
+            write_text_file,
+            read_text_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
