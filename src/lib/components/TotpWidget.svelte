@@ -19,28 +19,37 @@
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function load(): Promise<void> {
+  async function load(): Promise<boolean> {
     try {
       const result: TotpCode = await vault.totpCode(entryUuid);
       code = result.code;
       remaining = result.validFor;
       period = result.period;
       error = "";
+      return true;
     } catch (e) {
       code = "";
       error = String(e);
+      return false;
     }
   }
 
   $effect(() => {
     if (!seed) return;
-    const uuid = entryUuid;
-    void load();
-    const timer = setInterval(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = async (): Promise<void> => {
+      // A failing seed (invalid TOTP URI) must stop the per-second loop
+      // instead of hammering the backend forever.
+      if (!(await load()) && timer) clearInterval(timer);
+    };
+    void tick();
+    timer = setInterval(() => {
       remaining -= 1;
-      if (remaining <= 0) void load();
+      if (remaining <= 0) void tick();
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   });
 
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);

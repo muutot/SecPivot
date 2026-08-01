@@ -18,27 +18,37 @@
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function refresh(now = Date.now()): Promise<void> {
+  async function refresh(now = Date.now()): Promise<boolean> {
     try {
       const result: TotpCode = await computeTotp(seed, now);
       code = result.code;
       remaining = result.validFor;
       period = result.period;
       error = false;
+      return true;
     } catch {
       code = "";
       error = true;
+      return false;
     }
   }
 
   $effect(() => {
     if (!seed) return;
-    void refresh();
-    const timer = setInterval(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = async (): Promise<void> => {
+      // A failing seed (invalid TOTP URI) must stop the per-second loop
+      // instead of recomputing (WebCrypto) forever.
+      if (!(await refresh()) && timer) clearInterval(timer);
+    };
+    void tick();
+    timer = setInterval(() => {
       remaining -= 1;
-      if (remaining <= 0) void refresh();
+      if (remaining <= 0) void tick();
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   });
 
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
