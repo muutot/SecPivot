@@ -15,7 +15,7 @@ KeyVault stores credentials in standard KDBX 4.0 files. This reference documents
 Lock happens on:
 
 - explicit lock action (`close_vault`);
-- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`, reset on vault open, skipped when 0 or no vault open);
+- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`/`mousemove`/`wheel`/`scroll`, re-armed at most once per 15 s to avoid churn, reset on vault open, skipped when 0 or no vault open);
 - `lockAfterAction` immediately after a password copy;
 - focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open).
 

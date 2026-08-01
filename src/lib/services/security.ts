@@ -24,6 +24,7 @@ export async function copySensitive(value: string): Promise<void> {
 }
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let idleDeadline = 0;
 
 function clearIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
@@ -34,22 +35,40 @@ function clearIdleTimer(): void {
 export function armIdleLock(): void {
   clearIdleTimer();
   const minutes = get(appSettings).security.autoLockMinutes;
-  if (minutes <= 0 || !vault.get()) return;
+  if (minutes <= 0 || !vault.get()) {
+    idleDeadline = 0;
+    return;
+  }
+  idleDeadline = Date.now() + minutes * 60_000;
   idleTimer = setTimeout(() => {
     idleTimer = null;
     void lockVault();
   }, minutes * 60_000);
 }
 
+/**
+ * Activity handler shared by all idle-watch events. High-frequency events
+ * (`mousemove`/`wheel`/`scroll`) only re-arm when less than 15 s of the
+ * timeout remain, so the timer is not churned on every fire.
+ */
+function onActivity(): void {
+  if (Date.now() >= idleDeadline - 15_000) armIdleLock();
+}
+
 /** Install user-activity listeners that keep the idle timer fresh. Returns a cleanup. */
 export function installAutoLock(): () => void {
-  const onActivity = () => armIdleLock();
   window.addEventListener("pointerdown", onActivity);
   window.addEventListener("keydown", onActivity);
+  window.addEventListener("mousemove", onActivity);
+  window.addEventListener("wheel", onActivity, { capture: true, passive: true });
+  window.addEventListener("scroll", onActivity, { capture: true, passive: true });
   armIdleLock();
   return () => {
     window.removeEventListener("pointerdown", onActivity);
     window.removeEventListener("keydown", onActivity);
+    window.removeEventListener("mousemove", onActivity);
+    window.removeEventListener("wheel", onActivity, true);
+    window.removeEventListener("scroll", onActivity, true);
     clearIdleTimer();
   };
 }
