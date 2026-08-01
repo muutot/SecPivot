@@ -74,6 +74,11 @@
   }
 
   onMount(() => {
+    // The TCATO overlay window loads this SPA with a `#/tcato` hash; it must
+    // not run any of the main-window side effects (vault subscription, idle
+    // auto-lock, window-size tracking) or it could lock the real session or
+    // resize the fixed-size overlay.
+    if (isTcatoOverlay) return;
     const unsubscribe = vault.subscribe((value) => {
       currentVault = value;
       if (value && value.path !== expiredNotifiedPath) {
@@ -142,7 +147,7 @@
   $effect(() => {
     const g = get(appSettings).general;
     const view = currentVault === null ? (showLockScreen ? "lock" : "welcome") : "main";
-    if (!isTauriRuntime() || view === "lock") return;
+    if (!isTauriRuntime() || isTcatoOverlay || view === "lock") return;
     const width = view === "welcome" ? WELCOME_WINDOW_SIZE.width : g.windowWidth;
     const height = view === "welcome" ? WELCOME_WINDOW_SIZE.height : g.windowHeight;
     const key = `${width}x${height}`;
