@@ -11,6 +11,7 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 | General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop |
 | Security         | Single current section → `SecuritySettingsPanel`                            |
 | Database         | Single current section → `DatabaseSettingsPanel`                            |
+| Remote           | Single current section → `RemoteSettingsPanel` (S3 endpoint/keys/mirror)    |
 | About            | Single current section → `AboutSettingsPanel`                               |
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.
