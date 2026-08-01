@@ -1341,12 +1341,17 @@ fn parse_color(value: Option<&str>) -> Option<Color> {
     value?.trim().parse().ok()
 }
 
-/// Parse an ISO-8601 expiry string (optionally with `Z` suffix) into a
-/// `NaiveDateTime`. Returns `None` for empty input; rejects invalid formats.
+/// Parse an ISO-8601 expiry string into a UTC `NaiveDateTime`. Accepts the
+/// frontend's `toISOString()` output (with milliseconds and `Z` suffix) as
+/// well as legacy `%Y-%m-%dT%H:%M:%S` values. Returns `None` for empty input;
+/// rejects invalid formats.
 fn parse_expiry(value: Option<&str>) -> Option<NaiveDateTime> {
     let raw = value?.trim();
     if raw.is_empty() {
         return None;
+    }
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Some(dt.naive_utc());
     }
     let normalized = raw.strip_suffix('Z').unwrap_or(raw);
     NaiveDateTime::parse_from_str(normalized, "%Y-%m-%dT%H:%M:%S").ok()
@@ -3686,5 +3691,33 @@ mod tests {
             .expand_autotype_sequence(&format!("{{REF:P@I:{old_uuid}}}"))
             .unwrap_err();
         assert!(err.contains("未找到匹配条目"));
+    }
+
+    #[test]
+    fn parse_expiry_accepts_frontend_iso_with_milliseconds() {
+        assert_eq!(
+            parse_expiry(Some("2026-08-01T12:34:56.000Z")),
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 1).unwrap().and_hms_opt(12, 34, 56).unwrap())
+        );
+        assert_eq!(
+            parse_expiry(Some("2099-12-31T23:59:59.500Z"))
+                .map(|d| d.and_utc().timestamp_millis()),
+            Some(chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap().and_utc().timestamp_millis() + 500)
+        );
+        assert_eq!(
+            parse_expiry(Some("2020-01-01T00:00:00Z")),
+            Some(chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn parse_expiry_accepts_legacy_naive_and_rejects_garbage() {
+        assert_eq!(
+            parse_expiry(Some("2020-01-01T00:00:00")),
+            Some(chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap())
+        );
+        assert_eq!(parse_expiry(Some("")), None);
+        assert_eq!(parse_expiry(None), None);
+        assert_eq!(parse_expiry(Some("not-a-date")), None);
     }
 }
