@@ -30,6 +30,7 @@ export interface SecuritySettings {
   minimizeToTray: boolean;
   clearOnLock: boolean;
   lockAfterAction: boolean;
+  lockOnFocusLoss: boolean;
 }
 
 export interface DensitySettings {

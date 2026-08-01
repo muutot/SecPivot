@@ -53,3 +53,19 @@ export function installAutoLock(): () => void {
     clearIdleTimer();
   };
 }
+
+/**
+ * Install the focus-loss lock: when `lockOnFocusLoss` is enabled and a vault
+ * is open, losing window focus locks immediately. Returns a cleanup.
+ */
+export function installFocusLock(): () => void {
+  const onBlur = () => {
+    if (!get(appSettings).security.lockOnFocusLoss) return;
+    if (!vault.get()) return;
+    void lockVault();
+  };
+  window.addEventListener("blur", onBlur);
+  return () => {
+    window.removeEventListener("blur", onBlur);
+  };
+}

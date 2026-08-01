@@ -150,5 +150,24 @@
     </button>
   </section>
 
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="unlock" size={17} /></span>
+      <div>
+        <strong>失去焦点时锁定</strong>
+        <p>切换窗口或最小化时立即锁定数据库</p>
+      </div>
+    </div>
+    <button
+      class="toggle-switch"
+      class:active={security.lockOnFocusLoss}
+      role="switch"
+      aria-checked={security.lockOnFocusLoss}
+      onclick={() => change("lockOnFocusLoss", !security.lockOnFocusLoss)}
+    >
+      <span class="toggle-knob"></span>
+    </button>
+  </section>
+
   <p class="auto-save-note">修改即时生效并自动保存</p>
 </div>

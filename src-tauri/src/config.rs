@@ -183,6 +183,7 @@ pub struct SecuritySettings {
     pub minimize_to_tray: bool,
     pub clear_on_lock: bool,
     pub lock_after_action: bool,
+    pub lock_on_focus_loss: bool,
 }
 
 impl Default for SecuritySettings {
@@ -193,6 +194,7 @@ impl Default for SecuritySettings {
             minimize_to_tray: true,
             clear_on_lock: true,
             lock_after_action: false,
+            lock_on_focus_loss: false,
         }
     }
 }
@@ -484,6 +486,23 @@ mod tests {
         assert_eq!(config.general.density.group_gap, 2);
         assert_eq!(config.security.clipboard_clear_seconds, 20);
         assert_eq!(config.database.generator.length, 20);
+        assert!(!config.security.lock_on_focus_loss);
+    }
+
+    #[test]
+    fn lock_on_focus_loss_survives_deserialize_write_reload() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.security.lock_on_focus_loss = true;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"lockOnFocusLoss\": true"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert!(again.security.lock_on_focus_loss);
     }
 
     #[test]

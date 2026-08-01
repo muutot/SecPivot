@@ -41,6 +41,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   minimizeToTray: true,
   clearOnLock: true,
   lockAfterAction: false,
+  lockOnFocusLoss: false,
 };
 
 export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {

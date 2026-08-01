@@ -3,6 +3,7 @@
   import "../app.css";
   import { appSettings } from "$lib/services/settings";
   import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
+  import { installFocusLock } from "$lib/services/security";
 
   let { children } = $props();
 
@@ -15,7 +16,11 @@
       applySettingsToDocument();
       syncCompactShellClass(s.general.compactMode);
     });
-    return unsubscribe;
+    const stopFocusLock = installFocusLock();
+    return () => {
+      unsubscribe();
+      stopFocusLock();
+    };
   });
 </script>
 
