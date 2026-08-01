@@ -3,6 +3,7 @@
 //! `src/lib/types/vault.ts`.
 
 use crate::autotype::AutotypeContext;
+use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -12,8 +13,9 @@ use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -189,8 +191,39 @@ pub struct DuplicatePasswords {
 // Session
 // ---------------------------------------------------------------------------
 
+/// How a remote vault is persisted. `InMemory` uploads to S3 only; `SaveLocal`
+/// also mirrors the file under `<app_data>/Storage/remote/<local_dir>/`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteMode {
+    InMemory,
+    SaveLocal,
+}
+
+impl RemoteMode {
+    pub fn parse(mode: &str) -> Result<Self, String> {
+        match mode {
+            "memory" => Ok(RemoteMode::InMemory),
+            "local" => Ok(RemoteMode::SaveLocal),
+            other => Err(format!(
+                "远程保存模式 {other:?} 不受支持 (可用: memory / local)"
+            )),
+        }
+    }
+}
+
+/// Where a remote vault lives: the transport, its object key, and how saves
+/// should behave. Dropped on `close` so S3 credentials leave memory.
+pub struct RemoteTarget {
+    pub storage: Arc<dyn RemoteStorage>,
+    pub key: String,
+    pub mode: RemoteMode,
+    pub local_dir: PathBuf,
+    pub backup_count: usize,
+}
+
 /// The currently open vault. `db` holds the decrypted database; `password`
-/// and `keyfile` are kept only for save and cleared on close.
+/// and `keyfile` are kept only for save and cleared on close. `remote`
+/// is set when the vault came from S3.
 #[derive(Default)]
 pub struct VaultSession {
     path: Option<String>,
@@ -199,6 +232,7 @@ pub struct VaultSession {
     db: Option<Database>,
     dirty: bool,
     modified_at: String,
+    remote: Option<RemoteTarget>,
 }
 
 /// Combine password and/or keyfile into a `DatabaseKey`. At least one
@@ -272,6 +306,102 @@ impl VaultSession {
         self.snapshot()
     }
 
+    /// Open an existing vault stored on S3. `key` is the object key (e.g.
+    /// `vaults/private.kdbx`); the display path becomes `s3://<key>`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn open_remote(
+        &mut self,
+        storage: Arc<dyn RemoteStorage>,
+        key: &str,
+        password: &str,
+        keyfile: Option<&Path>,
+        mode: RemoteMode,
+        local_dir: &Path,
+        backup_count: usize,
+    ) -> Result<VaultState, String> {
+        let key = validate_remote_key(key)?;
+        let keyfile_bytes = match keyfile {
+            Some(keyfile_path) => {
+                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
+            }
+            None => None,
+        };
+        let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
+        let data = storage
+            .get(&key)
+            .map_err(|e| format!("下载远程文件失败: {e}"))?;
+        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
+        if mode == RemoteMode::SaveLocal {
+            write_local_copy(local_dir, &remote_key_basename(&key), &data, backup_count)?;
+        }
+        self.remote = Some(RemoteTarget {
+            storage,
+            key: key.clone(),
+            mode,
+            local_dir: local_dir.to_path_buf(),
+            backup_count,
+        });
+        self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
+        self.password = Some(password.to_owned());
+        self.keyfile = keyfile_bytes;
+        self.db = Some(db);
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.snapshot()
+    }
+
+    /// Create an empty vault and upload it to S3 immediately.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_remote(
+        &mut self,
+        storage: Arc<dyn RemoteStorage>,
+        key: &str,
+        password: &str,
+        kdf: &str,
+        cipher: &str,
+        compression: &str,
+        keyfile: Option<&Path>,
+        mode: RemoteMode,
+        local_dir: &Path,
+        backup_count: usize,
+    ) -> Result<VaultState, String> {
+        let key = validate_remote_key(key)?;
+        let keyfile_bytes = match keyfile {
+            Some(keyfile_path) => {
+                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
+            }
+            None => None,
+        };
+        let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
+        let mut db = Database::new();
+        apply_kdf(&mut db, kdf)?;
+        apply_cipher(&mut db, cipher)?;
+        apply_compression(&mut db, compression)?;
+        let mut buffer = Vec::new();
+        db.save(&mut Cursor::new(&mut buffer), db_key)
+            .map_err(|e| format!("序列化数据库失败: {e}"))?;
+        storage
+            .put(&key, &buffer)
+            .map_err(|e| format!("上传远程文件失败: {e}"))?;
+        if mode == RemoteMode::SaveLocal {
+            write_local_copy(local_dir, &remote_key_basename(&key), &buffer, backup_count)?;
+        }
+        self.remote = Some(RemoteTarget {
+            storage,
+            key: key.clone(),
+            mode,
+            local_dir: local_dir.to_path_buf(),
+            backup_count,
+        });
+        self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
+        self.password = Some(password.to_owned());
+        self.keyfile = keyfile_bytes;
+        self.db = Some(db);
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.snapshot()
+    }
+
     pub fn close(&mut self) {
         self.path = None;
         self.password = None;
@@ -279,6 +409,7 @@ impl VaultSession {
         self.db = None;
         self.dirty = false;
         self.modified_at.clear();
+        self.remote = None;
     }
 
     pub fn state(&self) -> Result<Option<VaultState>, String> {
@@ -289,11 +420,32 @@ impl VaultSession {
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
-        let path = self.require_path()?.to_owned();
-        let password = self.require_password()?.to_owned();
         let db = self.require_db()?;
-        let key = build_database_key(&password, self.keyfile.as_deref())?;
-        save_database(db, Path::new(&path), key)?;
+        let password = self.require_password()?;
+        let key = build_database_key(password, self.keyfile.as_deref())?;
+        let mut buffer = Vec::new();
+        db.save(&mut Cursor::new(&mut buffer), key)
+            .map_err(|e| format!("序列化数据库失败: {e}"))?;
+        if let Some(remote) = &self.remote {
+            remote
+                .storage
+                .put(&remote.key, &buffer)
+                .map_err(|e| format!("上传远程文件失败: {e}"))?;
+            if remote.mode == RemoteMode::SaveLocal {
+                write_local_copy(
+                    &remote.local_dir,
+                    &remote_key_basename(&remote.key),
+                    &buffer,
+                    remote.backup_count,
+                )
+                .map_err(|e| format!("保存本地副本失败: {e}"))?;
+            }
+            self.dirty = false;
+            self.modified_at = now_iso();
+            return self.snapshot();
+        }
+        let path = self.require_path()?.to_owned();
+        write_database_bytes(Path::new(&path), &buffer)?;
         self.dirty = false;
         self.modified_at = now_iso();
         self.snapshot()
@@ -913,11 +1065,85 @@ fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), Str
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key)
         .map_err(|e| format!("序列化数据库失败: {e}"))?;
+    write_database_bytes(path, &buffer)
+}
+
+/// Atomic write of already-serialized KDBX bytes (local vault save).
+fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), String> {
     let tmp = path.with_extension("kdbx.tmp");
-    std::fs::write(&tmp, &buffer).map_err(|e| format!("写入数据库失败: {e}"))?;
+    std::fs::write(&tmp, buffer).map_err(|e| format!("写入数据库失败: {e}"))?;
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("保存数据库失败: {e}"));
+    }
+    Ok(())
+}
+
+/// Validate an S3 object key for a vault file.
+fn validate_remote_key(key: &str) -> Result<String, String> {
+    let key = key.trim().trim_start_matches('/').to_owned();
+    if key.is_empty() {
+        return Err("远程文件 Key 不能为空".to_owned());
+    }
+    if !key.ends_with(".kdbx") {
+        return Err("远程文件必须以 .kdbx 结尾".to_owned());
+    }
+    Ok(key)
+}
+
+/// Basename of an S3 object key, used as the local mirror file name.
+fn remote_key_basename(key: &str) -> String {
+    key.rsplit('/').next().unwrap_or(key).to_owned()
+}
+
+/// Write the local mirror of a remote vault under `dir`, rotating up to
+/// `backup_count` timestamped `.bak` copies of the previous file first.
+fn write_local_copy(
+    dir: &Path,
+    name: &str,
+    bytes: &[u8],
+    backup_count: usize,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
+    let dest = dir.join(name);
+    if backup_count > 0 && dest.exists() {
+        let stem = dest
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(name)
+            .to_owned();
+        let ext = dest
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("kdbx")
+            .to_owned();
+        let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f");
+        let backup = dir.join(format!("{stem}.{stamp}.{ext}.bak"));
+        std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
+        prune_local_backups(dir, &stem, &ext, backup_count)?;
+    }
+    std::fs::write(&dest, bytes).map_err(|e| format!("写入本地副本失败: {e}"))
+}
+
+/// Keep only the newest `keep` backup files matching `<stem>.<ts>.<ext>.bak`.
+fn prune_local_backups(dir: &Path, stem: &str, ext: &str, keep: usize) -> Result<(), String> {
+    let mut backups: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("读取本地备份目录失败: {e}"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            let name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            name.starts_with(&format!("{stem}.")) && name.ends_with(&format!(".{ext}.bak"))
+        })
+        .collect();
+    backups.sort();
+    let total = backups.len();
+    for path in backups.into_iter().take(total.saturating_sub(keep)) {
+        let _ = std::fs::remove_file(path);
     }
     Ok(())
 }
@@ -1857,5 +2083,230 @@ mod tests {
         assert!(text.contains("\"line1\nline2\""));
         assert!(text.contains("Web,\"Git,Hub\",alice,s3cret,https://x"));
         assert!(text.contains("JBSWY3DPEHPK3PXP"));
+    }
+
+    /// Create a local vault and seed it into an in-memory remote storage.
+    fn seed_remote_storage(dir: &TempDir) -> (crate::remote::MemoryStorage, std::path::PathBuf) {
+        let seed_path = dir.path().join("seed.kdbx");
+        {
+            let mut session = VaultSession::default();
+            session
+                .create(&seed_path, "pw", "Aes", "Aes256", "None", None)
+                .unwrap();
+        }
+        let storage = crate::remote::MemoryStorage::default();
+        storage.seed("vaults/seed.kdbx", std::fs::read(&seed_path).unwrap());
+        (storage, seed_path)
+    }
+
+    #[test]
+    fn remote_open_save_round_trip_via_memory_storage() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("local");
+
+        let mut session = VaultSession::default();
+        let state = session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        assert_eq!(state.path, "s3://vaults/seed.kdbx");
+        assert_eq!(state.file_name, "seed.kdbx");
+
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Web".into(),
+            })
+            .unwrap();
+        let saved = session.save().unwrap();
+        assert!(!saved.dirty);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "Web");
+    }
+
+    #[test]
+    fn remote_save_local_writes_mirror_and_rotates_backups() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("mirror");
+
+        let mut session = VaultSession::default();
+        session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::SaveLocal,
+                &local,
+                1,
+            )
+            .unwrap();
+        assert!(local.join("seed.kdbx").exists());
+
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Mail".into(),
+            })
+            .unwrap();
+        session.save().unwrap();
+        session.save().unwrap();
+        session.save().unwrap();
+
+        let bytes = std::fs::read(local.join("seed.kdbx")).unwrap();
+        let key = DatabaseKey::new().with_password("pw");
+        let db = Database::parse(&bytes, key).unwrap();
+        assert_eq!(db.root().groups().count(), 1);
+
+        let backups: Vec<_> = std::fs::read_dir(&local)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".kdbx.bak"))
+            .collect();
+        assert_eq!(backups.len(), 1);
+    }
+
+    #[test]
+    fn remote_rejects_invalid_key_or_mode() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("local");
+        let mut session = VaultSession::default();
+
+        let err = session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "  /  ",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap_err();
+        assert!(err.contains("Key"));
+
+        let err = session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.txt",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap_err();
+        assert!(err.contains("kdbx"));
+
+        let err = session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/missing.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap_err();
+        assert!(err.contains("下载"));
+
+        let err = RemoteMode::parse("cloud").unwrap_err();
+        assert!(err.contains("模式"));
+        assert_eq!(RemoteMode::parse("memory").unwrap(), RemoteMode::InMemory);
+        assert_eq!(RemoteMode::parse("local").unwrap(), RemoteMode::SaveLocal);
+    }
+
+    #[test]
+    fn remote_create_uploads_and_saves_back() {
+        let storage = crate::remote::MemoryStorage::default();
+        let dir = TempDir::new().unwrap();
+        let local = dir.path().join("local");
+
+        let mut session = VaultSession::default();
+        let state = session
+            .create_remote(
+                Arc::new(storage.clone()),
+                "new/vault.kdbx",
+                "pw",
+                "Aes",
+                "Aes256",
+                "None",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        assert_eq!(state.path, "s3://new/vault.kdbx");
+        assert!(storage.get("new/vault.kdbx").is_ok());
+
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                name: "Web".into(),
+            })
+            .unwrap();
+        session.save().unwrap();
+
+        let mut reopened = VaultSession::default();
+        let state = reopened
+            .open_remote(
+                Arc::new(storage.clone()),
+                "new/vault.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        assert_eq!(state.root.children[0].name, "Web");
+    }
+
+    #[test]
+    fn remote_close_clears_session_and_storage() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("local");
+
+        let mut session = VaultSession::default();
+        session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        session.close();
+        assert!(!session.is_open());
+        assert!(session.state().unwrap().is_none());
     }
 }

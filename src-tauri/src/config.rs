@@ -250,12 +250,49 @@ impl Default for DatabaseDefaults {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteSettings {
+    /// S3-compatible endpoint, e.g. `https://s3.amazonaws.com` or a MinIO URL.
+    pub endpoint: String,
+    pub region: String,
+    pub bucket: String,
+    pub access_key: String,
+    /// Plaintext in `config.json` by design — a secondary credential, never a
+    /// vault master password. Keep the risk noted in `security-model.md`.
+    pub secret_key: String,
+    /// Optional key prefix (folder) used by the remote file browser.
+    pub prefix: String,
+    /// Subdirectory name under `Storage/remote/` for local copies of remote
+    /// vaults ("保存到本地" mode).
+    pub local_dir: String,
+    /// Number of timestamped `.bak` backups kept beside the local copy;
+    /// 0 disables backups.
+    pub backup_count: i32,
+}
+
+impl Default for RemoteSettings {
+    fn default() -> Self {
+        Self {
+            endpoint: "https://s3.amazonaws.com".into(),
+            region: "us-east-1".into(),
+            bucket: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
+            prefix: String::new(),
+            local_dir: "remote".into(),
+            backup_count: 3,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub general: GeneralSettings,
     pub security: SecuritySettings,
     pub database: DatabaseDefaults,
+    pub remote: RemoteSettings,
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +401,18 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         _ => "Gzip".into(),
     };
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
+
+    config.remote.endpoint = config.remote.endpoint.trim().to_owned();
+    config.remote.region = config.remote.region.trim().to_owned();
+    config.remote.bucket = config.remote.bucket.trim().to_owned();
+    config.remote.access_key = config.remote.access_key.trim().to_owned();
+    config.remote.secret_key = config.remote.secret_key.trim().to_owned();
+    config.remote.prefix = config.remote.prefix.trim().to_owned();
+    config.remote.local_dir = config.remote.local_dir.trim().to_owned();
+    if config.remote.local_dir.is_empty() {
+        config.remote.local_dir = "remote".into();
+    }
+    config.remote.backup_count = clamp_i32(config.remote.backup_count, 0, 10, 3);
 
     config
 }
@@ -485,6 +534,50 @@ mod tests {
         assert!(config.general.compact_mode);
         assert_eq!(config.general.density.group_gap, 2);
         assert!(config.general.density.show_group_icon);
+    }
+
+    #[test]
+    fn remote_settings_survive_deserialize_write_reload() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.remote.endpoint = "http://127.0.0.1:9000".into();
+        config.remote.region = "us-east-1".into();
+        config.remote.bucket = "my-vaults".into();
+        config.remote.access_key = "AKIA-test".into();
+        config.remote.secret_key = "s3cret".into();
+        config.remote.prefix = "vaults/".into();
+        config.remote.local_dir = "backups".into();
+        config.remote.backup_count = 5;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"secretKey\": \"s3cret\""));
+        assert!(text.contains("\"backupCount\": 5"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(again.remote.endpoint, "http://127.0.0.1:9000");
+        assert_eq!(again.remote.bucket, "my-vaults");
+        assert_eq!(again.remote.secret_key, "s3cret");
+        assert_eq!(again.remote.local_dir, "backups");
+        assert_eq!(again.remote.backup_count, 5);
+    }
+
+    #[test]
+    fn remote_defaults_and_normalization_rules() {
+        let mut config = AppConfig::default();
+        assert_eq!(config.remote.endpoint, "https://s3.amazonaws.com");
+        assert_eq!(config.remote.local_dir, "remote");
+        assert_eq!(config.remote.backup_count, 3);
+
+        config.remote.endpoint = "  https://s3.example.com  ".into();
+        config.remote.local_dir = "   ".into();
+        config.remote.backup_count = 99;
+        let normalized = normalize_config(config);
+        assert_eq!(normalized.remote.endpoint, "https://s3.example.com");
+        assert_eq!(normalized.remote.local_dir, "remote");
+        assert_eq!(normalized.remote.backup_count, 3);
     }
 
     #[test]

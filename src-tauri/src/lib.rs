@@ -1,13 +1,17 @@
 pub mod autotype;
 pub mod config;
 pub mod credential;
+pub mod remote;
 pub mod vault;
 
 use crate::autotype::AutotypeContext;
 use crate::config::ConfigStore;
-use crate::vault::{EntryInput, GroupInput, SecurityReport, TotpCode, VaultSession, VaultState};
+use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
+use crate::vault::{
+    EntryInput, GroupInput, RemoteMode, SecurityReport, TotpCode, VaultSession, VaultState,
+};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 // ---------------------------------------------------------------------------
@@ -277,6 +281,85 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
+// S3 remote commands
+// ---------------------------------------------------------------------------
+
+/// List `.kdbx` files under the configured prefix (newest key first).
+#[tauri::command]
+async fn s3_list_objects(cfg: crate::config::RemoteSettings) -> Result<Vec<RemoteObject>, String> {
+    let storage = S3Storage::new(&cfg)?;
+    let mut objects = storage.list(&cfg.prefix)?;
+    objects.retain(|o| o.key.ends_with(".kdbx"));
+    objects.sort_by(|a, b| b.key.cmp(&a.key));
+    Ok(objects)
+}
+
+/// Download a vault from S3 and open it. `mode` is `"memory"` (upload back
+/// only) or `"local"` (also mirror locally under `Storage/remote/<local_dir>`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn open_remote_vault(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    app: tauri::AppHandle,
+    cfg: crate::config::RemoteSettings,
+    key: String,
+    password: String,
+    keyfile: Option<String>,
+    mode: String,
+) -> Result<VaultState, String> {
+    let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
+    let mode = RemoteMode::parse(&mode)?;
+    let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .open_remote(
+            storage,
+            &key,
+            &password,
+            keyfile.as_deref().map(Path::new),
+            mode,
+            &local_dir,
+            cfg.backup_count.clamp(0, 10) as usize,
+        )
+}
+
+/// Create an empty vault and upload it to S3 immediately.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn create_remote_vault(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    app: tauri::AppHandle,
+    cfg: crate::config::RemoteSettings,
+    key: String,
+    password: String,
+    kdf: String,
+    cipher: String,
+    compression: String,
+    keyfile: Option<String>,
+    mode: String,
+) -> Result<VaultState, String> {
+    let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
+    let mode = RemoteMode::parse(&mode)?;
+    let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .create_remote(
+            storage,
+            &key,
+            &password,
+            &kdf,
+            &cipher,
+            &compression,
+            keyfile.as_deref().map(Path::new),
+            mode,
+            &local_dir,
+            cfg.backup_count.clamp(0, 10) as usize,
+        )
+}
+
+// ---------------------------------------------------------------------------
 // App entry point
 // ---------------------------------------------------------------------------
 
@@ -323,7 +406,10 @@ pub fn run() {
             read_text_file,
             remember_credential,
             get_saved_credential,
-            clear_saved_credential
+            clear_saved_credential,
+            s3_list_objects,
+            open_remote_vault,
+            create_remote_vault
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

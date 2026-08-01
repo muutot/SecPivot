@@ -33,6 +33,8 @@ chrono = { version = "0.4", features = ["serde"] }
 tauri-plugin-opener = "2"
 enigo = "0.6"
 keyring = "4.1.6"
+rust-s3 = "0.34"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 [dev-dependencies]
 tempfile = "3"
