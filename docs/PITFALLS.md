@@ -19,6 +19,7 @@ Recurring traps discovered while developing KeyVault. Read before touching the r
 - **UUIDs must be stable across the session.** Render KDBX uuid bytes as hex and reuse them as the frontend `uuid`; regenerating on each mutation breaks selection/editing.
 - **Save must re-open with the stored key, not re-derive from a lost password.** Hold `DatabaseKey` or the password (and keyfile bytes) in the session for the duration; zeroize on close.
 - **Browser demo behavior is not desktop evidence.** Do not check desktop KDBX TODOs from `npm run dev` screenshots or localStorage behavior.
+- **The entry-list TOTP badge computes client-side** (`computeTotp` in `src/lib/utils/totp.ts`) so the list stays IPC-free, while the detail-panel `TotpWidget` uses the backend `totp_code` command. Keep both implementations in sync (same period/digits/SHA defaults, otpauth URI support); the badge is display/copy-only and never an authority.
 
 ## Settings / style
 

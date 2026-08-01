@@ -24,6 +24,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
+  import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
 
   let currentVault = $state<VaultState | null>(null);
@@ -812,7 +813,7 @@
       ></span>
 
       <section class="entry-panel">
-        <div class="entry-table" style={`--col-url: ${colWidths.url}px`}>
+        <div class="entry-table" style={`--col-url: ${colWidths.url}px; --col-totp: 96px`}>
           <div class="entry-table-head" role="row">
             <div class="head-cell head-title">
               <button
@@ -833,6 +834,9 @@
                 title="调整列宽"
                 onpointerdown={(e) => startResize(e)}
               ></span>
+            </div>
+            <div class="head-cell head-totp">
+              <span class="head-label">验证码</span>
             </div>
             <div class="head-cell head-url">
               <button
@@ -885,6 +889,11 @@
                       <span class="entry-row-sub">{row.entry.username}</span>
                     {/if}
                   </div>
+                  {#if row.entry.totp}
+                    <span class="entry-row-col col-totp">
+                      <EntryTotpBadge seed={row.entry.totp} />
+                    </span>
+                  {/if}
                   <span class="entry-row-col col-url" title={row.entry.url || undefined}>
                     {row.entry.url}
                   </span>
@@ -1289,7 +1298,7 @@
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) 70px;
+    grid-template-columns: 24px minmax(0, 1fr) var(--col-totp, 96px) var(--col-url, 200px) 70px;
     align-items: center;
     gap: 9px;
     flex: 0 0 auto;
@@ -1377,7 +1386,7 @@
 
   .entry-row {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) 70px;
+    grid-template-columns: 24px minmax(0, 1fr) var(--col-totp, 96px) var(--col-url, 200px) 70px;
     align-items: center;
     gap: 9px;
     height: 40px;
@@ -1443,6 +1452,11 @@
 
   .col-url {
     color: var(--text-faint);
+  }
+
+  .col-totp {
+    display: flex;
+    min-width: 0;
   }
 
   .entry-row-actions {
