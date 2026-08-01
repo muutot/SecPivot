@@ -1440,10 +1440,7 @@ fn sync_attachments(
         }
     }
     for payload in payloads {
-        entry.add_attachment(
-            payload.name.clone(),
-            Value::protected(payload.data.clone()),
-        );
+        entry.add_attachment(payload.name.clone(), Value::protected(payload.data.clone()));
     }
 }
 
@@ -3543,7 +3540,10 @@ mod tests {
         assert!(err.contains("附件数据解码失败"));
 
         let state = session.state().unwrap().unwrap();
-        assert_eq!(state.root.entries[0].title, "Original", "title must be unchanged");
+        assert_eq!(
+            state.root.entries[0].title, "Original",
+            "title must be unchanged"
+        );
         let history = session.get_entry_history(uuid).unwrap();
         assert!(history.is_empty(), "history must not be polluted");
     }
@@ -3870,16 +3870,33 @@ mod tests {
     fn parse_expiry_accepts_frontend_iso_with_milliseconds() {
         assert_eq!(
             parse_expiry(Some("2026-08-01T12:34:56.000Z")),
-            Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 1).unwrap().and_hms_opt(12, 34, 56).unwrap())
+            Some(
+                chrono::NaiveDate::from_ymd_opt(2026, 8, 1)
+                    .unwrap()
+                    .and_hms_opt(12, 34, 56)
+                    .unwrap()
+            )
         );
         assert_eq!(
-            parse_expiry(Some("2099-12-31T23:59:59.500Z"))
-                .map(|d| d.and_utc().timestamp_millis()),
-            Some(chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap().and_utc().timestamp_millis() + 500)
+            parse_expiry(Some("2099-12-31T23:59:59.500Z")).map(|d| d.and_utc().timestamp_millis()),
+            Some(
+                chrono::NaiveDate::from_ymd_opt(2099, 12, 31)
+                    .unwrap()
+                    .and_hms_opt(23, 59, 59)
+                    .unwrap()
+                    .and_utc()
+                    .timestamp_millis()
+                    + 500
+            )
         );
         assert_eq!(
             parse_expiry(Some("2020-01-01T00:00:00Z")),
-            Some(chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap())
+            Some(
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+            )
         );
     }
 
@@ -3887,7 +3904,12 @@ mod tests {
     fn parse_expiry_accepts_legacy_naive_and_rejects_garbage() {
         assert_eq!(
             parse_expiry(Some("2020-01-01T00:00:00")),
-            Some(chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap())
+            Some(
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+            )
         );
         assert_eq!(parse_expiry(Some("")), None);
         assert_eq!(parse_expiry(None), None);

@@ -120,6 +120,8 @@ const REF_SEARCH_FIELDS: &str = "TUPANIO";
 /// `resolve` receives each parsed reference and returns the value to insert
 /// (or `None` when nothing matches). Non-`REF` placeholders and `{{`/`}}`
 /// escapes are preserved verbatim so `parse_sequence` can process them later.
+/// Resolved values have their braces escaped (`{` -> `{{`, `}` -> `}}`) so a
+/// referenced field can never be re-interpreted as placeholders or keys.
 pub fn expand_refs(
     sequence: &str,
     resolve: impl Fn(RefSpec<'_>) -> Option<String>,
@@ -131,7 +133,7 @@ pub fn expand_refs(
             '{' => {
                 if chars.peek() == Some(&'{') {
                     chars.next();
-                    out.push('{');
+                    out.push_str("{{");
                     continue;
                 }
                 let mut name = String::new();
@@ -151,7 +153,7 @@ pub fn expand_refs(
                     let spec = parse_ref(&name[4..])?;
                     let value =
                         resolve(spec).ok_or_else(|| AutotypeError::RefNotFound(name.clone()))?;
-                    out.push_str(&value);
+                    out.push_str(&escape_value(&value));
                 } else {
                     out.push('{');
                     out.push_str(&name);
@@ -161,13 +163,29 @@ pub fn expand_refs(
             '}' => {
                 if chars.peek() == Some(&'}') {
                     chars.next();
+                    out.push_str("}}");
+                } else {
+                    out.push('}');
                 }
-                out.push('}');
             }
             _ => out.push(c),
         }
     }
     Ok(out)
+}
+
+/// Escape braces in a resolved REF value so `parse_sequence` treats it as
+/// literal text rather than placeholders or special keys.
+fn escape_value(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '{' => out.push_str("{{"),
+            '}' => out.push_str("}}"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// Parse the inner text of a `{REF:...}` placeholder (`<Field>@<Search>:<Text>`).
@@ -443,10 +461,38 @@ mod tests {
             expand_refs("{REF:P@O:Banking Pin}", resolve).expect("expand"),
             "attr-value"
         );
-        // Doubled braces stay literal; unmatched braces preserved for parse_sequence.
+        // Doubled braces stay literal for parse_sequence; non-REF placeholders
+        // are preserved so parse_sequence resolves them later.
         assert_eq!(
             expand_refs("{{REF:U@I:X}} and {TAB}", resolve).expect("expand"),
-            "{REF:U@I:X} and {TAB}"
+            "{{REF:U@I:X}} and {TAB}"
+        );
+    }
+
+    #[test]
+    fn expand_refs_escapes_resolved_values() {
+        let resolve = |_: RefSpec<'_>| Some("a{TAB}b}c{".to_owned());
+        assert_eq!(
+            expand_refs("{REF:U@I:1}", resolve).expect("expand"),
+            "a{{TAB}}b}}c{{"
+        );
+        // Plain values pass through unchanged.
+        let plain = |_: RefSpec<'_>| Some("ref-value".to_owned());
+        assert_eq!(
+            expand_refs("{REF:U@I:1}", plain).expect("expand"),
+            "ref-value"
+        );
+    }
+
+    #[test]
+    fn expand_then_parse_never_reinterprets_escaped_values() {
+        let resolve = |_: RefSpec<'_>| Some("{TAB}{USERNAME}}".to_owned());
+        let expanded = expand_refs("{{TAB}}{REF:U@I:1}", resolve).expect("expand");
+        let tokens = parse_sequence(&expanded, &ctx()).expect("parse");
+        assert_eq!(
+            tokens,
+            vec![AutotypeToken::Text("{TAB}{TAB}{USERNAME}}".to_owned())],
+            "escaped braces must stay literal text, never become keys"
         );
     }
 
