@@ -389,7 +389,7 @@ export const vault: VaultStore = {
         notes: input.notes,
         totp: input.totp || undefined,
         customFields: input.customFields,
-        attachments: input.attachments?.map((a) => ({ name: a.name, size: a.size })),
+        attachments: input.attachments?.map((a) => ({ name: a.name, size: a.data?.length ?? 0 })),
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
       });

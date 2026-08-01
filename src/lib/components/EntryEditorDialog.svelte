@@ -43,8 +43,11 @@
   let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
-  let attachments = $state<AttachmentInput[]>(
-    entry?.attachments?.map((a) => ({ name: a.name })) ?? [],
+  /** Editor-local attachment state: `size` is display-only (shown in the UI)
+   * and stripped before sending — the backend contract has no `size`. */
+  type EditorAttachment = { name: string; size: number; data?: string };
+  let attachments = $state<EditorAttachment[]>(
+    entry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
 
@@ -161,7 +164,7 @@
         .map((f) => ({ name: f.name.trim(), value: f.value }))
         .filter((f) => f.name !== ""),
       attachments: attachments.map((a) =>
-        a.data ? { name: a.name, size: a.size, data: a.data } : { name: a.name, size: a.size },
+        a.data ? { name: a.name, data: a.data } : { name: a.name },
       ),
     });
   }
