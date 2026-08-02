@@ -5,6 +5,7 @@
   import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { installAutoLock, installFocusLock } from "$lib/services/security";
   import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
+  import RpcSideChannelPrompt from "$lib/components/RpcSideChannelPrompt.svelte";
 
   let { children } = $props();
 
@@ -39,4 +40,5 @@
 
 {#if !isTcatoOverlay}
   <BridgeApprovalPrompt />
+  <RpcSideChannelPrompt />
 {/if}
