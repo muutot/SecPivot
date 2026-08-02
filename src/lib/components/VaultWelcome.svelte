@@ -460,6 +460,18 @@
             </div>
           </div>
           <div class="field">
+            <span>配置名称</span>
+            <input
+              class="text-input"
+              type="text"
+              value={settings.remoteProfiles[settings.activeRemote].name}
+              placeholder="默认"
+              spellcheck="false"
+              oninput={(e) =>
+                appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
+            />
+          </div>
+          <div class="field">
             <span>服务地址</span>
             <input
               class="text-input"
