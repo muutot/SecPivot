@@ -134,11 +134,22 @@
     }, 1800);
   }
 
-  const compactMode = $derived(get(appSettings).general.compactMode);
-  const groupDensity = $derived(get(appSettings).general.density);
-  const showDescriptions = $derived(get(appSettings).general.showDescriptions);
+  /** Reactive mirror of the settings store. `$derived(get(appSettings))` would
+   * evaluate once and freeze (get() is untracked in Svelte 5); subscribing to
+   * a $state mirror keeps every derived below fresh. */
+  let settings = $state(get(appSettings));
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      settings = value;
+    });
+    return unsubscribe;
+  });
+
+  const compactMode = $derived(settings.general.compactMode);
+  const groupDensity = $derived(settings.general.density);
+  const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
-    !currentVault && rememberedPath !== null && get(appSettings).general.rememberLastDatabase,
+    !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
   );
   $effect(() => {
     syncCompactShellClass(compactMode);
@@ -270,7 +281,7 @@
   let detailVisible = $state(false);
 
   $effect(() => {
-    const p = get(appSettings).general.panelWidths;
+    const p = settings.general.panelWidths;
     groupWidth = p.group;
     detailWidth = p.detail;
     colWidths.url = p.urlCol;

@@ -14,12 +14,23 @@
 
   let { onopened }: Props = $props();
 
-  const recentFiles = $derived(get(appSettings).general.recentFiles);
+  /** Reactive mirror of the settings store. `$derived(get(appSettings))` would
+   * evaluate once and freeze (get() is untracked in Svelte 5); subscribing to
+   * a $state mirror keeps every derived below fresh. */
+  let settings = $state(get(appSettings));
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      settings = value;
+    });
+    return unsubscribe;
+  });
 
-  const remoteLocalDir = $derived(get(appSettings).remote.localDir || "remote");
+  const recentFiles = $derived(settings.general.recentFiles);
+
+  const remoteLocalDir = $derived(settings.remote.localDir || "remote");
 
   /** Opt-in screen-capture guard: excludes the main window from screenshots/recordings while a vault is open (Windows only). */
-  const guardEnabled = $derived(get(appSettings).security.screenCaptureGuard);
+  const guardEnabled = $derived(settings.security.screenCaptureGuard);
 
   type Modal = "none" | "open" | "create" | "remote";
   type RemoteTab = "open" | "create" | "config";
@@ -40,7 +51,7 @@
   let remoteMode: RemoteMode = $state("memory");
   let remoteLoading = $state(false);
 
-  const remote = $derived(get(appSettings).remote);
+  const remote = $derived(settings.remote);
   const remoteConfigured = $derived(
     Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
   );
