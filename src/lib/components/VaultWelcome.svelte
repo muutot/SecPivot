@@ -489,7 +489,7 @@
           <div class="field">
             <span>选择远程文件</span>
             <div class="remote-list">
-              {#if remoteLoading}
+              {#if remoteLoading && remoteObjects.length === 0}
                 <p class="remote-empty">正在加载…</p>
               {:else if remoteObjects.length === 0}
                 <p class="remote-empty">暂无文件</p>
