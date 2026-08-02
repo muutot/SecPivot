@@ -326,6 +326,25 @@ impl Default for RemoteSettings {
     }
 }
 
+/// One named S3 configuration. Multiple profiles can coexist; the frontend
+/// picks the active one per command (`cfg` travels with every call).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteProfile {
+    /// Display name shown in the profile selector.
+    pub name: String,
+    pub settings: RemoteSettings,
+}
+
+impl Default for RemoteProfile {
+    fn default() -> Self {
+        Self {
+            name: "默认".into(),
+            settings: RemoteSettings::default(),
+        }
+    }
+}
+
 /// KeePassHttp browser bridge. The loopback server only runs while `enabled`
 /// is true; association keys are session-held (never persisted) and wiped on
 /// vault lock, so the bridge serves nothing while locked.
@@ -344,15 +363,44 @@ pub struct RpcSettings {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default)]
     pub general: GeneralSettings,
+    #[serde(default)]
     pub security: SecuritySettings,
+    #[serde(default)]
     pub database: DatabaseDefaults,
-    pub remote: RemoteSettings,
+    /// Named S3 configurations; the browser and commands use the profile at
+    /// `active_remote` (clamped to a valid index on load).
+    #[serde(default)]
+    pub remote_profiles: Vec<RemoteProfile>,
+    #[serde(default)]
+    pub active_remote: usize,
+    /// Legacy single-profile field from configs written before profiles
+    /// existed; migrated into `remote_profiles` on load, never re-serialized.
+    #[serde(default, skip_serializing)]
+    pub remote: Option<RemoteSettings>,
+    #[serde(default)]
     pub bridge: BridgeSettings,
+    #[serde(default)]
     pub rpc: RpcSettings,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            general: GeneralSettings::default(),
+            security: SecuritySettings::default(),
+            database: DatabaseDefaults::default(),
+            remote_profiles: vec![RemoteProfile::default()],
+            active_remote: 0,
+            remote: None,
+            bridge: BridgeSettings::default(),
+            rpc: RpcSettings::default(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -470,19 +518,43 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     };
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
 
-    config.remote.endpoint = config.remote.endpoint.trim().to_owned();
-    config.remote.region = config.remote.region.trim().to_owned();
-    config.remote.bucket = config.remote.bucket.trim().to_owned();
-    config.remote.access_key = config.remote.access_key.trim().to_owned();
-    config.remote.secret_key = config.remote.secret_key.trim().to_owned();
-    config.remote.prefix = config.remote.prefix.trim().to_owned();
-    config.remote.local_dir = config.remote.local_dir.trim().to_owned();
-    if config.remote.local_dir.is_empty() {
-        config.remote.local_dir = "remote".into();
+    config.remote_profiles = if config.remote_profiles.is_empty() {
+        match config.remote.take() {
+            Some(legacy) => vec![RemoteProfile {
+                name: "默认".into(),
+                settings: legacy,
+            }],
+            None => vec![RemoteProfile::default()],
+        }
+    } else {
+        config.remote_profiles
+    };
+    for profile in &mut config.remote_profiles {
+        normalize_remote_settings(&mut profile.settings);
+        profile.name = profile.name.trim().to_owned();
+        if profile.name.is_empty() {
+            profile.name = "默认".into();
+        }
     }
-    config.remote.backup_count = clamp_i32(config.remote.backup_count, 0, 10, 3);
+    config.active_remote =
+        clamp_i32(config.active_remote as i32, 0, config.remote_profiles.len() as i32 - 1, 0)
+            as usize;
 
     config
+}
+
+fn normalize_remote_settings(settings: &mut RemoteSettings) {
+    settings.endpoint = settings.endpoint.trim().to_owned();
+    settings.region = settings.region.trim().to_owned();
+    settings.bucket = settings.bucket.trim().to_owned();
+    settings.access_key = settings.access_key.trim().to_owned();
+    settings.secret_key = settings.secret_key.trim().to_owned();
+    settings.prefix = settings.prefix.trim().to_owned();
+    settings.local_dir = settings.local_dir.trim().to_owned();
+    if settings.local_dir.is_empty() {
+        settings.local_dir = "remote".into();
+    }
+    settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -499,11 +571,17 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         let text = fs::read_to_string(&path).map_err(|e| format!("读取配置失败: {e}"))?;
         let mut value: AppConfig =
             serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
-        value.remote.access_key = crate::dpapi::decrypt(&value.remote.access_key);
-        value.remote.secret_key = crate::dpapi::decrypt(&value.remote.secret_key);
+        for profile in &mut value.remote_profiles {
+            profile.settings.access_key = crate::dpapi::decrypt(&profile.settings.access_key);
+            profile.settings.secret_key = crate::dpapi::decrypt(&profile.settings.secret_key);
+        }
+        if let Some(legacy) = &mut value.remote {
+            legacy.access_key = crate::dpapi::decrypt(&legacy.access_key);
+            legacy.secret_key = crate::dpapi::decrypt(&legacy.secret_key);
+        }
         Ok(normalize_config(value))
     } else {
-        Ok(AppConfig::default())
+        Ok(normalize_config(AppConfig::default()))
     }
 }
 
@@ -513,8 +591,10 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let path = dir.join(CONFIG_FILE);
     let tmp = dir.join("config.json.tmp");
     let mut persisted = config.clone();
-    persisted.remote.access_key = crate::dpapi::encrypt(&persisted.remote.access_key)?;
-    persisted.remote.secret_key = crate::dpapi::encrypt(&persisted.remote.secret_key)?;
+    for profile in &mut persisted.remote_profiles {
+        profile.settings.access_key = crate::dpapi::encrypt(&profile.settings.access_key)?;
+        profile.settings.secret_key = crate::dpapi::encrypt(&profile.settings.secret_key)?;
+    }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
     fs::write(&tmp, text).map_err(|e| format!("写入配置失败: {e}"))?;
@@ -611,30 +691,69 @@ mod tests {
     }
 
     #[test]
-    fn remote_settings_survive_deserialize_write_reload() {
+    fn remote_profiles_survive_deserialize_write_reload() {
         let dir = TempDir::new().unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let mut config = AppConfig::default();
-        config.remote.endpoint = "http://127.0.0.1:9000".into();
-        config.remote.region = "us-east-1".into();
-        config.remote.bucket = "my-vaults".into();
-        config.remote.access_key = "AKIA-test".into();
-        config.remote.secret_key = "s3cret".into();
-        config.remote.prefix = "vaults/".into();
-        config.remote.local_dir = "backups".into();
-        config.remote.backup_count = 5;
+        config.remote_profiles.push(RemoteProfile {
+            name: "Bitiful".into(),
+            settings: RemoteSettings {
+                endpoint: "http://127.0.0.1:9000".into(),
+                region: "cn-east-1".into(),
+                bucket: "my-vaults".into(),
+                access_key: "AKIA-test".into(),
+                secret_key: "s3cret".into(),
+                prefix: "vaults/".into(),
+                local_dir: "backups".into(),
+                backup_count: 5,
+            },
+        });
+        config.active_remote = 1;
         store.set(config.clone()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
         assert!(text.contains("\"backupCount\": 5"));
+        assert!(text.contains("\"remoteProfiles\""));
 
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
-        assert_eq!(again.remote.endpoint, "http://127.0.0.1:9000");
-        assert_eq!(again.remote.bucket, "my-vaults");
-        assert_eq!(again.remote.secret_key, "s3cret");
-        assert_eq!(again.remote.local_dir, "backups");
-        assert_eq!(again.remote.backup_count, 5);
+        assert_eq!(again.remote_profiles.len(), 2);
+        assert_eq!(again.remote_profiles[1].name, "Bitiful");
+        assert_eq!(again.remote_profiles[1].settings.endpoint, "http://127.0.0.1:9000");
+        assert_eq!(again.remote_profiles[1].settings.bucket, "my-vaults");
+        assert_eq!(again.remote_profiles[1].settings.secret_key, "s3cret");
+        assert_eq!(again.remote_profiles[1].settings.local_dir, "backups");
+        assert_eq!(again.remote_profiles[1].settings.backup_count, 5);
+        // active index is clamped to the last valid profile
+        assert_eq!(again.active_remote, 1);
+        // the legacy field must not be re-serialized
+        assert!(!text.contains("\"remote\":"));
+    }
+
+    #[test]
+    fn legacy_single_remote_migrates_into_first_profile() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        fs::create_dir_all(&conf).unwrap();
+        let legacy = r#"{"remote": {
+            "endpoint": "https://s3.bitiful.net", "region": "cn-east-1",
+            "bucket": "muuyo", "accessKey": "AK", "secretKey": "SK",
+            "prefix": "vaults/", "localDir": "remote", "backupCount": 3
+        }}"#;
+        fs::write(conf.join("config.json"), legacy).unwrap();
+
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let config = store.get().unwrap();
+        assert_eq!(config.remote_profiles.len(), 1);
+        assert_eq!(config.remote_profiles[0].name, "默认");
+        assert_eq!(config.remote_profiles[0].settings.endpoint, "https://s3.bitiful.net");
+        assert_eq!(config.remote_profiles[0].settings.bucket, "muuyo");
+        assert_eq!(config.active_remote, 0);
+        // re-saving writes the new shape only
+        store.set(config.clone()).unwrap();
+        let text = std::fs::read_to_string(conf.join("config.json")).unwrap();
+        assert!(text.contains("\"remoteProfiles\""));
+        assert!(!text.contains("\"accessKey\": \"AK\""));
     }
 
     #[cfg(target_os = "windows")]
@@ -643,8 +762,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let mut config = AppConfig::default();
-        config.remote.access_key = "AKIA-secret-access".into();
-        config.remote.secret_key = "plaintext-s3cret".into();
+        config.remote_profiles[0].settings.access_key = "AKIA-secret-access".into();
+        config.remote_profiles[0].settings.secret_key = "plaintext-s3cret".into();
         store.set(config).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
@@ -655,24 +774,26 @@ mod tests {
 
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
-        assert_eq!(again.remote.access_key, "AKIA-secret-access");
-        assert_eq!(again.remote.secret_key, "plaintext-s3cret");
+        assert_eq!(again.remote_profiles[0].settings.access_key, "AKIA-secret-access");
+        assert_eq!(again.remote_profiles[0].settings.secret_key, "plaintext-s3cret");
     }
 
     #[test]
     fn remote_defaults_and_normalization_rules() {
         let mut config = AppConfig::default();
-        assert_eq!(config.remote.endpoint, "https://s3.amazonaws.com");
-        assert_eq!(config.remote.local_dir, "remote");
-        assert_eq!(config.remote.backup_count, 3);
+        assert_eq!(config.remote_profiles[0].settings.endpoint, "https://s3.amazonaws.com");
+        assert_eq!(config.remote_profiles[0].settings.local_dir, "remote");
+        assert_eq!(config.remote_profiles[0].settings.backup_count, 3);
 
-        config.remote.endpoint = "  https://s3.example.com  ".into();
-        config.remote.local_dir = "   ".into();
-        config.remote.backup_count = 99;
+        config.remote_profiles[0].settings.endpoint = "  https://s3.example.com  ".into();
+        config.remote_profiles[0].settings.local_dir = "   ".into();
+        config.remote_profiles[0].settings.backup_count = 99;
+        config.active_remote = 42;
         let normalized = normalize_config(config);
-        assert_eq!(normalized.remote.endpoint, "https://s3.example.com");
-        assert_eq!(normalized.remote.local_dir, "remote");
-        assert_eq!(normalized.remote.backup_count, 3);
+        assert_eq!(normalized.remote_profiles[0].settings.endpoint, "https://s3.example.com");
+        assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
+        assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
+        assert_eq!(normalized.active_remote, 0);
     }
 
     #[test]
