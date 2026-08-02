@@ -183,7 +183,7 @@
       <!-- Explicit commit: whole row acts as the confirm target // anything else stays browse-only. -->
       <button type="button" class="picker-confirm" onclick={() => commit(current.uuid)}>
         <AppIcon name="check" size={13} />
-        <span>选择：{chain.map((g) => g.name).join(" / ")}</span>
+        <span>确认</span>
       </button>
     </div>
   {/if}
