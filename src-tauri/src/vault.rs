@@ -268,7 +268,8 @@ pub struct RemoteTarget {
 /// The currently open vault. `db` holds the decrypted database; `password`
 /// and `keyfile` are kept only for save and cleared on close. `remote`
 /// is set when the vault came from S3. `revision` counts edits so a save
-/// completing after a concurrent edit does not clear the dirty flag.
+/// completing after a concurrent edit does not clear the dirty flag, and so
+/// `snapshot` can reuse a cached tree instead of rebuilding it every call.
 #[derive(Default)]
 pub struct VaultSession {
     path: Option<String>,
@@ -279,6 +280,7 @@ pub struct VaultSession {
     modified_at: String,
     remote: Option<RemoteTarget>,
     revision: u64,
+    cached_snapshot: Option<(u64, VaultState)>,
 }
 
 /// Wipe a secret `String` in place, then drop it (buffer is zeroed before
@@ -629,9 +631,10 @@ impl VaultSession {
         self.dirty = false;
         self.modified_at.clear();
         self.remote = None;
+        self.cached_snapshot = None;
     }
 
-    pub fn state(&self) -> Result<Option<VaultState>, String> {
+    pub fn state(&mut self) -> Result<Option<VaultState>, String> {
         if !self.is_open() {
             return Ok(None);
         }
@@ -1170,6 +1173,7 @@ impl VaultSession {
         self.db = Some(db);
         self.dirty = false;
         self.modified_at = now_iso();
+        self.cached_snapshot = None;
         self.snapshot()
     }
 
@@ -1184,6 +1188,7 @@ impl VaultSession {
         self.dirty = false;
         self.modified_at = now_iso();
         self.remote = None;
+        self.cached_snapshot = None;
     }
 
     fn mark_dirty(&mut self) {
@@ -1212,10 +1217,17 @@ impl VaultSession {
             .ok_or_else(|| "数据库未打开".to_owned())
     }
 
-    fn snapshot(&self) -> Result<VaultState, String> {
+    fn snapshot(&mut self) -> Result<VaultState, String> {
+        // Rebuild the tree only when the database changed; repeated reads
+        // (e.g. get_vault_state polling) reuse the cached snapshot.
+        if let Some((revision, cached)) = &self.cached_snapshot {
+            if *revision == self.revision {
+                return Ok(cached.clone());
+            }
+        }
         let db = self.require_db()?;
         let path = self.require_path()?;
-        Ok(VaultState {
+        let state = VaultState {
             path: path.to_owned(),
             file_name: Path::new(path)
                 .file_name()
@@ -1225,7 +1237,9 @@ impl VaultSession {
             root: build_group_tree(db),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
-        })
+        };
+        self.cached_snapshot = Some((self.revision, state.clone()));
+        Ok(state)
     }
 
     /// Capture everything `persist_save` needs. Cheap (no KDF, no I/O): a
@@ -1266,6 +1280,7 @@ impl VaultSession {
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
+            self.cached_snapshot = None;
         }
         self.snapshot()
     }
@@ -1283,6 +1298,7 @@ impl VaultSession {
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
+            self.cached_snapshot = None;
         }
         self.snapshot()
     }
@@ -2097,7 +2113,7 @@ mod tests {
     #[test]
     fn create_then_reopen_round_trip() {
         let dir = TempDir::new().unwrap();
-        let (session, path) = create_session(&dir);
+        let (mut session, path) = create_session(&dir);
         let state = session.state().unwrap().unwrap();
         assert_eq!(state.root.name, "Root");
         assert_eq!(state.root.uuid, ROOT_GROUP_UUID);
@@ -2512,6 +2528,38 @@ mod tests {
         let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
+    }
+
+    #[test]
+    fn snapshot_cache_serves_unchanged_state_without_rebuild() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap();
+        // Repeated reads must be consistent even with the cache: same tree,
+        // same dirty flag, and edits invalidate the cache.
+        let first = session.state().unwrap().unwrap();
+        assert_eq!(first.root.children.len(), 1);
+        let second = session.state().unwrap().unwrap();
+        assert_eq!(second.root.children.len(), 1);
+        assert_eq!(second.root.children[0].name, "Mail");
+        assert_eq!(second.dirty, first.dirty);
+
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Work".into(),
+            })
+            .unwrap();
+        let third = session.state().unwrap().unwrap();
+        assert_eq!(third.root.children.len(), 2);
+        assert!(third.dirty, "edit must be reflected and keep dirty=true");
     }
 
     #[test]
