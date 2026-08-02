@@ -5,11 +5,10 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
-    seed: string;
     entryUuid: string;
   }
 
-  let { seed, entryUuid }: Props = $props();
+  let { entryUuid }: Props = $props();
 
   let code = $state("");
   let remaining = $state(0);
@@ -35,7 +34,6 @@
   }
 
   $effect(() => {
-    if (!seed) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     const tick = async (): Promise<void> => {
       // A failing seed (invalid TOTP URI) must stop the per-second loop

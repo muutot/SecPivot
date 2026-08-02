@@ -36,7 +36,8 @@
   let passwordLoading = $state(false);
   let url = $state(entry?.url ?? "");
   let notes = $state(entry?.notes ?? "");
-  let totp = $state(entry?.totp ?? "");
+  let totp = $state("");
+  let totpLoading = $state(false);
   let expiresLocal = $state(entry?.expires ? toLocalInput(entry.expires) : "");
   let iconIndex = $state<number | null>(entry?.icon ?? null);
   let colorHex = $state(entry?.color ?? "");
@@ -65,6 +66,23 @@
       })
       .catch(() => {
         passwordLoading = false;
+      });
+  });
+
+  /** TOTP seeds are not part of the snapshot; fetch on demand when editing. */
+  $effect(() => {
+    const targetUuid = entry?.uuid;
+    totp = "";
+    if (!targetUuid || !entry?.hasTotp) return;
+    totpLoading = true;
+    void vault
+      .getEntryTotp(targetUuid)
+      .then((value) => {
+        totp = value ?? "";
+        totpLoading = false;
+      })
+      .catch(() => {
+        totpLoading = false;
       });
   });
 
@@ -247,7 +265,8 @@
           class="text-input mono"
           type="text"
           bind:value={totp}
-          placeholder="Base32 密钥或 otpauth URI"
+          placeholder={totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
+          disabled={totpLoading}
         />
       </label>
 

@@ -317,11 +317,11 @@ import type { HistoryVersion } from "$lib/types/vault";
         </div>
       {/if}
 
-      {#if entry.totp}
+      {#if entry.hasTotp}
         <div class="field-block">
           <span class="field-label">TOTP 验证码</span>
           <div class="field-value">
-            <TotpWidget seed={entry.totp} entryUuid={entry.uuid} />
+            <TotpWidget entryUuid={entry.uuid} />
           </div>
         </div>
       {/if}

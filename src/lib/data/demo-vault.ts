@@ -1,4 +1,4 @@
-import type { VaultState } from "$lib/types/vault";
+﻿import type { VaultState } from "$lib/types/vault";
 
 export const DEMO_VAULT_PATH = "demo://vault.kdbx";
 
@@ -30,6 +30,7 @@ export function buildDemoVaultState(): VaultState {
               entries: [
                 {
                   uuid: "ent-proton",
+                  hasTotp: true,
                   groupUuid: "grp-email",
                   title: "ProtonMail",
                   username: "alice@proton.me",
@@ -42,6 +43,7 @@ export function buildDemoVaultState(): VaultState {
                 },
                 {
                   uuid: "ent-gmail",
+                  hasTotp: false,
                   groupUuid: "grp-email",
                   title: "Gmail",
                   username: "alice.wang@gmail.com",
@@ -62,6 +64,7 @@ export function buildDemoVaultState(): VaultState {
               entries: [
                 {
                   uuid: "ent-github",
+                  hasTotp: false,
                   groupUuid: "grp-social",
                   title: "GitHub",
                   username: "alice-dev",
@@ -84,6 +87,7 @@ export function buildDemoVaultState(): VaultState {
           entries: [
             {
               uuid: "ent-bank",
+              hasTotp: false,
               groupUuid: "grp-finance",
               title: "Checking Account",
               username: "alice2024",
@@ -95,6 +99,7 @@ export function buildDemoVaultState(): VaultState {
             },
             {
               uuid: "ent-card",
+              hasTotp: false,
               groupUuid: "grp-finance",
               title: "Visa Card",
               username: "ALICE WANG",
@@ -122,6 +127,7 @@ export function buildDemoVaultState(): VaultState {
               entries: [
                 {
                   uuid: "ent-vpn",
+                  hasTotp: false,
                   groupUuid: "grp-infra",
                   title: "VPN Gateway",
                   username: "alice.corp",
@@ -133,6 +139,7 @@ export function buildDemoVaultState(): VaultState {
                 },
                 {
                   uuid: "ent-db",
+                  hasTotp: false,
                   groupUuid: "grp-infra",
                   title: "Postgres Staging",
                   username: "svc_staging",
@@ -155,6 +162,7 @@ export function buildDemoVaultState(): VaultState {
           entries: [
             {
               uuid: "ent-wifi",
+              hasTotp: false,
               groupUuid: "grp-personal",
               title: "Home Wi-Fi",
               username: "",
@@ -166,6 +174,7 @@ export function buildDemoVaultState(): VaultState {
             },
             {
               uuid: "ent-safe",
+              hasTotp: false,
               groupUuid: "grp-personal",
               title: "Safeguard PIN",
               username: "",
@@ -181,6 +190,7 @@ export function buildDemoVaultState(): VaultState {
       entries: [
         {
           uuid: "ent-router",
+          hasTotp: false,
           groupUuid: "root",
           title: "Router Admin",
           username: "admin",

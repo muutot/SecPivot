@@ -564,6 +564,18 @@ fn get_entry_password(
         .get_entry_password(&uuid)
 }
 
+/// Fetch one entry's TOTP seed on demand; seeds are never part of `VaultState`.
+#[tauri::command]
+fn get_entry_totp(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<Option<String>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .get_entry_totp(&uuid)
+}
+
 /// Server-side security analysis; no passwords leave the session.
 #[tauri::command]
 fn security_report(
@@ -756,6 +768,7 @@ pub fn run() {
             add_group,
             rename_group,
             get_entry_password,
+            get_entry_totp,
             security_report,
             export_csv,
             read_text_file,

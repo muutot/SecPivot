@@ -1131,9 +1131,9 @@
                       <span class="entry-row-sub">{row.entry.username}</span>
                     {/if}
                   </div>
-                  {#if row.entry.totp}
+                  {#if row.entry.hasTotp}
                     <span class="entry-row-col col-totp">
-                      <EntryTotpBadge seed={row.entry.totp} />
+                      <EntryTotpBadge entryUuid={row.entry.uuid} />
                     </span>
                   {/if}
                   <span class="entry-row-col col-url" title={row.entry.url || undefined}>

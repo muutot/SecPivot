@@ -8,6 +8,10 @@ export interface VaultEntry {
   password?: string;
   url: string;
   notes: string;
+  /** Whether the entry carries a TOTP seed. The seed itself is never part of
+   * the snapshot: fetch codes via `vault.totpCode` or the seed on demand via
+   * `vault.getEntryTotp`; present only in the browser demo fallback. */
+  hasTotp: boolean;
   totp?: string;
   icon?: number;
   /** `#RRGGBB` background color tag. */

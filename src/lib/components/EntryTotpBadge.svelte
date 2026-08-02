@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { computeTotp } from "$lib/utils/totp";
+  import { vault } from "$lib/services/vault";
   import { copyText } from "$lib/utils/clipboard";
   import type { TotpCode } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
-    seed: string;
+    entryUuid: string;
   }
 
-  let { seed }: Props = $props();
+  let { entryUuid }: Props = $props();
 
   let code = $state("");
   let remaining = $state(0);
@@ -18,9 +18,9 @@
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function refresh(now = Date.now()): Promise<boolean> {
+  async function refresh(): Promise<boolean> {
     try {
-      const result: TotpCode = await computeTotp(seed, now);
+      const result: TotpCode = await vault.totpCode(entryUuid);
       code = result.code;
       remaining = result.validFor;
       period = result.period;
@@ -34,11 +34,10 @@
   }
 
   $effect(() => {
-    if (!seed) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     const tick = async (): Promise<void> => {
       // A failing seed (invalid TOTP URI) must stop the per-second loop
-      // instead of recomputing (WebCrypto) forever.
+      // instead of hammering the backend forever.
       if (!(await refresh()) && timer) clearInterval(timer);
     };
     void tick();

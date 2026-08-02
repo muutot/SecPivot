@@ -72,8 +72,10 @@ pub struct VaultEntry {
     pub username: String,
     pub url: String,
     pub notes: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub totp: Option<String>,
+    /// Whether the entry carries a TOTP seed. The seed itself is never part
+    /// of the snapshot: the renderer fetches codes via `totp_code` or the
+    /// seed on demand via `get_entry_totp`.
+    pub has_totp: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1063,6 +1065,15 @@ impl VaultSession {
         Ok(entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned())
     }
 
+    /// Fetch a single entry's TOTP seed on demand (never part of `VaultState`).
+    /// `None` means the entry has no seed configured.
+    pub fn get_entry_totp(&self, uuid: &str) -> Result<Option<String>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(entry.get_raw_otp_value().map(str::to_owned))
+    }
+
     /// Analyze all entries server-side; no passwords leave the session.
     pub fn security_report(&self) -> Result<SecurityReport, String> {
         let db = self.require_db()?;
@@ -1222,7 +1233,7 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
         url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
         notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
-        totp: entry.get_raw_otp_value().map(str::to_owned),
+        has_totp: entry.get_raw_otp_value().is_some(),
         icon: match entry.icon() {
             Some(Icon::BuiltIn(id)) => Some(*id as u32),
             _ => None,
@@ -1919,7 +1930,11 @@ mod tests {
         let entry = &group.entries[0];
         assert_eq!(entry.title, "GitHub");
         assert_eq!(session.get_entry_password(&entry.uuid).unwrap(), "s3cret");
-        assert_eq!(entry.totp.as_deref(), Some("JBSWY3DPEHPK3PXP"));
+        assert!(entry.has_totp);
+        assert_eq!(
+            session.get_entry_totp(&entry.uuid).unwrap().as_deref(),
+            Some("JBSWY3DPEHPK3PXP")
+        );
         let entry_uuid = entry.uuid.clone();
         assert!(entry.created.is_some());
         assert!(entry.modified.is_some());
@@ -1947,7 +1962,8 @@ mod tests {
         let entry = &state.root.children[0].entries[0];
         assert_eq!(entry.title, "GitHub (work)");
         assert_eq!(session.get_entry_password(&entry_uuid).unwrap(), "s3cret2");
-        assert!(entry.totp.is_none());
+        assert!(!entry.has_totp);
+        assert_eq!(session.get_entry_totp(&entry_uuid).unwrap(), None);
 
         let state = session.rename_group(&group.uuid, "Accounts").unwrap();
         assert_eq!(state.root.children[0].name, "Accounts");
@@ -2692,7 +2708,13 @@ mod tests {
             entry.get("password").is_none(),
             "entry password leaked in VaultEntry"
         );
-        assert!(entry["totp"].is_string());
+        // The TOTP seed must never leave the backend in a snapshot; only the
+        // presence flag is serialized.
+        assert!(
+            entry.get("totp").is_none(),
+            "TOTP seed leaked in VaultEntry"
+        );
+        assert!(entry["hasTotp"].is_boolean());
         // Optional fields absent on the entry are skipped entirely (not null).
         assert!(entry.get("icon").is_none());
         assert!(entry.get("tags").is_none());
@@ -2834,6 +2856,39 @@ mod tests {
         for key in ["code", "validFor", "period"] {
             assert!(obj.contains_key(key), "missing TotpCode key {key}");
         }
+    }
+
+    /// TOTP seeds never serialize into `VaultState` snapshots: the renderer
+    /// learns only `hasTotp` and fetches the seed (or a code) on demand.
+    #[test]
+    fn totp_seed_never_serializes_into_snapshot() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let mut input = EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "2FA".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        };
+        input.totp = Some("JBSWY3DPEHPK3PXP".into());
+        let state = session.add_entry(&input).unwrap();
+        let entry = &state.root.entries[0];
+        assert!(entry.has_totp);
+        let json = serde_json::to_value(&state).unwrap();
+        let serialized = serde_json::to_string(&json["root"]["entries"][0]).unwrap();
+        assert!(
+            !serialized.contains("JBSWY3DPEHPK3PXP"),
+            "TOTP seed leaked into snapshot JSON: {serialized}"
+        );
+        assert!(serialized.contains("hasTotp"));
     }
 
     #[test]

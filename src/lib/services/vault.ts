@@ -53,6 +53,7 @@ interface VaultStore {
   restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
+  getEntryTotp: (uuid: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
@@ -387,6 +388,7 @@ export const vault: VaultStore = {
         password: input.password,
         url: input.url,
         notes: input.notes,
+        hasTotp: Boolean(input.totp),
         totp: input.totp || undefined,
         customFields: input.customFields,
         attachments: input.attachments?.map((a) => ({ name: a.name, size: a.data?.length ?? 0 })),
@@ -412,6 +414,7 @@ export const vault: VaultStore = {
         if (entry) {
           Object.assign(entry, input, {
             groupUuid: input.groupUuid,
+            hasTotp: Boolean(input.totp),
             modified: new Date().toISOString(),
           });
           return;
@@ -440,6 +443,14 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.password ?? "";
+  },
+
+  async getEntryTotp(uuid: string): Promise<string | null> {
+    if (isTauriRuntime()) {
+      return backendInvoke<string | null>("get_entry_totp", { uuid });
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    return findEntry(current.root, uuid)?.totp ?? null;
   },
 
   async securityReport(): Promise<SecurityReport> {
