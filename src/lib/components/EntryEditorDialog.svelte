@@ -42,6 +42,7 @@
   let iconIndex = $state<number | null>(entry?.icon ?? null);
   let colorHex = $state(entry?.color ?? "");
   let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
+  let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
   /** Editor-local attachment state: `size` is display-only (shown in the UI)
@@ -203,201 +204,267 @@
       </div>
     </div>
 
-    <div class="form-grid">
-      <label class="field">
-        <span>标题</span>
-        <input class="text-input" type="text" bind:value={title} placeholder="例如：GitHub" />
-      </label>
+    <div class="editor-tabs" role="tablist" aria-label="条目字段分组">
+      <button
+        type="button"
+        role="tab"
+        class="editor-tab"
+        class:active={activeTab === "fields"}
+        aria-selected={activeTab === "fields"}
+        onclick={() => (activeTab = "fields")}
+      >
+        字段
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="editor-tab"
+        class:active={activeTab === "meta"}
+        aria-selected={activeTab === "meta"}
+        onclick={() => (activeTab = "meta")}
+      >
+        元属性
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="editor-tab"
+        class:active={activeTab === "custom"}
+        aria-selected={activeTab === "custom"}
+        onclick={() => (activeTab = "custom")}
+      >
+        自定义字段{#if customFields.length}({customFields.length}){/if}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="editor-tab"
+        class:active={activeTab === "attachments"}
+        aria-selected={activeTab === "attachments"}
+        onclick={() => (activeTab = "attachments")}
+      >
+        附件{#if attachments.length}({attachments.length}){/if}
+      </button>
+    </div>
 
-      <label class="field">
-        <span>分组</span>
-        <select class="text-input select" bind:value={targetGroupUuid}>
-          {#each entries as group (group.uuid)}
-            <option value={group.uuid}>{group.name.trim()}</option>
-          {/each}
-        </select>
-      </label>
+    {#if activeTab === "fields"}
+      <div class="form-grid" role="tabpanel">
+        <label class="field">
+          <span>标题</span>
+          <input class="text-input" type="text" bind:value={title} placeholder="例如：GitHub" />
+        </label>
 
-      <label class="field">
-        <span>用户名</span>
-        <input class="text-input" type="text" bind:value={username} autocomplete="off" />
-      </label>
+        <label class="field">
+          <span>分组</span>
+          <select class="text-input select" bind:value={targetGroupUuid}>
+            {#each entries as group (group.uuid)}
+              <option value={group.uuid}>{group.name.trim()}</option>
+            {/each}
+          </select>
+        </label>
 
-      <label class="field">
-        <span>密码</span>
-        <div class="input-row">
+        <label class="field">
+          <span>用户名</span>
+          <input class="text-input" type="text" bind:value={username} autocomplete="off" />
+        </label>
+
+        <label class="field">
+          <span>密码</span>
+          <div class="input-row">
+            <input
+              class="text-input mono"
+              type={showPassword ? "text" : "password"}
+              bind:value={password}
+              autocomplete="new-password"
+              disabled={passwordLoading}
+              placeholder={passwordLoading ? "加载中…" : ""}
+            />
+            <button class="icon-btn" onclick={generate} title="生成密码">
+              <AppIcon name="refresh" size={14} />
+            </button>
+            <button
+              class="icon-btn"
+              onclick={() => (showPassword = !showPassword)}
+              title="显示密码"
+            >
+              <AppIcon name={showPassword ? "eye-off" : "eye"} size={14} />
+            </button>
+          </div>
+          <div class="strength-row">
+            <span class="strength-bar"
+              ><span
+                class:strong={strength.className === "strong"}
+                class:fair={strength.className === "fair"}
+                class:weak={strength.className === "weak"}
+                style:width={`${Math.min(100, entropy)}%`}
+              ></span></span
+            >
+            <span class="strength-label {strength.className}"
+              >{strength.label} · {entropy} bits</span
+            >
+          </div>
+        </label>
+
+        <label class="field">
+          <span>网址</span>
+          <input class="text-input" type="url" bind:value={url} placeholder="https://" />
+        </label>
+
+        <label class="field full">
+          <span>备注</span>
+          <textarea class="text-input textarea" bind:value={notes} rows={4}></textarea>
+        </label>
+      </div>
+    {/if}
+
+    {#if activeTab === "meta"}
+      <div class="form-grid" role="tabpanel">
+        <label class="field">
+          <span>TOTP 种子</span>
           <input
             class="text-input mono"
-            type={showPassword ? "text" : "password"}
-            bind:value={password}
-            autocomplete="new-password"
-            disabled={passwordLoading}
-            placeholder={passwordLoading ? "加载中…" : ""}
+            type="text"
+            bind:value={totp}
+            placeholder={totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
+            disabled={totpLoading}
           />
-          <button class="icon-btn" onclick={generate} title="生成密码">
-            <AppIcon name="refresh" size={14} />
-          </button>
-          <button class="icon-btn" onclick={() => (showPassword = !showPassword)} title="显示密码">
-            <AppIcon name={showPassword ? "eye-off" : "eye"} size={14} />
-          </button>
-        </div>
-        <div class="strength-row">
-          <span class="strength-bar"
-            ><span
-              class:strong={strength.className === "strong"}
-              class:fair={strength.className === "fair"}
-              class:weak={strength.className === "weak"}
-              style:width={`${Math.min(100, entropy)}%`}
-            ></span></span
-          >
-          <span class="strength-label {strength.className}">{strength.label} · {entropy} bits</span>
-        </div>
-      </label>
+        </label>
 
-      <label class="field">
-        <span>网址</span>
-        <input class="text-input" type="url" bind:value={url} placeholder="https://" />
-      </label>
+        <label class="field">
+          <span>过期时间</span>
+          <input class="text-input" type="datetime-local" bind:value={expiresLocal} />
+          <span class="field-hint">到期后条目标记为已过期</span>
+        </label>
 
-      <label class="field">
-        <span>TOTP 种子</span>
-        <input
-          class="text-input mono"
-          type="text"
-          bind:value={totp}
-          placeholder={totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
-          disabled={totpLoading}
-        />
-      </label>
+        <section class="field full">
+          <span class="section-title">图标</span>
+          <div class="icon-grid">
+            {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
+              <button
+                type="button"
+                class="icon-option"
+                class:selected={iconIndex === index}
+                onclick={() => (iconIndex = iconIndex === index ? null : index)}
+                title={`内置图标 ${index}`}
+                aria-pressed={iconIndex === index}
+              >
+                <AppIcon name={keepassIconName(index)} size={16} />
+              </button>
+            {/each}
+          </div>
+        </section>
 
-      <label class="field">
-        <span>过期时间</span>
-        <input class="text-input" type="datetime-local" bind:value={expiresLocal} />
-        <span class="field-hint">到期后条目标记为已过期</span>
-      </label>
+        <section class="field full">
+          <span class="section-title">颜色标记</span>
+          <div class="color-row">
+            {#each KEEPASS_COLORS as color (color)}
+              <button
+                type="button"
+                class="color-option"
+                class:selected={colorHex.toUpperCase() === color}
+                style:background={color}
+                onclick={() => (colorHex = colorHex.toUpperCase() === color ? "" : color)}
+                title={color}
+                aria-label={`颜色 ${color}`}
+              ></button>
+            {/each}
+            <input
+              class="color-input"
+              type="color"
+              value={colorHex || "#000000"}
+              oninput={(e) => (colorHex = e.currentTarget.value.toUpperCase())}
+              title="自定义颜色"
+            />
+            {#if colorHex}
+              <button
+                type="button"
+                class="icon-btn"
+                onclick={() => (colorHex = "")}
+                title="清除颜色"
+              >
+                <AppIcon name="x" size={13} />
+              </button>
+            {/if}
+          </div>
+        </section>
+      </div>
+    {/if}
 
-      <section class="field full">
-        <span class="section-title">图标</span>
-        <div class="icon-grid">
-          {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
-            <button
-              type="button"
-              class="icon-option"
-              class:selected={iconIndex === index}
-              onclick={() => (iconIndex = iconIndex === index ? null : index)}
-              title={`内置图标 ${index}`}
-              aria-pressed={iconIndex === index}
-            >
-              <AppIcon name={keepassIconName(index)} size={16} />
-            </button>
-          {/each}
-        </div>
-      </section>
-
-      <section class="field full">
-        <span class="section-title">颜色标记</span>
-        <div class="color-row">
-          {#each KEEPASS_COLORS as color (color)}
-            <button
-              type="button"
-              class="color-option"
-              class:selected={colorHex.toUpperCase() === color}
-              style:background={color}
-              onclick={() => (colorHex = colorHex.toUpperCase() === color ? "" : color)}
-              title={color}
-              aria-label={`颜色 ${color}`}
-            ></button>
-          {/each}
-          <input
-            class="color-input"
-            type="color"
-            value={colorHex || "#000000"}
-            oninput={(e) => (colorHex = e.currentTarget.value.toUpperCase())}
-            title="自定义颜色"
-          />
-          {#if colorHex}
-            <button type="button" class="icon-btn" onclick={() => (colorHex = "")} title="清除颜色">
-              <AppIcon name="x" size={13} />
-            </button>
+    {#if activeTab === "custom"}
+      <div class="form-grid" role="tabpanel">
+        <section class="field full">
+          {#if customFields.length === 0}
+            <p class="section-empty">暂无自定义字段</p>
           {/if}
-        </div>
-      </section>
+          {#each customFields as field, i (i)}
+            <div class="custom-field-row">
+              <input
+                class="text-input"
+                type="text"
+                placeholder="字段名"
+                value={field.name}
+                oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
+              />
+              <input
+                class="text-input"
+                type="text"
+                placeholder="值"
+                value={field.value}
+                oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
+              />
+              <button
+                class="icon-btn"
+                onclick={() => removeCustomField(i)}
+                aria-label="删除字段"
+                title="删除字段"
+              >
+                <AppIcon name="x" size={13} />
+              </button>
+            </div>
+          {/each}
+          <button class="add-row-btn" onclick={addCustomField}>
+            <AppIcon name="plus" size={12} />添加字段
+          </button>
+        </section>
+      </div>
+    {/if}
 
-      <section class="field full">
-        <span class="section-title">自定义字段</span>
-        {#if customFields.length === 0}
-          <p class="section-empty">暂无自定义字段</p>
-        {/if}
-        {#each customFields as field, i (i)}
-          <div class="custom-field-row">
-            <input
-              class="text-input"
-              type="text"
-              placeholder="字段名"
-              value={field.name}
-              oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
-            />
-            <input
-              class="text-input"
-              type="text"
-              placeholder="值"
-              value={field.value}
-              oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
-            />
-            <button
-              class="icon-btn"
-              onclick={() => removeCustomField(i)}
-              aria-label="删除字段"
-              title="删除字段"
-            >
-              <AppIcon name="x" size={13} />
-            </button>
-          </div>
-        {/each}
-        <button class="add-row-btn" onclick={addCustomField}>
-          <AppIcon name="plus" size={12} />添加字段
-        </button>
-      </section>
-
-      <section class="field full">
-        <span class="section-title">附件</span>
-        {#if attachments.length === 0}
-          <p class="section-empty">暂无附件</p>
-        {/if}
-        {#each attachments as attachment, i (attachment.name + i)}
-          <div class="attachment-row">
-            <AppIcon name="file" size={14} />
-            <span class="attachment-name" title={attachment.name}>{attachment.name}</span>
-            <span class="attachment-size">{formatSize(attachment.size)}</span>
-            <button
-              class="icon-btn"
-              onclick={() => removeAttachment(i)}
-              aria-label="移除附件"
-              title="移除附件"
-            >
-              <AppIcon name="x" size={13} />
-            </button>
-          </div>
-        {/each}
-        <button class="add-row-btn" onclick={pickFiles}>
-          <AppIcon name="upload" size={12} />添加附件
-        </button>
-        <input
-          class="file-input"
-          type="file"
-          multiple
-          bind:this={fileInputEl}
-          onchange={handleFiles}
-          tabindex="-1"
-          aria-hidden="true"
-        />
-      </section>
-
-      <label class="field full">
-        <span>备注</span>
-        <textarea class="text-input textarea" bind:value={notes} rows={3}></textarea>
-      </label>
-    </div>
+    {#if activeTab === "attachments"}
+      <div class="form-grid" role="tabpanel">
+        <section class="field full">
+          {#if attachments.length === 0}
+            <p class="section-empty">暂无附件</p>
+          {/if}
+          {#each attachments as attachment, i (attachment.name + i)}
+            <div class="attachment-row">
+              <AppIcon name="file" size={14} />
+              <span class="attachment-name" title={attachment.name}>{attachment.name}</span>
+              <span class="attachment-size">{formatSize(attachment.size)}</span>
+              <button
+                class="icon-btn"
+                onclick={() => removeAttachment(i)}
+                aria-label="移除附件"
+                title="移除附件"
+              >
+                <AppIcon name="x" size={13} />
+              </button>
+            </div>
+          {/each}
+          <button class="add-row-btn" onclick={pickFiles}>
+            <AppIcon name="upload" size={12} />添加附件
+          </button>
+          <input
+            class="file-input"
+            type="file"
+            multiple
+            bind:this={fileInputEl}
+            onchange={handleFiles}
+            tabindex="-1"
+            aria-hidden="true"
+          />
+        </section>
+      </div>
+    {/if}
 
     <div class="modal-actions">
       <button class="modal-button" onclick={onclose}>取消</button>
@@ -418,7 +485,7 @@
   }
 
   .editor-modal {
-    width: min(460px, calc(100% - 40px));
+    width: min(500px, calc(100% - 40px));
     max-height: calc(100% - 48px);
     padding: 18px;
     border: 1px solid var(--border-color);
@@ -466,6 +533,38 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .editor-tabs {
+    display: flex;
+    gap: 2px;
+    margin: -12px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .editor-tab {
+    padding: 5px 12px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: var(--settings-control-radius, 6px) var(--settings-control-radius, 6px) 0 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+    transition:
+      color 80ms ease,
+      border-color 80ms ease;
+  }
+
+  .editor-tab:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .editor-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--selection-color);
   }
 
   .field {
