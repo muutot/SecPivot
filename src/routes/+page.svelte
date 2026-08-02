@@ -19,7 +19,12 @@
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
-  import { KEEPASS_ICONS, ENTRY_DEFAULT_ICON, GROUP_DEFAULT_ICON, ICON_PICKER_COUNT } from "$lib/utils/keepass-icons";
+  import {
+    KEEPASS_ICONS,
+    ENTRY_DEFAULT_ICON,
+    GROUP_DEFAULT_ICON,
+    ICON_PICKER_COUNT,
+  } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
@@ -65,7 +70,8 @@
   }
 
   function entryIconName(entry: VaultEntry): IconName {
-    const mapped = entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined;
+    const mapped =
+      entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined;
     return (mapped ?? ENTRY_DEFAULT_ICON) as IconName;
   }
 
@@ -664,7 +670,11 @@
     const name = newGroupName.trim();
     if (!name) return;
     try {
-      await vault.addGroup({ parentUuid: groupModalParent, name, icon: groupIconIndex ?? undefined });
+      await vault.addGroup({
+        parentUuid: groupModalParent,
+        name,
+        icon: groupIconIndex ?? undefined,
+      });
       groupModalOpen = false;
       flash("已创建分组");
     } catch (e) {
@@ -928,316 +938,327 @@
 {#if isTcatoOverlay}
   <TcatoOverlay />
 {:else}
-<main
-  class="app-shell"
-  class:compact={compactMode}
-  class:standalone={!currentVault}
-  style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
-  style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
-  style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
-  style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
->
-  {#if currentVault}
-    <div class="toolbar" role="presentation" data-tauri-drag-region>
-      <div class="toolbar-left">
-        <button class="tool-button primary" onclick={openCreateEntry} title="新建条目 (Ctrl+N)">
-          <AppIcon name="plus" size={14} />条目
-        </button>
-        <button class="tool-button" onclick={() => openGroupModal(selectedGroup)} title="新建分组">
-          <AppIcon name="folder-plus" size={14} />分组
-        </button>
-      </div>
-
-      <div class="toolbar-center">
-        <div class="search-box">
-          <span class="search-icon"><AppIcon name="search" size={13} /></span>
-          <input
-            class="search-input"
-            type="search"
-            placeholder="搜索…"
-            bind:value={search}
-            aria-label="搜索条目"
-          />
-          {#if search}
-            <button class="clear-button" onclick={() => (search = "")} aria-label="清除搜索"
-              >×</button
-            >
-          {/if}
-        </div>
-      </div>
-
-      <div class="toolbar-right">
-        {#if currentVault.dirty}
-          <span class="dirty-badge">未保存</span>
-        {/if}
-        <button
-          class="icon-action"
-          onclick={() => (detailVisible = !detailVisible)}
-          title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
-          aria-pressed={detailVisible}
-        >
-          <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
-        </button>
-        <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
-          <AppIcon name="shield" size={15} />
-        </button>
-        <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
-          <AppIcon name="download" size={15} />
-        </button>
-        <button class="icon-action" onclick={openSettings} title="设置">
-          <AppIcon name="settings" size={16} />
-        </button>
-        <button
-          class="tool-button"
-          onclick={handleSave}
-          disabled={busy || !currentVault.dirty}
-          title="保存数据库 (Ctrl+S)"
-        >
-          <AppIcon name="save" size={14} />保存
-        </button>
-        <button class="tool-button" onclick={handleLock} title="锁定数据库">
-          <AppIcon name="lock" size={14} />锁定
-        </button>
-      </div>
-    </div>
-
-    <div
-      class="main-content"
-      style={`--group-width: ${groupWidth}px; --detail-width: ${detailVisible ? detailWidth : 0}px`}
-    >
-      <section class="group-panel">
-        <GroupTree
-          root={currentVault.root}
-          selected={selectedGroup}
-          showIcon={compactMode ? groupDensity.showGroupIcon : true}
-          showChevron={compactMode ? groupDensity.showGroupChevron : true}
-          onselect={(uuid: string | null) => {
-            selectedGroup = uuid;
-            selectedEntry = null;
-            selectedUuids = new Set();
-            selectionAnchor = null;
-          }}
-          onaddsubgroup={openGroupModal}
-          onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
-          ondelete={askDeleteGroup}
-          onrestore={(uuid: string) => void restoreGroup(uuid)}
-          onemptybin={askEmptyRecycleBin}
-          ondropentry={(groupUuid: string, uuids: string[]) => void moveEntriesTo(groupUuid, uuids)}
-        />
-      </section>
-
-      <span
-        class="group-resize-handle"
-        role="separator"
-        aria-orientation="vertical"
-        title="调整分组宽度"
-        onpointerdown={startGroupResize}
-      ></span>
-
-      <section class="entry-panel">
-        <div class="entry-table" style={`--col-url: ${colWidths.url}px; --col-totp: 96px`}>
-          <div class="entry-table-head" role="row">
-            <div class="head-cell head-title">
-              <button
-                class="head-button"
-                type="button"
-                onclick={() => cycleSort("title")}
-                title="点击排序"
-              >
-                <span class="head-label">标题</span>
-                {#if sortCol === "title"}
-                  <span class="sort-arrow" aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>
-                {/if}
-              </button>
-              <span
-                class="resize-handle"
-                role="separator"
-                aria-orientation="vertical"
-                title="调整列宽"
-                onpointerdown={(e) => startResize(e)}
-              ></span>
-            </div>
-            <div class="head-cell head-totp">
-              <span class="head-label">验证码</span>
-            </div>
-            <div class="head-cell head-url">
-              <button
-                class="head-button"
-                type="button"
-                onclick={() => cycleSort("url")}
-                title="点击排序"
-              >
-                <span class="head-label">网址</span>
-                {#if sortCol === "url"}
-                  <span class="sort-arrow" aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>
-                {/if}
-              </button>
-            </div>
-            <div class="head-actions"></div>
-          </div>
-
-          <div
-            class="entry-list"
-            role="listbox"
-            aria-label="条目列表"
-            aria-multiselectable="true"
-            tabindex="-1"
-            oncontextmenu={openBlankMenu}
+  <main
+    class="app-shell"
+    class:compact={compactMode}
+    class:standalone={!currentVault}
+    style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
+    style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
+    style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
+    style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
+  >
+    {#if currentVault}
+      <div class="toolbar" role="presentation" data-tauri-drag-region>
+        <div class="toolbar-left">
+          <button class="tool-button primary" onclick={openCreateEntry} title="新建条目 (Ctrl+N)">
+            <AppIcon name="plus" size={14} />条目
+          </button>
+          <button
+            class="tool-button"
+            onclick={() => openGroupModal(selectedGroup)}
+            title="新建分组"
           >
-            {#if filteredEntries.length === 0}
-              <div class="empty-state">
-                <span class="empty-icon"><AppIcon name="key" size={20} /></span>
-                <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
-                <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
-              </div>
-            {:else}
-              {#each sortedEntries as row (row.entry.uuid)}
-                <div
-                  class="entry-row"
-                  class:selected={selectedUuids.has(row.entry.uuid)}
-                  class:expired-row={row.entry.expired}
-                  style:--row-color={row.entry.color ?? "transparent"}
-                  role="option"
-                  aria-selected={selectedUuids.has(row.entry.uuid)}
-                  tabindex="0"
-                  draggable="true"
-                  ondragstart={(e) => {
-                    const targets = selectedUuids.has(row.entry.uuid)
-                      ? Array.from(selectedUuids)
-                      : [row.entry.uuid];
-                    e.dataTransfer?.setData(
-                      "application/x-keyvault-entries",
-                      JSON.stringify(targets),
-                    );
-                    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onclick={(e) => handleRowClick(e, row.entry)}
-                  oncontextmenu={(e) => openEntryMenu(e, row.entry)}
-                  onkeydown={(e) => {
-                    if (e.key === "Enter") setSingleSelection(row.entry);
-                  }}
-                >
-                  {#if row.entry.color}
-                    <span class="entry-row-color-bar" aria-hidden="true"></span>
-                  {/if}
-                  <span class="entry-row-icon"><AppIcon name={entryIconName(row.entry)} size={13} /></span>
-                  <div class="entry-row-main">
-                    <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                      >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                        <span class="expired-flag">已过期</span>
-                      {/if}</span
-                    >
-                    {#if showDescriptions}
-                      <span class="entry-row-sub">{row.entry.username}</span>
-                    {/if}
-                  </div>
-                  {#if row.entry.hasTotp}
-                    <span class="entry-row-col col-totp">
-                      <EntryTotpBadge entryUuid={row.entry.uuid} />
-                    </span>
-                  {/if}
-                  <span class="entry-row-col col-url" title={row.entry.url || undefined}>
-                    {row.entry.url}
-                  </span>
-                  <div class="entry-row-actions">
-                    <button
-                      class="row-btn"
-                      class:star-active={row.entry.favorite}
-                      title={row.entry.favorite ? "取消收藏" : "收藏条目"}
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        void toggleFavorite(row.entry);
-                      }}
-                    >
-                      <AppIcon name="star" size={12} />
-                    </button>
-                    <button
-                      class="row-btn"
-                      title="复制用户名"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
-                      }}
-                    >
-                      <AppIcon name="user" size={12} />
-                    </button>
-                    <button
-                      class="row-btn"
-                      title="复制密码"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        void copyEntryPassword(row.entry);
-                      }}
-                    >
-                      <AppIcon name="copy" size={12} />
-                    </button>
-                  </div>
-                </div>
-              {/each}
+            <AppIcon name="folder-plus" size={14} />分组
+          </button>
+        </div>
+
+        <div class="toolbar-center">
+          <div class="search-box">
+            <span class="search-icon"><AppIcon name="search" size={13} /></span>
+            <input
+              class="search-input"
+              type="search"
+              placeholder="搜索…"
+              bind:value={search}
+              aria-label="搜索条目"
+            />
+            {#if search}
+              <button class="clear-button" onclick={() => (search = "")} aria-label="清除搜索"
+                >×</button
+              >
             {/if}
           </div>
         </div>
-      </section>
 
-      {#if detailVisible}
+        <div class="toolbar-right">
+          {#if currentVault.dirty}
+            <span class="dirty-badge">未保存</span>
+          {/if}
+          <button
+            class="icon-action"
+            onclick={() => (detailVisible = !detailVisible)}
+            title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
+            aria-pressed={detailVisible}
+          >
+            <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
+          </button>
+          <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
+            <AppIcon name="shield" size={15} />
+          </button>
+          <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
+            <AppIcon name="download" size={15} />
+          </button>
+          <button class="icon-action" onclick={openSettings} title="设置">
+            <AppIcon name="settings" size={16} />
+          </button>
+          <button
+            class="tool-button"
+            onclick={handleSave}
+            disabled={busy || !currentVault.dirty}
+            title="保存数据库 (Ctrl+S)"
+          >
+            <AppIcon name="save" size={14} />保存
+          </button>
+          <button class="tool-button" onclick={handleLock} title="锁定数据库">
+            <AppIcon name="lock" size={14} />锁定
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="main-content"
+        style={`--group-width: ${groupWidth}px; --detail-width: ${detailVisible ? detailWidth : 0}px`}
+      >
+        <section class="group-panel">
+          <GroupTree
+            root={currentVault.root}
+            selected={selectedGroup}
+            showIcon={compactMode ? groupDensity.showGroupIcon : true}
+            showChevron={compactMode ? groupDensity.showGroupChevron : true}
+            onselect={(uuid: string | null) => {
+              selectedGroup = uuid;
+              selectedEntry = null;
+              selectedUuids = new Set();
+              selectionAnchor = null;
+            }}
+            onaddsubgroup={openGroupModal}
+            onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
+            ondelete={askDeleteGroup}
+            onrestore={(uuid: string) => void restoreGroup(uuid)}
+            onemptybin={askEmptyRecycleBin}
+            ondropentry={(groupUuid: string, uuids: string[]) =>
+              void moveEntriesTo(groupUuid, uuids)}
+          />
+        </section>
+
         <span
-          class="detail-resize-handle"
+          class="group-resize-handle"
           role="separator"
           aria-orientation="vertical"
-          title="调整详情宽度"
-          onpointerdown={startDetailResize}
+          title="调整分组宽度"
+          onpointerdown={startGroupResize}
         ></span>
 
-        <section class="detail-panel">
-          {#if selectedEntry}
-            <EntryDetail
-              entry={selectedEntry}
-              groupPath={pathOf(selectedEntry.groupUuid)}
-              inRecycleBin={groupInBin(selectedEntry.groupUuid)}
-              onfavorite={toggleFavorite}
-              onedit={openEditEntry}
-              ondelete={askDeleteEntry}
-              onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
-            />
-          {:else}
-            <div class="detail-empty">
-              <AppIcon name="eye" size={22} />
-              <p>选择条目查看详情</p>
+        <section class="entry-panel">
+          <div class="entry-table" style={`--col-url: ${colWidths.url}px; --col-totp: 96px`}>
+            <div class="entry-table-head" role="row">
+              <div class="head-cell head-title">
+                <button
+                  class="head-button"
+                  type="button"
+                  onclick={() => cycleSort("title")}
+                  title="点击排序"
+                >
+                  <span class="head-label">标题</span>
+                  {#if sortCol === "title"}
+                    <span class="sort-arrow" aria-hidden="true"
+                      >{sortDir === "asc" ? "▲" : "▼"}</span
+                    >
+                  {/if}
+                </button>
+                <span
+                  class="resize-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  title="调整列宽"
+                  onpointerdown={(e) => startResize(e)}
+                ></span>
+              </div>
+              <div class="head-cell head-totp">
+                <span class="head-label">验证码</span>
+              </div>
+              <div class="head-cell head-url">
+                <button
+                  class="head-button"
+                  type="button"
+                  onclick={() => cycleSort("url")}
+                  title="点击排序"
+                >
+                  <span class="head-label">网址</span>
+                  {#if sortCol === "url"}
+                    <span class="sort-arrow" aria-hidden="true"
+                      >{sortDir === "asc" ? "▲" : "▼"}</span
+                    >
+                  {/if}
+                </button>
+              </div>
+              <div class="head-actions"></div>
             </div>
-          {/if}
-        </section>
-      {/if}
-    </div>
 
-    <footer class="status-bar" role="status" aria-live="polite">
-      <span class="status-left">
-        <span class="result-count">{filteredEntries.length} 个条目</span>
-        {#if selectedGroup !== null}
-          <span class="status-group-filter" title={pathOf(selectedGroup)}>
-            筛选于 {pathOf(selectedGroup)}
-          </span>
+            <div
+              class="entry-list"
+              role="listbox"
+              aria-label="条目列表"
+              aria-multiselectable="true"
+              tabindex="-1"
+              oncontextmenu={openBlankMenu}
+            >
+              {#if filteredEntries.length === 0}
+                <div class="empty-state">
+                  <span class="empty-icon"><AppIcon name="key" size={20} /></span>
+                  <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
+                  <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
+                </div>
+              {:else}
+                {#each sortedEntries as row (row.entry.uuid)}
+                  <div
+                    class="entry-row"
+                    class:selected={selectedUuids.has(row.entry.uuid)}
+                    class:expired-row={row.entry.expired}
+                    style:--row-color={row.entry.color ?? "transparent"}
+                    role="option"
+                    aria-selected={selectedUuids.has(row.entry.uuid)}
+                    tabindex="0"
+                    draggable="true"
+                    ondragstart={(e) => {
+                      const targets = selectedUuids.has(row.entry.uuid)
+                        ? Array.from(selectedUuids)
+                        : [row.entry.uuid];
+                      e.dataTransfer?.setData(
+                        "application/x-keyvault-entries",
+                        JSON.stringify(targets),
+                      );
+                      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onclick={(e) => handleRowClick(e, row.entry)}
+                    oncontextmenu={(e) => openEntryMenu(e, row.entry)}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") setSingleSelection(row.entry);
+                    }}
+                  >
+                    {#if row.entry.color}
+                      <span class="entry-row-color-bar" aria-hidden="true"></span>
+                    {/if}
+                    <span class="entry-row-icon"
+                      ><AppIcon name={entryIconName(row.entry)} size={13} /></span
+                    >
+                    <div class="entry-row-main">
+                      <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
+                        >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                          <span class="expired-flag">已过期</span>
+                        {/if}</span
+                      >
+                      {#if showDescriptions}
+                        <span class="entry-row-sub">{row.entry.username}</span>
+                      {/if}
+                    </div>
+                    {#if row.entry.hasTotp}
+                      <span class="entry-row-col col-totp">
+                        <EntryTotpBadge entryUuid={row.entry.uuid} />
+                      </span>
+                    {/if}
+                    <span class="entry-row-col col-url" title={row.entry.url || undefined}>
+                      {row.entry.url}
+                    </span>
+                    <div class="entry-row-actions">
+                      <button
+                        class="row-btn"
+                        class:star-active={row.entry.favorite}
+                        title={row.entry.favorite ? "取消收藏" : "收藏条目"}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          void toggleFavorite(row.entry);
+                        }}
+                      >
+                        <AppIcon name="star" size={12} />
+                      </button>
+                      <button
+                        class="row-btn"
+                        title="复制用户名"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
+                        }}
+                      >
+                        <AppIcon name="user" size={12} />
+                      </button>
+                      <button
+                        class="row-btn"
+                        title="复制密码"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          void copyEntryPassword(row.entry);
+                        }}
+                      >
+                        <AppIcon name="copy" size={12} />
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        </section>
+
+        {#if detailVisible}
+          <span
+            class="detail-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            title="调整详情宽度"
+            onpointerdown={startDetailResize}
+          ></span>
+
+          <section class="detail-panel">
+            {#if selectedEntry}
+              <EntryDetail
+                entry={selectedEntry}
+                groupPath={pathOf(selectedEntry.groupUuid)}
+                inRecycleBin={groupInBin(selectedEntry.groupUuid)}
+                onfavorite={toggleFavorite}
+                onedit={openEditEntry}
+                ondelete={askDeleteEntry}
+                onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
+              />
+            {:else}
+              <div class="detail-empty">
+                <AppIcon name="eye" size={22} />
+                <p>选择条目查看详情</p>
+              </div>
+            {/if}
+          </section>
         {/if}
-        {#if currentVault.dirty}
-          <span class="status-dirty"><i></i>未保存的修改</span>
-        {/if}
-      </span>
-      <span class="status-msg">{statusMsg}</span>
-      <span class="status-right">
-        {#if currentVault.path}
-          <span class="status-path" title={currentVault.path}>{currentVault.fileName}</span>
-        {/if}
-      </span>
-    </footer>
-  {:else if showLockScreen}
-    <LockScreen
-      remembered={rememberedPath}
-      onopened={() => void vault.refresh()}
-      onswitch={() => vault.clearRemembered()}
-    />
-  {:else}
-    <VaultWelcome onopened={() => void vault.refresh()} />
-  {/if}
-</main>
+      </div>
+
+      <footer class="status-bar" role="status" aria-live="polite">
+        <span class="status-left">
+          <span class="result-count">{filteredEntries.length} 个条目</span>
+          {#if selectedGroup !== null}
+            <span class="status-group-filter" title={pathOf(selectedGroup)}>
+              筛选于 {pathOf(selectedGroup)}
+            </span>
+          {/if}
+          {#if currentVault.dirty}
+            <span class="status-dirty"><i></i>未保存的修改</span>
+          {/if}
+        </span>
+        <span class="status-msg">{statusMsg}</span>
+        <span class="status-right">
+          {#if currentVault.path}
+            <span class="status-path" title={currentVault.path}>{currentVault.fileName}</span>
+          {/if}
+        </span>
+      </footer>
+    {:else if showLockScreen}
+      <LockScreen
+        remembered={rememberedPath}
+        onopened={() => void vault.refresh()}
+        onswitch={() => vault.clearRemembered()}
+      />
+    {:else}
+      <VaultWelcome onopened={() => void vault.refresh()} />
+    {/if}
+  </main>
 {/if}
 
 {#if editorOpen}

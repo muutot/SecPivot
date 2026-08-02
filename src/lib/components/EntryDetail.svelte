@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { VaultEntry } from "$lib/types/vault";
-import type { HistoryVersion } from "$lib/types/vault";
+  import type { HistoryVersion } from "$lib/types/vault";
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
   import { isTauriRuntime } from "$lib/services/settings";
@@ -22,8 +22,15 @@ import type { HistoryVersion } from "$lib/types/vault";
     onrestore?: (entry: VaultEntry) => void;
   }
 
-  let { entry, groupPath, inRecycleBin = false, onfavorite, onedit, ondelete, onrestore }: Props =
-    $props();
+  let {
+    entry,
+    groupPath,
+    inRecycleBin = false,
+    onfavorite,
+    onedit,
+    ondelete,
+    onrestore,
+  }: Props = $props();
 
   const iconName = $derived(
     ((entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined) ??
@@ -63,13 +70,8 @@ import type { HistoryVersion } from "$lib/types/vault";
   }
 
   async function restoreVersion(version: HistoryVersion): Promise<void> {
-    const when = version.modified
-      ? new Date(version.modified).toLocaleString("zh-CN")
-      : "未知时间";
-    if (
-      !window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)
-    )
-      return;
+    const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
+    if (!window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)) return;
     try {
       await vault.restoreEntryVersion(entry.uuid, version.index);
       historyLoadedUuid = null;
@@ -193,7 +195,9 @@ import type { HistoryVersion } from "$lib/types/vault";
 <div class="detail">
   <header class="detail-head">
     <div class="detail-title-row">
-      <span class="entry-icon" style:--entry-color={entry.color}><AppIcon name={iconName} size={15} /></span>
+      <span class="entry-icon" style:--entry-color={entry.color}
+        ><AppIcon name={iconName} size={15} /></span
+      >
       <div class="detail-titles">
         <h3 class="detail-title">{entry.title || "未命名条目"}</h3>
         <p class="detail-path">{groupPath}</p>
@@ -445,7 +449,10 @@ import type { HistoryVersion } from "$lib/types/vault";
       {:else}
         <div class="history-list">
           {#each historyVersions as version (version.index)}
-            <div class="history-item" title={`${version.username || ""}${version.url ? ` · ${version.url}` : ""}`}>
+            <div
+              class="history-item"
+              title={`${version.username || ""}${version.url ? ` · ${version.url}` : ""}`}
+            >
               <AppIcon name="clock" size={14} />
               <div class="history-item-main">
                 <span class="history-time">
@@ -455,11 +462,7 @@ import type { HistoryVersion } from "$lib/types/vault";
                 </span>
                 <span class="history-title">{version.title || "未命名条目"}</span>
               </div>
-              <button
-                class="copy-btn"
-                onclick={() => restoreVersion(version)}
-                title="恢复此版本"
-              >
+              <button class="copy-btn" onclick={() => restoreVersion(version)} title="恢复此版本">
                 <AppIcon name="undo" size={13} />
               </button>
             </div>
