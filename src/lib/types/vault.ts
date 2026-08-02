@@ -113,7 +113,6 @@ export interface HistoryVersion {
   username: string;
   url: string;
   notes: string;
-  password: string;
   expires: string | null;
   customFields: CustomField[];
 }

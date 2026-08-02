@@ -187,7 +187,8 @@ pub struct TotpCode {
     pub period: u64,
 }
 
-/// A single historical snapshot of an entry (see `Entry.history`).
+/// A single historical snapshot of an entry (see `Entry.history`). Passwords
+/// are never serialized: restoring a version happens server-side by index.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryVersion {
@@ -198,7 +199,6 @@ pub struct HistoryVersion {
     pub username: String,
     pub url: String,
     pub notes: String,
-    pub password: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<String>,
     pub custom_fields: Vec<CustomField>,
@@ -668,7 +668,8 @@ impl VaultSession {
     }
 
     /// List the historical snapshots of an entry, newest first. Passwords are
-    /// included so a version can be restored without re-entering them.
+    /// intentionally excluded from the payload — the renderer restores by
+    /// index, and the plaintext must not leave the backend.
     pub fn get_entry_history(&self, uuid: &str) -> Result<Vec<HistoryVersion>, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
@@ -690,10 +691,6 @@ impl VaultSession {
                     .to_owned(),
                 url: historical.get(FIELD_URL).unwrap_or_default().to_owned(),
                 notes: historical.get(FIELD_NOTES).unwrap_or_default().to_owned(),
-                password: historical
-                    .get(FIELD_PASSWORD)
-                    .unwrap_or_default()
-                    .to_owned(),
                 expires: historical.times.expiry.map(format_iso),
                 custom_fields: {
                     let mut fields: Vec<CustomField> = historical
@@ -2001,13 +1998,13 @@ mod tests {
         let history = session.get_entry_history(&uuid).unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].title, "A");
-        assert_eq!(history[0].password, "p1");
+        // Passwords never leave the backend in history payloads.
+        assert_eq!(session.get_entry_password(&uuid).unwrap(), "p2");
 
         session.update_entry(&uuid, &input("C", "p3")).unwrap();
         let history = session.get_entry_history(&uuid).unwrap();
         assert_eq!(history.len(), 2);
         assert_eq!(history[0].title, "B");
-        assert_eq!(history[0].password, "p2");
 
         // Restoring the snapshot replaces fields and pushes the pre-restore
         // state into the history itself.
