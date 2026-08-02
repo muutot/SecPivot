@@ -65,6 +65,30 @@
 - **安全约束(与 Phase 1 一致)**:仅 loopback;锁定时直接错误信封、不自动解锁;旁路密码只在桌面端展示、不入日志;SRP 中间态(K、密钥)存会话内,锁定即销毁;超时 120 s。
 - **依赖新增**:`num-bigint`(SRP 大数)、`tungstenite`(default-features 关闭,仅 handshake;std TcpStream 线程模式,不引入 async 运行时负担)。
 
+### Phase 2b(已立项):KeePassRPC 写路径(AddLogin/UpdateLogin)
+
+服务对象与权威来源不变(Kee 4.0.7 扩展源码 + KeePassRPC 1.12 插件源码)。服务端语义以 KeePassRPC `KeePassRPCService.JSONRPC.cs`(`AddLogin`/`UpdateLogin`)、`KeePassRPCService.cs`(`MergeEntries`/`MergeInNewURLs`)与 `KeePassRPCService.DTOV1.cs`(`setPwEntryFromEntry`)为基准。
+
+- **AddLogin**(v1 名,扩展实际调用):`[EntryDTO login, String parentUUID, String dbFileName]` → `EntryDTO + db`(DatabaseSummaryDTO)。
+  - 服务端新建条目:条目 UUID 由服务端生成(Kee 4.0.7 的 `Entry.toKPRPCEntryDTO` 不含 `uniqueID`);字段映射按插件 `setPwEntryFromEntry`:
+    - 第一个 `FFTpassword` 字段 → `Password`;所有 `FFTusername` 字段 → `UserName`;
+    - 其余字段 → 按 `displayName`(回退 `name`)存为附加字段。插件写入「KPRPC JSON」自定义配置;KeyVault 决策:写入 KDBX 自定义字符串字段(与 Phase 1 `set-login` 一致,不引入 KPRPC JSON 格式);
+    - `uRLs[0]` → `URL`,`uRLs[1..]` → 备用 URL;`title` → `Title`;`hTTPRealm` → 条目配置。
+  - `parentUUID` 空 → 根分组;非空按 UUID 查找分组,未找到回退根分组。`dbFileName` 空 → 当前库;KeyVault 单库会话:路径不匹配回退当前库(插件 `SelectDatabase` 同语义)。
+  - 成功返回新条目的 `EntryDTO`(含 `db` 摘要);库锁定 → 错误信封。
+- **UpdateLogin**(v1 名):`[EntryDTO login, String oldLoginUUID, int urlMergeMode, String dbFileName]` → `EntryDTO + db`。
+  - 前置校验:`login` 缺失 / `oldLoginUUID` 空 / `dbFileName` 空 / `oldLoginUUID` 无法解析到条目 → JSON-RPC error;目标条目位于回收站 → 拒绝。
+  - 合并语义(插件 `MergeEntries`):Title/UserName/Password/附加字段/HTTPRealm/图标从 DTO 覆盖;更新前创建历史快照(`CreateBackup`,对应 KeyVault 条目历史机制);URL 按 `urlMergeMode` 合并(`MergeInNewURLs` 语义:源 URL 逆序插入、去重、原备用 URL 提升为主 URL):
+    - `1` = 合并源 URL(保留旧 URL,新 URL 置顶,旧 URL 仍可匹配)
+    - `2` = 删除旧主 URL 后合并源 URL
+    - `3` = 保留旧 URL,仅追加源中不存在的 URL
+    - `4` = URL 不变
+    - `5` = 删除全部旧 URL,整体替换为源 URL 列表
+  - Kee 4.0.7 发送 `urlMergeMode`:`features` 含 `KPRPC_FEATURE_ENTRY_URL_REPLACEMENT` → `5`,否则 → `2`。决策:服务端提供该特性(语义最简、可预期),同时实现全部 5 种模式(纯函数,可离线单测)。
+- **BROWSER_SETTINGS_SYNC**:仅 Kee 扩展 `FeatureFlags.offered` 中宣告的客户端能力(浏览器多端设置同步,面向 Kee Vault 网页端托管会话);Kee 4.0.7 扩展无对应消息处理器,桌面 loopback 服务器无设置同步通道 —— 不实现、不宣告。Kee Vault 事件会话(`AckInit`/`sessionId` 浏览器托管传输)超出桌面客户端范围,不实现。
+- **v2 方法族**(`AddEntry`/`UpdateEntry`/`AllDatabases`/`AllDatabasesAndIcons`/DTO_V2)依赖 `KPRPC_FEATURE_DTO_V2` 且面向 Kee Vault,桌面 Kee 4.0.7 不调用 —— 不实现。
+- **测试策略**:`rpc.rs` 增加 URL 合并模式单测(5 模式 × 多 URL 场景)+ `AddLogin`/`UpdateLogin` 调度单测;`vault.rs` 增加写路径测试(新建于根/指定分组、字段映射、URL 合并、历史快照、回收站拒绝、锁定拒绝)。真机 Kee 扩展 E2E 仍不可行(离线),保留 `~` 证据缺口。
+
 ## 对仓库的影响(已落实)
 
 - 新后端模块 `bridge.rs`(协议核心,无 socket,可单测)+ `bridge_server.rs`(loopback 服务 + 生命周期 + 审批板);`lib.rs` 挂 managed state 与命令(`bridge_status`/`bridge_clients`/`bridge_remove_client`/`bridge_approve`),`set_config` 按 `bridge.enabled` 启停。
