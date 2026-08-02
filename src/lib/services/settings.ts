@@ -340,6 +340,7 @@ interface AppSettingsStore {
   setActiveRemote: (index: number) => void;
   addRemoteProfile: (name: string) => void;
   removeRemoteProfile: (index: number) => void;
+  renameRemoteProfile: (index: number, name: string) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
@@ -494,6 +495,16 @@ export const appSettings: AppSettingsStore = {
       const remoteProfiles = s.remoteProfiles.filter((_, i) => i !== index);
       const activeRemote = Math.min(Math.max(0, Math.round(index)), remoteProfiles.length - 1);
       return { ...s, remoteProfiles, activeRemote, remote: remoteProfiles[activeRemote].settings };
+    });
+    schedulePersist();
+  },
+
+  renameRemoteProfile(index, name): void {
+    settings.update((s) => {
+      const remoteProfiles = s.remoteProfiles.map((p, i) =>
+        i === index ? { ...p, name } : p,
+      );
+      return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
     });
     schedulePersist();
   },

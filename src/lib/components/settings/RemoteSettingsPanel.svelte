@@ -46,6 +46,62 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
         <div>
+          <strong>配置</strong>
+          <p>选择当前使用的远程配置，可维护多套并存</p>
+        </div>
+      </div>
+      <select
+        id="remote-profile-select"
+        class="settings-select setting-row-input"
+        value={s.activeRemote}
+        aria-label="远程配置"
+        onchange={(e) => appSettings.setActiveRemote(Number(e.currentTarget.value))}
+      >
+        {#each s.remoteProfiles as profile, i (i)}
+          <option value={i}>{profile.name}</option>
+        {/each}
+      </select>
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="edit" size={17} /></span>
+        <div>
+          <strong>配置名称</strong>
+          <p>当前配置的显示名称</p>
+        </div>
+      </div>
+      <input
+        id="remote-profile-name"
+        class="settings-input setting-row-input"
+        type="text"
+        value={s.remoteProfiles[s.activeRemote].name}
+        oninput={(e) => appSettings.renameRemoteProfile(s.activeRemote, e.currentTarget.value)}
+      />
+    </div>
+    <div class="profile-actions">
+      <button
+        class="profile-action-button"
+        onclick={() => appSettings.addRemoteProfile("")}
+        type="button"
+      >
+        添加配置
+      </button>
+      <button
+        class="profile-action-button"
+        disabled={s.remoteProfiles.length <= 1}
+        onclick={() => appSettings.removeRemoteProfile(s.activeRemote)}
+        type="button"
+      >
+        删除当前配置
+      </button>
+    </div>
+  </section>
+
+  <section class="setting-card">
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div>
           <strong>服务地址</strong>
           <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
         </div>
@@ -135,7 +191,7 @@
       />
     </div>
     <p class="settings-note warn">
-      风险提示：凭据以明文写入
+      风险提示：凭据以 DPAPI 加密后写入
       config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
     </p>
   </section>
@@ -205,3 +261,28 @@
 
   <p class="auto-save-note">修改即时生效并自动保存</p>
 </div>
+
+<style>
+  .profile-actions {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 2px;
+  }
+
+  .profile-action-button {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--hover-bg);
+    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+
+  .profile-action-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+</style>
