@@ -6,6 +6,7 @@ import type {
   SecuritySettings,
   DatabaseDefaults,
   RemoteSettings,
+  RemoteProfile,
   BridgeSettings,
   RpcSettings,
 } from "$lib/types/settings";
@@ -94,6 +95,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
+  remoteProfiles: [{ name: "默认", settings: DEFAULT_REMOTE_SETTINGS }],
+  activeRemote: 0,
   remote: DEFAULT_REMOTE_SETTINGS,
   bridge: DEFAULT_BRIDGE_SETTINGS,
   rpc: DEFAULT_RPC_SETTINGS,
@@ -159,6 +162,23 @@ export function normalizeRemoteSettings(
       3,
     ),
   };
+}
+
+/** Normalize `remoteProfiles` (at least one profile always survives), with a
+ * legacy single `remote` object promoted to the first profile. */
+export function normalizeRemoteProfiles(
+  source: Partial<RemoteProfile>[] | undefined,
+  legacy: Partial<RemoteSettings> | undefined,
+  fallback: RemoteSettings,
+): RemoteProfile[] {
+  const profiles = Array.isArray(source)
+    ? source.map((p, i) => ({
+        name: String(p?.name ?? "").trim() || (i === 0 ? "默认" : `配置 ${i + 1}`),
+        settings: normalizeRemoteSettings(p?.settings, fallback),
+      }))
+    : [];
+  if (profiles.length > 0) return profiles;
+  return [{ name: "默认", settings: normalizeRemoteSettings(legacy ?? undefined, fallback) }];
 }
 
 export function normalizeSettings(
@@ -274,11 +294,26 @@ export function normalizeSettings(
     },
   };
 
+  const remoteProfiles = normalizeRemoteProfiles(
+    source.remoteProfiles,
+    source.remote,
+    fallback.remote,
+  );
+  const activeRemote = clampInt(
+    source.activeRemote ?? fallback.activeRemote,
+    0,
+    remoteProfiles.length - 1,
+    0,
+  );
+  const remote = remoteProfiles[activeRemote].settings;
+
   return {
     general,
     security,
     database,
-    remote: normalizeRemoteSettings(source.remote, fallback.remote),
+    remoteProfiles,
+    activeRemote,
+    remote,
     bridge: {
       enabled:
         typeof source.bridge?.enabled === "boolean"
@@ -300,7 +335,11 @@ interface AppSettingsStore {
   updateGeneral: <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => void;
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
+  /** Update a field of the ACTIVE profile's settings (kept in `remote` too). */
   updateRemote: <K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]) => void;
+  setActiveRemote: (index: number) => void;
+  addRemoteProfile: (name: string) => void;
+  removeRemoteProfile: (index: number) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
@@ -417,7 +456,45 @@ export const appSettings: AppSettingsStore = {
   },
 
   updateRemote(key, value): void {
-    settings.update((s) => ({ ...s, remote: { ...s.remote, [key]: value } }));
+    settings.update((s) => {
+      const remoteProfiles = s.remoteProfiles.map((p, i) =>
+        i === s.activeRemote ? { ...p, settings: { ...p.settings, [key]: value } } : p,
+      );
+      return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
+    });
+    schedulePersist();
+  },
+
+  setActiveRemote(index): void {
+    settings.update((s) => {
+      const activeRemote = Math.min(Math.max(0, Math.round(index)), s.remoteProfiles.length - 1);
+      return { ...s, activeRemote, remote: s.remoteProfiles[activeRemote].settings };
+    });
+    schedulePersist();
+  },
+
+  addRemoteProfile(name): void {
+    settings.update((s) => {
+      const remoteProfiles = [
+        ...s.remoteProfiles,
+        {
+          name: name.trim() || `配置 ${s.remoteProfiles.length + 1}`,
+          settings: { ...DEFAULT_REMOTE_SETTINGS },
+        },
+      ];
+      const activeRemote = remoteProfiles.length - 1;
+      return { ...s, remoteProfiles, activeRemote, remote: remoteProfiles[activeRemote].settings };
+    });
+    schedulePersist();
+  },
+
+  removeRemoteProfile(index): void {
+    settings.update((s) => {
+      if (s.remoteProfiles.length <= 1) return s;
+      const remoteProfiles = s.remoteProfiles.filter((_, i) => i !== index);
+      const activeRemote = Math.min(Math.max(0, Math.round(index)), remoteProfiles.length - 1);
+      return { ...s, remoteProfiles, activeRemote, remote: remoteProfiles[activeRemote].settings };
+    });
     schedulePersist();
   },
 

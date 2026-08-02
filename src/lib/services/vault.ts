@@ -310,13 +310,17 @@ export const vault: VaultStore = {
 
   async listRemoteObjects(): Promise<RemoteObject[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
-    return backendInvoke<RemoteObject[]>("s3_list_objects", { cfg: get(appSettings).remote });
+    await appSettings.flush();
+    return backendInvoke<RemoteObject[]>("s3_list_objects", {
+      profile: get(appSettings).activeRemote,
+    });
   },
 
   async openRemote(key, password, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    await appSettings.flush();
     const result = await backendInvoke<VaultState>("open_remote_vault", {
-      cfg: get(appSettings).remote,
+      profile: get(appSettings).activeRemote,
       key,
       password,
       keyfile: keyfile || null,
@@ -329,8 +333,9 @@ export const vault: VaultStore = {
 
   async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    await appSettings.flush();
     const result = await backendInvoke<VaultState>("create_remote_vault", {
-      cfg: get(appSettings).remote,
+      profile: get(appSettings).activeRemote,
       key,
       password,
       kdf,

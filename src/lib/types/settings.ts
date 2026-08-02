@@ -24,9 +24,9 @@ export interface DatabaseDefaults {
   generator: PasswordGeneratorSettings;
 }
 
-/** S3-compatible remote vault settings. Access keys are stored plaintext in
- * `config.json` by design — a secondary credential, never a vault master
- * password (see `security-model.md`). */
+/** S3-compatible remote vault settings. Access keys are encrypted at rest
+ * with Windows DPAPI (`dpapi1:` prefix in `config.json`) — a secondary
+ * credential, never a vault master password (see `security-model.md`). */
 export interface RemoteSettings {
   endpoint: string;
   region: string;
@@ -39,6 +39,12 @@ export interface RemoteSettings {
   localDir: string;
   /** Number of timestamped `.bak` backups kept beside the local copy; 0 disables. */
   backupCount: number;
+}
+
+/** One named S3 configuration shown in the profile selector. */
+export interface RemoteProfile {
+  name: string;
+  settings: RemoteSettings;
 }
 
 export interface SecuritySettings {
@@ -113,6 +119,12 @@ export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
+  /** Named S3 configurations; `activeRemote` selects the one commands use. */
+  remoteProfiles: RemoteProfile[];
+  /** Index into `remoteProfiles` (clamped to a valid index on normalize). */
+  activeRemote: number;
+  /** Active profile's settings — kept in sync as a convenience surface for
+   * the settings UI; sent as `null` by the backend on load. */
   remote: RemoteSettings;
   bridge: BridgeSettings;
   rpc: RpcSettings;
