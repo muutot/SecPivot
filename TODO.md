@@ -71,3 +71,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - 账户绑定 (Hardware-bound, TPM) —— 用户暂缓
 - 其余见 roadmap
+
+## 浏览器集成(调研完成,提案见 `docs/browser-integration.md`)
+
+- [ ] Phase 1 — KeePassHttp 兼容协议:后台 loopback HTTP 服务(`associate`/`test-associate`/`get-logins`/`set-login`/`get-logins-count`),AES-256-CBC 逐字段加密 + HMAC-SHA256;匹配复用 `VaultSession::autotype_match` 评分,skips 回收站;associate 密钥存会话内、锁定即销毁 (🚧 需真机浏览器扩展验证,离线仅协议级测试)
+- [ ] Phase 2 (optional) — KeePassRPC (SRP + WebSocket + AES JSON-RPC) 或 KeePassXC-Browser(native messaging + manifest;同名冲突待决) —— Phase 1 架构验证后再立项
