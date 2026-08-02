@@ -56,9 +56,7 @@
 
   const current = $derived(chain[chain.length - 1] ?? null);
 
-  /** Pick a group: sets the value and drills into its children. */
-  function select(uuid: string): void {
-    onchange(uuid);
+  function drillTo(uuid: string): void {
     browseUuid = uuid;
   }
 
@@ -67,11 +65,24 @@
     browseUuid = null;
   }
 
+  function confirm(): void {
+    if (!current) return;
+    onchange(current.uuid);
+    dismiss();
+  }
+
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       e.preventDefault();
       dismiss();
+    } else if (e.key === "Enter" && open) {
+      e.preventDefault();
+      confirm();
     }
+  }
+
+  function handlePanelClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) confirm();
   }
 
   function handleClickOutside(e: MouseEvent): void {
@@ -82,7 +93,8 @@
 
   function toggle(): void {
     if (open) {
-      dismiss();
+      open = false;
+      browseUuid = null;
     } else {
       browseUuid = null;
       open = true;
@@ -113,37 +125,56 @@
   </button>
 
   {#if open && current}
-    <div class="picker-panel" role="listbox" aria-label="选择分组">
+    <div
+      class="picker-panel"
+      role="listbox"
+      aria-label="选择分组"
+      tabindex="-1"
+      onclick={handlePanelClick}
+      onkeydown={(e) => e.key === "Enter" && confirm()}
+    >
       {#if chain.length > 1}
         <button
           type="button"
           class="picker-up"
-          onclick={() => select(chain[chain.length - 2].uuid)}
+          onclick={() => drillTo(chain[chain.length - 2].uuid)}
         >
           <AppIcon name="chevron-left" size={13} />
           <span class="up-label">返回上一级：{chain[chain.length - 2].name}</span>
         </button>
-        <div class="crumb-divider"></div>
       {/if}
 
       <div class="crumb-current">
-        <AppIcon name={iconOf(current)} size={14} />
-        <span class="crumb-label">{current.name}</span>
+        {#each chain as crumb, i (crumb.uuid)}
+          {#if i > 0}
+            <span class="crumb-sep">/</span>
+          {/if}
+          {#if i < chain.length - 1}
+            <button type="button" class="crumb-link" onclick={() => drillTo(crumb.uuid)}>
+              {crumb.name}
+            </button>
+          {:else}
+            <span class="crumb-label">
+              <AppIcon name={iconOf(current)} size={13} />
+              <span class="crumb-name">{crumb.name}</span>
+            </span>
+          {/if}
+        {/each}
         <span class="crumb-count">{countEntries(current)}</span>
       </div>
 
+      <div class="crumb-divider"></div>
+
       {#if current.children.length === 0}
-        <div class="picker-empty">该分组下没有子分组</div>
+        <div class="picker-empty">该分组下没有子分组,点击下方空白处或按回车确认</div>
       {:else}
-        <div class="crumb-divider"></div>
         {#each current.children as child (child.uuid)}
           <button
             type="button"
             class="picker-row"
-            class:selected={child.uuid === value}
             role="option"
-            aria-selected={child.uuid === value}
-            onclick={() => select(child.uuid)}
+            aria-selected={child.uuid === current.uuid}
+            onclick={() => drillTo(child.uuid)}
           >
             <AppIcon name={iconOf(child)} size={14} />
             <span class="row-name">{child.name}</span>
@@ -154,6 +185,11 @@
           </button>
         {/each}
       {/if}
+
+      <button type="button" class="picker-confirm" onclick={confirm}>
+        <AppIcon name="check" size={13} />
+        <span>选择当前分组</span>
+      </button>
     </div>
   {/if}
 </div>
@@ -215,6 +251,7 @@
 
   .picker-up,
   .picker-row,
+  .picker-confirm,
   .crumb-current {
     display: flex;
     align-items: center;
@@ -243,13 +280,52 @@
     color: var(--selection-color);
   }
 
-  .up-label,
-  .crumb-label,
-  .row-name {
+  .up-label {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .crumb-label,
+  .crumb-name,
+  .row-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .crumb-current {
+    flex-wrap: wrap;
+    color: var(--text-primary);
+    cursor: default;
+  }
+
+  .crumb-current .crumb-link {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--text-secondary);
+    font-size: inherit;
+    cursor: pointer;
+  }
+
+  .crumb-current .crumb-link:hover {
+    color: var(--text-primary);
+  }
+
+  .crumb-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .crumb-name {
+    max-width: 160px;
+  }
+
+  .crumb-sep {
+    color: var(--text-faint);
   }
 
   .crumb-count,
@@ -265,17 +341,17 @@
     background: var(--border-color);
   }
 
-  .crumb-current {
+  .picker-confirm {
+    margin-top: 4px;
     border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
-    cursor: default;
+    color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
+    cursor: pointer;
   }
 
-  .picker-row.selected {
-    border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
+  .picker-confirm:hover {
     color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
+    background: color-mix(in srgb, var(--selection-color) 22%, var(--hover-bg));
   }
 
   .picker-empty {
