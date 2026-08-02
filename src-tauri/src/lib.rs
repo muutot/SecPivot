@@ -7,6 +7,8 @@ pub mod credential;
 pub mod dpapi;
 pub mod focus;
 pub mod remote;
+pub mod rpc;
+pub mod rpc_server;
 pub mod shield;
 pub mod vault;
 
@@ -48,6 +50,7 @@ fn set_config(
     let saved = store.set(config)?;
     register_global_hotkey(&app, &saved.general.global_auto_type_shortcut);
     sync_bridge(&app, &saved);
+    sync_rpc(&app, &saved);
     Ok(saved)
 }
 
@@ -58,6 +61,19 @@ fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
     if config.bridge.enabled {
         if let Err(e) = state.start(app) {
             eprintln!("bridge: {e}");
+        }
+    } else {
+        state.stop();
+    }
+}
+
+/// Start or stop the loopback KeePassRPC server to match `rpc.enabled`;
+/// failures are logged, never fatal (the app stays usable without Kee).
+fn sync_rpc(app: &tauri::AppHandle, config: &config::AppConfig) {
+    let state = app.state::<rpc_server::RpcState>();
+    if config.rpc.enabled {
+        if let Err(e) = state.start(app) {
+            eprintln!("rpc: {e}");
         }
     } else {
         state.stop();
@@ -82,6 +98,21 @@ fn bridge_status(
     Ok(BridgeStatus {
         running: state.running(),
         port: bridge::BRIDGE_PORT,
+    })
+}
+
+/// Whether the KeePassRPC loopback server is currently listening.
+#[derive(serde::Serialize)]
+struct RpcStatus {
+    running: bool,
+    port: u16,
+}
+
+#[tauri::command]
+fn rpc_status(state: tauri::State<'_, rpc_server::RpcState>) -> Result<RpcStatus, String> {
+    Ok(RpcStatus {
+        running: state.running(),
+        port: rpc::RPC_PORT,
     })
 }
 
@@ -900,7 +931,9 @@ pub fn run() {
             app.manage(TcatoTarget(Mutex::new(None)));
             app.manage(bridge_server::BridgeState::default());
             app.manage(bridge_server::ApprovalBoard::default());
+            app.manage(rpc_server::RpcState::default());
             sync_bridge(app.handle(), &config);
+            sync_rpc(app.handle(), &config);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -949,7 +982,8 @@ pub fn run() {
             bridge_status,
             bridge_clients,
             bridge_remove_client,
-            bridge_approve
+            bridge_approve,
+            rpc_status
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -46,15 +46,17 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 ## Backend ownership
 
-| Path                             | Ownership                                                                                                                                                                                                             |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src-tauri/src/lib.rs`           | Tauri builder, managed state (`AppState`), command registration, setup, global auto-type hotkey (register/re-register + handler), TCATO overlay window + commands, bridge lifecycle (`sync_bridge`) + bridge commands |
-| `src-tauri/src/config.rs`        | `config.json` schema, defaults, normalization, atomic persistence                                                                                                                                                     |
-| `src-tauri/src/vault.rs`         | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization, auto-type match scoring, `BridgeHost` impl (association keys, logins, `db_hash`)                                                |
-| `src-tauri/src/bridge.rs`        | KeePassHttp protocol core: request/response types, AES-256-CBC per-field crypto, verifier/HMAC, request dispatch (pure, no sockets)                                                                                   |
-| `src-tauri/src/bridge_server.rs` | Loopback HTTP server (127.0.0.1:19455), `BridgeState` lifecycle, `ApprovalBoard`, HTTP framing, server tests                                                                                                          |
-| `src-tauri/src/autotype.rs`      | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                             |
-| `src-tauri/src/focus.rs`         | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                  |
+| Path                             | Ownership                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src-tauri/src/lib.rs`           | Tauri builder, managed state (`AppState`), command registration, setup, global auto-type hotkey (register/re-register + handler), TCATO overlay window + commands, bridge lifecycle (`sync_bridge`/`sync_rpc`) + bridge/RPC status commands |
+| `src-tauri/src/config.rs`        | `config.json` schema, defaults, normalization, atomic persistence                                                                                                                                                                           |
+| `src-tauri/src/vault.rs`         | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization, auto-type match scoring, `BridgeHost` impl (association keys, logins, `db_hash`) + `RpcHost` impl (SRP session keys, RPC DTOs)                        |
+| `src-tauri/src/bridge.rs`        | KeePassHttp protocol core: request/response types, AES-256-CBC per-field crypto, verifier/HMAC, request dispatch (pure, no sockets)                                                                                                         |
+| `src-tauri/src/bridge_server.rs` | Loopback HTTP server (127.0.0.1:19455), `BridgeState` lifecycle, `ApprovalBoard`, HTTP framing, server tests                                                                                                                                |
+| `src-tauri/src/rpc.rs`           | KeePassRPC protocol core: SRP-6a server math, key-auth challenge/response, AES-256-CBC + SHA-1 MAC frames, v1 JSON-RPC dispatch (pure, no sockets)                                                                                          |
+| `src-tauri/src/rpc_server.rs`    | Loopback WebSocket server (127.0.0.1:12546), `RpcState` lifecycle, per-connection handshake state machine, side-channel event emission, WS transport tests                                                                                  |
+| `src-tauri/src/autotype.rs`      | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                                                   |
+| `src-tauri/src/focus.rs`         | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                                        |
 
 ## Persistent layout
 
@@ -78,7 +80,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/config.rs`
 - `src-tauri/src/vault.rs`
-- `src-tauri/src/bridge.rs` + `src-tauri/src/bridge_server.rs` (protocol ↔ server ↔ session boundaries)
+- `src-tauri/src/bridge.rs` + `src-tauri/src/bridge_server.rs` + `src-tauri/src/rpc.rs` + `src-tauri/src/rpc_server.rs` (protocol ↔ server ↔ session boundaries)
 - `TODO.md`
 - `SKILL.md` and shared references
 

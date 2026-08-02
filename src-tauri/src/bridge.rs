@@ -463,8 +463,8 @@ fn rand_index(bound: usize) -> usize {
 
 /// Fresh 20-char password over upper/lower/digits/symbols, one character from
 /// each category guaranteed — mirrors the app's default generator settings
-/// (`DEFAULT_DATABASE_SETTINGS.generator`).
-fn generate_password() -> String {
+/// (`DEFAULT_DATABASE_SETTINGS.generator`). Shared with the KeePassRPC bridge.
+pub(crate) fn generate_password() -> String {
     const LEN: usize = 20;
     const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";

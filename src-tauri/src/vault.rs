@@ -5,6 +5,7 @@
 use crate::autotype::{self, AutotypeContext};
 use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
+use crate::rpc::{RpcDatabase, RpcGroup, RpcGroupRef, RpcHost, RpcLogin};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -290,6 +291,9 @@ pub struct VaultSession {
     /// only, never persisted: `close()` wipes them so the loopback server
     /// cannot serve credentials while the vault is locked.
     bridge_keys: HashMap<String, Vec<u8>>,
+    /// KeePassRPC session keys (client username → 32-byte SRP-derived key).
+    /// Same lifecycle as `bridge_keys`: in-memory only, wiped on close.
+    rpc_keys: HashMap<String, Vec<u8>>,
 }
 
 /// Wipe a secret `String` in place, then drop it (buffer is zeroed before
@@ -637,6 +641,9 @@ impl VaultSession {
             wipe_secret_bytes(&mut keyfile);
         }
         for (_, mut key) in self.bridge_keys.drain() {
+            wipe_secret_bytes(&mut key);
+        }
+        for (_, mut key) in self.rpc_keys.drain() {
             wipe_secret_bytes(&mut key);
         }
         self.db = None;
@@ -1524,6 +1531,174 @@ impl BridgeHost for VaultSession {
         }
         self.mark_dirty();
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// KeePassRPC host
+// ---------------------------------------------------------------------------
+
+impl RpcHost for VaultSession {
+    fn is_open(&self) -> bool {
+        self.is_open()
+    }
+
+    /// The 32-byte SRP-derived session key for a Kee client username. Held
+    /// only in memory; wiped by `close()` along with the master key.
+    fn rpc_key(&self, username: &str) -> Option<Vec<u8>> {
+        self.rpc_keys.get(username).cloned()
+    }
+
+    fn register_rpc_key(&mut self, username: &str, key: Vec<u8>) {
+        self.rpc_keys.insert(username.to_owned(), key);
+    }
+
+    fn database(&self) -> Option<RpcDatabase> {
+        let db = self.require_db().ok()?;
+        let bin_id = recycle_bin_id(db);
+        let file_name = self
+            .path
+            .as_deref()
+            .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p))
+            .unwrap_or_default()
+            .to_owned();
+        Some(RpcDatabase {
+            name: db
+                .meta
+                .database_name
+                .clone()
+                .unwrap_or_else(|| file_name.clone()),
+            file_name,
+            icon_image_data: String::new(),
+            root: build_rpc_group(db.root(), bin_id, ROOT_GROUP_NAME, ""),
+            active: true,
+        })
+    }
+
+    fn find_logins(
+        &self,
+        urls: &[String],
+        uuid: Option<&str>,
+        free_text: Option<&str>,
+        username: Option<&str>,
+    ) -> Vec<RpcLogin> {
+        let Ok(db) = self.require_db() else {
+            return Vec::new();
+        };
+        let bin_id = recycle_bin_id(db);
+        let filter = RpcLoginFilter {
+            urls,
+            uuid,
+            free_text,
+            username,
+        };
+        let mut out = Vec::new();
+        collect_rpc_logins(db.root(), bin_id, &filter, ROOT_GROUP_NAME, "", &mut out);
+        out
+    }
+}
+
+/// FindLogins filter criteria (mirrors the KeePassRPC parameter list).
+struct RpcLoginFilter<'a> {
+    urls: &'a [String],
+    uuid: Option<&'a str>,
+    free_text: Option<&'a str>,
+    username: Option<&'a str>,
+}
+
+/// Build the full group tree DTO, root included. The recycle bin subtree is
+/// excluded so credentials in it stay invisible to browsers.
+fn build_rpc_group(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    title: &str,
+    parent_path: &str,
+) -> RpcGroup {
+    let path = if parent_path.is_empty() {
+        title.to_owned()
+    } else {
+        format!("{parent_path}/{title}")
+    };
+    RpcGroup {
+        uuid: group.id().uuid().to_string(),
+        title: title.to_owned(),
+        path: path.clone(),
+        icon_image_data: String::new(),
+        entries: Vec::new(),
+        children: group
+            .groups()
+            .filter(|g| bin_id != Some(g.id()))
+            .map(|g| {
+                let name = g.name.clone();
+                build_rpc_group(g, bin_id, &name, &path)
+            })
+            .collect(),
+    }
+}
+
+/// Depth-first scan for KeePassRPC logins. Matching follows the extension's
+/// semantics: any URL-host match, exact uuid, or title/username substring
+/// (`freeText`), plus username filter; the recycle bin is skipped.
+fn collect_rpc_logins(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    filter: &RpcLoginFilter<'_>,
+    group_title: &str,
+    parent_path: &str,
+    out: &mut Vec<RpcLogin>,
+) {
+    if bin_id == Some(group.id()) {
+        return;
+    }
+    let group_path = if parent_path.is_empty() {
+        group_title.to_owned()
+    } else {
+        format!("{parent_path}/{group_title}")
+    };
+    for entry in group.entries() {
+        let entry_urls: Vec<String> = entry
+            .get(FIELD_URL)
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
+        let by_url = filter
+            .urls
+            .iter()
+            .any(|u| entry_urls.iter().any(|eu| bridge_host_matches(eu, u)));
+        let by_uuid = filter
+            .uuid
+            .is_some_and(|id| entry.id().uuid().to_string() == id);
+        let title = entry.get_title().unwrap_or_default();
+        let entry_username = entry.get(FIELD_USERNAME).unwrap_or_default();
+        let by_text = filter
+            .free_text
+            .is_some_and(|t| !t.is_empty() && (title.contains(t) || entry_username.contains(t)));
+        let by_username = filter
+            .username
+            .is_some_and(|u| !u.is_empty() && entry_username.contains(u));
+        if by_url || by_uuid || by_text || by_username {
+            out.push(RpcLogin {
+                uuid: entry.id().uuid().to_string(),
+                title: title.to_owned(),
+                username: entry_username.to_owned(),
+                password: entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
+                urls: entry_urls,
+                http_realm: String::new(),
+                icon_image_data: String::new(),
+                parent_group: RpcGroupRef {
+                    uuid: group.id().uuid().to_string(),
+                    title: group_title.to_owned(),
+                    path: group_path.clone(),
+                    icon_image_data: String::new(),
+                },
+                match_accuracy: if by_url { 3 } else { 1 },
+            });
+        }
+    }
+    for child in group.groups() {
+        let child_title = child.name.clone();
+        collect_rpc_logins(child, bin_id, filter, &child_title, &group_path, out);
     }
 }
 
@@ -4867,5 +5042,126 @@ mod tests {
 
         session.close();
         assert_eq!(session.db_hash(), "");
+    }
+
+    // -- KeePassRPC host ----------------------------------------------------
+
+    #[test]
+    fn rpc_keys_are_session_held_and_wiped_on_close() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        assert!(session.rpc_key("user@browser").is_none());
+        session.register_rpc_key("user@browser", vec![7u8; 32]);
+        assert_eq!(session.rpc_key("user@browser").unwrap(), vec![7u8; 32]);
+
+        session.close();
+        assert!(session.rpc_key("user@browser").is_none());
+    }
+
+    #[test]
+    fn rpc_database_dto_builds_group_tree_and_skips_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Internet".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        session
+            .add_entry(&entry_input(
+                &group_uuid,
+                "Example",
+                "alice",
+                "s3cret",
+                "https://example.com/login",
+            ))
+            .unwrap();
+        let root_entry = session
+            .add_entry(&entry_input(
+                ROOT_GROUP_UUID,
+                "Trash",
+                "ghost",
+                "pw-x",
+                "https://ghost.example",
+            ))
+            .unwrap();
+        let trash_uuid = root_entry.root.entries[0].uuid.clone();
+
+        let db = session.database().unwrap();
+        assert_eq!(db.file_name, "test.kdbx");
+        assert!(db.active);
+        assert_eq!(db.root.title, "Root");
+        assert_eq!(db.root.children.len(), 1);
+        assert_eq!(db.root.children[0].title, "Internet");
+        assert_eq!(db.root.children[0].path, "Root/Internet");
+        assert_eq!(db.root.children[0].children.len(), 0);
+
+        // Moved to recycle bin: gone from the tree and from FindLogins.
+        session.delete_entry(&trash_uuid).unwrap();
+        let db = session.database().unwrap();
+        assert!(db.root.entries.is_empty());
+        let logins = session.find_logins(&["https://ghost.example".to_owned()], None, None, None);
+        assert!(logins.is_empty());
+    }
+
+    #[test]
+    fn rpc_find_logins_matches_url_uuid_and_free_text() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let root = ROOT_GROUP_UUID.to_owned();
+
+        session
+            .add_entry(&entry_input(
+                &root,
+                "Example",
+                "alice",
+                "s3cret",
+                "https://example.com/login",
+            ))
+            .unwrap();
+        session
+            .add_entry(&entry_input(
+                &root,
+                "Other",
+                "bob",
+                "pw-2",
+                "https://other.example",
+            ))
+            .unwrap();
+
+        let by_url = session.find_logins(
+            &["https://example.com/dashboard".to_owned()],
+            None,
+            None,
+            None,
+        );
+        assert_eq!(by_url.len(), 1);
+        assert_eq!(by_url[0].username, "alice");
+        assert_eq!(by_url[0].password, "s3cret");
+        assert_eq!(by_url[0].urls, vec!["https://example.com/login".to_owned()]);
+        assert_eq!(by_url[0].parent_group.title, "Root");
+
+        let uuid = by_url[0].uuid.clone();
+        let by_uuid = session.find_logins(&[], Some(&uuid), None, None);
+        assert_eq!(by_uuid.len(), 1);
+
+        let by_text = session.find_logins(&[], None, Some("Examp"), None);
+        assert_eq!(by_text.len(), 1);
+        assert_eq!(by_text[0].title, "Example");
+
+        let by_username = session.find_logins(&[], None, None, Some("bob"));
+        assert_eq!(by_username.len(), 1);
+        assert_eq!(by_username[0].username, "bob");
+
+        session.close();
+        assert!(session
+            .find_logins(&["https://example.com".to_owned()], None, None, None)
+            .is_empty());
+        assert!(session.database().is_none());
     }
 }

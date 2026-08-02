@@ -335,6 +335,15 @@ pub struct BridgeSettings {
     pub enabled: bool,
 }
 
+/// KeePassRPC (Kee 4.x) bridge. Same lifecycle as the KeePassHttp bridge:
+/// the loopback server only runs while `enabled`, and SRP keys are
+/// session-held (never persisted) and wiped on vault lock.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RpcSettings {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
@@ -343,6 +352,7 @@ pub struct AppConfig {
     pub database: DatabaseDefaults,
     pub remote: RemoteSettings,
     pub bridge: BridgeSettings,
+    pub rpc: RpcSettings,
 }
 
 // ---------------------------------------------------------------------------
