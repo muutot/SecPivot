@@ -155,6 +155,7 @@
       class:active={security.clearOnLock}
       role="switch"
       aria-checked={security.clearOnLock}
+      aria-label="锁定后清空剪贴板"
       onclick={() => change("clearOnLock", !security.clearOnLock)}
     >
       <span class="toggle-knob"></span>
@@ -174,6 +175,7 @@
       class:active={security.minimizeToTray}
       role="switch"
       aria-checked={security.minimizeToTray}
+      aria-label="关闭窗口时最小化到托盘"
       onclick={() => change("minimizeToTray", !security.minimizeToTray)}
     >
       <span class="toggle-knob"></span>
@@ -193,6 +195,7 @@
       class:active={security.lockAfterAction}
       role="switch"
       aria-checked={security.lockAfterAction}
+      aria-label="复制后自动锁定"
       onclick={() => change("lockAfterAction", !security.lockAfterAction)}
     >
       <span class="toggle-knob"></span>
@@ -212,6 +215,7 @@
       class:active={security.lockOnFocusLoss}
       role="switch"
       aria-checked={security.lockOnFocusLoss}
+      aria-label="失去焦点时锁定"
       onclick={() => change("lockOnFocusLoss", !security.lockOnFocusLoss)}
     >
       <span class="toggle-knob"></span>
@@ -231,6 +235,7 @@
       class:active={security.rememberPassword}
       role="switch"
       aria-checked={security.rememberPassword}
+      aria-label="记住密码"
       onclick={() => change("rememberPassword", !security.rememberPassword)}
     >
       <span class="toggle-knob"></span>

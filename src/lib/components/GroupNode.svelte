@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import { KEEPASS_ICONS, GROUP_DEFAULT_ICON } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
+  import GroupNode from "$lib/components/GroupNode.svelte";
 
   interface Props {
     group: VaultGroup;
@@ -43,10 +44,16 @@
   }: Props = $props();
 
   let renaming = $state(false);
-  let nameInput = $state(group.name);
+  let nameInput = $state<string>("");
   let inputEl: HTMLInputElement | undefined = $state();
   let menu = $state<{ x: number; y: number } | null>(null);
   let dragActive = $state(false);
+
+  const groupName = $derived(group.name);
+
+  $effect(() => {
+    nameInput = groupName;
+  });
 
   const count = $derived(countEntries(group));
   const isExpanded = $derived(expanded.has(group.uuid));
@@ -59,7 +66,7 @@
 
   const DRAG_MIME = "application/x-keyvault-entries";
 
-const menuItems: ContextMenuItem[] = $derived(
+  const menuItems: ContextMenuItem[] = $derived(
     isBin
       ? count > 0
         ? [{ id: "empty-bin", label: "清空回收站", icon: "trash", destructive: true }]
@@ -182,7 +189,7 @@ const menuItems: ContextMenuItem[] = $derived(
 
 {#if isExpanded}
   {#each group.children as child (child.uuid)}
-    <svelte:self
+    <GroupNode
       group={child}
       depth={depth + 1}
       {selected}

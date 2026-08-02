@@ -205,6 +205,7 @@
         class:active={general.showDescriptions}
         role="switch"
         aria-checked={general.showDescriptions}
+        aria-label="显示描述"
         onclick={() => change("showDescriptions", !general.showDescriptions)}
       >
         <span class="toggle-knob"></span>
@@ -267,6 +268,7 @@
         class:active={general.rememberLastDatabase}
         role="switch"
         aria-checked={general.rememberLastDatabase}
+        aria-label="记住上次数据库"
         onclick={() => change("rememberLastDatabase", !general.rememberLastDatabase)}
       >
         <span class="toggle-knob"></span>
@@ -312,6 +314,7 @@
         class:active={general.compactMode}
         role="switch"
         aria-checked={general.compactMode}
+        aria-label="紧凑模式"
         onclick={() => change("compactMode", !general.compactMode)}
       >
         <span class="toggle-knob"></span>
@@ -363,6 +366,7 @@
         class:active={s.general.density.showGroupIcon}
         role="switch"
         aria-checked={s.general.density.showGroupIcon}
+        aria-label="显示分组图标"
         onclick={() =>
           change("density", {
             ...s.general.density,
@@ -386,6 +390,7 @@
         class:active={s.general.density.showGroupChevron}
         role="switch"
         aria-checked={s.general.density.showGroupChevron}
+        aria-label="显示折叠箭头"
         onclick={() =>
           change("density", {
             ...s.general.density,

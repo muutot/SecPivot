@@ -46,8 +46,9 @@
     return null;
   }
 
+  const initialRoot = (() => root)();
   const initialExpanded = new Set<string>();
-  collectUuids(root, initialExpanded);
+  collectUuids(initialRoot, initialExpanded);
 
   let expanded = $state<Set<string>>(initialExpanded);
 

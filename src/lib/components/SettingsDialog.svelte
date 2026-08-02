@@ -245,10 +245,6 @@
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
-  .settings-nav-item.active .app-icon {
-    color: var(--selection-color);
-  }
-
   .sidebar-foot {
     margin-top: auto;
     padding: 12px 14px;

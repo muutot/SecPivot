@@ -101,7 +101,7 @@
 <div class="group-picker" bind:this={pickerEl}>
   <button
     type="button"
-    class="text-input select picker-trigger"
+    class="picker-trigger"
     aria-haspopup="listbox"
     aria-expanded={open}
     onclick={toggle}
@@ -168,7 +168,25 @@
     align-items: center;
     gap: 8px;
     justify-content: space-between;
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-primary);
+    background: var(--input-bg);
+    font-size: 12px;
     cursor: pointer;
+    transition:
+      border-color 100ms ease,
+      background 100ms ease;
+  }
+
+  .picker-trigger:hover,
+  .picker-trigger:focus-visible {
+    border-color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 10%, var(--input-bg));
+    outline: none;
   }
 
   .trigger-label {
@@ -188,9 +206,9 @@
     padding: 4px;
     overflow-y: auto;
     border: 1px solid var(--border-color);
-    border-radius: 7px;
+    border-radius: var(--settings-control-radius, 6px);
     background: var(--surface-bg);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
@@ -202,9 +220,9 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 7px 9px;
+    padding: 7px 10px;
     border: 0;
-    border-radius: 5px;
+    border-radius: 4px;
     color: var(--text-secondary);
     font-size: var(--font-size-secondary, 11px);
     text-align: left;

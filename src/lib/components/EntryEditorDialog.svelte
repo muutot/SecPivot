@@ -31,26 +31,31 @@
 
   let { mode, groups, groupUuid, entry, onclose, onsaved }: Props = $props();
 
-  let title = $state(entry?.title ?? "");
-  let username = $state(entry?.username ?? "");
+  const initialEntry = (() => entry)();
+  const initialGroupUuid = (() => groupUuid)();
+
+  let title = $state(initialEntry?.title ?? "");
+  let username = $state(initialEntry?.username ?? "");
   let password = $state("");
   let passwordLoading = $state(false);
-  let url = $state(entry?.url ?? "");
-  let notes = $state(entry?.notes ?? "");
+  let url = $state(initialEntry?.url ?? "");
+  let notes = $state(initialEntry?.notes ?? "");
   let totp = $state("");
   let totpLoading = $state(false);
-  let expiresLocal = $state(entry?.expires ? toLocalInput(entry.expires) : "");
-  let iconIndex = $state<number | null>(entry?.icon ?? null);
-  let colorHex = $state(entry?.color ?? "");
-  let targetGroupUuid = $state(entry?.groupUuid ?? groupUuid);
+  let expiresLocal = $state(initialEntry?.expires ? toLocalInput(initialEntry.expires) : "");
+  let iconIndex = $state<number | null>(initialEntry?.icon ?? null);
+  let colorHex = $state(initialEntry?.color ?? "");
+  let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
   let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
   let showPassword = $state(false);
-  let customFields = $state<CustomField[]>(entry?.customFields?.map((f) => ({ ...f })) ?? []);
+  let customFields = $state<CustomField[]>(
+    initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
+  );
   /** Editor-local attachment state: `size` is display-only (shown in the UI)
    * and stripped before sending — the backend contract has no `size`. */
   type EditorAttachment = { name: string; size: number; data?: string };
   let attachments = $state<EditorAttachment[]>(
-    entry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
+    initialEntry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
 
