@@ -1,16 +1,17 @@
 # 浏览器集成调研与设计提案
 
-状态:`proposal`(调研完成,未实现)。立项见 `TODO.md`。本文是决策依据,不是交付证据。
+状态:`Phase 1 已交付`(KeePassHttp 兼容协议实现完毕,离线协议级测试通过;真机浏览器扩展验证不可行,保留 `~` 证据缺口)。立项与交付证据见 `TODO.md`。本文是决策依据与实现说明。
 
 ## 目标
 
 让 KeyVault 作为 KDBX 客户端,能被 **KeePass 生态**的浏览器扩展当作凭据来源,复用现有 `VaultSession`(解锁校验、条目匹配、回收站跳过、密码不落地 IPC 的安全模型),不外发主密钥。
 
-## 现状
+## 现状(已实现)
 
-- KeyVault 前端不暴露任何后台服务;Rust 后端没有监听任何端口,也没有浏览器集成协议。
-- 现有能力:自动填充(`auto_type` + `{REF:...}`)、TCATO、全局热键(见 `security-model.md`)——这些是**桌面到前台窗口**的通道,浏览器扩展完全不经过它们。
-- 因此当前**不兼容**任何 KeePass 浏览器扩展。
+- 后台 loopback HTTP 服务:`bridge_server.rs` 监听 `127.0.0.1:19455`,每连接一次 JSON POST。
+- 协议核心:`bridge.rs` 实现 `associate`/`test-associate`/`get-logins`/`set-login`/`get-logins-count`;AES-256-CBC 逐字段加密 + PKCS7;请求 `Verifier` 与响应 `Hmac`(HMAC-SHA256)按 KeePassHttp 语义校验。
+- 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),`db_hash` = SHA1(根分组UUID ‖ 回收站分组UUID)。
+- associate 密钥存会话内(`bridge_keys`),锁定即销毁;首次关联由桌面端审批(设置「集成」面板 + 全局审批提示组件)。
 
 ## 生态:候选协议
 
@@ -30,34 +31,34 @@
 
 理由:协议最简单(纯 HTTP 单向、无握手/心跳),浏览器端扩展成熟多 (Chrome/Edge/Firefox),与现有 `VaultSession` 对接成本最低,可先于复杂协议验证 Tauri 后台监听架构。
 
-技术选型:
+技术选型(已按此实现):
 
-- 服务:`tokio` + `axum`(项目已有一个自带 `Runtime` 的 tokio 依赖模式,见 `remote.rs`),loopback 绑定 `127.0.0.1:19455`。
-- 密钥杂凑:`aes` + `block-modes`(AES-CBC, PKCS7)+ `hmac`/`sha2`(HMAC-SHA256)。
-- 字段按 KeePassHttp 规范逐字段加密(`Url`/`SubmitUrl`/`Login`/`Password`/`Uuid`/`Realm`/`Names[]`),每响应独立 `Nonce`。
-- `associate` 密钥存储:沿用 KeePassHttp「AES 密钥存于库根分组 `KeePassHttp Settings`,客户端记住 `Id`」;KeyVault 侧密钥落在 **会话内**(与 keyfile 同理),不落 `config.json`,锁定即销毁——需在 `security-model.md` 增补一条不变式。
+- 服务:标准库 `std::net` 单线程 accept + 每连接独立线程(无 async 运行时负担),loopback 绑定 `127.0.0.1:19455`;请求头 16 KiB / 请求体 1 MiB 上限,读超时 10 s。
+- 密钥杂凑:`aes` + `cbc`(AES-256-CBC, PKCS7)+ `hmac`/`sha2`(HMAC-SHA256),`getrandom` 生成 nonce/客户端 id。
+- 字段按 KeePassHttp 规范逐字段加密(`Url`/`SubmitUrl`/`Login`/`Password`/`Uuid`/`Realm`/`Names[]`),每响应独立 `Nonce`(作 IV)。
+- `associate` 密钥存储:KeyVault 侧密钥落在 **会话内**(与 keyfile 同理),不落 `config.json`,锁定即销毁——`security-model.md` 已增补不变式。
 - 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),避免两套匹配规则。
 
-安全约束(必须):
+安全约束(已落实):
 
-- 仅监听 loopback;绑定非 loopback 一律拒绝。
-- 未解锁库时 `get-logins` 返回错误,不触发自动解锁(或仅触发前端解锁提示,由用户确认)。
-- HTTP 本体是明文 JSON,但敏感字段密文 + HMAC;DP012 内机器不会经不住中间人。`PITFALLS.md` 增补:凡请求带密文的错误日志不得打印明文。
-- 首次 `associate` 需要用户在桌面端手动批准(复用设置面板,"允许此浏览器客户端")。
+- 仅监听 loopback;绑定 `127.0.0.1` 固定地址。
+- 未解锁库时请求返回错误信封,不触发自动解锁。
+- HTTP 本体是明文 JSON,但敏感字段密文 + HMAC;错误日志不打印解密明文。
+- 首次 `associate` 需要用户在桌面端手动批准:后端发 `bridge-associate-request` 事件(载荷 `{ token, id }`,不含密钥),前端审批提示组件调用 `bridge_approve`;120 s 未答复自动拒绝。
 
 ### Phase 2(可选、后置):KeePassRPC 或 KeePassXC 协议
 
 - KeePassRPC 需要 SRP(rust `srp` crate)+ WebSocket(`tokio-tungstenite`)+ AES JSON-RPC,单次 SRP 实现与测试成本明显高于 Phase 1;仅在 Phase 1 架构验证后再立项。
 - KeePassXC-Browser 需在 Phase 完成的「后台 loopback 服务 + 密钥杂凑」基础上加原生宿主(manifest + Windows 注册表桥)。天然冲突问题需先解决以确认是否接入。
 
-## 对仓库的影响(shorthand)
+## 对仓库的影响(已落实)
 
-- 新后端模块 `browser_http.rs`(或 `bridge.rs`)装载协议实现,`lib.rs` 挂常驻任务。
-- 设置面板新增「浏览器集成」小节(开关 + 查看已授权客户端 + 移除授权)。
-- `security-model.md` / `data-contracts.md` / `project-structure.md` 增补对应章节。
-- 测试:协议级单元测试(associate/verifier/get-logins 匹配)下发内存 Session;真实扩展可用性需真机浏览器验证,环境无法完成则标 `~`。
+- 新后端模块 `bridge.rs`(协议核心,无 socket,可单测)+ `bridge_server.rs`(loopback 服务 + 生命周期 + 审批板);`lib.rs` 挂 managed state 与命令(`bridge_status`/`bridge_clients`/`bridge_remove_client`/`bridge_approve`),`set_config` 按 `bridge.enabled` 启停。
+- 设置面板新增「集成」分区(`BridgeSettingsPanel.svelte`:开关 + 服务状态 + 已授权客户端列表/移除)。
+- 全局关联审批提示 `BridgeApprovalPrompt.svelte`(挂 `+layout.svelte`,TCATO 窗口除外)。
+- `security-model.md` / `data-contracts.md` / `project-structure.md` 已增补对应章节。
 
 ## 验证边界
 
-- 可离线验证:响应信封字段、AES 往返、HMAC、URL 匹配(借用 `autotype_match` 单测)。
-- 无法离线验证:浏览器扩展真实上屏自动填充、原生注册表宿主、多实例 shortcut —— 标 `~` 保留到有运行环境。
+- 可离线验证(已交付):响应信封字段、AES 往返、HMAC/Verifier、URL 匹配、associate 审批流、HTTP 帧解析与超限(共 131 后端测试通过)。
+- 无法离线验证:浏览器扩展真实上屏自动填充、真实扩展握手 —— 标 `~` 保留到有运行环境。

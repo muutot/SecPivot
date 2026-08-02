@@ -19,39 +19,42 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 ## Frontend ownership
 
-| Path                                       | Ownership                                                                                            |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `src/app.css`                              | Global reset, theme defaults, font variables, accessibility media rules; imports shared settings CSS |
-| `src/lib/styles/settings-shared.css`       | Reusable settings-panel primitives (header/cards/toggles/slider/feedback)                            |
-| `src/lib/types/theme.ts`                   | `ThemeColors`, `DARK_THEME_COLORS`, `LIGHT_THEME_COLORS`                                             |
-| `src/lib/types/settings.ts`                | `AppSettings`, `GeneralSettings`, `SecuritySettings`, `DatabaseDefaults`                             |
-| `src/lib/types/vault.ts`                   | `VaultState`, `VaultGroup`, `VaultEntry`, request/input shapes                                       |
-| `src/lib/utils/theme.ts`                   | `ThemeColors` → CSS-variable mapping                                                                 |
-| `src/lib/utils/password.ts`                | Password generator, entropy estimate, strength label                                                 |
-| `src/lib/utils/totp.ts`                    | Browser-fallback TOTP (RFC 6238, WebCrypto); desktop uses backend `totp_code`                        |
-| `src/lib/utils/clipboard.ts`               | Clipboard copy + scheduled clear (`clipboardClearSeconds`)                                           |
-| `src/lib/services/settings.ts`             | `appSettings` store, defaults, normalization, debounced persistence                                  |
-| `src/lib/services/settings-bootstrap.ts`   | Apply settings to document (theme colors, font vars, window effect)                                  |
-| `src/lib/services/security.ts`             | `lockVault`/`copySensitive`/`armIdleLock`/`installAutoLock` (lock lifecycle, clipboard-clear gating) |
-| `src/lib/services/vault.ts`                | `vault` store: open/create/close/save + entry/group CRUD + `remembered` path (Tauri + browser)       |
-| `src/lib/data/demo-vault.ts`               | Browser-preview fallback data; not proof of desktop KDBX behavior                                    |
-| `src/lib/components/AppIcon.svelte`        | Hand-written inline SVG icon set (stroke `currentColor`)                                             |
-| `src/lib/components/ContextMenu.svelte`    | Viewport-fixed right-click menu (items, destructive style, click-outside/Escape close)               |
-| `src/lib/components/SettingsDialog.svelte` | Settings shell: sidebar nav + content pane + panels                                                  |
-| `src/lib/components/settings/*`            | General / Security / Database / About panels                                                         |
-| `src/lib/components/VaultWelcome.svelte`   | Welcome/unlock + open/create database modal flows                                                    |
-| `src/lib/components/LockScreen.svelte`     | Lock screen: reopen remembered path with password, or switch to another database                     |
-| `src/lib/components/TotpWidget.svelte`     | TOTP code readout with countdown bar; refetches per period                                           |
+| Path                                             | Ownership                                                                                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/app.css`                                    | Global reset, theme defaults, font variables, accessibility media rules; imports shared settings CSS                                                                           |
+| `src/lib/styles/settings-shared.css`             | Reusable settings-panel primitives (header/cards/toggles/slider/feedback)                                                                                                      |
+| `src/lib/types/theme.ts`                         | `ThemeColors`, `DARK_THEME_COLORS`, `LIGHT_THEME_COLORS`                                                                                                                       |
+| `src/lib/types/settings.ts`                      | `AppSettings`, `GeneralSettings`, `SecuritySettings`, `DatabaseDefaults`                                                                                                       |
+| `src/lib/types/vault.ts`                         | `VaultState`, `VaultGroup`, `VaultEntry`, request/input shapes                                                                                                                 |
+| `src/lib/utils/theme.ts`                         | `ThemeColors` → CSS-variable mapping                                                                                                                                           |
+| `src/lib/utils/password.ts`                      | Password generator, entropy estimate, strength label                                                                                                                           |
+| `src/lib/utils/totp.ts`                          | Browser-fallback TOTP (RFC 6238, WebCrypto); desktop uses backend `totp_code`                                                                                                  |
+| `src/lib/utils/clipboard.ts`                     | Clipboard copy + scheduled clear (`clipboardClearSeconds`)                                                                                                                     |
+| `src/lib/services/settings.ts`                   | `appSettings` store, defaults, normalization, debounced persistence                                                                                                            |
+| `src/lib/services/settings-bootstrap.ts`         | Apply settings to document (theme colors, font vars, window effect)                                                                                                            |
+| `src/lib/services/security.ts`                   | `lockVault`/`copySensitive`/`armIdleLock`/`installAutoLock` (lock lifecycle, clipboard-clear gating)                                                                           |
+| `src/lib/services/vault.ts`                      | `vault` store: open/create/close/save + entry/group CRUD + `remembered` path (Tauri + browser)                                                                                 |
+| `src/lib/data/demo-vault.ts`                     | Browser-preview fallback data; not proof of desktop KDBX behavior                                                                                                              |
+| `src/lib/components/AppIcon.svelte`              | Hand-written inline SVG icon set (stroke `currentColor`)                                                                                                                       |
+| `src/lib/components/ContextMenu.svelte`          | Viewport-fixed right-click menu (items, destructive style, click-outside/Escape close)                                                                                         |
+| `src/lib/components/SettingsDialog.svelte`       | Settings shell: sidebar nav + content pane + panels                                                                                                                            |
+| `src/lib/components/settings/*`                  | General / Security / Database / Remote / Integrations / About panels                                                                                                           |
+| `src/lib/components/BridgeApprovalPrompt.svelte` | Global browser-association approval modal; listens for `bridge-associate-request` and answers via `bridge_approve` (mounted in `+layout.svelte`, skipped on the TCATO overlay) |
+| `src/lib/components/VaultWelcome.svelte`         | Welcome/unlock + open/create database modal flows                                                                                                                              |
+| `src/lib/components/LockScreen.svelte`           | Lock screen: reopen remembered path with password, or switch to another database                                                                                               |
+| `src/lib/components/TotpWidget.svelte`           | TOTP code readout with countdown bar; refetches per period                                                                                                                     |
 
 ## Backend ownership
 
-| Path                        | Ownership                                                                                                                        |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `src-tauri/src/lib.rs`      | Tauri builder, managed state (`AppState`), command registration, setup, global auto-type hotkey (register/re-register + handler), TCATO overlay window + commands |
-| `src-tauri/src/config.rs`   | `config.json` schema, defaults, normalization, atomic persistence                                                                |
-| `src-tauri/src/vault.rs`    | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization, auto-type match scoring                    |
-| `src-tauri/src/autotype.rs` | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion |
-| `src-tauri/src/focus.rs`    | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection |
+| Path                             | Ownership                                                                                                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src-tauri/src/lib.rs`           | Tauri builder, managed state (`AppState`), command registration, setup, global auto-type hotkey (register/re-register + handler), TCATO overlay window + commands, bridge lifecycle (`sync_bridge`) + bridge commands |
+| `src-tauri/src/config.rs`        | `config.json` schema, defaults, normalization, atomic persistence                                                                                                                                                     |
+| `src-tauri/src/vault.rs`         | KeePass session: open/create/close/get_state/save, entry & group CRUD, serialization, auto-type match scoring, `BridgeHost` impl (association keys, logins, `db_hash`)                                                |
+| `src-tauri/src/bridge.rs`        | KeePassHttp protocol core: request/response types, AES-256-CBC per-field crypto, verifier/HMAC, request dispatch (pure, no sockets)                                                                                   |
+| `src-tauri/src/bridge_server.rs` | Loopback HTTP server (127.0.0.1:19455), `BridgeState` lifecycle, `ApprovalBoard`, HTTP framing, server tests                                                                                                          |
+| `src-tauri/src/autotype.rs`      | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                             |
+| `src-tauri/src/focus.rs`         | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                  |
 
 ## Persistent layout
 
@@ -75,6 +78,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/config.rs`
 - `src-tauri/src/vault.rs`
+- `src-tauri/src/bridge.rs` + `src-tauri/src/bridge_server.rs` (protocol ↔ server ↔ session boundaries)
 - `TODO.md`
 - `SKILL.md` and shared references
 
