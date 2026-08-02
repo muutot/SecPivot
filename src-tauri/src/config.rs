@@ -536,9 +536,12 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
             profile.name = "默认".into();
         }
     }
-    config.active_remote =
-        clamp_i32(config.active_remote as i32, 0, config.remote_profiles.len() as i32 - 1, 0)
-            as usize;
+    config.active_remote = clamp_i32(
+        config.active_remote as i32,
+        0,
+        config.remote_profiles.len() as i32 - 1,
+        0,
+    ) as usize;
 
     config
 }
@@ -729,7 +732,10 @@ mod tests {
         let again = reloaded.get().unwrap();
         assert_eq!(again.remote_profiles.len(), 2);
         assert_eq!(again.remote_profiles[1].name, "Bitiful");
-        assert_eq!(again.remote_profiles[1].settings.endpoint, "http://127.0.0.1:9000");
+        assert_eq!(
+            again.remote_profiles[1].settings.endpoint,
+            "http://127.0.0.1:9000"
+        );
         assert_eq!(again.remote_profiles[1].settings.bucket, "my-vaults");
         assert_eq!(again.remote_profiles[1].settings.secret_key, "s3cret");
         assert_eq!(again.remote_profiles[1].settings.local_dir, "backups");
@@ -756,7 +762,10 @@ mod tests {
         let config = store.get().unwrap();
         assert_eq!(config.remote_profiles.len(), 1);
         assert_eq!(config.remote_profiles[0].name, "默认");
-        assert_eq!(config.remote_profiles[0].settings.endpoint, "https://s3.bitiful.net");
+        assert_eq!(
+            config.remote_profiles[0].settings.endpoint,
+            "https://s3.bitiful.net"
+        );
         assert_eq!(config.remote_profiles[0].settings.bucket, "muuyo");
         assert_eq!(config.active_remote, 0);
         // re-saving writes the new shape only
@@ -784,14 +793,23 @@ mod tests {
 
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
-        assert_eq!(again.remote_profiles[0].settings.access_key, "AKIA-secret-access");
-        assert_eq!(again.remote_profiles[0].settings.secret_key, "plaintext-s3cret");
+        assert_eq!(
+            again.remote_profiles[0].settings.access_key,
+            "AKIA-secret-access"
+        );
+        assert_eq!(
+            again.remote_profiles[0].settings.secret_key,
+            "plaintext-s3cret"
+        );
     }
 
     #[test]
     fn remote_defaults_and_normalization_rules() {
         let mut config = AppConfig::default();
-        assert_eq!(config.remote_profiles[0].settings.endpoint, "https://s3.amazonaws.com");
+        assert_eq!(
+            config.remote_profiles[0].settings.endpoint,
+            "https://s3.amazonaws.com"
+        );
         assert_eq!(config.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(config.remote_profiles[0].settings.backup_count, 3);
 
@@ -800,7 +818,10 @@ mod tests {
         config.remote_profiles[0].settings.backup_count = 99;
         config.active_remote = 42;
         let normalized = normalize_config(config);
-        assert_eq!(normalized.remote_profiles[0].settings.endpoint, "https://s3.example.com");
+        assert_eq!(
+            normalized.remote_profiles[0].settings.endpoint,
+            "https://s3.example.com"
+        );
         assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(normalized.active_remote, 0);
