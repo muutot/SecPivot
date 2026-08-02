@@ -4,6 +4,7 @@
   import { appSettings } from "$lib/services/settings";
   import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { installAutoLock, installFocusLock } from "$lib/services/security";
+  import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
 
   let { children } = $props();
 
@@ -35,3 +36,7 @@
 </script>
 
 {@render children()}
+
+{#if !isTcatoOverlay}
+  <BridgeApprovalPrompt />
+{/if}

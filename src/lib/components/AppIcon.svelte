@@ -41,6 +41,7 @@
     | "download"
     | "upload"
     | "cloud"
+    | "plug"
     | "widgets";
 
   interface Props {
@@ -106,6 +107,7 @@
     download: '<path d="M12 4v12"></path><path d="m6 11 6 6 6-6"></path><path d="M5 21h14"></path>',
     upload: '<path d="M12 20V8"></path><path d="m6 14 6-6 6 6"></path><path d="M5 3h14"></path>',
     cloud: '<path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.6 12.5 4 4 0 0 0 6.5 19z"></path>',
+    plug: '<path d="M9 2v5M15 2v5"></path><path d="M5 7h14v4a7 7 0 0 1-7 7 7 7 0 0 1-7-7z"></path><path d="M12 18v4"></path>',
     widgets:
       '<rect x="4" y="4" width="7" height="6" rx="1"></rect><rect x="13" y="4" width="7" height="6" rx="1"></rect><rect x="4" y="14" width="7" height="6" rx="1"></rect><rect x="13" y="14" width="7" height="6" rx="1"></rect>',
   };

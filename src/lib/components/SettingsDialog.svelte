@@ -5,9 +5,10 @@
   import SecuritySettingsPanel from "$lib/components/settings/SecuritySettingsPanel.svelte";
   import DatabaseSettingsPanel from "$lib/components/settings/DatabaseSettingsPanel.svelte";
   import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
+  import BridgeSettingsPanel from "$lib/components/settings/BridgeSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
-  type Section = "general" | "security" | "database" | "remote" | "about";
+  type Section = "general" | "security" | "database" | "remote" | "integrations" | "about";
   type GeneralTab = "appearance" | "display" | "compact";
 
   interface Props {
@@ -23,7 +24,7 @@
   const sections: {
     id: Section;
     label: string;
-    icon: "sliders" | "shield" | "database" | "cloud" | "info";
+    icon: "sliders" | "shield" | "database" | "cloud" | "plug" | "info";
     description: string;
     tabs?: { id: GeneralTab; label: string }[];
     title: string;
@@ -60,6 +61,13 @@
       icon: "cloud",
       title: "远程",
       description: "S3 兼容对象存储的连接、凭据与本地镜像设置。",
+    },
+    {
+      id: "integrations",
+      label: "集成",
+      icon: "plug",
+      title: "集成",
+      description: "浏览器桥接（KeePassHttp 兼容）与授权客户端管理。",
     },
     {
       id: "about",
@@ -143,6 +151,8 @@
       <DatabaseSettingsPanel {onclose} showHeader={false} />
     {:else if active === "remote"}
       <RemoteSettingsPanel {onclose} showHeader={false} />
+    {:else if active === "integrations"}
+      <BridgeSettingsPanel {onclose} showHeader={false} />
     {:else if active === "about"}
       <AboutSettingsPanel {onclose} showHeader={false} {appVersion} />
     {/if}
