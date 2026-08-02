@@ -304,7 +304,7 @@ fn handle_associate(
         key.zeroize();
         return BridgeResponse::failure(&request_type, "关联校验失败");
     }
-    let id = request.id.clone().unwrap_or_else(hex_id);
+    let id = request.id.clone().unwrap_or_else(new_client_id);
     if !approve(&id) {
         key.zeroize();
         return BridgeResponse::failure(&request_type, "已拒绝浏览器连接授权");
@@ -332,7 +332,8 @@ fn handle_associate(
     response
 }
 
-fn hex_id() -> String {
+/// Random client/approval token (base64 of 12 entropy bytes).
+pub fn new_client_id() -> String {
     STANDARD.encode(random_bytes(12))
 }
 

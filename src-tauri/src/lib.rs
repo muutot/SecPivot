@@ -1,5 +1,6 @@
 pub mod autotype;
 pub mod bridge;
+pub mod bridge_server;
 pub mod clipboard;
 pub mod config;
 pub mod credential;
@@ -9,6 +10,7 @@ pub mod remote;
 pub mod shield;
 pub mod vault;
 
+use crate::bridge::BridgeHost;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
 use crate::vault::{
@@ -45,7 +47,78 @@ fn set_config(
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
     register_global_hotkey(&app, &saved.general.global_auto_type_shortcut);
+    sync_bridge(&app, &saved);
     Ok(saved)
+}
+
+/// Start or stop the loopback bridge to match `bridge.enabled`; failures are
+/// logged, never fatal (the app stays usable without browser integration).
+fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
+    let state = app.state::<bridge_server::BridgeState>();
+    if config.bridge.enabled {
+        if let Err(e) = state.start(app) {
+            eprintln!("bridge: {e}");
+        }
+    } else {
+        state.stop();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Browser bridge commands (KeePassHttp)
+// ---------------------------------------------------------------------------
+
+/// Whether the loopback server is currently listening.
+#[derive(serde::Serialize)]
+struct BridgeStatus {
+    running: bool,
+    port: u16,
+}
+
+#[tauri::command]
+fn bridge_status(
+    state: tauri::State<'_, bridge_server::BridgeState>,
+) -> Result<BridgeStatus, String> {
+    Ok(BridgeStatus {
+        running: state.running(),
+        port: bridge::BRIDGE_PORT,
+    })
+}
+
+/// Authorized browser clients of the open session (id only — never keys).
+#[tauri::command]
+fn bridge_clients(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<Vec<String>, String> {
+    Ok(session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .list_clients())
+}
+
+/// Deauthorize one browser client; returns the remaining list.
+#[tauri::command]
+fn bridge_remove_client(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    id: String,
+) -> Result<Vec<String>, String> {
+    let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    if !session.remove_client(&id) {
+        return Err("未找到该客户端".to_owned());
+    }
+    Ok(session.list_clients())
+}
+
+/// Answer a pending browser-association approval from the settings UI.
+#[tauri::command]
+fn bridge_approve(
+    board: tauri::State<'_, bridge_server::ApprovalBoard>,
+    token: String,
+    allowed: bool,
+) -> Result<(), String> {
+    if board.decide(&token, allowed) {
+        Ok(())
+    } else {
+        Err("审批已过期或不存在".to_owned())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +898,9 @@ pub fn run() {
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(TcatoTarget(Mutex::new(None)));
+            app.manage(bridge_server::BridgeState::default());
+            app.manage(bridge_server::ApprovalBoard::default());
+            sync_bridge(app.handle(), &config);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -869,7 +945,11 @@ pub fn run() {
             clear_saved_credential,
             s3_list_objects,
             open_remote_vault,
-            create_remote_vault
+            create_remote_vault,
+            bridge_status,
+            bridge_clients,
+            bridge_remove_client,
+            bridge_approve
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
