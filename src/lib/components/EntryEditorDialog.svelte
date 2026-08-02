@@ -18,6 +18,7 @@
     ICON_PICKER_COUNT,
     ENTRY_DEFAULT_ICON,
   } from "$lib/utils/keepass-icons";
+  import GroupPicker from "$lib/components/GroupPicker.svelte";
 
   interface Props {
     mode: "create" | "edit";
@@ -85,16 +86,6 @@
       .catch(() => {
         totpLoading = false;
       });
-  });
-
-  const entries = $derived.by(() => {
-    const list: { name: string; uuid: string }[] = [];
-    function walk(group: VaultGroup, depth: number): void {
-      list.push({ name: `${"　".repeat(depth)}${group.name}`, uuid: group.uuid });
-      for (const child of group.children) walk(child, depth + 1);
-    }
-    for (const group of groups) walk(group, 0);
-    return list;
   });
 
   const entropy = $derived(estimateEntropy(password));
@@ -256,11 +247,11 @@
 
         <label class="field">
           <span>分组</span>
-          <select class="text-input select" bind:value={targetGroupUuid}>
-            {#each entries as group (group.uuid)}
-              <option value={group.uuid}>{group.name.trim()}</option>
-            {/each}
-          </select>
+          <GroupPicker
+            {groups}
+            value={targetGroupUuid}
+            onchange={(uuid) => (targetGroupUuid = uuid)}
+          />
         </label>
 
         <label class="field">
