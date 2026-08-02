@@ -16,8 +16,8 @@ use crate::bridge::BridgeHost;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
 use crate::vault::{
-    EntryInput, GroupInput, HistoryVersion, RemoteMode, SecurityReport, TotpCode, VaultSession,
-    VaultState,
+    EntryInput, EntryPatch, GroupInput, HistoryVersion, RemoteMode, SecurityReport, TotpCode,
+    VaultSession, VaultState,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -404,6 +404,18 @@ fn update_entry(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .update_entry(&uuid, &input)
+}
+
+#[tauri::command]
+fn update_entries(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuids: Vec<String>,
+    patch: EntryPatch,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_entries(&uuids, &patch)
 }
 
 #[tauri::command]
@@ -974,6 +986,7 @@ pub fn run() {
             change_master_key,
             add_entry,
             update_entry,
+            update_entries,
             delete_entry,
             delete_entries,
             move_entry,

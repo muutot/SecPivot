@@ -173,6 +173,42 @@ pub struct EntryInput {
     pub attachments: Vec<AttachmentInput>,
 }
 
+/// Partial entry update applied to several entries at once (batch editing).
+/// An absent field leaves the entry untouched; the `clear_*` flags explicitly
+/// clear optional values. Passwords never enter the log or config.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryPatch {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    /// TOTP seed to set; an empty string clears the existing seed.
+    #[serde(default)]
+    pub totp: Option<String>,
+    /// New ISO-8601 expiry; an empty string clears the existing expiry.
+    #[serde(default)]
+    pub expires: Option<String>,
+    #[serde(default)]
+    pub clear_expires: bool,
+    /// Built-in KeePass icon index.
+    #[serde(default)]
+    pub icon: Option<u32>,
+    #[serde(default)]
+    pub clear_icon: bool,
+    /// `#RRGGBB` background color; an empty string clears the existing color.
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub clear_color: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupInput {
@@ -732,6 +768,45 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry);
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Apply one partial patch to several entries in a single transaction.
+    /// Only the fields present in the patch are written; the rest of each
+    /// entry (including the password) is left untouched. All uuids are
+    /// validated up-front so a bad id aborts the whole batch before any
+    /// entry is modified; the snapshot is built once afterwards.
+    pub fn update_entries(
+        &mut self,
+        uuids: &[String],
+        patch: &EntryPatch,
+    ) -> Result<VaultState, String> {
+        if uuids.is_empty() {
+            return self.snapshot();
+        }
+        let ids: Vec<EntryId> = uuids
+            .iter()
+            .map(|uuid| parse_entry_id(uuid))
+            .collect::<Result<_, _>>()?;
+        {
+            let db = self.require_db_mut()?;
+            for id in &ids {
+                db.entry(*id).ok_or_else(|| "条目不存在".to_owned())?;
+            }
+            for id in ids {
+                let mut entry = db.entry_mut(id).expect("validated entry must exist");
+                {
+                    let mut tracked = entry.track_changes();
+                    {
+                        let mut current = tracked.as_mut();
+                        apply_patch_fields(&mut current, patch);
+                    }
+                    tracked.times.last_modification = Some(Times::now());
+                }
+                trim_entry_history(&mut entry);
+            }
         }
         self.mark_dirty();
         self.snapshot()
@@ -2154,6 +2229,59 @@ fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
     entry.foreground_color = None;
 }
 
+/// Apply a partial batch-edit patch to an entry. Absent fields are skipped;
+/// the `clear_*` flags and empty-string values clear optional attributes.
+fn apply_patch_fields(entry: &mut EntryMut<'_>, patch: &EntryPatch) {
+    if let Some(title) = &patch.title {
+        entry.set(FIELD_TITLE, Value::unprotected(title.clone()));
+    }
+    if let Some(username) = &patch.username {
+        entry.set(FIELD_USERNAME, Value::unprotected(username.clone()));
+    }
+    if let Some(password) = &patch.password {
+        entry.set(FIELD_PASSWORD, Value::protected(password.clone()));
+    }
+    if let Some(url) = &patch.url {
+        entry.set(FIELD_URL, Value::unprotected(url.clone()));
+    }
+    if let Some(notes) = &patch.notes {
+        entry.set(FIELD_NOTES, Value::unprotected(notes.clone()));
+    }
+    if let Some(seed) = &patch.totp {
+        if seed.trim().is_empty() {
+            entry.fields.remove(FIELD_OTP);
+        } else {
+            entry.set(FIELD_OTP, Value::unprotected(seed.trim().to_owned()));
+        }
+    }
+    if patch.clear_expires {
+        entry.times.expiry = None;
+        entry.times.expires = Some(false);
+    } else if let Some(expires) = &patch.expires {
+        match parse_expiry(Some(expires)) {
+            Some(expiry) => {
+                entry.times.expiry = Some(expiry);
+                entry.times.expires = Some(true);
+            }
+            None => {
+                entry.times.expiry = None;
+                entry.times.expires = Some(false);
+            }
+        }
+    }
+    if patch.clear_icon {
+        entry.set_icon_none();
+    } else if let Some(icon_id) = patch.icon {
+        entry.set_icon_builtin(icon_id as usize);
+    }
+    if patch.clear_color {
+        entry.background_color = None;
+    } else if let Some(color) = &patch.color {
+        entry.background_color = parse_color(Some(color));
+        entry.foreground_color = None;
+    }
+}
+
 /// Parse a `#RRGGBB` color string; `None` for empty/absent or invalid input.
 fn parse_color(value: Option<&str>) -> Option<Color> {
     value?.trim().parse().ok()
@@ -3039,6 +3167,215 @@ mod tests {
     }
 
     #[test]
+    fn update_entries_applies_patch_to_all_uuids_and_skips_absent_fields() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let mut uuids = Vec::new();
+        for i in 0..3 {
+            let state = session
+                .add_entry(&EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: format!("E{i}"),
+                    username: format!("user{i}"),
+                    password: "secret".into(),
+                    url: format!("https://e{i}.example"),
+                    notes: "note".into(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                })
+                .unwrap();
+            uuids.push(state.root.entries.last().unwrap().uuid.clone());
+        }
+
+        let patch = EntryPatch {
+            title: Some("Renamed".into()),
+            username: Some("shared".into()),
+            ..EntryPatch::default()
+        };
+        let state = session.update_entries(&uuids, &patch).unwrap();
+        assert_eq!(state.root.entries.len(), 3);
+        for (i, entry) in state.root.entries.iter().enumerate() {
+            assert_eq!(entry.title, "Renamed");
+            assert_eq!(entry.username, "shared");
+            assert_eq!(
+                session.get_entry_password(&entry.uuid).unwrap(),
+                "secret",
+                "untouched password must survive"
+            );
+            assert_eq!(
+                entry.url,
+                format!("https://e{i}.example"),
+                "absent url field must stay untouched"
+            );
+        }
+        let history = session.get_entry_history(&uuids[0]).unwrap();
+        assert!(
+            !history.is_empty(),
+            "each patched entry gains a history snapshot"
+        );
+    }
+
+    #[test]
+    fn update_entries_empty_strings_and_clear_flags_clear_optional_attributes() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "E".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: Some("JBSWY3DPEHPK3PXP".into()),
+                expires: Some("2026-12-31T23:59:00Z".into()),
+                icon: Some(7),
+                color: Some("#2288FF".into()),
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        assert!(state.root.entries[0].has_totp);
+
+        let patch = EntryPatch {
+            totp: Some("".into()),
+            clear_expires: true,
+            clear_icon: true,
+            clear_color: true,
+            ..EntryPatch::default()
+        };
+        let state = session.update_entries(&[uuid], &patch).unwrap();
+        let entry = &state.root.entries[0];
+        assert!(!entry.has_totp, "empty totp clears the seed");
+        assert_eq!(entry.expires, None, "clear_expires removes the expiry");
+        assert!(
+            entry.icon.is_none(),
+            "clear_icon resets to the default icon"
+        );
+        assert!(entry.color.is_none(), "clear_color removes the tag");
+        assert_eq!(entry.title, "E", "absent fields stay untouched");
+        assert_eq!(
+            session.get_entry_password(&entry.uuid).unwrap(),
+            "p",
+            "untouched password must survive"
+        );
+    }
+
+    #[test]
+    fn update_entries_sets_expiry_icon_and_color() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "E".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+
+        let patch = EntryPatch {
+            expires: Some("2027-06-01T12:00:00Z".into()),
+            icon: Some(5),
+            color: Some("#00CC66".into()),
+            ..EntryPatch::default()
+        };
+        let state = session.update_entries(&[uuid], &patch).unwrap();
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.expires.as_deref(), Some("2027-06-01T12:00:00Z"));
+        assert_eq!(entry.icon, Some(5));
+        assert_eq!(entry.color.as_deref(), Some("#00CC66"));
+    }
+
+    #[test]
+    fn update_entries_unknown_uuid_errors_and_empty_list_is_a_noop() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let before = session.state().unwrap().unwrap();
+        assert!(!before.dirty, "fresh session is clean");
+        let patch = EntryPatch {
+            title: Some("X".into()),
+            ..EntryPatch::default()
+        };
+        let err = session
+            .update_entries(&["00000000-0000-0000-0000-000000000000".into()], &patch)
+            .unwrap_err();
+        assert!(err.contains("条目不存在"));
+        assert_eq!(
+            session.state().unwrap().unwrap().dirty,
+            before.dirty,
+            "failed batch must not change the dirty flag"
+        );
+
+        let state = session.update_entries(&[], &patch).unwrap();
+        assert_eq!(
+            state.dirty, before.dirty,
+            "empty batch must not mark the vault dirty"
+        );
+    }
+
+    #[test]
+    fn update_entries_is_atomic_on_unknown_uuid() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let mut uuids = Vec::new();
+        for i in 0..2 {
+            let state = session
+                .add_entry(&EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: format!("E{i}"),
+                    username: "".into(),
+                    password: "p".into(),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                })
+                .unwrap();
+            uuids.push(state.root.entries.last().unwrap().uuid.clone());
+        }
+        // A batch with a valid entry first and an unknown uuid second must
+        // abort the whole batch: no entry may change, no history recorded.
+        let patch = EntryPatch {
+            title: Some("Batch".into()),
+            ..EntryPatch::default()
+        };
+        let err = session
+            .update_entries(
+                &[
+                    uuids[0].clone(),
+                    "00000000-0000-0000-0000-000000000000".into(),
+                ],
+                &patch,
+            )
+            .unwrap_err();
+        assert!(err.contains("条目不存在"));
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(state.root.entries[0].title, "E0", "no partial application");
+        assert_eq!(state.root.entries[1].title, "E1");
+        let history = session.get_entry_history(&uuids[0]).unwrap();
+        assert!(history.is_empty(), "no history snapshot on aborted batch");
+    }
+
+    #[test]
     fn save_clears_dirty_and_persists() {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
@@ -3690,6 +4027,21 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(nested.parent_uuid.as_deref(), Some("abc"));
+
+        let patch: EntryPatch = serde_json::from_value(serde_json::json!({
+            "title": "Batch",
+            "clearExpires": true,
+            "clearIcon": true,
+            "clearColor": true,
+        }))
+        .unwrap();
+        assert_eq!(patch.title.as_deref(), Some("Batch"));
+        assert_eq!(patch.username, None, "absent fields stay untouched");
+        assert!(patch.clear_expires && patch.clear_icon && patch.clear_color);
+
+        let partial: EntryPatch = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(partial.title.is_none());
+        assert!(!partial.clear_expires);
     }
 
     #[test]
