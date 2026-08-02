@@ -6,10 +6,12 @@
   import DatabaseSettingsPanel from "$lib/components/settings/DatabaseSettingsPanel.svelte";
   import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
   import BridgeSettingsPanel from "$lib/components/settings/BridgeSettingsPanel.svelte";
+  import RpcSettingsPanel from "$lib/components/settings/RpcSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
   type Section = "general" | "security" | "database" | "remote" | "integrations" | "about";
   type GeneralTab = "appearance" | "display" | "compact";
+  type IntegrationsTab = "http" | "rpc";
 
   interface Props {
     onclose: () => void;
@@ -20,13 +22,18 @@
 
   let active: Section = $state("general");
   let generalTab: GeneralTab = $state("appearance");
+  let integrationsTab: IntegrationsTab = $state("http");
+
+  const currentTab = $derived(
+    active === "general" ? generalTab : active === "integrations" ? integrationsTab : null,
+  );
 
   const sections: {
     id: Section;
     label: string;
     icon: "sliders" | "shield" | "database" | "cloud" | "plug" | "info";
     description: string;
-    tabs?: { id: GeneralTab; label: string }[];
+    tabs?: { id: string; label: string }[];
     title: string;
   }[] = [
     {
@@ -67,7 +74,11 @@
       label: "集成",
       icon: "plug",
       title: "集成",
-      description: "浏览器桥接（KeePassHttp 兼容）与授权客户端管理。",
+      description: "浏览器桥接（KeePassHttp 与 KeePassRPC 兼容）与授权客户端管理。",
+      tabs: [
+        { id: "http", label: "KeePassHttp" },
+        { id: "rpc", label: "KeePassRPC" },
+      ],
     },
     {
       id: "about",
@@ -98,6 +109,7 @@
           onclick={() => {
             active = section.id;
             if (section.id === "general") generalTab = "appearance";
+            if (section.id === "integrations") integrationsTab = "http";
           }}
         >
           <AppIcon name={section.icon} size={16} />
@@ -123,12 +135,15 @@
       </div>
 
       {#if activeSection.tabs}
-        <nav class="settings-subnav" aria-label="通用子分类">
+        <nav class="settings-subnav" aria-label="{activeSection.title}子分类">
           {#each activeSection.tabs as tab (tab.id)}
             <button
               class="settings-subnav-item"
-              class:active={generalTab === tab.id}
-              onclick={() => (generalTab = tab.id)}
+              class:active={currentTab === tab.id}
+              onclick={() => {
+                if (active === "general") generalTab = tab.id as GeneralTab;
+                if (active === "integrations") integrationsTab = tab.id as IntegrationsTab;
+              }}
             >
               {tab.label}
             </button>
@@ -152,7 +167,11 @@
     {:else if active === "remote"}
       <RemoteSettingsPanel {onclose} showHeader={false} />
     {:else if active === "integrations"}
-      <BridgeSettingsPanel {onclose} showHeader={false} />
+      {#if integrationsTab === "rpc"}
+        <RpcSettingsPanel {onclose} showHeader={false} />
+      {:else}
+        <BridgeSettingsPanel {onclose} showHeader={false} />
+      {/if}
     {:else if active === "about"}
       <AboutSettingsPanel {onclose} showHeader={false} {appVersion} />
     {/if}

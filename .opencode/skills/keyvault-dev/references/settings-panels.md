@@ -12,6 +12,7 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 | Security         | Single current section → `SecuritySettingsPanel`                            |
 | Database         | Single current section → `DatabaseSettingsPanel`                            |
 | Remote           | Single current section → `RemoteSettingsPanel` (S3 endpoint/keys/mirror)    |
+| Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`  |
 | About            | Single current section → `AboutSettingsPanel`                               |
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.

@@ -7,6 +7,7 @@ import type {
   DatabaseDefaults,
   RemoteSettings,
   BridgeSettings,
+  RpcSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
@@ -85,12 +86,17 @@ export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
   enabled: false,
 };
 
+export const DEFAULT_RPC_SETTINGS: RpcSettings = {
+  enabled: false,
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
   remote: DEFAULT_REMOTE_SETTINGS,
   bridge: DEFAULT_BRIDGE_SETTINGS,
+  rpc: DEFAULT_RPC_SETTINGS,
 };
 
 const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
@@ -279,6 +285,12 @@ export function normalizeSettings(
           ? source.bridge.enabled
           : (fallback.bridge?.enabled ?? false),
     },
+    rpc: {
+      enabled:
+        typeof source.rpc?.enabled === "boolean"
+          ? source.rpc.enabled
+          : (fallback.rpc?.enabled ?? false),
+    },
   };
 }
 
@@ -290,6 +302,7 @@ interface AppSettingsStore {
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
   updateRemote: <K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
+  updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
@@ -410,6 +423,11 @@ export const appSettings: AppSettingsStore = {
 
   updateBridge(key, value): void {
     settings.update((s) => ({ ...s, bridge: { ...s.bridge, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateRpc(key, value): void {
+    settings.update((s) => ({ ...s, rpc: { ...s.rpc, [key]: value } }));
     schedulePersist();
   },
 

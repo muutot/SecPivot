@@ -124,10 +124,11 @@ Do not use a parent scoped selector to style inside a child Svelte component. Pa
 
 ## Fixed layer order
 
-| Layer                   | Current z-index |
-| ----------------------- | --------------- |
-| modal backdrop / dialog | 50              |
-| context menu / popover  | 9999            |
+| Layer                                                               | Current z-index |
+| ------------------------------------------------------------------- | --------------- |
+| modal backdrop / dialog                                             | 50              |
+| app-level security prompts (association approval, RPC side-channel) | 80              |
+| context menu / popover                                              | 9999            |
 
 Check the complete stacking context before changing a value; do not solve one overlap by arbitrary escalation.
 

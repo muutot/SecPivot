@@ -103,10 +103,17 @@ export interface BridgeSettings {
   enabled: boolean;
 }
 
+/** KeePassRPC (Kee 4.x) bridge. Loopback-only server; SRP keys are
+ * session-held, and the side-channel password is shown once per connection. */
+export interface RpcSettings {
+  enabled: boolean;
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
   remote: RemoteSettings;
   bridge: BridgeSettings;
+  rpc: RpcSettings;
 }
