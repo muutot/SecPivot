@@ -1,4 +1,5 @@
 pub mod autotype;
+pub mod clipboard;
 pub mod config;
 pub mod credential;
 pub mod dpapi;
@@ -657,6 +658,25 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
+// Clipboard commands
+// ---------------------------------------------------------------------------
+
+/// Current clipboard text (or `null` when it holds non-text content).
+/// Used by the scheduled wipe to avoid destroying text the user copied in
+/// another app after ours.
+#[tauri::command]
+fn clipboard_read_text() -> Result<Option<String>, String> {
+    clipboard::read_clipboard_text()
+}
+
+/// Empty the clipboard. The frontend calls this only after verifying the
+/// clipboard still holds our own text (or on lock with `clearOnLock`).
+#[tauri::command]
+fn clipboard_clear() -> Result<(), String> {
+    clipboard::clear_clipboard()
+}
+
+// ---------------------------------------------------------------------------
 // S3 remote commands
 // ---------------------------------------------------------------------------
 
@@ -841,6 +861,8 @@ pub fn run() {
             security_report,
             export_csv,
             read_text_file,
+            clipboard_read_text,
+            clipboard_clear,
             remember_credential,
             get_saved_credential,
             clear_saved_credential,
