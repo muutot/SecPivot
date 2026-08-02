@@ -785,9 +785,15 @@ fn clipboard_clear() -> Result<(), String> {
 // S3 remote commands
 // ---------------------------------------------------------------------------
 
-/// List `.kdbx` files under the configured prefix (newest key first).
+/// List `.kdbx` files under the active profile's prefix (newest key first).
+/// `profile` is the index into `remoteProfiles`; settings (including the
+/// decrypted credentials) are resolved from `ConfigStore`, never sent over IPC.
 #[tauri::command]
-async fn s3_list_objects(cfg: crate::config::RemoteSettings) -> Result<Vec<RemoteObject>, String> {
+async fn s3_list_objects(
+    profile: usize,
+    config: tauri::State<'_, ConfigStore>,
+) -> Result<Vec<RemoteObject>, String> {
+    let cfg = config.remote_settings(profile)?;
     crate::remote::list_objects_async(cfg).await
 }
 
@@ -799,12 +805,13 @@ async fn open_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
-    cfg: crate::config::RemoteSettings,
+    profile: usize,
     key: String,
     password: String,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
+    let cfg = config.remote_settings(profile)?;
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
@@ -862,7 +869,7 @@ async fn create_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
-    cfg: crate::config::RemoteSettings,
+    profile: usize,
     key: String,
     password: String,
     kdf: String,
@@ -871,6 +878,7 @@ async fn create_remote_vault(
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
+    let cfg = config.remote_settings(profile)?;
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;

@@ -631,6 +631,16 @@ impl ConfigStore {
         *guard = normalized.clone();
         Ok(normalized)
     }
+
+    /// Settings of the profile at `index`, clamped to the last valid profile
+    /// (mirrors how `active_remote` is normalized). Returns the decrypted
+    /// in-memory values — commands resolve profiles here instead of taking
+    /// credentials over IPC.
+    pub fn remote_settings(&self, index: usize) -> Result<RemoteSettings, String> {
+        let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
+        let idx = index.min(guard.remote_profiles.len().saturating_sub(1));
+        Ok(guard.remote_profiles[idx].settings.clone())
+    }
 }
 
 #[cfg(test)]
@@ -794,6 +804,30 @@ mod tests {
         assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(normalized.active_remote, 0);
+    }
+
+    #[test]
+    fn remote_settings_resolves_profile_and_clamps_index() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.remote_profiles.push(RemoteProfile {
+            name: "Bitiful".into(),
+            settings: RemoteSettings {
+                endpoint: "http://127.0.0.1:9000".into(),
+                ..RemoteSettings::default()
+            },
+        });
+        config.active_remote = 1;
+        store.set(config).unwrap();
+
+        let first = store.remote_settings(0).unwrap();
+        assert_eq!(first.endpoint, "https://s3.amazonaws.com");
+        let second = store.remote_settings(1).unwrap();
+        assert_eq!(second.endpoint, "http://127.0.0.1:9000");
+        // out-of-range indices clamp to the last valid profile
+        let clamped = store.remote_settings(9).unwrap();
+        assert_eq!(clamped.endpoint, "http://127.0.0.1:9000");
     }
 
     #[test]
