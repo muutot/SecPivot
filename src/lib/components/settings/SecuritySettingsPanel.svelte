@@ -43,7 +43,6 @@
     const picked = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "密钥文件", extensions: ["key", "kdbx", "keyx", "xml"] }],
     });
     if (typeof picked === "string" && picked.length > 0) {
       newKeyfile = picked;
