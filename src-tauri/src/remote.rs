@@ -10,10 +10,19 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, RwLock};
+use std::time::Duration;
 use tauri::Manager;
 
 /// Prefix used for the display path of remote vaults (`s3://<key>`).
 pub const REMOTE_URI_PREFIX: &str = "s3://";
+
+/// TCP connect timeout for S3 requests. rust-s3's default is 60 s; 15 s keeps
+/// an unreachable endpoint failure snappy.
+const S3_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Overall bound for the object listing call (small payloads).
+const S3_LIST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Overall bound for download/upload calls (vault files; generous for slow links).
+const S3_IO_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// A single process-wide tokio runtime shared by every S3 transport. Creating
 /// a runtime per command would spin up (and tear down) a full thread pool on
@@ -48,10 +57,20 @@ pub trait RemoteStorage: Send + Sync {
 pub struct S3Storage {
     bucket: s3::Bucket,
     runtime: &'static tokio::runtime::Runtime,
+    list_timeout: Duration,
+    io_timeout: Duration,
 }
 
 impl S3Storage {
     pub fn new(cfg: &RemoteSettings) -> Result<Self, String> {
+        Self::with_timeouts(cfg, S3_LIST_TIMEOUT, S3_IO_TIMEOUT)
+    }
+
+    fn with_timeouts(
+        cfg: &RemoteSettings,
+        list_timeout: Duration,
+        io_timeout: Duration,
+    ) -> Result<Self, String> {
         let endpoint = cfg.endpoint.trim();
         let region = cfg.region.trim();
         let bucket_name = cfg.bucket.trim();
@@ -77,11 +96,15 @@ impl S3Storage {
         )
         .map_err(|e| format!("S3 凭据无效: {e}"))?;
         let mut bucket = s3::Bucket::new(bucket_name, region, credentials)
+            .map_err(|e| format!("S3 配置无效: {e}"))?
+            .with_request_timeout(S3_CONNECT_TIMEOUT)
             .map_err(|e| format!("S3 配置无效: {e}"))?;
         bucket.set_path_style();
         Ok(Self {
             bucket,
             runtime: shared_runtime(),
+            list_timeout,
+            io_timeout,
         })
     }
 
@@ -93,54 +116,66 @@ impl S3Storage {
 impl RemoteStorage for S3Storage {
     fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
         self.runtime.block_on(async {
-            let results = self
-                .bucket
-                .list(prefix.trim_start_matches('/').to_owned(), None)
-                .await
-                .map_err(|e| format!("S3 列表请求失败: {e}"))?;
-            let mut objects = Vec::new();
-            for page in results {
-                for item in page.contents {
-                    objects.push(RemoteObject {
-                        key: item.key.trim_start_matches('/').to_owned(),
-                        size: item.size as usize,
-                        modified: Some(item.last_modified),
-                    });
+            let result = tokio::time::timeout(self.list_timeout, async {
+                let results = self
+                    .bucket
+                    .list(prefix.trim_start_matches('/').to_owned(), None)
+                    .await
+                    .map_err(|e| format!("S3 列表请求失败: {e}"))?;
+                let mut objects = Vec::new();
+                for page in results {
+                    for item in page.contents {
+                        objects.push(RemoteObject {
+                            key: item.key.trim_start_matches('/').to_owned(),
+                            size: item.size as usize,
+                            modified: Some(item.last_modified),
+                        });
+                    }
                 }
-            }
-            Ok(objects)
+                Ok(objects)
+            })
+            .await;
+            result.map_err(|_| "S3 列表请求超时，请检查网络与服务地址".to_owned())?
         })
     }
 
     fn get(&self, key: &str) -> Result<Vec<u8>, String> {
         self.runtime.block_on(async {
-            let response = self
-                .bucket
-                .get_object(&Self::object_key(key))
-                .await
-                .map_err(|e| format!("S3 下载失败: {e}"))?;
-            if response.status_code() != 200 {
-                return Err(format!("S3 下载失败: HTTP {}", response.status_code()));
-            }
-            Ok(response.to_vec())
+            let result = tokio::time::timeout(self.io_timeout, async {
+                let response = self
+                    .bucket
+                    .get_object(&Self::object_key(key))
+                    .await
+                    .map_err(|e| format!("S3 下载失败: {e}"))?;
+                if response.status_code() != 200 {
+                    return Err(format!("S3 下载失败: HTTP {}", response.status_code()));
+                }
+                Ok(response.to_vec())
+            })
+            .await;
+            result.map_err(|_| "S3 下载超时，请检查网络与服务地址".to_owned())?
         })
     }
 
     fn put(&self, key: &str, data: &[u8]) -> Result<(), String> {
         self.runtime.block_on(async {
-            let response = self
-                .bucket
-                .put_object_with_content_type(
-                    &Self::object_key(key),
-                    data,
-                    "application/octet-stream",
-                )
-                .await
-                .map_err(|e| format!("S3 上传失败: {e}"))?;
-            if response.status_code() != 200 {
-                return Err(format!("S3 上传失败: HTTP {}", response.status_code()));
-            }
-            Ok(())
+            let result = tokio::time::timeout(self.io_timeout, async {
+                let response = self
+                    .bucket
+                    .put_object_with_content_type(
+                        &Self::object_key(key),
+                        data,
+                        "application/octet-stream",
+                    )
+                    .await
+                    .map_err(|e| format!("S3 上传失败: {e}"))?;
+                if response.status_code() != 200 {
+                    return Err(format!("S3 上传失败: HTTP {}", response.status_code()));
+                }
+                Ok(())
+            })
+            .await;
+            result.map_err(|_| "S3 上传超时，请检查网络与服务地址".to_owned())?
         })
     }
 }
@@ -273,5 +308,129 @@ mod tests {
         let a = shared_runtime() as *const _;
         let b = shared_runtime() as *const _;
         assert!(std::ptr::eq(a, b));
+    }
+
+    // -----------------------------------------------------------------------
+    // Local mock S3 server: turns the "no live S3 evidence" gap into an
+    // offline HTTP-level round trip through the real S3Storage transport
+    // (path-style signing, ListObjectsV2 XML parsing, get/put).
+    // -----------------------------------------------------------------------
+
+    const LIST_V2_XML: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\
+<Name>test-bucket</Name><Prefix>vaults/</Prefix><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys>\
+<IsTruncated>false</IsTruncated>\
+<Contents><Key>vaults/a.kdbx</Key>\
+<LastModified>2024-01-01T00:00:00.000Z</LastModified>\
+<ETag>&quot;abc&quot;</ETag><Size>3</Size><StorageClass>STANDARD</StorageClass></Contents>\
+</ListBucketResult>";
+
+    /// Serve one HTTP/1.1 request per connection (no keep-alive): list-type=2
+    /// returns `LIST_V2_XML`, PUTs are acknowledged, other GETs return `[1,2,3]`.
+    fn s3_mock_handle(mut stream: std::net::TcpStream) {
+        use std::io::{Read, Write};
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 4096];
+        let header_end;
+        loop {
+            let n = stream.read(&mut chunk).unwrap_or(0);
+            if n == 0 {
+                return;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                header_end = pos + 4;
+                break;
+            }
+        }
+        let text = String::from_utf8_lossy(&buf[..header_end]);
+        let head = text.lines().next().unwrap_or("").to_string();
+        let is_list = head.starts_with("GET") && text.contains("list-type=2");
+        let is_put = head.starts_with("PUT");
+        let content_length: usize = text
+            .lines()
+            .find(|l| l.to_ascii_lowercase().starts_with("content-length:"))
+            .and_then(|l| l.split(':').nth(1).and_then(|v| v.trim().parse().ok()))
+            .unwrap_or(0);
+        while buf.len() < header_end + content_length {
+            let n = stream.read(&mut chunk).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        let body: Vec<u8> = if is_list {
+            LIST_V2_XML.as_bytes().to_vec()
+        } else if is_put {
+            Vec::new()
+        } else {
+            vec![1u8, 2, 3]
+        };
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.write_all(&body);
+    }
+
+    fn spawn_s3_mock() -> std::net::SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("mock listener");
+        let addr = listener.local_addr().expect("mock addr");
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                std::thread::spawn(move || s3_mock_handle(stream));
+            }
+        });
+        addr
+    }
+    fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
+        RemoteSettings {
+            endpoint: format!("http://{addr}"),
+            region: "us-east-1".to_owned(),
+            bucket: "test-bucket".to_owned(),
+            access_key: "AK".to_owned(),
+            secret_key: "SK".to_owned(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn s3_transport_round_trips_against_local_mock() {
+        let storage = S3Storage::with_timeouts(
+            &mock_config(spawn_s3_mock()),
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+        )
+        .expect("storage");
+
+        let objects = storage.list("vaults/").expect("list");
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].key, "vaults/a.kdbx");
+        assert_eq!(objects[0].size, 3);
+
+        assert_eq!(storage.get("vaults/a.kdbx").expect("get"), vec![1, 2, 3]);
+        storage.put("vaults/b.kdbx", &[9, 9]).expect("put");
+    }
+
+    /// A server that accepts the connection but never answers must surface a
+    /// bounded error instead of hanging the list forever.
+    #[test]
+    fn s3_list_surfaces_timeout_error_instead_of_hanging() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("mock listener");
+        let addr = listener.local_addr().expect("mock addr");
+        std::thread::spawn(move || {
+            for _stream in listener.incoming().flatten() {
+                std::thread::sleep(Duration::from_secs(30));
+            }
+        });
+        let storage = S3Storage::with_timeouts(
+            &mock_config(addr),
+            Duration::from_millis(500),
+            Duration::from_secs(10),
+        )
+        .expect("storage");
+        let err = storage.list("vaults/").expect_err("list must time out");
+        assert!(err.contains("超时"), "unexpected error: {err}");
     }
 }

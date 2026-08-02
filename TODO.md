@@ -51,7 +51,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back to S3 for remote sessions
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<localDir>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3 objects, open (password + keyfile) and create remote vaults
-- [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport verified only via offline `MemoryStorage` tests — 53 backend tests pass, `npm run verify` green)
+- [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport now covered by a local mock HTTP S3 server test: ListObjectsV2 XML parsing, path-style signing, get/put, bounded-timeout behavior — `remote::tests::*`; real-provider behavior still unverified)
 
 ## Stage 7 — Feature gap list (priority order)
 
