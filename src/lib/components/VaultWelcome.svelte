@@ -163,7 +163,10 @@
     if (isTauriRuntime()) {
       const selected = await open({
         multiple: false,
-        filters: [{ name: "KeePass 数据库", extensions: ["kdbx"] }],
+        filters: [
+          { name: "KeePass 数据库", extensions: ["kdbx"] },
+          { name: "所有文件", extensions: ["*"] },
+        ],
       });
       if (!selected) return;
       path = String(selected);
@@ -226,7 +229,10 @@
   async function pickCreatePath(): Promise<void> {
     const selected = await save({
       defaultPath: "new-vault.kdbx",
-      filters: [{ name: "KeePass 数据库", extensions: ["kdbx"] }],
+      filters: [
+        { name: "KeePass 数据库", extensions: ["kdbx"] },
+        { name: "所有文件", extensions: ["*"] },
+      ],
     });
     if (selected) path = String(selected);
   }
@@ -248,7 +254,10 @@
         if (isTauriRuntime()) {
           const selected = await save({
             defaultPath: "new-vault.kdbx",
-            filters: [{ name: "KeePass 数据库", extensions: ["kdbx"] }],
+            filters: [
+              { name: "KeePass 数据库", extensions: ["kdbx"] },
+              { name: "所有文件", extensions: ["*"] },
+            ],
           });
           if (!selected) return;
           target = String(selected);
@@ -421,6 +430,36 @@
 
         {#if remoteTab === "config"}
           <div class="field">
+            <span>远程配置</span>
+            <div class="profile-bar">
+              <select
+                class="text-input profile-select"
+                value={settings.activeRemote}
+                aria-label="远程配置"
+                onchange={(e) => appSettings.setActiveRemote(Number(e.currentTarget.value))}
+              >
+                {#each settings.remoteProfiles as profile, i (i)}
+                  <option value={i}>{profile.name}</option>
+                {/each}
+              </select>
+              <button
+                class="welcome-button"
+                type="button"
+                onclick={() => appSettings.addRemoteProfile("")}
+              >
+                添加
+              </button>
+              <button
+                class="welcome-button"
+                type="button"
+                disabled={settings.remoteProfiles.length <= 1}
+                onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+          <div class="field">
             <span>服务地址</span>
             <input
               class="text-input"
@@ -480,7 +519,8 @@
             />
           </div>
           <p class="remote-config-note">
-            凭据明文保存在 config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
+            凭据以 DPAPI 加密后保存在
+            config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
           </p>
         {:else if remoteTab === "open"}
           <div class="field">
@@ -1099,6 +1139,16 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+  }
+
+  .profile-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .profile-select {
+    flex: 1;
   }
 
   .remote-config-note {

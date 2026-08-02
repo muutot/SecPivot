@@ -52,7 +52,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<localDir>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3 objects, open (password + keyfile) and create remote vaults
 - [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport now covered by a local mock HTTP S3 server test: ListObjectsV2 XML parsing, path-style signing, get/put, bounded-timeout behavior — `remote::tests::*`; real-provider behavior still unverified)
-- [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`:后端存储/规范化/旧单配置自动迁移,命令按 profile 索引从 `ConfigStore` 解析凭据不跨 IPC,设置面板 profile 选择器(添加/重命名/删除/切换),欢迎页内联配置编辑当前 profile)
+- [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`:后端存储/规范化/旧单配置自动迁移,命令按 profile 索引从 `ConfigStore` 解析凭据不跨 IPC,设置面板 profile 选择器(添加/重命名/删除/切换),欢迎页远程弹窗配置标签 profile 选择器(切换/添加/删除))
+- [x] 任意文件可作数据库/密钥文件:远程打开/创建键名不再要求 `.kdbx` 后缀(由 KDBX 解析判定,非库文件报「无法打开数据库」),本地打开/创建选择器加「所有文件」选项,密钥文件选择器(欢迎页 + 改主密钥)放开任意类型
 
 ## Stage 7 — Feature gap list (priority order)
 
