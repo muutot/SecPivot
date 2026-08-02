@@ -12,6 +12,7 @@
   import { copyText } from "$lib/utils/clipboard";
   import type {
     EntryInput,
+    EntryPatch,
     VaultEntry,
     VaultGroup,
     VaultState,
@@ -48,8 +49,9 @@
   let selectedUuids = $state<Set<string>>(new Set());
   let selectionAnchor = $state<string | null>(null);
   let editorOpen = $state(false);
-  let editorMode: "create" | "edit" = $state("create");
+  let editorMode: "create" | "edit" | "edit-multi" = $state("create");
   let editEntry: VaultEntry | null = $state(null);
+  let editEntries: VaultEntry[] = $state([]);
   let groupModalOpen = $state(false);
   let groupModalParent = $state<string | null>(null);
   let newGroupName = $state("");
@@ -99,6 +101,7 @@
         selectedUuids = new Set();
         selectionAnchor = null;
         editorOpen = false;
+        editEntries = [];
       } else {
         selectedEntry = findEntryByUuid(value, selectedEntry?.uuid ?? null);
       }
@@ -643,23 +646,55 @@
   function openCreateEntry(): void {
     editorMode = "create";
     editEntry = null;
+    editEntries = [];
     editorOpen = true;
+  }
+
+  /** Collect the fully-populated entries behind the current selection. */
+  function selectedEntries(): VaultEntry[] {
+    if (!currentVault) return [];
+    return allGroupsOf(currentVault.root)
+      .flatMap((g) => g.entries)
+      .filter((e) => selectedUuids.has(e.uuid));
   }
 
   function openEditEntry(entry: VaultEntry): void {
+    if (selectedUuids.size > 1 && selectedUuids.has(entry.uuid)) {
+      editorMode = "edit-multi";
+      editEntry = null;
+      editEntries = selectedEntries();
+      if (editEntries.length < 2) {
+        setSingleSelection(entry);
+        editorMode = "edit";
+        editEntry = entry;
+        editEntries = [];
+      }
+      editorOpen = true;
+      return;
+    }
     editorMode = "edit";
     editEntry = entry;
+    editEntries = [];
     editorOpen = true;
   }
 
-  async function handleEditorSave(input: EntryInput): Promise<void> {
+  async function handleEditorSave(
+    input: EntryInput | null,
+    patch: EntryPatch | null,
+  ): Promise<void> {
     try {
-      if (editorMode === "create") {
+      if (editorMode === "create" && input) {
         const state = await vault.addEntry(input);
         setSingleSelection(findEntryByUuid(state, null));
         editorOpen = false;
         flash("已创建条目");
-      } else if (editEntry) {
+      } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
+        const uuids = editEntries.map((e) => e.uuid);
+        const state = await vault.updateEntries(uuids, patch);
+        selectedEntry = findEntryByUuid(state, selectedEntry?.uuid ?? null);
+        editorOpen = false;
+        flash(`已更新 ${uuids.length} 个条目`);
+      } else if (editorMode === "edit" && input && editEntry) {
         const state = await vault.updateEntry(editEntry.uuid, input);
         setSingleSelection(findEntryByUuid(state, editEntry.uuid));
         editorOpen = false;
@@ -858,6 +893,11 @@
       ...(multi
         ? [
             {
+              id: "edit-selected",
+              label: `编辑所选条目 (${selectedUuids.size})`,
+              icon: "edit" as const,
+            },
+            {
               id: "delete-selected",
               label: `删除所选条目 (${selectedUuids.size})`,
               icon: "trash" as const,
@@ -898,7 +938,7 @@
   ]);
 
   function handleEntryMenuAction(id: string, entry: VaultEntry): void {
-    if (id === "edit") openEditEntry(entry);
+    if (id === "edit" || id === "edit-selected") openEditEntry(entry);
     else if (id === "copy-username" && entry.username)
       void copyEntryValue(entry.username, "用户名");
     else if (id === "copy-password") void copyEntryPassword(entry);
@@ -1113,6 +1153,12 @@
               aria-multiselectable="true"
               tabindex="-1"
               oncontextmenu={openBlankMenu}
+              onkeydown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+                  e.preventDefault();
+                  selectAllEntries();
+                }
+              }}
             >
               {#if filteredEntries.length === 0}
                 <div class="empty-state">
@@ -1244,6 +1290,9 @@
       <footer class="status-bar" role="status" aria-live="polite">
         <span class="status-left">
           <span class="result-count">{filteredEntries.length} 个条目</span>
+          {#if selectedUuids.size > 1}
+            <span class="status-group-filter">已选 {selectedUuids.size} 个</span>
+          {/if}
           {#if selectedGroup !== null}
             <span class="status-group-filter" title={pathOf(selectedGroup)}>
               筛选于 {pathOf(selectedGroup)}
@@ -1278,8 +1327,9 @@
     groups={currentVault ? [currentVault.root] : []}
     groupUuid={selectedGroup ?? currentVault?.root.uuid ?? "root"}
     entry={editEntry}
+    entries={editEntries}
     onclose={() => (editorOpen = false)}
-    onsaved={(input) => void handleEditorSave(input)}
+    onsaved={(input, patch) => void handleEditorSave(input, patch)}
   />
 {/if}
 

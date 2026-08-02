@@ -6,6 +6,7 @@ import type {
   VaultGroup,
   VaultEntry,
   EntryInput,
+  EntryPatch,
   GroupInput,
   CreateVaultRequest,
   TotpCode,
@@ -45,6 +46,7 @@ interface VaultStore {
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
+  updateEntries: (uuids: string[], patch: EntryPatch) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
   deleteEntries: (uuids: string[]) => Promise<VaultState>;
   moveEntry: (uuid: string, groupUuid: string) => Promise<VaultState>;
@@ -426,6 +428,41 @@ export const vault: VaultStore = {
         }
       }
       throw new Error("entry not found");
+    });
+    state.set(result);
+    return result;
+  },
+
+  async updateEntries(uuids: string[], patch: EntryPatch): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_entries", { uuids, patch });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const groups: VaultGroup[] = [];
+      collectGroups(draft.root, groups);
+      for (const group of groups) {
+        for (const entry of group.entries) {
+          if (!uuids.includes(entry.uuid)) continue;
+          if (patch.title !== undefined) entry.title = patch.title;
+          if (patch.username !== undefined) entry.username = patch.username;
+          if (patch.password !== undefined) entry.password = patch.password;
+          if (patch.url !== undefined) entry.url = patch.url;
+          if (patch.notes !== undefined) entry.notes = patch.notes;
+          if (patch.totp !== undefined) {
+            entry.totp = patch.totp || undefined;
+            entry.hasTotp = Boolean(patch.totp);
+          }
+          if (patch.clearExpires) entry.expires = undefined;
+          else if (patch.expires !== undefined) entry.expires = patch.expires || undefined;
+          if (patch.clearIcon) entry.icon = undefined;
+          else if (patch.icon !== undefined) entry.icon = patch.icon;
+          if (patch.clearColor) entry.color = undefined;
+          else if (patch.color !== undefined) entry.color = patch.color || undefined;
+          entry.modified = new Date().toISOString();
+        }
+      }
     });
     state.set(result);
     return result;

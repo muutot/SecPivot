@@ -97,6 +97,28 @@ export interface EntryInput {
   attachments?: AttachmentInput[];
 }
 
+/** Partial entry update applied to several entries at once (batch editing).
+ * An absent field leaves every target entry untouched — passwords of
+ * unchanged fields are never fetched or re-sent. */
+export interface EntryPatch {
+  title?: string;
+  username?: string;
+  password?: string;
+  url?: string;
+  notes?: string;
+  /** TOTP seed to set; empty string clears the existing seed. */
+  totp?: string;
+  /** New ISO-8601 expiry; set `clearExpires` instead to remove it. */
+  expires?: string;
+  clearExpires?: boolean;
+  /** Built-in KeePass icon index; set `clearIcon` instead to reset it. */
+  icon?: number;
+  clearIcon?: boolean;
+  /** `#RRGGBB` background color; set `clearColor` instead to remove it. */
+  color?: string;
+  clearColor?: boolean;
+}
+
 export interface GroupInput {
   parentUuid: string | null;
   name: string;

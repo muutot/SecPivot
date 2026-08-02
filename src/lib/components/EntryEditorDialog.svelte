@@ -2,6 +2,7 @@
   import { get } from "svelte/store";
   import type {
     EntryInput,
+    EntryPatch,
     VaultEntry,
     VaultGroup,
     CustomField,
@@ -21,30 +22,53 @@
   import GroupPicker from "$lib/components/GroupPicker.svelte";
 
   interface Props {
-    mode: "create" | "edit";
+    mode: "create" | "edit" | "edit-multi";
     groups: VaultGroup[];
     groupUuid: string;
     entry: VaultEntry | null;
+    /** All selected entries in batch mode (`mode === "edit-multi"`). */
+    entries: VaultEntry[];
     onclose: () => void;
-    onsaved: (input: EntryInput) => void;
+    onsaved: (input: EntryInput | null, patch: EntryPatch | null) => void;
   }
 
-  let { mode, groups, groupUuid, entry, onclose, onsaved }: Props = $props();
+  let { mode, groups, groupUuid, entry, entries, onclose, onsaved }: Props = $props();
 
+  // The dialog is mounted per open (editorOpen), so `mode` never changes
+  // during an instance's lifetime; capturing it once is intentional.
+  // svelte-ignore state_referenced_locally
+  const multi = mode === "edit-multi";
   const initialEntry = (() => entry)();
   const initialGroupUuid = (() => groupUuid)();
 
-  let title = $state(initialEntry?.title ?? "");
-  let username = $state(initialEntry?.username ?? "");
+  /** Shared value of a field across batch targets, or `null` when the values
+   * differ (KeePass's "multiple values" case). */
+  function sharedValue(pick: (e: VaultEntry) => string): string | null {
+    if (!multi) return pick(initialEntry as VaultEntry) ?? "";
+    if (entries.length === 0) return "";
+    const first = pick(entries[0]) ?? "";
+    return entries.every((e) => (pick(e) ?? "") === first) ? first : null;
+  }
+
+  let title = $state(multi ? (sharedValue((e) => e.title) ?? "") : (initialEntry?.title ?? ""));
+  let username = $state(
+    multi ? (sharedValue((e) => e.username) ?? "") : (initialEntry?.username ?? ""),
+  );
   let password = $state("");
   let passwordLoading = $state(false);
-  let url = $state(initialEntry?.url ?? "");
-  let notes = $state(initialEntry?.notes ?? "");
+  let url = $state(multi ? (sharedValue((e) => e.url) ?? "") : (initialEntry?.url ?? ""));
+  let notes = $state(multi ? (sharedValue((e) => e.notes) ?? "") : (initialEntry?.notes ?? ""));
   let totp = $state("");
   let totpLoading = $state(false);
-  let expiresLocal = $state(initialEntry?.expires ? toLocalInput(initialEntry.expires) : "");
-  let iconIndex = $state<number | null>(initialEntry?.icon ?? null);
-  let colorHex = $state(initialEntry?.color ?? "");
+  let expiresLocal = $state(
+    multi
+      ? (sharedValue((e) => e.expires ?? "") ?? "")
+      : initialEntry?.expires
+        ? toLocalInput(initialEntry.expires)
+        : "",
+  );
+  let iconIndex = $state<number | null>(multi ? null : (initialEntry?.icon ?? null));
+  let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
   let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
   let showPassword = $state(false);
@@ -59,8 +83,41 @@
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
 
-  /** In the Tauri runtime the current password must be fetched on demand. */
+  /** In batch mode every optional field starts "untouched": the displayed
+   * placeholder (`多个值`) is not the real value, and a field is applied to
+   * all targets only once the user edits it (KeePass multi-edit semantics). */
+  const untouched = $state(new Set<string>());
+  if (multi) {
+    for (const key of [
+      "title",
+      "username",
+      "password",
+      "url",
+      "notes",
+      "totp",
+      "expires",
+      "icon",
+      "color",
+    ]) {
+      untouched.add(key);
+    }
+  }
+  const titleMulti = $derived(multi && sharedValue((e) => e.title) === null);
+  const usernameMulti = $derived(multi && sharedValue((e) => e.username) === null);
+  const urlMulti = $derived(multi && sharedValue((e) => e.url) === null);
+  const notesMulti = $derived(multi && sharedValue((e) => e.notes) === null);
+  const expiresMulti = $derived(multi && sharedValue((e) => e.expires ?? "") === null);
+  const iconMulti = $derived(multi && new Set(entries.map((e) => e.icon ?? -1)).size > 1);
+  const colorMulti = $derived(multi && new Set(entries.map((e) => e.color ?? "")).size > 1);
+
+  function markTouched(key: string): void {
+    untouched.delete(key);
+  }
+
+  /** In the Tauri runtime the current password must be fetched on demand.
+   * Batch mode never loads passwords (KeePass shows `<multiple values>`). */
   $effect(() => {
+    if (multi) return;
     const targetUuid = entry?.uuid;
     password = "";
     if (!targetUuid) return;
@@ -76,8 +133,10 @@
       });
   });
 
-  /** TOTP seeds are not part of the snapshot; fetch on demand when editing. */
+  /** TOTP seeds are not part of the snapshot; fetch on demand when editing.
+   * Batch mode never loads seeds. */
   $effect(() => {
+    if (multi) return;
     const targetUuid = entry?.uuid;
     totp = "";
     if (!targetUuid || !entry?.hasTotp) return;
@@ -100,6 +159,7 @@
     const settings = get(appSettings);
     password = generatePassword(settings.database.generator);
     showPassword = true;
+    markTouched("password");
   }
 
   function addCustomField(): void {
@@ -162,26 +222,71 @@
     return (KEEPASS_ICONS[index] ?? ENTRY_DEFAULT_ICON) as IconName;
   }
 
+  function pickIcon(index: number): void {
+    markTouched("icon");
+    iconIndex = iconIndex === index ? null : index;
+  }
+
+  function pickColor(color: string): void {
+    markTouched("color");
+    colorHex = colorHex.toUpperCase() === color ? "" : color;
+  }
+
+  function clearColor(): void {
+    markTouched("color");
+    colorHex = "";
+  }
+
   function submit(): void {
+    if (multi) {
+      const patch: EntryPatch = {};
+      if (!untouched.has("title")) patch.title = title.trim();
+      if (!untouched.has("username")) patch.username = username.trim();
+      if (!untouched.has("password")) patch.password = password;
+      if (!untouched.has("url")) patch.url = url.trim();
+      if (!untouched.has("notes")) patch.notes = notes;
+      if (!untouched.has("totp")) patch.totp = totp.trim() || "";
+      if (!untouched.has("expires")) {
+        if (expiresLocal) patch.expires = new Date(expiresLocal).toISOString();
+        else patch.clearExpires = true;
+      }
+      if (!untouched.has("icon")) {
+        if (iconIndex !== null) patch.icon = iconIndex;
+        else patch.clearIcon = true;
+      }
+      if (!untouched.has("color")) {
+        if (colorHex) patch.color = colorHex;
+        else patch.clearColor = true;
+      }
+      if (Object.keys(patch).length === 0) {
+        onclose();
+        return;
+      }
+      onsaved(null, patch);
+      return;
+    }
     if (!title.trim() && !username.trim() && !password) return;
-    onsaved({
-      groupUuid: targetGroupUuid,
-      title: title.trim(),
-      username: username.trim(),
-      password,
-      url: url.trim(),
-      notes,
-      totp: totp.trim() || undefined,
-      expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
-      icon: iconIndex ?? undefined,
-      color: colorHex || undefined,
-      customFields: customFields
-        .map((f) => ({ name: f.name.trim(), value: f.value }))
-        .filter((f) => f.name !== ""),
-      attachments: attachments.map((a) =>
-        a.data ? { name: a.name, data: a.data } : { name: a.name },
-      ),
-    });
+    onsaved(
+      {
+        groupUuid: targetGroupUuid,
+        title: title.trim(),
+        username: username.trim(),
+        password,
+        url: url.trim(),
+        notes,
+        totp: totp.trim() || undefined,
+        expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
+        icon: iconIndex ?? undefined,
+        color: colorHex || undefined,
+        customFields: customFields
+          .map((f) => ({ name: f.name.trim(), value: f.value }))
+          .filter((f) => f.name !== ""),
+        attachments: attachments.map((a) =>
+          a.data ? { name: a.name, data: a.data } : { name: a.name },
+        ),
+      },
+      null,
+    );
   }
 </script>
 
@@ -195,8 +300,20 @@
     <div class="modal-head">
       <span class="modal-icon"><AppIcon name="key" size={18} /></span>
       <div>
-        <strong>{mode === "create" ? "新建条目" : "编辑条目"}</strong>
-        <p>{mode === "create" ? "在当前分组创建新条目" : "保存对条目的修改"}</p>
+        <strong
+          >{mode === "create"
+            ? "新建条目"
+            : multi
+              ? `批量编辑 ${entries.length} 个条目`
+              : "编辑条目"}</strong
+        >
+        <p>
+          {mode === "create"
+            ? "在当前分组创建新条目"
+            : multi
+              ? "修改应用到所有选中条目,未修改的字段保持不变"
+              : "保存对条目的修改"}
+        </p>
       </div>
     </div>
 
@@ -221,47 +338,64 @@
       >
         元属性
       </button>
-      <button
-        type="button"
-        role="tab"
-        class="editor-tab"
-        class:active={activeTab === "custom"}
-        aria-selected={activeTab === "custom"}
-        onclick={() => (activeTab = "custom")}
-      >
-        自定义字段{#if customFields.length}({customFields.length}){/if}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="editor-tab"
-        class:active={activeTab === "attachments"}
-        aria-selected={activeTab === "attachments"}
-        onclick={() => (activeTab = "attachments")}
-      >
-        附件{#if attachments.length}({attachments.length}){/if}
-      </button>
+      {#if !multi}
+        <button
+          type="button"
+          role="tab"
+          class="editor-tab"
+          class:active={activeTab === "custom"}
+          aria-selected={activeTab === "custom"}
+          onclick={() => (activeTab = "custom")}
+        >
+          自定义字段{#if customFields.length}({customFields.length}){/if}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="editor-tab"
+          class:active={activeTab === "attachments"}
+          aria-selected={activeTab === "attachments"}
+          onclick={() => (activeTab = "attachments")}
+        >
+          附件{#if attachments.length}({attachments.length}){/if}
+        </button>
+      {/if}
     </div>
 
     {#if activeTab === "fields"}
       <div class="form-grid" role="tabpanel">
         <label class="field">
           <span>标题</span>
-          <input class="text-input" type="text" bind:value={title} placeholder="例如：GitHub" />
-        </label>
-
-        <label class="field">
-          <span>分组</span>
-          <GroupPicker
-            {groups}
-            value={targetGroupUuid}
-            onchange={(uuid) => (targetGroupUuid = uuid)}
+          <input
+            class="text-input"
+            type="text"
+            bind:value={title}
+            placeholder={titleMulti ? "多个值" : "例如：GitHub"}
+            oninput={() => markTouched("title")}
           />
         </label>
 
+        {#if !multi}
+          <label class="field">
+            <span>分组</span>
+            <GroupPicker
+              {groups}
+              value={targetGroupUuid}
+              onchange={(uuid) => (targetGroupUuid = uuid)}
+            />
+          </label>
+        {/if}
+
         <label class="field">
           <span>用户名</span>
-          <input class="text-input" type="text" bind:value={username} autocomplete="off" />
+          <input
+            class="text-input"
+            type="text"
+            bind:value={username}
+            autocomplete="off"
+            placeholder={usernameMulti ? "多个值" : undefined}
+            oninput={() => markTouched("username")}
+          />
         </label>
 
         <label class="field">
@@ -273,7 +407,8 @@
               bind:value={password}
               autocomplete="new-password"
               disabled={passwordLoading}
-              placeholder={passwordLoading ? "加载中…" : ""}
+              placeholder={multi ? "多个值" : passwordLoading ? "加载中…" : ""}
+              oninput={() => markTouched("password")}
             />
             <button class="icon-btn" onclick={generate} title="生成密码">
               <AppIcon name="refresh" size={14} />
@@ -303,12 +438,23 @@
 
         <label class="field">
           <span>网址</span>
-          <input class="text-input" type="url" bind:value={url} placeholder="https://" />
+          <input
+            class="text-input"
+            type="url"
+            bind:value={url}
+            placeholder={urlMulti ? "多个值" : "https://"}
+            oninput={() => markTouched("url")}
+          />
         </label>
 
         <label class="field full">
           <span>备注</span>
-          <textarea class="text-input textarea" bind:value={notes} rows={4}></textarea>
+          <textarea
+            class="text-input textarea"
+            bind:value={notes}
+            rows={4}
+            placeholder={notesMulti ? "多个值" : undefined}
+            oninput={() => markTouched("notes")}></textarea>
         </label>
       </div>
     {/if}
@@ -321,15 +467,27 @@
             class="text-input mono"
             type="text"
             bind:value={totp}
-            placeholder={totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
+            placeholder={multi ? "多个值" : totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
             disabled={totpLoading}
+            oninput={() => markTouched("totp")}
           />
+          {#if multi}
+            <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
+          {/if}
         </label>
 
         <label class="field">
           <span>过期时间</span>
-          <input class="text-input" type="datetime-local" bind:value={expiresLocal} />
-          <span class="field-hint">到期后条目标记为已过期</span>
+          <input
+            class="text-input"
+            type="datetime-local"
+            bind:value={expiresLocal}
+            placeholder={expiresMulti ? "多个值" : undefined}
+            oninput={() => markTouched("expires")}
+          />
+          <span class="field-hint"
+            >{multi ? "清空并保存将移除所有选中条目的过期时间" : "到期后条目标记为已过期"}</span
+          >
         </label>
 
         <section class="field full">
@@ -339,15 +497,18 @@
               <button
                 type="button"
                 class="icon-option"
-                class:selected={iconIndex === index}
-                onclick={() => (iconIndex = iconIndex === index ? null : index)}
-                title={`内置图标 ${index}`}
+                class:selected={!multi && iconIndex === index}
+                onclick={() => pickIcon(index)}
+                title={multi && iconMulti ? `多个值 → ${index}` : `内置图标 ${index}`}
                 aria-pressed={iconIndex === index}
               >
                 <AppIcon name={keepassIconName(index)} size={16} />
               </button>
             {/each}
           </div>
+          {#if multi}
+            <span class="field-hint">点击图标将应用到所有选中条目;未点击则保持不变</span>
+          {/if}
         </section>
 
         <section class="field full">
@@ -357,9 +518,9 @@
               <button
                 type="button"
                 class="color-option"
-                class:selected={colorHex.toUpperCase() === color}
+                class:selected={!multi && colorHex.toUpperCase() === color}
                 style:background={color}
-                onclick={() => (colorHex = colorHex.toUpperCase() === color ? "" : color)}
+                onclick={() => pickColor(color)}
                 title={color}
                 aria-label={`颜色 ${color}`}
               ></button>
@@ -368,25 +529,26 @@
               class="color-input"
               type="color"
               value={colorHex || "#000000"}
-              oninput={(e) => (colorHex = e.currentTarget.value.toUpperCase())}
+              oninput={(e) => {
+                markTouched("color");
+                colorHex = e.currentTarget.value.toUpperCase();
+              }}
               title="自定义颜色"
             />
             {#if colorHex}
-              <button
-                type="button"
-                class="icon-btn"
-                onclick={() => (colorHex = "")}
-                title="清除颜色"
-              >
+              <button type="button" class="icon-btn" onclick={clearColor} title="清除颜色">
                 <AppIcon name="x" size={13} />
               </button>
             {/if}
           </div>
+          {#if multi}
+            <span class="field-hint">选择颜色将应用到所有选中条目;未选择则保持不变</span>
+          {/if}
         </section>
       </div>
     {/if}
 
-    {#if activeTab === "custom"}
+    {#if !multi && activeTab === "custom"}
       <div class="form-grid" role="tabpanel">
         <section class="field full">
           {#if customFields.length === 0}
@@ -425,7 +587,7 @@
       </div>
     {/if}
 
-    {#if activeTab === "attachments"}
+    {#if !multi && activeTab === "attachments"}
       <div class="form-grid" role="tabpanel">
         <section class="field full">
           {#if attachments.length === 0}
