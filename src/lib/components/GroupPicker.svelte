@@ -220,8 +220,8 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 7px 10px;
-    border: 0;
+    padding: 6px 10px;
+    border: 1px solid transparent;
     border-radius: 4px;
     color: var(--text-secondary);
     font-size: var(--font-size-secondary, 11px);
@@ -266,12 +266,15 @@
   }
 
   .crumb-current {
-    background: color-mix(in srgb, var(--selection-color) 13%, transparent);
+    border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
     color: var(--text-primary);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
     cursor: default;
   }
 
   .picker-row.selected {
+    border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
+    color: var(--text-primary);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
   }
 
