@@ -2409,15 +2409,22 @@ dependencies = [
 name = "keyvault-desktop"
 version = "0.1.0"
 dependencies = [
+ "aes 0.8.4",
  "base64 0.22.1",
+ "block-padding 0.3.3",
+ "cbc 0.1.2",
  "chrono",
+ "cipher 0.4.4",
  "enigo",
+ "getrandom 0.2.17",
+ "hmac 0.12.1",
  "keepass",
  "keyring",
  "rust-argon2",
  "rust-s3",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

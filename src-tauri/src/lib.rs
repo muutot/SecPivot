@@ -1,4 +1,5 @@
 pub mod autotype;
+pub mod bridge;
 pub mod clipboard;
 pub mod config;
 pub mod credential;

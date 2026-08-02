@@ -329,16 +329,10 @@ impl Default for RemoteSettings {
 /// KeePassHttp browser bridge. The loopback server only runs while `enabled`
 /// is true; association keys are session-held (never persisted) and wiped on
 /// vault lock, so the bridge serves nothing while locked.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BridgeSettings {
     pub enabled: bool,
-}
-
-impl Default for BridgeSettings {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
