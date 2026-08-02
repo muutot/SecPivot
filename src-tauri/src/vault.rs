@@ -20,6 +20,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 /// Virtual root group id used by the frontend; maps to the DB root group.
 pub const ROOT_GROUP_UUID: &str = "root";
@@ -275,6 +276,19 @@ pub struct VaultSession {
     remote: Option<RemoteTarget>,
 }
 
+/// Wipe a secret `String` in place, then drop it (buffer is zeroed before
+/// the heap allocation is freed). Best-effort: only this owned copy is
+/// cleared — copies made by the OS, IPC, or `DatabaseKey` internals are
+/// outside our control (`keepass` zeroizes its own key material on drop).
+fn wipe_secret_string(secret: &mut String) {
+    secret.zeroize();
+}
+
+/// Wipe a secret byte buffer in place (see `wipe_secret_string`).
+fn wipe_secret_bytes(secret: &mut Vec<u8>) {
+    secret.zeroize();
+}
+
 /// Combine password and/or keyfile into a `DatabaseKey`. At least one
 /// component must be present.
 fn build_database_key(password: &str, keyfile: Option<&[u8]>) -> Result<DatabaseKey, String> {
@@ -444,8 +458,14 @@ impl VaultSession {
 
     pub fn close(&mut self) {
         self.path = None;
-        self.password = None;
-        self.keyfile = None;
+        // Wipe secret material before dropping the buffers: setting `None`
+        // alone leaves the master password and keyfile contents on the heap.
+        if let Some(mut password) = self.password.take() {
+            wipe_secret_string(&mut password);
+        }
+        if let Some(mut keyfile) = self.keyfile.take() {
+            wipe_secret_bytes(&mut keyfile);
+        }
         self.db = None;
         self.dirty = false;
         self.modified_at.clear();
@@ -3661,6 +3681,52 @@ mod tests {
         session.close();
         assert!(!session.is_open());
         assert!(session.state().unwrap().is_none());
+    }
+
+    /// The wipe helpers must zero the *heap* bytes of a secret before it is
+    /// dropped, not just replace the logical value with an empty string.
+    /// Read the allocation through a raw pointer while it is still alive.
+    #[test]
+    fn wipe_helpers_zero_heap_bytes() {
+        let mut password = String::from("master-password-123");
+        let p_ptr = password.as_mut_ptr();
+        let p_len = password.len();
+        wipe_secret_string(&mut password);
+        let p_bytes = unsafe { std::slice::from_raw_parts(p_ptr, p_len) };
+        assert!(p_bytes.iter().all(|&b| b == 0));
+
+        let mut keyfile = Vec::from("keyfile-bytes");
+        let k_ptr = keyfile.as_mut_ptr();
+        let k_len = keyfile.len();
+        wipe_secret_bytes(&mut keyfile);
+        let k_bytes = unsafe { std::slice::from_raw_parts(k_ptr, k_len) };
+        assert!(k_bytes.iter().all(|&b| b == 0));
+    }
+
+    /// `close` must clear the master password and keyfile from the session
+    /// (the wipe itself is covered by `wipe_helpers_zero_heap_bytes`).
+    #[test]
+    fn close_clears_stored_secrets() {
+        let dir = TempDir::new().unwrap();
+        let keyfile = write_keyfile(&dir);
+        let path = dir.path().join("test.kdbx");
+        let mut session = VaultSession::default();
+        session
+            .create(
+                &path,
+                "master-password",
+                "Aes",
+                "Aes256",
+                "None",
+                Some(&keyfile),
+            )
+            .unwrap();
+        assert!(session.password.is_some());
+        assert!(session.keyfile.is_some());
+        session.close();
+        assert!(session.password.is_none());
+        assert!(session.keyfile.is_none());
+        assert!(!session.is_open());
     }
 
     #[test]

@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use zeroize::Zeroize;
 
 /// Sequence replayed by the global auto-type hotkey.
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
@@ -109,8 +110,10 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
 
 /// Store the master password for a vault path in the OS credential store.
 #[tauri::command]
-fn remember_credential(path: String, password: String) -> Result<(), String> {
-    credential::remember(&path, &password)
+fn remember_credential(path: String, mut password: String) -> Result<(), String> {
+    let result = credential::remember(&path, &password);
+    password.zeroize();
+    result
 }
 
 /// Fetch the stored master password for a vault path, if any.
@@ -132,9 +135,10 @@ fn clear_saved_credential(path: String) -> Result<(), String> {
 #[tauri::command]
 fn open_vault(
     app: tauri::AppHandle,
+    config: tauri::State<'_, ConfigStore>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
-    password: String,
+    mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     let result = session
@@ -145,19 +149,29 @@ fn open_vault(
             &password,
             keyfile.as_deref().map(Path::new),
         );
+    password.zeroize();
     if result.is_ok() {
-        shield::set_capture_guard(&app, true);
+        apply_capture_guard(&app, &config);
     }
     result
+}
+
+/// Apply the screen-capture guard only when the user enabled it in settings.
+fn apply_capture_guard(app: &tauri::AppHandle, config: &ConfigStore) {
+    let Ok(cfg) = config.get() else { return };
+    if cfg.security.screen_capture_guard {
+        shield::set_capture_guard(app, true);
+    }
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn create_vault(
     app: tauri::AppHandle,
+    config: tauri::State<'_, ConfigStore>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
-    password: String,
+    mut password: String,
     kdf: String,
     cipher: String,
     compression: String,
@@ -174,8 +188,9 @@ fn create_vault(
             &compression,
             keyfile.as_deref().map(Path::new),
         );
+    password.zeroize();
     if result.is_ok() {
-        shield::set_capture_guard(&app, true);
+        apply_capture_guard(&app, &config);
     }
     result
 }
@@ -214,13 +229,15 @@ fn save_vault(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<VaultSta
 #[tauri::command]
 fn change_master_key(
     session: tauri::State<'_, Mutex<VaultSession>>,
-    password: String,
+    mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    session
+    let result = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .change_master_key(&password, keyfile.as_deref().map(Path::new))
+        .change_master_key(&password, keyfile.as_deref().map(Path::new));
+    password.zeroize();
+    result
 }
 
 #[tauri::command]
@@ -590,9 +607,10 @@ async fn s3_list_objects(cfg: crate::config::RemoteSettings) -> Result<Vec<Remot
 async fn open_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
+    config: tauri::State<'_, ConfigStore>,
     cfg: crate::config::RemoteSettings,
     key: String,
-    password: String,
+    mut password: String,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
@@ -611,8 +629,9 @@ async fn open_remote_vault(
             &local_dir,
             cfg.backup_count.clamp(0, 10) as usize,
         );
+    password.zeroize();
     if result.is_ok() {
-        shield::set_capture_guard(&app, true);
+        apply_capture_guard(&app, &config);
     }
     result
 }
@@ -623,9 +642,10 @@ async fn open_remote_vault(
 async fn create_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
+    config: tauri::State<'_, ConfigStore>,
     cfg: crate::config::RemoteSettings,
     key: String,
-    password: String,
+    mut password: String,
     kdf: String,
     cipher: String,
     compression: String,
@@ -650,8 +670,9 @@ async fn create_remote_vault(
             &local_dir,
             cfg.backup_count.clamp(0, 10) as usize,
         );
+    password.zeroize();
     if result.is_ok() {
-        shield::set_capture_guard(&app, true);
+        apply_capture_guard(&app, &config);
     }
     result
 }
