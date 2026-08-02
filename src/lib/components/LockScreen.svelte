@@ -43,10 +43,7 @@
   });
 
   async function pickKeyfile(): Promise<void> {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "密钥文件", extensions: ["key", "keyx", "xml", "txt"] }],
-    });
+    const selected = await open({ multiple: false });
     if (selected) keyfilePath = String(selected);
   }
 

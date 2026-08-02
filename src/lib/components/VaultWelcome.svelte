@@ -179,10 +179,7 @@
   }
 
   async function pickKeyfile(): Promise<void> {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "密钥文件", extensions: ["key", "keyx", "xml", "txt"] }],
-    });
+    const selected = await open({ multiple: false });
     if (selected) keyfilePath = String(selected);
   }
 
@@ -980,6 +977,8 @@
     margin-top: 5px;
     padding: 6px;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
