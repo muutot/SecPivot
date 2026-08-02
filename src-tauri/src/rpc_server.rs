@@ -403,6 +403,12 @@ fn dispatch_jsonrpc(
         }
         Err(RpcError::InvalidMessage(m)) => jsonrpc_error(&id, -32600, &m),
         Err(RpcError::AuthFailed) => jsonrpc_error(&id, -32603, "Frame authentication failed"),
+        Err(RpcError::EntryNotFound) => jsonrpc_error(
+            &id,
+            -32001,
+            "oldLoginUUID could not be resolved to an existing entry.",
+        ),
+        Err(RpcError::InRecycleBin) => jsonrpc_error(&id, -32002, "Entry is in the Recycle Bin."),
     };
     Some(Envelope::jsonrpc(encrypt_frame(
         secret,
@@ -518,6 +524,21 @@ mod tests {
             _username: Option<&str>,
         ) -> Vec<crate::rpc::RpcLogin> {
             Vec::new()
+        }
+        fn add_login(
+            &mut self,
+            _login: &crate::rpc::RpcLoginWrite,
+            _parent_uuid: &str,
+        ) -> Result<crate::rpc::RpcLogin, RpcError> {
+            Err(RpcError::Unsupported("AddLogin".to_owned()))
+        }
+        fn update_login(
+            &mut self,
+            _login: &crate::rpc::RpcLoginWrite,
+            _old_uuid: &str,
+            _url_merge_mode: u8,
+        ) -> Result<crate::rpc::RpcLogin, RpcError> {
+            Err(RpcError::Unsupported("UpdateLogin".to_owned()))
         }
     }
 

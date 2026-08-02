@@ -9,8 +9,8 @@
 //! - JSON-RPC frames: AES-256-CBC (fresh IV per message) + a keyed SHA-1
 //!   "hmac" over (SHA-1(key) || ciphertext || iv), all base64.
 //!
-//! The crypto is a shared secret by protocol design — it is *not*
-//! authenticated encryption — so the server must stay loopback-only and every
+//! The crypto is a shared secret by protocol design �?it is *not*
+//! authenticated encryption �?so the server must stay loopback-only and every
 //! first-time client runs a user-typed side-channel SRP password. Session keys
 //! live in the vault session and are wiped on lock (see security-model.md).
 
@@ -37,17 +37,20 @@ pub(crate) const PROTOCOL_VERSION: u32 = 0x010804;
 /// server minimum (default 2).
 pub(crate) const SECURITY_LEVEL: u32 = 3;
 /// Feature flags the server offers; must include the client's required set.
-pub const FEATURES: [&str; 4] = [
+/// `KPRPC_FEATURE_ENTRY_URL_REPLACEMENT` makes Kee send `urlMergeMode = 5`
+/// (replace all URLs) on `UpdateLogin` instead of the default `2`.
+pub const FEATURES: [&str; 5] = [
     "KPRPC_FEATURE_VERSION_1_6",
     "KPRPC_GENERAL_CLIENTS",
     "KPRPC_SECURITY_FIX_20200729",
     "KPRPC_FEATURE_WARN_USER_WHEN_FEATURE_MISSING",
+    "KPRPC_FEATURE_ENTRY_URL_REPLACEMENT",
 ];
 
 /// SRP-6a group shared by KeePassRPC implementations (fixed 512-bit prime).
 const SRP_N_HEX: &str = "d4c7f8a2b32c11b8fba9581ec4ba4f1b04215642ef7355e37c0fc0443ef756ea2c6b8eeb755a1c723027663caa265ef785b8ff6a9b35227a52d86633dbdfca43";
 const SRP_G: u32 = 2;
-/// k = SHA-1(N || g) as hex — hard-coded in both the C# plugin and JS client.
+/// k = SHA-1(N || g) as hex �?hard-coded in both the C# plugin and JS client.
 const SRP_K_HEX: &str = "b7867f1299da8cc24ab93e08986ebc4d6a478ad0";
 
 // ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ pub(crate) fn random_hex(len: usize) -> String {
     hex(&random_bytes(len))
 }
 
-/// The SRP group prime N as lowercase hex — used by client-side test math
+/// The SRP group prime N as lowercase hex �?used by client-side test math
 /// (the extension's own `SRPc` numbers live in `num-bigint` on both sides).
 #[cfg(test)]
 pub(crate) fn group_n_hex() -> String {
@@ -194,7 +197,7 @@ impl Envelope {
 // ---------------------------------------------------------------------------
 
 /// Server-side SRP state. The side-channel password is consumed to build the
-/// verifier immediately and zeroized — later steps need only `v`.
+/// verifier immediately and zeroized �?later steps need only `v`.
 pub struct SrpServer {
     b: BigUint,
     /// B exactly as sent (uppercase hex).
@@ -319,10 +322,10 @@ pub fn decrypt_frame(secret: &[u8], frame: &JsonRpcFrame) -> Result<String, RpcE
     )
     .decrypt_padded_vec_mut::<Pkcs7>(&ciphertext)
     .map_err(|_| RpcError::InvalidMessage("解密失败".to_owned()))?;
-    String::from_utf8(plaintext).map_err(|_| RpcError::InvalidMessage("明文非 UTF-8".to_owned()))
+    String::from_utf8(plaintext).map_err(|_| RpcError::InvalidMessage("明文�?UTF-8".to_owned()))
 }
 
-/// base64(SHA-1(SHA-1(key) || ciphertext || iv)) — the protocol's naive MAC.
+/// base64(SHA-1(SHA-1(key) || ciphertext || iv)) �?the protocol's naive MAC.
 fn frame_mac(secret: &[u8], ciphertext: &[u8], iv: &[u8]) -> String {
     let key_hash = sha1_bytes(secret);
     let mut hasher = Sha1::new();
@@ -352,14 +355,20 @@ fn mac_eq(a: &str, b: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RpcError {
-    /// Malformed envelope/frame — answer `INVALID_MESSAGE`.
+    /// Malformed envelope/frame �?answer `INVALID_MESSAGE`.
     InvalidMessage(String),
-    /// Authentication failed — answer `AUTH_FAILED`.
+    /// Authentication failed �?answer `AUTH_FAILED`.
     AuthFailed,
-    /// Method not implemented yet — answer a JSON-RPC error.
+    /// Method not implemented yet �?answer a JSON-RPC error.
     Unsupported(String),
-    /// Vault is not open — answer a JSON-RPC error.
+    /// Vault is not open �?answer a JSON-RPC error.
     Locked,
+    /// `oldLoginUUID` did not resolve to an entry (KeePassRPC's exception).
+    EntryNotFound,
+    /// Target entry lives in the recycle bin �?KeyVault policy rejects the
+    /// write (Kee's read paths never surface recycled entries, so this is
+    /// unreachable through the extension and purely defense-in-depth).
+    InRecycleBin,
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +377,7 @@ pub enum RpcError {
 
 /// One credential the bridge hands to the browser; plaintext exists only
 /// inside an encrypted JSON-RPC frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RpcLogin {
     pub uuid: String,
     pub title: String,
@@ -382,7 +391,7 @@ pub struct RpcLogin {
     pub match_accuracy: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RpcGroupRef {
     pub uuid: String,
     pub title: String,
@@ -418,7 +427,7 @@ pub trait RpcHost {
     fn register_rpc_key(&mut self, username: &str, key: Vec<u8>);
     fn database(&self) -> Option<RpcDatabase>;
     /// Find logins by URL host match (recycle bin skipped), uuid, or
-    /// free-text/username search — one or more criteria may be active.
+    /// free-text/username search �?one or more criteria may be active.
     fn find_logins(
         &self,
         urls: &[String],
@@ -426,6 +435,18 @@ pub trait RpcHost {
         free_text: Option<&str>,
         username: Option<&str>,
     ) -> Vec<RpcLogin>;
+    /// Create an entry under `parent_uuid` (empty or unresolvable �?root
+    /// group) and return it. Implements KeePassRPC `AddLogin`.
+    fn add_login(&mut self, login: &RpcLoginWrite, parent_uuid: &str)
+        -> Result<RpcLogin, RpcError>;
+    /// Update the entry identified by `old_uuid` with `login`, merging URLs
+    /// per `url_merge_mode` (KeePassRPC `UpdateLogin` + `MergeEntries`).
+    fn update_login(
+        &mut self,
+        login: &RpcLoginWrite,
+        old_uuid: &str,
+        url_merge_mode: u8,
+    ) -> Result<RpcLogin, RpcError>;
 }
 
 /// Decode the 64-char lowercase-hex session key into raw bytes.
@@ -545,6 +566,143 @@ fn entry_dto(e: &RpcLogin, db: &RpcDatabase) -> Value {
 }
 
 // ---------------------------------------------------------------------------
+// Write-path shapes (Kee 4.0.7 `Entry.toKPRPCEntryDTO` + `Field` DTOs)
+// ---------------------------------------------------------------------------
+
+/// One `formFieldList` item sent by Kee. Types mirror the extension's
+/// `FormFieldTypeDTO`: `FFTusername` / `FFTpassword` / `FFTtext` /
+/// `FFTradio` / `FFTcheckbox` / `FFTselect`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RpcFieldWrite {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub value: String,
+    pub page: i64,
+}
+
+/// Entry data sent by Kee's `AddLogin`/`UpdateLogin` (v1 `Entry` DTO). The
+/// username/password live inside `formFieldList`; extra fields are mapped by
+/// name, mirroring the plugin's `setPwEntryFromEntry`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RpcLoginWrite {
+    pub title: String,
+    #[serde(rename = "uRLs")]
+    pub urls: Vec<String>,
+    #[serde(rename = "hTTPRealm")]
+    pub http_realm: String,
+    pub icon_image_data: String,
+    pub form_field_list: Vec<RpcFieldWrite>,
+}
+
+/// KeePassRPC username convention: every `FFTusername` field maps to `UserName`
+/// (the plugin writes all of them, last one wins).
+pub fn write_username(login: &RpcLoginWrite) -> String {
+    login
+        .form_field_list
+        .iter()
+        .rev()
+        .find(|f| f.field_type == "FFTusername")
+        .map(|f| f.value.clone())
+        .unwrap_or_default()
+}
+
+/// KeePassRPC password convention: the first `FFTpassword` field maps to
+/// `Password`; later ones fall through to custom fields.
+pub fn write_password(login: &RpcLoginWrite) -> String {
+    login
+        .form_field_list
+        .iter()
+        .find(|f| f.field_type == "FFTpassword")
+        .map(|f| f.value.clone())
+        .unwrap_or_default()
+}
+
+/// Extra form fields (everything but the consumed username/password fields),
+/// named `displayName` (fallback `name`), mirroring `setPwEntryFromEntry`.
+pub fn write_custom_fields(login: &RpcLoginWrite) -> Vec<(String, String)> {
+    let mut seen_password = false;
+    let mut out = Vec::new();
+    for field in &login.form_field_list {
+        match field.field_type.as_str() {
+            "FFTusername" => {}
+            "FFTpassword" if !seen_password => {
+                seen_password = true;
+            }
+            _ => {
+                let name = if field.display_name.is_empty() {
+                    field.name.clone()
+                } else {
+                    field.display_name.clone()
+                };
+                if !name.is_empty() {
+                    out.push((name, field.value.clone()));
+                }
+            }
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// URL merging (KeePassRPC `MergeEntries` / `MergeInNewURLs` semantics)
+// ---------------------------------------------------------------------------
+
+/// C# `MergeInNewURLs(destURLs, sourceURLs)`: source URLs are walked backwards
+/// and inserted at the front when missing; the source's primary URL is promoted
+/// to the front when already present (so it stays the primary match).
+fn merge_in_new_urls(dest: &mut Vec<String>, source: &[String]) {
+    for i in (0..source.len()).rev() {
+        let url = &source[i];
+        if let Some(pos) = dest.iter().position(|d| d == url) {
+            if i == 0 {
+                dest.remove(pos);
+                dest.insert(0, url.clone());
+            }
+        } else {
+            dest.insert(0, url.clone());
+        }
+    }
+}
+
+/// Apply KeePassRPC `MergeEntries` URL merging to a destination URL list
+/// (`[primary, alt...]`) with a source list (`[primary, alt...]`). Modes mirror
+/// the plugin's `urlMergeMode`:
+/// 1 = merge source URLs in (old URLs kept, new ones first, still matchable);
+/// 2 = delete the old primary URL, then merge;
+/// 3 = keep old URLs, append only source URLs not already present;
+/// 4 = leave URLs unchanged;
+/// 5 = replace the whole list with the source URLs.
+/// Unknown modes behave like 4 (the plugin's switch has no default).
+pub fn merge_urls(dest: &[String], source: &[String], mode: u8) -> Vec<String> {
+    let mut dest = dest.to_vec();
+    match mode {
+        1 => merge_in_new_urls(&mut dest, source),
+        2 => {
+            if !dest.is_empty() {
+                dest.remove(0);
+            }
+            merge_in_new_urls(&mut dest, source);
+        }
+        3 => {
+            for url in source {
+                if !dest.contains(url) {
+                    dest.push(url.clone());
+                }
+            }
+        }
+        4 => {}
+        5 => dest = source.to_vec(),
+        _ => {}
+    }
+    dest
+}
+
+// ---------------------------------------------------------------------------
 // JSON-RPC dispatch (v1 method names used by Kee 4.0.7)
 // ---------------------------------------------------------------------------
 
@@ -596,6 +754,44 @@ pub fn handle_jsonrpc(
         }
         "GetPasswordProfiles" => Ok(json!(["Default"])),
         "GeneratePassword" => Ok(json!(crate::bridge::generate_password())),
+        "AddLogin" => {
+            let db = host.database().ok_or(RpcError::Locked)?;
+            let params =
+                params.ok_or_else(|| RpcError::InvalidMessage("AddLogin 缺少参数".to_owned()))?;
+            let login: RpcLoginWrite =
+                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
+                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
+            let parent_uuid = params.get(1).and_then(|v| v.as_str()).unwrap_or_default();
+            let entry = host.add_login(&login, parent_uuid)?;
+            Ok(entry_dto(&entry, &db))
+        }
+        "UpdateLogin" => {
+            let db = host.database().ok_or(RpcError::Locked)?;
+            let params = params
+                .ok_or_else(|| RpcError::InvalidMessage("UpdateLogin 缺少参数".to_owned()))?;
+            let login: RpcLoginWrite =
+                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
+                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
+            let old_uuid = params.get(1).and_then(|v| v.as_str()).unwrap_or_default();
+            if old_uuid.is_empty() {
+                return Err(RpcError::InvalidMessage(
+                    "oldLoginUUID was not passed to the updateLogin function".to_owned(),
+                ));
+            }
+            if params
+                .get(3)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .is_empty()
+            {
+                return Err(RpcError::InvalidMessage(
+                    "dbFileName was not passed to the updateLogin function".to_owned(),
+                ));
+            }
+            let url_merge_mode = params.get(2).and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+            let entry = host.update_login(&login, old_uuid, url_merge_mode)?;
+            Ok(entry_dto(&entry, &db))
+        }
         other => Err(RpcError::Unsupported(other.to_owned())),
     }
 }
@@ -743,6 +939,7 @@ mod tests {
         open: bool,
         keys: HashMap<String, Vec<u8>>,
         db: RpcDatabase,
+        next_id: u32,
     }
 
     impl RpcHost for MockHost {
@@ -787,6 +984,75 @@ mod tests {
                 .cloned()
                 .collect()
         }
+        fn add_login(
+            &mut self,
+            login: &RpcLoginWrite,
+            parent_uuid: &str,
+        ) -> Result<RpcLogin, RpcError> {
+            if !self.open {
+                return Err(RpcError::Locked);
+            }
+            let parent = if parent_uuid == "g-1" {
+                RpcGroupRef {
+                    uuid: "g-1".to_owned(),
+                    title: "Internet".to_owned(),
+                    path: "/Internet".to_owned(),
+                    icon_image_data: String::new(),
+                }
+            } else {
+                RpcGroupRef {
+                    uuid: self.db.root.uuid.clone(),
+                    title: self.db.root.title.clone(),
+                    path: String::new(),
+                    icon_image_data: String::new(),
+                }
+            };
+            let created = RpcLogin {
+                uuid: format!("e-{}", self.next_id),
+                title: login.title.clone(),
+                username: write_username(login),
+                password: write_password(login),
+                urls: login.urls.clone(),
+                http_realm: login.http_realm.clone(),
+                icon_image_data: login.icon_image_data.clone(),
+                parent_group: parent,
+                match_accuracy: 1,
+            };
+            self.next_id += 1;
+            self.db.root.entries.push(created.clone());
+            Ok(created)
+        }
+        fn update_login(
+            &mut self,
+            login: &RpcLoginWrite,
+            old_uuid: &str,
+            url_merge_mode: u8,
+        ) -> Result<RpcLogin, RpcError> {
+            if !self.open {
+                return Err(RpcError::Locked);
+            }
+            let pos = self
+                .db
+                .root
+                .entries
+                .iter()
+                .position(|e| e.uuid == old_uuid)
+                .ok_or(RpcError::EntryNotFound)?;
+            let old = &self.db.root.entries[pos];
+            let updated = RpcLogin {
+                uuid: old.uuid.clone(),
+                title: login.title.clone(),
+                username: write_username(login),
+                password: write_password(login),
+                urls: merge_urls(&old.urls, &login.urls, url_merge_mode),
+                http_realm: login.http_realm.clone(),
+                icon_image_data: login.icon_image_data.clone(),
+                parent_group: old.parent_group.clone(),
+                match_accuracy: 1,
+            };
+            self.db.root.entries[pos] = updated.clone();
+            Ok(updated)
+        }
     }
 
     fn mock_host() -> MockHost {
@@ -826,6 +1092,7 @@ mod tests {
             open: true,
             keys: HashMap::new(),
             db,
+            next_id: 2,
         }
     }
 
@@ -921,10 +1188,236 @@ mod tests {
             handle_jsonrpc(&mut host, "GetAllDatabases", None),
             Err(RpcError::Locked)
         );
-        host.open = true;
         assert_eq!(
             handle_jsonrpc(&mut host, "AddLogin", None),
-            Err(RpcError::Unsupported("AddLogin".to_owned()))
+            Err(RpcError::Locked)
+        );
+        assert_eq!(
+            handle_jsonrpc(&mut host, "UpdateLogin", None),
+            Err(RpcError::Locked)
+        );
+        host.open = true;
+        assert_eq!(
+            handle_jsonrpc(&mut host, "AddGroup", None),
+            Err(RpcError::Unsupported("AddGroup".to_owned()))
+        );
+    }
+
+    fn login_write(title: &str, username: &str, password: &str, urls: &[&str]) -> Value {
+        json!({
+            "title": title,
+            "uRLs": urls,
+            "hTTPRealm": "",
+            "iconImageData": "",
+            "formFieldList": [
+                { "displayName": "KeePass username", "id": "u", "name": "user", "type": "FFTusername", "value": username, "page": 0 },
+                { "displayName": "KeePass password", "id": "p", "name": "pass", "type": "FFTpassword", "value": password, "page": 0 },
+                { "displayName": "Custom note", "id": "n", "name": "note", "type": "FFTtext", "value": "hello", "page": 0 },
+            ],
+        })
+    }
+
+    #[test]
+    fn url_merge_modes_match_keepassrpc_semantics() {
+        let old = vec![
+            "https://old.example.com".to_owned(),
+            "https://alt.example.com".to_owned(),
+        ];
+        let src = vec![
+            "https://new.example.com".to_owned(),
+            "https://alt.example.com".to_owned(),
+        ];
+        // 1: source walked backwards, missing URLs inserted at front; the
+        // source primary is promoted when already present.
+        assert_eq!(
+            merge_urls(&old, &src, 1),
+            vec![
+                "https://new.example.com",
+                "https://old.example.com",
+                "https://alt.example.com"
+            ]
+        );
+        // 2: old primary removed first, then merged.
+        assert_eq!(
+            merge_urls(&old, &src, 2),
+            vec!["https://new.example.com", "https://alt.example.com"]
+        );
+        // 3: keep old, append only new ones.
+        assert_eq!(
+            merge_urls(&old, &src, 3),
+            vec![
+                "https://old.example.com",
+                "https://alt.example.com",
+                "https://new.example.com"
+            ]
+        );
+        // 4: unchanged.
+        assert_eq!(merge_urls(&old, &src, 4), old);
+        // 5: whole-list replace.
+        assert_eq!(merge_urls(&old, &src, 5), src);
+        // Unknown modes behave like 4 (plugin switch has no default).
+        assert_eq!(merge_urls(&old, &src, 0), old);
+
+        // Source primary promotion: already present but not first.
+        let promoted = merge_urls(
+            &[
+                "https://alt.example.com".to_owned(),
+                "https://new.example.com".to_owned(),
+            ],
+            &["https://new.example.com".to_owned()],
+            1,
+        );
+        assert_eq!(
+            promoted,
+            vec!["https://new.example.com", "https://alt.example.com"]
+        );
+
+        // Mode 2 with an empty source leaves no URL (old primary deleted).
+        assert_eq!(
+            merge_urls(&old, &Vec::<String>::new(), 2),
+            vec!["https://alt.example.com"]
+        );
+    }
+
+    #[test]
+    fn add_login_creates_entry_and_returns_dto() {
+        let mut host = mock_host();
+        let params = json!([
+            login_write(
+                "New Site",
+                "bob",
+                "pw-1",
+                &["https://new.example.com/login"]
+            ),
+            "g-1",
+            "vault.kdbx",
+        ]);
+        let result = handle_jsonrpc(&mut host, "AddLogin", Some(&params)).unwrap();
+        assert_eq!(result["uniqueID"], "e-2");
+        assert_eq!(result["title"], "New Site");
+        assert_eq!(result["uRLs"][0], "https://new.example.com/login");
+        assert_eq!(result["formFieldList"][0]["type"], "FFTusername");
+        assert_eq!(result["formFieldList"][0]["value"], "bob");
+        assert_eq!(result["formFieldList"][1]["value"], "pw-1");
+        assert_eq!(result["parent"]["path"], "/Internet");
+        assert_eq!(result["db"]["fileName"], "vault.kdbx");
+
+        // The new entry is visible to subsequent reads.
+        let params = json!([
+            [],
+            null,
+            null,
+            "LSTnoForms",
+            false,
+            null,
+            "",
+            "New Site",
+            null
+        ]);
+        let result = handle_jsonrpc(&mut host, "FindLogins", Some(&params)).unwrap();
+        let entries = result.as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["uniqueID"], "e-2");
+        assert_eq!(entries[0]["formFieldList"][0]["value"], "bob");
+    }
+
+    #[test]
+    fn add_login_without_parent_uses_root_group() {
+        let mut host = mock_host();
+        let params = json!([
+            login_write("Rooted", "u", "p", &["https://root.example.com"]),
+            null,
+            "vault.kdbx",
+        ]);
+        let result = handle_jsonrpc(&mut host, "AddLogin", Some(&params)).unwrap();
+        assert_eq!(result["parent"]["uniqueID"], "g-root");
+        assert_eq!(result["parent"]["path"], "");
+
+        // Unknown parent uuid also falls back to root.
+        let params = json!([
+            login_write("Rooted 2", "u", "p", &["https://root2.example.com"]),
+            "does-not-exist",
+            "vault.kdbx",
+        ]);
+        let result = handle_jsonrpc(&mut host, "AddLogin", Some(&params)).unwrap();
+        assert_eq!(result["parent"]["uniqueID"], "g-root");
+    }
+
+    #[test]
+    fn add_login_with_missing_login_errors() {
+        let mut host = mock_host();
+        let params = json!([null, "g-1", "vault.kdbx"]);
+        assert!(matches!(
+            handle_jsonrpc(&mut host, "AddLogin", Some(&params)),
+            Err(RpcError::InvalidMessage(_))
+        ));
+    }
+
+    #[test]
+    fn update_login_replaces_or_merges_urls() {
+        let mut host = mock_host();
+        // Mode 5 (Kee sends this when KPRPC_FEATURE_ENTRY_URL_REPLACEMENT is
+        // offered): whole-list replace.
+        let params = json!([
+            login_write(
+                "Example",
+                "alice",
+                "s3cret",
+                &["https://only-new.example.com"]
+            ),
+            "e-1",
+            5,
+            "vault.kdbx",
+        ]);
+        let result = handle_jsonrpc(&mut host, "UpdateLogin", Some(&params)).unwrap();
+        assert_eq!(result["uniqueID"], "e-1");
+        assert_eq!(result["uRLs"], json!(["https://only-new.example.com"]));
+        assert_eq!(result["formFieldList"][0]["value"], "alice");
+
+        // Mode 1: old URL kept, new one promoted to primary.
+        let params = json!([
+            login_write(
+                "Example",
+                "alice",
+                "s3cret",
+                &["https://second.example.com"]
+            ),
+            "e-1",
+            1,
+            "vault.kdbx",
+        ]);
+        let result = handle_jsonrpc(&mut host, "UpdateLogin", Some(&params)).unwrap();
+        assert_eq!(
+            result["uRLs"],
+            json!(["https://second.example.com", "https://only-new.example.com",])
+        );
+    }
+
+    #[test]
+    fn update_login_validates_params_and_unknown_uuid() {
+        let mut host = mock_host();
+        // Empty oldLoginUUID �?error (plugin ArgumentException mirror).
+        let params = json!([login_write("X", "u", "p", &[]), "", 5, "vault.kdbx"]);
+        assert!(matches!(
+            handle_jsonrpc(&mut host, "UpdateLogin", Some(&params)),
+            Err(RpcError::InvalidMessage(_))
+        ));
+        // Empty dbFileName �?error (plugin ArgumentException mirror).
+        let params = json!([login_write("X", "u", "p", &[]), "e-1", 5, ""]);
+        assert!(matches!(
+            handle_jsonrpc(&mut host, "UpdateLogin", Some(&params)),
+            Err(RpcError::InvalidMessage(_))
+        ));
+        // Unknown uuid �?EntryNotFound.
+        let params = json!([
+            login_write("X", "u", "p", &["https://x.example.com"]),
+            "e-999",
+            5,
+            "vault.kdbx",
+        ]);
+        assert_eq!(
+            handle_jsonrpc(&mut host, "UpdateLogin", Some(&params)),
+            Err(RpcError::EntryNotFound)
         );
     }
 

@@ -88,6 +88,7 @@
 - **BROWSER_SETTINGS_SYNC**:仅 Kee 扩展 `FeatureFlags.offered` 中宣告的客户端能力(浏览器多端设置同步,面向 Kee Vault 网页端托管会话);Kee 4.0.7 扩展无对应消息处理器,桌面 loopback 服务器无设置同步通道 —— 不实现、不宣告。Kee Vault 事件会话(`AckInit`/`sessionId` 浏览器托管传输)超出桌面客户端范围,不实现。
 - **v2 方法族**(`AddEntry`/`UpdateEntry`/`AllDatabases`/`AllDatabasesAndIcons`/DTO_V2)依赖 `KPRPC_FEATURE_DTO_V2` 且面向 Kee Vault,桌面 Kee 4.0.7 不调用 —— 不实现。
 - **测试策略**:`rpc.rs` 增加 URL 合并模式单测(5 模式 × 多 URL 场景)+ `AddLogin`/`UpdateLogin` 调度单测;`vault.rs` 增加写路径测试(新建于根/指定分组、字段映射、URL 合并、历史快照、回收站拒绝、锁定拒绝)。真机 Kee 扩展 E2E 仍不可行(离线),保留 `~` 证据缺口。
+- **Phase 2b 交付状态(已交付)**:`rpc.rs` 新增写路径 DTO(`RpcLoginWrite`/`RpcFieldWrite`,serde 精确还原 `uRLs`/`hTTPRealm`/`formFieldList` 键名)、`merge_urls` 纯函数(5 模式 + `MergeInNewURLs` 源主 URL 提升语义)、`handle_jsonrpc` 的 `AddLogin`/`UpdateLogin` 分支(镜像插件的 `ArgumentException` 预校验与 `-32001`/`-32002` 错误码)与特性 `KPRPC_FEATURE_ENTRY_URL_REPLACEMENT`(Kee 将发 `urlMergeMode=5`);`vault.rs` 的 `VaultSession` RpcHost 写路径:`setPwEntryFromEntry` 字段映射(首 `FFTpassword`→Password 受保护、`FFTusername`→UserName 后者胜、余字段→`displayName` 回退 `name` 的自定义字符串、URL 空格拼接与读路径一致)、父分组解析(空/无效/回收站内 → 根回退)、更新走 `edit_tracking` 历史快照(插件 `CreateBackup` 等价)、回收站条目拒绝(插件允许,但 Kee 读路径永不可见,属防御纵深)。**已记录偏差**:附加字段存 KDBX 字符串而非插件私有「KPRPC JSON」配置;更新覆盖字段但不删除陈旧自定义字段(避免误删应用管理字段)。
 
 ## 对仓库的影响(已落实)
 

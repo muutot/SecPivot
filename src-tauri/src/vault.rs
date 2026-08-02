@@ -5,7 +5,10 @@
 use crate::autotype::{self, AutotypeContext};
 use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
-use crate::rpc::{RpcDatabase, RpcGroup, RpcGroupRef, RpcHost, RpcLogin};
+use crate::rpc::{
+    merge_urls, write_custom_fields, write_password, write_username, RpcDatabase, RpcError,
+    RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite,
+};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -1596,6 +1599,96 @@ impl RpcHost for VaultSession {
         collect_rpc_logins(db.root(), bin_id, &filter, ROOT_GROUP_NAME, "", &mut out);
         out
     }
+
+    fn add_login(
+        &mut self,
+        login: &RpcLoginWrite,
+        parent_uuid: &str,
+    ) -> Result<RpcLogin, RpcError> {
+        if !self.is_open() {
+            return Err(RpcError::Locked);
+        }
+        // Resolve the parent group up front (immutable pass): unknown or
+        // invalid uuids fall back to the root group, mirroring the plugin's
+        // `AddLogin`; a parent inside the recycle bin is rejected like the
+        // plugin's `GetRootPwGroup`.
+        let parent_id = {
+            let db = self.require_db().map_err(rpc_write_error)?;
+            let bin_id = recycle_bin_id(db);
+            Uuid::parse_str(parent_uuid)
+                .ok()
+                .map(GroupId::from_uuid)
+                .filter(|id| find_rpc_group_id(db.root(), *id, bin_id))
+        };
+        let created_uuid = {
+            let db = self.require_db_mut().map_err(rpc_write_error)?;
+            let mut parent_group = match parent_id {
+                Some(id) => match db.group_mut(id) {
+                    Some(group) => group,
+                    None => db.root_mut(),
+                },
+                None => db.root_mut(),
+            };
+            let mut entry = parent_group.add_entry();
+            apply_login_write(&mut entry, login, &login.urls.join(" "));
+            entry.set_icon_none();
+            entry.id().uuid().to_string()
+        };
+        self.mark_dirty();
+        rpc_login_by_uuid(self, &created_uuid)
+            .ok_or(RpcError::InvalidMessage("新建条目读取失败".to_owned()))
+    }
+
+    fn update_login(
+        &mut self,
+        login: &RpcLoginWrite,
+        old_uuid: &str,
+        url_merge_mode: u8,
+    ) -> Result<RpcLogin, RpcError> {
+        if !self.is_open() {
+            return Err(RpcError::Locked);
+        }
+        let id = parse_entry_id(old_uuid).map_err(|_| RpcError::EntryNotFound)?;
+        // Resolve + merge URLs on the immutable snapshot first.
+        let merged_urls = {
+            let db = self.require_db().map_err(rpc_write_error)?;
+            let bin_id = recycle_bin_id(db);
+            let current = match find_rpc_entry_urls(db.root(), id, bin_id, false) {
+                FindEntryOutcome::NotFound => return Err(RpcError::EntryNotFound),
+                FindEntryOutcome::InRecycleBin => return Err(RpcError::InRecycleBin),
+                FindEntryOutcome::Found(urls) => urls,
+            };
+            merge_urls(&current, &login.urls, url_merge_mode)
+        };
+        {
+            let db = self.require_db_mut().map_err(rpc_write_error)?;
+            let mut entry = db.entry_mut(id).ok_or(RpcError::EntryNotFound)?;
+            // `edit_tracking` snapshots the pre-edit entry into its history on
+            // drop — the KDBX equivalent of the plugin's `CreateBackup`.
+            entry.edit_tracking(|tracked| {
+                let mut this = tracked.as_mut();
+                apply_login_write(&mut this, login, &merged_urls.join(" "));
+            });
+        }
+        self.mark_dirty();
+        rpc_login_by_uuid(self, old_uuid).ok_or(RpcError::EntryNotFound)
+    }
+}
+
+/// Read one entry by uuid as an `RpcLogin` (recycle bin skipped, like the
+/// read paths); the plugin returns the updated entry the same way.
+fn rpc_login_by_uuid(session: &VaultSession, uuid: &str) -> Option<RpcLogin> {
+    let db = session.require_db().ok()?;
+    let bin_id = recycle_bin_id(db);
+    let filter = RpcLoginFilter {
+        urls: &[],
+        uuid: Some(uuid),
+        free_text: None,
+        username: None,
+    };
+    let mut out = Vec::new();
+    collect_rpc_logins(db.root(), bin_id, &filter, ROOT_GROUP_NAME, "", &mut out);
+    out.into_iter().next()
 }
 
 /// FindLogins filter criteria (mirrors the KeePassRPC parameter list).
@@ -1710,6 +1803,85 @@ fn bridge_entry_title(url: &str) -> String {
         url.trim().to_owned()
     } else {
         host
+    }
+}
+
+/// Map an internal vault error (e.g. "vault is locked") to a JSON-RPC error.
+fn rpc_write_error(err: String) -> RpcError {
+    RpcError::InvalidMessage(err)
+}
+
+/// True when `id` resolves to a group reachable from `group` without crossing
+/// the recycle bin (the bin subtree is skipped, like every read path).
+/// References only flow downward, so recursion stays borrow-safe.
+fn find_rpc_group_id(group: GroupRef<'_>, id: GroupId, bin_id: Option<GroupId>) -> bool {
+    if bin_id == Some(group.id()) {
+        return false;
+    }
+    if group.id() == id {
+        return true;
+    }
+    for child in group.groups() {
+        if find_rpc_group_id(child, id, bin_id) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Outcome of resolving an entry during the write pass.
+enum FindEntryOutcome {
+    NotFound,
+    /// Found, but inside the recycle bin subtree (KeyVault rejects the write).
+    InRecycleBin,
+    /// Found outside the recycle bin, with its current URL list.
+    Found(Vec<String>),
+}
+
+/// Resolve an entry by id and read its URL list (space-separated `URL` field).
+/// References only flow downward, so recursion stays borrow-safe.
+fn find_rpc_entry_urls(
+    group: GroupRef<'_>,
+    id: EntryId,
+    bin_id: Option<GroupId>,
+    in_bin: bool,
+) -> FindEntryOutcome {
+    let in_bin = in_bin || bin_id == Some(group.id());
+    if let Some(entry) = group.entry(id) {
+        let urls: Vec<String> = entry
+            .get(FIELD_URL)
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
+        if in_bin {
+            FindEntryOutcome::InRecycleBin
+        } else {
+            FindEntryOutcome::Found(urls)
+        }
+    } else {
+        for child in group.groups() {
+            match find_rpc_entry_urls(child, id, bin_id, in_bin) {
+                FindEntryOutcome::NotFound => {}
+                outcome => return outcome,
+            }
+        }
+        FindEntryOutcome::NotFound
+    }
+}
+
+/// Apply Kee's `Entry` DTO to a destination entry (the plugin's
+/// `setPwEntryFromEntry`, adapted to KDBX strings): title and the URL list
+/// (space-joined so the read path sees every URL), first password field →
+/// Password, all username fields → UserName (last wins), remaining fields →
+/// custom strings named `displayName` (fallback `name`).
+fn apply_login_write(entry: &mut EntryMut<'_>, login: &RpcLoginWrite, urls: &str) {
+    entry.set(FIELD_TITLE, Value::unprotected(login.title.clone()));
+    entry.set(FIELD_URL, Value::unprotected(urls.to_owned()));
+    entry.set(FIELD_USERNAME, Value::unprotected(write_username(login)));
+    entry.set(FIELD_PASSWORD, Value::protected(write_password(login)));
+    for (name, value) in write_custom_fields(login) {
+        entry.set(name, Value::unprotected(value));
     }
 }
 
@@ -5163,5 +5335,191 @@ mod tests {
             .find_logins(&["https://example.com".to_owned()], None, None, None)
             .is_empty());
         assert!(session.database().is_none());
+    }
+
+    // -- KeePassRPC write path (AddLogin/UpdateLogin) ----------------------
+
+    fn rpc_login_write(
+        title: &str,
+        username: &str,
+        password: &str,
+        urls: &[&str],
+    ) -> RpcLoginWrite {
+        use crate::rpc::RpcFieldWrite;
+        RpcLoginWrite {
+            title: title.to_owned(),
+            urls: urls.iter().map(|u| u.to_string()).collect(),
+            http_realm: String::new(),
+            icon_image_data: String::new(),
+            form_field_list: vec![
+                RpcFieldWrite {
+                    id: "u".to_owned(),
+                    name: "user".to_owned(),
+                    display_name: "KeePass username".to_owned(),
+                    field_type: "FFTusername".to_owned(),
+                    value: username.to_owned(),
+                    page: 0,
+                },
+                RpcFieldWrite {
+                    id: "p".to_owned(),
+                    name: "pass".to_owned(),
+                    display_name: "KeePass password".to_owned(),
+                    field_type: "FFTpassword".to_owned(),
+                    value: password.to_owned(),
+                    page: 0,
+                },
+                RpcFieldWrite {
+                    id: "n".to_owned(),
+                    name: "note".to_owned(),
+                    display_name: "Custom note".to_owned(),
+                    field_type: "FFTtext".to_owned(),
+                    value: "hello".to_owned(),
+                    page: 0,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn rpc_add_login_creates_entry_with_fields_and_urls() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        let login = rpc_login_write("站点", "alice", "pw-1", &["https://rpc.example.com/login"]);
+        let created = session.add_login(&login, "").unwrap();
+        assert!(!created.uuid.is_empty());
+        assert_eq!(created.title, "站点");
+        assert_eq!(created.username, "alice");
+        assert_eq!(created.password, "pw-1");
+        assert_eq!(
+            created.urls,
+            vec!["https://rpc.example.com/login".to_owned()]
+        );
+        assert_eq!(created.parent_group.title, "Root");
+        assert_eq!(created.parent_group.path, "Root");
+
+        // Username/password land in the standard fields, the extra form field
+        // becomes a custom string, and FindLogins sees the new entry.
+        let state = session.state().unwrap().unwrap();
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.username, "alice");
+        assert_eq!(entry.url, "https://rpc.example.com/login");
+        assert!(entry
+            .custom_fields
+            .iter()
+            .any(|f| f.name == "Custom note" && f.value == "hello"));
+
+        let by_url = session.find_logins(
+            &["https://rpc.example.com/dashboard".to_owned()],
+            None,
+            None,
+            None,
+        );
+        assert_eq!(by_url.len(), 1);
+        assert_eq!(by_url[0].uuid, created.uuid);
+    }
+
+    #[test]
+    fn rpc_add_login_lands_in_specified_group_and_skips_recycle_bin_parent() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: None,
+                name: "Internet".to_owned(),
+                icon: None,
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+
+        let login = rpc_login_write("站点", "bob", "pw", &["https://grp.example.com"]);
+        let created = session.add_login(&login, &group_uuid).unwrap();
+        assert_eq!(created.parent_group.uuid, group_uuid);
+
+        let state = session.state().unwrap().unwrap();
+        let group = &state.root.children[0];
+        assert_eq!(group.entries.len(), 1);
+        assert_eq!(group.entries[0].title, "站点");
+
+        // Unknown or invalid parent uuid falls back to the root group.
+        let created = session
+            .add_login(&login, "00000000-0000-0000-0000-000000000000")
+            .unwrap();
+        assert_eq!(created.parent_group.title, "Root");
+        assert_eq!(created.parent_group.path, "Root");
+    }
+
+    #[test]
+    fn rpc_update_login_merges_urls_and_snapshots_history() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        let login = rpc_login_write("站点", "alice", "pw-1", &["https://old.example.com"]);
+        let created = session.add_login(&login, "").unwrap();
+
+        // Mode 1: old URL kept, new one promoted to primary.
+        let update = rpc_login_write("站点", "alice", "pw-2", &["https://new.example.com"]);
+        let updated = session.update_login(&update, &created.uuid, 1).unwrap();
+        assert_eq!(updated.username, "alice");
+        assert_eq!(updated.password, "pw-2");
+        assert_eq!(
+            updated.urls,
+            vec![
+                "https://new.example.com".to_owned(),
+                "https://old.example.com".to_owned(),
+            ]
+        );
+
+        // The pre-edit state was snapshotted into the entry history (the
+        // plugin's `CreateBackup`): old password is recoverable.
+        let id = parse_entry_id(&created.uuid).unwrap();
+        let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+        let historical = entry.historical(0).unwrap();
+        assert_eq!(historical.get_password(), Some("pw-1"));
+        assert_eq!(historical.get_url(), Some("https://old.example.com"));
+
+        // Mode 5 replaces the whole list.
+        let updated = session.update_login(&update, &created.uuid, 5).unwrap();
+        assert_eq!(updated.urls, vec!["https://new.example.com".to_owned()]);
+    }
+
+    #[test]
+    fn rpc_update_login_rejects_unknown_uuid_recycle_bin_and_locked() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let root = ROOT_GROUP_UUID.to_owned();
+        let state = session
+            .add_entry(&entry_input(
+                &root,
+                "Bin",
+                "u",
+                "p",
+                "https://bin.example.com",
+            ))
+            .unwrap();
+        let bin_uuid = state.root.entries[0].uuid.clone();
+
+        let login = rpc_login_write("Bin", "u", "p2", &["https://other.example.com"]);
+
+        // Unknown entry uuid → EntryNotFound.
+        assert_eq!(
+            session.update_login(&login, "00000000-0000-0000-0000-000000000000", 5),
+            Err(RpcError::EntryNotFound)
+        );
+
+        // Entries moved to the recycle bin are rejected.
+        session.delete_entry(&bin_uuid).unwrap();
+        assert_eq!(
+            session.update_login(&login, &bin_uuid, 5),
+            Err(RpcError::InRecycleBin)
+        );
+
+        // A locked vault rejects both write methods.
+        session.close();
+        assert_eq!(session.add_login(&login, ""), Err(RpcError::Locked));
+        assert_eq!(
+            session.update_login(&login, &bin_uuid, 5),
+            Err(RpcError::Locked)
+        );
     }
 }
