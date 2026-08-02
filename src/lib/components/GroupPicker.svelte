@@ -268,6 +268,7 @@
   .picker-up,
   .picker-row {
     cursor: pointer;
+    background: transparent;
   }
 
   .picker-up:hover,
