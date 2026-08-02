@@ -137,6 +137,10 @@ pub struct BridgeResponse {
     pub entries: Vec<BridgeEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub count: Option<usize>,
+    /// `generate-password` only: the fresh plaintext password (never a vault
+    /// secret; the browser needs it to fill the form).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
     pub nonce: String,
     pub verifier: String,
     pub hash: String,
@@ -156,6 +160,7 @@ impl BridgeResponse {
             id: None,
             entries: Vec::new(),
             count: None,
+            password: None,
             nonce: String::new(),
             verifier: String::new(),
             hash: String::new(),
@@ -176,6 +181,7 @@ impl BridgeResponse {
             id: None,
             entries: Vec::new(),
             count: None,
+            password: None,
             nonce: nonce_b64.clone(),
             verifier: verifier_b64.clone(),
             hash: host.db_hash(),
@@ -321,6 +327,7 @@ fn handle_associate(
         id: Some(id),
         entries: Vec::new(),
         count: None,
+        password: None,
         nonce: nonce_b64.clone(),
         verifier: verifier_b64.clone(),
         hash: host.db_hash(),
@@ -397,6 +404,11 @@ fn dispatch(
                 Err(e) => BridgeResponse::failure(request_type, &e),
             }
         }
+        "generate-password" => {
+            let mut response = BridgeResponse::success(request_type, key, host);
+            response.password = Some(generate_password());
+            response
+        }
         other => BridgeResponse::failure(other, &format!("不支持的操作: {other}")),
     }
 }
@@ -440,6 +452,37 @@ fn decrypt_set_login_fields(request: &BridgeRequest, key: &[u8]) -> Result<SetLo
         url,
         uuid,
     })
+}
+
+/// Random index in `0..bound` from the OS RNG.
+fn rand_index(bound: usize) -> usize {
+    let mut buf = [0u8; 4];
+    getrandom::getrandom(&mut buf).expect("OS RNG must be available");
+    u32::from_le_bytes(buf) as usize % bound
+}
+
+/// Fresh 20-char password over upper/lower/digits/symbols, one character from
+/// each category guaranteed — mirrors the app's default generator settings
+/// (`DEFAULT_DATABASE_SETTINGS.generator`).
+fn generate_password() -> String {
+    const LEN: usize = 20;
+    const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";
+    const DIGITS: &str = "0123456789";
+    const SYMBOLS: &str = "!@#$%^&*()-_=+[]{};:,.<>?";
+    let pool: Vec<char> = format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect();
+    let mut out: Vec<char> = (0..LEN).map(|_| pool[rand_index(pool.len())]).collect();
+    for category in [UPPER, LOWER, DIGITS, SYMBOLS] {
+        if !out.iter().any(|c| category.contains(*c)) {
+            let pos = rand_index(out.len());
+            let category_len = category.chars().count();
+            out[pos] = category
+                .chars()
+                .nth(rand_index(category_len))
+                .expect("category is non-empty");
+        }
+    }
+    out.into_iter().collect()
 }
 
 #[cfg(test)]
@@ -897,6 +940,24 @@ mod tests {
         let response = handle_request(request, &mut host, |_| true);
         assert!(!response.success);
         assert_eq!(response.error.as_deref(), Some("数据库未打开或已锁定"));
+    }
+
+    #[test]
+    fn generate_password_meets_default_policy_and_is_fresh() {
+        let mut host = MockHost::open();
+        let response = handle_request(authorized_request("generate-password"), &mut host, |_| true);
+        assert!(response.success);
+        let password = response
+            .password
+            .expect("generate-password returns a password");
+        assert_eq!(password.len(), 20);
+        assert!(password.chars().any(|c| c.is_ascii_uppercase()));
+        assert!(password.chars().any(|c| c.is_ascii_lowercase()));
+        assert!(password.chars().any(|c| c.is_ascii_digit()));
+        assert!(password.chars().any(|c| !c.is_ascii_alphanumeric()));
+
+        let again = handle_request(authorized_request("generate-password"), &mut host, |_| true);
+        assert_ne!(password, again.password.expect("fresh password"));
     }
 
     fn hex_bytes(s: &str) -> Vec<u8> {

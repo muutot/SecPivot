@@ -9,7 +9,7 @@
 ## 现状(已实现)
 
 - 后台 loopback HTTP 服务:`bridge_server.rs` 监听 `127.0.0.1:19455`,每连接一次 JSON POST。
-- 协议核心:`bridge.rs` 实现 `associate`/`test-associate`/`get-logins`/`set-login`/`get-logins-count`;AES-256-CBC 逐字段加密 + PKCS7;请求 `Verifier` 与响应 `Hmac`(HMAC-SHA256)按 KeePassHttp 语义校验。
+- 协议核心:`bridge.rs` 实现 `associate`/`test-associate`/`get-logins`/`get-logins-count`/`set-login`/`generate-password`;AES-256-CBC 逐字段加密 + PKCS7;请求 `Verifier` 与响应 `Hmac`(HMAC-SHA256)按 KeePassHttp 语义校验。`generate-password` 返回 20 位随机口令(大小写/数字/符号各至少一位,与应用默认生成器一致)。
 - 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),`db_hash` = SHA1(根分组UUID ‖ 回收站分组UUID)。
 - associate 密钥存会话内(`bridge_keys`),锁定即销毁;首次关联由桌面端审批(设置「集成」面板 + 全局审批提示组件)。
 
