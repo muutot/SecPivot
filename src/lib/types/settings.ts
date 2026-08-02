@@ -97,9 +97,16 @@ export interface GeneralSettings {
   globalAutoTypeShortcut: string;
 }
 
+/** KeePassHttp browser bridge. The loopback server runs only while enabled;
+ * association keys are session-held and wiped on vault lock. */
+export interface BridgeSettings {
+  enabled: boolean;
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
   remote: RemoteSettings;
+  bridge: BridgeSettings;
 }

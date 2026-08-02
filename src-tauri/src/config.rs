@@ -326,6 +326,21 @@ impl Default for RemoteSettings {
     }
 }
 
+/// KeePassHttp browser bridge. The loopback server only runs while `enabled`
+/// is true; association keys are session-held (never persisted) and wiped on
+/// vault lock, so the bridge serves nothing while locked.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BridgeSettings {
+    pub enabled: bool,
+}
+
+impl Default for BridgeSettings {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
@@ -333,6 +348,7 @@ pub struct AppConfig {
     pub security: SecuritySettings,
     pub database: DatabaseDefaults,
     pub remote: RemoteSettings,
+    pub bridge: BridgeSettings,
 }
 
 // ---------------------------------------------------------------------------
@@ -893,6 +909,24 @@ mod tests {
         assert_eq!(normalized.general.theme_colors.accent, "#ff5050");
         assert_eq!(normalized.general.density.group_gap, 2);
         assert_eq!(normalized.general.density.group_indent, 12);
+    }
+
+    #[test]
+    fn bridge_defaults_off_and_survives_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert!(!store.get().unwrap().bridge.enabled);
+
+        let mut config = AppConfig::default();
+        config.bridge.enabled = true;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"bridge\": {"));
+        assert!(text.contains("\"enabled\": true"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert!(reloaded.get().unwrap().bridge.enabled);
     }
 
     #[test]

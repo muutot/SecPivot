@@ -6,6 +6,7 @@ import type {
   SecuritySettings,
   DatabaseDefaults,
   RemoteSettings,
+  BridgeSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
@@ -80,11 +81,16 @@ export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
   backupCount: 3,
 };
 
+export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
+  enabled: false,
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
   remote: DEFAULT_REMOTE_SETTINGS,
+  bridge: DEFAULT_BRIDGE_SETTINGS,
 };
 
 const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
@@ -267,6 +273,12 @@ export function normalizeSettings(
     security,
     database,
     remote: normalizeRemoteSettings(source.remote, fallback.remote),
+    bridge: {
+      enabled:
+        typeof source.bridge?.enabled === "boolean"
+          ? source.bridge.enabled
+          : (fallback.bridge?.enabled ?? false),
+    },
   };
 }
 
@@ -277,6 +289,7 @@ interface AppSettingsStore {
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
   updateRemote: <K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]) => void;
+  updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
@@ -392,6 +405,11 @@ export const appSettings: AppSettingsStore = {
 
   updateRemote(key, value): void {
     settings.update((s) => ({ ...s, remote: { ...s.remote, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateBridge(key, value): void {
+    settings.update((s) => ({ ...s, bridge: { ...s.bridge, [key]: value } }));
     schedulePersist();
   },
 
