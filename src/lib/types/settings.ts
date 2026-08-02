@@ -50,6 +50,8 @@ export interface SecuritySettings {
   lockOnFocusLoss: boolean;
   /** Keep the master password in the OS credential store for Windows Hello unlock. */
   rememberPassword: boolean;
+  /** Exclude the main window from screenshots/recordings while a vault is open (Windows WDA_EXCLUDEFROMCAPTURE). Default off — opt-in from the welcome page. */
+  screenCaptureGuard: boolean;
 }
 
 export interface DensitySettings {

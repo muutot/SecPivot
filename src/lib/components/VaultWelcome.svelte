@@ -18,6 +18,9 @@
 
   const remoteLocalDir = $derived(get(appSettings).remote.localDir || "remote");
 
+  /** Opt-in screen-capture guard: excludes the main window from screenshots/recordings while a vault is open (Windows only). */
+  const guardEnabled = $derived(get(appSettings).security.screenCaptureGuard);
+
   type Modal = "none" | "open" | "create" | "remote";
   type RemoteTab = "open" | "create" | "config";
 
@@ -296,6 +299,29 @@
             <span class="recent-name">{file.split(/[\\/]/).pop() || file}</span>
           </button>
         {/each}
+      </div>
+    {/if}
+
+    {#if isTauriRuntime()}
+      <div class="welcome-guard">
+        <div class="guard-info">
+          <span class="guard-title">防截屏守卫</span>
+          <span class="guard-desc">库打开期间窗口不出现在截屏/录屏中</span>
+        </div>
+        <button
+          class="toggle-switch"
+          class:active={guardEnabled}
+          role="switch"
+          aria-label="防截屏守卫"
+          aria-checked={guardEnabled}
+          title="库打开期间从截屏/录屏/共享中隐藏主窗口"
+          onclick={() => {
+            appSettings.updateSecurity("screenCaptureGuard", !guardEnabled);
+            void appSettings.flush();
+          }}
+        >
+          <span class="toggle-knob"></span>
+        </button>
       </div>
     {/if}
   </div>
@@ -734,6 +760,37 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .welcome-guard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--card-bg);
+  }
+
+  .guard-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .guard-title {
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .guard-desc {
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
   }
 
   .modal-backdrop {

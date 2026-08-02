@@ -223,6 +223,10 @@ pub struct SecuritySettings {
     pub lock_after_action: bool,
     pub lock_on_focus_loss: bool,
     pub remember_password: bool,
+    /// Exclude the main window from screenshots/recordings while a vault is
+    /// open (Windows `WDA_EXCLUDEFROMCAPTURE`). Default off — opt-in from the
+    /// welcome page; see `shield.rs` for why `WDA_MONITOR` must not be used.
+    pub screen_capture_guard: bool,
 }
 
 impl Default for SecuritySettings {
@@ -235,6 +239,7 @@ impl Default for SecuritySettings {
             lock_after_action: false,
             lock_on_focus_loss: false,
             remember_password: false,
+            screen_capture_guard: false,
         }
     }
 }
@@ -697,6 +702,23 @@ mod tests {
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
         assert!(again.security.lock_on_focus_loss);
+    }
+
+    #[test]
+    fn screen_capture_guard_defaults_off_and_survives_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert!(!store.get().unwrap().security.screen_capture_guard);
+
+        let mut config = AppConfig::default();
+        config.security.screen_capture_guard = true;
+        store.set(config.clone()).unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"screenCaptureGuard\": true"));
+
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert!(reloaded.get().unwrap().security.screen_capture_guard);
     }
 
     #[test]
