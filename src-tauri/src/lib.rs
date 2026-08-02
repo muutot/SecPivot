@@ -145,14 +145,22 @@ fn open_vault(
     mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    let result = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .open(
-            Path::new(&path),
-            &password,
-            keyfile.as_deref().map(Path::new),
-        );
+    // Slow work (file read, KDF, parse) runs outside the session lock; only
+    // the state adoption is locked.
+    let prepared = vault::prepare_local_open(
+        Path::new(&path),
+        &password,
+        keyfile.as_deref().map(Path::new),
+    );
+    let result = match prepared {
+        Ok((db, keyfile_bytes)) => {
+            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            let result = session.adopt_local(db, Path::new(&path), &password, keyfile_bytes);
+            drop(session);
+            result
+        }
+        Err(e) => Err(e),
+    };
     password.zeroize();
     if result.is_ok() {
         apply_capture_guard(&app, &config);
@@ -181,17 +189,25 @@ fn create_vault(
     compression: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    let result = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .create(
-            Path::new(&path),
-            &password,
-            &kdf,
-            &cipher,
-            &compression,
-            keyfile.as_deref().map(Path::new),
-        );
+    // Slow work (KDF, serialization, file write) runs outside the session
+    // lock; only the state adoption is locked.
+    let prepared = vault::prepare_local_create(
+        Path::new(&path),
+        &password,
+        &kdf,
+        &cipher,
+        &compression,
+        keyfile.as_deref().map(Path::new),
+    );
+    let result = match prepared {
+        Ok((db, keyfile_bytes)) => {
+            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            let result = session.adopt_local(db, Path::new(&path), &password, keyfile_bytes);
+            drop(session);
+            result
+        }
+        Err(e) => Err(e),
+    };
     password.zeroize();
     if result.is_ok() {
         apply_capture_guard(&app, &config);
@@ -224,23 +240,40 @@ fn get_vault_state(
 
 #[tauri::command]
 fn save_vault(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<VaultState, String> {
+    // Capture a cheap job under the lock, then run KDF + serialization +
+    // transport outside it, then mark clean under the lock again.
+    let job = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .prepare_save()?;
+    let revision = job.revision;
+    vault::persist_save(job)?;
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .save()
+        .complete_save(revision)
 }
 
 #[tauri::command]
 fn change_master_key(
     session: tauri::State<'_, Mutex<VaultSession>>,
-    mut password: String,
+    password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    let result = session
+    // Keyfile read, KDF and persistence all happen without the session lock.
+    let keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
+    let (db, target, revision) = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .change_master_key(&password, keyfile.as_deref().map(Path::new));
-    password.zeroize();
+        .prepare_change()?;
+    let persisted = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
+    let result = match persisted {
+        Ok(()) => session
+            .lock()
+            .map_err(|_| "数据库锁已损坏".to_owned())?
+            .complete_change(password, keyfile_bytes, revision),
+        Err(e) => Err(e),
+    };
     result
 }
 
@@ -342,10 +375,12 @@ fn save_attachment(
     name: String,
     dest: String,
 ) -> Result<(), String> {
-    session
+    // Extract under the lock, write the file outside it.
+    let data = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .save_attachment(&uuid, &name, &dest)
+        .attachment_data(&uuid, &name)?;
+    vault::write_attachment_file(&data, &dest)
 }
 
 #[tauri::command]
@@ -590,10 +625,12 @@ fn security_report(
 /// Export all entries as CSV to a user-picked path (passwords resolved server-side).
 #[tauri::command]
 fn export_csv(session: tauri::State<'_, Mutex<VaultSession>>, path: String) -> Result<(), String> {
-    session
+    // Build the payload under the lock, write the file outside it.
+    let content = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .export_csv(&path)
+        .export_csv_content()?;
+    vault::write_csv_file(&path, &content)
 }
 
 /// Read a UTF-8 text file from a user-picked path (CSV import). Only `.csv`
@@ -650,18 +687,34 @@ async fn open_remote_vault(
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    let result = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .open_remote(
-            storage,
-            &key,
-            &password,
-            keyfile.as_deref().map(Path::new),
-            mode,
-            &local_dir,
-            cfg.backup_count.clamp(0, 10) as usize,
-        );
+    // Network download, KDF and parse run without the session lock.
+    let prepared = vault::prepare_remote_open(
+        storage.clone(),
+        &key,
+        &password,
+        keyfile.as_deref().map(Path::new),
+        mode,
+        &local_dir,
+        cfg.backup_count.clamp(0, 10) as usize,
+    );
+    let result = match prepared {
+        Ok((db, keyfile_bytes, key)) => {
+            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            let result = session.adopt_remote(
+                db,
+                storage,
+                &key,
+                &password,
+                keyfile_bytes,
+                mode,
+                &local_dir,
+                cfg.backup_count.clamp(0, 10) as usize,
+            );
+            drop(session);
+            result
+        }
+        Err(e) => Err(e),
+    };
     password.zeroize();
     if result.is_ok() {
         apply_capture_guard(&app, &config);
@@ -688,21 +741,37 @@ async fn create_remote_vault(
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    let result = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .create_remote(
-            storage,
-            &key,
-            &password,
-            &kdf,
-            &cipher,
-            &compression,
-            keyfile.as_deref().map(Path::new),
-            mode,
-            &local_dir,
-            cfg.backup_count.clamp(0, 10) as usize,
-        );
+    // KDF, serialization, upload and local mirror run without the lock.
+    let prepared = vault::prepare_remote_create(
+        storage.clone(),
+        &key,
+        &password,
+        &kdf,
+        &cipher,
+        &compression,
+        keyfile.as_deref().map(Path::new),
+        mode,
+        &local_dir,
+        cfg.backup_count.clamp(0, 10) as usize,
+    );
+    let result = match prepared {
+        Ok((db, keyfile_bytes, key)) => {
+            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            let result = session.adopt_remote(
+                db,
+                storage,
+                &key,
+                &password,
+                keyfile_bytes,
+                mode,
+                &local_dir,
+                cfg.backup_count.clamp(0, 10) as usize,
+            );
+            drop(session);
+            result
+        }
+        Err(e) => Err(e),
+    };
     password.zeroize();
     if result.is_ok() {
         apply_capture_guard(&app, &config);

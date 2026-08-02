@@ -256,6 +256,7 @@ impl RemoteMode {
 
 /// Where a remote vault lives: the transport, its object key, and how saves
 /// should behave. Dropped on `close` so S3 credentials leave memory.
+#[derive(Clone)]
 pub struct RemoteTarget {
     pub storage: Arc<dyn RemoteStorage>,
     pub key: String,
@@ -266,7 +267,8 @@ pub struct RemoteTarget {
 
 /// The currently open vault. `db` holds the decrypted database; `password`
 /// and `keyfile` are kept only for save and cleared on close. `remote`
-/// is set when the vault came from S3.
+/// is set when the vault came from S3. `revision` counts edits so a save
+/// completing after a concurrent edit does not clear the dirty flag.
 #[derive(Default)]
 pub struct VaultSession {
     path: Option<String>,
@@ -276,6 +278,7 @@ pub struct VaultSession {
     dirty: bool,
     modified_at: String,
     remote: Option<RemoteTarget>,
+    revision: u64,
 }
 
 /// Wipe a secret `String` in place, then drop it (buffer is zeroed before
@@ -310,6 +313,203 @@ fn build_database_key(password: &str, keyfile: Option<&[u8]>) -> Result<Database
     Ok(key)
 }
 
+/// Where a save should land. Captured cheaply under the session lock; the
+/// slow work (KDF, serialization, network, disk) happens outside it.
+pub(crate) enum SaveTarget {
+    Local(PathBuf),
+    Remote {
+        storage: Arc<dyn RemoteStorage>,
+        key: String,
+        mode: RemoteMode,
+        local_dir: PathBuf,
+        backup_count: usize,
+    },
+}
+
+/// Everything `persist_save` needs. `password`/`keyfile` are clones so the
+/// KDF can run without the lock; both are zeroized after use. `revision`
+/// records the session's edit counter so the completion step can tell whether
+/// edits landed while the save ran.
+pub(crate) struct SaveJob {
+    pub db: Database,
+    pub password: String,
+    pub keyfile: Option<Vec<u8>>,
+    pub target: SaveTarget,
+    pub revision: u64,
+}
+
+/// Read an optional keyfile into memory (called without the session lock).
+pub(crate) fn read_keyfile(keyfile: Option<&Path>) -> Result<Option<Vec<u8>>, String> {
+    match keyfile {
+        Some(keyfile_path) => std::fs::read(keyfile_path)
+            .map(Some)
+            .map_err(|e| format!("无法读取密钥文件: {e}")),
+        None => Ok(None),
+    }
+}
+
+/// Lock-free half of `open`: read the file, build the key (KDF) and parse
+/// the database. Returns the decrypted `Database` plus the keyfile bytes.
+pub(crate) fn prepare_local_open(
+    path: &Path,
+    password: &str,
+    keyfile: Option<&Path>,
+) -> Result<(Database, Option<Vec<u8>>), String> {
+    let keyfile_bytes = read_keyfile(keyfile)?;
+    let key = build_database_key(password, keyfile_bytes.as_deref())?;
+    let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
+    let db = Database::parse(&data, key).map_err(classify_open_error)?;
+    Ok((db, keyfile_bytes))
+}
+
+/// Lock-free half of `create`: build the database, run the KDF and write the
+/// new vault file. Returns the database plus the keyfile bytes.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_local_create(
+    path: &Path,
+    password: &str,
+    kdf: &str,
+    cipher: &str,
+    compression: &str,
+    keyfile: Option<&Path>,
+) -> Result<(Database, Option<Vec<u8>>), String> {
+    let keyfile_bytes = read_keyfile(keyfile)?;
+    let key = build_database_key(password, keyfile_bytes.as_deref())?;
+    let mut db = Database::new();
+    apply_kdf(&mut db, kdf)?;
+    apply_cipher(&mut db, cipher)?;
+    apply_compression(&mut db, compression)?;
+    save_database(&db, path, key)?;
+    Ok((db, keyfile_bytes))
+}
+
+/// Lock-free half of `open_remote`: validate the key, download from S3
+/// (network), build the key (KDF), parse, and mirror locally if requested.
+/// Returns the database, keyfile bytes and the normalized object key.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_remote_open(
+    storage: Arc<dyn RemoteStorage>,
+    key: &str,
+    password: &str,
+    keyfile: Option<&Path>,
+    mode: RemoteMode,
+    local_dir: &Path,
+    backup_count: usize,
+) -> Result<(Database, Option<Vec<u8>>, String), String> {
+    let key = validate_remote_key(key)?;
+    let keyfile_bytes = read_keyfile(keyfile)?;
+    let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
+    let data = storage
+        .get(&key)
+        .map_err(|e| format!("下载远程文件失败: {e}"))?;
+    let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
+    if mode == RemoteMode::SaveLocal {
+        write_local_copy(local_dir, &remote_key_basename(&key), &data, backup_count)?;
+    }
+    Ok((db, keyfile_bytes, key))
+}
+
+/// Lock-free half of `create_remote`: build the database, run the KDF,
+/// serialize, upload to S3 (network) and mirror locally if requested.
+/// Returns the database, keyfile bytes and the normalized object key.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_remote_create(
+    storage: Arc<dyn RemoteStorage>,
+    key: &str,
+    password: &str,
+    kdf: &str,
+    cipher: &str,
+    compression: &str,
+    keyfile: Option<&Path>,
+    mode: RemoteMode,
+    local_dir: &Path,
+    backup_count: usize,
+) -> Result<(Database, Option<Vec<u8>>, String), String> {
+    let key = validate_remote_key(key)?;
+    let keyfile_bytes = read_keyfile(keyfile)?;
+    let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
+    let mut db = Database::new();
+    apply_kdf(&mut db, kdf)?;
+    apply_cipher(&mut db, cipher)?;
+    apply_compression(&mut db, compression)?;
+    let mut buffer = Vec::new();
+    db.save(&mut Cursor::new(&mut buffer), db_key)
+        .map_err(|e| format!("序列化数据库失败: {e}"))?;
+    storage
+        .put(&key, &buffer)
+        .map_err(|e| format!("上传远程文件失败: {e}"))?;
+    if mode == RemoteMode::SaveLocal {
+        write_local_copy(local_dir, &remote_key_basename(&key), &buffer, backup_count)?;
+    }
+    Ok((db, keyfile_bytes, key))
+}
+
+/// Serialize `db` with `key` and persist it to the given target. Runs
+/// entirely outside the session lock.
+pub(crate) fn persist_snapshot(
+    db: &Database,
+    key: &DatabaseKey,
+    target: &SaveTarget,
+) -> Result<(), String> {
+    let mut buffer = Vec::new();
+    db.save(&mut Cursor::new(&mut buffer), key.clone())
+        .map_err(|e| format!("序列化数据库失败: {e}"))?;
+    match target {
+        SaveTarget::Remote {
+            storage,
+            key,
+            mode,
+            local_dir,
+            backup_count,
+        } => {
+            storage
+                .put(key, &buffer)
+                .map_err(|e| format!("上传远程文件失败: {e}"))?;
+            if *mode == RemoteMode::SaveLocal {
+                write_local_copy(local_dir, &remote_key_basename(key), &buffer, *backup_count)
+                    .map_err(|e| format!("保存本地副本失败: {e}"))?;
+            }
+            Ok(())
+        }
+        SaveTarget::Local(path) => write_database_bytes(path, &buffer),
+    }
+}
+
+/// Full lock-free save: derive the session key (KDF), then serialize and
+/// persist. Secret clones are zeroized afterwards.
+pub(crate) fn persist_save(job: SaveJob) -> Result<(), String> {
+    let key = build_database_key(&job.password, job.keyfile.as_deref())?;
+    let result = persist_snapshot(&job.db, &key, &job.target);
+    let mut password = job.password;
+    wipe_secret_string(&mut password);
+    if let Some(mut keyfile) = job.keyfile {
+        wipe_secret_bytes(&mut keyfile);
+    }
+    result
+}
+
+/// Lock-free persist with an externally supplied master key (used by
+/// `change_master_key`). The caller owns the new password/keyfile.
+pub(crate) fn persist_change(
+    db: &Database,
+    password: &str,
+    keyfile: Option<&[u8]>,
+    target: &SaveTarget,
+) -> Result<(), String> {
+    let key = build_database_key(password, keyfile)?;
+    persist_snapshot(db, &key, target)
+}
+
+/// Write attachment bytes extracted under the lock (file I/O outside it).
+pub(crate) fn write_attachment_file(data: &[u8], dest: &str) -> Result<(), String> {
+    std::fs::write(dest, data).map_err(|e| format!("写入附件失败: {e}"))
+}
+
+/// Write CSV content built under the lock (file I/O outside it).
+pub(crate) fn write_csv_file(path: &str, content: &str) -> Result<(), String> {
+    std::fs::write(path, content).map_err(|e| format!("写入文件失败: {e}"))
+}
+
 impl VaultSession {
     pub fn is_open(&self) -> bool {
         self.db.is_some()
@@ -322,17 +522,8 @@ impl VaultSession {
         password: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let keyfile_bytes = match keyfile {
-            Some(keyfile_path) => {
-                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
-            }
-            None => None,
-        };
-        let key = build_database_key(password, keyfile_bytes.as_deref())?;
-        let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
-        let db = Database::parse(&data, key).map_err(classify_open_error)?;
-        self.replace(db, path, password, keyfile_bytes);
-        self.snapshot()
+        let (db, keyfile_bytes) = prepare_local_open(path, password, keyfile)?;
+        self.adopt_local(db, path, password, keyfile_bytes)
     }
 
     /// Create an empty vault with the given KDF / cipher / compression and
@@ -346,20 +537,9 @@ impl VaultSession {
         compression: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let keyfile_bytes = match keyfile {
-            Some(keyfile_path) => {
-                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
-            }
-            None => None,
-        };
-        let key = build_database_key(password, keyfile_bytes.as_deref())?;
-        let mut db = Database::new();
-        apply_kdf(&mut db, kdf)?;
-        apply_cipher(&mut db, cipher)?;
-        apply_compression(&mut db, compression)?;
-        save_database(&db, path, key)?;
-        self.replace(db, path, password, keyfile_bytes);
-        self.snapshot()
+        let (db, keyfile_bytes) =
+            prepare_local_create(path, password, kdf, cipher, compression, keyfile)?;
+        self.adopt_local(db, path, password, keyfile_bytes)
     }
 
     /// Open an existing vault stored on S3. `key` is the object key (e.g.
@@ -375,35 +555,25 @@ impl VaultSession {
         local_dir: &Path,
         backup_count: usize,
     ) -> Result<VaultState, String> {
-        let key = validate_remote_key(key)?;
-        let keyfile_bytes = match keyfile {
-            Some(keyfile_path) => {
-                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
-            }
-            None => None,
-        };
-        let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
-        let data = storage
-            .get(&key)
-            .map_err(|e| format!("下载远程文件失败: {e}"))?;
-        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
-        if mode == RemoteMode::SaveLocal {
-            write_local_copy(local_dir, &remote_key_basename(&key), &data, backup_count)?;
-        }
-        self.remote = Some(RemoteTarget {
-            storage,
-            key: key.clone(),
+        let (db, keyfile_bytes, key) = prepare_remote_open(
+            storage.clone(),
+            key,
+            password,
+            keyfile,
             mode,
-            local_dir: local_dir.to_path_buf(),
+            local_dir,
             backup_count,
-        });
-        self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
-        self.password = Some(password.to_owned());
-        self.keyfile = keyfile_bytes;
-        self.db = Some(db);
-        self.dirty = false;
-        self.modified_at = now_iso();
-        self.snapshot()
+        )?;
+        self.adopt_remote(
+            db,
+            storage,
+            &key,
+            password,
+            keyfile_bytes,
+            mode,
+            local_dir,
+            backup_count,
+        )
     }
 
     /// Create an empty vault and upload it to S3 immediately.
@@ -421,41 +591,28 @@ impl VaultSession {
         local_dir: &Path,
         backup_count: usize,
     ) -> Result<VaultState, String> {
-        let key = validate_remote_key(key)?;
-        let keyfile_bytes = match keyfile {
-            Some(keyfile_path) => {
-                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
-            }
-            None => None,
-        };
-        let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
-        let mut db = Database::new();
-        apply_kdf(&mut db, kdf)?;
-        apply_cipher(&mut db, cipher)?;
-        apply_compression(&mut db, compression)?;
-        let mut buffer = Vec::new();
-        db.save(&mut Cursor::new(&mut buffer), db_key)
-            .map_err(|e| format!("序列化数据库失败: {e}"))?;
-        storage
-            .put(&key, &buffer)
-            .map_err(|e| format!("上传远程文件失败: {e}"))?;
-        if mode == RemoteMode::SaveLocal {
-            write_local_copy(local_dir, &remote_key_basename(&key), &buffer, backup_count)?;
-        }
-        self.remote = Some(RemoteTarget {
-            storage,
-            key: key.clone(),
+        let (db, keyfile_bytes, key) = prepare_remote_create(
+            storage.clone(),
+            key,
+            password,
+            kdf,
+            cipher,
+            compression,
+            keyfile,
             mode,
-            local_dir: local_dir.to_path_buf(),
+            local_dir,
             backup_count,
-        });
-        self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
-        self.password = Some(password.to_owned());
-        self.keyfile = keyfile_bytes;
-        self.db = Some(db);
-        self.dirty = false;
-        self.modified_at = now_iso();
-        self.snapshot()
+        )?;
+        self.adopt_remote(
+            db,
+            storage,
+            &key,
+            password,
+            keyfile_bytes,
+            mode,
+            local_dir,
+            backup_count,
+        )
     }
 
     pub fn close(&mut self) {
@@ -482,12 +639,10 @@ impl VaultSession {
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
-        let password = self.require_password()?;
-        let key = build_database_key(password, self.keyfile.as_deref())?;
-        self.save_with_key(&key)?;
-        self.dirty = false;
-        self.modified_at = now_iso();
-        self.snapshot()
+        let job = self.prepare_save()?;
+        let revision = job.revision;
+        persist_save(job)?;
+        self.complete_save(revision)
     }
 
     /// Re-encrypt and persist the vault with a new master key (password
@@ -497,46 +652,10 @@ impl VaultSession {
         password: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let keyfile_bytes = match keyfile {
-            Some(keyfile_path) => {
-                Some(std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?)
-            }
-            None => None,
-        };
-        let key = build_database_key(password, keyfile_bytes.as_deref())?;
-        self.save_with_key(&key)?;
-        self.password = Some(password.to_owned());
-        self.keyfile = keyfile_bytes;
-        self.dirty = false;
-        self.modified_at = now_iso();
-        self.snapshot()
-    }
-
-    /// Serialize the database with `key` and persist to the remote target or
-    /// the local path of the current session.
-    fn save_with_key(&self, key: &DatabaseKey) -> Result<(), String> {
-        let db = self.require_db()?;
-        let mut buffer = Vec::new();
-        db.save(&mut Cursor::new(&mut buffer), key.clone())
-            .map_err(|e| format!("序列化数据库失败: {e}"))?;
-        if let Some(remote) = &self.remote {
-            remote
-                .storage
-                .put(&remote.key, &buffer)
-                .map_err(|e| format!("上传远程文件失败: {e}"))?;
-            if remote.mode == RemoteMode::SaveLocal {
-                write_local_copy(
-                    &remote.local_dir,
-                    &remote_key_basename(&remote.key),
-                    &buffer,
-                    remote.backup_count,
-                )
-                .map_err(|e| format!("保存本地副本失败: {e}"))?;
-            }
-            return Ok(());
-        }
-        let path = self.require_path()?.to_owned();
-        write_database_bytes(Path::new(&path), &buffer)
+        let keyfile_bytes = read_keyfile(keyfile)?;
+        let (db, target, revision) = self.prepare_change()?;
+        persist_change(&db, password, keyfile_bytes.as_deref(), &target)?;
+        self.complete_change(password.to_owned(), keyfile_bytes, revision)
     }
 
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
@@ -873,14 +992,22 @@ impl VaultSession {
     }
 
     /// Write an entry attachment to an arbitrary destination path.
-    pub fn save_attachment(&self, uuid: &str, name: &str, dest: &str) -> Result<(), String> {
+    /// Extract one attachment's bytes under the lock; the caller writes them
+    /// outside it (see `write_attachment_file`).
+    pub(crate) fn attachment_data(&self, uuid: &str, name: &str) -> Result<Vec<u8>, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
         let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
         let attachment = entry
             .attachment_by_name(name)
             .ok_or_else(|| "附件不存在".to_owned())?;
-        std::fs::write(dest, attachment.data.get()).map_err(|e| format!("写入附件失败: {e}"))
+        Ok(attachment.data.get().to_vec())
+    }
+
+    /// Convenience used by tests and callers that may hold the lock anyway.
+    pub fn save_attachment(&self, uuid: &str, name: &str, dest: &str) -> Result<(), String> {
+        let data = self.attachment_data(uuid, name)?;
+        write_attachment_file(&data, dest)
     }
 
     /// Toggle the favorite/pin marker on an entry (persisted as a custom field).
@@ -1003,6 +1130,49 @@ impl VaultSession {
 
     // -- internals ----------------------------------------------------------
 
+    /// Locked half of `open`/`create`: adopt a decrypted database prepared
+    /// outside the lock. Cheap — no KDF, no file I/O.
+    pub(crate) fn adopt_local(
+        &mut self,
+        db: Database,
+        path: &Path,
+        password: &str,
+        keyfile: Option<Vec<u8>>,
+    ) -> Result<VaultState, String> {
+        self.replace(db, path, password, keyfile);
+        self.snapshot()
+    }
+
+    /// Locked half of `open_remote`/`create_remote`: adopt a decrypted
+    /// database prepared outside the lock. Cheap — no KDF, no network I/O.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn adopt_remote(
+        &mut self,
+        db: Database,
+        storage: Arc<dyn RemoteStorage>,
+        key: &str,
+        password: &str,
+        keyfile: Option<Vec<u8>>,
+        mode: RemoteMode,
+        local_dir: &Path,
+        backup_count: usize,
+    ) -> Result<VaultState, String> {
+        self.remote = Some(RemoteTarget {
+            storage,
+            key: key.to_owned(),
+            mode,
+            local_dir: local_dir.to_path_buf(),
+            backup_count,
+        });
+        self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
+        self.password = Some(password.to_owned());
+        self.keyfile = keyfile;
+        self.db = Some(db);
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.snapshot()
+    }
+
     /// Replace the session with a freshly opened/created local database. Any
     /// remote target from a previous session is dropped: saving a local vault
     /// must never upload to a stale S3 target.
@@ -1018,6 +1188,7 @@ impl VaultSession {
 
     fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.revision += 1;
         self.modified_at = now_iso();
     }
 
@@ -1055,6 +1226,65 @@ impl VaultSession {
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
         })
+    }
+
+    /// Capture everything `persist_save` needs. Cheap (no KDF, no I/O): a
+    /// database clone plus the target info, so the slow work can run outside
+    /// the session lock.
+    pub(crate) fn prepare_save(&self) -> Result<SaveJob, String> {
+        let (db, target, revision) = self.prepare_change()?;
+        Ok(SaveJob {
+            db,
+            password: self.require_password()?.to_owned(),
+            keyfile: self.keyfile.clone(),
+            target,
+            revision,
+        })
+    }
+
+    /// Cheap snapshot of the database and save target, used when the caller
+    /// supplies a fresh master key (`change_master_key`). Returns the current
+    /// edit revision so the completion step can detect concurrent edits.
+    pub(crate) fn prepare_change(&self) -> Result<(Database, SaveTarget, u64), String> {
+        let db = self.require_db()?.clone();
+        let target = match &self.remote {
+            Some(remote) => SaveTarget::Remote {
+                storage: remote.storage.clone(),
+                key: remote.key.clone(),
+                mode: remote.mode,
+                local_dir: remote.local_dir.clone(),
+                backup_count: remote.backup_count,
+            },
+            None => SaveTarget::Local(PathBuf::from(self.require_path()?.to_owned())),
+        };
+        Ok((db, target, self.revision))
+    }
+
+    /// Locked completion of `save`: mark the session clean (unless edits
+    /// landed while the save ran) and re-snapshot.
+    pub(crate) fn complete_save(&mut self, revision: u64) -> Result<VaultState, String> {
+        if self.revision == revision {
+            self.dirty = false;
+            self.modified_at = now_iso();
+        }
+        self.snapshot()
+    }
+
+    /// Locked completion of `change_master_key`: adopt the new credentials
+    /// and re-snapshot. Only called after the persist succeeded.
+    pub(crate) fn complete_change(
+        &mut self,
+        password: String,
+        keyfile: Option<Vec<u8>>,
+        revision: u64,
+    ) -> Result<VaultState, String> {
+        self.password = Some(password);
+        self.keyfile = keyfile;
+        if self.revision == revision {
+            self.dirty = false;
+            self.modified_at = now_iso();
+        }
+        self.snapshot()
     }
 
     /// Fetch a single entry's password on demand (never part of `VaultState`).
@@ -1141,6 +1371,13 @@ impl VaultSession {
 
     /// Export all entries as CSV (passwords included) straight to a file.
     pub fn export_csv(&self, path: &str) -> Result<(), String> {
+        let content = self.export_csv_content()?;
+        write_csv_file(path, &content)
+    }
+
+    /// Build the CSV payload under the lock; the caller writes it outside
+    /// the lock (see `write_csv_file`).
+    pub(crate) fn export_csv_content(&self) -> Result<String, String> {
         let db = self.require_db()?;
         let mut lines = vec!["Group,Title,Username,Password,URL,Notes,TOTP,Favorite".to_owned()];
 
@@ -1174,8 +1411,7 @@ impl VaultSession {
         }
         walk(&db.root(), "", &mut lines);
 
-        let content = format!("\u{FEFF}{}\r\n", lines.join("\r\n"));
-        std::fs::write(path, content).map_err(|e| format!("写入文件失败: {e}"))
+        Ok(format!("\u{FEFF}{}\r\n", lines.join("\r\n")))
     }
 }
 
@@ -2270,6 +2506,33 @@ mod tests {
             .unwrap();
         let saved = session.save().unwrap();
         assert!(!saved.dirty);
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "Mail");
+    }
+
+    #[test]
+    fn concurrent_edit_during_save_keeps_dirty_flag() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap();
+        // An edit lands between the save's prepare (locked) and completion
+        // (locked again): the completion must not clear the new dirty state.
+        let job = session.prepare_save().unwrap();
+        let revision = job.revision;
+        persist_save(job).unwrap();
+        session.mark_dirty();
+        let state = session.complete_save(revision).unwrap();
+        assert!(state.dirty, "edit during save must stay dirty");
         drop(session);
 
         let mut reopened = VaultSession::default();
