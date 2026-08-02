@@ -113,19 +113,23 @@ impl S3Storage {
     }
 }
 
-/// Command body for `s3_list_objects`: lists `.kdbx` objects under the
-/// configured prefix, newest key first. `S3Storage`'s sync methods block on
-/// their own runtime, which panics when called from an async runtime worker
-/// thread (the command future then aborts and the invoke never resolves).
-/// Hop to the blocking pool first, exactly like the open/create commands do.
+/// Command body for `s3_list_objects`: lists all objects under the configured
+/// prefix, `.kdbx` files first, then key descending. `S3Storage`'s sync
+/// methods block on their own runtime, which panics when called from an async
+/// runtime worker thread (the command future then aborts and the invoke never
+/// resolves). Hop to the blocking pool first, exactly like the open/create
+/// commands do.
 pub async fn list_objects_async(cfg: RemoteSettings) -> Result<Vec<RemoteObject>, String> {
     let storage = S3Storage::new(&cfg)?;
     let prefix = cfg.prefix.clone();
     let mut objects = tokio::task::spawn_blocking(move || storage.list(&prefix))
         .await
         .map_err(|e| format!("S3 列表任务异常: {e}"))??;
-    objects.retain(|o| o.key.ends_with(".kdbx"));
-    objects.sort_by(|a, b| b.key.cmp(&a.key));
+    objects.sort_by(|a, b| {
+        let a_db = a.key.ends_with(".kdbx");
+        let b_db = b.key.ends_with(".kdbx");
+        b_db.cmp(&a_db).then_with(|| b.key.cmp(&a.key))
+    });
     Ok(objects)
 }
 
@@ -341,9 +345,22 @@ mod tests {
 <ETag>&quot;abc&quot;</ETag><Size>3</Size><StorageClass>STANDARD</StorageClass></Contents>\
 </ListBucketResult>";
 
+    /// Mixed bucket for the ordering test: two databases plus one other file.
+    const MIXED_V2_XML: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\
+<Name>test-bucket</Name><Prefix>vaults/</Prefix><KeyCount>3</KeyCount><MaxKeys>1000</MaxKeys>\
+<IsTruncated>false</IsTruncated>\
+<Contents><Key>vaults/notes.txt</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified>\
+<ETag>&quot;1&quot;</ETag><Size>4</Size><StorageClass>STANDARD</StorageClass></Contents>\
+<Contents><Key>vaults/z.kdbx</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified>\
+<ETag>&quot;2&quot;</ETag><Size>5</Size><StorageClass>STANDARD</StorageClass></Contents>\
+<Contents><Key>vaults/a.kdbx</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified>\
+<ETag>&quot;3&quot;</ETag><Size>3</Size><StorageClass>STANDARD</StorageClass></Contents>\
+</ListBucketResult>";
+
     /// Serve one HTTP/1.1 request per connection (no keep-alive): list-type=2
-    /// returns `LIST_V2_XML`, PUTs are acknowledged, other GETs return `[1,2,3]`.
-    fn s3_mock_handle(mut stream: std::net::TcpStream) {
+    /// returns `list_xml`, PUTs are acknowledged, other GETs return `[1,2,3]`.
+    fn s3_mock_handle(mut stream: std::net::TcpStream, list_xml: &'static str) {
         use std::io::{Read, Write};
         let mut buf = Vec::new();
         let mut chunk = [0u8; 4096];
@@ -376,7 +393,7 @@ mod tests {
             buf.extend_from_slice(&chunk[..n]);
         }
         let body: Vec<u8> = if is_list {
-            LIST_V2_XML.as_bytes().to_vec()
+            list_xml.as_bytes().to_vec()
         } else if is_put {
             Vec::new()
         } else {
@@ -390,15 +407,19 @@ mod tests {
         let _ = stream.write_all(&body);
     }
 
-    fn spawn_s3_mock() -> std::net::SocketAddr {
+    fn spawn_s3_mock_with_xml(list_xml: &'static str) -> std::net::SocketAddr {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("mock listener");
         let addr = listener.local_addr().expect("mock addr");
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
-                std::thread::spawn(move || s3_mock_handle(stream));
+                std::thread::spawn(move || s3_mock_handle(stream, list_xml));
             }
         });
         addr
+    }
+
+    fn spawn_s3_mock() -> std::net::SocketAddr {
+        spawn_s3_mock_with_xml(LIST_V2_XML)
     }
     fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
         RemoteSettings {
@@ -447,6 +468,23 @@ mod tests {
             assert_eq!(objects.len(), 1);
             assert_eq!(objects[0].key, "vaults/a.kdbx");
             assert_eq!(objects[0].size, 3);
+        });
+    }
+
+    /// The list must not filter to `.kdbx` only: every object shows, with
+    /// databases first and then keys descending.
+    #[test]
+    fn s3_list_objects_async_lists_all_objects_kdbx_first() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("rt");
+        let cfg = mock_config(spawn_s3_mock_with_xml(MIXED_V2_XML));
+        rt.block_on(async move {
+            let objects = list_objects_async(cfg).await.expect("list");
+            let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+            assert_eq!(keys, ["vaults/z.kdbx", "vaults/a.kdbx", "vaults/notes.txt"]);
         });
     }
 
