@@ -281,6 +281,10 @@ pub struct VaultSession {
     remote: Option<RemoteTarget>,
     revision: u64,
     cached_snapshot: Option<(u64, VaultState)>,
+    /// Groups created in the current session. An empty group is kept visible
+    /// while it is brand-new (so the user can immediately add entries to it)
+    /// and is filtered out again once the vault is reopened.
+    session_groups: Vec<String>,
 }
 
 /// Wipe a secret `String` in place, then drop it (buffer is zeroed before
@@ -632,6 +636,7 @@ impl VaultSession {
         self.modified_at.clear();
         self.remote = None;
         self.cached_snapshot = None;
+        self.session_groups.clear();
     }
 
     pub fn state(&mut self) -> Result<Option<VaultState>, String> {
@@ -1092,7 +1097,7 @@ impl VaultSession {
         if name.is_empty() {
             return Err("分组名称不能为空".to_owned());
         }
-        {
+        let new_uuid = {
             let db = self.require_db_mut()?;
             let mut parent = match input.parent_uuid.as_deref() {
                 None | Some(ROOT_GROUP_UUID) => db.root_mut(),
@@ -1108,7 +1113,9 @@ impl VaultSession {
                 Some(icon_id) => group.set_icon_builtin(icon_id as usize),
                 None => group.set_icon_none(),
             }
-        }
+            group.id().uuid().to_string()
+        };
+        self.session_groups.push(new_uuid);
         self.mark_dirty();
         self.snapshot()
     }
@@ -1167,6 +1174,7 @@ impl VaultSession {
             local_dir: local_dir.to_path_buf(),
             backup_count,
         });
+        self.session_groups.clear();
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         self.password = Some(password.to_owned());
         self.keyfile = keyfile;
@@ -1181,6 +1189,7 @@ impl VaultSession {
     /// remote target from a previous session is dropped: saving a local vault
     /// must never upload to a stale S3 target.
     fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
+        self.session_groups.clear();
         self.path = Some(path.to_string_lossy().into_owned());
         self.password = Some(password.to_owned());
         self.keyfile = keyfile;
@@ -1234,7 +1243,7 @@ impl VaultSession {
                 .and_then(|s| s.to_str())
                 .unwrap_or(path)
                 .to_owned(),
-            root: build_group_tree(db),
+            root: build_group_tree(db, &self.session_groups),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
         };
@@ -1435,7 +1444,7 @@ impl VaultSession {
 // Serialization
 // ---------------------------------------------------------------------------
 
-fn build_group_tree(db: &Database) -> VaultGroup {
+fn build_group_tree(db: &Database, session_groups: &[String]) -> VaultGroup {
     let root_ref = db.root();
     VaultGroup {
         uuid: ROOT_GROUP_UUID.to_owned(),
@@ -1445,7 +1454,9 @@ fn build_group_tree(db: &Database) -> VaultGroup {
         is_recycle_bin: false,
         children: root_ref
             .groups()
-            .map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
+            .filter_map(|g| {
+                build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid, session_groups)
+            })
             .collect(),
         entries: root_ref
             .entries()
@@ -1454,13 +1465,30 @@ fn build_group_tree(db: &Database) -> VaultGroup {
     }
 }
 
+/// Build a single group's visible tree node. Returns `None` for an "empty"
+/// group — one that holds no entries and whose descendants (after filtering)
+/// are also empty. A group created during the current session is an
+/// exception: it stays visible until the vault is reopened, so the user can
+/// immediately start adding entries into it.
 fn build_group(
     group: &GroupRef<'_>,
     parent_uuid: &str,
     recyclebin_uuid: Option<Uuid>,
-) -> VaultGroup {
+    session_groups: &[String],
+) -> Option<VaultGroup> {
     let uuid = group.id().uuid().to_string();
-    VaultGroup {
+    let children = group
+        .groups()
+        .filter_map(|g| build_group(&g, &uuid, recyclebin_uuid, session_groups))
+        .collect::<Vec<_>>();
+    let entries = group
+        .entries()
+        .map(|e| build_entry(&e, &uuid))
+        .collect::<Vec<_>>();
+    if entries.is_empty() && children.is_empty() && !session_groups.iter().any(|s| s == &uuid) {
+        return None;
+    }
+    Some(VaultGroup {
         uuid: uuid.clone(),
         parent_uuid: Some(parent_uuid.to_owned()),
         name: group.name.clone(),
@@ -1469,12 +1497,9 @@ fn build_group(
             _ => None,
         },
         is_recycle_bin: Some(group.id().uuid()) == recyclebin_uuid,
-        children: group
-            .groups()
-            .map(|g| build_group(&g, &uuid, recyclebin_uuid))
-            .collect(),
-        entries: group.entries().map(|e| build_entry(&e, &uuid)).collect(),
-    }
+        children,
+        entries,
+    })
 }
 
 fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
@@ -2504,20 +2529,38 @@ mod tests {
         assert_eq!(state.root.children[0].entries.len(), 3);
         assert!(state.root.children[0].is_recycle_bin);
 
-        // Second pass permanently deletes the recycled entries.
+        // Second pass permanently deletes the recycled entries; the now-empty
+        // recycle bin no longer occupies a slot in the tree.
         let state = session.delete_entries(&uuids).unwrap();
-        assert_eq!(state.root.children[0].entries.len(), 0);
+        assert!(state.root.children.iter().all(|g| !g.is_recycle_bin));
     }
 
     #[test]
     fn save_clears_dirty_and_persists() {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
-        session
+        let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
                 icon: None,
                 name: "Mail".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Inbox".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let saved = session.save().unwrap();
@@ -2528,6 +2571,7 @@ mod tests {
         let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
+        assert_eq!(state.root.children[0].entries.len(), 1);
     }
 
     #[test]
@@ -2566,11 +2610,27 @@ mod tests {
     fn concurrent_edit_during_save_keeps_dirty_flag() {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
-        session
+        let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
                 icon: None,
                 name: "Mail".into(),
+            })
+            .unwrap();
+        session
+            .add_entry(&EntryInput {
+                group_uuid: state.root.children[0].uuid.clone(),
+                title: "Inbox".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         // An edit lands between the save's prepare (locked) and completion
@@ -2587,6 +2647,76 @@ mod tests {
         let state = reopened.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
+        assert_eq!(state.root.children[0].entries.len(), 1);
+    }
+
+    #[test]
+    fn empty_groups_visible_in_session_but_hidden_after_reopen() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+
+        // A freshly created empty group is visible so the user can populate it.
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "New".into(),
+            })
+            .unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "New");
+        assert!(state.root.children[0].entries.is_empty());
+
+        // Even without saving, re-reading the session keeps it visible.
+        let again = session.state().unwrap().unwrap();
+        assert_eq!(again.root.children.len(), 1);
+
+        // Once persisted and reopened, the still-empty group is filtered out.
+        session.save().unwrap();
+        drop(session);
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert!(
+            state.root.children.is_empty(),
+            "empty group must not appear after reopening"
+        );
+    }
+
+    #[test]
+    fn empty_child_group_inherits_visibility_from_parent_content() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let parent = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Parent".into(),
+            })
+            .unwrap()
+            .root
+            .children[0]
+            .uuid
+            .clone();
+        // A nested group inside the parent is empty, but the parent holds it,
+        // so the whole subtree is visible.
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(parent.clone()),
+                icon: None,
+                name: "EmptyChild".into(),
+            })
+            .unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].children.len(), 1);
+        session.save().unwrap();
+        drop(session);
+
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert!(
+            state.root.children.is_empty(),
+            "subtree with no entries anywhere should be hidden after reopen"
+        );
     }
 
     #[test]
@@ -2851,26 +2981,22 @@ mod tests {
         session.delete_entry(&entry_uuid).unwrap();
         session.empty_recycle_bin().unwrap();
         let state = session.state().unwrap().unwrap();
-        let bin = state
-            .root
-            .children
-            .iter()
-            .find(|g| g.is_recycle_bin)
-            .unwrap();
-        assert!(bin.entries.is_empty());
+        // The recycle bin now holds nothing, so it is filtered out of the
+        // tree like any other empty group.
+        assert!(
+            !state.root.children.iter().any(|g| g.is_recycle_bin),
+            "empty recycle bin should be hidden"
+        );
         session.save().unwrap();
         drop(session);
 
         let mut reopened = VaultSession::default();
         let state = reopened.open(&path, "master-password", None).unwrap();
         assert!(state.root.entries.is_empty());
-        let bin = state
-            .root
-            .children
-            .iter()
-            .find(|g| g.is_recycle_bin)
-            .unwrap();
-        assert!(bin.entries.is_empty());
+        assert!(
+            !state.root.children.iter().any(|g| g.is_recycle_bin),
+            "empty recycle bin should not reappear after reopen"
+        );
     }
 
     #[test]
@@ -3514,11 +3640,27 @@ mod tests {
         assert_eq!(state.root.name, "Root");
 
         let mut session = reopened;
-        session
+        let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
                 icon: None,
                 name: "Mail".into(),
+            })
+            .unwrap();
+        session
+            .add_entry(&EntryInput {
+                group_uuid: state.root.children[0].uuid.clone(),
+                title: "Inbox".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         session.save().unwrap();
@@ -3716,11 +3858,27 @@ mod tests {
         assert_eq!(state.path, "s3://vaults/seed.kdbx");
         assert_eq!(state.file_name, "seed.kdbx");
 
-        session
+        let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
                 icon: None,
                 name: "Web".into(),
+            })
+            .unwrap();
+        session
+            .add_entry(&EntryInput {
+                group_uuid: state.root.children[0].uuid.clone(),
+                title: "Site".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         let saved = session.save().unwrap();
@@ -3740,6 +3898,7 @@ mod tests {
             .unwrap();
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Web");
+        assert_eq!(state.root.children[0].entries.len(), 1);
     }
 
     #[test]
@@ -3999,11 +4158,27 @@ mod tests {
         assert_eq!(state.path, "s3://new/vault.kdbx");
         assert!(storage.get("new/vault.kdbx").is_ok());
 
-        session
+        let state = session
             .add_group(&GroupInput {
                 parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
                 icon: None,
                 name: "Web".into(),
+            })
+            .unwrap();
+        session
+            .add_entry(&EntryInput {
+                group_uuid: state.root.children[0].uuid.clone(),
+                title: "Site".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
             })
             .unwrap();
         session.save().unwrap();
@@ -4021,6 +4196,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(state.root.children[0].name, "Web");
+        assert_eq!(state.root.children[0].entries.len(), 1);
     }
 
     #[test]
