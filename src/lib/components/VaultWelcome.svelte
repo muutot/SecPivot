@@ -7,6 +7,7 @@
   import type { RemoteMode, RemoteObject } from "$lib/types/vault";
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import Select from "$lib/components/Select.svelte";
 
   interface Props {
     onopened: () => void;
@@ -432,16 +433,13 @@
           <div class="field">
             <span>远程配置</span>
             <div class="profile-bar">
-              <select
-                class="text-input profile-select"
+              <Select
+                className="profile-select"
                 value={settings.activeRemote}
-                aria-label="远程配置"
-                onchange={(e) => appSettings.setActiveRemote(Number(e.currentTarget.value))}
-              >
-                {#each settings.remoteProfiles as profile, i (i)}
-                  <option value={i}>{profile.name}</option>
-                {/each}
-              </select>
+                ariaLabel="远程配置"
+                options={settings.remoteProfiles.map((p, i) => ({ value: i, label: p.name }))}
+                onchange={(v) => appSettings.setActiveRemote(Number(v))}
+              />
               <button
                 class="welcome-button"
                 type="button"
@@ -1159,7 +1157,7 @@
     align-items: center;
   }
 
-  .profile-select {
+  :global(.profile-select) {
     flex: 1;
   }
 

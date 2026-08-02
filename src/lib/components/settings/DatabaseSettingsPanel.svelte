@@ -2,6 +2,7 @@
   import { appSettings } from "$lib/services/settings";
   import type { Cipher, Compression, Kdf } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import Select from "$lib/components/Select.svelte";
 
   interface Props {
     onclose: () => void;
@@ -70,14 +71,14 @@
           <strong>加密算法</strong>
           <p>数据库对称加密标准</p>
         </div>
-        <select
-          class="settings-select"
+        <Select
           value={s.database.cipher}
-          onchange={(e) => appSettings.updateDatabase("cipher", e.currentTarget.value as Cipher)}
-        >
-          <option value="Aes256">AES-256</option>
-          <option value="ChaCha20">ChaCha20</option>
-        </select>
+          options={[
+            { value: "Aes256", label: "AES-256" },
+            { value: "ChaCha20", label: "ChaCha20" },
+          ]}
+          onchange={(v) => appSettings.updateDatabase("cipher", v as Cipher)}
+        />
       </div>
     </div>
   </section>
@@ -90,15 +91,14 @@
           <strong>压缩</strong>
           <p>数据库内容压缩方式</p>
         </div>
-        <select
-          class="settings-select"
+        <Select
           value={s.database.compression}
-          onchange={(e) =>
-            appSettings.updateDatabase("compression", e.currentTarget.value as Compression)}
-        >
-          <option value="None">不压缩</option>
-          <option value="Gzip">Gzip</option>
-        </select>
+          options={[
+            { value: "None", label: "不压缩" },
+            { value: "Gzip", label: "Gzip" },
+          ]}
+          onchange={(v) => appSettings.updateDatabase("compression", v as Compression)}
+        />
       </div>
     </div>
   </section>

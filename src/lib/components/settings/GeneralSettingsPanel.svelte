@@ -2,6 +2,7 @@
   import { appSettings } from "$lib/services/settings";
   import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import Select from "$lib/components/Select.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
   type Section = "appearance" | "display" | "compact";
@@ -242,15 +243,15 @@
             <strong>窗口效果</strong>
             <p>Windows 平台背景材质</p>
           </div>
-          <select
-            class="settings-select"
+          <Select
             value={general.windowEffect}
-            onchange={(e) => change("windowEffect", e.currentTarget.value as WindowEffect)}
-          >
-            <option value="off">关闭</option>
-            <option value="acrylic">亚克力</option>
-            <option value="mica">云母</option>
-          </select>
+            options={[
+              { value: "off", label: "关闭" },
+              { value: "acrylic", label: "亚克力" },
+              { value: "mica", label: "云母" },
+            ]}
+            onchange={(v) => change("windowEffect", v as WindowEffect)}
+          />
         </div>
       </div>
     </section>

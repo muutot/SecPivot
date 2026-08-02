@@ -2,6 +2,7 @@
   import { appSettings } from "$lib/services/settings";
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import Select from "$lib/components/Select.svelte";
 
   interface Props {
     onclose: () => void;
@@ -50,17 +51,14 @@
           <p>选择当前使用的远程配置，可维护多套并存</p>
         </div>
       </div>
-      <select
+      <Select
         id="remote-profile-select"
-        class="settings-select setting-row-input"
+        className="profile-picker"
         value={s.activeRemote}
-        aria-label="远程配置"
-        onchange={(e) => appSettings.setActiveRemote(Number(e.currentTarget.value))}
-      >
-        {#each s.remoteProfiles as profile, i (i)}
-          <option value={i}>{profile.name}</option>
-        {/each}
-      </select>
+        ariaLabel="远程配置"
+        options={s.remoteProfiles.map((p, i) => ({ value: i, label: p.name }))}
+        onchange={(v) => appSettings.setActiveRemote(Number(v))}
+      />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -263,6 +261,11 @@
 </div>
 
 <style>
+  :global(.profile-picker) {
+    flex: 0 0 200px;
+    width: 200px;
+  }
+
   .profile-actions {
     display: flex;
     gap: 8px;

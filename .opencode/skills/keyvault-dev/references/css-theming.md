@@ -95,7 +95,7 @@ The settings shell defines the settings scope variables consumed by shell and ch
 - `.setting-card`, `.toggle-card`, `.setting-heading`, `.setting-icon`, `.heading-inline`, `.value-label`;
 - `.toggle-switch`, `.toggle-knob` and active/disabled states;
 - `.transparency-slider` including WebKit and Firefox tracks/thumbs;
-- `.settings-input` / `.settings-select` control styles;
+- `.settings-input` / `.settings-select` control styles (`.settings-select` is legacy — new code uses the shared `Select.svelte` component);
 - `.settings-feedback` success/error states;
 - `.auto-save-note` and the default pointer cursor for buttons.
 
@@ -117,7 +117,7 @@ Do not use a parent scoped selector to style inside a child Svelte component. Pa
 - Toggle card: label/icon/description on the left, switch on the right in one row.
 - Slider card: heading/value on one row, unwrapped `input[type="range"].transparency-slider` below, and `--slider-pct` updated from the current value.
 - Number input: use textfield appearance and hide WebKit spin buttons.
-- Select: keep the native affordance unless a replacement is deliberately handled; use settings control size/radius/colors.
+- Select: use the shared `Select.svelte` component (self-drawn trigger + fixed-position listbox, keyboard nav, `role="combobox"`/`listbox`); never introduce raw `<select>` markup. Trigger matches settings control size/radius/colors; the list is a `--surface-bg` popover at the popover z-index with a short pop-in animation that respects reduced motion.
 - Feedback: use `.settings-feedback` with `.success`; keep it dismissible by time and accessible.
 - Buttons and inputs need visible focus. Never remove outline without a replacement.
 - Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.
