@@ -2494,14 +2494,12 @@ fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Validate an S3 object key for a vault file.
+/// Validate an S3 object key for a vault file. Keys need not end in `.kdbx`:
+/// whether the object really is a database is decided by the KDBX parse.
 fn validate_remote_key(key: &str) -> Result<String, String> {
     let key = key.trim().trim_start_matches('/').to_owned();
     if key.is_empty() {
         return Err("远程文件 Key 不能为空".to_owned());
-    }
-    if !key.ends_with(".kdbx") {
-        return Err("远程文件必须以 .kdbx 结尾".to_owned());
     }
     Ok(key)
 }
@@ -4618,7 +4616,7 @@ mod tests {
                 3,
             )
             .unwrap_err();
-        assert!(err.contains("kdbx"));
+        assert!(err.contains("下载"));
 
         let err = session
             .open_remote(
@@ -4637,6 +4635,46 @@ mod tests {
         assert!(err.contains("模式"));
         assert_eq!(RemoteMode::parse("memory").unwrap(), RemoteMode::InMemory);
         assert_eq!(RemoteMode::parse("local").unwrap(), RemoteMode::SaveLocal);
+    }
+
+    #[test]
+    fn remote_opens_database_under_any_key_name() {
+        let dir = TempDir::new().unwrap();
+        let (storage, seed_path) = seed_remote_storage(&dir);
+        let storage = Arc::new(storage);
+        let local = dir.path().join("local");
+        let seed_bytes = std::fs::read(&seed_path).unwrap();
+
+        // A valid database under a key WITHOUT a `.kdbx` suffix opens normally.
+        storage.seed("vaults/backup-noext", seed_bytes.clone());
+        let mut session = VaultSession::default();
+        let state = session
+            .open_remote(
+                storage.clone(),
+                "vaults/backup-noext",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap();
+        assert_eq!(state.path, "s3://vaults/backup-noext");
+
+        // A non-database object under any key name fails at parse with a clear error.
+        storage.seed("vaults/notes", b"not a kdbx at all".to_vec());
+        let err = session
+            .open_remote(
+                storage.clone(),
+                "vaults/notes",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local,
+                3,
+            )
+            .unwrap_err();
+        assert!(err.contains("无法打开数据库"));
     }
 
     #[test]
