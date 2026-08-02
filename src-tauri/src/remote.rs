@@ -9,11 +9,21 @@ use crate::config::RemoteSettings;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use tauri::Manager;
 
 /// Prefix used for the display path of remote vaults (`s3://<key>`).
 pub const REMOTE_URI_PREFIX: &str = "s3://";
+
+/// A single process-wide tokio runtime shared by every S3 transport. Creating
+/// a runtime per command would spin up (and tear down) a full thread pool on
+/// each list/open/save, which is measurable overhead on hot paths.
+fn shared_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Runtime::new().expect("无法初始化 S3 运行时: tokio 资源不足")
+    })
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +47,7 @@ pub trait RemoteStorage: Send + Sync {
 
 pub struct S3Storage {
     bucket: s3::Bucket,
-    runtime: tokio::runtime::Runtime,
+    runtime: &'static tokio::runtime::Runtime,
 }
 
 impl S3Storage {
@@ -69,9 +79,10 @@ impl S3Storage {
         let mut bucket = s3::Bucket::new(bucket_name, region, credentials)
             .map_err(|e| format!("S3 配置无效: {e}"))?;
         bucket.set_path_style();
-        let runtime =
-            tokio::runtime::Runtime::new().map_err(|e| format!("S3 运行时初始化失败: {e}"))?;
-        Ok(Self { bucket, runtime })
+        Ok(Self {
+            bucket,
+            runtime: shared_runtime(),
+        })
     }
 
     fn object_key(key: &str) -> String {
@@ -252,5 +263,15 @@ mod tests {
         assert_eq!(sanitize_dir_name("my vaults"), "my_vaults");
         assert_eq!(sanitize_dir_name("..\\..\\evil"), "______evil");
         assert_eq!(sanitize_dir_name("safe-dir_1"), "safe-dir_1");
+    }
+
+    /// S3 transports must share one process-wide runtime: a fresh thread pool
+    /// per command would defeat its purpose. Both calls must resolve to the
+    /// exact same instance.
+    #[test]
+    fn s3_uses_a_single_shared_runtime() {
+        let a = shared_runtime() as *const _;
+        let b = shared_runtime() as *const _;
+        assert!(std::ptr::eq(a, b));
     }
 }
