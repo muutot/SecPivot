@@ -1243,7 +1243,7 @@
 {#if editorOpen}
   <EntryEditorDialog
     mode={editorMode}
-    groups={currentVault?.root.children ?? []}
+    groups={currentVault ? [currentVault.root] : []}
     groupUuid={selectedGroup ?? currentVault?.root.uuid ?? "root"}
     entry={editEntry}
     onclose={() => (editorOpen = false)}
