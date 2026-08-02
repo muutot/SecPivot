@@ -75,4 +75,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 浏览器集成(调研完成,提案见 `docs/browser-integration.md`)
 
 - [~] Phase 1 — KeePassHttp 兼容协议:后台 loopback HTTP 服务(`associate`/`test-associate`/`get-logins`/`get-logins-count`/`set-login`/`generate-password`),AES-256-CBC 逐字段加密 + HMAC-SHA256;匹配复用 `VaultSession::autotype_match` 评分,skips 回收站;associate 密钥存会话内、锁定即销毁。已交付:`bridge.rs`(协议核心,19 测试含 NIST SP 800-38A/RFC 4231 向量)、`bridge_server.rs`(127.0.0.1:19455 服务 + 审批板 + 生命周期,7 测试)、`VaultSession` 桥接(5 测试)、设置「集成」面板(开关/状态/已授权客户端管理)+ 全局关联审批提示,共 132 后端测试通过 (🚧 真机浏览器扩展验证不可行,离线仅协议级测试)
-- [ ] Phase 2 (optional) — KeePassRPC (SRP + WebSocket + AES JSON-RPC) 或 KeePassXC-Browser(native messaging + manifest;同名冲突待决) —— Phase 1 架构验证后再立项
+- [ ] Phase 2 — KeePassRPC 兼容(SRP-6a + WebSocket :12546 + AES JSON-RPC)——**已立项**:协议规格已从 Kee 4.0.7 官方扩展源码提取(`docs/browser-integration.md` Phase 2 细则)。实施顺序:rpc.rs 协议核心(SRP-6a 512-bit 群 + 密钥认证 + AES-256-CBC/HMAC-SHA1 帧 + v1 方法/DTO)→ rpc_server.rs(WS loopback + 生命周期 + 会话密钥驻留)→ 前端(设置分区 + SRP 旁路密码对话框)→ 文档与验证。(🚧 真机 Kee 扩展验证不可行,离线仅协议级自洽测试)
+- [ ] Phase 2b (post) — KeePassRPC 写路径(AddLogin/UpdateEntry)、Kee Vault 事件会话(BROWSER_SETTINGS_SYNC) —— 待 Phase 2 主路径验证后再立项

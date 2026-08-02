@@ -46,10 +46,24 @@
 - HTTP 本体是明文 JSON,但敏感字段密文 + HMAC;错误日志不打印解密明文。
 - 首次 `associate` 需要用户在桌面端手动批准:后端发 `bridge-associate-request` 事件(载荷 `{ token, id }`,不含密钥),前端审批提示组件调用 `bridge_approve`;120 s 未答复自动拒绝。
 
-### Phase 2(可选、后置):KeePassRPC 或 KeePassXC 协议
+### Phase 2(已立项):KeePassRPC 兼容(SRP-6a + WebSocket + AES JSON-RPC)
 
-- KeePassRPC 需要 SRP(rust `srp` crate)+ WebSocket(`tokio-tungstenite`)+ AES JSON-RPC,单次 SRP 实现与测试成本明显高于 Phase 1;仅在 Phase 1 架构验证后再立项。
-- KeePassXC-Browser 需在 Phase 完成的「后台 loopback 服务 + 密钥杂凑」基础上加原生宿主(manifest + Windows 注册表桥)。天然冲突问题需先解决以确认是否接入。
+服务对象:**Kee 官方扩展**(Chrome/Edge/Firefox),协议规格以 Kee 4.0.7 扩展源码(AMO `keefox-4.0.7.xpi`)为权威参考。架构沿用 Phase 1 的双模块切分:`rpc.rs`(纯协议,无 socket,可离线单测)+ `rpc_server.rs`(WS loopback 服务 + 生命周期)。
+
+- **传输**:WebSocket `ws://127.0.0.1:12546`(tungstenite,thread-per-connection,与 `bridge_server.rs` 同模式)。扩展先以 `fetch` 探测 `http://127.0.0.1:12546/pingAvailabilityTest`,**期望 HTTP 404** 才发起 WS——普通 HTTP 请求一律回 404,仅 Upgrade 握手由 WS 处理。
+- **信封**(所有消息):`{protocol: "setup"|"jsonrpc"|"error", srp?, key?, jsonrpc?, error?, version: int, features?, clientTypeId?, clientDisplayName?, clientDisplayDescription?}`。`version` 是 24 位整数(大端三字节 = major.minor.patch;Kee 2.0.0 → 131072)。
+- **SRP-6a(KeePassRPC 变体)**:
+  - 群参数:`N` = 512-bit 常量 `d4c7f8a2b32c11b8fba9581ec4ba4f1b04215642ef7355e37c0fc0443ef756ea2c6b8eeb755a1c723027663caa265ef785b8ff6a9b35227a52d86633dbdfca43`(hex),`g = 2`,`k = b7867f1299da8cc24ab93e08986ebc4d6a478ad0`(固定 SHA-1 常量)。
+  - `H()` = SHA-256,作用于 **hex 字符串拼接**;`x = H(s‖p)`,`v = g^x mod N`,`u = H(A‖B)`,`B = (kv + g^b) mod N`,`S = (A·v^u)^b mod N`;客户端证明 `M = H(A‖B‖S)`(全大写 hex 拼接,输出小写 hex),服务端证明 `M2 = H(A大写‖M‖S大写)`;会话密钥 `K = H(S大写hex)` 小写 hex(= 32 字节,即 secretKey)。
+  - 握手(服务端视角):`identifyToServer{I, A, securityLevel}` → 服务端生成旁路密码 p(桌面端显示,用户抄入扩展对话框)+ 盐 s + b,发 `identifyToClient{s, B, securityLevel, features}` → `proofToServer{M}` → 校验 M 后发 `proofToClient{M2}`。
+- **密钥认证(1b)**:`key{username, securityLevel}` → 服务端随机 `sc`,发 `key{sc, securityLevel, features}` → `key{cc, cr}`(cr = SHA256("1"‖secret‖sc‖cc) 小写 hex)→ 校验后发 `key{sr}`(sr = SHA256("0"‖secret‖sc‖cc))。密钥按 username 存会话内(与 bridge_keys 同理,锁定即销毁;扩展侧自动回退 SRP 重新授权)。
+- **JSON-RPC 帧**:AES-256-CBC + PKCS7(iv 16 随机字节),`hmac = base64(SHA1(SHA1(key字节)‖密文‖iv))`;帧 `{message, iv, hmac}`。每条消息独立 IV。
+- **方法(v1 名,Kee 4.0.7 实际调用)**:`GetAllDatabases(null)` → `[DatabaseDTO]`;`FindLogins([urls, null, httpRealm, "LSTnoForms", false, uuid, dbFileName, freeText, username])` → `[EntryDTO + {db: DatabaseSummaryDTO}]`;`GetPasswordProfiles(null)` → `[名称]`;`GeneratePassword([profileName, url])` → 口令字符串;`AddLogin([EntryDTO, parentUUID, dbFileName])` / `UpdateLogin([EntryDTO, oldLoginUUID, urlMergeMode, dbFileName])` → EntryDTO + db(Phase 2b);`OpenAndFocusDatabase`/`ChangeDatabase`/`LaunchGroupEditor`/`LaunchLoginEditor` 返回空或错误。服务端可主动调用 `KPRPCListener`/`callBackToKeeFoxJS` 通知扩展。
+- **DTO 字段**(camelCase):`DatabaseDTO{name, fileName, iconImageData, root: GroupDTO, active}`;`GroupDTO{title, uniqueID, iconImageData, path, childLightEntries: [EntrySummaryDTO], childGroups: [GroupDTO]}`;`EntrySummaryDTO{iconImageData, usernameValue, usernameName, title, uRLs, uniqueID}`;`EntryDTO{uRLs, neverAutoFill, alwaysAutoFill, neverAutoSubmit, alwaysAutoSubmit, iconImageData, parent: GroupSummaryDTO, matchAccuracy, hTTPRealm, uniqueID, title, formFieldList: [FieldDTO]}`;`FieldDTO{displayName, id, name, type: "FFTusername"|"FFTpassword"|"FFTtext"|"FFTradio"|"FFTcheckbox"|"FFTselect", value, page}`。用户名=首个 text 字段,口令=首个 password 字段。
+- **特性标志**:服务端必须包含客户端必需的 `["KPRPC_FEATURE_VERSION_1_6", "KPRPC_GENERAL_CLIENTS", "KPRPC_SECURITY_FIX_20200729"]`(在 identifyToClient 与 key.sc 响应中随 `features` 数组下发);securityLevel 双向检查,服务端发 3。
+- **错误码**:`AUTH_FAILED`/`AUTH_RESTART`/`AUTH_EXPIRED`/`AUTH_INVALID_PARAM`/`AUTH_MISSING_PARAM`/`AUTH_CLIENT_SECURITY_LEVEL_TOO_LOW`/`VERSION_CLIENT_TOO_LOW`/`UNRECOGNISED_PROTOCOL`/`INVALID_MESSAGE`,错误信封 `error{code, messageParams}`;认证失败后扩展自动清存根密钥并回退 SRP。
+- **安全约束(与 Phase 1 一致)**:仅 loopback;锁定时直接错误信封、不自动解锁;旁路密码只在桌面端展示、不入日志;SRP 中间态(K、密钥)存会话内,锁定即销毁;超时 120 s。
+- **依赖新增**:`num-bigint`(SRP 大数)、`tungstenite`(default-features 关闭,仅 handshake;std TcpStream 线程模式,不引入 async 运行时负担)。
 
 ## 对仓库的影响(已落实)
 
@@ -57,6 +71,7 @@
 - 设置面板新增「集成」分区(`BridgeSettingsPanel.svelte`:开关 + 服务状态 + 已授权客户端列表/移除)。
 - 全局关联审批提示 `BridgeApprovalPrompt.svelte`(挂 `+layout.svelte`,TCATO 窗口除外)。
 - `security-model.md` / `data-contracts.md` / `project-structure.md` 已增补对应章节。
+- Phase 2 计划:`rpc.rs` + `rpc_server.rs`、设置面板 KeePassRPC 分区、SRP 旁路密码对话框(桌面端展示随机密码,用户抄入 Kee 扩展)。
 
 ## 验证边界
 
