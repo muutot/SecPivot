@@ -815,7 +815,7 @@ mod tests {
             id: Some("browser-chrome".to_owned()),
             nonce: nonce_b64.clone(),
             verifier: Some(make_verifier(&key, &nonce)),
-            key: Some(STANDARD.encode(&key)),
+            key: Some(STANDARD.encode(key)),
             ..Default::default()
         };
         let mut host = MockHost::open();
@@ -872,7 +872,7 @@ mod tests {
             id: Some("denied-client".to_owned()),
             nonce: nonce_b64,
             verifier: Some(make_verifier(&key, &nonce)),
-            key: Some(STANDARD.encode(&key)),
+            key: Some(STANDARD.encode(key)),
             ..Default::default()
         };
         let response = handle_request(request, &mut host, |_| false);
