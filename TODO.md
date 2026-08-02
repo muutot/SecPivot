@@ -46,12 +46,13 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ## Stage 6 — S3 remote vaults
 
-- [x] S3 settings panel (`RemoteSettingsPanel.svelte`; endpoint/region/bucket/accessKey/secretKey/prefix/localDir/backupCount, plaintext keys per approved design)
+- [x] S3 settings panel (`RemoteSettingsPanel.svelte`; endpoint/region/bucket/accessKey/secretKey/prefix/localDir/backupCount, keys DPAPI-encrypted at rest on Windows)
 - [x] Remote transport: `RemoteStorage` trait + `S3Storage` (rust-s3 0.34, path-style for MinIO) + `MemoryStorage` fake
 - [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back to S3 for remote sessions
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<localDir>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3 objects, open (password + keyfile) and create remote vaults
 - [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport now covered by a local mock HTTP S3 server test: ListObjectsV2 XML parsing, path-style signing, get/put, bounded-timeout behavior — `remote::tests::*`; real-provider behavior still unverified)
+- [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`:后端存储/规范化/旧单配置自动迁移,命令按 profile 索引从 `ConfigStore` 解析凭据不跨 IPC,设置面板 profile 选择器(添加/重命名/删除/切换),欢迎页内联配置编辑当前 profile)
 
 ## Stage 7 — Feature gap list (priority order)
 
