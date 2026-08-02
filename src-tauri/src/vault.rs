@@ -3,6 +3,7 @@
 //! `src/lib/types/vault.ts`.
 
 use crate::autotype::{self, AutotypeContext};
+use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
@@ -285,6 +286,10 @@ pub struct VaultSession {
     /// while it is brand-new (so the user can immediately add entries to it)
     /// and is filtered out again once the vault is reopened.
     session_groups: Vec<String>,
+    /// Browser-bridge client keys (KeePassHttp `Id` → AES key). Session-held
+    /// only, never persisted: `close()` wipes them so the loopback server
+    /// cannot serve credentials while the vault is locked.
+    bridge_keys: HashMap<String, Vec<u8>>,
 }
 
 /// Wipe a secret `String` in place, then drop it (buffer is zeroed before
@@ -630,6 +635,9 @@ impl VaultSession {
         }
         if let Some(mut keyfile) = self.keyfile.take() {
             wipe_secret_bytes(&mut keyfile);
+        }
+        for (_, mut key) in self.bridge_keys.drain() {
+            wipe_secret_bytes(&mut key);
         }
         self.db = None;
         self.dirty = false;
@@ -1438,6 +1446,156 @@ impl VaultSession {
 
         Ok(format!("\u{FEFF}{}\r\n", lines.join("\r\n")))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Browser bridge (KeePassHttp) host
+// ---------------------------------------------------------------------------
+
+impl BridgeHost for VaultSession {
+    fn is_open(&self) -> bool {
+        self.is_open()
+    }
+
+    fn client_key(&self, id: &str) -> Option<Vec<u8>> {
+        self.bridge_keys.get(id).cloned()
+    }
+
+    fn register_client(&mut self, id: &str, key: Vec<u8>) {
+        self.bridge_keys.insert(id.to_owned(), key);
+    }
+
+    fn list_clients(&self) -> Vec<String> {
+        self.bridge_keys.keys().cloned().collect()
+    }
+
+    fn remove_client(&mut self, id: &str) -> bool {
+        self.bridge_keys.remove(id).is_some()
+    }
+
+    fn logins_for(&self, url: &str, submit_url: Option<&str>) -> Vec<BridgeLogin> {
+        let Ok(db) = self.require_db() else {
+            return Vec::new();
+        };
+        let bin_id = recycle_bin_id(db);
+        let mut out = Vec::new();
+        collect_bridge_logins(db.root(), bin_id, url, submit_url, &mut out);
+        out
+    }
+
+    fn db_hash(&self) -> String {
+        let Ok(db) = self.require_db() else {
+            return String::new();
+        };
+        bridge_db_hash(db)
+    }
+
+    fn set_login(
+        &mut self,
+        login: &str,
+        password: &str,
+        url: &str,
+        uuid: Option<&str>,
+    ) -> Result<(), String> {
+        let uuid = uuid.unwrap_or_default();
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
+            entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
+            entry.set(FIELD_URL, Value::unprotected(url.to_owned()));
+        }
+        self.mark_dirty();
+        Ok(())
+    }
+
+    fn create_login(&mut self, login: &str, password: &str, url: &str) -> Result<(), String> {
+        let title = bridge_entry_title(url);
+        {
+            let db = self.require_db_mut()?;
+            let mut root = db.root_mut();
+            let mut entry = root.add_entry();
+            entry.set(FIELD_TITLE, Value::unprotected(title));
+            entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
+            entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
+            entry.set(FIELD_URL, Value::unprotected(url.to_owned()));
+            entry.set_icon_none();
+        }
+        self.mark_dirty();
+        Ok(())
+    }
+}
+
+/// Title for entries created by the browser bridge: the URL host, or the raw
+/// URL when it has no parseable host.
+fn bridge_entry_title(url: &str) -> String {
+    let host = url_host(url);
+    if host.is_empty() {
+        url.trim().to_owned()
+    } else {
+        host
+    }
+}
+
+/// Depth-first scan for bridge logins matching the request URL (or its
+/// submit URL). The recycle bin subtree is skipped entirely.
+fn collect_bridge_logins(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    url: &str,
+    submit_url: Option<&str>,
+    out: &mut Vec<BridgeLogin>,
+) {
+    if bin_id == Some(group.id()) {
+        return;
+    }
+    let url = url.to_lowercase();
+    let submit_url = submit_url.map(str::to_lowercase);
+    for entry in group.entries() {
+        let entry_url = entry.get(FIELD_URL).unwrap_or_default().to_lowercase();
+        let matches = bridge_host_matches(&entry_url, &url)
+            || submit_url
+                .as_deref()
+                .is_some_and(|s| bridge_host_matches(&entry_url, s));
+        if matches {
+            out.push(BridgeLogin {
+                uuid: entry.id().uuid().to_string(),
+                name: entry.get_title().unwrap_or_default().to_owned(),
+                login: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                password: entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
+            });
+        }
+    }
+    for child in group.groups() {
+        collect_bridge_logins(child, bin_id, url.as_str(), submit_url.as_deref(), out);
+    }
+}
+
+/// Host-level URL match: exact host equality, or one host covering the other
+/// as a domain suffix (`example.com` ↔ `www.example.com`). Empty hosts never
+/// match, so entries without a URL are invisible to the bridge.
+fn bridge_host_matches(entry_url: &str, request_url: &str) -> bool {
+    let entry_host = url_host(entry_url);
+    let request_host = url_host(request_url);
+    if entry_host.is_empty() || request_host.is_empty() {
+        return false;
+    }
+    entry_host == request_host
+        || request_host.ends_with(&format!(".{entry_host}"))
+        || entry_host.ends_with(&format!(".{request_host}"))
+}
+
+/// KeePassHttp database hash: SHA1 of (root uuid bytes + recycle-bin uuid
+/// bytes), hex-encoded, as a change signal for browser extensions.
+fn bridge_db_hash(db: &Database) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(db.root().id().uuid().as_bytes());
+    if let Some(bin) = db.meta.recyclebin_uuid {
+        hasher.update(bin.as_bytes());
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 // ---------------------------------------------------------------------------
@@ -4511,5 +4669,203 @@ mod tests {
         assert_eq!(parse_expiry(Some("")), None);
         assert_eq!(parse_expiry(None), None);
         assert_eq!(parse_expiry(Some("not-a-date")), None);
+    }
+
+    // -- browser bridge (KeePassHttp) --------------------------------------
+
+    fn entry_input(
+        group_uuid: &str,
+        title: &str,
+        username: &str,
+        password: &str,
+        url: &str,
+    ) -> EntryInput {
+        EntryInput {
+            group_uuid: group_uuid.to_owned(),
+            title: title.to_owned(),
+            username: username.to_owned(),
+            password: password.to_owned(),
+            url: url.to_owned(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn bridge_client_keys_are_session_held_and_wiped_on_close() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        assert_eq!(session.list_clients(), Vec::<String>::new());
+        assert!(session.client_key("browser-a").is_none());
+
+        session.register_client("browser-a", vec![1u8; 32]);
+        session.register_client("browser-b", vec![2u8; 32]);
+        assert_eq!(session.client_key("browser-a").unwrap(), vec![1u8; 32]);
+        assert!(session.list_clients().contains(&"browser-a".to_owned()));
+        assert!(session.list_clients().contains(&"browser-b".to_owned()));
+
+        assert!(session.remove_client("browser-a"));
+        assert!(!session.remove_client("browser-a"));
+        assert_eq!(session.list_clients(), vec!["browser-b".to_owned()]);
+
+        session.close();
+        assert!(!session.is_open());
+        assert_eq!(session.list_clients(), Vec::<String>::new());
+        assert!(session.client_key("browser-b").is_none());
+    }
+
+    #[test]
+    fn bridge_logins_match_host_and_subdomains_but_not_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let root = ROOT_GROUP_UUID.to_owned();
+
+        let state = session
+            .add_entry(&entry_input(
+                &root,
+                "主站",
+                "user@example",
+                "pw-1",
+                "https://example.com",
+            ))
+            .unwrap();
+        let _ = state;
+        session
+            .add_entry(&entry_input(
+                &root,
+                "子域",
+                "user@www",
+                "pw-2",
+                "https://www.example.com",
+            ))
+            .unwrap();
+        let state = session
+            .add_entry(&entry_input(
+                &root,
+                "无关",
+                "user@else",
+                "pw-3",
+                "https://elsewhere.io",
+            ))
+            .unwrap();
+        let www_uuid = state.root.entries[1].uuid.clone();
+        let other_uuid = state.root.entries[2].uuid.clone();
+        let _ = other_uuid;
+
+        // Exact host, subdomain-of, and superdomain-of all match.
+        let logins = session.logins_for("https://example.com/login", None);
+        assert_eq!(logins.len(), 2);
+        assert!(logins.iter().any(|l| l.login == "user@www"));
+
+        // A request subdomain matches the bare entry host only.
+        let logins = session.logins_for("https://sub.example.com", None);
+        assert_eq!(logins.len(), 1);
+        assert_eq!(logins[0].login, "user@example");
+
+        // Submit URL can match too (elsewhere + example.com + www.example.com).
+        let logins = session.logins_for("https://elsewhere.io", Some("https://example.com"));
+        assert_eq!(logins.len(), 3);
+
+        // No URL at all matches nothing.
+        let logins = session.logins_for("https://example.com", None);
+        assert!(logins.iter().all(|l| !l.uuid.is_empty()));
+        assert!(session.logins_for("", None).is_empty());
+        assert!(session.logins_for("https://nomatch.xyz", None).is_empty());
+
+        // Entries moved to the recycle bin are invisible to the bridge.
+        session.delete_entry(&www_uuid).unwrap();
+        let logins = session.logins_for("https://www.example.com", None);
+        assert!(logins.iter().all(|l| l.uuid != www_uuid));
+        let logins = session.logins_for("https://example.com", None);
+        assert!(logins.iter().all(|l| l.uuid != www_uuid));
+        assert!(logins.iter().any(|l| l.login == "user@example"));
+    }
+
+    #[test]
+    fn bridge_set_login_updates_entry_fields() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let root = ROOT_GROUP_UUID.to_owned();
+
+        let state = session
+            .add_entry(&entry_input(
+                &root,
+                "站点",
+                "old-user",
+                "old-pw",
+                "https://example.com",
+            ))
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+
+        session
+            .set_login("new-user", "new-pw", "https://example.com/sso", Some(&uuid))
+            .unwrap();
+        assert_eq!(session.get_entry_password(&uuid).unwrap(), "new-pw");
+        assert_eq!(
+            session.autotype_context(&uuid).unwrap().username,
+            "new-user"
+        );
+        assert_eq!(
+            session.autotype_context(&uuid).unwrap().url,
+            "https://example.com/sso"
+        );
+
+        let err = session.set_login(
+            "u",
+            "p",
+            "https://example.com",
+            Some("00000000-0000-0000-0000-000000000000"),
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn bridge_create_login_adds_entry_with_host_title() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        session
+            .create_login("fresh-user", "fresh-pw", "https://fresh.example.net/x")
+            .unwrap();
+
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(state.root.entries.len(), 1);
+        let entry = &state.root.entries[0];
+        assert_eq!(entry.title, "fresh.example.net");
+        assert_eq!(entry.username, "fresh-user");
+
+        session.create_login("u2", "p2", "not-a-url").unwrap();
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(state.root.entries[1].title, "not-a-url");
+    }
+
+    #[test]
+    fn bridge_db_hash_is_sha1_hex_of_root_and_recycle_bin() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+
+        let hash = session.db_hash();
+        assert_eq!(hash.len(), 40);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+
+        // A recycled entry changes the hash (recycle-bin uuid is part of it).
+        let state = session
+            .add_entry(&entry_input(ROOT_GROUP_UUID, "x", "u", "p", "https://a.b"))
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        session.delete_entry(&uuid).unwrap();
+        let after = session.db_hash();
+        assert_eq!(after.len(), 40);
+        assert_ne!(after, hash);
+
+        session.close();
+        assert_eq!(session.db_hash(), "");
     }
 }
