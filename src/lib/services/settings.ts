@@ -501,9 +501,7 @@ export const appSettings: AppSettingsStore = {
 
   renameRemoteProfile(index, name): void {
     settings.update((s) => {
-      const remoteProfiles = s.remoteProfiles.map((p, i) =>
-        i === index ? { ...p, name } : p,
-      );
+      const remoteProfiles = s.remoteProfiles.map((p, i) => (i === index ? { ...p, name } : p));
       return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
     });
     schedulePersist();

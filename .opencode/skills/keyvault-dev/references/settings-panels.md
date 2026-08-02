@@ -6,14 +6,14 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 
 `SettingsDialog.svelte` is the parent shell for the settings page. Its primary categories:
 
-| Primary category | Secondary sections / implementation                                         |
-| ---------------- | --------------------------------------------------------------------------- |
-| General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop |
-| Security         | Single current section → `SecuritySettingsPanel`                            |
-| Database         | Single current section → `DatabaseSettingsPanel`                            |
+| Primary category | Secondary sections / implementation                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop                                                           |
+| Security         | Single current section → `SecuritySettingsPanel`                                                                                      |
+| Database         | Single current section → `DatabaseSettingsPanel`                                                                                      |
 | Remote           | Single current section → `RemoteSettingsPanel` (profile selector + name + S3 endpoint/keys/mirror; edits apply to the active profile) |
-| Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`  |
-| About            | Single current section → `AboutSettingsPanel`                               |
+| Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`                                                            |
+| About            | Single current section → `AboutSettingsPanel`                                                                                         |
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.
 
