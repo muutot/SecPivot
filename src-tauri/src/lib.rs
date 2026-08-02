@@ -788,11 +788,7 @@ fn clipboard_clear() -> Result<(), String> {
 /// List `.kdbx` files under the configured prefix (newest key first).
 #[tauri::command]
 async fn s3_list_objects(cfg: crate::config::RemoteSettings) -> Result<Vec<RemoteObject>, String> {
-    let storage = S3Storage::new(&cfg)?;
-    let mut objects = storage.list(&cfg.prefix)?;
-    objects.retain(|o| o.key.ends_with(".kdbx"));
-    objects.sort_by(|a, b| b.key.cmp(&a.key));
-    Ok(objects)
+    crate::remote::list_objects_async(cfg).await
 }
 
 /// Download a vault from S3 and open it. `mode` is `"memory"` (upload back
@@ -805,23 +801,35 @@ async fn open_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     cfg: crate::config::RemoteSettings,
     key: String,
-    mut password: String,
+    password: String,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    // Network download, KDF and parse run without the session lock.
-    let prepared = vault::prepare_remote_open(
-        storage.clone(),
-        &key,
-        &password,
-        keyfile.as_deref().map(Path::new),
-        mode,
-        &local_dir,
-        cfg.backup_count.clamp(0, 10) as usize,
-    );
+    let backup_count = cfg.backup_count.clamp(0, 10) as usize;
+    let keyfile_path = keyfile.map(PathBuf::from);
+    let local_dir_for_network = local_dir.clone();
+    let storage_for_network = storage.clone();
+    // Network download, KDF and parse run without the session lock, off the
+    // async worker thread: the S3 transport blocks on its own runtime, which
+    // panics on a runtime worker (the command future would abort and the
+    // invoke would never resolve — the UI would stay on "正在加载…").
+    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+        let result = vault::prepare_remote_open(
+            storage_for_network,
+            &key,
+            &password,
+            keyfile_path.as_deref(),
+            mode,
+            &local_dir_for_network,
+            backup_count,
+        );
+        (result, password)
+    })
+    .await
+    .map_err(|e| format!("远程打开任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes, key)) => {
             let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
@@ -856,7 +864,7 @@ async fn create_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     cfg: crate::config::RemoteSettings,
     key: String,
-    mut password: String,
+    password: String,
     kdf: String,
     cipher: String,
     compression: String,
@@ -866,19 +874,30 @@ async fn create_remote_vault(
     let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
-    // KDF, serialization, upload and local mirror run without the lock.
-    let prepared = vault::prepare_remote_create(
-        storage.clone(),
-        &key,
-        &password,
-        &kdf,
-        &cipher,
-        &compression,
-        keyfile.as_deref().map(Path::new),
-        mode,
-        &local_dir,
-        cfg.backup_count.clamp(0, 10) as usize,
-    );
+    let backup_count = cfg.backup_count.clamp(0, 10) as usize;
+    let keyfile_path = keyfile.map(PathBuf::from);
+    let local_dir_for_network = local_dir.clone();
+    let storage_for_network = storage.clone();
+    // KDF, serialization, upload and local mirror run without the lock, off
+    // the async worker thread (the S3 transport must not block a runtime
+    // worker — see the comment in `open_remote_vault`).
+    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+        let result = vault::prepare_remote_create(
+            storage_for_network,
+            &key,
+            &password,
+            &kdf,
+            &cipher,
+            &compression,
+            keyfile_path.as_deref(),
+            mode,
+            &local_dir_for_network,
+            backup_count,
+        );
+        (result, password)
+    })
+    .await
+    .map_err(|e| format!("远程创建任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes, key)) => {
             let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;

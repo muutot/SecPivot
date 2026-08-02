@@ -113,6 +113,22 @@ impl S3Storage {
     }
 }
 
+/// Command body for `s3_list_objects`: lists `.kdbx` objects under the
+/// configured prefix, newest key first. `S3Storage`'s sync methods block on
+/// their own runtime, which panics when called from an async runtime worker
+/// thread (the command future then aborts and the invoke never resolves).
+/// Hop to the blocking pool first, exactly like the open/create commands do.
+pub async fn list_objects_async(cfg: RemoteSettings) -> Result<Vec<RemoteObject>, String> {
+    let storage = S3Storage::new(&cfg)?;
+    let prefix = cfg.prefix.clone();
+    let mut objects = tokio::task::spawn_blocking(move || storage.list(&prefix))
+        .await
+        .map_err(|e| format!("S3 列表任务异常: {e}"))??;
+    objects.retain(|o| o.key.ends_with(".kdbx"));
+    objects.sort_by(|a, b| b.key.cmp(&a.key));
+    Ok(objects)
+}
+
 impl RemoteStorage for S3Storage {
     fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
         self.runtime.block_on(async {
@@ -411,6 +427,27 @@ mod tests {
 
         assert_eq!(storage.get("vaults/a.kdbx").expect("get"), vec![1, 2, 3]);
         storage.put("vaults/b.kdbx", &[9, 9]).expect("put");
+    }
+
+    /// The Tauri commands run on async runtime worker threads, where
+    /// `S3Storage`'s sync methods (`Runtime::block_on`) panic — the command
+    /// future aborts and the invoke never resolves, leaving the UI on an
+    /// endless "正在加载…". Commands must hop to the blocking pool first, as
+    /// `list_objects_async` does; this test pins that path end-to-end.
+    #[test]
+    fn s3_list_objects_async_works_from_runtime_worker_thread() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("rt");
+        let cfg = mock_config(spawn_s3_mock());
+        rt.block_on(async move {
+            let objects = list_objects_async(cfg).await.expect("list");
+            assert_eq!(objects.len(), 1);
+            assert_eq!(objects[0].key, "vaults/a.kdbx");
+            assert_eq!(objects[0].size, 3);
+        });
     }
 
     /// A server that accepts the connection but never answers must surface a
