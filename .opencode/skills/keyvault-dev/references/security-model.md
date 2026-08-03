@@ -26,6 +26,8 @@ The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes 
 
 After lock, the frontend `vault` store is cleared and the UI shows the lock screen (`LockScreen.svelte`) when a last-database path is remembered (`rememberLastDatabase`); otherwise it returns to the welcome screen. The remembered path (`vault.remembered`) is set on open/create and cleared only via "use another database"; the password is never persisted or remembered.
 
+With `minimizeToTray` on (default), closing the main window does **not** lock — it merely hides to the system tray, keeping the in-memory session alive. Use the tray "锁定数据库" menu (or any lock path above) to drop the session; "退出" quits and fully ends the process.
+
 ## KeePass strengths
 
 The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCha20), and compression. Defaults favor Argon2id + AES-256 + Gzip. Customizing these only affects newly created databases.

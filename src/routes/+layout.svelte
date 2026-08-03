@@ -3,7 +3,8 @@
   import "../app.css";
   import { appSettings } from "$lib/services/settings";
   import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
-  import { installAutoLock, installFocusLock } from "$lib/services/security";
+  import { installAutoLock, installFocusLock, lockVault } from "$lib/services/security";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
   import RpcSideChannelPrompt from "$lib/components/RpcSideChannelPrompt.svelte";
 
@@ -28,10 +29,18 @@
     // /settings; focus-lock already lived here.
     const stopFocusLock = isTcatoOverlay ? () => {} : installFocusLock();
     const stopAutoLock = isTcatoOverlay ? () => {} : installAutoLock();
+    // System tray "锁定数据库" action.
+    let stopTrayLock: UnlistenFn | undefined;
+    if (!isTcatoOverlay && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      void listen("tray-lock", () => void lockVault()).then((fn) => {
+        stopTrayLock = fn;
+      });
+    }
     return () => {
       unsubscribe();
       stopFocusLock();
       stopAutoLock();
+      stopTrayLock?.();
     };
   });
 </script>

@@ -22,12 +22,22 @@ use crate::vault::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use zeroize::Zeroize;
 
 /// Sequence replayed by the global auto-type hotkey.
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
+
+/// Tray icon identifiers.
+const TRAY_ID: &str = "main";
+const TRAY_MENU_SHOW: &str = "tray-show";
+const TRAY_MENU_LOCK: &str = "tray-lock";
+const TRAY_MENU_QUIT: &str = "tray-quit";
+/// Emitted to the frontend when the user picks "锁定" from the tray.
+const TRAY_LOCK_EVENT: &str = "tray-lock";
 
 /// CSV import cap (8 MiB): guards the read-text command against oversized
 /// files; the `.csv` extension whitelist stops arbitrary file exfiltration.
@@ -1241,6 +1251,79 @@ async fn create_remote_vault(
 }
 
 // ---------------------------------------------------------------------------
+// System tray (KeePassTray-like)
+// ---------------------------------------------------------------------------
+
+/// Show (or toggle, when `force_show` is false) the main window.
+fn toggle_main_window(app: &tauri::AppHandle, force_show: bool) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let visible = window.is_visible().unwrap_or(false);
+    let focused = window.is_focused().unwrap_or(false);
+    if force_show || !visible || !focused {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    } else {
+        let _ = window.hide();
+    }
+}
+
+/// Build the tray icon with Show / Lock / Quit actions. Left-clicking the icon
+/// toggles the main window; the menu always forces a show.
+fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .expect("bundle icon must exist");
+    let show = MenuItem::with_id(app, TRAY_MENU_SHOW, "显示主窗口", true, None::<&str>)?;
+    let lock = MenuItem::with_id(app, TRAY_MENU_LOCK, "锁定数据库", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, TRAY_MENU_QUIT, "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &lock, &quit])?;
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon)
+        .tooltip("KeyVault")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            TRAY_MENU_SHOW => toggle_main_window(app, true),
+            TRAY_MENU_LOCK => {
+                let _ = app.emit(TRAY_LOCK_EVENT, ());
+            }
+            TRAY_MENU_QUIT => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main_window(tray.app_handle(), false);
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// When `minimizeToTray` is enabled, the window close button hides the window
+/// instead of exiting the app; the tray "退出" menu item is the way out.
+fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    let app = window.app_handle();
+    let minimize_to_tray = app
+        .state::<ConfigStore>()
+        .get()
+        .map(|cfg| cfg.security.minimize_to_tray)
+        .unwrap_or(false);
+    if minimize_to_tray {
+        api.prevent_close();
+        let _ = window.hide();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // App entry point
 // ---------------------------------------------------------------------------
 
@@ -1262,6 +1345,7 @@ pub fn run() {
             let store = ConfigStore::load(project_dir)?;
             let config = store.get()?;
             register_global_hotkey(app.handle(), &config.keyboard.auto_type_global);
+            setup_tray(app.handle())?;
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(TcatoTarget(Mutex::new(None)));
@@ -1271,6 +1355,11 @@ pub fn run() {
             sync_bridge(app.handle(), &config);
             sync_rpc(app.handle(), &config);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                handle_close_requested(window, api);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
