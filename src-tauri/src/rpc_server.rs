@@ -301,6 +301,7 @@ fn dispatch_setup(
                 conn.session_key = Some(secret);
                 let mut reply = Envelope::setup();
                 reply.srp = Some(SrpMessage {
+                    stage: Some("proofToClient".to_owned()),
                     m2: Some(m2),
                     ..Default::default()
                 });
@@ -698,6 +699,11 @@ mod tests {
         let (m, m2) = client_proof(&s, &b, &password, &a_hex, &a);
         let reply = dispatch_setup(&mut conn, &proof_to_server(&m), &mut host, &mut |_, _| {})
             .expect("proofToClient reply");
+        assert_eq!(
+            reply.srp.as_ref().unwrap().stage.as_deref(),
+            Some("proofToClient"),
+            "Kee dispatches on srp.stage == \"proofToClient\"; without it the client silently aborts"
+        );
         assert_eq!(reply.srp.as_ref().unwrap().m2.as_ref().unwrap(), &m2);
 
         assert!(host.rpc_key("alice@kprpc").is_some());
