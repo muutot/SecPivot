@@ -120,7 +120,9 @@ function clampInt(value: number, min: number, max: number, fallback: number): nu
 }
 
 function validHex(value: string, fallback: string): string {
-  return typeof value === "string" && hexColor.test(value) ? value : fallback;
+  // An empty string is kept as-is so cleared inputs stay clear while the
+  // user types a replacement (only non-empty invalid values fall back).
+  return typeof value === "string" && (value === "" || hexColor.test(value)) ? value : fallback;
 }
 
 /** Trim, dedup (keep first occurrence), and cap the recent-files list. */
@@ -154,8 +156,10 @@ export function normalizeRemoteSettings(
 ): RemoteSettings {
   const r = source ?? {};
   const str = (key: keyof RemoteSettings, fb: string): string => {
-    const value = typeof r[key] === "string" ? String(r[key]).trim() : "";
-    return value || fb;
+    // Only a missing (non-string) value falls back; an empty string from a
+    // cleared input is preserved so it stays clear while the user types.
+    const value = r[key];
+    return typeof value === "string" ? value.trim() : fb;
   };
   return {
     endpoint: str("endpoint", fallback.endpoint),
