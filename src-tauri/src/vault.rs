@@ -720,6 +720,29 @@ impl VaultSession {
         self.complete_change(password.to_owned(), keyfile_bytes, revision)
     }
 
+    /// Save As: persist the current database (same master key) to a new local
+    /// path, then switch the session to that path. On success a remote
+    /// session becomes a plain local one — later saves go to the new file,
+    /// never back to S3. On failure the session is left untouched.
+    pub fn save_as(&mut self, path: &Path) -> Result<VaultState, String> {
+        let (db, _, revision) = self.prepare_change()?;
+        let password = self.require_password()?.to_owned();
+        let keyfile = self.keyfile.clone();
+        persist_change(
+            &db,
+            &password,
+            keyfile.as_deref(),
+            &SaveTarget::Local(path.to_path_buf()),
+        )?;
+        self.replace(db, path, &password, keyfile);
+        if self.revision == revision {
+            self.dirty = false;
+            self.modified_at = now_iso();
+            self.cached_snapshot = None;
+        }
+        self.snapshot()
+    }
+
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
         // Decode all attachment payloads before touching the database so a
         // bad payload aborts the whole mutation (no half-applied entry).
@@ -3412,6 +3435,170 @@ mod tests {
         assert_eq!(state.root.children.len(), 1);
         assert_eq!(state.root.children[0].name, "Mail");
         assert_eq!(state.root.children[0].entries.len(), 1);
+    }
+
+    #[test]
+    fn save_as_writes_new_file_and_switches_session_target() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let new_path = dir.path().join("copy.kdbx");
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Inbox".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+
+        let state = session.save_as(&new_path).unwrap();
+        assert_eq!(state.path, new_path.to_string_lossy());
+        assert!(!state.dirty, "save as marks the session clean");
+
+        // The new file holds the data; the original file was never touched.
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&new_path, "master-password", None).unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "Mail");
+        assert_eq!(state.root.children[0].entries.len(), 1);
+        drop(reopened);
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&path, "master-password", None).unwrap();
+        assert!(
+            state.root.children.is_empty(),
+            "original file must keep its pre-save-as content"
+        );
+        drop(reopened);
+
+        // Subsequent edits and saves go to the new target.
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "After".into(),
+                username: "".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        session.save().unwrap();
+        drop(session);
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&new_path, "master-password", None).unwrap();
+        assert_eq!(state.root.entries.len(), 1);
+        assert_eq!(state.root.entries[0].title, "After");
+    }
+
+    #[test]
+    fn save_as_failure_keeps_session_untouched() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap();
+        let missing_dir = dir.path().join("no-such-dir").join("v.kdbx");
+
+        let err = session.save_as(&missing_dir).unwrap_err();
+        assert!(!err.is_empty(), "saving into a missing directory must fail");
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(
+            state.path,
+            path.to_string_lossy(),
+            "session target unchanged"
+        );
+        assert_eq!(state.root.children.len(), 1);
+        assert!(state.dirty, "unsaved edits remain dirty");
+    }
+
+    #[test]
+    fn save_as_from_remote_session_switches_to_local() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local_dir = dir.path().join("local");
+        let mut session = VaultSession::default();
+        let state = session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::InMemory,
+                &local_dir,
+                3,
+            )
+            .unwrap();
+        assert!(state.path.starts_with("s3://"));
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Local".into(),
+            })
+            .unwrap();
+        session
+            .add_entry(&EntryInput {
+                group_uuid: state.root.children[0].uuid.clone(),
+                title: "Exported".into(),
+                username: "".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+
+        let local_path = dir.path().join("exported.kdbx");
+        let state = session.save_as(&local_path).unwrap();
+        assert_eq!(state.path, local_path.to_string_lossy());
+        assert!(!state.dirty);
+
+        // Later saves are local: the S3 object must not receive the group.
+        session.save().unwrap();
+        let remote_db = Database::parse(
+            &storage.get("vaults/seed.kdbx").unwrap(),
+            DatabaseKey::new().with_password("pw"),
+        )
+        .unwrap();
+        assert_eq!(
+            remote_db.root().groups().count(),
+            0,
+            "remote target must not receive post-save-as changes"
+        );
+        let mut reopened = VaultSession::default();
+        let state = reopened.open(&local_path, "pw", None).unwrap();
+        assert_eq!(state.root.children.len(), 1);
+        assert_eq!(state.root.children[0].name, "Local");
     }
 
     #[test]

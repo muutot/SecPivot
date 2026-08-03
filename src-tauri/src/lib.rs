@@ -361,6 +361,17 @@ fn save_vault(session: tauri::State<'_, Mutex<VaultSession>>) -> Result<VaultSta
 }
 
 #[tauri::command]
+fn save_vault_as(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    path: String,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .save_as(Path::new(&path))
+}
+
+#[tauri::command]
 fn change_master_key(
     session: tauri::State<'_, Mutex<VaultSession>>,
     password: String,
@@ -983,6 +994,7 @@ pub fn run() {
             close_vault,
             get_vault_state,
             save_vault,
+            save_vault_as,
             change_master_key,
             add_entry,
             update_entry,
