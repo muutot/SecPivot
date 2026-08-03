@@ -141,6 +141,10 @@ fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()
     while stop.try_recv().is_err() {
         match listener.accept() {
             Ok((stream, _addr)) => {
+                // Accepted streams inherit the listener's non-blocking flag on
+                // Windows; tungstenite needs a blocking stream, so restore it
+                // (a non-blocking read yields WSAEWOULDBLOCK → os error 10035).
+                let _ = stream.set_nonblocking(false);
                 let app = app.clone();
                 std::thread::spawn(move || handle_connection(stream, &app));
             }
@@ -220,6 +224,7 @@ fn is_websocket_upgrade(stream: &mut TcpStream) -> bool {
 /// 404, WebSocket upgrades go through tungstenite.
 fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
     if !is_websocket_upgrade(&mut stream) {
+        eprintln!("[rpc] plain HTTP probe answered 404");
         let _ = stream.write_all(PROBE_404_RESPONSE);
         let _ = stream.shutdown(std::net::Shutdown::Write);
         // Drain the request so the close is a graceful FIN — Windows sends
@@ -234,21 +239,32 @@ fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
         return None;
     }
     // The request head was only peeked, so tungstenite still sees it.
-    accept_hdr(stream, accept_callback).ok()
+    match accept_hdr(stream, accept_callback) {
+        Ok(ws) => Some(ws),
+        Err(e) => {
+            eprintln!("[rpc] websocket accept failed: {e}");
+            None
+        }
+    }
 }
 
 fn handle_connection(stream: TcpStream, app: &AppHandle) {
     let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
+    eprintln!("[rpc] connection accepted");
     let Some(mut ws) = serve_connection(stream) else {
         return;
     };
+    eprintln!("[rpc] websocket upgraded");
     // Handshake is done; allow longer idle on the data path.
     let _ = ws.get_mut().set_read_timeout(Some(DATA_TIMEOUT));
     let mut conn = Conn::default();
     loop {
         let msg = match ws.read() {
             Ok(msg) => msg,
-            Err(_) => break,
+            Err(e) => {
+                eprintln!("[rpc] ws read error: {e}");
+                break;
+            }
         };
         match msg {
             WsMessage::Text(text) => {
@@ -274,8 +290,12 @@ fn handle_connection(stream: TcpStream, app: &AppHandle) {
 fn step(ws: &mut WebSocket<TcpStream>, conn: &mut Conn, text: &str, app: &AppHandle) -> bool {
     let env: Envelope = match serde_json::from_str(text) {
         Ok(env) => env,
-        Err(_) => return false,
+        Err(e) => {
+            eprintln!("[rpc] unparsable envelope: {e}");
+            return false;
+        }
     };
+    eprintln!("[rpc] envelope protocol={}", env.protocol);
     match env.protocol.as_str() {
         "setup" => reply_setup(ws, conn, env, app),
         "jsonrpc" => reply_jsonrpc(ws, conn, env, app),
@@ -307,8 +327,10 @@ fn dispatch_setup(
                 let i = srp.i.clone().filter(|s| !s.is_empty())?;
                 let a = srp.a.clone().filter(|s| !s.is_empty())?;
                 if !host.is_open() {
+                    eprintln!("[rpc] identifyToServer refused: vault locked");
                     return Some(error("AUTH_FAILED"));
                 }
+                eprintln!("[rpc] identifyToServer accepted");
                 let mut password = random_hex(SIDE_CHANNEL_BYTES);
                 let expires = SIDE_CHANNEL_TTL.as_secs();
                 side_channel(&password, expires);
@@ -412,10 +434,12 @@ fn reply_setup(
         return false;
     }
     let Some(session_state) = app.try_state::<Mutex<VaultSession>>() else {
+        eprintln!("[rpc] VaultSession state missing");
         return false;
     };
     let Some(reply) = ({
         let Ok(mut session) = session_state.lock() else {
+            eprintln!("[rpc] VaultSession lock poisoned");
             return false;
         };
         dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
@@ -428,10 +452,12 @@ fn reply_setup(
             );
         })
     }) else {
+        eprintln!("[rpc] dispatch_setup returned None");
         return false;
     };
     let error_sent = reply.error.is_some();
     let sent = send_envelope(ws, &reply);
+    eprintln!("[rpc] setup reply sent={sent} error={error_sent}");
     if !sent || error_sent {
         let _ = ws.close(None);
         false
@@ -986,11 +1012,7 @@ mod tests {
             let server = std::thread::spawn(move || {
                 let (stream, _) = listener.accept().unwrap();
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-                let mut ws: WebSocket<TcpStream> = {
-                    #[allow(clippy::result_large_err)]
-                    accept_hdr(stream, accept_callback)
-                }
-                .unwrap();
+                let mut ws = serve_connection(stream).expect("ws upgrade via serve_connection");
                 let msg = ws.read().expect("text frame");
                 assert_eq!(
                     msg,
@@ -1029,6 +1051,68 @@ mod tests {
                 .write_all(&[0x88, 0x82, 0x11, 0x22, 0x33, 0x44, 0x03 ^ 0x11, 0xe8 ^ 0x22])
                 .unwrap();
             let _ = stream.read(&mut [0u8; 8]).ok();
+            server.join().unwrap();
+        }
+
+        #[test]
+        fn serve_connection_round_trips_client_message() {
+            // Regression: the peek-based upgrade path must still deliver
+            // client frames to tungstenite (a dead connection here showed up
+            // as RSTs to real clients right after the WS upgrade).
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                let mut ws = serve_connection(stream).expect("ws upgrade via serve_connection");
+                let msg = ws.read().expect("client text frame");
+                eprintln!("server read: {msg:?}");
+                let _ = ws.send(WsMessage::Text("pong".to_owned().into()));
+                let _ = ws.read(); // client close
+            });
+
+            let (mut client, _) = tungstenite::connect(format!("ws://{addr}/")).unwrap();
+            client
+                .send(WsMessage::Text("hello".to_owned().into()))
+                .unwrap();
+            let reply = client.read().expect("server reply");
+            assert_eq!(reply, WsMessage::Text("pong".to_owned().into()));
+            server.join().unwrap();
+        }
+
+        #[test]
+        fn nonblocking_listener_streams_are_restored_to_blocking() {
+            // accept_loop() keeps the listener non-blocking; on Windows
+            // accepted streams inherit that flag and tungstenite then fails
+            // reads with WSAEWOULDBLOCK (os error 10035). Mirror the loop:
+            // restore blocking before handing the stream to tungstenite.
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || loop {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        stream.set_nonblocking(false).expect("restore blocking");
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                        let mut ws = serve_connection(stream).expect("ws upgrade");
+                        let msg = ws.read().expect("text frame on blocking stream");
+                        let _ = ws.send(WsMessage::Text(format!("echo:{msg}").into()));
+                        break;
+                    }
+                    Err(_) => std::thread::sleep(Duration::from_millis(10)),
+                }
+            });
+
+            let (mut client, _) = tungstenite::connect(format!("ws://{addr}/")).unwrap();
+            // Delay the frame so the server's first read runs while the
+            // socket has no data — the exact window where a non-blocking
+            // stream fails with WSAEWOULDBLOCK (os error 10035).
+            std::thread::sleep(Duration::from_millis(300));
+            client
+                .send(WsMessage::Text("hello".to_owned().into()))
+                .unwrap();
+            let reply = client.read().expect("server echo");
+            assert_eq!(reply, WsMessage::Text("echo:hello".to_owned().into()));
             server.join().unwrap();
         }
 

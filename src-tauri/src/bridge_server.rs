@@ -122,6 +122,9 @@ fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()
     while stop.try_recv().is_err() {
         match listener.accept() {
             Ok((stream, _addr)) => {
+                // Accepted streams inherit the listener's non-blocking flag on
+                // Windows; readers here expect a blocking stream.
+                let _ = stream.set_nonblocking(false);
                 let app = app.clone();
                 std::thread::spawn(move || handle_connection(stream, &app));
             }
