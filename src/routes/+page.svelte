@@ -2186,7 +2186,6 @@
     min-width: 0;
     z-index: 2;
     border-left: 1px solid var(--border-color);
-    box-shadow: -12px 0 36px rgba(0, 0, 0, 0.35);
     background: var(--card-bg);
   }
 
