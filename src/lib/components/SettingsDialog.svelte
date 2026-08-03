@@ -9,7 +9,6 @@
   import RpcSettingsPanel from "$lib/components/settings/RpcSettingsPanel.svelte";
   import KeyboardSettingsPanel from "$lib/components/settings/KeyboardSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
-  import WindowControls from "$lib/components/WindowControls.svelte";
 
   type Section =
     "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
@@ -141,7 +140,6 @@
           <span class="settings-count"
             >{activeSection.tabs?.length ? `${activeSection.tabs.length} 组` : "1 页"}</span
           >
-          <WindowControls variant="chrome" />
           <button class="close-button" onclick={onclose} title="返回主界面" aria-label="返回主界面">
             <AppIcon name="chevron-left" size={15} />
           </button>
