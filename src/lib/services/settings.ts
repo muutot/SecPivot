@@ -317,9 +317,11 @@ export function normalizeSettings(
   const remote = remoteProfiles[activeRemote].settings;
 
   const k = source.keyboard ?? fallback.keyboard;
-  const legacyGlobal = (source.general as unknown as {
-    globalAutoTypeShortcut?: unknown;
-  })?.globalAutoTypeShortcut;
+  const legacyGlobal = (
+    source.general as unknown as {
+      globalAutoTypeShortcut?: unknown;
+    }
+  )?.globalAutoTypeShortcut;
   const keyboard: KeyboardSettings = {
     autoTypeGlobal:
       typeof k?.autoTypeGlobal === "string" && k.autoTypeGlobal.trim()
@@ -375,10 +377,7 @@ interface AppSettingsStore {
   renameRemoteProfile: (index: number, name: string) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
-  updateKeyboard: <K extends keyof KeyboardSettings>(
-    key: K,
-    value: KeyboardSettings[K],
-  ) => void;
+  updateKeyboard: <K extends keyof KeyboardSettings>(key: K, value: KeyboardSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;

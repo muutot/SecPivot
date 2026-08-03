@@ -11,13 +11,7 @@
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
   type Section =
-    | "general"
-    | "security"
-    | "keyboard"
-    | "database"
-    | "remote"
-    | "integrations"
-    | "about";
+    "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
   type GeneralTab = "appearance" | "display" | "compact";
   type IntegrationsTab = "http" | "rpc";
 

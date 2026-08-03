@@ -8,6 +8,7 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, lockVault, copySensitive } from "$lib/services/security";
   import { copyText } from "$lib/utils/clipboard";
@@ -682,6 +683,71 @@
     editorOpen = true;
   }
 
+  let searchInputEl = $state<HTMLInputElement | null>(null);
+
+  /** True when the event's pressed modifiers match `combo` ("Ctrl+Shift+C"). */
+  function matchesShortcut(event: KeyboardEvent, combo: string): boolean {
+    const mods: [string, boolean][] = [
+      ["Ctrl", event.ctrlKey],
+      ["Alt", event.altKey],
+      ["Shift", event.shiftKey],
+      ["Meta", event.metaKey],
+    ];
+    const parts = combo.split("+").map((p) => p.trim());
+    let keyPart = "";
+    for (const part of parts) {
+      if (part === "Ctrl" || part === "Alt" || part === "Shift" || part === "Meta") continue;
+      keyPart = part;
+    }
+    for (const [name, pressed] of mods) {
+      if (parts.includes(name) !== pressed) return false;
+    }
+    if (!keyPart) return false;
+    const eventKey =
+      event.key === " " ? "Space" : event.key.length === 1 ? event.key.toUpperCase() : event.key;
+    return eventKey === keyPart;
+  }
+
+  /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
+  function handleShortcutKeydown(event: KeyboardEvent): void {
+    if (isTcatoOverlay || !currentVault) return;
+    if (editorOpen || groupModalOpen || reportOpen || confirmState || entryMenu || blankMenu)
+      return;
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    ) {
+      return;
+    }
+    const shortcuts = effectiveShortcuts(get(appSettings).keyboard.shortcuts);
+    for (const [actionId, combo] of Object.entries(shortcuts)) {
+      if (!combo || !matchesShortcut(event, combo)) continue;
+      event.preventDefault();
+      switch (actionId) {
+        case "save":
+          void handleSave();
+          break;
+        case "lock":
+          void handleLock();
+          break;
+        case "edit":
+          if (selectedEntry) openEditEntry(selectedEntry);
+          break;
+        case "copy-password":
+          if (selectedEntry) void copyEntryPassword(selectedEntry);
+          break;
+        case "new-entry":
+          openCreateEntry();
+          break;
+        case "focus-search":
+          searchInputEl?.focus();
+          break;
+      }
+      return;
+    }
+  }
+
   /** Collect the fully-populated entries behind the current selection. */
   function selectedEntries(): VaultEntry[] {
     if (!currentVault) return [];
@@ -1024,6 +1090,8 @@
   <title>KeyVault</title>
 </svelte:head>
 
+<svelte:window onkeydowncapture={handleShortcutKeydown} />
+
 {#if isTcatoOverlay}
   <TcatoOverlay />
 {:else}
@@ -1059,6 +1127,7 @@
               type="search"
               placeholder="搜索…"
               bind:value={search}
+              bind:this={searchInputEl}
               aria-label="搜索条目"
             />
             {#if search}

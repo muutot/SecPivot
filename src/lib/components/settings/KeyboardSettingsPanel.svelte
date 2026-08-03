@@ -134,7 +134,9 @@
     <div class="shortcut-row">
       {#if recordingAction === action.id}
         <span class="binding-chip recording">按下快捷键…（Esc 取消）</span>
-        <button type="button" class="binding-add" onclick={stopRecording} aria-label="取消录制">×</button>
+        <button type="button" class="binding-add" onclick={stopRecording} aria-label="取消录制"
+          >×</button
+        >
       {:else if bindingFor(action.id)}
         <span class="binding-chip">
           <kbd>{bindingFor(action.id)}</kbd>
@@ -145,16 +147,28 @@
             onclick={() => setBinding(action.id, "")}>×</button
           >
         </span>
-        <button type="button" class="binding-add" onclick={() => startRecording(action.id)} aria-label="录制快捷键">＋</button>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording(action.id)}
+          aria-label="录制快捷键">＋</button
+        >
       {:else}
         <span class="binding-chip default"><kbd>{action.default}</kbd></span>
-        <button type="button" class="binding-add" onclick={() => startRecording(action.id)} aria-label="录制快捷键">＋</button>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording(action.id)}
+          aria-label="录制快捷键">＋</button
+        >
       {/if}
     </div>
   </section>
 {/each}
 
-<p class="panel-note">点击 ＋ 录制新快捷键；录制后可通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。</p>
+<p class="panel-note">
+  点击 ＋ 录制新快捷键；录制后可通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。
+</p>
 
 <style>
   .shortcut-input {

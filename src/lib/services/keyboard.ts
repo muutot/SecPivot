@@ -55,3 +55,13 @@ export const KEYBOARD_ACTIONS: KeyboardAction[] = [
     default: "Ctrl+K",
   },
 ];
+
+/** Stored bindings merged with action defaults, so unrecorded actions still
+ *  dispatch their default accelerator. */
+export function effectiveShortcuts(shortcuts: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const action of KEYBOARD_ACTIONS) {
+    out[action.id] = shortcuts[action.id] || action.default;
+  }
+  return out;
+}
