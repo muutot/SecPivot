@@ -389,7 +389,11 @@ impl Default for FaviconSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RemoteSettings {
+    /// Transport kind: `"s3"` (S3-compatible object storage) or `"webdav"`.
+    /// Normalized to one of the two on load.
+    pub kind: String,
     /// S3-compatible endpoint, e.g. `https://s3.amazonaws.com` or a MinIO URL.
+    /// For WebDAV this is the WebDAV base URL (e.g. a davfs/Nextcloud mount).
     pub endpoint: String,
     pub region: String,
     pub bucket: String,
@@ -413,6 +417,7 @@ pub struct RemoteSettings {
 impl Default for RemoteSettings {
     fn default() -> Self {
         Self {
+            kind: "s3".into(),
             endpoint: "https://s3.amazonaws.com".into(),
             region: "us-east-1".into(),
             bucket: String::new(),
@@ -684,7 +689,16 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config
 }
 
+/// Lowercase the transport kind and fall back to `"s3"` on anything unknown.
+fn normalize_remote_kind(kind: &str) -> String {
+    match kind.trim().to_ascii_lowercase().as_str() {
+        "webdav" => "webdav".into(),
+        _ => "s3".into(),
+    }
+}
+
 fn normalize_remote_settings(settings: &mut RemoteSettings) {
+    settings.kind = normalize_remote_kind(&settings.kind);
     settings.endpoint = settings.endpoint.trim().to_owned();
     settings.region = settings.region.trim().to_owned();
     settings.bucket = settings.bucket.trim().to_owned();
@@ -869,6 +883,7 @@ mod tests {
         config.remote_profiles.push(RemoteProfile {
             name: "Bitiful".into(),
             settings: RemoteSettings {
+                kind: "s3".into(),
                 endpoint: "http://127.0.0.1:9000".into(),
                 region: "cn-east-1".into(),
                 bucket: "my-vaults".into(),
@@ -971,6 +986,7 @@ mod tests {
         );
         assert_eq!(config.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(config.remote_profiles[0].settings.backup_count, 3);
+        assert_eq!(config.remote_profiles[0].settings.kind, "s3");
 
         config.remote_profiles[0].settings.endpoint = "  https://s3.example.com  ".into();
         config.remote_profiles[0].settings.local_dir = "   ".into();
@@ -984,6 +1000,30 @@ mod tests {
         assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(normalized.active_remote, 0);
+    }
+
+    #[test]
+    fn remote_kind_normalizes_to_s3_or_webdav() {
+        let mut config = AppConfig::default();
+        config.remote_profiles[0].settings.kind = "  WebDAV ".into();
+        assert_eq!(
+            normalize_config(config).remote_profiles[0].settings.kind,
+            "webdav"
+        );
+
+        let mut config = AppConfig::default();
+        config.remote_profiles[0].settings.kind = "ftp".into();
+        assert_eq!(
+            normalize_config(config).remote_profiles[0].settings.kind,
+            "s3"
+        );
+
+        let mut config = AppConfig::default();
+        config.remote_profiles[0].settings.kind = "".into();
+        assert_eq!(
+            normalize_config(config).remote_profiles[0].settings.kind,
+            "s3"
+        );
     }
 
     #[test]

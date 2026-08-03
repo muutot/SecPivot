@@ -118,6 +118,7 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
 };
 
 export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
+  kind: "s3",
   endpoint: "https://s3.amazonaws.com",
   region: "us-east-1",
   bucket: "",
@@ -211,6 +212,10 @@ export function normalizeRemoteSettings(
     return typeof value === "string" ? value.trim() : fb;
   };
   return {
+    kind: (() => {
+      const kind = typeof r.kind === "string" ? r.kind.trim().toLowerCase() : fallback.kind;
+      return kind === "webdav" ? "webdav" : "s3";
+    })(),
     endpoint: str("endpoint", fallback.endpoint),
     region: str("region", fallback.region),
     bucket: str("bucket", fallback.bucket),

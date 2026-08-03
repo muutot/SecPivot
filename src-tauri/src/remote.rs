@@ -1,28 +1,32 @@
-//! S3 remote storage: a transport trait plus the real S3 implementation and
-//! an in-memory fake used by offline tests. The payloads are ordinary KDBX
-//! files; only the transport differs. S3 access keys are sent from the
-//! frontend config on every command (never cached in the session) and live in
-//! `conf/config.json` per the approved security model — they are secondary
-//! credentials, distinct from vault master passwords.
+//! Remote storage transports shared by the S3 and WebDAV backends: a transport
+//! trait plus the real S3 and WebDAV implementations and an in-memory fake used
+//! by offline tests. The payloads are ordinary KDBX files; only the transport
+//! differs. S3 keys / WebDAV credentials are sent from the frontend config on
+//! every command (never cached in the session) and live in `conf/config.json`
+//! per the approved security model — they are secondary credentials, distinct
+//! from vault master passwords.
 
 use crate::config::RemoteSettings;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use tauri::Manager;
+use url::Url;
 
 /// Prefix used for the display path of remote vaults (`s3://<key>`).
 pub const REMOTE_URI_PREFIX: &str = "s3://";
 
-/// TCP connect timeout for S3 requests. rust-s3's default is 60 s; 15 s keeps
-/// an unreachable endpoint failure snappy.
-const S3_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// TCP connect timeout for remote storage requests (shared). rust-s3's
+/// default is 60 s; 15 s keeps an unreachable endpoint failure snappy.
+const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Overall bound for the object listing call (small payloads).
-const S3_LIST_TIMEOUT: Duration = Duration::from_secs(30);
+const REMOTE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Overall bound for download/upload calls (vault files; generous for slow links).
-const S3_IO_TIMEOUT: Duration = Duration::from_secs(120);
+const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// A single process-wide tokio runtime shared by every S3 transport. Creating
 /// a runtime per command would spin up (and tear down) a full thread pool on
@@ -63,7 +67,7 @@ pub struct S3Storage {
 
 impl S3Storage {
     pub fn new(cfg: &RemoteSettings) -> Result<Self, String> {
-        Self::with_timeouts(cfg, S3_LIST_TIMEOUT, S3_IO_TIMEOUT)
+        Self::with_timeouts(cfg, REMOTE_LIST_TIMEOUT, REMOTE_IO_TIMEOUT)
     }
 
     fn with_timeouts(
@@ -97,7 +101,7 @@ impl S3Storage {
         .map_err(|e| format!("S3 凭据无效: {e}"))?;
         let mut bucket = s3::Bucket::new(bucket_name, region, credentials)
             .map_err(|e| format!("S3 配置无效: {e}"))?
-            .with_request_timeout(S3_CONNECT_TIMEOUT)
+            .with_request_timeout(REMOTE_CONNECT_TIMEOUT)
             .map_err(|e| format!("S3 配置无效: {e}"))?;
         bucket.set_path_style();
         Ok(Self {
@@ -113,18 +117,28 @@ impl S3Storage {
     }
 }
 
-/// Command body for `s3_list_objects`: lists all objects under the configured
-/// prefix, `.kdbx` files first, then key descending. `S3Storage`'s sync
-/// methods block on their own runtime, which panics when called from an async
-/// runtime worker thread (the command future then aborts and the invoke never
-/// resolves). Hop to the blocking pool first, exactly like the open/create
-/// commands do.
+/// Build the transport matching a profile's `kind` (`"s3"` → S3, `"webdav"` →
+/// WebDAV). Vault code only ever holds `Arc<dyn RemoteStorage>`, so swapping
+/// the backend is isolated to this factory.
+pub fn make_storage(cfg: &RemoteSettings) -> Result<Arc<dyn RemoteStorage>, String> {
+    match cfg.kind.as_str() {
+        "webdav" => Ok(Arc::new(WebDavStorage::new(cfg)?)),
+        _ => Ok(Arc::new(S3Storage::new(cfg)?)),
+    }
+}
+
+/// Command body for `s3_list_objects` (name kept for frontend compatibility):
+/// lists all objects under the configured prefix, `.kdbx` files first, then
+/// key descending. The transport's sync methods block on their own runtime,
+/// which panics when called from an async runtime worker thread (the command
+/// future then aborts and the invoke never resolves). Hop to the blocking pool
+/// first, exactly like the open/create commands do.
 pub async fn list_objects_async(cfg: RemoteSettings) -> Result<Vec<RemoteObject>, String> {
-    let storage = S3Storage::new(&cfg)?;
+    let storage = make_storage(&cfg)?;
     let prefix = cfg.prefix.clone();
     let mut objects = tokio::task::spawn_blocking(move || storage.list(&prefix))
         .await
-        .map_err(|e| format!("S3 列表任务异常: {e}"))??;
+        .map_err(|e| format!("远程列表任务异常: {e}"))??;
     objects.sort_by(|a, b| {
         let a_db = a.key.ends_with(".kdbx");
         let b_db = b.key.ends_with(".kdbx");
@@ -198,6 +212,321 @@ impl RemoteStorage for S3Storage {
             result.map_err(|_| "S3 上传超时，请检查网络与服务地址".to_owned())?
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// WebDAV transport (reqwest blocking + PROPFIND multistatus parsing)
+// ---------------------------------------------------------------------------
+
+/// `propfind` request body: ask only for size + last-modified so collections
+/// (which carry no `getcontentlength`) are distinguishable from files.
+const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:getcontentlength/>
+    <d:getlastmodified/>
+  </d:prop>
+</d:propfind>"#;
+
+/// One process-wide shared reqwest blocking client. The client owns a tokio
+/// runtime that must never be dropped from an async context (dropping it on a
+/// runtime worker panics — e.g. when a vault session closes); keeping the
+/// original alive forever means per-storage clones never tear the runtime down.
+///
+/// `reqwest::blocking::Client::build` also *blocks* (`wait::enter`), so it must
+/// run off any async worker or it panics on first use — hence a dedicated
+/// init thread for the one-time construction.
+fn shared_blocking_client() -> &'static reqwest::blocking::Client {
+    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("webdav-client-init".into())
+            .spawn(|| {
+                reqwest::blocking::Client::builder()
+                    .connect_timeout(REMOTE_CONNECT_TIMEOUT)
+                    .build()
+                    .expect("无法初始化 WebDAV 客户端: reqwest 资源不足")
+            })
+            .expect("spawn webdav client init thread")
+            .join()
+            .expect("webdav client init thread panicked")
+    })
+}
+
+/// WebDAV transport. `endpoint` is the WebDAV base URL, `access_key`/`secret_key`
+/// are the Basic-auth username/password, and `prefix` is the folder to list
+/// from. Vault keys are URL paths relative to `endpoint` (e.g. `vaults/a.kdbx`).
+pub struct WebDavStorage {
+    client: reqwest::blocking::Client,
+    auth: Option<(String, String)>,
+    base_url: String,
+    list_timeout: Duration,
+    io_timeout: Duration,
+}
+
+impl WebDavStorage {
+    pub fn new(cfg: &RemoteSettings) -> Result<Self, String> {
+        Self::with_timeouts(cfg, REMOTE_LIST_TIMEOUT, REMOTE_IO_TIMEOUT)
+    }
+
+    fn with_timeouts(
+        cfg: &RemoteSettings,
+        list_timeout: Duration,
+        io_timeout: Duration,
+    ) -> Result<Self, String> {
+        let endpoint = cfg.endpoint.trim();
+        if endpoint.is_empty() {
+            return Err("请先在设置中配置 WebDAV 服务地址".to_owned());
+        }
+        let base_url = endpoint.trim_end_matches('/').to_owned();
+        let username = cfg.access_key.trim();
+        // Skip Basic auth entirely when no credentials are configured (public
+        // servers); empty `Basic ` headers can trip up some implementations.
+        let auth = if username.is_empty() {
+            None
+        } else {
+            Some((username.to_owned(), cfg.secret_key.clone()))
+        };
+        Ok(Self {
+            client: shared_blocking_client().clone(),
+            auth,
+            base_url,
+            list_timeout,
+            io_timeout,
+        })
+    }
+
+    /// Absolute URL for a vault key (or, with an empty key, the base URL).
+    /// Rejects `.`/`..` path segments so a key cannot escape the endpoint.
+    fn url_for(&self, path: &str) -> Result<String, String> {
+        let mut url = self.base_url.clone();
+        for segment in path.split('/') {
+            if segment.is_empty() || segment == "." || segment == ".." {
+                continue;
+            }
+            url.push('/');
+            url.push_str(&encode_path_segment(segment));
+        }
+        Ok(url)
+    }
+}
+
+/// Percent-encode a URL path segment, keeping unreserved + sub-delims intact so
+/// the server receives exactly the vault key (spaces etc. stay valid).
+fn encode_path_segment(segment: &str) -> String {
+    let mut out = String::with_capacity(segment.len());
+    for byte in segment.bytes() {
+        let keep = byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'-' | b'_'
+                    | b'.'
+                    | b'~'
+                    | b'!'
+                    | b'$'
+                    | b'&'
+                    | b'\''
+                    | b'('
+                    | b')'
+                    | b'*'
+                    | b'+'
+                    | b','
+                    | b';'
+                    | b'='
+                    | b':'
+                    | b'@'
+            );
+        if keep {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+impl RemoteStorage for WebDavStorage {
+    fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
+        let target = self.url_for(prefix.trim_matches('/'))?;
+        let mut builder = self
+            .client
+            .request(
+                reqwest::Method::from_bytes(b"PROPFIND").expect("valid method"),
+                &target,
+            )
+            .header("Depth", "1")
+            .timeout(self.list_timeout)
+            .body(PROPFIND_BODY);
+        if let Some((user, pass)) = &self.auth {
+            builder = builder.basic_auth(user.clone(), Some(pass.clone()));
+        }
+        let response = builder
+            .send()
+            .map_err(|e| format!("WebDAV 列表请求失败: {e}"))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("WebDAV 列表失败: HTTP {status}"));
+        }
+        let text = response
+            .text()
+            .map_err(|e| format!("WebDAV 列表响应读取失败: {e}"))?;
+        parse_multistatus(&text, &self.base_url, &target)
+    }
+
+    fn get(&self, key: &str) -> Result<Vec<u8>, String> {
+        let url = self.url_for(key)?;
+        let mut builder = self.client.get(&url).timeout(self.io_timeout);
+        if let Some((user, pass)) = &self.auth {
+            builder = builder.basic_auth(user.clone(), Some(pass.clone()));
+        }
+        let response = builder
+            .send()
+            .map_err(|e| format!("WebDAV 下载请求失败: {e}"))?;
+        if response.status() == reqwest::StatusCode::OK {
+            response
+                .bytes()
+                .map(|b| b.to_vec())
+                .map_err(|e| format!("WebDAV 下载响应读取失败: {e}"))
+        } else {
+            Err(format!("WebDAV 下载失败: HTTP {}", response.status()))
+        }
+    }
+
+    fn put(&self, key: &str, data: &[u8]) -> Result<(), String> {
+        let url = self.url_for(key)?;
+        let mut builder = self
+            .client
+            .put(&url)
+            .header("Content-Type", "application/octet-stream")
+            .timeout(self.io_timeout)
+            .body(data.to_vec());
+        if let Some((user, pass)) = &self.auth {
+            builder = builder.basic_auth(user.clone(), Some(pass.clone()));
+        }
+        let response = builder
+            .send()
+            .map_err(|e| format!("WebDAV 上传请求失败: {e}"))?;
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "WebDAV 上传失败: HTTP {}（请确认目录已存在）",
+                response.status()
+            ))
+        }
+    }
+}
+
+/// Record a text payload against the element currently open (`current`).
+fn record_prop(
+    current: &str,
+    href: &mut Option<String>,
+    size: &mut Option<usize>,
+    modified: &mut Option<String>,
+    text: &str,
+) {
+    match current {
+        "href" => *href = Some(text.to_string()),
+        "getcontentlength" => *size = text.parse().ok(),
+        "getlastmodified" => *modified = Some(text.to_string()),
+        _ => {}
+    }
+}
+
+/// Parse a PROPFIND `multistatus` body into file objects. Only responses that
+/// carry a `getcontentlength` are files; the requested collection itself and
+/// any sub-collections are dropped.
+fn parse_multistatus(
+    body: &str,
+    base_url: &str,
+    request_url: &str,
+) -> Result<Vec<RemoteObject>, String> {
+    let mut reader = Reader::from_str(body);
+    reader.trim_text(true);
+    let request_key = href_to_key(base_url, request_url);
+    let mut objects = Vec::new();
+    let mut in_response = false;
+    let mut current = String::new();
+    let mut href: Option<String> = None;
+    let mut size: Option<usize> = None;
+    let mut modified: Option<String> = None;
+
+    loop {
+        match reader.read_event() {
+            Err(e) => return Err(format!("WebDAV 列表解析失败: {e}")),
+            Ok(Event::Eof) => break,
+            Ok(Event::Start(e)) => {
+                current = local_name(&e);
+                if current == "response" {
+                    in_response = true;
+                    href = None;
+                    size = None;
+                    modified = None;
+                }
+            }
+            Ok(Event::Empty(e)) => {
+                current = local_name(&e);
+            }
+            Ok(Event::Text(t)) => {
+                if in_response {
+                    let text = t.unescape().unwrap_or_default().trim().to_owned();
+                    record_prop(&current, &mut href, &mut size, &mut modified, &text);
+                }
+            }
+            Ok(Event::CData(t)) => {
+                if in_response {
+                    let text = String::from_utf8_lossy(t.as_ref()).trim().to_owned();
+                    record_prop(&current, &mut href, &mut size, &mut modified, &text);
+                }
+            }
+            Ok(Event::End(e)) => {
+                let name = end_local_name(&e);
+                if name == "response" {
+                    if in_response {
+                        if let (Some(h), Some(s)) = (href.as_deref(), size) {
+                            let key = href_to_key(base_url, h);
+                            if !key.is_empty() && key != request_key {
+                                objects.push(RemoteObject {
+                                    key,
+                                    size: s,
+                                    modified: modified.clone(),
+                                });
+                            }
+                        }
+                        in_response = false;
+                    }
+                } else {
+                    current.clear();
+                }
+            }
+            Ok(_) => {}
+        }
+    }
+    Ok(objects)
+}
+
+fn local_name(e: &quick_xml::events::BytesStart) -> String {
+    String::from_utf8_lossy(e.local_name().as_ref()).into_owned()
+}
+
+fn end_local_name(e: &quick_xml::events::BytesEnd) -> String {
+    String::from_utf8_lossy(e.local_name().as_ref()).into_owned()
+}
+
+/// Convert a PROPFIND `href` (absolute URL or absolute path) to a vault key
+/// relative to the configured base URL path.
+fn href_to_key(base_url: &str, href: &str) -> String {
+    let base_path = Url::parse(base_url)
+        .map(|u| u.path().to_string())
+        .unwrap_or_default();
+    let path = Url::parse(href)
+        .map(|u| u.path().to_string())
+        .unwrap_or_else(|_| href.to_string());
+    let relative = match path.strip_prefix(base_path.as_str()) {
+        Some(rest) => rest.to_string(),
+        None => path.as_str().to_string(),
+    };
+    relative.trim_start_matches('/').to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -507,5 +836,204 @@ mod tests {
         .expect("storage");
         let err = storage.list("vaults/").expect_err("list must time out");
         assert!(err.contains("超时"), "unexpected error: {err}");
+    }
+
+    // -----------------------------------------------------------------------
+    // WebDAV transport tests (offline mock HTTP server + pure parsers)
+    // -----------------------------------------------------------------------
+
+    const WEBDAV_MULTISTATUS: &str = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\
+<d:multistatus xmlns:d=\"DAV:\">\
+<d:response><d:href>/dav/vaults/</d:href><d:propstat><d:prop>\
+<d:resourcetype><d:collection/></d:resourcetype></d:prop>\
+<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>\
+<d:response><d:href>/dav/vaults/a.kdbx</d:href><d:propstat><d:prop>\
+<d:getcontentlength>3</d:getcontentlength>\
+<d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop>\
+<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>\
+<d:response><d:href>/dav/vaults/sub/</d:href><d:propstat><d:prop>\
+<d:resourcetype><d:collection/></d:resourcetype></d:prop>\
+<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>\
+<d:response><d:href>/dav/vaults/z.kdbx</d:href><d:propstat><d:prop>\
+<d:getcontentlength>5</d:getcontentlength></d:prop>\
+<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>\
+</d:multistatus>";
+
+    /// Serve one WebDAV request per connection: PROPFIND → multistatus,
+    /// GET `a.kdbx` → `[1,2,3]`, PUT → 201, anything else → 404.
+    fn webdav_mock_handle(mut stream: std::net::TcpStream) {
+        use std::io::{Read, Write};
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 4096];
+        let header_end;
+        loop {
+            let n = stream.read(&mut chunk).unwrap_or(0);
+            if n == 0 {
+                return;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                header_end = pos + 4;
+                break;
+            }
+        }
+        let text = String::from_utf8_lossy(&buf[..header_end]).into_owned();
+        let head = text.lines().next().unwrap_or("").to_string();
+        let content_length: usize = text
+            .lines()
+            .find(|l| l.to_ascii_lowercase().starts_with("content-length:"))
+            .and_then(|l| l.split(':').nth(1).and_then(|v| v.trim().parse().ok()))
+            .unwrap_or(0);
+        while buf.len() < header_end + content_length {
+            let n = stream.read(&mut chunk).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        let is_propfind = head.starts_with("PROPFIND");
+        let is_put = head.starts_with("PUT");
+        let is_get = head.starts_with("GET");
+        let (status, body): (&str, Vec<u8>) = if is_propfind {
+            ("207 Multi-Status", WEBDAV_MULTISTATUS.as_bytes().to_vec())
+        } else if is_get && text.contains("/a.kdbx") {
+            ("200 OK", vec![1u8, 2, 3])
+        } else if is_put {
+            ("201 Created", Vec::new())
+        } else {
+            ("404 Not Found", Vec::new())
+        };
+        let content_type = if is_propfind {
+            "application/xml; charset=utf-8"
+        } else {
+            "application/octet-stream"
+        };
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.write_all(&body);
+    }
+
+    fn spawn_webdav_mock() -> std::net::SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("mock listener");
+        let addr = listener.local_addr().expect("mock addr");
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                std::thread::spawn(move || webdav_mock_handle(stream));
+            }
+        });
+        addr
+    }
+
+    fn mock_webdav_config(addr: std::net::SocketAddr) -> RemoteSettings {
+        RemoteSettings {
+            kind: "webdav".into(),
+            endpoint: format!("http://{addr}/dav"),
+            access_key: "user".into(),
+            secret_key: "pass".into(),
+            prefix: "vaults/".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn webdav_transport_round_trips_against_local_mock() {
+        let storage = WebDavStorage::with_timeouts(
+            &mock_webdav_config(spawn_webdav_mock()),
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+        )
+        .expect("storage");
+
+        let mut objects = storage.list("vaults/").expect("list");
+        objects.sort_by(|a, b| a.key.cmp(&b.key));
+        assert_eq!(objects.len(), 2, "collections and self must be dropped");
+        assert_eq!(objects[0].key, "vaults/a.kdbx");
+        assert_eq!(objects[0].size, 3);
+        assert_eq!(
+            objects[0].modified.as_deref(),
+            Some("Mon, 01 Jan 2024 00:00:00 GMT")
+        );
+        assert_eq!(objects[1].key, "vaults/z.kdbx");
+        assert_eq!(objects[1].size, 5);
+
+        assert_eq!(storage.get("vaults/a.kdbx").expect("get"), vec![1, 2, 3]);
+        storage.put("vaults/b.kdbx", &[9, 9]).expect("put");
+    }
+
+    /// The command path (factory + blocking-pool hop) must work end-to-end for
+    /// WebDAV exactly as it does for S3.
+    #[test]
+    fn webdav_list_objects_async_works_from_runtime_worker_thread() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("rt");
+        let cfg = mock_webdav_config(spawn_webdav_mock());
+        rt.block_on(async move {
+            let objects = list_objects_async(cfg).await.expect("list");
+            let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+            // .kdbx first (both are), then key descending.
+            assert_eq!(keys, ["vaults/z.kdbx", "vaults/a.kdbx"]);
+        });
+    }
+
+    #[test]
+    fn webdav_parser_keeps_files_and_drops_collections() {
+        let storage = WebDavStorage {
+            client: reqwest::blocking::Client::new(),
+            auth: None,
+            base_url: "http://dav.example.com/dav".into(),
+            list_timeout: Duration::from_secs(10),
+            io_timeout: Duration::from_secs(10),
+        };
+        let objects = parse_multistatus(
+            WEBDAV_MULTISTATUS,
+            &storage.base_url,
+            "http://dav.example.com/dav/vaults/",
+        )
+        .expect("parse");
+        assert_eq!(objects.len(), 2);
+        assert_eq!(objects[0].key, "vaults/a.kdbx");
+        assert_eq!(objects[1].key, "vaults/z.kdbx");
+    }
+
+    #[test]
+    fn webdav_href_to_key_handles_absolute_and_relative_hrefs() {
+        assert_eq!(
+            href_to_key("http://h/dav", "http://h/dav/vaults/a.kdbx"),
+            "vaults/a.kdbx"
+        );
+        assert_eq!(
+            href_to_key("http://h/dav", "/dav/vaults/a.kdbx"),
+            "vaults/a.kdbx"
+        );
+        assert_eq!(
+            href_to_key("http://h/dav", "vaults/a.kdbx"),
+            "vaults/a.kdbx"
+        );
+        assert_eq!(href_to_key("http://h", "/vaults/a.kdbx"), "vaults/a.kdbx");
+        assert_eq!(href_to_key("http://h/dav", "http://h/dav/"), "");
+    }
+
+    #[test]
+    fn webdav_url_for_encodes_segments_and_rejects_dotdot() {
+        let storage = WebDavStorage {
+            client: reqwest::blocking::Client::new(),
+            auth: None,
+            base_url: "http://h/dav".into(),
+            list_timeout: Duration::from_secs(10),
+            io_timeout: Duration::from_secs(10),
+        };
+        assert_eq!(
+            storage.url_for("a b/c.kdbx").unwrap(),
+            "http://h/dav/a%20b/c.kdbx"
+        );
+        assert_eq!(storage.url_for("a.kdbx").unwrap(), "http://h/dav/a.kdbx");
+        // ".." segments must not escape the endpoint.
+        assert_eq!(storage.url_for("../x.kdbx").unwrap(), "http://h/dav/x.kdbx");
     }
 }

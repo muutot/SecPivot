@@ -26,10 +26,14 @@ export interface DatabaseDefaults {
   fileExtension: string;
 }
 
-/** S3-compatible remote vault settings. Access keys are encrypted at rest
- * with Windows DPAPI (`dpapi1:` prefix in `config.json`) — a secondary
- * credential, never a vault master password (see `security-model.md`). */
+/** Remote vault settings. Transport kind is `"s3"` (S3-compatible object
+ * storage) or `"webdav"` (WebDAV). For WebDAV, `endpoint` is the WebDAV base
+ * URL and `accessKey`/`secretKey` are the Basic-auth username/password;
+ * `region`/`bucket` are ignored. Access credentials are encrypted at rest with
+ * Windows DPAPI (`dpapi1:` prefix in `config.json`) — a secondary credential,
+ * never a vault master password (see `security-model.md`). */
 export interface RemoteSettings {
+  kind: string;
   endpoint: string;
   region: string;
   bucket: string;

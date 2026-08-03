@@ -15,7 +15,7 @@ pub mod vault;
 
 use crate::bridge::BridgeHost;
 use crate::config::ConfigStore;
-use crate::remote::{local_storage_dir, RemoteObject, RemoteStorage, S3Storage};
+use crate::remote::{local_storage_dir, make_storage, RemoteObject};
 use crate::vault::{
     EntryInput, EntryPatch, GroupInput, HistoryVersion, RemoteMode, SecurityReport, TotpCode,
     VaultSession, VaultState,
@@ -1123,7 +1123,7 @@ async fn open_remote_vault(
     mode: String,
 ) -> Result<VaultState, String> {
     let cfg = config.remote_settings(profile)?;
-    let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
+    let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
@@ -1133,7 +1133,7 @@ async fn open_remote_vault(
     let storage_for_network = storage.clone();
     let backup_template_for_network = backup_template.clone();
     // Network download, KDF and parse run without the session lock, off the
-    // async worker thread: the S3 transport blocks on its own runtime, which
+    // async worker thread: the remote transport blocks on its own runtime, which
     // panics on a runtime worker (the command future would abort and the
     // invoke would never resolve — the UI would stay on "正在加载…").
     let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
@@ -1194,7 +1194,7 @@ async fn create_remote_vault(
     mode: String,
 ) -> Result<VaultState, String> {
     let cfg = config.remote_settings(profile)?;
-    let storage: Arc<dyn RemoteStorage> = Arc::new(S3Storage::new(&cfg)?);
+    let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
@@ -1204,7 +1204,7 @@ async fn create_remote_vault(
     let storage_for_network = storage.clone();
     let backup_template_for_network = backup_template.clone();
     // KDF, serialization, upload and local mirror run without the lock, off
-    // the async worker thread (the S3 transport must not block a runtime
+    // the async worker thread (the remote transport must not block a runtime
     // worker — see the comment in `open_remote_vault`).
     let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
         let result = vault::prepare_remote_create(

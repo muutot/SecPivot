@@ -53,8 +53,11 @@
   let remoteLoading = $state(false);
 
   const remote = $derived(settings.remote);
+  const remoteKindLabel = $derived(remote.kind === "webdav" ? "WebDAV" : "S3");
   const remoteConfigured = $derived(
-    Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
+    remote.kind === "webdav"
+      ? Boolean(remote.endpoint)
+      : Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
   );
 
   function changeRemote<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
@@ -85,7 +88,7 @@
     try {
       remoteObjects = await vault.listRemoteObjects();
       if (remoteObjects.length === 0) {
-        error = "未找到远程数据库文件，请检查设置中的存储桶与对象前缀";
+        error = "未找到远程数据库文件，请检查设置中的服务地址与对象前缀";
       }
     } catch (e) {
       error = String(e);
@@ -372,14 +375,14 @@
                 : "解锁数据库"
               : modal === "create"
                 ? "新建数据库"
-                : "远程数据库 (S3)"}</strong
+                : `远程数据库 (${remoteKindLabel})`}</strong
           >
           <p>
             {modal === "open"
               ? path
               : modal === "create"
                 ? "选择一个位置并设置主密码"
-                : "从 S3 打开或创建数据库"}
+                : `从 ${remoteKindLabel} 打开或创建数据库`}
           </p>
         </div>
       </div>
@@ -470,6 +473,19 @@
             />
           </div>
           <div class="field">
+            <span>传输类型</span>
+            <Select
+              className="profile-select"
+              value={remote.kind}
+              ariaLabel="传输类型"
+              options={[
+                { value: "s3", label: "S3 兼容对象存储" },
+                { value: "webdav", label: "WebDAV" },
+              ]}
+              onchange={(v) => changeRemote("kind", v)}
+            />
+          </div>
+          <div class="field">
             <span>服务地址</span>
             <input
               class="text-input"
@@ -480,44 +496,46 @@
               oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
             />
           </div>
-          <div class="remote-config-grid">
-            <div class="field">
-              <span>区域</span>
-              <input
-                class="text-input"
-                type="text"
-                value={remote.region}
-                placeholder="us-east-1"
-                spellcheck="false"
-                oninput={(e) => changeRemote("region", e.currentTarget.value)}
-              />
+          {#if remote.kind !== "webdav"}
+            <div class="remote-config-grid">
+              <div class="field">
+                <span>区域</span>
+                <input
+                  class="text-input"
+                  type="text"
+                  value={remote.region}
+                  placeholder="us-east-1"
+                  spellcheck="false"
+                  oninput={(e) => changeRemote("region", e.currentTarget.value)}
+                />
+              </div>
+              <div class="field">
+                <span>存储桶</span>
+                <input
+                  class="text-input"
+                  type="text"
+                  value={remote.bucket}
+                  placeholder="my-bucket"
+                  spellcheck="false"
+                  oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
+                />
+              </div>
             </div>
-            <div class="field">
-              <span>存储桶</span>
-              <input
-                class="text-input"
-                type="text"
-                value={remote.bucket}
-                placeholder="my-bucket"
-                spellcheck="false"
-                oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
-              />
-            </div>
-          </div>
+          {/if}
           <div class="field">
-            <span>Access Key</span>
+            <span>{remote.kind === "webdav" ? "用户名" : "Access Key"}</span>
             <input
               class="text-input"
               type="text"
               value={remote.accessKey}
-              placeholder="AKIA..."
+              placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
               autocomplete="off"
               spellcheck="false"
               oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
             />
           </div>
           <div class="field">
-            <span>Secret Key</span>
+            <span>{remote.kind === "webdav" ? "密码" : "Secret Key"}</span>
             <input
               class="text-input"
               type="password"
@@ -585,7 +603,7 @@
                 onclick={() => (remoteMode = "memory")}
               >
                 <strong>仅在内存</strong>
-                <small>保存时只上传回 S3</small>
+                <small>保存时只上传回远程存储</small>
               </button>
               <button
                 class="remote-mode-option"

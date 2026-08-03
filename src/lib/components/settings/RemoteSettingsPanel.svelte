@@ -35,7 +35,7 @@
     <div>
       <span class="eyebrow">Settings · 远程</span>
       <h2>远程</h2>
-      <p>S3 兼容对象存储配置，用于远程打开与创建数据库。</p>
+      <p>S3 兼容对象存储或 WebDAV 配置，用于远程打开与创建数据库。</p>
     </div>
     <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
   </header>
@@ -98,10 +98,30 @@
   <section class="setting-card">
     <div class="setting-row">
       <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
+        <div>
+          <strong>传输类型</strong>
+          <p>S3 兼容对象存储，或 WebDAV（网盘/自建服务）</p>
+        </div>
+      </div>
+      <Select
+        id="remote-kind"
+        className="profile-picker"
+        value={remote.kind}
+        ariaLabel="传输类型"
+        options={[
+          { value: "s3", label: "S3 兼容对象存储" },
+          { value: "webdav", label: "WebDAV" },
+        ]}
+        onchange={(v) => change("kind", v)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
         <div>
           <strong>服务地址</strong>
-          <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
+          <p>{remote.kind === "webdav" ? "WebDAV 基地址（如 https://dav.example.com/remote.php/dav/files/user）" : "兼容 AWS S3、MinIO 等 S3 API 服务"}</p>
         </div>
       </div>
       <input
@@ -109,44 +129,46 @@
         class="settings-input setting-row-input"
         type="text"
         value={remote.endpoint}
-        placeholder="https://s3.amazonaws.com"
+        placeholder={remote.kind === "webdav" ? "https://dav.example.com/dav" : "https://s3.amazonaws.com"}
         oninput={(e) => change("endpoint", e.currentTarget.value)}
       />
     </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-        <div>
-          <strong>区域</strong>
-          <p>存储桶所在的地域</p>
+    {#if remote.kind !== "webdav"}
+      <div class="setting-row">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+          <div>
+            <strong>区域</strong>
+            <p>存储桶所在的地域</p>
+          </div>
         </div>
+        <input
+          id="remote-region"
+          class="settings-input setting-row-input"
+          type="text"
+          value={remote.region}
+          placeholder="us-east-1"
+          oninput={(e) => change("region", e.currentTarget.value)}
+        />
       </div>
-      <input
-        id="remote-region"
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.region}
-        placeholder="us-east-1"
-        oninput={(e) => change("region", e.currentTarget.value)}
-      />
-    </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-        <div>
-          <strong>存储桶</strong>
-          <p>对象存储的桶名称</p>
+      <div class="setting-row">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+          <div>
+            <strong>存储桶</strong>
+            <p>对象存储的桶名称</p>
+          </div>
         </div>
+        <input
+          id="remote-bucket"
+          class="settings-input setting-row-input"
+          type="text"
+          value={remote.bucket}
+          placeholder="my-bucket"
+          oninput={(e) => change("bucket", e.currentTarget.value)}
+        />
       </div>
-      <input
-        id="remote-bucket"
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.bucket}
-        placeholder="my-bucket"
-        oninput={(e) => change("bucket", e.currentTarget.value)}
-      />
-    </div>
+    {/if}
   </section>
 
   <section class="setting-card">
@@ -154,8 +176,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="key" size={17} /></span>
         <div>
-          <strong>Access Key</strong>
-          <p>远程存储的访问密钥 ID</p>
+          <strong>{remote.kind === "webdav" ? "用户名" : "Access Key"}</strong>
+          <p>{remote.kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
         </div>
       </div>
       <input
@@ -165,7 +187,7 @@
         autocomplete="off"
         spellcheck="false"
         value={remote.accessKey}
-        placeholder="AKIA..."
+        placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
         oninput={(e) => change("accessKey", e.currentTarget.value)}
       />
     </div>
@@ -173,8 +195,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
         <div>
-          <strong>Secret Key</strong>
-          <p>与 Access Key 配对的私钥</p>
+          <strong>{remote.kind === "webdav" ? "密码" : "Secret Key"}</strong>
+          <p>{remote.kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
         </div>
       </div>
       <input

@@ -11,7 +11,7 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 | General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop                                                           |
 | Security         | Single current section → `SecuritySettingsPanel`                                                                                      |
 | Database         | Single current section → `DatabaseSettingsPanel`                                                                                      |
-| Remote           | Single current section → `RemoteSettingsPanel` (profile selector + name + S3 endpoint/keys/mirror; edits apply to the active profile) |
+| Remote           | Single current section → `RemoteSettingsPanel` (profile selector + name + transport kind (S3/WebDAV) + endpoint/credentials/mirror; WebDAV hides region/bucket and relabels creds as username/password; edits apply to the active profile) |
 | Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`                                                            |
 | About            | Single current section → `AboutSettingsPanel`                                                                                         |
 
