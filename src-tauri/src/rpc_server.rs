@@ -296,6 +296,10 @@ fn step(ws: &mut WebSocket<TcpStream>, conn: &mut Conn, text: &str, app: &AppHan
         }
     };
     eprintln!("[rpc] envelope protocol={}", env.protocol);
+    eprintln!(
+        "[rpc]   raw: {}",
+        text.chars().take(400).collect::<String>()
+    );
     match env.protocol.as_str() {
         "setup" => reply_setup(ws, conn, env, app),
         "jsonrpc" => reply_jsonrpc(ws, conn, env, app),
@@ -377,6 +381,10 @@ fn dispatch_setup(
                 reply.srp = Some(SrpMessage {
                     stage: Some("proofToClient".to_owned()),
                     m2: Some(m2),
+                    // Kee checks `srp.securityLevel` on every setup message;
+                    // missing here it rejects the server as "security level
+                    // too low" (AUTH_SERVER_SECURITY_LEVEL_TOO_LOW).
+                    security_level: Some(SECURITY_LEVEL),
                     ..Default::default()
                 });
                 Some(reply)
@@ -459,7 +467,21 @@ fn reply_setup(
             );
         })
     }) else {
-        eprintln!("[rpc] dispatch_setup returned None");
+        eprintln!(
+            "[rpc] dispatch_setup returned None (srp={:?} key={:?} error={:?})",
+            env.srp
+                .as_ref()
+                .map(|s| s.stage.clone().unwrap_or_default()),
+            env.key.as_ref().map(|k| format!(
+                "username={:?} sc={} cc={} cr={} sr={}",
+                k.username,
+                k.sc.is_some(),
+                k.cc.is_some(),
+                k.cr.is_some(),
+                k.sr.is_some()
+            )),
+            env.error.as_ref().map(|e| e.code.clone())
+        );
         return false;
     };
     let error_sent = reply.error.is_some();
@@ -1251,6 +1273,79 @@ mod tests {
                 "probe response needs CORS headers, got: {text}"
             );
             server.join().unwrap();
+        }
+
+        #[test]
+        fn serialized_replies_carry_keepassrpc_field_names() {
+            // The extension reads `srp.securityLevel` / `key.securityLevel`
+            // (camelCase) and `srp.B` / `srp.I` / `srp.A` / `srp.M` / `srp.M2`
+            // (uppercase). The JSON on the wire must match exactly, or Kee
+            // rejects the server as "security level too low" / aborts setup.
+            let mut host = FakeHost::open();
+            let (a_hex, _) = client_ephemeral();
+            let mut conn = Conn::default();
+            let reply = dispatch_setup(
+                &mut conn,
+                &identify_to_server("serialize@kprpc", &a_hex),
+                &mut host,
+                &mut |_, _| {},
+            )
+            .expect("identifyToClient reply");
+            let json = serde_json::to_string(&reply).expect("reply serializes");
+            eprintln!("identifyToClient wire: {json}");
+            assert!(
+                json.contains("\"securityLevel\":3"),
+                "missing camelCase securityLevel: {json}"
+            );
+            assert!(
+                json.contains("\"stage\":\"identifyToClient\""),
+                "missing stage: {json}"
+            );
+            assert!(json.contains("\"B\""), "missing uppercase B: {json}");
+
+            // proofToClient must also carry securityLevel: Kee 4.x checks it on
+            // every srp message and rejects the server (AUTH_SERVER_SECURITY_
+            // LEVEL_TOO_LOW) when it is missing or null.
+            let mut conn = Conn::default();
+            let (a_hex, a) = client_ephemeral();
+            let mut shown: Option<String> = None;
+            let reply = dispatch_setup(
+                &mut conn,
+                &identify_to_server("serialize@kprpc", &a_hex),
+                &mut host,
+                &mut |pw, _| shown = Some(pw.to_owned()),
+            )
+            .expect("identifyToClient reply");
+            let s = reply.srp.as_ref().unwrap().s.clone().unwrap();
+            let b = reply.srp.as_ref().unwrap().b.clone().unwrap();
+            let (m, _) = client_proof(&s, &b, shown.as_ref().unwrap(), &a_hex, &a);
+            let reply = dispatch_setup(&mut conn, &proof_to_server(&m), &mut host, &mut |_, _| {})
+                .expect("proofToClient reply");
+            let json = serde_json::to_string(&reply).expect("reply serializes");
+            eprintln!("proofToClient wire: {json}");
+            assert!(
+                json.contains("\"securityLevel\":3"),
+                "proofToClient must carry securityLevel: {json}"
+            );
+            assert!(json.contains("\"M2\""), "missing uppercase M2: {json}");
+
+            let mut host = FakeHost::open();
+            host.register_rpc_key("serialize@kprpc", vec![9u8; 32]);
+            let mut conn = Conn::default();
+            let reply = dispatch_setup(
+                &mut conn,
+                &key_request("serialize@kprpc"),
+                &mut host,
+                &mut |_, _| {},
+            )
+            .expect("sc challenge");
+            let json = serde_json::to_string(&reply).expect("reply serializes");
+            eprintln!("key.sc wire: {json}");
+            assert!(
+                json.contains("\"securityLevel\":3"),
+                "missing camelCase securityLevel: {json}"
+            );
+            assert!(json.contains("\"sc\""), "missing sc: {json}");
         }
     }
 }
