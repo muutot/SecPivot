@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
-  import { countEntries } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
 
@@ -77,7 +76,15 @@
     knownUuids = new Set(uuids);
   });
 
-  const total = $derived(countEntries(root));
+  /** Total entries outside the recycle bin subtree ("全部条目" count). */
+  function countVisibleEntries(group: VaultGroup): number {
+    if (group.isRecycleBin) return 0;
+    let n = group.entries.length;
+    for (const child of group.children) n += countVisibleEntries(child);
+    return n;
+  }
+
+  const total = $derived(countVisibleEntries(root));
 </script>
 
 <div class="group-tree">

@@ -256,7 +256,7 @@
 
   const selectedSubtree = $derived.by((): VaultGroup[] => {
     if (!currentVault) return [];
-    if (selectedGroup === null) return allGroups;
+    if (selectedGroup === null) return allGroups.filter((g) => !groupInBin(g.uuid));
     const group = allGroups.find((g) => g.uuid === selectedGroup);
     if (!group) return allGroups;
     const list: VaultGroup[] = [];
