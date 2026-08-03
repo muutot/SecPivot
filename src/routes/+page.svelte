@@ -1909,7 +1909,7 @@
 
   .main-content {
     display: grid;
-    grid-template-columns: var(--group-width, 200px) minmax(0, 1fr) var(--detail-width, 300px);
+    grid-template-columns: var(--group-width, 200px) minmax(0, 1fr);
     min-height: 0;
     position: relative;
   }
@@ -2178,10 +2178,15 @@
   }
 
   .detail-panel {
-    position: relative;
-    min-height: 0;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: var(--detail-width, 300px);
     min-width: 0;
-    border-left: 1px solid var(--border-subtle);
+    z-index: 2;
+    border-left: 1px solid var(--border-color);
+    box-shadow: -12px 0 36px rgba(0, 0, 0, 0.35);
     background: var(--card-bg);
   }
 
