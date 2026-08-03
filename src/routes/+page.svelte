@@ -38,6 +38,7 @@
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
+  import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
@@ -1230,6 +1231,16 @@
             <AppIcon name="copy" size={14} />
             {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
           </button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button
+            class="tool-button"
+            class:icon-only={iconOnlyButtons}
+            onclick={handleLock}
+            title="锁定数据库"
+          >
+            <AppIcon name="lock" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
+          </button>
         </div>
 
         <div class="toolbar-center">
@@ -1272,15 +1283,8 @@
           <button class="icon-action" onclick={openSettings} title="设置">
             <AppIcon name="settings" size={16} />
           </button>
-          <button
-            class="tool-button"
-            class:icon-only={iconOnlyButtons}
-            onclick={handleLock}
-            title="锁定数据库"
-          >
-            <AppIcon name="lock" size={14} />
-            {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
-          </button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <WindowControls variant="toolbar" />
         </div>
       </div>
 
@@ -1538,12 +1542,18 @@
         </span>
       </footer>
     {:else if showLockScreen}
+      <div class="standalone-bar" data-tauri-drag-region>
+        <WindowControls variant="chrome" />
+      </div>
       <LockScreen
         remembered={rememberedPath}
         onopened={() => void vault.refresh()}
         onswitch={() => vault.clearRemembered()}
       />
     {:else}
+      <div class="standalone-bar" data-tauri-drag-region>
+        <WindowControls variant="chrome" />
+      </div>
       <VaultWelcome onopened={() => void vault.refresh()} />
     {/if}
   </main>
@@ -1705,6 +1715,7 @@
 
 <style>
   .app-shell {
+    position: relative;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     width: 100%;
@@ -1723,6 +1734,19 @@
     min-width: 0;
   }
 
+  .standalone-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 10px;
+    z-index: 20;
+  }
+
   .toolbar {
     display: flex;
     align-items: center;
@@ -1731,6 +1755,13 @@
     padding: 6px 14px;
     border-top: 1px solid var(--border-subtle);
     border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 18px;
+    flex: 0 0 auto;
+    background: var(--border-subtle);
   }
 
   .toolbar-left,

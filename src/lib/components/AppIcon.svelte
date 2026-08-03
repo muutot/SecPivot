@@ -44,7 +44,10 @@
     | "upload"
     | "cloud"
     | "plug"
-    | "widgets";
+    | "widgets"
+    | "minimize"
+    | "maximize"
+    | "restore";
 
   interface Props {
     name: IconName;
@@ -114,6 +117,10 @@
     plug: '<path d="M9 2v5M15 2v5"></path><path d="M5 7h14v4a7 7 0 0 1-7 7 7 7 0 0 1-7-7z"></path><path d="M12 18v4"></path>',
     widgets:
       '<rect x="4" y="4" width="7" height="6" rx="1"></rect><rect x="13" y="4" width="7" height="6" rx="1"></rect><rect x="4" y="14" width="7" height="6" rx="1"></rect><rect x="13" y="14" width="7" height="6" rx="1"></rect>',
+    minimize: '<path d="M5 12h14"></path>',
+    maximize: '<rect x="5" y="5" width="14" height="14" rx="1"></rect>',
+    restore:
+      '<rect x="7" y="8" width="10" height="10" rx="1"></rect><path d="M8 7V4h10a1 1 0 0 1 1 1v11h-3"></path>',
   };
 </script>
 
