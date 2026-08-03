@@ -8,6 +8,7 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import type { EntryColumnState } from "$lib/types/settings";
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, lockVault, copySensitive } from "$lib/services/security";
@@ -298,12 +299,109 @@
     return result;
   });
 
-  type SortCol = "title" | "url";
+  type SortCol = string;
   let sortCol = $state<SortCol>("title");
   let sortDir = $state<"asc" | "desc">("asc");
-  /** URL column floor: header chars ("网址") × 10px font + 10px — matches config.rs clamp. */
-  const URL_COL_MIN = "网址".length * 10 + 10;
-  let colWidths = $state<{ url: number }>({ url: get(appSettings).general.panelWidths.urlCol });
+  /** Resizable column width bounds — match config.rs entry-column clamps. */
+  const COL_WIDTH_MIN = 30;
+  const COL_WIDTH_MAX = 400;
+  /** Built-in entry-table columns, in default display order. */
+  const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[] = [
+    { id: "title", label: "标题" },
+    { id: "username", label: "用户名" },
+    { id: "password", label: "密码", sortable: false },
+    { id: "url", label: "网址" },
+    { id: "totp", label: "验证码", sortable: false },
+    { id: "notes", label: "备注" },
+    { id: "tags", label: "标签" },
+    { id: "created", label: "创建时间" },
+    { id: "modified", label: "修改时间" },
+    { id: "expires", label: "过期时间" },
+  ];
+  /** Custom-field column names present in the vault, most frequent first. */
+  const customColumnNames = $derived.by(() => {
+    if (!currentVault) return [];
+    const names = new Map<string, number>();
+    for (const group of allGroupsOf(currentVault.root)) {
+      for (const e of group.entries) {
+        for (const f of e.customFields ?? []) {
+          names.set(f.name, (names.get(f.name) ?? 0) + 1);
+        }
+      }
+    }
+    return [...names.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+  });
+  let entryColumns = $state<EntryColumnState[]>(
+    get(appSettings).general.entryColumns.map((c) => ({ ...c })),
+  );
+  $effect(() => {
+    entryColumns = get(appSettings).general.entryColumns.map((c) => ({ ...c }));
+  });
+  /** Persisted state of a column id (built-in or `custom:<name>`). */
+  function colState(id: string): EntryColumnState {
+    return (
+      entryColumns.find((c) => c.id === id) ?? {
+        id,
+        visible: false,
+        width: id === "title" ? 0 : 140,
+      }
+    );
+  }
+  /** Visible columns in render order (icon/actions columns excluded). */
+  const visibleCols = $derived.by(() => {
+    const out: { id: string; label: string; width: number; sortable: boolean }[] = [];
+    for (const def of BUILTIN_COLUMNS) {
+      const st = colState(def.id);
+      if (st.visible) {
+        out.push({
+          id: def.id,
+          label: def.label,
+          width: st.width,
+          sortable: def.sortable !== false,
+        });
+      }
+    }
+    for (const name of customColumnNames) {
+      const id = `custom:${name}`;
+      if (colState(id).visible) {
+        out.push({ id, label: name, width: colState(id).width, sortable: true });
+      }
+    }
+    return out;
+  });
+  /** CSS grid template for the entry table (icon + visible columns + actions). */
+  const entryGridCols = $derived.by(() => {
+    const cols = ["34px"];
+    for (const c of visibleCols) {
+      cols.push(c.id === "title" ? "minmax(0, 1fr)" : `${c.width}px`);
+    }
+    cols.push("70px");
+    return cols.join(" ");
+  });
+  /** Sort key of an entry for a column id (password is never sortable). */
+  function sortValue(entry: VaultEntry, colId: string): string {
+    if (colId === "totp") return entry.hasTotp ? "1" : "0";
+    return colText(entry, colId);
+  }
+  /** Display text of an entry cell for a column id. */
+  function colText(entry: VaultEntry, colId: string): string {
+    if (colId.startsWith("custom:")) {
+      const name = colId.slice("custom:".length);
+      return entry.customFields?.find((f) => f.name === name)?.value ?? "";
+    }
+    if (colId === "created" || colId === "modified" || colId === "expires") {
+      return formatDateValue(entry[colId] as string | undefined);
+    }
+    if (colId === "password") return entry.password ? "••••••" : "";
+    return String(entry[colId as keyof VaultEntry] ?? "");
+  }
+  function formatDateValue(value: string | undefined): string {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const p = (n: number): string => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
   let groupWidth = $state(get(appSettings).general.panelWidths.group);
   let detailWidth = $state(get(appSettings).general.panelWidths.detail);
   let detailVisible = $state(false);
@@ -312,7 +410,6 @@
     const p = settings.general.panelWidths;
     groupWidth = p.group;
     detailWidth = p.detail;
-    colWidths.url = p.urlCol;
   });
 
   $effect(() => {
@@ -329,8 +426,8 @@
     return [...filteredEntries].sort((a, b) => {
       const fav = Number(b.entry.favorite) - Number(a.entry.favorite);
       if (fav !== 0) return fav;
-      const av = a.entry[col] ?? "";
-      const bv = b.entry[col] ?? "";
+      const av = sortValue(a.entry, col);
+      const bv = sortValue(b.entry, col);
       return av.localeCompare(bv, "zh-CN", { numeric: true }) * dir;
     });
   });
@@ -344,16 +441,20 @@
     }
   }
 
-  function startResize(e: PointerEvent): void {
+  function startColResize(e: PointerEvent, colId: string): void {
     e.preventDefault();
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
     const startX = e.clientX;
-    const startW = colWidths.url;
+    const startW = colState(colId).width || 140;
     document.body.classList.add("resizing-column");
     const onMove = (ev: PointerEvent): void => {
-      colWidths.url = Math.min(400, Math.max(URL_COL_MIN, startW - (ev.clientX - startX)));
+      const width = Math.min(
+        COL_WIDTH_MAX,
+        Math.max(COL_WIDTH_MIN, startW + (ev.clientX - startX)),
+      );
+      entryColumns = entryColumns.map((c) => (c.id === colId ? { ...c, width } : c));
     };
     const onUp = (ev: PointerEvent): void => {
       if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
@@ -361,11 +462,16 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
-      savePanelWidths();
+      saveLayout();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+  }
+
+  /** Right-click a table column header → column config menu (filled in later step). */
+  function openColumnMenu(e: MouseEvent): void {
+    e.preventDefault();
   }
 
   function startDetailResize(e: PointerEvent): void {
@@ -385,7 +491,7 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
-      savePanelWidths();
+      saveLayout();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -409,19 +515,23 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
-      savePanelWidths();
+      saveLayout();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
   }
 
-  function savePanelWidths(): void {
+  function saveLayout(): void {
     appSettings.updateGeneral("panelWidths", {
       group: groupWidth,
       detail: detailWidth,
-      urlCol: colWidths.url,
+      urlCol: colState("url").width || 200,
     });
+    appSettings.updateGeneral(
+      "entryColumns",
+      entryColumns.map((c) => ({ ...c })),
+    );
   }
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
@@ -1324,48 +1434,37 @@
         ></span>
 
         <section class="entry-panel">
-          <div class="entry-table" style={`--col-url: ${colWidths.url}px; --col-totp: 96px`}>
-            <div class="entry-table-head" role="row">
-              <div class="head-cell head-title">
-                <button
-                  class="head-button"
-                  type="button"
-                  onclick={() => cycleSort("title")}
-                  title="点击排序"
-                >
-                  <span class="head-label">标题</span>
-                  {#if sortCol === "title"}
-                    <span class="sort-arrow" aria-hidden="true"
-                      >{sortDir === "asc" ? "▲" : "▼"}</span
-                    >
+          <div class="entry-table" style={`--entry-cols: ${entryGridCols}`}>
+            <div class="entry-table-head" role="row" tabindex="-1" oncontextmenu={openColumnMenu}>
+              <span class="head-icon-col" aria-hidden="true"></span>
+              {#each visibleCols as col (col.id)}
+                <div class="head-cell" class:head-sortable={col.sortable}>
+                  <button
+                    class="head-button"
+                    type="button"
+                    onclick={() => {
+                      if (col.sortable) cycleSort(col.id);
+                    }}
+                    title={col.sortable ? "点击排序" : undefined}
+                  >
+                    <span class="head-label">{col.label}</span>
+                    {#if sortCol === col.id}
+                      <span class="sort-arrow" aria-hidden="true"
+                        >{sortDir === "asc" ? "▲" : "▼"}</span
+                      >
+                    {/if}
+                  </button>
+                  {#if col.id !== "title"}
+                    <span
+                      class="resize-handle"
+                      role="separator"
+                      aria-orientation="vertical"
+                      title="调整列宽"
+                      onpointerdown={(e) => startColResize(e, col.id)}
+                    ></span>
                   {/if}
-                </button>
-                <span
-                  class="resize-handle"
-                  role="separator"
-                  aria-orientation="vertical"
-                  title="调整列宽"
-                  onpointerdown={(e) => startResize(e)}
-                ></span>
-              </div>
-              <div class="head-cell head-url">
-                <button
-                  class="head-button"
-                  type="button"
-                  onclick={() => cycleSort("url")}
-                  title="点击排序"
-                >
-                  <span class="head-label">网址</span>
-                  {#if sortCol === "url"}
-                    <span class="sort-arrow" aria-hidden="true"
-                      >{sortDir === "asc" ? "▲" : "▼"}</span
-                    >
-                  {/if}
-                </button>
-              </div>
-              <div class="head-cell head-totp">
-                <span class="head-label">验证码</span>
-              </div>
+                </div>
+              {/each}
               <div class="head-actions"></div>
             </div>
 
@@ -1419,36 +1518,52 @@
                     {#if row.entry.color}
                       <span class="entry-row-color-bar" aria-hidden="true"></span>
                     {/if}
-                    <span class="entry-row-icon"
-                      >{#if customIconUrl(row.entry)}
-                        <img
-                          class="entry-row-img"
-                          src={customIconUrl(row.entry)}
-                          alt=""
-                          draggable="false"
-                        />
-                      {:else}
-                        <AppIcon name={entryIconName(row.entry)} size={16} />
-                      {/if}</span
-                    >
-                    <div class="entry-row-main">
-                      <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                        >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                          <span class="expired-flag">已过期</span>
+                    <span class="entry-row-icon-cell">
+                      <span class="entry-row-icon"
+                        >{#if customIconUrl(row.entry)}
+                          <img
+                            class="entry-row-img"
+                            src={customIconUrl(row.entry)}
+                            alt=""
+                            draggable="false"
+                          />
+                        {:else}
+                          <AppIcon name={entryIconName(row.entry)} size={16} />
                         {/if}</span
                       >
-                      {#if showDescriptions}
-                        <span class="entry-row-sub">{row.entry.username}</span>
-                      {/if}
-                    </div>
-                    <span class="entry-row-col col-url" title={row.entry.url || undefined}>
-                      {row.entry.url}
                     </span>
-                    {#if row.entry.hasTotp}
-                      <span class="entry-row-col col-totp">
-                        <EntryTotpBadge entryUuid={row.entry.uuid} />
-                      </span>
-                    {/if}
+                    {#each visibleCols as col (col.id)}
+                      {#if col.id === "title"}
+                        <span class="entry-row-col col-title">
+                          <div class="entry-row-main">
+                            <span
+                              class="entry-row-title"
+                              title={row.entry.expired ? "已过期" : undefined}
+                              >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                                <span class="expired-flag">已过期</span>
+                              {/if}</span
+                            >
+                            {#if showDescriptions}
+                              <span class="entry-row-sub">{row.entry.username}</span>
+                            {/if}
+                          </div>
+                        </span>
+                      {:else if col.id === "totp"}
+                        <span class="entry-row-col col-totp">
+                          {#if row.entry.hasTotp}
+                            <EntryTotpBadge entryUuid={row.entry.uuid} />
+                          {/if}
+                        </span>
+                      {:else}
+                        <span
+                          class="entry-row-col"
+                          class:col-masked={col.id === "password"}
+                          title={colText(row.entry, col.id) || undefined}
+                        >
+                          {colText(row.entry, col.id)}
+                        </span>
+                      {/if}
+                    {/each}
                     <div class="entry-row-actions">
                       <button
                         class="row-btn"
@@ -1939,14 +2054,19 @@
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) var(--col-totp, 96px) 70px;
+    grid-template-columns: var(--entry-cols);
     align-items: center;
-    gap: 9px;
+    gap: 0;
     flex: 0 0 auto;
     height: 28px;
-    padding: 0 10px;
+    padding: 0;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-bg);
+  }
+
+  .head-icon-col {
+    height: 100%;
+    border-right: 1px solid var(--border-subtle);
   }
 
   .head-cell {
@@ -1956,6 +2076,8 @@
     gap: 4px;
     min-width: 0;
     height: 100%;
+    padding: 0 8px;
+    border-right: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     font-size: var(--font-size-tiny, 10px);
     font-weight: 600;
@@ -1963,8 +2085,8 @@
     user-select: none;
   }
 
-  .head-title {
-    grid-column: 1 / 3;
+  .head-cell:not(.head-sortable) {
+    cursor: default;
   }
 
   .head-cell:hover {
@@ -2014,6 +2136,9 @@
 
   .head-actions {
     min-width: 0;
+    height: 100%;
+    padding: 0 10px;
+    border-left: 1px solid var(--border-subtle);
   }
 
   .entry-list {
@@ -2028,11 +2153,11 @@
   .entry-row {
     position: relative;
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) var(--col-url, 200px) var(--col-totp, 96px) 70px;
+    grid-template-columns: var(--entry-cols);
     align-items: center;
-    gap: 9px;
+    gap: 0;
     height: 40px;
-    padding: 0 10px;
+    padding: 0;
     cursor: pointer;
   }
 
@@ -2056,6 +2181,14 @@
 
   .entry-row.selected {
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
+  }
+
+  .entry-row-icon-cell {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding-left: 10px;
+    border-right: 1px solid var(--border-subtle);
   }
 
   .entry-row-icon {
@@ -2082,7 +2215,9 @@
   .entry-row-main {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     min-width: 0;
+    height: 100%;
     flex: 1;
   }
 
@@ -2122,25 +2257,37 @@
   .entry-row-col {
     overflow: hidden;
     min-width: 0;
+    height: 100%;
+    padding: 0 8px;
+    border-right: 1px solid var(--border-subtle);
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .col-url {
+  .col-title {
+    color: var(--text-primary);
+  }
+
+  .col-masked {
     color: var(--text-faint);
   }
 
   .col-totp {
     display: flex;
+    align-items: center;
     min-width: 0;
   }
 
   .entry-row-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 2px;
     min-width: 0;
+    height: 100%;
+    padding: 0 10px;
+    border-left: 1px solid var(--border-subtle);
     opacity: 0;
   }
 
