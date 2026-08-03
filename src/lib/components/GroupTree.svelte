@@ -49,8 +49,9 @@
   }
 
   const initialRoot = (() => root)();
-  const initialExpanded = new Set<string>();
-  collectUuids(initialRoot, initialExpanded);
+  // Databases open fully collapsed: only the (unrendered) root stays
+  // expanded, so every top-level group starts folded.
+  const initialExpanded = new Set<string>([initialRoot.uuid]);
 
   let expanded = $state<Set<string>>(initialExpanded);
 
@@ -66,6 +67,12 @@
   $effect(() => {
     const uuids = new Set<string>();
     collectUuids(root, uuids);
+    // A brand-new database (no overlapping uuids) also starts collapsed.
+    if (uuids.size > 0 && ![...uuids].some((uuid) => knownUuids.has(uuid))) {
+      expanded = new Set([root.uuid]);
+      knownUuids = new Set(uuids);
+      return;
+    }
     let next: Set<string> | null = null;
     for (const uuid of uuids) {
       if (!knownUuids.has(uuid)) {
