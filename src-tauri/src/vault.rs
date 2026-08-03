@@ -3853,7 +3853,12 @@ mod tests {
         unset.set_unprotected(FIELD_PASSWORD, "p");
         unset.times.expiry = Some(past);
         unset.times.expires = None;
-        save_database(&db, &path, DatabaseKey::new().with_password("master-password")).unwrap();
+        save_database(
+            &db,
+            &path,
+            DatabaseKey::new().with_password("master-password"),
+        )
+        .unwrap();
         let mut session = VaultSession::default();
         let state = session.open(&path, "master-password", None).unwrap();
         assert_eq!(state.root.entries.len(), 2);
