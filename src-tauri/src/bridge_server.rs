@@ -83,9 +83,8 @@ impl BridgeState {
         let listener = match TcpListener::bind(("127.0.0.1", BRIDGE_PORT)) {
             Ok(listener) => listener,
             Err(e) => {
-                let message = format!(
-                    "无法监听 127.0.0.1:{BRIDGE_PORT} (端口可能被其他 KeePass 占用): {e}"
-                );
+                let message =
+                    format!("无法监听 127.0.0.1:{BRIDGE_PORT} (端口可能被其他 KeePass 占用): {e}");
                 if let Ok(mut slot) = self.last_error.lock() {
                     *slot = Some(message.clone());
                 }
