@@ -912,8 +912,7 @@ mod tests {
             conn.session_key.as_ref().unwrap(),
             &request.to_string(),
         ));
-        let (reply, method) =
-            dispatch_jsonrpc(&mut conn, &env, &mut host).expect("jsonrpc reply");
+        let (reply, method) = dispatch_jsonrpc(&mut conn, &env, &mut host).expect("jsonrpc reply");
         assert_eq!(method, "GetAllDatabases");
         let frame = reply.jsonrpc.as_ref().unwrap();
         let plaintext = decrypt_frame(conn.session_key.as_ref().unwrap(), frame).expect("decrypt");
