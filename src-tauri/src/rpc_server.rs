@@ -25,11 +25,12 @@ use crate::rpc::{
 use crate::vault::VaultSession;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{mpsc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
-use tungstenite::handshake::server::{Request, Response};
+use tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tungstenite::{accept_hdr, Message as WsMessage, WebSocket};
 use zeroize::Zeroize;
 
@@ -180,22 +181,66 @@ impl Drop for Conn {
     }
 }
 
+/// Accept a WebSocket upgrade on `/`. Any other request gets a 404 with CORS
+/// headers — Kee 2.x probes the port with a plain `GET /pingAvailabilityTest`
+/// and only proceeds to the WebSocket handshake when that probe returns 404.
+#[allow(clippy::result_large_err)] // ErrorResponse is tungstenite's type, not ours
+fn accept_callback(req: &Request, res: Response) -> Result<Response, ErrorResponse> {
+    if req.uri().path() == "/" {
+        return Ok(res);
+    }
+    Err(Response::builder()
+        .status(tungstenite::http::StatusCode::NOT_FOUND)
+        .body(None)
+        .expect("valid response"))
+}
+
+/// Kee 2.x's port-availability probe answer (plain HTTP, no WebSocket).
+const PROBE_404_RESPONSE: &[u8] = b"HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: Content-Type, X-Requested-With\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+/// Read the request head (up to `\r\n\r\n`) via `peek` and judge whether the
+/// client is asking for a WebSocket upgrade; nothing is consumed from the
+/// stream, so the head is still visible to tungstenite afterwards.
+fn is_websocket_upgrade(stream: &mut TcpStream) -> bool {
+    let mut head = Vec::new();
+    let mut buf = [0u8; 2048];
+    while !head.windows(4).any(|w| w == b"\r\n\r\n") && head.len() < 64 * 1024 {
+        match stream.peek(&mut buf) {
+            Ok(0) => return false,
+            Ok(n) => head.extend_from_slice(&buf[..n]),
+            Err(_) => return false,
+        }
+    }
+    String::from_utf8_lossy(&head)
+        .to_ascii_lowercase()
+        .contains("upgrade: websocket")
+}
+
+/// Serve one inbound connection: plain-HTTP port probes get Kee's expected
+/// 404, WebSocket upgrades go through tungstenite.
+fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
+    if !is_websocket_upgrade(&mut stream) {
+        let _ = stream.write_all(PROBE_404_RESPONSE);
+        let _ = stream.shutdown(std::net::Shutdown::Write);
+        // Drain the request so the close is a graceful FIN — Windows sends
+        // an RST when a socket with unread data is dropped.
+        let mut buf = [0u8; 1024];
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+        }
+        return None;
+    }
+    // The request head was only peeked, so tungstenite still sees it.
+    accept_hdr(stream, accept_callback).ok()
+}
+
 fn handle_connection(stream: TcpStream, app: &AppHandle) {
     let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
-    // The handshake callback returns tungstenite's `ErrorResponse` (large by
-    // API design); the result type is not ours to shrink.
-    #[allow(clippy::result_large_err)]
-    let mut ws = match accept_hdr(stream, |req: &Request, res: Response| {
-        if req.uri().path() != "/" {
-            return Err(Response::builder()
-                .status(tungstenite::http::StatusCode::NOT_FOUND)
-                .body(None)
-                .expect("valid response"));
-        }
-        Ok(res)
-    }) {
-        Ok(ws) => ws,
-        Err(_) => return,
+    let Some(mut ws) = serve_connection(stream) else {
+        return;
     };
     // Handshake is done; allow longer idle on the data path.
     let _ = ws.get_mut().set_read_timeout(Some(DATA_TIMEOUT));
@@ -943,7 +988,7 @@ mod tests {
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
                 let mut ws: WebSocket<TcpStream> = {
                     #[allow(clippy::result_large_err)]
-                    accept_hdr(stream, |_req: &Request, res: Response| Ok(res))
+                    accept_hdr(stream, accept_callback)
                 }
                 .unwrap();
                 let msg = ws.read().expect("text frame");
@@ -984,6 +1029,50 @@ mod tests {
                 .write_all(&[0x88, 0x82, 0x11, 0x22, 0x33, 0x44, 0x03 ^ 0x11, 0xe8 ^ 0x22])
                 .unwrap();
             let _ = stream.read(&mut [0u8; 8]).ok();
+            server.join().unwrap();
+        }
+
+        #[test]
+        fn availability_probe_gets_404_with_cors() {
+            // Kee 2.x polls `GET /pingAvailabilityTest` over plain HTTP and
+            // only attempts the WebSocket handshake when it gets a 404; a
+            // different status makes it assume another service owns the port.
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                // serve_connection must answer the probe and decline the
+                // connection without touching tungstenite.
+                assert!(serve_connection(stream).is_none());
+            });
+
+            let mut stream = TcpStream::connect(addr).unwrap();
+            stream
+                .write_all(
+                    b"GET /pingAvailabilityTest HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: moz-extension://test\r\nConnection: keep-alive\r\n\r\n",
+                )
+                .unwrap();
+            let mut response = Vec::new();
+            let mut one = [0u8; 1];
+            while !response.ends_with(b"\r\n\r\n") && response.len() < 8192 {
+                if stream.read(&mut one).unwrap() == 0 {
+                    break;
+                }
+                response.push(one[0]);
+            }
+            // Close our end so the server's drain loop ends before join().
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            let text = String::from_utf8_lossy(&response);
+            assert!(
+                text.starts_with("HTTP/1.1 404"),
+                "probe must answer 404, got: {text}"
+            );
+            assert!(
+                text.to_lowercase()
+                    .contains("access-control-allow-origin: *"),
+                "probe response needs CORS headers, got: {text}"
+            );
             server.join().unwrap();
         }
     }
