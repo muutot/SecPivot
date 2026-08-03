@@ -24,6 +24,8 @@
     | "chevron-down"
     | "chevron-right"
     | "chevron-left"
+    | "chevrons-down"
+    | "chevrons-right"
     | "grid"
     | "keyboard"
     | "palette"
@@ -86,6 +88,8 @@
     "chevron-down": '<path d="m6 9 6 6 6-6"></path>',
     "chevron-right": '<path d="m9 6 6 6-6 6"></path>',
     "chevron-left": '<path d="m15 6-6 6 6 6"></path>',
+    "chevrons-down": '<path d="m7 6 5 5 5-5"></path><path d="m7 13 5 5 5-5"></path>',
+    "chevrons-right": '<path d="m6 7 5 5-5 5"></path><path d="m13 7 5 5-5 5"></path>',
     grid: '<rect x="4" y="4" width="7" height="7" rx="1"></rect><rect x="13" y="4" width="7" height="7" rx="1"></rect><rect x="4" y="13" width="7" height="7" rx="1"></rect><rect x="13" y="13" width="7" height="7" rx="1"></rect>',
     keyboard:
       '<rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"></path>',

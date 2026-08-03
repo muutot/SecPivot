@@ -85,11 +85,31 @@
   }
 
   const total = $derived(countVisibleEntries(root));
+
+  /** Expand every group (keep the root itself; it is not rendered). */
+  function expandAll(): void {
+    const next = new Set<string>();
+    collectUuids(root, next);
+    expanded = next;
+  }
+
+  /** Collapse every group (keep only the root). */
+  function collapseAll(): void {
+    expanded = new Set([root.uuid]);
+  }
 </script>
 
 <div class="group-tree">
   <div class="tree-head">
     <span class="tree-label">分组</span>
+    <div class="tree-tools">
+      <button class="tool-btn" title="全部展开" aria-label="全部展开" onclick={expandAll}>
+        <AppIcon name="chevrons-down" size={13} />
+      </button>
+      <button class="tool-btn" title="全部折叠" aria-label="全部折叠" onclick={collapseAll}>
+        <AppIcon name="chevrons-right" size={13} />
+      </button>
+    </div>
   </div>
 
   <div class="tree-list">
@@ -138,6 +158,31 @@
     font-size: var(--font-size-tiny, 10px);
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  .tree-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-faint);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .tool-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
   }
 
   .tree-list {

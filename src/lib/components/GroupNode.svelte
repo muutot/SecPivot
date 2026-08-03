@@ -175,7 +175,7 @@
         {#if showChevron}
           {#if hasChildren}
             <span class="chevron" class:open={isExpanded} aria-hidden="true">
-              <AppIcon name="chevron-down" size={13} />
+              <AppIcon name="chevron-right" size={13} />
             </span>
           {:else}
             <span class="leaf-dot" aria-hidden="true"></span>
@@ -258,7 +258,7 @@
   }
 
   .chevron.open {
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
   }
 
   .leaf-dot {
