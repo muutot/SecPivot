@@ -2659,6 +2659,11 @@ fn resolve_group_id(db: &Database, uuid: &str) -> Result<GroupId, String> {
 /// A URI without an explicit `digits` parameter is also pinned to 6: keepass
 /// 0.13 falls back to 8 (`DEFAULT_DIGITS`), so Google Authenticator exports —
 /// which omit `digits` — would otherwise produce an unusable 8-digit code.
+///
+/// The `secret` value is uppercased: keepass decodes it with the `base32`
+/// crate, whose RFC 4648 lookup table accepts only A-Z and 2-7, so lowercase
+/// secrets (typed by hand or scraped from a QR code) fail with a `Base32`
+/// error instead of producing a code.
 fn normalize_totp_seed(seed: &str) -> String {
     let trimmed = seed.trim();
     if trimmed.to_ascii_lowercase().starts_with("otpauth://") {
@@ -2666,12 +2671,22 @@ fn normalize_totp_seed(seed: &str) -> String {
             Some(at) => trimmed.split_at(at),
             None => (trimmed, ""),
         };
-        if query.to_ascii_lowercase().contains("digits=") {
-            trimmed.to_owned()
-        } else if query.is_empty() {
+        let mut pairs: Vec<String> = query
+            .trim_start_matches('?')
+            .split('&')
+            .filter(|pair| !pair.is_empty())
+            .map(|pair| match pair.split_once('=') {
+                Some(("secret", value)) => format!("secret={}", value.to_uppercase()),
+                _ => pair.to_owned(),
+            })
+            .collect();
+        if !pairs.iter().any(|pair| pair.starts_with("digits=")) {
+            pairs.push("digits=6".to_owned());
+        }
+        if pairs.is_empty() {
             format!("{head}?digits=6")
         } else {
-            format!("{trimmed}&digits=6")
+            format!("{head}?{}", pairs.join("&"))
         }
     } else {
         let secret = trimmed.replace([' ', '-'], "").to_uppercase();
@@ -4543,6 +4558,31 @@ mod tests {
         )
         .unwrap();
         assert_eq!(explicit.code, "94287082");
+    }
+
+    #[test]
+    fn totp_accepts_lowercase_secret_in_uri() {
+        // keepass decodes secrets with the `base32` crate whose RFC 4648
+        // table only accepts A-Z / 2-7; a lowercase secret (typed by hand or
+        // scraped from a QR code) must be uppercased before parsing.
+        let user_uri =
+            "otpauth://totp/Google:m2uyoo@gmail.com?secret=2r23njeqijx7zfia7u2b2ena4lhkkuwt&issuer=Google";
+        let code = compute_totp_at(user_uri, 1_700_000_000).expect("lowercase secret must decode");
+        assert_eq!(code.code.len(), 6);
+        assert_eq!(code.period, 30);
+
+        // The lowercase URI must yield the same code as its uppercased twin.
+        let upper_uri =
+            "otpauth://totp/Google:m2uyoo@gmail.com?secret=2R23NJEQIJX7ZFIA7U2B2ENA4LHKKUWT&issuer=Google";
+        assert_eq!(
+            compute_totp_at(upper_uri, 1_700_000_000).unwrap().code,
+            code.code,
+        );
+
+        // Raw lowercase Base32 keys were already normalized; keep it working.
+        let raw = compute_totp_at("2r23njeqijx7zfia7u2b2ena4lhkkuwt", 1_700_000_000)
+            .expect("raw lowercase key must decode");
+        assert_eq!(raw.code, code.code);
     }
 
     #[test]
