@@ -1736,6 +1736,10 @@ impl RpcHost for VaultSession {
             entry.id().uuid().to_string()
         };
         self.mark_dirty();
+        // The extension assumes a successful AddLogin/UpdateLogin is durable
+        // (KeePassRPC persists after every write); nothing in the desktop UI
+        // saves on its behalf, so flush here.
+        persist_after_rpc_write(self)?;
         rpc_login_by_uuid(self, &created_uuid)
             .ok_or(RpcError::InvalidMessage("新建条目读取失败".to_owned()))
     }
@@ -1772,8 +1776,18 @@ impl RpcHost for VaultSession {
             });
         }
         self.mark_dirty();
+        persist_after_rpc_write(self)?;
         rpc_login_by_uuid(self, old_uuid).ok_or(RpcError::EntryNotFound)
     }
+}
+
+/// Persist the vault right after a browser-originated write (Add/UpdateLogin)
+/// so the change survives a restart even when the desktop UI never saves.
+fn persist_after_rpc_write(session: &mut VaultSession) -> Result<(), RpcError> {
+    session
+        .save()
+        .map_err(|e| RpcError::InvalidMessage(format!("保存失败: {e}")))?;
+    Ok(())
 }
 
 /// Read one entry by uuid as an `RpcLogin` (recycle bin skipped, like the
@@ -1818,7 +1832,35 @@ fn build_rpc_group(
         title: title.to_owned(),
         path: path.clone(),
         icon_image_data: String::new(),
-        entries: Vec::new(),
+        entries: group
+            .entries()
+            .map(|entry| {
+                let urls: Vec<String> = entry
+                    .get(FIELD_URL)
+                    .unwrap_or_default()
+                    .split_whitespace()
+                    .map(str::to_owned)
+                    .collect();
+                RpcLogin {
+                    uuid: entry.id().uuid().to_string(),
+                    title: entry.get_title().unwrap_or_default().to_owned(),
+                    username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                    // childLightEntries carry no credentials; keep them out of
+                    // the tree snapshot to avoid secrets entering the browser.
+                    password: String::new(),
+                    urls,
+                    http_realm: String::new(),
+                    icon_image_data: String::new(),
+                    parent_group: RpcGroupRef {
+                        uuid: group.id().uuid().to_string(),
+                        title: title.to_owned(),
+                        path: path.clone(),
+                        icon_image_data: String::new(),
+                    },
+                    match_accuracy: 1,
+                }
+            })
+            .collect(),
         children: group
             .groups()
             .filter(|g| bin_id != Some(g.id()))
@@ -2783,6 +2825,81 @@ mod tests {
             .create(&path, "master-password", "Aes", "Aes256", "None", None)
             .unwrap();
         (session, path)
+    }
+
+    /// The plugin tree served through GetAllDatabases must actually contain
+    /// the vault's entries — an empty `childLightEntries` made the Kee browser
+    /// extension show nothing, so adds/edits could not be seen either.
+    #[test]
+    fn plugin_tree_includes_root_and_subgroup_entries() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let group_uuid = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap()
+            .root
+            .children[0]
+            .uuid
+            .clone();
+        session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Webmail".into(),
+                username: "alice".into(),
+                password: "s3cret".into(),
+                url: "https://webmail.example.com".into(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .expect("group entry added");
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "RootEntry".into(),
+                username: "bob".into(),
+                password: "pw".into(),
+                url: "https://root.example".into(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .expect("root entry added");
+
+        use crate::rpc::RpcHost;
+        let db = session
+            .database()
+            .expect("open session exposes plugin tree");
+        assert!(
+            db.root.entries.iter().any(|e| e.title == "RootEntry"),
+            "root-level entries must appear in the plugin tree"
+        );
+        let mail = db
+            .root
+            .children
+            .iter()
+            .find(|g| g.title == "Mail")
+            .expect("Mail group must appear in the plugin tree");
+        assert!(
+            mail.entries.iter().any(|e| e.title == "Webmail"),
+            "sub-group entries must appear in the plugin tree"
+        );
+        assert!(
+            db.root.entries.iter().all(|e| e.password.is_empty()),
+            "plugin tree light entries must never carry credentials"
+        );
     }
 
     /// Write a KeePass-style binary keyfile and return its path.
