@@ -573,6 +573,72 @@ fn auto_type(
 }
 
 // ---------------------------------------------------------------------------
+// Download Favicons (KeePass-style: fetch per host, store as custom icons)
+// ---------------------------------------------------------------------------
+
+/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with a 4-second
+/// timeout and a 512 KiB size cap. Returns `None` when nothing is served.
+async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(4))
+        .user_agent("KeyVault/0.1")
+        .build()
+        .ok()?;
+    for path in ["/favicon.ico", "/favicon.png"] {
+        let Ok(response) = client.get(format!("https://{host}{path}")).send().await else {
+            continue;
+        };
+        if !response.status().is_success() {
+            continue;
+        }
+        let Ok(bytes) = response.bytes().await else {
+            continue;
+        };
+        if !bytes.is_empty() && bytes.len() < 512 * 1024 {
+            return Some(bytes.to_vec());
+        }
+    }
+    None
+}
+
+/// Download favicons for every entry URL host and write them back into the
+/// database as custom icons (persisted immediately).
+#[tauri::command]
+async fn download_favicons(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<vault::FaviconReport, String> {
+    let jobs = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .favicon_jobs()?;
+    let mut set = tokio::task::JoinSet::new();
+    for job in &jobs {
+        let host = job.host.clone();
+        set.spawn(async move {
+            let host = host;
+            (host.clone(), fetch_favicon(&host).await)
+        });
+    }
+    let mut fetched: Vec<vault::FaviconFetch> = Vec::new();
+    while let Some(result) = set.join_next().await {
+        if let Ok((host, Some(bytes))) = result {
+            fetched.push(vault::FaviconFetch { host, bytes });
+        }
+    }
+    let downloaded = fetched.len();
+    let report = {
+        let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        session.apply_favicons(&jobs, fetched)?;
+        session.save()?;
+        vault::FaviconReport {
+            attempted: jobs.len(),
+            downloaded,
+        }
+    };
+    Ok(report)
+}
+
+// ---------------------------------------------------------------------------
 // TCATO (two-channel auto-type overlay)
 // ---------------------------------------------------------------------------
 
@@ -1051,6 +1117,7 @@ pub fn run() {
             get_entry_totp,
             security_report,
             export_csv,
+            download_favicons,
             read_text_file,
             clipboard_read_text,
             clipboard_clear,

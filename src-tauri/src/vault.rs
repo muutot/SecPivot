@@ -290,6 +290,30 @@ pub struct DuplicatePasswords {
     pub uuids: Vec<String>,
 }
 
+/// One favicon job: a URL host plus every entry UUID that references it.
+#[derive(Debug, Clone)]
+pub struct FaviconJob {
+    pub host: String,
+    pub entry_uuids: Vec<String>,
+}
+
+/// A successfully fetched favicon for one host, ready to be written back.
+#[derive(Debug, Clone)]
+pub struct FaviconFetch {
+    pub host: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Result of a "Download Favicons" run, surfaced to the renderer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaviconReport {
+    /// Number of distinct hosts whose entries were examined.
+    pub attempted: usize,
+    /// Number of favicons actually fetched and stored.
+    pub downloaded: usize,
+}
+
 // ---------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------
@@ -1208,6 +1232,72 @@ impl VaultSession {
             .get_raw_otp_value()
             .ok_or_else(|| "该条目没有 TOTP 种子".to_owned())?;
         compute_totp_now(seed)
+    }
+
+    /// Distinct URL hosts referenced by entry URLs, with the entries per host
+    /// (KeePass "Download Favicons" job list). Non-http(s) URLs are skipped.
+    pub fn favicon_jobs(&self) -> Result<Vec<FaviconJob>, String> {
+        let db = self.require_db()?;
+        let mut map: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        collect_favicon_hosts(&db.root(), &mut map);
+        Ok(map
+            .into_iter()
+            .map(|(host, entry_uuids)| FaviconJob { host, entry_uuids })
+            .collect())
+    }
+
+    /// Store fetched favicon bytes as database custom icons and point every
+    /// entry of the same host at that icon. An entry that already references
+    /// an identical icon keeps it; otherwise the icon data is replaced (or a
+    /// new custom icon is created). Persisting is the caller's job.
+    pub fn apply_favicons(
+        &mut self,
+        jobs: &[FaviconJob],
+        fetched: Vec<FaviconFetch>,
+    ) -> Result<(), String> {
+        let db = self.require_db_mut()?;
+        let jobs: HashMap<&str, &FaviconJob> = jobs.iter().map(|j| (j.host.as_str(), j)).collect();
+        for item in fetched {
+            let Some(job) = jobs.get(item.host.as_str()) else {
+                continue;
+            };
+            let Some(first) = job.entry_uuids.first() else {
+                continue;
+            };
+            let first_id = parse_entry_id(first)?;
+            let existing = {
+                let Some(first_entry) = db.entry_mut(first_id) else {
+                    continue;
+                };
+                first_entry.icon().cloned()
+            };
+            let icon_id = match existing {
+                Some(Icon::Custom(id)) => {
+                    let identical = db
+                        .custom_icon(id)
+                        .is_some_and(|icon| icon.data == item.bytes);
+                    if !identical {
+                        if let Some(mut icon) = db.custom_icon_mut(id) {
+                            icon.data = item.bytes.clone();
+                        }
+                    }
+                    id
+                }
+                _ => {
+                    let Some(mut first_entry) = db.entry_mut(first_id) else {
+                        continue;
+                    };
+                    first_entry.set_icon_custom_new(item.bytes.clone()).id()
+                }
+            };
+            for uuid in job.entry_uuids.iter().skip(1) {
+                let Some(mut entry) = db.entry_mut(parse_entry_id(uuid)?) else {
+                    continue;
+                };
+                let _ = entry.set_icon_custom(icon_id);
+            }
+        }
+        Ok(())
     }
 
     /// Collect the fields an auto-type sequence can substitute, for the given entry.
@@ -2138,6 +2228,42 @@ fn bridge_db_hash(db: &Database) -> String {
 // Serialization
 // ---------------------------------------------------------------------------
 
+/// Collect every entry URL host under `group` into `map`, keyed by host.
+fn collect_favicon_hosts(
+    group: &GroupRef<'_>,
+    map: &mut std::collections::BTreeMap<String, Vec<String>>,
+) {
+    for entry in group.entries() {
+        if let Some(host) = extract_host(entry.get(FIELD_URL).unwrap_or_default()) {
+            map.entry(host)
+                .or_default()
+                .push(entry.id().uuid().to_string());
+        }
+    }
+    for child in group.groups() {
+        collect_favicon_hosts(&child, map);
+    }
+}
+
+/// Best-effort host extraction for favicon downloads: accepts `http(s)://`
+/// URLs and scheme-less domains, returning `host[:port]`; `None` otherwise.
+fn extract_host(url: &str) -> Option<String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = if trimmed.contains("://") {
+        trimmed.to_owned()
+    } else {
+        format!("https://{trimmed}")
+    };
+    let parsed = url::Url::parse(&candidate).ok()?;
+    match parsed.scheme() {
+        "http" | "https" => parsed.host_str().map(str::to_owned),
+        _ => None,
+    }
+}
+
 /// Encode a custom-icon's raw image bytes as a `data:` URL with a guessed
 /// media type, so the renderer can drop it straight into an `<img>`.
 fn icon_to_data_url(bytes: &[u8]) -> String {
@@ -2961,6 +3087,65 @@ mod tests {
             .create(&path, "master-password", "Aes", "Aes256", "None", None)
             .unwrap();
         (session, path)
+    }
+
+    /// KeePass "Download Favicons": jobs are grouped by URL host, fetched
+    /// bytes land in the database as custom icons on every entry of that
+    /// host, and survive a save + reopen round-trip.
+    #[test]
+    fn apply_favicons_persists_custom_icon_across_reopen() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        for (title, url) in [
+            ("Login", "https://example.com/login"),
+            ("Other", "https://example.com/other"),
+        ] {
+            session
+                .add_entry(&EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: title.into(),
+                    username: "u".into(),
+                    password: "p".into(),
+                    url: url.into(),
+                    notes: String::new(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: Vec::new(),
+                    attachments: Vec::new(),
+                })
+                .unwrap();
+        }
+        let jobs = session.favicon_jobs().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].host, "example.com");
+        assert_eq!(jobs[0].entry_uuids.len(), 2);
+
+        let bytes = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        session
+            .apply_favicons(
+                &jobs,
+                vec![FaviconFetch {
+                    host: "example.com".into(),
+                    bytes: bytes.clone(),
+                }],
+            )
+            .unwrap();
+        session.save().unwrap();
+        drop(session);
+
+        let mut session = VaultSession::default();
+        session.open(&path, "master-password", None).unwrap();
+        let db = session.require_db().unwrap();
+        let mut icon_datas = Vec::new();
+        for entry in db.root().entries() {
+            match entry.icon().cloned() {
+                Some(Icon::Custom(id)) => icon_datas.push(db.custom_icon(id).unwrap().data.clone()),
+                _ => panic!("entry should reference a custom icon"),
+            }
+        }
+        assert_eq!(icon_datas, vec![bytes.clone(), bytes.clone()]);
     }
 
     /// The plugin tree served through GetAllDatabases must actually contain

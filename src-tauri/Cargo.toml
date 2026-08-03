@@ -49,6 +49,9 @@ getrandom = "0.2"
 # KeePassRPC bridge (Phase 2): SRP big-number math + WebSocket loopback server.
 num-bigint = "0.4"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+# Download favicons (KeePass "Download Favicons"); TLS via rustls, no native deps.
+reqwest = { version = "0.13", features = ["rustls"] }
+url = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange"] }
