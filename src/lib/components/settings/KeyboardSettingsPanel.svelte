@@ -37,17 +37,18 @@
     change("shortcuts", shortcuts);
   }
 
-  let recordingAction = $state("");
+  type RecordingTarget = "global" | string;
+  let recordingTarget = $state<RecordingTarget | "">("");
   let recordingTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
-  function startRecording(actionId: string): void {
+  function startRecording(target: RecordingTarget): void {
     stopRecording();
-    recordingAction = actionId;
+    recordingTarget = target;
     window.addEventListener("keydown", onRecordingKey, true);
     recordingTimer = setTimeout(() => {
       recordingTimer = undefined;
       stopRecording();
-    }, 5000);
+    }, 3000);
   }
 
   function stopRecording(): void {
@@ -55,7 +56,7 @@
       clearTimeout(recordingTimer);
       recordingTimer = undefined;
     }
-    recordingAction = "";
+    recordingTarget = "";
     window.removeEventListener("keydown", onRecordingKey, true);
   }
 
@@ -85,9 +86,12 @@
     }
 
     if (pressed.length === 0) return;
-    const actionId = recordingAction;
+    const target = recordingTarget;
     stopRecording();
-    if (actionId) setBinding(actionId, pressed.join("+"));
+    if (!target) return;
+    const shortcut = pressed.join("+");
+    if (target === "global") change("autoTypeGlobal", shortcut);
+    else setBinding(target, shortcut);
   }
 
   onDestroy(() => {
@@ -96,98 +100,139 @@
   });
 </script>
 
-<section class="setting-card">
-  <div class="setting-heading">
-    <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
-    <div class="heading-inline">
+{#if showHeader}
+  <header>
+    <div>
+      <span class="eyebrow">Settings · 快捷键</span>
+      <h2>快捷键</h2>
+      <p>全局自动填充热键与常用操作的窗口内快捷键。</p>
+    </div>
+    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+  </header>
+{/if}
+
+<div class="settings-scroll">
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
       <div>
         <strong>全局自动填充热键</strong>
-        <p>按快捷键时，把匹配前台窗口的条目自动键入；留空禁用</p>
-        <p class="hint">
-          使用 Ctrl/Alt/Shift/Command 加按键组合，如
-          Ctrl+Shift+A；按窗口标题匹配条目网址域名或标题，回收站内条目不参与
+        <p>
+          按下快捷键时，把匹配前台窗口的条目自动键入；按窗口标题匹配条目的网址域名或标题，回收站内条目不参与。未绑定时禁用。
         </p>
       </div>
     </div>
-  </div>
-  <input
-    class="settings-input shortcut-input"
-    type="text"
-    spellcheck="false"
-    value={keyboard.autoTypeGlobal}
-    placeholder="Ctrl+Shift+A"
-    oninput={(e) => change("autoTypeGlobal", (e.currentTarget as HTMLInputElement).value.trim())}
-  />
-</section>
+    <div class="shortcut-bindings">
+      {#if recordingTarget === "global"}
+        <div class="binding-chip recording">
+          <kbd>按下快捷键…</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={stopRecording}
+            aria-label="取消录制">&times;</button
+          >
+        </div>
+      {:else if keyboard.autoTypeGlobal}
+        <div class="binding-chip">
+          <kbd>{keyboard.autoTypeGlobal}</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={() => change("autoTypeGlobal", "")}
+            aria-label="移除绑定">&minus;</button
+          >
+        </div>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("global")}
+          aria-label="重新录制">+</button
+        >
+      {:else}
+        <span class="binding-disabled">未绑定</span>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("global")}
+          aria-label="录制快捷键">+</button
+        >
+      {/if}
+    </div>
+  </section>
 
-{#each KEYBOARD_ACTIONS as action (action.id)}
-  <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name={action.icon} size={17} /></span>
-      <div class="heading-inline">
+  {#each KEYBOARD_ACTIONS as action (action.id)}
+    <section class="setting-card toggle-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name={action.icon} size={17} /></span>
         <div>
           <strong>{action.label}</strong>
           <p>{action.description}</p>
         </div>
       </div>
-    </div>
-    <div class="shortcut-row">
-      {#if recordingAction === action.id}
-        <span class="binding-chip recording">按下快捷键…（Esc 取消）</span>
-        <button type="button" class="binding-add" onclick={stopRecording} aria-label="取消录制"
-          >×</button
-        >
-      {:else if bindingFor(action.id)}
-        <span class="binding-chip">
-          <kbd>{bindingFor(action.id)}</kbd>
+      <div class="shortcut-bindings">
+        {#if recordingTarget === action.id}
+          <div class="binding-chip recording">
+            <kbd>按下快捷键…</kbd>
+            <button
+              type="button"
+              class="binding-chip-close"
+              onclick={stopRecording}
+              aria-label="取消录制">&times;</button
+            >
+          </div>
+        {:else if bindingFor(action.id)}
+          <div class="binding-chip">
+            <kbd>{bindingFor(action.id)}</kbd>
+            <button
+              type="button"
+              class="binding-chip-close"
+              onclick={() => setBinding(action.id, "")}
+              aria-label="移除绑定">&minus;</button
+            >
+          </div>
           <button
             type="button"
-            class="binding-clear"
-            aria-label="清除快捷键"
-            onclick={() => setBinding(action.id, "")}>×</button
+            class="binding-add"
+            onclick={() => startRecording(action.id)}
+            aria-label="重新录制">+</button
           >
-        </span>
-        <button
-          type="button"
-          class="binding-add"
-          onclick={() => startRecording(action.id)}
-          aria-label="录制快捷键">＋</button
-        >
-      {:else}
-        <span class="binding-chip default"><kbd>{action.default}</kbd></span>
-        <button
-          type="button"
-          class="binding-add"
-          onclick={() => startRecording(action.id)}
-          aria-label="录制快捷键">＋</button
-        >
-      {/if}
-    </div>
-  </section>
-{/each}
+        {:else}
+          <div class="binding-chip default">
+            <kbd>{action.default}</kbd>
+          </div>
+          <button
+            type="button"
+            class="binding-add"
+            onclick={() => startRecording(action.id)}
+            aria-label="录制快捷键">+</button
+          >
+        {/if}
+      </div>
+    </section>
+  {/each}
 
-<p class="panel-note">
-  点击 ＋ 录制新快捷键；录制后可通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。
-</p>
+  <p class="settings-note">
+    点击 ＋ 录制新快捷键；录制后通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。
+  </p>
+  <p class="auto-save-note">修改即时生效并自动保存</p>
+</div>
 
 <style>
-  .shortcut-input {
-    margin-top: 10px;
-    max-width: 240px;
-  }
-
-  .shortcut-row {
+  .shortcut-bindings {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin-top: 10px;
+    gap: 6px;
+    flex-shrink: 0;
   }
 
   .binding-chip {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 28px;
+    gap: 4px;
+    height: 30px;
     padding: 0 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
@@ -209,8 +254,6 @@
 
   .binding-chip.recording {
     border-color: var(--selection-color);
-    color: var(--selection-color);
-    font-size: 11px;
     animation: pulse-recording 1s ease-in-out infinite;
   }
 
@@ -224,24 +267,34 @@
     }
   }
 
-  .binding-clear {
+  .binding-chip-close {
+    position: absolute;
+    top: -7px;
+    right: -7px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     padding: 0;
-    border: none;
-    border-radius: 4px;
-    font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    font-size: 10px;
     line-height: 1;
     color: var(--text-muted);
-    background: transparent;
+    background: var(--card-bg);
     cursor: pointer;
+    opacity: 0;
+    transition: opacity 100ms ease;
   }
 
-  .binding-clear:hover {
+  .binding-chip:hover .binding-chip-close {
+    opacity: 1;
+  }
+
+  .binding-chip-close:hover {
     color: var(--danger-color);
+    border-color: var(--danger-color);
     background: color-mix(in srgb, var(--danger-color) 12%, transparent);
   }
 
@@ -249,15 +302,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border: 1px dashed var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-muted);
     background: transparent;
-    font-size: 15px;
+    font-size: 17px;
     cursor: pointer;
+    transition:
+      color 100ms ease,
+      border-color 100ms ease;
   }
 
   .binding-add:hover {
@@ -265,10 +321,9 @@
     border-color: var(--text-muted);
   }
 
-  .panel-note {
-    margin: 4px 2px 0;
-    font-size: 10px;
-    color: var(--text-secondary);
-    opacity: 0.75;
+  .binding-disabled {
+    color: var(--text-faint);
+    font-size: var(--settings-description-size, var(--font-size-secondary, 11px));
+    font-style: italic;
   }
 </style>
