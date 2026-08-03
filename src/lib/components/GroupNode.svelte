@@ -89,6 +89,11 @@
 
   function handleRowClick(): void {
     onselect(group.uuid);
+  }
+
+  function handleMiddleClick(event: MouseEvent): void {
+    if (event.button !== 1) return;
+    event.preventDefault();
     if (hasChildren) ontoggle(group.uuid);
   }
 
@@ -146,6 +151,7 @@
         class:no-icon={!showIcon}
         class:drop-target={dragActive}
         onclick={handleRowClick}
+        onauxclick={handleMiddleClick}
         oncontextmenu={openMenu}
         title={group.name}
         ondragover={(e) => {
