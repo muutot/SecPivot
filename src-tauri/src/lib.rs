@@ -576,19 +576,19 @@ fn auto_type(
 // Download Favicons (KeePass-style: fetch per host, store as custom icons)
 // ---------------------------------------------------------------------------
 
-/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with a 4-second
+/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with an 8-second
 /// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
-/// every failure reason is logged to stderr so server-side diagnosis is
-/// possible without changing the renderer contract.
+/// every failure reason is logged to stderr (full error chain) so server-side
+/// diagnosis is possible without changing the renderer contract.
 async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(4))
+        .timeout(std::time::Duration::from_secs(8))
         .user_agent("KeyVault/0.1")
         .build()
     {
         Ok(client) => client,
         Err(e) => {
-            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host}): {e}");
+            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host}): {e:#}");
             return None;
         }
     };
@@ -597,7 +597,7 @@ async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
         let response = match client.get(&url).send().await {
             Ok(response) => response,
             Err(e) => {
-                eprintln!("[favicon] 请求 {url} 失败: {e}");
+                eprintln!("[favicon] 请求 {url} 失败: {e:#}");
                 continue;
             }
         };
@@ -638,10 +638,21 @@ async fn download_favicons(
     uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
     let jobs = {
-        let session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let session = session.lock().map_err(|_| {
+            eprintln!("[favicon] 数据库锁已损坏");
+            "数据库锁已损坏".to_owned()
+        })?;
         match &uuids {
-            Some(selected) if !selected.is_empty() => session.favicon_jobs_selected(selected)?,
-            _ => session.favicon_jobs()?,
+            Some(selected) if !selected.is_empty() => {
+                session.favicon_jobs_selected(selected).map_err(|e| {
+                    eprintln!("[favicon] 收集选中条目图标任务失败: {e}");
+                    e
+                })?
+            }
+            _ => session.favicon_jobs().map_err(|e| {
+                eprintln!("[favicon] 收集图标任务失败: {e}");
+                e
+            })?,
         }
     };
     let total = jobs.len();
@@ -664,9 +675,18 @@ async fn download_favicons(
     }
     let downloaded = fetched.len();
     let report = {
-        let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        session.apply_favicons(&jobs, fetched)?;
-        session.save()?;
+        let mut session = session.lock().map_err(|_| {
+            eprintln!("[favicon] 数据库锁已损坏");
+            "数据库锁已损坏".to_owned()
+        })?;
+        session.apply_favicons(&jobs, fetched).map_err(|e| {
+            eprintln!("[favicon] 写入图标失败: {e}");
+            e
+        })?;
+        session.save().map_err(|e| {
+            eprintln!("[favicon] 保存数据库失败: {e}");
+            e
+        })?;
         vault::FaviconReport {
             attempted: jobs.len(),
             downloaded,
