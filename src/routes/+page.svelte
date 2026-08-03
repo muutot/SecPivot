@@ -308,6 +308,8 @@
   /** Resizable column width bounds — match config.rs entry-column clamps. */
   const COL_WIDTH_MIN = 30;
   const COL_WIDTH_MAX = 400;
+  /** Title column width when `width` is `0` (auto sentinel, see settings.ts). */
+  const COL_TITLE_DEFAULT = 200;
   /** Built-in entry-table columns, in default display order. */
   const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[] = [
     { id: "title", label: "标题" },
@@ -376,7 +378,8 @@
   const entryGridCols = $derived.by(() => {
     const cols = ["34px"];
     for (const c of visibleCols) {
-      cols.push(c.id === "title" ? "minmax(0, 1fr)" : `${c.width}px`);
+      const w = c.id === "title" && c.width <= 0 ? COL_TITLE_DEFAULT : c.width;
+      cols.push(`${w}px`);
     }
     cols.push("70px");
     return cols.join(" ");
@@ -450,7 +453,10 @@
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
     const startX = e.clientX;
-    const startW = colState(colId).width || 140;
+    const cellEl = target.parentElement;
+    const renderW = cellEl ? Math.round(cellEl.getBoundingClientRect().width) : 0;
+    const storedW = colState(colId).width;
+    const startW = storedW > 0 ? storedW : Math.max(renderW, COL_WIDTH_MIN);
     document.body.classList.add("resizing-column");
     const onMove = (ev: PointerEvent): void => {
       const width = Math.min(
@@ -1493,15 +1499,13 @@
                       >
                     {/if}
                   </button>
-                  {#if col.id !== "title"}
-                    <span
-                      class="resize-handle"
-                      role="separator"
-                      aria-orientation="vertical"
-                      title="调整列宽"
-                      onpointerdown={(e) => startColResize(e, col.id)}
-                    ></span>
-                  {/if}
+                  <span
+                    class="resize-handle"
+                    role="separator"
+                    aria-orientation="vertical"
+                    title="调整列宽"
+                    onpointerdown={(e) => startColResize(e, col.id)}
+                  ></span>
                 </div>
               {/each}
               <div class="head-actions"></div>
@@ -1599,7 +1603,7 @@
                           class:col-masked={col.id === "password"}
                           title={colText(row.entry, col.id) || undefined}
                         >
-                          {colText(row.entry, col.id)}
+                          <span class="entry-row-col-text">{colText(row.entry, col.id)}</span>
                         </span>
                       {/if}
                     {/each}
@@ -2097,6 +2101,9 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .entry-table-head {
@@ -2193,7 +2200,9 @@
   .entry-list {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    width: max-content;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 0 0 16px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
@@ -2235,8 +2244,8 @@
   .entry-row-icon-cell {
     display: flex;
     align-items: center;
+    justify-content: center;
     height: 100%;
-    padding-left: 10px;
     border-right: 1px solid var(--border-subtle);
   }
 
@@ -2304,12 +2313,19 @@
   }
 
   .entry-row-col {
+    display: flex;
+    align-items: center;
     overflow: hidden;
     min-width: 0;
     height: 100%;
     padding: 0 8px;
     border-right: 1px solid var(--border-subtle);
     font-size: 12px;
+  }
+
+  .entry-row-col-text {
+    overflow: hidden;
+    min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
