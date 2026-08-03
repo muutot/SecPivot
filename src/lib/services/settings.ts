@@ -24,8 +24,9 @@ export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-/** Default entry-table columns. `width: 0` on "title" = flexible (fills the
- *  remaining list width). Mirrors `default_entry_columns` in config.rs. */
+/** Default entry-table columns. `width: 0` on "title" is an auto sentinel
+ *  (the frontend renders the default column width). Mirrors
+ *  `default_entry_columns` in config.rs. */
 export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
   { id: "title", visible: true, width: 0 },
   { id: "username", visible: true, width: 120 },
@@ -40,7 +41,7 @@ export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
 ];
 
 /** Merge a persisted column list over the defaults: unknown ids (custom-field
- *  columns) survive, widths clamp to 30..=400 (title keeps its 0 flex
+ *  columns) survive, widths clamp to 30..=400 (title keeps its 0 auto
  *  sentinel). Mirrors `normalize_entry_columns` in config.rs. */
 export function normalizeEntryColumns(
   source: EntryColumnState[] | undefined,

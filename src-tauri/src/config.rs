@@ -150,8 +150,8 @@ impl Default for DensitySettings {
 /// One entry-table column's persisted state (KeePass-style list). `id` is
 /// the built-in column id ("title", "username", "password", "url", "totp",
 /// "notes", "tags", "created", "modified", "expires") or `custom:<field name>`
-/// for entry custom fields. `width` is px; the "title" column uses `0` as a
-/// sentinel meaning flexible (fills the remaining list width).
+/// for entry custom fields. `width` is px; the "title" column uses `0` as an
+/// auto sentinel (the frontend resolves it to the default column width).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EntryColumnState {
@@ -522,7 +522,7 @@ fn clamp_i32(value: i32, min: i32, max: i32, fallback: i32) -> i32 {
     }
 }
 
-/// Clamp every column's width to 30..=400 px ("title" keeps its `0` flex
+/// Clamp every column's width to 30..=400 px ("title" keeps its `0` auto
 /// sentinel) and keep ids/visibility verbatim — unknown ids survive the
 /// round-trip because custom-field columns appear dynamically on the frontend.
 /// Boundary-clamps (not fallback) to stay idempotent with the frontend
