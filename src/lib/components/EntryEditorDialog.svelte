@@ -436,7 +436,7 @@
           </div>
         </label>
 
-        <label class="field">
+        <label class="field full">
           <span>网址</span>
           <input
             class="text-input"
