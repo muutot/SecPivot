@@ -569,6 +569,23 @@
     }
   }
 
+  async function handleDownloadFavicons(): Promise<void> {
+    if (busy || !currentVault) return;
+    busy = true;
+    try {
+      const report = await vault.downloadFavicons();
+      flash(
+        report.attempted === 0
+          ? "没有可下载的网址图标"
+          : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
+      );
+    } catch (e) {
+      flash(`图标下载失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
     try {
       const password = await vault.getEntryPassword(entry.uuid);
@@ -1190,6 +1207,13 @@
           </button>
           <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
             <AppIcon name="download" size={15} />
+          </button>
+          <button
+            class="icon-action"
+            onclick={() => void handleDownloadFavicons()}
+            title="下载网址图标"
+          >
+            <AppIcon name="globe" size={15} />
           </button>
           <button class="icon-action" onclick={openSettings} title="设置">
             <AppIcon name="settings" size={16} />

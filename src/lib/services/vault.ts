@@ -12,6 +12,7 @@ import type {
   TotpCode,
   HistoryVersion,
   SecurityReport,
+  FaviconReport,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -58,6 +59,7 @@ interface VaultStore {
   getEntryPassword: (uuid: string) => Promise<string>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
+  downloadFavicons: () => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
@@ -514,6 +516,13 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return computeSecurityReport(current.root);
+  },
+
+  async downloadFavicons(): Promise<FaviconReport> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
+    const report = await backendInvoke<FaviconReport>("download_favicons");
+    await refreshInternal();
+    return report;
   },
 
   async toggleFavorite(uuid: string): Promise<VaultState> {

@@ -87,6 +87,12 @@ export interface DuplicatePasswords {
   uuids: string[];
 }
 
+/** Result of `download_favicons` (KeePass "Download Favicons"). */
+export interface FaviconReport {
+  attempted: number;
+  downloaded: number;
+}
+
 export interface EntryInput {
   groupUuid: string;
   title: string;
