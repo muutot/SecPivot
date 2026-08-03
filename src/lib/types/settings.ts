@@ -99,8 +99,15 @@ export interface GeneralSettings {
   windowWidth: number;
   windowHeight: number;
   panelWidths: PanelWidths;
+}
+
+/** 快捷键 section: the global auto-type hotkey plus app-window shortcuts
+ *  for common actions. Mirrors `KeyboardSettings` in `src-tauri/src/config.rs`. */
+export interface KeyboardSettings {
   /** Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A"); empty disables it. */
-  globalAutoTypeShortcut: string;
+  autoTypeGlobal: string;
+  /** App-window shortcuts: action id → accelerator. An absent key or empty value means unbound. */
+  shortcuts: Record<string, string>;
 }
 
 /** KeePassHttp browser bridge. The loopback server runs only while enabled;
@@ -128,4 +135,5 @@ export interface AppSettings {
   remote: RemoteSettings;
   bridge: BridgeSettings;
   rpc: RpcSettings;
+  keyboard: KeyboardSettings;
 }

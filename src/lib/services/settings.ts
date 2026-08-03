@@ -9,8 +9,10 @@ import type {
   RemoteProfile,
   BridgeSettings,
   RpcSettings,
+  KeyboardSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
+import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
 
 export const PERSIST_DEBOUNCE_MS = 120;
 
@@ -43,7 +45,6 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowWidth: 1100,
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
-  globalAutoTypeShortcut: "",
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -91,6 +92,13 @@ export const DEFAULT_RPC_SETTINGS: RpcSettings = {
   enabled: false,
 };
 
+/** App-window shortcuts start unbound; the panel shows the action's `default`
+ *  accelerator until the user records a binding. */
+export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
+  autoTypeGlobal: "",
+  shortcuts: {},
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
@@ -100,6 +108,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   remote: DEFAULT_REMOTE_SETTINGS,
   bridge: DEFAULT_BRIDGE_SETTINGS,
   rpc: DEFAULT_RPC_SETTINGS,
+  keyboard: DEFAULT_KEYBOARD_SETTINGS,
 };
 
 const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
@@ -307,6 +316,28 @@ export function normalizeSettings(
   );
   const remote = remoteProfiles[activeRemote].settings;
 
+  const k = source.keyboard ?? fallback.keyboard;
+  const legacyGlobal = (source.general as unknown as {
+    globalAutoTypeShortcut?: unknown;
+  })?.globalAutoTypeShortcut;
+  const keyboard: KeyboardSettings = {
+    autoTypeGlobal:
+      typeof k?.autoTypeGlobal === "string" && k.autoTypeGlobal.trim()
+        ? k.autoTypeGlobal.trim()
+        : typeof legacyGlobal === "string" && legacyGlobal.trim()
+          ? legacyGlobal.trim()
+          : (fallback.keyboard?.autoTypeGlobal ?? ""),
+    shortcuts: {},
+  };
+  if (k && typeof k.shortcuts === "object" && k.shortcuts !== null) {
+    for (const action of KEYBOARD_ACTIONS) {
+      const value = (k.shortcuts as Record<string, unknown>)[action.id];
+      if (typeof value === "string" && value.trim()) {
+        keyboard.shortcuts[action.id] = value.trim();
+      }
+    }
+  }
+
   return {
     general,
     security,
@@ -326,6 +357,7 @@ export function normalizeSettings(
           ? source.rpc.enabled
           : (fallback.rpc?.enabled ?? false),
     },
+    keyboard,
   };
 }
 
@@ -343,6 +375,10 @@ interface AppSettingsStore {
   renameRemoteProfile: (index: number, name: string) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
+  updateKeyboard: <K extends keyof KeyboardSettings>(
+    key: K,
+    value: KeyboardSettings[K],
+  ) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
@@ -514,6 +550,11 @@ export const appSettings: AppSettingsStore = {
 
   updateRpc(key, value): void {
     settings.update((s) => ({ ...s, rpc: { ...s.rpc, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateKeyboard(key, value): void {
+    settings.update((s) => ({ ...s, keyboard: { ...s.keyboard, [key]: value } }));
     schedulePersist();
   },
 

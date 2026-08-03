@@ -7,9 +7,17 @@
   import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
   import BridgeSettingsPanel from "$lib/components/settings/BridgeSettingsPanel.svelte";
   import RpcSettingsPanel from "$lib/components/settings/RpcSettingsPanel.svelte";
+  import KeyboardSettingsPanel from "$lib/components/settings/KeyboardSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
-  type Section = "general" | "security" | "database" | "remote" | "integrations" | "about";
+  type Section =
+    | "general"
+    | "security"
+    | "keyboard"
+    | "database"
+    | "remote"
+    | "integrations"
+    | "about";
   type GeneralTab = "appearance" | "display" | "compact";
   type IntegrationsTab = "http" | "rpc";
 
@@ -31,7 +39,7 @@
   const sections: {
     id: Section;
     label: string;
-    icon: "sliders" | "shield" | "database" | "cloud" | "plug" | "info";
+    icon: "sliders" | "shield" | "keyboard" | "database" | "cloud" | "plug" | "info";
     description: string;
     tabs?: { id: string; label: string }[];
     title: string;
@@ -54,6 +62,13 @@
       icon: "shield",
       title: "安全",
       description: "自动锁定、剪贴板清理与托盘行为。",
+    },
+    {
+      id: "keyboard",
+      label: "快捷键",
+      icon: "keyboard",
+      title: "快捷键",
+      description: "全局自动填充热键与常用操作的窗口内快捷键。",
     },
     {
       id: "database",
@@ -162,6 +177,8 @@
       <GeneralSettingsPanel {onclose} showHeader={false} section={generalTab} />
     {:else if active === "security"}
       <SecuritySettingsPanel {onclose} showHeader={false} />
+    {:else if active === "keyboard"}
+      <KeyboardSettingsPanel {onclose} showHeader={false} />
     {:else if active === "database"}
       <DatabaseSettingsPanel {onclose} showHeader={false} />
     {:else if active === "remote"}

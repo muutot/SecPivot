@@ -275,30 +275,6 @@
         <span class="toggle-knob"></span>
       </button>
     </section>
-
-    <section class="setting-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
-        <div class="heading-inline">
-          <div>
-            <strong>全局自动填充热键</strong>
-            <p>按快捷键时，把匹配前台窗口的条目自动键入；留空禁用</p>
-            <p class="hint">
-              使用 Ctrl/Alt/Shift/Command 加按键组合，如
-              Ctrl+Shift+A；按窗口标题匹配条目网址域名或标题，回收站内条目不参与
-            </p>
-          </div>
-        </div>
-      </div>
-      <input
-        class="settings-input shortcut-input"
-        type="text"
-        spellcheck="false"
-        value={general.globalAutoTypeShortcut}
-        placeholder="Ctrl+Shift+A"
-        oninput={(e) => change("globalAutoTypeShortcut", e.currentTarget.value.trim())}
-      />
-    </section>
   {/if}
 
   {#if section === "compact"}
@@ -511,16 +487,5 @@
   .preset-button:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
-  }
-
-  .hint {
-    font-size: 10px;
-    color: var(--text-secondary);
-    opacity: 0.75;
-  }
-
-  .shortcut-input {
-    margin-top: 10px;
-    max-width: 240px;
   }
 </style>
