@@ -351,7 +351,14 @@ fn dispatch_setup(
                 let mut server = conn.srp.take()?;
                 let expiry = conn.srp_expiry.take()?;
                 let a = conn.srp_a.take()?;
+                eprintln!(
+                    "[rpc] proofToServer received (a_len={}, m_len={}, a[..6]={})",
+                    a.len(),
+                    m.len(),
+                    &a[..6.min(a.len())]
+                );
                 if Instant::now() > expiry {
+                    eprintln!("[rpc] proof expired");
                     return Some(error("AUTH_EXPIRED"));
                 }
                 let m2 = match server.verify_proof(&a, &m) {
@@ -549,7 +556,7 @@ fn send_envelope(ws: &mut WebSocket<TcpStream>, env: &Envelope) -> bool {
 mod tests {
     use super::*;
     use crate::rpc::{hex, RpcHost};
-    use num_bigint::BigUint;
+    use num_bigint::{BigInt, BigUint, Sign};
     use std::collections::HashMap;
     use std::net::TcpStream;
     use std::time::{Duration, Instant};
@@ -666,6 +673,92 @@ mod tests {
         let m = sha256(&format!("{a_hex}{b_hex}{s_upper}"));
         let m2 = sha256(&format!("{a_hex}{m}{s_upper}"));
         (m, m2)
+    }
+
+    /// JS-style modular exponentiation exactly as Kee 4.0.6's `SRP.ts` does it:
+    /// `%` on a negative base yields a negative remainder (ECMAScript BigInt
+    /// semantics), unlike `num-bigint`'s non-negative `%`.
+    fn js_modpow(base: &BigInt, exponent: &BigInt, modulus: &BigInt) -> BigInt {
+        let mut result = BigInt::from(1u32);
+        let mut base = base.clone();
+        let mut exponent = exponent.clone();
+        while exponent > BigInt::ZERO {
+            if (&exponent & BigInt::from(1u32)) != BigInt::ZERO {
+                result = (&result * &base) % modulus;
+            }
+            exponent >>= 1;
+            if exponent > BigInt::ZERO {
+                base = (&base * &base) % modulus;
+            }
+        }
+        result
+    }
+
+    /// Byte-for-byte replication of `SRPc.calculations` from Kee 4.0.6
+    /// (`src/background/SRP.ts`), including its negative-remainder quirk.
+    /// Returns the client's M and whether the client-side S came out negative
+    /// (JS `BigInt.toString(16)` would print "-…", corrupting the M preimage).
+    fn kee_406_client_proof(
+        salt: &str,
+        b_hex: &str,
+        password: &str,
+        a_hex: &str,
+        a: &BigUint,
+    ) -> (String, bool) {
+        let group_hex = crate::rpc::group_n_hex();
+        let n = BigUint::parse_bytes(group_hex.as_bytes(), 16).unwrap();
+        let n_big = BigInt::parse_bytes(group_hex.as_bytes(), 16).unwrap();
+        let g = BigUint::from(2u32);
+        let k = BigUint::parse_bytes("b7867f1299da8cc24ab93e08986ebc4d6a478ad0".as_bytes(), 16)
+            .unwrap();
+        let u = BigUint::parse_bytes(sha256(&format!("{a_hex}{b_hex}")).as_bytes(), 16).unwrap();
+        let x = BigUint::parse_bytes(sha256(&format!("{salt}{password}")).as_bytes(), 16).unwrap();
+        let kgx = (&k * g.modpow(&x, &n)) % &n;
+        let aux = a + &u * &x;
+        let base = BigInt::parse_bytes(b_hex.as_bytes(), 16).unwrap()
+            - BigInt::from_biguint(Sign::Plus, kgx);
+        let s_js = js_modpow(&base, &BigInt::from_biguint(Sign::Plus, aux), &n_big);
+        let negative = s_js.sign() == Sign::Minus;
+        // JS `BigInt.toString(16)` keeps a "-" prefix; the client uppercases
+        // the whole string when building the M preimage.
+        let s_str = s_js.to_str_radix(16);
+        let m = sha256(&format!("{a_hex}{b_hex}{}", s_str.to_uppercase()));
+        (m, negative)
+    }
+
+    /// Statistical probe: run the exact Kee 4.0.6 client SRP math against the
+    /// server 200 times and report how often the server would reject M.
+    #[test]
+    fn kee_406_client_srp_compatibility_statistics() {
+        let trials = 200u32;
+        let mut rejected = 0u32;
+        let mut negative_s = 0u32;
+        let mut rejected_with_positive_s = 0u32;
+        for _ in 0..trials {
+            let (a_hex, a) = client_ephemeral();
+            let (mut server, payload) = crate::rpc::SrpServer::begin("password-shared");
+            let salt = payload["s"].as_str().unwrap().to_owned();
+            let b_hex = payload["B"].as_str().unwrap().to_owned();
+            let (m, neg) = kee_406_client_proof(&salt, &b_hex, "password-shared", &a_hex, &a);
+            if neg {
+                negative_s += 1;
+            }
+            if server.verify_proof(&a_hex, &m).is_err() {
+                rejected += 1;
+                if !neg {
+                    rejected_with_positive_s += 1;
+                }
+            }
+        }
+        eprintln!(
+            "Kee 4.0.6 SRP compat: {rejected}/{trials} rejected, \
+             {negative_s}/{trials} negative S, \
+             {rejected_with_positive_s} rejected with positive S"
+        );
+        assert_eq!(
+            rejected, 0,
+            "every Kee 4.0.6 handshake must succeed via the negative-S fallback"
+        );
     }
 
     fn sha256(input: &str) -> String {
