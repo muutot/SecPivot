@@ -99,7 +99,7 @@
           >{rpc.enabled
             ? status?.running
               ? `运行中 :${status.port}`
-              : status?.error ?? "启动中…"
+              : (status?.error ?? "启动中…")
             : "已停用"}</span
         >
       </div>
