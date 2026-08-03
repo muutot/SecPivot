@@ -60,11 +60,16 @@ impl ServerHandle {
 #[derive(Default)]
 pub(crate) struct BridgeState {
     server: Mutex<Option<ServerHandle>>,
+    last_error: Mutex<Option<String>>,
 }
 
 impl BridgeState {
     pub(crate) fn running(&self) -> bool {
         self.server.lock().ok().is_some_and(|guard| guard.is_some())
+    }
+
+    pub(crate) fn last_error(&self) -> Option<String> {
+        self.last_error.lock().ok().and_then(|e| e.clone())
     }
 
     pub(crate) fn start(&self, app: &AppHandle) -> Result<(), String> {
@@ -75,9 +80,18 @@ impl BridgeState {
         if guard.is_some() {
             return Ok(());
         }
-        let listener = TcpListener::bind(("127.0.0.1", BRIDGE_PORT)).map_err(|e| {
-            format!("无法监听 127.0.0.1:{BRIDGE_PORT} (端口可能被其他 KeePass 占用): {e}")
-        })?;
+        let listener = match TcpListener::bind(("127.0.0.1", BRIDGE_PORT)) {
+            Ok(listener) => listener,
+            Err(e) => {
+                let message = format!(
+                    "无法监听 127.0.0.1:{BRIDGE_PORT} (端口可能被其他 KeePass 占用): {e}"
+                );
+                if let Ok(mut slot) = self.last_error.lock() {
+                    *slot = Some(message.clone());
+                }
+                return Err(message);
+            }
+        };
         listener
             .set_nonblocking(true)
             .map_err(|e| format!("设置监听模式失败: {e}"))?;
@@ -88,6 +102,9 @@ impl BridgeState {
             stop: stop_tx,
             join: Some(join),
         });
+        if let Ok(mut slot) = self.last_error.lock() {
+            *slot = None;
+        }
         Ok(())
     }
 
@@ -123,10 +140,16 @@ fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()
 
 fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
-    let body = match read_http_body(&mut stream) {
-        Ok(body) => body,
+    let (method, body) = match read_http_request(&mut stream) {
+        Ok(request) => request,
         Err(_) => return,
     };
+    // Browser extensions send a CORS preflight before the real POST; answer
+    // it with the same policy as KeePassXC so the fetch is allowed.
+    if method.eq_ignore_ascii_case("OPTIONS") {
+        let _ = write_http_options(&mut stream);
+        return;
+    }
     let request: BridgeRequest = match serde_json::from_str(&body) {
         Ok(request) => request,
         Err(_) => {
@@ -267,7 +290,7 @@ fn parse_content_length(head: &[u8]) -> Result<usize, String> {
     Ok(0)
 }
 
-fn read_http_body(stream: &mut TcpStream) -> Result<String, String> {
+fn read_http_request(stream: &mut TcpStream) -> Result<(String, String), String> {
     let mut head = Vec::with_capacity(1024);
     let mut buf = [0u8; 4096];
     loop {
@@ -284,6 +307,16 @@ fn read_http_body(stream: &mut TcpStream) -> Result<String, String> {
             }
             continue;
         };
+        let request_line = String::from_utf8_lossy(&head[..end])
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        let method = request_line
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
         let content_length = parse_content_length(&head[..end])?;
         if content_length > MAX_BODY_BYTES {
             return Err("请求体过大".to_owned());
@@ -300,14 +333,38 @@ fn read_http_body(stream: &mut TcpStream) -> Result<String, String> {
             body.extend_from_slice(&buf[..n]);
         }
         body.truncate(content_length);
-        return String::from_utf8(body).map_err(|_| "请求体不是有效文本".to_owned());
+        return String::from_utf8(body)
+            .map(|text| (method, text))
+            .map_err(|_| "请求体不是有效文本".to_owned());
     }
+}
+
+/// Shared CORS policy: browser extensions fetch this loopback port from a
+/// different origin, so every response must carry these headers and OPTIONS
+/// preflights must be answered (mirrors KeePassXC's KeePassHttp server).
+fn cors_headers() -> &'static str {
+    "Access-Control-Allow-Origin: *\r\n\
+     Access-Control-Allow-Methods: POST, OPTIONS\r\n\
+     Access-Control-Allow-Headers: Content-Type, X-Requested-With\r\n"
+}
+
+/// Empty 200 answer for a CORS preflight (OPTIONS).
+fn write_http_options(stream: &mut TcpStream) -> std::io::Result<()> {
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\n{}\
+         Content-Length: 0\r\nConnection: close\r\n\r\n",
+        cors_headers()
+    )?;
+    stream.flush()
 }
 
 fn write_http_response(stream: &mut TcpStream, body: &str) -> std::io::Result<()> {
     write!(
         stream,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 200 OK\r\n{}\
+         Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        cors_headers(),
         body.len()
     )?;
     stream.write_all(body.as_bytes())?;
@@ -335,17 +392,18 @@ mod tests {
     }
 
     #[test]
-    fn read_http_body_parses_post_with_content_length() {
+    fn read_http_request_parses_post_with_content_length() {
         let raw = b"POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 19\r\n\r\n{\"RequestType\":\"x\"}";
         let (stream, writer) = client_writes(raw.to_vec());
         writer.join().unwrap();
         let mut stream = stream;
-        let body = read_http_body(&mut stream).unwrap();
+        let (method, body) = read_http_request(&mut stream).unwrap();
+        assert_eq!(method, "POST");
         assert_eq!(body, r#"{"RequestType":"x"}"#);
     }
 
     #[test]
-    fn read_http_body_handles_split_body_chunks() {
+    fn read_http_request_handles_split_body_chunks() {
         let raw = b"POST / HTTP/1.1\r\nContent-Length: 19\r\n\r\n{\"RequestType\":\"";
         let rest = b"x\"}";
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -359,32 +417,33 @@ mod tests {
         });
         let (mut stream, _) = listener.accept().unwrap();
         writer.join().unwrap();
-        let body = read_http_body(&mut stream).unwrap();
+        let (method, body) = read_http_request(&mut stream).unwrap();
+        assert_eq!(method, "POST");
         assert_eq!(body, r#"{"RequestType":"x"}"#);
     }
 
     #[test]
-    fn read_http_body_rejects_oversized_body_and_garbage_headers() {
+    fn read_http_request_rejects_oversized_body_and_garbage_headers() {
         let raw = b"POST / HTTP/1.1\r\nContent-Length: 99999999\r\n\r\n{}";
         let (stream, writer) = client_writes(raw.to_vec());
         writer.join().unwrap();
         let mut stream = stream;
-        assert!(read_http_body(&mut stream).unwrap_err().contains("过大"));
+        assert!(read_http_request(&mut stream).unwrap_err().contains("过大"));
 
         let raw = b"POST / HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}";
         let (stream, writer) = client_writes(raw.to_vec());
         writer.join().unwrap();
         let mut stream = stream;
-        assert!(read_http_body(&mut stream).unwrap_err().contains("无效"));
+        assert!(read_http_request(&mut stream).unwrap_err().contains("无效"));
     }
 
     #[test]
-    fn read_http_body_rejects_closed_connection() {
+    fn read_http_request_rejects_closed_connection() {
         let raw = b"POST / HTTP/1.1\r\nContent-Length: 50\r\n\r\nshort";
         let (stream, writer) = client_writes(raw.to_vec());
         writer.join().unwrap();
         let mut stream = stream;
-        assert!(read_http_body(&mut stream).unwrap_err().contains("关闭"));
+        assert!(read_http_request(&mut stream).unwrap_err().contains("关闭"));
     }
 
     #[test]
@@ -404,7 +463,30 @@ mod tests {
         let frame = reader.join().unwrap();
         assert!(frame.starts_with("HTTP/1.1 200 OK\r\n"));
         assert!(frame.contains("Content-Type: application/json\r\n"));
+        assert!(frame.contains("Access-Control-Allow-Origin: *\r\n"));
+        assert!(frame.contains("Access-Control-Allow-Headers: Content-Type, X-Requested-With\r\n"));
         assert!(frame.ends_with("{\"Success\":true}"));
+    }
+
+    #[test]
+    fn cors_preflight_options_gets_200_with_allow_headers() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let reader = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(addr).unwrap();
+            stream.shutdown(std::net::Shutdown::Write).unwrap();
+            let mut out = Vec::new();
+            stream.read_to_end(&mut out).unwrap();
+            String::from_utf8(out).unwrap()
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        write_http_options(&mut stream).unwrap();
+        drop(stream);
+        let frame = reader.join().unwrap();
+        assert!(frame.starts_with("HTTP/1.1 200 OK\r\n"));
+        assert!(frame.contains("Access-Control-Allow-Origin: *\r\n"));
+        assert!(frame.contains("Access-Control-Allow-Methods: POST, OPTIONS\r\n"));
+        assert!(frame.contains("Content-Length: 0\r\n"));
     }
 
     #[test]

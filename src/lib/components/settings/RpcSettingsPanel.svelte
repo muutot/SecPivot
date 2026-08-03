@@ -25,6 +25,7 @@
   interface RpcStatus {
     running: boolean;
     port: number;
+    error: string | null;
   }
 
   let status = $state<RpcStatus | null>(null);
@@ -95,7 +96,11 @@
           <p>监听地址 127.0.0.1:12546，Kee 浏览器扩展直接连接本机服务</p>
         </div>
         <span class="value-label" class:status-off={!rpc.enabled}
-          >{rpc.enabled ? (status?.running ? `运行中 :${status.port}` : "启动中…") : "已停用"}</span
+          >{rpc.enabled
+            ? status?.running
+              ? `运行中 :${status.port}`
+              : status?.error ?? "启动中…"
+            : "已停用"}</span
         >
       </div>
     </div>

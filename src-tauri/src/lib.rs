@@ -89,6 +89,7 @@ fn sync_rpc(app: &tauri::AppHandle, config: &config::AppConfig) {
 struct BridgeStatus {
     running: bool,
     port: u16,
+    error: Option<String>,
 }
 
 #[tauri::command]
@@ -98,6 +99,7 @@ fn bridge_status(
     Ok(BridgeStatus {
         running: state.running(),
         port: bridge::BRIDGE_PORT,
+        error: state.last_error(),
     })
 }
 
@@ -106,6 +108,7 @@ fn bridge_status(
 struct RpcStatus {
     running: bool,
     port: u16,
+    error: Option<String>,
 }
 
 #[tauri::command]
@@ -113,6 +116,7 @@ fn rpc_status(state: tauri::State<'_, rpc_server::RpcState>) -> Result<RpcStatus
     Ok(RpcStatus {
         running: state.running(),
         port: rpc::RPC_PORT,
+        error: state.last_error(),
     })
 }
 

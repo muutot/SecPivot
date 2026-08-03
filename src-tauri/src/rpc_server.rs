@@ -78,11 +78,16 @@ impl ServerHandle {
 #[derive(Default)]
 pub(crate) struct RpcState {
     server: Mutex<Option<ServerHandle>>,
+    last_error: Mutex<Option<String>>,
 }
 
 impl RpcState {
     pub(crate) fn running(&self) -> bool {
         self.server.lock().ok().is_some_and(|guard| guard.is_some())
+    }
+
+    pub(crate) fn last_error(&self) -> Option<String> {
+        self.last_error.lock().ok().and_then(|e| e.clone())
     }
 
     pub(crate) fn start(&self, app: &AppHandle) -> Result<(), String> {
@@ -93,9 +98,18 @@ impl RpcState {
         if guard.is_some() {
             return Ok(());
         }
-        let listener = TcpListener::bind(("127.0.0.1", RPC_PORT)).map_err(|e| {
-            format!("无法监听 127.0.0.1:{RPC_PORT} (端口可能已被 KeePass 客户端占用): {e}")
-        })?;
+        let listener = match TcpListener::bind(("127.0.0.1", RPC_PORT)) {
+            Ok(listener) => listener,
+            Err(e) => {
+                let message = format!(
+                    "无法监听 127.0.0.1:{RPC_PORT} (端口可能已被 KeePass 客户端占用): {e}"
+                );
+                if let Ok(mut slot) = self.last_error.lock() {
+                    *slot = Some(message.clone());
+                }
+                return Err(message);
+            }
+        };
         listener
             .set_nonblocking(true)
             .map_err(|e| format!("设置监听模式失败: {e}"))?;
@@ -106,6 +120,9 @@ impl RpcState {
             stop: stop_tx,
             join: Some(join),
         });
+        if let Ok(mut slot) = self.last_error.lock() {
+            *slot = None;
+        }
         Ok(())
     }
 

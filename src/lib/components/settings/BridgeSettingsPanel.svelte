@@ -25,6 +25,7 @@
   interface BridgeStatus {
     running: boolean;
     port: number;
+    error: string | null;
   }
 
   let status = $state<BridgeStatus | null>(null);
@@ -121,7 +122,7 @@
           >{bridge.enabled
             ? status?.running
               ? `运行中 :${status.port}`
-              : "启动中…"
+              : status?.error ?? "启动中…"
             : "已停用"}</span
         >
       </div>
