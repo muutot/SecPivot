@@ -21,7 +21,7 @@ use crate::vault::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use zeroize::Zeroize;
 
@@ -604,8 +604,12 @@ async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
 /// Download favicons for the given entry URLs (or every entry when `uuids`
 /// is empty/None) and write them back into the database as custom icons
 /// (persisted immediately). Only the listed entries receive icons.
+///
+/// Emits `favicon-progress` (`{ done, total }`) after each host finishes so
+/// the renderer can show a progress dialog.
 #[tauri::command]
 async fn download_favicons(
+    app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
@@ -616,6 +620,8 @@ async fn download_favicons(
             _ => session.favicon_jobs()?,
         }
     };
+    let total = jobs.len();
+    let mut done = 0usize;
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();
@@ -629,6 +635,8 @@ async fn download_favicons(
         if let Ok((host, Some(bytes))) = result {
             fetched.push(vault::FaviconFetch { host, bytes });
         }
+        done += 1;
+        let _ = app.emit("favicon-progress", vault::FaviconProgress { done, total });
     }
     let downloaded = fetched.len();
     let report = {

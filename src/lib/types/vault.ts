@@ -93,6 +93,12 @@ export interface FaviconReport {
   downloaded: number;
 }
 
+/** `favicon-progress` event payload emitted during a favicon download run. */
+export interface FaviconProgress {
+  done: number;
+  total: number;
+}
+
 export interface EntryInput {
   groupUuid: string;
   title: string;

@@ -314,6 +314,16 @@ pub struct FaviconReport {
     pub downloaded: usize,
 }
 
+/// Progress of a "Download Favicons" run, emitted after each host finishes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaviconProgress {
+    /// Hosts finished so far.
+    pub done: usize,
+    /// Distinct hosts to process.
+    pub total: usize,
+}
+
 // ---------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------

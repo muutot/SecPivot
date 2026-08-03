@@ -20,6 +20,7 @@
     VaultState,
     SecurityReport,
     FaviconReport,
+    FaviconProgress,
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
@@ -64,6 +65,7 @@
   let busy = $state(false);
   let reportOpen = $state(false);
   let securityReport = $state<SecurityReport | null>(null);
+  let faviconProgress = $state<FaviconProgress | null>(null);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
   let expiredNotifiedPath = $state<string | null>(null);
@@ -571,32 +573,46 @@
   }
 
   async function handleDownloadFavicons(): Promise<void> {
-    if (busy || !currentVault) return;
-    busy = true;
-    try {
-      const report = await vault.downloadFavicons();
-      flashFaviconReport(report, "没有可下载的网址图标");
-    } catch (e) {
-      flash(`图标下载失败：${e}`);
-    } finally {
-      busy = false;
-    }
+    await runFaviconDownload(undefined, "没有可下载的网址图标");
   }
 
   /** Download icons for the selected entries only (context menu, multi-select aware). */
   async function downloadSelectedFavicons(entry: VaultEntry): Promise<void> {
-    if (busy) return;
     const uuids = selectedUuids.size > 1 ? Array.from(selectedUuids) : [entry.uuid];
+    await runFaviconDownload(uuids, "所选条目没有可下载的网址图标");
+  }
+
+  async function runFaviconDownload(
+    uuids: string[] | undefined,
+    noneMessage: string,
+  ): Promise<void> {
+    if (busy) return;
+    if (!isTauriRuntime()) {
+      flash("浏览器预览不支持下载图标");
+      return;
+    }
     busy = true;
+    faviconProgress = { done: 0, total: 0 };
+    const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
+      faviconProgress = e.payload;
+    });
     try {
       const report = await vault.downloadFavicons(uuids);
-      flashFaviconReport(report, "所选条目没有可下载的网址图标");
+      flashFaviconReport(report, noneMessage);
     } catch (e) {
       flash(`图标下载失败：${e}`);
     } finally {
+      unlisten();
+      faviconProgress = null;
       busy = false;
     }
   }
+
+  let progressPct = $derived(
+    faviconProgress && faviconProgress.total > 0
+      ? `${Math.round((faviconProgress.done / faviconProgress.total) * 100)}%`
+      : "0%",
+  );
 
   function flashFaviconReport(report: FaviconReport, noneMessage: string): void {
     flash(
@@ -1647,6 +1663,33 @@
   />
 {/if}
 
+{#if faviconProgress}
+  <div class="modal-backdrop" role="presentation">
+    <div class="group-modal">
+      <div class="modal-head">
+        <span class="modal-icon"><AppIcon name="globe" size={16} /></span>
+        <div>
+          <strong>下载网址图标</strong>
+          <p>
+            {#if faviconProgress.total > 0}
+              正在下载，已完成 {faviconProgress.done}/{faviconProgress.total}
+            {:else}
+              正在连接站点…
+            {/if}
+          </p>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          class:indeterminate={faviconProgress.total === 0}
+          style:--progress-pct={progressPct}
+        ></div>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .app-shell {
     display: grid;
@@ -2373,6 +2416,45 @@
   .modal-button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  .progress-track {
+    height: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    width: var(--progress-pct, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--selection-color);
+    transition: width 0.2s ease;
+  }
+
+  .progress-fill.indeterminate {
+    width: 40%;
+    animation: progress-slide 1.1s ease-in-out infinite alternate;
+  }
+
+  @keyframes progress-slide {
+    from {
+      transform: translateX(-110%);
+    }
+    to {
+      transform: translateX(260%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill {
+      transition: none;
+    }
+    .progress-fill.indeterminate {
+      animation: none;
+    }
   }
 
   :global(body.resizing-column) {
