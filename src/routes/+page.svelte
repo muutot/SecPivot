@@ -1519,7 +1519,7 @@
         {/if}
       </div>
 
-      <footer class="status-bar" role="status" aria-live="polite">
+      <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
           <span class="result-count">{filteredEntries.length} 个条目</span>
           {#if selectedUuids.size > 1}

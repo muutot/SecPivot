@@ -133,7 +133,7 @@
   </aside>
 
   <div id="settings-content" class="settings-content">
-    <section class="settings-section-header">
+    <section class="settings-section-header" data-tauri-drag-region>
       <div class="settings-section-heading-row">
         <div class="settings-breadcrumb">{activeSection.title}</div>
         <div class="settings-section-actions">
