@@ -332,7 +332,7 @@
 
       {#if entry.hasTotp}
         <div class="field-block">
-          <span class="field-label">TOTP 验证码</span>
+          <span class="field-label">OTP 验证码</span>
           <div class="field-value">
             <TotpWidget entryUuid={entry.uuid} />
           </div>

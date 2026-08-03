@@ -13,6 +13,8 @@
   let code = $state("");
   let remaining = $state(0);
   let period = $state(30);
+  let kind = $state<"totp" | "hotp" | "steam">("totp");
+  let counter = $state<number | undefined>(undefined);
   let error = $state("");
   let copied = $state(false);
 
@@ -24,6 +26,8 @@
       code = result.code;
       remaining = result.validFor;
       period = result.period;
+      kind = result.kind;
+      counter = result.counter;
       error = "";
       return true;
     } catch (e) {
@@ -41,15 +45,20 @@
       if (!(await load()) && timer) clearInterval(timer);
     };
     void tick();
-    timer = setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) void tick();
-    }, 1000);
+    // HOTP is counter-driven, not clock-driven: fetch once, never count down
+    // (the counter only advances when a code is requested).
+    if (kind !== "hotp") {
+      timer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) void tick();
+      }, 1000);
+    }
     return () => {
       if (timer) clearInterval(timer);
     };
   });
 
+  const isHotp = $derived(kind === "hotp");
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
 
   async function copy(): Promise<void> {
@@ -77,12 +86,18 @@
       </button>
     {/if}
   </div>
-  <div class="totp-bar" aria-hidden="true">
-    <span class:low={fraction < 0.25} style:width={`${fraction * 100}%`}></span>
-  </div>
+  {#if !isHotp}
+    <div class="totp-bar" aria-hidden="true">
+      <span class:low={fraction < 0.25} style:width={`${fraction * 100}%`}></span>
+    </div>
+  {/if}
   <div class="totp-meta">
     {#if error}
       <span class="totp-error">无法生成验证码</span>
+    {:else if isHotp}
+      <span>HOTP · 第 {counter ?? 0} 次</span>
+    {:else if kind === "steam"}
+      <span>Steam · {remaining}s 后刷新</span>
     {:else}
       <span>{remaining}s 后刷新</span>
     {/if}

@@ -4,6 +4,7 @@
 
 use crate::autotype::{self, AutotypeContext};
 use crate::bridge::{BridgeHost, BridgeLogin};
+use crate::otp;
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use crate::rpc::{
     merge_urls, write_custom_fields, write_password, write_username, RpcDatabase, RpcError,
@@ -14,14 +15,13 @@ use base64::Engine;
 use chrono::NaiveDateTime;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{
-    Color, Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value, TOTP,
+    Color, Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value,
 };
 use keepass::{Database, DatabaseKey};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -43,6 +43,13 @@ const FIELD_PASSWORD: &str = "Password";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
 const FIELD_OTP: &str = "otp";
+/// KeeOtp-compatible OTP custom-field names, checked in priority order by the
+/// OTP resolver (HOTP and Steam have dedicated fields; `otp`/`TimeOtp` are the
+/// TOTP forms KeePassXC / KeeWeb understand).
+const FIELD_TIME_OTP: &str = "TimeOtp";
+const FIELD_HMAC_OTP: &str = "HmacOtp";
+const FIELD_STEAM_OTP: &str = "SteamOtp";
+const FIELD_STEAM_OTP_ALT: &str = "steam";
 /// Custom field used to mark an entry as pinned/favorite.
 const FIELD_FAVORITE: &str = "KeyVault.Favorite";
 const FIELD_FAVORITE_TRUE: &str = "true";
@@ -51,7 +58,7 @@ const FIELD_FAVORITE_TRUE: &str = "true";
 const FIELD_ORIGINAL_GROUP: &str = "KeyVault.OriginalGroup";
 
 /// Standard fields that are surfaced through the entry's own columns and must
-/// not leak into the custom-fields list.
+/// not leak into the generic custom-fields list.
 const RESERVED_FIELDS: [&str; 8] = [
     FIELD_TITLE,
     FIELD_USERNAME,
@@ -267,15 +274,21 @@ pub struct GroupInput {
     pub icon: Option<u32>,
 }
 
-/// A computed one-time code for display with a local countdown.
+/// A computed one-time password for display. `kind` is `"totp"` / `"hotp"` /
+/// `"steam"`. Time-based kinds carry a live `valid_for`/`period` countdown;
+/// HOTP has neither (0/0) and instead reports the current `counter`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TotpCode {
     pub code: String,
-    /// Seconds until this code expires (1..=period).
+    pub kind: String,
+    /// Seconds until this code expires (1..=period; 0 for HOTP).
     pub valid_for: u64,
-    /// Total period in seconds (usually 30).
+    /// Total period in seconds (usually 30; 0 for HOTP).
     pub period: u64,
+    /// The moving factor that produced this code (HOTP only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counter: Option<u64>,
 }
 
 /// A single historical snapshot of an entry (see `Entry.history`). Passwords
@@ -1262,15 +1275,53 @@ impl VaultSession {
         self.snapshot()
     }
 
-    /// Compute the current TOTP code for an entry that carries an `otp` seed.
-    pub fn totp_code(&self, uuid: &str) -> Result<TotpCode, String> {
-        let db = self.require_db()?;
+    /// Compute the one-time password for an entry that carries an OTP seed
+    /// field. Detects the kind from the field name: `otp`/`TimeOtp` = TOTP,
+    /// `HmacOtp` = HOTP, `SteamOtp`/`steam` = Steam Guard. HOTP advances its
+    /// counter on every request and rewrites the seed field server-side (no
+    /// history snapshot), so the next code uses the new counter.
+    pub fn totp_code(&mut self, uuid: &str) -> Result<TotpCode, String> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("读取系统时间失败: {e}"))?
+            .as_secs();
         let id = parse_entry_id(uuid)?;
-        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-        let seed = entry
-            .get_raw_otp_value()
-            .ok_or_else(|| "该条目没有 TOTP 种子".to_owned())?;
-        compute_totp_now(seed)
+        let (is_hotp, spec) = {
+            let db = self.require_db()?;
+            let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+            let spec = parse_entry_otp_spec(&entry)?;
+            (spec.kind == otp::OtpKind::Hotp, spec)
+        };
+        let code = otp::compute(&spec, now)?;
+        if is_hotp {
+            self.advance_hotp_counter(id, &spec)?;
+        }
+        Ok(TotpCode {
+            code: code.code,
+            kind: otp_kind_name(spec.kind).to_owned(),
+            valid_for: code.valid_for,
+            period: code.period,
+            counter: code.counter,
+        })
+    }
+
+    /// Advance an `HmacOtp` entry's counter by rewriting the seed field with
+    /// `counter+1`. Mutates without `track_changes` so showing a code does not
+    /// pollute the entry's history; the vault is left dirty so the next save
+    /// persists the new counter.
+    fn advance_hotp_counter(&mut self, id: EntryId, spec: &otp::OtpSpec) -> Result<(), String> {
+        let next = {
+            let mut next = spec.clone();
+            next.counter = spec.counter + 1;
+            otp::render_hotp_seed(&next)
+        };
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            entry.set(FIELD_HMAC_OTP, Value::unprotected(next));
+        }
+        self.mark_dirty();
+        Ok(())
     }
 
     /// Distinct URL hosts referenced by entry URLs, with the entries per host
@@ -2416,7 +2467,7 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
         url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
         notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
-        has_totp: entry.get_raw_otp_value().is_some(),
+        has_totp: entry_has_otp(entry),
         icon: match entry.icon() {
             Some(Icon::BuiltIn(id)) => Some(*id as u32),
             _ => None,
@@ -2893,66 +2944,64 @@ fn resolve_group_id(db: &Database, uuid: &str) -> Result<GroupId, String> {
     }
 }
 
-/// Keepass `TOTP` parses `otpauth://` URIs only. Raw Base32 keys are wrapped
-/// into a URI with RFC 6238 defaults (SHA-1, 6 digits, 30s period).
-///
-/// A URI without an explicit `digits` parameter is also pinned to 6: keepass
-/// 0.13 falls back to 8 (`DEFAULT_DIGITS`), so Google Authenticator exports —
-/// which omit `digits` — would otherwise produce an unusable 8-digit code.
-///
-/// The `secret` value is uppercased: keepass decodes it with the `base32`
-/// crate, whose RFC 4648 lookup table accepts only A-Z and 2-7, so lowercase
-/// secrets (typed by hand or scraped from a QR code) fail with a `Base32`
-/// error instead of producing a code.
-fn normalize_totp_seed(seed: &str) -> String {
-    let trimmed = seed.trim();
-    if trimmed.to_ascii_lowercase().starts_with("otpauth://") {
-        let (head, query) = match trimmed.find('?') {
-            Some(at) => trimmed.split_at(at),
-            None => (trimmed, ""),
-        };
-        let mut pairs: Vec<String> = query
-            .trim_start_matches('?')
-            .split('&')
-            .filter(|pair| !pair.is_empty())
-            .map(|pair| match pair.split_once('=') {
-                Some(("secret", value)) => format!("secret={}", value.to_uppercase()),
-                _ => pair.to_owned(),
-            })
-            .collect();
-        if !pairs.iter().any(|pair| pair.starts_with("digits=")) {
-            pairs.push("digits=6".to_owned());
+/// Find the first non-empty OTP seed field on an entry, in KeeOtp priority
+/// order: `HmacOtp` (HOTP), `SteamOtp`/`steam` (Steam Guard), then the TOTP
+/// forms `otp`/`TimeOtp`. Returns the field name and its raw value.
+fn entry_otp_field(entry: &Entry) -> Option<(&'static str, &str)> {
+    const ORDER: [&str; 5] = [
+        FIELD_HMAC_OTP,
+        FIELD_STEAM_OTP,
+        FIELD_STEAM_OTP_ALT,
+        FIELD_TIME_OTP,
+        FIELD_OTP,
+    ];
+    for name in ORDER {
+        if let Some(value) = entry.get(name) {
+            if !value.is_empty() {
+                return Some((name, value));
+            }
         }
-        if pairs.is_empty() {
-            format!("{head}?digits=6")
-        } else {
-            format!("{head}?{}", pairs.join("&"))
-        }
-    } else {
-        let secret = trimmed.replace([' ', '-'], "").to_uppercase();
-        format!("otpauth://totp/KeyVault?secret={secret}&digits=6&period=30")
+    }
+    None
+}
+
+/// Whether the entry carries any OTP seed (TOTP, HOTP or Steam).
+fn entry_has_otp(entry: &Entry) -> bool {
+    entry_otp_field(entry).is_some()
+}
+
+/// Resolve an entry's OTP seed into a computation spec, picking the parser by
+/// the field that actually holds the seed.
+fn parse_entry_otp_spec(entry: &Entry) -> Result<otp::OtpSpec, String> {
+    let (field, value) = entry_otp_field(entry).ok_or_else(|| "该条目没有 OTP 种子".to_owned())?;
+    match field {
+        FIELD_HMAC_OTP => otp::parse_hotp_seed(value),
+        FIELD_STEAM_OTP | FIELD_STEAM_OTP_ALT => otp::parse_steam_seed(value),
+        _ => otp::parse_totp_seed(value),
     }
 }
 
-/// Compute the code at a specific unix timestamp (deterministic; used by tests).
-fn compute_totp_at(seed: &str, unix_time: u64) -> Result<TotpCode, String> {
-    let totp =
-        TOTP::from_str(&normalize_totp_seed(seed)).map_err(|e| format!("TOTP 种子无效: {e}"))?;
-    let code = totp.value_at(unix_time);
-    Ok(TotpCode {
-        code: code.code,
-        valid_for: code.valid_for.as_secs(),
-        period: code.period.as_secs(),
-    })
+fn otp_kind_name(kind: otp::OtpKind) -> &'static str {
+    match kind {
+        otp::OtpKind::Totp => "totp",
+        otp::OtpKind::Hotp => "hotp",
+        otp::OtpKind::Steam => "steam",
+    }
 }
 
-/// Compute the code for the current time.
-fn compute_totp_now(seed: &str) -> Result<TotpCode, String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("读取系统时间失败: {e}"))?
-        .as_secs();
-    compute_totp_at(seed, now)
+/// Compute a TOTP code at a specific unix timestamp (deterministic; used by
+/// tests). Delegates to the shared OTP primitives in `otp.rs`.
+#[cfg(test)]
+fn compute_totp_at(seed: &str, unix_time: u64) -> Result<TotpCode, String> {
+    let spec = otp::parse_totp_seed(seed)?;
+    let code = otp::compute(&spec, unix_time)?;
+    Ok(TotpCode {
+        code: code.code,
+        kind: otp_kind_name(code.kind).to_owned(),
+        valid_for: code.valid_for,
+        period: code.period,
+        counter: code.counter,
+    })
 }
 
 fn classify_open_error<E: std::fmt::Display>(e: E) -> String {
@@ -5060,7 +5109,7 @@ mod tests {
     #[test]
     fn totp_rejects_invalid_seed() {
         let err = compute_totp_at("INVALID!", 59).unwrap_err();
-        assert!(err.contains("TOTP"), "unexpected error: {err}");
+        assert!(err.contains("Base32"), "unexpected error: {err}");
     }
 
     #[test]
@@ -5093,7 +5142,7 @@ mod tests {
             .unwrap();
         let uuid = state.root.children[0].entries[0].uuid.clone();
         let err = session.totp_code(&uuid).unwrap_err();
-        assert!(err.contains("TOTP"));
+        assert!(err.contains("没有 OTP"), "unexpected error: {err}");
     }
 
     #[test]
@@ -5128,6 +5177,85 @@ mod tests {
         let code = session.totp_code(&uuid).unwrap();
         assert_eq!(code.code.len(), 6);
         assert_eq!(code.period, 30);
+        assert_eq!(code.kind, "totp");
+        assert!((1..=code.period).contains(&code.valid_for));
+    }
+
+    /// HOTP reads its counter from the `HmacOtp` field and advances it on
+    /// each request, writing `counter+1` back server-side.
+    #[test]
+    fn hotp_code_advances_counter_and_writes_back() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Hotp".into(),
+                username: "".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                custom_fields: vec![CustomField {
+                    name: "HmacOtp".into(),
+                    value: "JBSWY3DPEHPK3PXP".into(),
+                }],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        let first = session.totp_code(&uuid).unwrap();
+        assert_eq!(first.kind, "hotp");
+        assert_eq!(first.period, 0);
+        assert_eq!(first.counter, Some(0));
+        let second = session.totp_code(&uuid).unwrap();
+        assert_eq!(second.counter, Some(1));
+        // A third call keeps advancing (no repeat of an earlier code).
+        let third = session.totp_code(&uuid).unwrap();
+        assert_eq!(third.counter, Some(2));
+    }
+
+    /// A Steam guard entry yields a 5-character code from the Steam alphabet
+    /// with a live countdown (time-based).
+    #[test]
+    fn steam_code_is_five_chars_with_countdown() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "G".into(),
+            })
+            .unwrap();
+        let group_uuid = state.root.children[0].uuid.clone();
+        let state = session
+            .add_entry(&EntryInput {
+                group_uuid,
+                title: "Steam".into(),
+                username: "".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                custom_fields: vec![CustomField {
+                    name: "SteamOtp".into(),
+                    value: "CNBNMZBN".into(),
+                }],
+                attachments: vec![],
+            })
+            .unwrap();
+        let uuid = state.root.children[0].entries[0].uuid.clone();
+        let code = session.totp_code(&uuid).unwrap();
+        assert_eq!(code.kind, "steam");
+        assert_eq!(code.code.len(), 5);
+        assert_eq!(code.period, 30);
         assert!((1..=code.period).contains(&code.valid_for));
     }
 
@@ -5136,7 +5264,7 @@ mod tests {
         let code = compute_totp_at("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59).unwrap();
         let json = serde_json::to_value(&code).unwrap();
         let obj = json.as_object().unwrap();
-        for key in ["code", "validFor", "period"] {
+        for key in ["code", "kind", "validFor", "period"] {
             assert!(obj.contains_key(key), "missing TotpCode key {key}");
         }
     }

@@ -6,6 +6,7 @@ pub mod config;
 pub mod credential;
 pub mod dpapi;
 pub mod focus;
+pub mod otp;
 pub mod remote;
 pub mod rpc;
 pub mod rpc_server;

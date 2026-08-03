@@ -10,7 +10,7 @@ This reference is a source map, not a substitute for reading the current files. 
 | Settings window     | `src/routes/settings/+page.svelte` → `SettingsDialog.svelte`                     | Standalone settings page, theme/font application, settings navigation/panels                         |
 | Frontend services   | `src/lib/services/*`                                                             | Settings store + bootstrap, vault IPC wrapper + browser fallback                                     |
 | GUI backend         | `src-tauri/src/lib.rs`                                                           | Tauri setup, managed config + vault session, commands                                                |
-| Backend modules     | `src-tauri/src/config.rs`, `src-tauri/src/vault.rs`, `src-tauri/src/autotype.rs` | Config persistence; KeePass open/create/edit/save session; auto-type sequence parsing + enigo replay |
+| Backend modules     | `src-tauri/src/config.rs`, `src-tauri/src/vault.rs`, `src-tauri/src/autotype.rs`, `src-tauri/src/otp.rs` | Config persistence; KeePass open/create/edit/save session; auto-type sequence parsing + enigo replay; OTP primitives (RFC 6238 TOTP, RFC 4226 HOTP, Steam Guard) |
 | Release automation  | `scripts/version.mjs`, `changelog.mjs`, `release.mjs`                            | Atomic version bump, gitmoji changelog, two-pass release orchestration                               |
 | CI / CD             | `.github/workflows/ci.yml`, `release.yml`                                        | `npm run verify` on push/PR; tagged multi-platform build + draft release                             |
 | Windows installer   | `src-tauri/windows/installer.nsi`                                                | Custom NSIS template wired via `bundle.windows.nsis.template`                                        |
@@ -29,6 +29,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/utils/theme.ts`                         | `ThemeColors` → CSS-variable mapping                                                                                                                                                            |
 | `src/lib/utils/password.ts`                      | Password generator, entropy estimate, strength label                                                                                                                                            |
 | `src/lib/utils/totp.ts`                          | Browser-fallback TOTP (RFC 6238, WebCrypto); desktop uses backend `totp_code`                                                                                                                   |
+| `src-tauri/src/otp.rs`                          | Pure one-time-password primitives: TOTP (RFC 6238), HOTP (RFC 4226), Steam Guard; seed parsing + field contract                 |
 | `src/lib/utils/clipboard.ts`                     | Clipboard copy + scheduled clear (`clipboardClearSeconds`)                                                                                                                                      |
 | `src/lib/services/settings.ts`                   | `appSettings` store, defaults, normalization, debounced persistence                                                                                                                             |
 | `src/lib/services/settings-bootstrap.ts`         | Apply settings to document (theme colors, font vars, window effect)                                                                                                                             |
@@ -43,7 +44,8 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/components/RpcSideChannelPrompt.svelte` | Global KeePassRPC side-channel modal; listens for `rpc-side-channel-request`, shows the one-time SRP password with a countdown/copy (mounted in `+layout.svelte`, skipped on the TCATO overlay) |
 | `src/lib/components/VaultWelcome.svelte`         | Welcome/unlock + open/create database modal flows                                                                                                                                               |
 | `src/lib/components/LockScreen.svelte`           | Lock screen: reopen remembered path with password, or switch to another database                                                                                                                |
-| `src/lib/components/TotpWidget.svelte`           | TOTP code readout with countdown bar; refetches per period                                                                                                                                      |
+| `src/lib/components/TotpWidget.svelte`           | OTP code readout with countdown bar; TOTP/Steam refetch per period, HOTP shows a static code + counter                                                                                                                           |
+| `src/lib/components/EntryTotpBadge.svelte`       | List-row OTP badge (TOTP/Steam countdown bar; HOTP static, no bar); copy on click                                                                                  |
 
 ## Backend ownership
 

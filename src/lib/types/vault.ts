@@ -150,8 +150,14 @@ export interface GroupInput {
 
 export interface TotpCode {
   code: string;
+  /** `"totp"` (RFC 6238), `"hotp"` (RFC 4226 counter), or `"steam"` guard. */
+  kind: "totp" | "hotp" | "steam";
+  /** Seconds until this code expires (1..=period; 0 for HOTP). */
   validFor: number;
+  /** Total period in seconds (usually 30; 0 for HOTP). */
   period: number;
+  /** The moving factor that produced this code (HOTP only). */
+  counter?: number;
 }
 
 export interface HistoryVersion {

@@ -81,5 +81,5 @@ export async function computeTotp(seed: string, now = Date.now()): Promise<TotpC
     (mac[offset + 3] & 0xff);
   const code = String(binary % 10 ** digits).padStart(digits, "0");
   const validFor = period - (unix % period);
-  return { code, validFor, period };
+  return { code, kind: "totp", validFor, period };
 }

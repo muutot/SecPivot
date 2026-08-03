@@ -13,6 +13,7 @@
   let code = $state("");
   let remaining = $state(0);
   let period = $state(30);
+  let kind = $state<"totp" | "hotp" | "steam">("totp");
   let error = $state(false);
   let copied = $state(false);
 
@@ -24,6 +25,7 @@
       code = result.code;
       remaining = result.validFor;
       period = result.period;
+      kind = result.kind;
       error = false;
       return true;
     } catch {
@@ -41,10 +43,13 @@
       if (!(await refresh()) && timer) clearInterval(timer);
     };
     void tick();
-    timer = setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) void tick();
-    }, 1000);
+    // Counter-driven HOTP never counts down; show one static code.
+    if (kind !== "hotp") {
+      timer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) void tick();
+      }, 1000);
+    }
     return () => {
       if (timer) clearInterval(timer);
     };
@@ -75,9 +80,11 @@
   disabled={!code}
 >
   <span class="totp-badge-code">{error ? "—" : code || "••••••"}</span>
-  <span class="totp-badge-bar" aria-hidden="true">
-    <span class:low={fraction < 0.25} style:width={`${fraction * 100}%`}></span>
-  </span>
+  {#if kind !== "hotp"}
+    <span class="totp-badge-bar" aria-hidden="true">
+      <span class:low={fraction < 0.25} style:width={`${fraction * 100}%`}></span>
+    </span>
+  {/if}
   {#if copied}
     <span class="totp-badge-copied"><AppIcon name="check" size={11} /></span>
   {/if}
