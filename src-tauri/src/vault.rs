@@ -2630,10 +2630,24 @@ fn resolve_group_id(db: &Database, uuid: &str) -> Result<GroupId, String> {
 
 /// Keepass `TOTP` parses `otpauth://` URIs only. Raw Base32 keys are wrapped
 /// into a URI with RFC 6238 defaults (SHA-1, 6 digits, 30s period).
+///
+/// A URI without an explicit `digits` parameter is also pinned to 6: keepass
+/// 0.13 falls back to 8 (`DEFAULT_DIGITS`), so Google Authenticator exports —
+/// which omit `digits` — would otherwise produce an unusable 8-digit code.
 fn normalize_totp_seed(seed: &str) -> String {
     let trimmed = seed.trim();
     if trimmed.to_ascii_lowercase().starts_with("otpauth://") {
-        trimmed.to_owned()
+        let (head, query) = match trimmed.find('?') {
+            Some(at) => trimmed.split_at(at),
+            None => (trimmed, ""),
+        };
+        if query.to_ascii_lowercase().contains("digits=") {
+            trimmed.to_owned()
+        } else if query.is_empty() {
+            format!("{head}?digits=6")
+        } else {
+            format!("{trimmed}&digits=6")
+        }
     } else {
         let secret = trimmed.replace([' ', '-'], "").to_uppercase();
         format!("otpauth://totp/KeyVault?secret={secret}&digits=6&period=30")
@@ -4446,6 +4460,33 @@ mod tests {
         assert_eq!(at_59.code, "287082");
         assert_eq!(at_59.period, 30);
         assert_eq!(at_59.valid_for, 1);
+    }
+
+    #[test]
+    fn totp_uri_without_digits_defaults_to_six() {
+        // Google Authenticator exports omit `digits`; keepass 0.13 would
+        // default to 8. The RFC 6238 vector secret must still yield the
+        // 6-digit code, like KeePass and the raw-seed path above.
+        let seed =
+            "otpauth://totp/Google:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Google";
+        let at_59 = compute_totp_at(seed, 59).unwrap();
+        assert_eq!(at_59.code, "287082");
+        assert_eq!(at_59.valid_for, 1);
+
+        let no_query = compute_totp_at(
+            "otpauth://totp/Google:user?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            59,
+        )
+        .unwrap();
+        assert_eq!(no_query.code, "287082");
+
+        // An explicit `digits=8` is respected and unchanged.
+        let explicit = compute_totp_at(
+            "otpauth://totp/RFC6238:test?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&period=30",
+            59,
+        )
+        .unwrap();
+        assert_eq!(explicit.code, "94287082");
     }
 
     #[test]
