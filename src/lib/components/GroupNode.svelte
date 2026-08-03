@@ -258,7 +258,7 @@
   }
 
   .chevron.open {
-    transform: rotate(-90deg);
+    transform: rotate(90deg);
   }
 
   .leaf-dot {
