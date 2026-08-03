@@ -576,19 +576,134 @@ fn auto_type(
 // Download Favicons (KeePass-style: fetch per host, store as custom icons)
 // ---------------------------------------------------------------------------
 
+/// Build the favicon HTTP client. Windows follows the WinINET system proxy
+/// (`ProxyEnable`/`ProxyServer` in the Internet Settings registry hive, the
+/// same source .NET/KeePass uses); reqwest's `system-proxy` feature only
+/// reads environment variables, which is why KeePass can reach hosts that
+/// KeyVault could not. Other platforms rely on the env-var proxy instead.
+fn build_favicon_client() -> Option<reqwest::Client> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("KeyVault/0.1");
+    if let Some(proxy) = wininet_https_proxy() {
+        if let Ok(proxy) = reqwest::Proxy::https(proxy) {
+            builder = builder.proxy(proxy);
+        }
+    }
+    builder.build().ok()
+}
+
+/// Windows system proxy for https targets, as `http://host:port`. Returns
+/// `None` when the system proxy is disabled or cannot be parsed.
+#[cfg(windows)]
+fn wininet_https_proxy() -> Option<String> {
+    use std::ptr;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegGetValueW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE,
+        RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    };
+
+    fn u16z(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    let mut hkey: HKEY = ptr::null_mut();
+    let status = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            u16z("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings").as_ptr(),
+            0,
+            KEY_QUERY_VALUE,
+            &mut hkey,
+        )
+    };
+    if status != 0 {
+        return None;
+    }
+    let mut enabled: u32 = 0;
+    let mut len = std::mem::size_of::<u32>() as u32;
+    let ok = unsafe {
+        RegGetValueW(
+            hkey,
+            ptr::null(),
+            u16z("ProxyEnable").as_ptr(),
+            RRF_RT_REG_DWORD,
+            ptr::null_mut(),
+            &mut enabled as *mut u32 as *mut _,
+            &mut len,
+        )
+    };
+    if ok != 0 || enabled == 0 {
+        unsafe { RegCloseKey(hkey) };
+        return None;
+    }
+    let mut buf = [0u16; 1024];
+    len = (buf.len() * 2) as u32;
+    let ok = unsafe {
+        RegGetValueW(
+            hkey,
+            ptr::null(),
+            u16z("ProxyServer").as_ptr(),
+            RRF_RT_REG_SZ,
+            ptr::null_mut(),
+            buf.as_mut_ptr() as *mut _,
+            &mut len,
+        )
+    };
+    unsafe { RegCloseKey(hkey) };
+    if ok != 0 {
+        return None;
+    }
+    let raw = String::from_utf16_lossy(&buf[..len as usize / 2]);
+    parse_proxy_server(raw.trim_end_matches('\0')).map(|p| format!("http://{p}"))
+}
+
+/// Parse a WinINET `ProxyServer` value: plain `host:port`, scheme-qualified
+/// `http=host:port;https=host:port;…`, or default-plus-`secure=` form
+/// `host:port;secure=host:port`. Returns the proxy for https traffic.
+fn parse_proxy_server(raw: &str) -> Option<String> {
+    let parts: Vec<&str> = raw
+        .split(';')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let picked = if parts
+        .iter()
+        .any(|p| p.starts_with("https=") || p.starts_with("http="))
+    {
+        parts
+            .iter()
+            .find_map(|part| part.strip_prefix("https="))
+            .or_else(|| parts.iter().find_map(|part| part.strip_prefix("http=")))
+    } else if parts.iter().any(|p| p.starts_with("secure=")) {
+        parts.iter().find_map(|part| part.strip_prefix("secure="))
+    } else if !parts[0].contains('=') {
+        Some(parts[0])
+    } else {
+        None
+    };
+    picked
+        .map(|value| value.strip_prefix("http://").unwrap_or(value))
+        .map(str::to_owned)
+}
+
+#[cfg(not(windows))]
+fn wininet_https_proxy() -> Option<String> {
+    None
+}
+
 /// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with an 8-second
 /// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
 /// every failure reason is logged to stderr (full error chain) so server-side
 /// diagnosis is possible without changing the renderer contract.
 async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .user_agent("KeyVault/0.1")
-        .build()
-    {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host}): {e:#}");
+    let client = match build_favicon_client() {
+        Some(client) => client,
+        None => {
+            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host})");
             return None;
         }
     };
@@ -1228,5 +1343,35 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let missing = dir.path().join("nope.csv").to_string_lossy().into_owned();
         assert!(read_text_file(missing).unwrap_err().contains("失败"));
+    }
+
+    #[test]
+    fn parse_proxy_server_handles_wininet_forms() {
+        assert_eq!(
+            parse_proxy_server("127.0.0.1:51400").as_deref(),
+            Some("127.0.0.1:51400")
+        );
+        assert_eq!(
+            parse_proxy_server("host:8080;secure=10.0.0.1:8443").as_deref(),
+            Some("10.0.0.1:8443")
+        );
+        assert_eq!(
+            parse_proxy_server("http=127.0.0.1:7890;https=127.0.0.1:7891").as_deref(),
+            Some("127.0.0.1:7891")
+        );
+        assert_eq!(
+            parse_proxy_server("https=proxy.local:3128").as_deref(),
+            Some("proxy.local:3128")
+        );
+        assert_eq!(
+            parse_proxy_server("ftp=ftp.local:21;http=127.0.0.1:8080").as_deref(),
+            Some("127.0.0.1:8080")
+        );
+        assert_eq!(
+            parse_proxy_server("http://127.0.0.1:51400").as_deref(),
+            Some("127.0.0.1:51400")
+        );
+        assert_eq!(parse_proxy_server("").as_deref(), None);
+        assert_eq!(parse_proxy_server("ftp=ftp.local:21").as_deref(), None);
     }
 }
