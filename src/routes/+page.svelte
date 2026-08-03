@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
@@ -110,6 +111,14 @@
     const unsubRemembered = vault.remembered((value) => {
       rememberedPath = value;
     });
+    // A browser extension write (AddLogin/UpdateLogin) lands straight into the
+    // vault in memory; refresh so the entry list shows it without a reopen.
+    let unlistenVaultChanged: UnlistenFn | undefined;
+    if (isTauriRuntime()) {
+      void listen("rpc-vault-changed", () => void vault.refresh()).then(
+        (stop) => (unlistenVaultChanged = stop),
+      );
+    }
     void vault.refresh();
     const rememberWindowSize = (): void => {
       if (!currentVault) return;
@@ -123,6 +132,7 @@
     return () => {
       unsubscribe();
       unsubRemembered();
+      void unlistenVaultChanged?.();
       window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
     };

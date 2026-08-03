@@ -48,6 +48,9 @@ const MAX_FRAME_BYTES: usize = 1024 * 1024;
 /// Event emitted to the frontend so the side-channel password can be shown.
 /// Payload: `{ password, expiresInSecs }` — never persisted, never logged.
 pub(crate) const SIDE_CHANNEL_EVENT: &str = "rpc-side-channel-request";
+/// Emitted after a browser-originated write (AddLogin/UpdateLogin) so the
+/// desktop UI refreshes its entry list immediately.
+pub(crate) const VAULT_CHANGED_EVENT: &str = "rpc-vault-changed";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -496,12 +499,13 @@ fn reply_setup(
 }
 
 /// Pure JSON-RPC dispatch: decrypt → `handle_jsonrpc` → encrypt. Returns the
-/// encrypted response envelope (or `None` to close on frame/auth failures).
+/// encrypted response envelope plus the method name (or `None` to close on
+/// frame/auth failures).
 fn dispatch_jsonrpc(
     conn: &mut Conn,
     env: &Envelope,
     host: &mut dyn crate::rpc::RpcHost,
-) -> Option<Envelope> {
+) -> Option<(Envelope, String)> {
     let frame = env.jsonrpc.as_ref()?;
     let secret = conn.session_key.as_ref()?;
     let plaintext = match decrypt_frame(secret, frame) {
@@ -527,10 +531,10 @@ fn dispatch_jsonrpc(
         ),
         Err(RpcError::InRecycleBin) => jsonrpc_error(&id, -32002, "Entry is in the Recycle Bin."),
     };
-    Some(Envelope::jsonrpc(encrypt_frame(
-        secret,
-        &response.to_string(),
-    )))
+    Some((
+        Envelope::jsonrpc(encrypt_frame(secret, &response.to_string())),
+        method,
+    ))
 }
 
 fn reply_jsonrpc(
@@ -546,7 +550,14 @@ fn reply_jsonrpc(
         return false;
     };
     match dispatch_jsonrpc(conn, &env, &mut *session) {
-        Some(reply) => send_envelope(ws, &reply),
+        Some((reply, method)) => {
+            if matches!(method.as_str(), "AddLogin" | "UpdateLogin") {
+                // Writes mutate the vault in place; tell the desktop UI to
+                // refresh so the new/edited entry shows up without a reopen.
+                let _ = app.emit(VAULT_CHANGED_EVENT, ());
+            }
+            send_envelope(ws, &reply)
+        }
         None => false,
     }
 }
@@ -901,7 +912,9 @@ mod tests {
             conn.session_key.as_ref().unwrap(),
             &request.to_string(),
         ));
-        let reply = dispatch_jsonrpc(&mut conn, &env, &mut host).expect("jsonrpc reply");
+        let (reply, method) =
+            dispatch_jsonrpc(&mut conn, &env, &mut host).expect("jsonrpc reply");
+        assert_eq!(method, "GetAllDatabases");
         let frame = reply.jsonrpc.as_ref().unwrap();
         let plaintext = decrypt_frame(conn.session_key.as_ref().unwrap(), frame).expect("decrypt");
         let value: Value = serde_json::from_str(&plaintext).unwrap();
