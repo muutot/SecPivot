@@ -11,6 +11,7 @@ import type {
   RpcSettings,
   KeyboardSettings,
   FaviconSettings,
+  EntryColumnState,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
@@ -21,6 +22,44 @@ export const RECENT_FILES_MAX = 8;
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/** Default entry-table columns. `width: 0` on "title" = flexible (fills the
+ *  remaining list width). Mirrors `default_entry_columns` in config.rs. */
+export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
+  { id: "title", visible: true, width: 0 },
+  { id: "username", visible: true, width: 120 },
+  { id: "password", visible: true, width: 100 },
+  { id: "url", visible: true, width: 180 },
+  { id: "totp", visible: true, width: 96 },
+  { id: "notes", visible: false, width: 160 },
+  { id: "tags", visible: false, width: 120 },
+  { id: "created", visible: false, width: 140 },
+  { id: "modified", visible: false, width: 140 },
+  { id: "expires", visible: false, width: 140 },
+];
+
+/** Merge a persisted column list over the defaults: unknown ids (custom-field
+ *  columns) survive, widths clamp to 30..=400 (title keeps its 0 flex
+ *  sentinel). Mirrors `normalize_entry_columns` in config.rs. */
+export function normalizeEntryColumns(
+  source: EntryColumnState[] | undefined,
+  fallback: EntryColumnState[] = DEFAULT_ENTRY_COLUMNS,
+): EntryColumnState[] {
+  const byId = new Map(fallback.map((c) => [c.id, { ...c }]));
+  for (const col of Array.isArray(source) ? source : []) {
+    if (typeof col !== "object" || col === null) continue;
+    const width =
+      col.id === "title" && col.width === 0
+        ? 0
+        : clampInt(typeof col.width === "number" ? col.width : 120, 30, 400, 120);
+    byId.set(String(col.id), {
+      id: String(col.id),
+      visible: typeof col.visible === "boolean" ? col.visible : true,
+      width,
+    });
+  }
+  return Array.from(byId.values());
 }
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
@@ -47,6 +86,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
   iconOnlyButtons: false,
+  entryColumns: DEFAULT_ENTRY_COLUMNS,
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -301,6 +341,7 @@ export function normalizeSettings(
     },
     iconOnlyButtons:
       typeof g.iconOnlyButtons === "boolean" ? g.iconOnlyButtons : fallback.general.iconOnlyButtons,
+    entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:
       g.language === "en" || g.language === "zh-CN" ? g.language : fallback.general.language,

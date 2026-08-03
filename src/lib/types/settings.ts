@@ -74,11 +74,24 @@ export interface DensitySettings {
   showGroupChevron: boolean;
 }
 
+/** One entry-table column's persisted state (KeePass-style list). `id` is a
+ *  built-in column id ("title", "username", "password", "url", "totp",
+ *  "notes", "tags", "created", "modified", "expires") or `custom:<field name>`
+ *  for entry custom fields. `width` is px; the "title" column uses `0` as a
+ *  flex sentinel (fills the remaining list width). Mirrors
+ *  `EntryColumnState` in `src-tauri/src/config.rs`. */
+export interface EntryColumnState {
+  id: string;
+  visible: boolean;
+  width: number;
+}
+
 /** User-resizable pane widths of the main view, remembered across restarts. */
 export interface PanelWidths {
   group: number;
   detail: number;
-  /** URL column; floor is header chars × 10px + 10px ("网址" → 30). */
+  /** URL column; floor is header chars × 10px + 10px ("网址" → 30).
+   *  Kept in sync with the "url" entry column's width for legacy configs. */
   urlCol: number;
 }
 
@@ -106,6 +119,8 @@ export interface GeneralSettings {
   panelWidths: PanelWidths;
   /** Toolbar control buttons show icons only; button names appear in hover tooltips. */
   iconOnlyButtons: boolean;
+  /** Entry-table column layout (visible + px width per column id). */
+  entryColumns: EntryColumnState[];
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

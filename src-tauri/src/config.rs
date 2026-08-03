@@ -147,6 +147,54 @@ impl Default for DensitySettings {
     }
 }
 
+/// One entry-table column's persisted state (KeePass-style list). `id` is
+/// the built-in column id ("title", "username", "password", "url", "totp",
+/// "notes", "tags", "created", "modified", "expires") or `custom:<field name>`
+/// for entry custom fields. `width` is px; the "title" column uses `0` as a
+/// sentinel meaning flexible (fills the remaining list width).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EntryColumnState {
+    pub id: String,
+    pub visible: bool,
+    pub width: i32,
+}
+
+impl Default for EntryColumnState {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            visible: true,
+            width: 120,
+        }
+    }
+}
+
+fn col(id: &str, visible: bool, width: i32) -> EntryColumnState {
+    EntryColumnState {
+        id: id.into(),
+        visible,
+        width,
+    }
+}
+
+/// Default entry-table columns, mirroring the frontend
+/// `DEFAULT_ENTRY_COLUMNS` in `src/lib/services/settings.ts`.
+pub fn default_entry_columns() -> Vec<EntryColumnState> {
+    vec![
+        col("title", true, 0),
+        col("username", true, 120),
+        col("password", true, 100),
+        col("url", true, 180),
+        col("totp", true, 96),
+        col("notes", false, 160),
+        col("tags", false, 120),
+        col("created", false, 140),
+        col("modified", false, 140),
+        col("expires", false, 140),
+    ]
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct GeneralSettings {
@@ -175,6 +223,8 @@ pub struct GeneralSettings {
     /// on load, never re-serialized.
     #[serde(default, skip_serializing)]
     pub global_auto_type_shortcut: String,
+    /// Entry-table column layout (visible + px width per column id).
+    pub entry_columns: Vec<EntryColumnState>,
 }
 
 /// Resizable pane widths of the main view: group tree, detail panel, and the
@@ -219,6 +269,7 @@ impl Default for GeneralSettings {
             panel_widths: PanelWidths::default(),
             icon_only_buttons: false,
             global_auto_type_shortcut: String::new(),
+            entry_columns: default_entry_columns(),
         }
     }
 }
@@ -471,6 +522,24 @@ fn clamp_i32(value: i32, min: i32, max: i32, fallback: i32) -> i32 {
     }
 }
 
+/// Clamp every column's width to 30..=400 px ("title" keeps its `0` flex
+/// sentinel) and keep ids/visibility verbatim — unknown ids survive the
+/// round-trip because custom-field columns appear dynamically on the frontend.
+/// Boundary-clamps (not fallback) to stay idempotent with the frontend
+/// `clampInt` in `normalizeEntryColumns`.
+fn normalize_entry_columns(columns: Vec<EntryColumnState>) -> Vec<EntryColumnState> {
+    columns
+        .into_iter()
+        .map(|mut c| {
+            if c.id == "title" && c.width == 0 {
+                return c;
+            }
+            c.width = c.width.clamp(30, 400);
+            c
+        })
+        .collect()
+}
+
 fn valid_hex(value: &str, fallback: &str) -> String {
     let bytes = value.as_bytes();
     let valid_len = bytes.len() == 7 || bytes.len() == 9;
@@ -545,6 +614,8 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         clamp_i32(config.general.density.group_padding_y, 0, 16, 3);
     config.general.density.group_indent = clamp_i32(config.general.density.group_indent, 4, 32, 12);
     config.general.density.group_radius = clamp_i32(config.general.density.group_radius, 0, 12, 6);
+
+    config.general.entry_columns = normalize_entry_columns(config.general.entry_columns);
 
     let recent = std::mem::take(&mut config.general.recent_files);
     let mut seen = std::collections::HashSet::new();
@@ -1015,6 +1086,54 @@ mod tests {
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
         let again = reloaded.get().unwrap();
         assert!(again.security.lock_on_focus_loss);
+    }
+
+    #[test]
+    fn entry_columns_roundtrip_keeps_ids_and_clamps_widths() {
+        let dir = TempDir::new().unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let mut config = AppConfig::default();
+        config.general.entry_columns = vec![
+            col("title", true, 0),
+            col("username", true, 120),
+            col("custom:手机号", true, 999),
+            col("notes", true, 10),
+        ];
+        store.set(config.clone()).unwrap();
+        let normalized = store.get().unwrap();
+        let by_id: std::collections::HashMap<&str, &EntryColumnState> = normalized
+            .general
+            .entry_columns
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect();
+        // title keeps its 0 flex sentinel
+        assert_eq!(by_id["title"].width, 0);
+        assert!(by_id["title"].visible);
+        // normal widths pass through
+        assert_eq!(by_id["username"].width, 120);
+        // custom-field ids survive the round-trip
+        assert_eq!(by_id["custom:手机号"].width, 400);
+        // out-of-range widths clamp
+        assert_eq!(by_id["notes"].width, 30);
+        assert_eq!(normalized.general.entry_columns.len(), 4);
+    }
+
+    #[test]
+    fn empty_config_object_gets_default_entry_columns() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        fs::create_dir_all(&conf).unwrap();
+        fs::write(conf.join("config.json"), "{}").unwrap();
+
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let config = store.get().unwrap();
+        assert_eq!(
+            config.general.entry_columns.len(),
+            default_entry_columns().len()
+        );
+        assert_eq!(config.general.entry_columns[0].id, "title");
+        assert_eq!(config.general.entry_columns[0].width, 0);
     }
 
     #[test]
