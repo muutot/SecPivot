@@ -8,6 +8,8 @@
     selected: string | null;
     showIcon?: boolean;
     showChevron?: boolean;
+    /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
+    customIcons?: Record<string, string>;
     onselect: (uuid: string | null) => void;
     onaddsubgroup: (parentUuid: string | null) => void;
     onrename: (uuid: string, name: string) => void;
@@ -22,6 +24,7 @@
     selected,
     showIcon = true,
     showChevron = true,
+    customIcons = {},
     onselect,
     onaddsubgroup,
     onrename,
@@ -126,6 +129,7 @@
         {expanded}
         {showIcon}
         {showChevron}
+        {customIcons}
         onselect={(uuid: string) => onselect(uuid)}
         ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}

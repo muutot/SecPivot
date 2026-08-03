@@ -37,6 +37,11 @@
       ENTRY_DEFAULT_ICON) as IconName,
   );
 
+  /** Data URL of the database-stored custom icon (favicon), if any. */
+  const customIconUrl = $derived(
+    entry.customIcon ? $vault?.customIcons?.[entry.customIcon] : undefined,
+  );
+
   let revealPassword = $state(false);
   let fetchedPassword = $state("");
   let passwordLoaded = $state(false);
@@ -196,7 +201,11 @@
   <header class="detail-head">
     <div class="detail-title-row">
       <span class="entry-icon" style:--entry-color={entry.color}
-        ><AppIcon name={iconName} size={15} /></span
+        >{#if customIconUrl}
+          <img class="entry-icon-img" src={customIconUrl} alt="" draggable="false" />
+        {:else}
+          <AppIcon name={iconName} size={15} />
+        {/if}</span
       >
       <div class="detail-titles">
         <h3 class="detail-title">{entry.title || "未命名条目"}</h3>
@@ -517,6 +526,14 @@
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--warning-color);
     background: var(--hover-bg);
+  }
+
+  .entry-icon-img {
+    width: 17px;
+    height: 17px;
+    display: block;
+    border-radius: 3px;
+    object-fit: contain;
   }
 
   .entry-icon[style*="--entry-color"] {

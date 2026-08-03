@@ -79,6 +79,11 @@
     return (mapped ?? ENTRY_DEFAULT_ICON) as IconName;
   }
 
+  /** Data URL of the entry's database-stored custom icon (favicon), if any. */
+  function customIconUrl(entry: VaultEntry): string | undefined {
+    return entry.customIcon ? currentVault?.customIcons?.[entry.customIcon] : undefined;
+  }
+
   function groupIconName(index: number): IconName {
     return (KEEPASS_ICONS[index] ?? GROUP_DEFAULT_ICON) as IconName;
   }
@@ -1208,6 +1213,7 @@
           <GroupTree
             root={currentVault.root}
             selected={selectedGroup}
+            customIcons={currentVault.customIcons}
             showIcon={compactMode ? groupDensity.showGroupIcon : true}
             showChevron={compactMode ? groupDensity.showGroupChevron : true}
             onselect={(uuid: string | null) => {
@@ -1331,7 +1337,16 @@
                       <span class="entry-row-color-bar" aria-hidden="true"></span>
                     {/if}
                     <span class="entry-row-icon"
-                      ><AppIcon name={entryIconName(row.entry)} size={13} /></span
+                      >{#if customIconUrl(row.entry)}
+                        <img
+                          class="entry-row-img"
+                          src={customIconUrl(row.entry)}
+                          alt=""
+                          draggable="false"
+                        />
+                      {:else}
+                        <AppIcon name={entryIconName(row.entry)} size={13} />
+                      {/if}</span
                     >
                     <div class="entry-row-main">
                       <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
@@ -1915,6 +1930,14 @@
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--warning-color);
     background: var(--input-bg);
+  }
+
+  .entry-row-img {
+    width: 13px;
+    height: 13px;
+    display: block;
+    border-radius: 2px;
+    object-fit: contain;
   }
 
   .entry-row-main {

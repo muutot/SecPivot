@@ -89,6 +89,11 @@ pub struct VaultEntry {
     pub has_totp: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
+    /// UUID of the referenced database custom icon (a favicon stored in the
+    /// KDBX `Meta/CustomIcons` section); the image bytes travel once in
+    /// `VaultState::custom_icons`. Mutually exclusive with `icon`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_icon: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,6 +143,9 @@ pub struct VaultGroup {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
+    /// UUID of the database custom icon used by this group, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_icon: Option<String>,
     pub is_recycle_bin: bool,
     pub children: Vec<VaultGroup>,
     pub entries: Vec<VaultEntry>,
@@ -151,6 +159,11 @@ pub struct VaultState {
     pub root: VaultGroup,
     pub dirty: bool,
     pub modified_at: String,
+    /// Database custom icons (favicons) that live in the KDBX Meta section,
+    /// keyed by custom-icon UUID; values are `data:` URLs for direct display.
+    /// Only present when the database carries at least one custom icon.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub custom_icons: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1393,6 +1406,10 @@ impl VaultSession {
             root: build_group_tree(db),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
+            custom_icons: db
+                .iter_all_custom_icons()
+                .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))
+                .collect(),
         };
         self.cached_snapshot = Some((self.revision, state.clone()));
         Ok(state)
@@ -2121,6 +2138,29 @@ fn bridge_db_hash(db: &Database) -> String {
 // Serialization
 // ---------------------------------------------------------------------------
 
+/// Encode a custom-icon's raw image bytes as a `data:` URL with a guessed
+/// media type, so the renderer can drop it straight into an `<img>`.
+fn icon_to_data_url(bytes: &[u8]) -> String {
+    let mime = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        "image/png"
+    } else if bytes.starts_with(&[0x00, 0x00, 0x01, 0x00])
+        || bytes.starts_with(&[0x00, 0x00, 0x02, 0x00])
+    {
+        "image/x-icon"
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        "image/jpeg"
+    } else if bytes.starts_with(b"GIF8") {
+        "image/gif"
+    } else if bytes.starts_with(b"BM") {
+        "image/bmp"
+    } else if bytes.starts_with(b"<svg") || bytes.starts_with(b"<?xml") {
+        "image/svg+xml"
+    } else {
+        "image/png"
+    };
+    format!("data:{mime};base64,{}", BASE64.encode(bytes))
+}
+
 fn build_group_tree(db: &Database) -> VaultGroup {
     let root_ref = db.root();
     VaultGroup {
@@ -2128,6 +2168,7 @@ fn build_group_tree(db: &Database) -> VaultGroup {
         parent_uuid: None,
         name: ROOT_GROUP_NAME.to_owned(),
         icon: None,
+        custom_icon: None,
         is_recycle_bin: false,
         children: root_ref
             .groups()
@@ -2169,6 +2210,10 @@ fn build_group(
             Some(Icon::BuiltIn(id)) => Some(*id as u32),
             _ => None,
         },
+        custom_icon: match group.icon() {
+            Some(Icon::Custom(id)) => Some(id.uuid().to_string()),
+            _ => None,
+        },
         is_recycle_bin: is_bin,
         children,
         entries,
@@ -2186,6 +2231,10 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         has_totp: entry.get_raw_otp_value().is_some(),
         icon: match entry.icon() {
             Some(Icon::BuiltIn(id)) => Some(*id as u32),
+            _ => None,
+        },
+        custom_icon: match entry.icon() {
+            Some(Icon::Custom(id)) => Some(id.uuid().to_string()),
             _ => None,
         },
         created: entry.times.creation.map(format_iso),
@@ -2987,6 +3036,27 @@ mod tests {
             db.root.entries.iter().all(|e| e.password.is_empty()),
             "plugin tree light entries must never carry credentials"
         );
+    }
+
+    #[test]
+    fn icon_to_data_url_guesses_media_types() {
+        let png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+        let url = icon_to_data_url(&png);
+        assert!(url.starts_with("data:image/png;base64,"));
+        assert_eq!(BASE64.decode(url.split_once(',').unwrap().1).unwrap(), png,);
+
+        assert!(
+            icon_to_data_url(&[0x00, 0x00, 0x01, 0x00, 1]).starts_with("data:image/x-icon;base64,")
+        );
+        assert!(icon_to_data_url(&[0xFF, 0xD8, 0xFF]).starts_with("data:image/jpeg;base64,"));
+        assert!(icon_to_data_url(b"GIF89a").starts_with("data:image/gif;base64,"));
+        assert!(icon_to_data_url(b"BMXXXX").starts_with("data:image/bmp;base64,"));
+        assert!(
+            icon_to_data_url(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>")
+                .starts_with("data:image/svg+xml;base64,")
+        );
+        let unknown = b"binary payload";
+        assert!(icon_to_data_url(unknown).starts_with("data:image/png;base64,"));
     }
 
     /// Write a KeePass-style binary keyfile and return its path.

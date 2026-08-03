@@ -14,6 +14,9 @@ export interface VaultEntry {
   hasTotp: boolean;
   totp?: string;
   icon?: number;
+  /** UUID of the database custom icon (favicon stored in the KDBX Meta
+   * section); the image data sits in `VaultState.customIcons`. */
+  customIcon?: string;
   /** `#RRGGBB` background color tag. */
   color?: string;
   created?: string;
@@ -48,6 +51,8 @@ export interface VaultGroup {
   parentUuid: string | null;
   name: string;
   icon?: number;
+  /** UUID of the database custom icon used by this group, if any. */
+  customIcon?: string;
   isRecycleBin: boolean;
   children: VaultGroup[];
   entries: VaultEntry[];
@@ -59,6 +64,9 @@ export interface VaultState {
   root: VaultGroup;
   dirty: boolean;
   modifiedAt: string;
+  /** Database custom icons (favicons) keyed by custom-icon UUID; values are
+   * `data:` URLs ready for `<img>`. Present only when the DB carries icons. */
+  customIcons?: Record<string, string>;
 }
 
 /** Server-side security analysis; passwords never cross into the report. */

@@ -14,6 +14,8 @@
     expanded: Set<string>;
     showIcon?: boolean;
     showChevron?: boolean;
+    /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
+    customIcons?: Record<string, string>;
     inRecycleBin?: boolean;
     onselect: (uuid: string) => void;
     ontoggle: (uuid: string) => void;
@@ -32,6 +34,7 @@
     expanded,
     showIcon = true,
     showChevron = true,
+    customIcons = {},
     inRecycleBin = false,
     onselect,
     ontoggle,
@@ -182,7 +185,16 @@
           {/if}
         {/if}
         {#if showIcon}
-          <AppIcon name={isBin ? "trash" : iconName} size={13} />
+          {#if group.customIcon && customIcons[group.customIcon]}
+            <img
+              class="group-icon-img"
+              src={customIcons[group.customIcon]}
+              alt=""
+              draggable="false"
+            />
+          {:else}
+            <AppIcon name={isBin ? "trash" : iconName} size={13} />
+          {/if}
         {/if}
         <span class="group-name">{group.name}</span>
         {#if count > 0}
@@ -202,6 +214,7 @@
       {expanded}
       {showIcon}
       {showChevron}
+      {customIcons}
       inRecycleBin={isBin || inRecycleBin}
       {onselect}
       {ontoggle}
@@ -321,6 +334,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .group-icon-img {
+    width: 13px;
+    height: 13px;
+    display: block;
+    border-radius: 2px;
+    object-fit: contain;
   }
 
   .group-count {
