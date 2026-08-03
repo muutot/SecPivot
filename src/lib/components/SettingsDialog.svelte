@@ -142,7 +142,9 @@
             >{activeSection.tabs?.length ? `${activeSection.tabs.length} 组` : "1 页"}</span
           >
           <WindowControls variant="chrome" />
-          <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+          <button class="close-button" onclick={onclose} title="返回主界面" aria-label="返回主界面">
+            <AppIcon name="chevron-left" size={15} />
+          </button>
         </div>
       </div>
 
