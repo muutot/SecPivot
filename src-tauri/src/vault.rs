@@ -936,7 +936,10 @@ impl VaultSession {
                     .to_owned(),
                 url: historical.get(FIELD_URL).unwrap_or_default().to_owned(),
                 notes: historical.get(FIELD_NOTES).unwrap_or_default().to_owned(),
-                expires: historical.times.expiry.map(format_iso),
+                expires: match historical.times.expires {
+                    Some(true) => historical.times.expiry.map(format_iso),
+                    _ => None,
+                },
                 custom_fields: {
                     let mut fields: Vec<CustomField> = historical
                         .fields
@@ -2127,11 +2130,15 @@ fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
         color: entry.background_color.as_ref().map(ToString::to_string),
-        expires: entry.times.expiry.map(format_iso),
-        expired: entry
-            .times
-            .expiry
-            .is_some_and(|expiry| expiry < chrono::Utc::now().naive_utc()),
+        expires: match entry.times.expires {
+            Some(true) => entry.times.expiry.map(format_iso),
+            _ => None,
+        },
+        expired: entry.times.expires == Some(true)
+            && entry
+                .times
+                .expiry
+                .is_some_and(|expiry| expiry < chrono::Utc::now().naive_utc()),
         custom_fields: {
             let mut fields: Vec<CustomField> = entry
                 .fields
@@ -3822,6 +3829,72 @@ mod tests {
         let entry = &state.root.entries[0];
         assert_eq!(entry.expires.as_deref(), Some("2099-12-31T23:59:59Z"));
         assert!(!entry.expired);
+    }
+
+    #[test]
+    fn disabled_expiry_flag_never_marks_entry_expired() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("official.kdbx");
+        let mut db = keepass::Database::new();
+        let past = chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let mut root = db.root_mut();
+        // KeePass default: expiry timestamp present, expiry disabled.
+        let mut disabled = root.add_entry();
+        disabled.set_unprotected(FIELD_TITLE, "Disabled");
+        disabled.set_unprotected(FIELD_PASSWORD, "p");
+        disabled.times.expiry = Some(past);
+        disabled.times.expires = Some(false);
+        // Expiry status never set: `expires = None`.
+        let mut unset = root.add_entry();
+        unset.set_unprotected(FIELD_TITLE, "Unset");
+        unset.set_unprotected(FIELD_PASSWORD, "p");
+        unset.times.expiry = Some(past);
+        unset.times.expires = None;
+        save_database(&db, &path, DatabaseKey::new().with_password("master-password")).unwrap();
+        let mut session = VaultSession::default();
+        let state = session.open(&path, "master-password", None).unwrap();
+        assert_eq!(state.root.entries.len(), 2);
+        for entry in &state.root.entries {
+            assert!(
+                entry.expires.is_none(),
+                "{} should not expose expiry",
+                entry.title
+            );
+            assert!(
+                !entry.expired,
+                "{} should not be flagged expired",
+                entry.title
+            );
+        }
+
+        // A genuinely enabled past expiry is still flagged after reopen.
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Genuine".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: Some("2020-01-01T00:00:00Z".to_owned()),
+                icon: None,
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+        let state = session.state().unwrap().unwrap();
+        let genuine = state
+            .root
+            .entries
+            .iter()
+            .find(|e| e.title == "Genuine")
+            .expect("added entry should be present");
+        assert!(genuine.expired, "enabled past expiry should be flagged");
     }
 
     #[test]
