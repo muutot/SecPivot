@@ -536,8 +536,12 @@ fn toggle_favorite(
 
 /// Resolve and replay a KeePass-style auto-type sequence for an entry.
 /// Executes on a background thread; returns once parsing succeeds.
+///
+/// The main window is minimized first so keystrokes land in the window the
+/// user switches to during the replay delay, never in KeyVault itself.
 #[tauri::command]
 fn auto_type(
+    app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
     sequence: String,
@@ -548,6 +552,9 @@ fn auto_type(
         let expanded = session.expand_autotype_sequence(&sequence)?;
         (ctx, expanded)
     };
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.minimize();
+    }
     autotype::run_sequence(&expanded, &ctx).map_err(|e| e.to_string())
 }
 

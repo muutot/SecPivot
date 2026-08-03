@@ -979,7 +979,7 @@
   async function runAutoType(entry: VaultEntry): Promise<void> {
     try {
       await vault.autoType(entry.uuid, AUTOTYPE_SEQUENCE);
-      flash("已触发自动填充，请切换到目标窗口");
+      flash("已最小化，请在 1.5 秒内切换到目标窗口");
     } catch (e) {
       flash(`自动填充失败：${e}`);
     }

@@ -344,13 +344,14 @@ pub fn execute_tokens(tokens: &[AutotypeToken]) -> Result<(), AutotypeError> {
 
 /// Resolve and replay an auto-type sequence on a background thread.
 ///
-/// A short startup delay gives the user time to focus the target window
-/// before keystrokes are sent. Failures are logged rather than propagated,
+/// A startup delay gives the user time to switch to the target window (the
+/// caller is expected to have minimized its own window first) before
+/// keystrokes are sent. Failures are logged rather than propagated,
 /// because the replay happens after this call has already returned.
 pub fn run_sequence(sequence: &str, ctx: &AutotypeContext) -> Result<(), AutotypeError> {
     let tokens = parse_sequence(sequence, ctx)?;
     thread::spawn(move || {
-        thread::sleep(Duration::from_millis(300));
+        thread::sleep(Duration::from_millis(1500));
         if let Err(e) = execute_tokens(&tokens) {
             eprintln!("auto-type failed: {e}");
         }
