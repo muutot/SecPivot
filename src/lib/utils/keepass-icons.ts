@@ -94,5 +94,13 @@ export const KEEPASS_COLORS: string[] = [
   "#000000",
 ];
 
-/** Number of icon choices shown in the icon picker grid. */
-export const ICON_PICKER_COUNT = 36;
+/**
+ * Icon indices offered by the built-in picker. `KEEPASS_ICONS` maps several
+ * KeePass indices to the same compact glyph, so the picker shows each distinct
+ * glyph exactly once (first occurrence wins) instead of a grid full of
+ * duplicates.
+ */
+export const KEEPASS_ICON_CHOICES: number[] = [
+  0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 15, 16, 17, 22, 24, 25, 34, 36, 37, 38, 39, 42, 43, 44, 45,
+  46, 47, 48, 49, 51, 52,
+];

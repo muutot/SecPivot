@@ -29,9 +29,9 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import {
     KEEPASS_ICONS,
+    KEEPASS_ICON_CHOICES,
     ENTRY_DEFAULT_ICON,
     GROUP_DEFAULT_ICON,
-    ICON_PICKER_COUNT,
   } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
@@ -1765,7 +1765,7 @@
       />
       <span class="group-icon-label">图标</span>
       <div class="group-icon-grid">
-        {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
+        {#each KEEPASS_ICON_CHOICES as index}
           <button
             type="button"
             class="icon-option"

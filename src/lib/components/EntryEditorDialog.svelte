@@ -16,7 +16,7 @@
   import {
     KEEPASS_ICONS,
     KEEPASS_COLORS,
-    ICON_PICKER_COUNT,
+    KEEPASS_ICON_CHOICES,
     ENTRY_DEFAULT_ICON,
   } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
@@ -535,7 +535,7 @@
                 <img class="icon-option-img" src={customIconUrl} alt="" draggable="false" />
               </button>
             {/if}
-            {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
+            {#each KEEPASS_ICON_CHOICES as index}
               <button
                 type="button"
                 class="icon-option"
