@@ -1269,13 +1269,6 @@
           <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
             <AppIcon name="download" size={15} />
           </button>
-          <button
-            class="icon-action"
-            onclick={() => void handleDownloadFavicons()}
-            title="下载网址图标"
-          >
-            <AppIcon name="globe" size={15} />
-          </button>
           <button class="icon-action" onclick={openSettings} title="设置">
             <AppIcon name="settings" size={16} />
           </button>
