@@ -22,6 +22,8 @@ export interface DatabaseDefaults {
   cipher: Cipher;
   compression: Compression;
   generator: PasswordGeneratorSettings;
+  /** Default file extension (no leading dot) for "另存为" and as the backup fallback. */
+  fileExtension: string;
 }
 
 /** S3-compatible remote vault settings. Access keys are encrypted at rest
@@ -39,6 +41,9 @@ export interface RemoteSettings {
   localDir: string;
   /** Number of timestamped `.bak` backups kept beside the local copy; 0 disables. */
   backupCount: number;
+  /** Backup file name template. Placeholders: `{name}` (file stem),
+   * `{timestamp}` (`YYYYMMDDHHmmssSSS`), `{ext}` (original extension). */
+  backupTemplate: string;
 }
 
 /** One named S3 configuration shown in the profile selector. */

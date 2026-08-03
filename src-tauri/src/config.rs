@@ -7,11 +7,15 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-
 const CONFIG_SUBDIR: &str = "conf";
+
 const CONFIG_FILE: &str = "config.json";
+
 const RECENT_FILES_MAX: usize = 8;
 
+/// Default backup file name template. `{name}` = file stem, `{timestamp}` =
+/// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension.
+const DEFAULT_BACKUP_TEMPLATE: &str = "{name}.{timestamp}.{ext}.bak";
 // ---------------------------------------------------------------------------
 // Serde shapes (camelCase on the wire)
 // ---------------------------------------------------------------------------
@@ -297,6 +301,9 @@ pub struct DatabaseDefaults {
     pub cipher: String,
     pub compression: String,
     pub generator: PasswordGeneratorSettings,
+    /// File extension used as the default in "另存为" and as the fallback
+    /// extension when a backup target has none. Stored without the leading dot.
+    pub file_extension: String,
 }
 
 impl Default for DatabaseDefaults {
@@ -306,6 +313,7 @@ impl Default for DatabaseDefaults {
             cipher: "Aes256".into(),
             compression: "Gzip".into(),
             generator: PasswordGeneratorSettings::default(),
+            file_extension: "kdbx".into(),
         }
     }
 }
@@ -329,6 +337,9 @@ pub struct RemoteSettings {
     /// Number of timestamped `.bak` backups kept beside the local copy;
     /// 0 disables backups.
     pub backup_count: i32,
+    /// Backup file name template. Placeholders: `{name}` (file stem),
+    /// `{timestamp}` (`YYYYMMDDHHmmssSSS`), `{ext}` (original extension).
+    pub backup_template: String,
 }
 
 impl Default for RemoteSettings {
@@ -342,6 +353,7 @@ impl Default for RemoteSettings {
             prefix: String::new(),
             local_dir: "remote".into(),
             backup_count: 3,
+            backup_template: DEFAULT_BACKUP_TEMPLATE.into(),
         }
     }
 }
@@ -540,6 +552,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         _ => "Gzip".into(),
     };
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
+    config.database.file_extension = normalize_file_extension(&config.database.file_extension);
 
     config.remote_profiles = if config.remote_profiles.is_empty() {
         match config.remote.take() {
@@ -590,6 +603,26 @@ fn normalize_remote_settings(settings: &mut RemoteSettings) {
         settings.local_dir = "remote".into();
     }
     settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
+    settings.backup_template = settings.backup_template.trim().to_owned();
+    if settings.backup_template.is_empty() {
+        settings.backup_template = DEFAULT_BACKUP_TEMPLATE.into();
+    }
+}
+
+/// Sanitize a user-supplied file extension: drop the leading dot, keep only
+/// alphanumeric characters, fall back to `kdbx` when nothing remains.
+fn normalize_file_extension(ext: &str) -> String {
+    let cleaned: String = ext
+        .trim()
+        .trim_start_matches('.')
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    if cleaned.is_empty() {
+        "kdbx".into()
+    } else {
+        cleaned
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +784,7 @@ mod tests {
                 prefix: "vaults/".into(),
                 local_dir: "backups".into(),
                 backup_count: 5,
+                backup_template: "{name}.{timestamp}.{ext}.bak".into(),
             },
         });
         config.active_remote = 1;
@@ -857,6 +891,35 @@ mod tests {
         assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(normalized.active_remote, 0);
+    }
+
+    #[test]
+    fn file_extension_and_backup_template_normalize() {
+        let mut config = AppConfig::default();
+        assert_eq!(config.database.file_extension, "kdbx");
+        assert_eq!(
+            config.remote_profiles[0].settings.backup_template,
+            "{name}.{timestamp}.{ext}.bak"
+        );
+
+        config.database.file_extension = "  .kdb!x  ".into();
+        config.remote_profiles[0].settings.backup_template = "   ".into();
+        let normalized = normalize_config(config);
+        assert_eq!(normalized.database.file_extension, "kdbx");
+
+        let mut config = AppConfig::default();
+        config.database.file_extension = "txt".into();
+        config.remote_profiles[0].settings.backup_template =
+            "  {name}-{timestamp}.{ext}.old  ".into();
+        let normalized = normalize_config(config);
+        assert_eq!(normalized.database.file_extension, "txt");
+        assert_eq!(
+            normalized.remote_profiles[0].settings.backup_template,
+            "{name}-{timestamp}.{ext}.old"
+        );
+        assert_eq!(normalize_file_extension(""), "kdbx");
+        assert_eq!(normalize_file_extension("..."), "kdbx");
+        assert_eq!(normalize_file_extension("KDBX"), "KDBX");
     }
 
     #[test]

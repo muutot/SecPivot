@@ -72,6 +72,7 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
     excludeSimilar: false,
     excludeAmbiguous: false,
   },
+  fileExtension: "kdbx",
 };
 
 export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
@@ -83,6 +84,7 @@ export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
   prefix: "",
   localDir: "remote",
   backupCount: 3,
+  backupTemplate: "{name}.{timestamp}.{ext}.bak",
 };
 
 export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
@@ -175,7 +177,21 @@ export function normalizeRemoteSettings(
       10,
       3,
     ),
+    backupTemplate:
+      typeof r.backupTemplate === "string" && r.backupTemplate.trim() !== ""
+        ? r.backupTemplate.trim()
+        : fallback.backupTemplate,
   };
+}
+
+/** Sanitize a user-supplied file extension: drop the leading dot, keep only
+ *  alphanumeric characters, fall back to `kdbx` when nothing remains. */
+export function normalizeFileExtension(ext: string): string {
+  const cleaned = ext
+    .trim()
+    .replace(/^\.+/, "")
+    .replace(/[^a-zA-Z0-9]/g, "");
+  return cleaned === "" ? "kdbx" : cleaned;
 }
 
 /** Normalize `remoteProfiles` (at least one profile always survives), with a
@@ -308,6 +324,7 @@ export function normalizeSettings(
       ...(typeof d.generator === "object" ? d.generator : {}),
       length: clampInt(d.generator?.length ?? fallback.database.generator.length, 8, 128, 20),
     },
+    fileExtension: normalizeFileExtension(d.fileExtension ?? fallback.database.fileExtension),
   };
 
   const remoteProfiles = normalizeRemoteProfiles(

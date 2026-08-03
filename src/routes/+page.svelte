@@ -497,10 +497,11 @@
     if (!currentVault) return;
     try {
       if (isTauriRuntime()) {
-        const baseName = (currentVault.fileName.replace(/\.kdbx$/i, "") || "keyvault") + ".kdbx";
+        const ext = get(appSettings).database.fileExtension;
+        const baseName = (currentVault.fileName.replace(/\.\w+$/i, "") || "keyvault") + "." + ext;
         const selected = await save({
           defaultPath: baseName,
-          filters: [{ name: "KeePass 数据库", extensions: ["kdbx"] }],
+          filters: [{ name: "KeePass 数据库", extensions: [ext] }],
         });
         if (!selected) return;
         await vault.saveAs(String(selected));

@@ -257,6 +257,30 @@
     />
   </section>
 
+  <section class="setting-card">
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="file" size={17} /></span>
+        <div>
+          <strong>备份文件名模板</strong>
+          <p>时间戳备份的命名规则</p>
+        </div>
+      </div>
+      <input
+        id="remote-backup-template"
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.backupTemplate}
+        placeholder={"{name}.{timestamp}.{ext}.bak"}
+        spellcheck="false"
+        oninput={(e) => change("backupTemplate", e.currentTarget.value)}
+      />
+    </div>
+    <p class="settings-note">
+      占位符：{"{name}"} 文件主名、{"{timestamp}"} 时间戳、{"{ext}"} 原扩展名
+    </p>
+  </section>
+
   <p class="auto-save-note">修改即时生效并自动保存</p>
 </div>
 

@@ -105,6 +105,25 @@
 
   <section class="setting-card">
     <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="save" size={17} /></span>
+      <div class="heading-inline">
+        <div>
+          <strong>文件后缀</strong>
+          <p>另存为的默认文件后缀；备份文件无后缀时也使用它</p>
+        </div>
+        <input
+          class="extension-input"
+          type="text"
+          value={s.database.fileExtension}
+          placeholder="kdbx"
+          oninput={(e) => appSettings.updateDatabase("fileExtension", e.currentTarget.value)}
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="setting-card">
+    <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="key" size={17} /></span>
       <div class="heading-inline">
         <div>
@@ -225,6 +244,24 @@
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
     font-variant-numeric: tabular-nums;
     cursor: pointer;
+  }
+
+  .extension-input {
+    width: 110px;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .extension-input:focus {
+    outline: none;
+    border-color: var(--selection-color);
   }
 
   .charset-chip.active {

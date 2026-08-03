@@ -41,6 +41,16 @@ fn get_config(store: tauri::State<'_, ConfigStore>) -> Result<config::AppConfig,
     store.get()
 }
 
+/// Trim a stored backup template, falling back to the default when empty.
+fn normalize_backup_template(template: &str) -> String {
+    let trimmed = template.trim();
+    if trimmed.is_empty() {
+        vault::DEFAULT_BACKUP_TEMPLATE.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 #[tauri::command]
 fn set_config(
     store: tauri::State<'_, ConfigStore>,
@@ -850,9 +860,11 @@ async fn open_remote_vault(
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
+    let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);
     let local_dir_for_network = local_dir.clone();
     let storage_for_network = storage.clone();
+    let backup_template_for_network = backup_template.clone();
     // Network download, KDF and parse run without the session lock, off the
     // async worker thread: the S3 transport blocks on its own runtime, which
     // panics on a runtime worker (the command future would abort and the
@@ -866,6 +878,7 @@ async fn open_remote_vault(
             mode,
             &local_dir_for_network,
             backup_count,
+            &backup_template_for_network,
         );
         (result, password)
     })
@@ -883,6 +896,7 @@ async fn open_remote_vault(
                 mode,
                 &local_dir,
                 cfg.backup_count.clamp(0, 10) as usize,
+                &backup_template,
             );
             drop(session);
             result
@@ -917,9 +931,11 @@ async fn create_remote_vault(
     let mode = RemoteMode::parse(&mode)?;
     let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
+    let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);
     let local_dir_for_network = local_dir.clone();
     let storage_for_network = storage.clone();
+    let backup_template_for_network = backup_template.clone();
     // KDF, serialization, upload and local mirror run without the lock, off
     // the async worker thread (the S3 transport must not block a runtime
     // worker — see the comment in `open_remote_vault`).
@@ -935,6 +951,7 @@ async fn create_remote_vault(
             mode,
             &local_dir_for_network,
             backup_count,
+            &backup_template_for_network,
         );
         (result, password)
     })
@@ -952,6 +969,7 @@ async fn create_remote_vault(
                 mode,
                 &local_dir,
                 cfg.backup_count.clamp(0, 10) as usize,
+                &backup_template,
             );
             drop(session);
             result

@@ -31,6 +31,12 @@ use zeroize::Zeroize;
 pub const ROOT_GROUP_UUID: &str = "root";
 pub const ROOT_GROUP_NAME: &str = "Root";
 
+/// Default backup file name template. `{name}` = file stem, `{timestamp}` =
+/// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension. Kept in sync with
+/// `config::DEFAULT_BACKUP_TEMPLATE`; used only when a saved session carries
+/// no template (defensive fallback).
+pub const DEFAULT_BACKUP_TEMPLATE: &str = "{name}.{timestamp}.{ext}.bak";
+
 const FIELD_TITLE: &str = "Title";
 const FIELD_USERNAME: &str = "UserName";
 const FIELD_PASSWORD: &str = "Password";
@@ -304,6 +310,7 @@ pub struct RemoteTarget {
     pub mode: RemoteMode,
     pub local_dir: PathBuf,
     pub backup_count: usize,
+    pub backup_template: String,
 }
 
 /// The currently open vault. `db` holds the decrypted database; `password`
@@ -373,6 +380,7 @@ pub(crate) enum SaveTarget {
         mode: RemoteMode,
         local_dir: PathBuf,
         backup_count: usize,
+        backup_template: String,
     },
 }
 
@@ -445,6 +453,7 @@ pub(crate) fn prepare_remote_open(
     mode: RemoteMode,
     local_dir: &Path,
     backup_count: usize,
+    backup_template: &str,
 ) -> Result<(Database, Option<Vec<u8>>, String), String> {
     let key = validate_remote_key(key)?;
     let keyfile_bytes = read_keyfile(keyfile)?;
@@ -454,7 +463,13 @@ pub(crate) fn prepare_remote_open(
         .map_err(|e| format!("下载远程文件失败: {e}"))?;
     let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
     if mode == RemoteMode::SaveLocal {
-        write_local_copy(local_dir, &remote_key_basename(&key), &data, backup_count)?;
+        write_local_copy(
+            local_dir,
+            &remote_key_basename(&key),
+            &data,
+            backup_count,
+            backup_template,
+        )?;
     }
     Ok((db, keyfile_bytes, key))
 }
@@ -474,6 +489,7 @@ pub(crate) fn prepare_remote_create(
     mode: RemoteMode,
     local_dir: &Path,
     backup_count: usize,
+    backup_template: &str,
 ) -> Result<(Database, Option<Vec<u8>>, String), String> {
     let key = validate_remote_key(key)?;
     let keyfile_bytes = read_keyfile(keyfile)?;
@@ -489,7 +505,13 @@ pub(crate) fn prepare_remote_create(
         .put(&key, &buffer)
         .map_err(|e| format!("上传远程文件失败: {e}"))?;
     if mode == RemoteMode::SaveLocal {
-        write_local_copy(local_dir, &remote_key_basename(&key), &buffer, backup_count)?;
+        write_local_copy(
+            local_dir,
+            &remote_key_basename(&key),
+            &buffer,
+            backup_count,
+            backup_template,
+        )?;
     }
     Ok((db, keyfile_bytes, key))
 }
@@ -511,13 +533,20 @@ pub(crate) fn persist_snapshot(
             mode,
             local_dir,
             backup_count,
+            backup_template,
         } => {
             storage
                 .put(key, &buffer)
                 .map_err(|e| format!("上传远程文件失败: {e}"))?;
             if *mode == RemoteMode::SaveLocal {
-                write_local_copy(local_dir, &remote_key_basename(key), &buffer, *backup_count)
-                    .map_err(|e| format!("保存本地副本失败: {e}"))?;
+                write_local_copy(
+                    local_dir,
+                    &remote_key_basename(key),
+                    &buffer,
+                    *backup_count,
+                    backup_template,
+                )
+                .map_err(|e| format!("保存本地副本失败: {e}"))?;
             }
             Ok(())
         }
@@ -604,6 +633,7 @@ impl VaultSession {
         mode: RemoteMode,
         local_dir: &Path,
         backup_count: usize,
+        backup_template: &str,
     ) -> Result<VaultState, String> {
         let (db, keyfile_bytes, key) = prepare_remote_open(
             storage.clone(),
@@ -613,6 +643,7 @@ impl VaultSession {
             mode,
             local_dir,
             backup_count,
+            backup_template,
         )?;
         self.adopt_remote(
             db,
@@ -623,6 +654,7 @@ impl VaultSession {
             mode,
             local_dir,
             backup_count,
+            backup_template,
         )
     }
 
@@ -640,6 +672,7 @@ impl VaultSession {
         mode: RemoteMode,
         local_dir: &Path,
         backup_count: usize,
+        backup_template: &str,
     ) -> Result<VaultState, String> {
         let (db, keyfile_bytes, key) = prepare_remote_create(
             storage.clone(),
@@ -652,6 +685,7 @@ impl VaultSession {
             mode,
             local_dir,
             backup_count,
+            backup_template,
         )?;
         self.adopt_remote(
             db,
@@ -662,6 +696,7 @@ impl VaultSession {
             mode,
             local_dir,
             backup_count,
+            backup_template,
         )
     }
 
@@ -1278,6 +1313,7 @@ impl VaultSession {
         mode: RemoteMode,
         local_dir: &Path,
         backup_count: usize,
+        backup_template: &str,
     ) -> Result<VaultState, String> {
         self.remote = Some(RemoteTarget {
             storage,
@@ -1285,6 +1321,7 @@ impl VaultSession {
             mode,
             local_dir: local_dir.to_path_buf(),
             backup_count,
+            backup_template: backup_template.to_owned(),
         });
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         self.password = Some(password.to_owned());
@@ -1387,6 +1424,7 @@ impl VaultSession {
                 mode: remote.mode,
                 local_dir: remote.local_dir.clone(),
                 backup_count: remote.backup_count,
+                backup_template: remote.backup_template.clone(),
             },
             None => SaveTarget::Local(PathBuf::from(self.require_path()?.to_owned())),
         };
@@ -2710,13 +2748,41 @@ fn remote_key_basename(key: &str) -> String {
     key.rsplit('/').next().unwrap_or(key).to_owned()
 }
 
+/// Expand a backup name template. `{name}` → file stem, `{timestamp}` →
+/// `YYYYMMDDHHmmssSSS`, `{ext}` → extension without the dot (falls back to
+/// the caller's `default_ext` when the source file has none). Unknown tokens
+/// are kept verbatim so a typo cannot silently drop the extension.
+fn expand_backup_template(template: &str, name: &str, stamp: &str, ext: &str) -> String {
+    template
+        .replace("{name}", name)
+        .replace("{timestamp}", stamp)
+        .replace("{ext}", ext)
+}
+
+/// Whether `candidate` matches the shape a template produces: the template is
+/// filled in for `{name}`/`{ext}` and `{timestamp}` acts as a wildcard run.
+/// A template without `{timestamp}` matches only the exact filled name.
+fn template_matches(candidate: &str, name: &str, ext: &str, template: &str) -> bool {
+    let filled = template.replace("{name}", name).replace("{ext}", ext);
+    match filled.split_once("{timestamp}") {
+        Some((before, after)) => {
+            candidate.len() >= before.len() + after.len()
+                && candidate.starts_with(before)
+                && candidate.ends_with(after)
+        }
+        None => candidate == filled,
+    }
+}
+
 /// Write the local mirror of a remote vault under `dir`, rotating up to
-/// `backup_count` timestamped `.bak` copies of the previous file first.
+/// `backup_count` timestamped backups (named via `backup_template`) of the
+/// previous file first.
 fn write_local_copy(
     dir: &Path,
     name: &str,
     bytes: &[u8],
     backup_count: usize,
+    backup_template: &str,
 ) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
     let dest = dir.join(name);
@@ -2731,27 +2797,32 @@ fn write_local_copy(
             .and_then(|s| s.to_str())
             .unwrap_or("kdbx")
             .to_owned();
-        let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f");
-        let backup = dir.join(format!("{stem}.{stamp}.{ext}.bak"));
-        std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
-        prune_local_backups(dir, &stem, &ext, backup_count)?;
+        let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f").to_string();
+        let backup = dir.join(expand_backup_template(backup_template, &stem, &stamp, &ext));
+        if backup != dest {
+            std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
+        }
+        prune_local_backups(dir, &stem, &ext, backup_count, backup_template)?;
     }
     std::fs::write(&dest, bytes).map_err(|e| format!("写入本地副本失败: {e}"))
 }
 
-/// Keep only the newest `keep` backup files matching `<stem>.<ts>.<ext>.bak`.
-fn prune_local_backups(dir: &Path, stem: &str, ext: &str, keep: usize) -> Result<(), String> {
+/// Keep only the newest `keep` backup files matching `backup_template`.
+fn prune_local_backups(
+    dir: &Path,
+    stem: &str,
+    ext: &str,
+    keep: usize,
+    backup_template: &str,
+) -> Result<(), String> {
     let mut backups: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("读取本地备份目录失败: {e}"))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
-            let name = path
-                .file_name()
+            path.file_name()
                 .and_then(|s| s.to_str())
-                .unwrap_or_default()
-                .to_owned();
-            name.starts_with(&format!("{stem}.")) && name.ends_with(&format!(".{ext}.bak"))
+                .is_some_and(|name| template_matches(name, stem, ext, backup_template))
         })
         .collect();
     backups.sort();
@@ -3676,6 +3747,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local_dir,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert!(state.path.starts_with("s3://"));
@@ -5115,6 +5187,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert_eq!(state.path, "s3://vaults/seed.kdbx");
@@ -5156,6 +5229,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert_eq!(state.root.children.len(), 1);
@@ -5179,6 +5253,7 @@ mod tests {
                 RemoteMode::SaveLocal,
                 &local,
                 1,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert!(local.join("seed.kdbx").exists());
@@ -5208,6 +5283,61 @@ mod tests {
     }
 
     #[test]
+    fn remote_backup_uses_custom_template_and_prunes_by_shape() {
+        let dir = TempDir::new().unwrap();
+        let (storage, _) = seed_remote_storage(&dir);
+        let local = dir.path().join("mirror");
+        const TEMPLATE: &str = "{name}-backup-{timestamp}.{ext}.old";
+
+        let mut session = VaultSession::default();
+        session
+            .open_remote(
+                Arc::new(storage.clone()),
+                "vaults/seed.kdbx",
+                "pw",
+                None,
+                RemoteMode::SaveLocal,
+                &local,
+                2,
+                TEMPLATE,
+            )
+            .unwrap();
+        assert!(local.join("seed.kdbx").exists());
+
+        session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Mail".into(),
+            })
+            .unwrap();
+        session.save().unwrap();
+        session.save().unwrap();
+        session.save().unwrap();
+
+        let backups: Vec<_> = std::fs::read_dir(&local)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("seed-backup-") && name.ends_with(".kdbx.old"))
+            .collect();
+        assert_eq!(backups.len(), 2, "keeps only the newest two");
+        for name in &backups {
+            assert!(
+                !name.ends_with(".bak"),
+                "custom template must shape the backup name: {name}"
+            );
+        }
+        let old_style: Vec<_> = std::fs::read_dir(&local)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".kdbx.bak"))
+            .collect();
+        assert!(old_style.is_empty(), "no default-template backups");
+    }
+
+    #[test]
     fn opening_local_vault_clears_stale_remote_target() {
         let dir = TempDir::new().unwrap();
         let (storage, _) = seed_remote_storage(&dir);
@@ -5223,6 +5353,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
 
@@ -5360,6 +5491,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap_err();
         assert!(err.contains("Key"));
@@ -5373,6 +5505,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap_err();
         assert!(err.contains("下载"));
@@ -5386,6 +5519,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap_err();
         assert!(err.contains("下载"));
@@ -5416,6 +5550,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert_eq!(state.path, "s3://vaults/backup-noext");
@@ -5431,6 +5566,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap_err();
         assert!(err.contains("无法打开数据库"));
@@ -5455,6 +5591,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert_eq!(state.path, "s3://new/vault.kdbx");
@@ -5495,6 +5632,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         assert_eq!(state.root.children[0].name, "Web");
@@ -5517,6 +5655,7 @@ mod tests {
                 RemoteMode::InMemory,
                 &local,
                 3,
+                DEFAULT_BACKUP_TEMPLATE,
             )
             .unwrap();
         session.close();
