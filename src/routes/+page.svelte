@@ -947,6 +947,7 @@
       },
       { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
       { id: "autotype", label: "自动填充", icon: "keyboard" },
+      { id: "autotype-password", label: "自动填充密码", icon: "key" },
       {
         id: "tcato",
         label: "TCATO 覆盖层填充",
@@ -977,6 +978,7 @@
     else if (id === "copy-password") void copyEntryPassword(entry);
     else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
     else if (id === "autotype") void runAutoType(entry);
+    else if (id === "autotype-password") void runAutoType(entry, AUTOTYPE_PASSWORD_SEQUENCE);
     else if (id === "tcato") void openTcatoOverlay(entry);
     else if (id === "favorite") void toggleFavorite(entry);
     else if (id === "delete") askDeleteEntry(entry);
@@ -985,10 +987,12 @@
 
   /** KeePass-standard default auto-type sequence. */
   const AUTOTYPE_SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
+  /** Password-only variant: fills just the password, then submits. */
+  const AUTOTYPE_PASSWORD_SEQUENCE = "{PASSWORD}{ENTER}";
 
-  async function runAutoType(entry: VaultEntry): Promise<void> {
+  async function runAutoType(entry: VaultEntry, sequence = AUTOTYPE_SEQUENCE): Promise<void> {
     try {
-      await vault.autoType(entry.uuid, AUTOTYPE_SEQUENCE);
+      await vault.autoType(entry.uuid, sequence);
       flash("已最小化，请在 1.5 秒内切换到目标窗口");
     } catch (e) {
       flash(`自动填充失败：${e}`);
