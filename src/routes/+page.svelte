@@ -9,6 +9,9 @@
   import { vault } from "$lib/services/vault";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import type { EntryColumnState } from "$lib/types/settings";
+  import ColumnConfigMenu, {
+    type ColumnMenuSection,
+  } from "$lib/components/ColumnConfigMenu.svelte";
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, lockVault, copySensitive } from "$lib/services/security";
@@ -469,9 +472,45 @@
     window.addEventListener("pointercancel", onUp);
   }
 
-  /** Right-click a table column header → column config menu (filled in later step). */
+  /** Right-click a table column header → column config menu. */
+  let columnMenu = $state<{ x: number; y: number } | null>(null);
+  const columnMenuSections = $derived.by(() => {
+    const sections: ColumnMenuSection[] = [
+      {
+        label: "内置条目",
+        items: BUILTIN_COLUMNS.map((def) => ({
+          id: def.id,
+          label: def.label,
+          visible: colState(def.id).visible,
+        })),
+      },
+    ];
+    if (customColumnNames.length > 0) {
+      sections.push({
+        label: "自定义条目",
+        items: customColumnNames.map((name) => {
+          const id = `custom:${name}`;
+          return { id, label: name, visible: colState(id).visible };
+        }),
+      });
+    }
+    return sections;
+  });
   function openColumnMenu(e: MouseEvent): void {
     e.preventDefault();
+    columnMenu = { x: e.clientX, y: e.clientY };
+  }
+  function toggleColumn(id: string): void {
+    const existing = entryColumns.find((c) => c.id === id);
+    if (existing) {
+      entryColumns = entryColumns.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c));
+    } else {
+      entryColumns = [...entryColumns, { id, visible: true, width: id === "title" ? 0 : 140 }];
+    }
+    appSettings.updateGeneral(
+      "entryColumns",
+      entryColumns.map((c) => ({ ...c })),
+    );
   }
 
   function startDetailResize(e: PointerEvent): void {
@@ -1691,6 +1730,16 @@
     report={securityReport}
     entries={reportEntries}
     onclose={() => (reportOpen = false)}
+  />
+{/if}
+
+{#if columnMenu}
+  <ColumnConfigMenu
+    x={columnMenu.x}
+    y={columnMenu.y}
+    sections={columnMenuSections}
+    onclose={() => (columnMenu = null)}
+    ontoggle={toggleColumn}
   />
 {/if}
 
