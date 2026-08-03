@@ -581,9 +581,13 @@ fn auto_type(
 /// same source .NET/KeePass uses); reqwest's `system-proxy` feature only
 /// reads environment variables, which is why KeePass can reach hosts that
 /// KeyVault could not. Other platforms rely on the env-var proxy instead.
+///
+/// The timeout is generous (20 s) on purpose: the first TLS handshake
+/// through a proxy frequently takes ~5-10 s, and a tight timeout kills the
+/// first request while the retry on the warm connection succeeds.
 fn build_favicon_client() -> Option<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(20))
         .user_agent("KeyVault/0.1");
     if let Some(proxy) = wininet_https_proxy() {
         if let Ok(proxy) = reqwest::Proxy::https(proxy) {
@@ -695,7 +699,7 @@ fn wininet_https_proxy() -> Option<String> {
     None
 }
 
-/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with an 8-second
+/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with a 20-second
 /// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
 /// every failure reason is logged to stderr (full error chain) so server-side
 /// diagnosis is possible without changing the renderer contract.
