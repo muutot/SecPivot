@@ -204,7 +204,7 @@
         >{#if customIconUrl}
           <img class="entry-icon-img" src={customIconUrl} alt="" draggable="false" />
         {:else}
-          <AppIcon name={iconName} size={15} />
+          <AppIcon name={iconName} size={20} />
         {/if}</span
       >
       <div class="detail-titles">
@@ -529,8 +529,8 @@
   }
 
   .entry-icon-img {
-    width: 17px;
-    height: 17px;
+    width: 20px;
+    height: 20px;
     display: block;
     border-radius: 3px;
     object-fit: contain;

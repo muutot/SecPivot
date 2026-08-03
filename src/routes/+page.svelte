@@ -1431,7 +1431,7 @@
                           draggable="false"
                         />
                       {:else}
-                        <AppIcon name={entryIconName(row.entry)} size={13} />
+                        <AppIcon name={entryIconName(row.entry)} size={16} />
                       {/if}</span
                     >
                     <div class="entry-row-main">
@@ -2048,8 +2048,8 @@
   }
 
   .entry-row-img {
-    width: 13px;
-    height: 13px;
+    width: 16px;
+    height: 16px;
     display: block;
     border-radius: 2px;
     object-fit: contain;

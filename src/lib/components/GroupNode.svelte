@@ -193,7 +193,7 @@
               draggable="false"
             />
           {:else}
-            <AppIcon name={isBin ? "trash" : iconName} size={13} />
+            <AppIcon name={isBin ? "trash" : iconName} size={16} />
           {/if}
         {/if}
         <span class="group-name">{group.name}</span>
@@ -337,8 +337,8 @@
   }
 
   .group-icon-img {
-    width: 13px;
-    height: 13px;
+    width: 16px;
+    height: 16px;
     display: block;
     border-radius: 2px;
     object-fit: contain;
