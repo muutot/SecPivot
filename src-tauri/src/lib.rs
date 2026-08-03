@@ -577,26 +577,50 @@ fn auto_type(
 // ---------------------------------------------------------------------------
 
 /// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with a 4-second
-/// timeout and a 512 KiB size cap. Returns `None` when nothing is served.
+/// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
+/// every failure reason is logged to stderr so server-side diagnosis is
+/// possible without changing the renderer contract.
 async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(4))
         .user_agent("KeyVault/0.1")
         .build()
-        .ok()?;
+    {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host}): {e}");
+            return None;
+        }
+    };
     for path in ["/favicon.ico", "/favicon.png"] {
-        let Ok(response) = client.get(format!("https://{host}{path}")).send().await else {
-            continue;
+        let url = format!("https://{host}{path}");
+        let response = match client.get(&url).send().await {
+            Ok(response) => response,
+            Err(e) => {
+                eprintln!("[favicon] 请求 {url} 失败: {e}");
+                continue;
+            }
         };
         if !response.status().is_success() {
+            eprintln!("[favicon] {url} 返回 {}", response.status());
             continue;
         }
-        let Ok(bytes) = response.bytes().await else {
-            continue;
+        let bytes = match response.bytes().await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("[favicon] 读取 {url} 响应失败: {e}");
+                continue;
+            }
         };
-        if !bytes.is_empty() && bytes.len() < 512 * 1024 {
-            return Some(bytes.to_vec());
+        if bytes.is_empty() {
+            eprintln!("[favicon] {url} 返回空内容");
+            continue;
         }
+        if bytes.len() >= 512 * 1024 {
+            eprintln!("[favicon] {url} 超过 512 KiB 上限 ({} 字节)", bytes.len());
+            continue;
+        }
+        return Some(bytes.to_vec());
     }
     None
 }
