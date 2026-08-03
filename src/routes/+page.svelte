@@ -1058,10 +1058,11 @@
     else if (id === "delete-selected") askDeleteEntries();
   }
 
-  /** KeePass-standard default auto-type sequence. */
-  const AUTOTYPE_SEQUENCE = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
-  /** Password-only variant: fills just the password, then submits. */
-  const AUTOTYPE_PASSWORD_SEQUENCE = "{PASSWORD}{ENTER}";
+  /** KeePass-standard default auto-type sequence; no trailing enter, so the
+   * user confirms the form (captcha, 2FA, etc.) before submitting. */
+  const AUTOTYPE_SEQUENCE = "{USERNAME}{TAB}{PASSWORD}";
+  /** Password-only variant: fills just the password, no submit. */
+  const AUTOTYPE_PASSWORD_SEQUENCE = "{PASSWORD}";
 
   async function runAutoType(entry: VaultEntry, sequence = AUTOTYPE_SEQUENCE): Promise<void> {
     try {
