@@ -3,6 +3,7 @@
 //! to `<project_dir>/conf/config.json`.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -163,8 +164,10 @@ pub struct GeneralSettings {
     pub window_height: i32,
     /// User-resizable pane widths in the main view, remembered across restarts.
     pub panel_widths: PanelWidths,
-    /// Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A").
-    /// Empty means the hotkey is disabled.
+    /// Legacy global auto-type hotkey from configs written before the
+    /// `keyboard` section existed; migrated into `keyboard.auto_type_global`
+    /// on load, never re-serialized.
+    #[serde(default, skip_serializing)]
     pub global_auto_type_shortcut: String,
 }
 
@@ -211,6 +214,20 @@ impl Default for GeneralSettings {
             global_auto_type_shortcut: String::new(),
         }
     }
+}
+
+/// Keyboard section: the global auto-type hotkey plus app-window shortcuts
+/// for common actions (save, lock, edit, …). Mirrors the frontend
+/// `KeyboardSettings` in `src/lib/types/settings.ts`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct KeyboardSettings {
+    /// Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A").
+    /// Empty means the hotkey is disabled.
+    pub auto_type_global: String,
+    /// App-window shortcuts: action id → accelerator. An absent key or empty
+    /// value means the action is unbound.
+    pub shortcuts: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -386,6 +403,8 @@ pub struct AppConfig {
     pub bridge: BridgeSettings,
     #[serde(default)]
     pub rpc: RpcSettings,
+    #[serde(default)]
+    pub keyboard: KeyboardSettings,
 }
 
 impl Default for AppConfig {
@@ -399,6 +418,7 @@ impl Default for AppConfig {
             remote: None,
             bridge: BridgeSettings::default(),
             rpc: RpcSettings::default(),
+            keyboard: KeyboardSettings::default(),
         }
     }
 }
@@ -542,6 +562,15 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         config.remote_profiles.len() as i32 - 1,
         0,
     ) as usize;
+
+    // Legacy `general.global_auto_type_shortcut` → `keyboard.auto_type_global`.
+    if config.keyboard.auto_type_global.is_empty()
+        && !config.general.global_auto_type_shortcut.is_empty()
+    {
+        config.keyboard.auto_type_global =
+            std::mem::take(&mut config.general.global_auto_type_shortcut);
+    }
+    config.general.global_auto_type_shortcut.clear();
 
     config
 }
@@ -1031,22 +1060,29 @@ mod tests {
     }
 
     #[test]
-    fn global_auto_type_shortcut_survives_round_trip_and_defaults_empty() {
+    fn keyboard_auto_type_global_round_trips_and_defaults_empty() {
         let dir = TempDir::new().unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
-        assert_eq!(store.get().unwrap().general.global_auto_type_shortcut, "");
+        assert_eq!(store.get().unwrap().keyboard.auto_type_global, "");
 
         let mut config = AppConfig::default();
-        config.general.global_auto_type_shortcut = "Ctrl+Shift+A".into();
+        config.keyboard.auto_type_global = "Ctrl+Shift+A".into();
+        config
+            .keyboard
+            .shortcuts
+            .insert("save".into(), "Ctrl+S".into());
         store.set(config.clone()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
-        assert!(text.contains("\"globalAutoTypeShortcut\": \"Ctrl+Shift+A\""));
+        assert!(text.contains("\"autoTypeGlobal\": \"Ctrl+Shift+A\""));
+        assert!(text.contains("\"save\": \"Ctrl+S\""));
 
         let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let again = reloaded.get().unwrap();
+        assert_eq!(again.keyboard.auto_type_global, "Ctrl+Shift+A");
         assert_eq!(
-            reloaded.get().unwrap().general.global_auto_type_shortcut,
-            "Ctrl+Shift+A"
+            again.keyboard.shortcuts.get("save"),
+            Some(&"Ctrl+S".to_string())
         );
     }
 
@@ -1057,7 +1093,30 @@ mod tests {
         std::fs::create_dir_all(&conf).unwrap();
         std::fs::write(conf.join("config.json"), r#"{"general":{"theme":"light"}}"#).unwrap();
         let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
-        assert_eq!(store.get().unwrap().general.global_auto_type_shortcut, "");
+        assert_eq!(store.get().unwrap().keyboard.auto_type_global, "");
+    }
+
+    #[test]
+    fn legacy_global_auto_type_shortcut_migrates_into_keyboard_section() {
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        std::fs::create_dir_all(&conf).unwrap();
+        std::fs::write(
+            conf.join("config.json"),
+            r#"{"general":{"globalAutoTypeShortcut":"Ctrl+Shift+A"}}"#,
+        )
+        .unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        let loaded = store.get().unwrap();
+        assert_eq!(loaded.keyboard.auto_type_global, "Ctrl+Shift+A");
+        assert_eq!(loaded.general.global_auto_type_shortcut, "");
+
+        // A re-save writes it under `keyboard`, never the legacy field.
+        store.set(loaded).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+        assert!(text.contains("\"keyboard\""));
+        assert!(text.contains("\"autoTypeGlobal\": \"Ctrl+Shift+A\""));
+        assert!(!text.contains("globalAutoTypeShortcut"));
     }
 
     #[test]

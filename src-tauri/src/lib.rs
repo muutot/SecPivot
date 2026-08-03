@@ -48,7 +48,7 @@ fn set_config(
     config: config::AppConfig,
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
-    register_global_hotkey(&app, &saved.general.global_auto_type_shortcut);
+    register_global_hotkey(&app, &saved.keyboard.auto_type_global);
     sync_bridge(&app, &saved);
     sync_rpc(&app, &saved);
     Ok(saved)
@@ -986,7 +986,7 @@ pub fn run() {
                 });
             let store = ConfigStore::load(project_dir)?;
             let config = store.get()?;
-            register_global_hotkey(app.handle(), &config.general.global_auto_type_shortcut);
+            register_global_hotkey(app.handle(), &config.keyboard.auto_type_global);
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(TcatoTarget(Mutex::new(None)));
