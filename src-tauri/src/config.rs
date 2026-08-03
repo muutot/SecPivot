@@ -318,6 +318,23 @@ impl Default for DatabaseDefaults {
     }
 }
 
+/// Favicon download behavior ("Download Favicons"). Mirrors the frontend
+/// `FaviconSettings` in `src/lib/types/settings.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FaviconSettings {
+    /// How many distinct hosts may be fetched at once. 8 is a safe default:
+    /// parallel enough to be fast, low enough not to overwhelm the system
+    /// proxy (clash-verge & co.) with hundreds of simultaneous tunnels.
+    pub concurrency: i32,
+}
+
+impl Default for FaviconSettings {
+    fn default() -> Self {
+        Self { concurrency: 8 }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RemoteSettings {
@@ -420,6 +437,8 @@ pub struct AppConfig {
     pub rpc: RpcSettings,
     #[serde(default)]
     pub keyboard: KeyboardSettings,
+    #[serde(default)]
+    pub favicon: FaviconSettings,
 }
 
 impl Default for AppConfig {
@@ -434,6 +453,7 @@ impl Default for AppConfig {
             bridge: BridgeSettings::default(),
             rpc: RpcSettings::default(),
             keyboard: KeyboardSettings::default(),
+            favicon: FaviconSettings::default(),
         }
     }
 }
@@ -538,6 +558,8 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.security.auto_lock_minutes = clamp_i32(config.security.auto_lock_minutes, 0, 240, 5);
     config.security.clipboard_clear_seconds =
         clamp_i32(config.security.clipboard_clear_seconds, 0, 600, 20);
+
+    config.favicon.concurrency = clamp_i32(config.favicon.concurrency, 1, 16, 8);
 
     config.database.kdf = match config.database.kdf.as_str() {
         "Argon2id" | "Argon2" | "Aes" => config.database.kdf,

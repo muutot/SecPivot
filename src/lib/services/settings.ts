@@ -10,6 +10,7 @@ import type {
   BridgeSettings,
   RpcSettings,
   KeyboardSettings,
+  FaviconSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
@@ -102,6 +103,10 @@ export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
   shortcuts: {},
 };
 
+export const DEFAULT_FAVICON_SETTINGS: FaviconSettings = {
+  concurrency: 8,
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
@@ -112,6 +117,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   bridge: DEFAULT_BRIDGE_SETTINGS,
   rpc: DEFAULT_RPC_SETTINGS,
   keyboard: DEFAULT_KEYBOARD_SETTINGS,
+  favicon: DEFAULT_FAVICON_SETTINGS,
 };
 
 const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
@@ -384,6 +390,9 @@ export function normalizeSettings(
           : (fallback.rpc?.enabled ?? false),
     },
     keyboard,
+    favicon: {
+      concurrency: clampInt(source.favicon?.concurrency ?? fallback.favicon?.concurrency, 1, 16, 8),
+    },
   };
 }
 
@@ -402,6 +411,7 @@ interface AppSettingsStore {
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
   updateKeyboard: <K extends keyof KeyboardSettings>(key: K, value: KeyboardSettings[K]) => void;
+  updateFavicon: <K extends keyof FaviconSettings>(key: K, value: FaviconSettings[K]) => void;
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
@@ -578,6 +588,11 @@ export const appSettings: AppSettingsStore = {
 
   updateKeyboard(key, value): void {
     settings.update((s) => ({ ...s, keyboard: { ...s.keyboard, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateFavicon(key, value): void {
+    settings.update((s) => ({ ...s, favicon: { ...s.favicon, [key]: value } }));
     schedulePersist();
   },
 

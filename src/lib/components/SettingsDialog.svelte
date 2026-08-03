@@ -12,7 +12,7 @@
 
   type Section =
     "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
-  type GeneralTab = "appearance" | "display" | "compact";
+  type GeneralTab = "appearance" | "display" | "compact" | "network";
   type IntegrationsTab = "http" | "rpc";
 
   interface Props {
@@ -48,6 +48,7 @@
         { id: "appearance", label: "外观" },
         { id: "display", label: "显示" },
         { id: "compact", label: "紧凑" },
+        { id: "network", label: "网络" },
       ],
     },
     {

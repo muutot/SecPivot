@@ -5,7 +5,7 @@
   import Select from "$lib/components/Select.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
-  type Section = "appearance" | "display" | "compact";
+  type Section = "appearance" | "display" | "compact" | "network";
 
   interface Props {
     onclose: () => void;
@@ -429,6 +429,30 @@
         />
       </section>
     {/each}
+  {/if}
+
+  {#if section === "network"}
+    <section class="setting-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div class="heading-inline">
+          <div>
+            <strong>图标下载并发数</strong>
+            <p>下载条目网址图标时同时进行的请求数，默认 8</p>
+          </div>
+          <span class="value-label">{s.favicon.concurrency} 个</span>
+        </div>
+      </div>
+      <input
+        type="range"
+        class="transparency-slider"
+        min="1"
+        max="16"
+        value={s.favicon.concurrency}
+        style:--slider-pct={sliderPercentage(s.favicon.concurrency, 1, 16)}
+        oninput={(e) => appSettings.updateFavicon("concurrency", Number(e.currentTarget.value))}
+      />
+    </section>
   {/if}
 
   <p class="auto-save-note">修改即时生效并自动保存</p>

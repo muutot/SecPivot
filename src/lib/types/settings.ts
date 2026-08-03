@@ -129,6 +129,13 @@ export interface RpcSettings {
   enabled: boolean;
 }
 
+/** Favicon download behavior ("Download Favicons").
+ *  Mirrors `FaviconSettings` in `src-tauri/src/config.rs`. */
+export interface FaviconSettings {
+  /** How many distinct hosts may be fetched at once (1-16, default 8). */
+  concurrency: number;
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
@@ -143,4 +150,5 @@ export interface AppSettings {
   bridge: BridgeSettings;
   rpc: RpcSettings;
   keyboard: KeyboardSettings;
+  favicon: FaviconSettings;
 }

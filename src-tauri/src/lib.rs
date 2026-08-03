@@ -750,10 +750,15 @@ async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
 ///
 /// Emits `favicon-progress` (`{ done, total }`) after each host finishes so
 /// the renderer can show a progress dialog.
+///
+/// Hosts are fetched concurrently, capped by the configurable
+/// `favicon.concurrency` (default 8) so a large database cannot open
+/// hundreds of simultaneous tunnels through the system proxy.
 #[tauri::command]
 async fn download_favicons(
     app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    config: tauri::State<'_, ConfigStore>,
     uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
     let jobs = {
@@ -776,11 +781,20 @@ async fn download_favicons(
     };
     let total = jobs.len();
     let mut done = 0usize;
+    let concurrency = config
+        .get()
+        .map(|cfg| cfg.favicon.concurrency.max(1) as usize)
+        .unwrap_or(8);
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();
+        let semaphore = semaphore.clone();
         set.spawn(async move {
             let host = host;
+            // A closed semaphore (only on shutdown) degrades to unlimited
+            // concurrency instead of failing the download.
+            let _permit = semaphore.acquire_owned().await.ok();
             (host.clone(), fetch_favicon(&host).await)
         });
     }
