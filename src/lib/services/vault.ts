@@ -43,6 +43,7 @@ interface VaultStore {
   ) => Promise<VaultState>;
   close: () => Promise<void>;
   save: () => Promise<VaultState>;
+  saveAs: (path: string) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
@@ -364,6 +365,18 @@ export const vault: VaultStore = {
     state.set(saved);
     await browserPersist(saved);
     return saved;
+  },
+
+  /** Save As: persist to a new local path and switch the session target. */
+  async saveAs(path: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("save_vault_as", { path });
+      state.set(result);
+      return result;
+    }
+    const result = await this.save();
+    rememberRecent(path);
+    return result;
   },
 
   async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {

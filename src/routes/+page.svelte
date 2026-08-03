@@ -480,6 +480,28 @@
     }
   }
 
+  /** Save As: pick a new local path, persist there and switch to it. */
+  async function handleSaveAs(): Promise<void> {
+    if (!currentVault) return;
+    try {
+      if (isTauriRuntime()) {
+        const baseName = (currentVault.fileName.replace(/\.kdbx$/i, "") || "keyvault") + ".kdbx";
+        const selected = await save({
+          defaultPath: baseName,
+          filters: [{ name: "KeePass 数据库", extensions: ["kdbx"] }],
+        });
+        if (!selected) return;
+        await vault.saveAs(String(selected));
+      } else {
+        flash("浏览器预览不支持另存为");
+        return;
+      }
+      flash("已另存为数据库");
+    } catch (e) {
+      flash(`另存为失败：${e}`);
+    }
+  }
+
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
     try {
@@ -933,6 +955,7 @@
     { id: "import-csv", label: "导入 CSV", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
+    { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
   ]);
@@ -977,6 +1000,7 @@
     else if (id === "import-csv") void handleImportCsv();
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
+    else if (id === "save-as") void handleSaveAs();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
   }
@@ -1059,6 +1083,13 @@
             title="保存数据库 (Ctrl+S)"
           >
             <AppIcon name="save" size={14} />保存
+          </button>
+          <button
+            class="tool-button"
+            onclick={() => void handleSaveAs()}
+            title="另存为数据库副本到新路径"
+          >
+            <AppIcon name="copy" size={14} />另存为
           </button>
           <button class="tool-button" onclick={handleLock} title="锁定数据库">
             <AppIcon name="lock" size={14} />锁定
