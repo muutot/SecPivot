@@ -19,7 +19,6 @@
     VaultGroup,
     VaultState,
     SecurityReport,
-    FaviconReport,
     FaviconProgress,
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -65,7 +64,12 @@
   let busy = $state(false);
   let reportOpen = $state(false);
   let securityReport = $state<SecurityReport | null>(null);
-  let faviconProgress = $state<FaviconProgress | null>(null);
+  let faviconDialog = $state<{
+    phase: "working" | "done";
+    progress: FaviconProgress;
+    result: string;
+    error: boolean;
+  } | null>(null);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
   let expiredNotifiedPath = $state<string | null>(null);
@@ -592,35 +596,49 @@
       return;
     }
     busy = true;
-    faviconProgress = { done: 0, total: 0 };
+    faviconDialog = {
+      phase: "working",
+      progress: { done: 0, total: 0 },
+      result: "正在连接站点…",
+      error: false,
+    };
     const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
-      faviconProgress = e.payload;
+      faviconDialog = {
+        phase: "working",
+        progress: e.payload,
+        result: `正在下载，已完成 ${e.payload.done}/${e.payload.total}`,
+        error: false,
+      };
     });
     try {
       const report = await vault.downloadFavicons(uuids);
-      flashFaviconReport(report, noneMessage);
+      faviconDialog = {
+        phase: "done",
+        progress: { done: report.attempted, total: report.attempted },
+        result:
+          report.attempted === 0
+            ? noneMessage
+            : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
+        error: false,
+      };
     } catch (e) {
-      flash(`图标下载失败：${e}`);
+      faviconDialog = {
+        phase: "done",
+        progress: { done: 0, total: 0 },
+        result: `图标下载失败：${e}`,
+        error: true,
+      };
     } finally {
       unlisten();
-      faviconProgress = null;
       busy = false;
     }
   }
 
   let progressPct = $derived(
-    faviconProgress && faviconProgress.total > 0
-      ? `${Math.round((faviconProgress.done / faviconProgress.total) * 100)}%`
+    faviconDialog && faviconDialog.progress.total > 0
+      ? `${Math.round((faviconDialog.progress.done / faviconDialog.progress.total) * 100)}%`
       : "0%",
   );
-
-  function flashFaviconReport(report: FaviconReport, noneMessage: string): void {
-    flash(
-      report.attempted === 0
-        ? noneMessage
-        : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
-    );
-  }
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
     try {
@@ -1663,29 +1681,31 @@
   />
 {/if}
 
-{#if faviconProgress}
+{#if faviconDialog}
   <div class="modal-backdrop" role="presentation">
     <div class="group-modal">
       <div class="modal-head">
-        <span class="modal-icon"><AppIcon name="globe" size={16} /></span>
+        <span class="modal-icon" class:danger={faviconDialog.error}>
+          <AppIcon name={faviconDialog.error ? "x" : "globe"} size={16} />
+        </span>
         <div>
-          <strong>下载网址图标</strong>
-          <p>
-            {#if faviconProgress.total > 0}
-              正在下载，已完成 {faviconProgress.done}/{faviconProgress.total}
-            {:else}
-              正在连接站点…
-            {/if}
-          </p>
+          <strong>{faviconDialog.error ? "下载图标失败" : "下载网址图标"}</strong>
+          <p>{faviconDialog.result}</p>
         </div>
       </div>
-      <div class="progress-track">
-        <div
-          class="progress-fill"
-          class:indeterminate={faviconProgress.total === 0}
-          style:--progress-pct={progressPct}
-        ></div>
-      </div>
+      {#if faviconDialog.phase === "working"}
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            class:indeterminate={faviconDialog.progress.total === 0}
+            style:--progress-pct={progressPct}
+          ></div>
+        </div>
+      {:else}
+        <div class="modal-actions">
+          <button class="modal-button primary" onclick={() => (faviconDialog = null)}>关闭</button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
