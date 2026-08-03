@@ -99,6 +99,8 @@ export interface GeneralSettings {
   windowWidth: number;
   windowHeight: number;
   panelWidths: PanelWidths;
+  /** Toolbar control buttons show icons only; button names appear in hover tooltips. */
+  iconOnlyButtons: boolean;
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

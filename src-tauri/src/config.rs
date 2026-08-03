@@ -164,6 +164,8 @@ pub struct GeneralSettings {
     pub window_height: i32,
     /// User-resizable pane widths in the main view, remembered across restarts.
     pub panel_widths: PanelWidths,
+    /// Toolbar control buttons show icons only (labels on hover tooltips).
+    pub icon_only_buttons: bool,
     /// Legacy global auto-type hotkey from configs written before the
     /// `keyboard` section existed; migrated into `keyboard.auto_type_global`
     /// on load, never re-serialized.
@@ -211,6 +213,7 @@ impl Default for GeneralSettings {
             window_width: 1100,
             window_height: 720,
             panel_widths: PanelWidths::default(),
+            icon_only_buttons: false,
             global_auto_type_shortcut: String::new(),
         }
     }

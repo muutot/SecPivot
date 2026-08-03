@@ -161,6 +161,7 @@
 
   const compactMode = $derived(settings.general.compactMode);
   const groupDensity = $derived(settings.general.density);
+  const iconOnlyButtons = $derived(settings.general.iconOnlyButtons);
   const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
@@ -1107,15 +1108,42 @@
     {#if currentVault}
       <div class="toolbar" role="presentation" data-tauri-drag-region>
         <div class="toolbar-left">
-          <button class="tool-button primary" onclick={openCreateEntry} title="新建条目 (Ctrl+N)">
-            <AppIcon name="plus" size={14} />条目
+          <button
+            class="tool-button primary"
+            class:icon-only={iconOnlyButtons}
+            onclick={openCreateEntry}
+            title="新建条目 (Ctrl+N)"
+          >
+            <AppIcon name="plus" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">条目</span>{/if}
           </button>
           <button
             class="tool-button"
+            class:icon-only={iconOnlyButtons}
             onclick={() => openGroupModal(selectedGroup)}
             title="新建分组"
           >
-            <AppIcon name="folder-plus" size={14} />分组
+            <AppIcon name="folder-plus" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">分组</span>{/if}
+          </button>
+          <button
+            class="tool-button"
+            class:icon-only={iconOnlyButtons}
+            onclick={handleSave}
+            disabled={busy || !currentVault.dirty}
+            title="保存数据库 (Ctrl+S)"
+          >
+            <AppIcon name="save" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
+          </button>
+          <button
+            class="tool-button"
+            class:icon-only={iconOnlyButtons}
+            onclick={() => void handleSaveAs()}
+            title="另存为数据库副本到新路径"
+          >
+            <AppIcon name="copy" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
           </button>
         </div>
 
@@ -1161,21 +1189,12 @@
           </button>
           <button
             class="tool-button"
-            onclick={handleSave}
-            disabled={busy || !currentVault.dirty}
-            title="保存数据库 (Ctrl+S)"
+            class:icon-only={iconOnlyButtons}
+            onclick={handleLock}
+            title="锁定数据库"
           >
-            <AppIcon name="save" size={14} />保存
-          </button>
-          <button
-            class="tool-button"
-            onclick={() => void handleSaveAs()}
-            title="另存为数据库副本到新路径"
-          >
-            <AppIcon name="copy" size={14} />另存为
-          </button>
-          <button class="tool-button" onclick={handleLock} title="锁定数据库">
-            <AppIcon name="lock" size={14} />锁定
+            <AppIcon name="lock" size={14} />
+            {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
           </button>
         </div>
       </div>
@@ -1717,6 +1736,12 @@
   .tool-button:disabled {
     cursor: not-allowed;
     opacity: 0.55;
+  }
+
+  .tool-button.icon-only {
+    justify-content: center;
+    width: 28px;
+    padding: 0;
   }
 
   .dirty-badge {

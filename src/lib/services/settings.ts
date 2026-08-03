@@ -45,6 +45,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowWidth: 1100,
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
+  iconOnlyButtons: false,
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -272,6 +273,8 @@ export function normalizeSettings(
       detail: clampInt(g.panelWidths?.detail ?? fallback.general.panelWidths.detail, 260, 640, 300),
       urlCol: clampInt(g.panelWidths?.urlCol ?? fallback.general.panelWidths.urlCol, 30, 400, 200),
     },
+    iconOnlyButtons:
+      typeof g.iconOnlyButtons === "boolean" ? g.iconOnlyButtons : fallback.general.iconOnlyButtons,
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:
       g.language === "en" || g.language === "zh-CN" ? g.language : fallback.general.language,

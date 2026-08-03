@@ -213,6 +213,26 @@
       </button>
     </section>
 
+    <section class="setting-card toggle-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="eye" size={17} /></span>
+        <div>
+          <strong>工具栏仅显示图标</strong>
+          <p>控制按钮只显示图标，按钮名称在鼠标悬浮时提示</p>
+        </div>
+      </div>
+      <button
+        class="toggle-switch"
+        class:active={general.iconOnlyButtons}
+        role="switch"
+        aria-checked={general.iconOnlyButtons}
+        aria-label="工具栏仅显示图标"
+        onclick={() => change("iconOnlyButtons", !general.iconOnlyButtons)}
+      >
+        <span class="toggle-knob"></span>
+      </button>
+    </section>
+
     <section class="setting-card">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
