@@ -109,8 +109,10 @@ export interface EntryInput {
   totp?: string;
   /** ISO-8601 expiry datetime; empty/absent disables expiry. */
   expires?: string;
-  /** Built-in KeePass icon index (0-68); absent = default icon. */
-  icon?: number;
+  /** Built-in KeePass icon index (0-68); `null` resets to the default icon,
+   * and an absent value keeps the entry's current icon (custom favicons
+   * survive content-only edits). */
+  icon?: number | null;
   /** `#RRGGBB` background color; empty/absent clears it. */
   color?: string;
   customFields?: CustomField[];

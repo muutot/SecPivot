@@ -17,7 +17,7 @@ use keepass::db::{
     Color, Entry, EntryId, EntryMut, EntryRef, GroupId, GroupRef, History, Icon, Times, Value, TOTP,
 };
 use keepass::{Database, DatabaseKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -166,6 +166,33 @@ pub struct VaultState {
     pub custom_icons: HashMap<String, String>,
 }
 
+/// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
+/// index, JSON `null` explicitly resets to the default icon, and an absent
+/// field keeps the entry's current icon. Plain `Option<Option<u32>>` serde
+/// would collapse `null` into "absent", silently wiping favicon icons on
+/// content-only edits.
+fn de_entry_icon<'de, D>(deserializer: D) -> Result<Option<Option<u32>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // `serde_json::Value` (not `Option<Value>`) so a present JSON `null`
+    // stays distinct from an absent field: `Option<Value>` collapses `null`
+    // into `None`, silently turning an explicit "reset to default" into
+    // "keep the current icon".
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(Some(None)),
+        serde_json::Value::Number(n) => {
+            let icon = n
+                .as_u64()
+                .and_then(|v| u32::try_from(v).ok())
+                .ok_or_else(|| serde::de::Error::custom("icon must be a u32 index"))?;
+            Ok(Some(Some(icon)))
+        }
+        _ => Err(serde::de::Error::custom("icon must be a number or null")),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryInput {
@@ -180,9 +207,11 @@ pub struct EntryInput {
     /// ISO-8601 expiry datetime; empty/absent disables expiry.
     #[serde(default)]
     pub expires: Option<String>,
-    /// Built-in KeePass icon index; absent = default icon.
-    #[serde(default)]
-    pub icon: Option<u32>,
+    /// Built-in KeePass icon index; `null` resets to the default icon, and an
+    /// absent value keeps the entry's current icon (custom favicons survive
+    /// content-only edits).
+    #[serde(default, deserialize_with = "de_entry_icon")]
+    pub icon: Option<Option<u32>>,
     /// `#RRGGBB` background color; empty/absent clears it.
     #[serde(default)]
     pub color: Option<String>,
@@ -2524,10 +2553,13 @@ fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
             entry.times.expires = Some(false);
         }
     }
-    // Icon: a built-in KeePass index; absent = default icon.
+    // Icon: a built-in index; `null` resets to the default icon, and an
+    // absent value keeps the current icon so custom favicon icons survive
+    // content-only edits (e.g. `update_entry` with unchanged icon).
     match input.icon {
-        Some(icon_id) => entry.set_icon_builtin(icon_id as usize),
-        None => entry.set_icon_none(),
+        Some(Some(icon_id)) => entry.set_icon_builtin(icon_id as usize),
+        Some(None) => entry.set_icon_none(),
+        None => {}
     }
     // Background color tags the entry row; foreground is left unset.
     entry.background_color = parse_color(input.color.as_deref());
@@ -3143,7 +3175,7 @@ mod tests {
                     notes: String::new(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: Vec::new(),
                     attachments: Vec::new(),
@@ -3181,6 +3213,77 @@ mod tests {
         assert_eq!(icon_datas, vec![bytes.clone(), bytes.clone()]);
     }
 
+    /// A content-only edit (icon omitted) must keep the entry's icon — both a
+    /// built-in icon and a downloaded favicon custom icon — while an explicit
+    /// `icon: null` still clears it.
+    #[test]
+    fn update_without_icon_keeps_existing_icon() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let input = || EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        };
+        let state = session.add_entry(&input()).unwrap();
+        let uuid = state.root.entries.last().unwrap().uuid.clone();
+
+        // Built-in icon survives a content-only update.
+        session
+            .update_entry(
+                &uuid,
+                &EntryInput {
+                    icon: Some(Some(5)),
+                    ..input()
+                },
+            )
+            .unwrap();
+        let state = session.update_entry(&uuid, &input()).unwrap();
+        let entry = state.root.entries.last().unwrap();
+        assert_eq!(entry.icon, Some(5));
+        assert_eq!(entry.custom_icon, None);
+
+        // A downloaded favicon (custom icon) also survives a content-only update.
+        let jobs = session.favicon_jobs().unwrap();
+        session
+            .apply_favicons(
+                &jobs,
+                vec![FaviconFetch {
+                    host: "example.com".into(),
+                    bytes: vec![0x89, 0x50, 0x4E, 0x47],
+                }],
+            )
+            .unwrap();
+        let state = session.update_entry(&uuid, &input()).unwrap();
+        let entry = state.root.entries.last().unwrap();
+        assert_eq!(entry.icon, None);
+        assert!(entry.custom_icon.is_some(), "custom favicon must be kept");
+
+        // An explicit `icon: null` clears both kinds.
+        session
+            .update_entry(
+                &uuid,
+                &EntryInput {
+                    icon: Some(None),
+                    ..input()
+                },
+            )
+            .unwrap();
+        let state = session.update_entry(&uuid, &input()).unwrap();
+        let entry = state.root.entries.last().unwrap();
+        assert_eq!(entry.icon, None);
+        assert_eq!(entry.custom_icon, None);
+    }
+
     /// Multi-select "Download Favicons": `favicon_jobs_selected` scopes jobs
     /// to the given entries only — same-host entries outside the selection
     /// never share the icon, and URL-less entries are skipped.
@@ -3205,7 +3308,7 @@ mod tests {
                     notes: String::new(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: Vec::new(),
                     attachments: Vec::new(),
@@ -3266,7 +3369,7 @@ mod tests {
                 notes: String::new(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: Vec::new(),
                 attachments: Vec::new(),
@@ -3282,7 +3385,7 @@ mod tests {
                 notes: String::new(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: Vec::new(),
                 attachments: Vec::new(),
@@ -3406,7 +3509,7 @@ mod tests {
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3439,7 +3542,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3473,7 +3576,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3490,7 +3593,7 @@ mod tests {
             notes: "".into(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: vec![],
             attachments: vec![],
@@ -3537,7 +3640,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3557,7 +3660,7 @@ mod tests {
                         notes: "".into(),
                         totp: None,
                         expires: None,
-                        icon: None,
+                        icon: Some(None),
                         color: None,
                         custom_fields: vec![],
                         attachments: vec![],
@@ -3585,7 +3688,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: Some(1),
+                icon: Some(Some(1)),
                 color: Some("#FF8800".into()),
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3608,7 +3711,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3631,7 +3734,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: Some(3),
+                    icon: Some(Some(3)),
                     color: Some("#2288FF".into()),
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3691,7 +3794,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3726,7 +3829,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3761,7 +3864,7 @@ mod tests {
                     notes: "note".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3812,7 +3915,7 @@ mod tests {
                 notes: "".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: Some("2026-12-31T23:59:00Z".into()),
-                icon: Some(7),
+                icon: Some(Some(7)),
                 color: Some("#2288FF".into()),
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3859,7 +3962,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -3923,7 +4026,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -3976,7 +4079,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4016,7 +4119,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4053,7 +4156,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4128,7 +4231,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4211,7 +4314,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4314,7 +4417,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: Some("2020-01-01T00:00:00Z".to_owned()),
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4337,7 +4440,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -4361,7 +4464,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: Some("2099-12-31T23:59:59Z".to_owned()),
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![],
                     attachments: vec![],
@@ -4433,7 +4536,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: Some("2020-01-01T00:00:00Z".to_owned()),
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4463,7 +4566,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4506,7 +4609,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4556,7 +4659,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4606,7 +4709,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4665,7 +4768,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4729,7 +4832,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4767,7 +4870,7 @@ mod tests {
                 notes: "work".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4854,6 +4957,30 @@ mod tests {
         let partial: EntryPatch = serde_json::from_value(serde_json::json!({})).unwrap();
         assert!(partial.title.is_none());
         assert!(!partial.clear_expires);
+    }
+
+    #[test]
+    fn entry_input_icon_tristate_deserializes_absent_null_and_index() {
+        let base = |mut value: serde_json::Value| {
+            let obj = value.as_object_mut().unwrap();
+            obj.insert("groupUuid".into(), "g1".into());
+            obj.insert("title".into(), "T".into());
+            obj.insert("username".into(), "u".into());
+            obj.insert("password".into(), "p".into());
+            obj.insert("url".into(), "https://x".into());
+            obj.insert("notes".into(), "n".into());
+            value
+        };
+        // Absent icon (content-only edit) keeps the current icon.
+        let absent: EntryInput = serde_json::from_value(base(serde_json::json!({}))).unwrap();
+        assert_eq!(absent.icon, None);
+        // Explicit null resets to the default icon.
+        let clear: EntryInput =
+            serde_json::from_value(base(serde_json::json!({"icon": null}))).unwrap();
+        assert_eq!(clear.icon, Some(None));
+        // A number sets the built-in index.
+        let set: EntryInput = serde_json::from_value(base(serde_json::json!({"icon": 7}))).unwrap();
+        assert_eq!(set.icon, Some(Some(7)));
     }
 
     #[test]
@@ -4958,7 +5085,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -4991,7 +5118,7 @@ mod tests {
                 notes: "".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5029,7 +5156,7 @@ mod tests {
             notes: "".into(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: vec![],
             attachments: vec![],
@@ -5069,7 +5196,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5107,7 +5234,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5150,7 +5277,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![
                     CustomField {
@@ -5196,7 +5323,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![CustomField {
                         name: "PIN".into(),
@@ -5261,7 +5388,7 @@ mod tests {
                 notes: "n".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![
                     CustomField {
@@ -5312,7 +5439,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
@@ -5376,7 +5503,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5439,7 +5566,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5523,7 +5650,7 @@ mod tests {
                 notes: "line1\nline2".into(),
                 totp: Some("JBSWY3DPEHPK3PXP".into()),
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5595,7 +5722,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5789,7 +5916,7 @@ mod tests {
                 notes: String::new(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![AttachmentInput {
@@ -5823,7 +5950,7 @@ mod tests {
                 notes: String::new(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -5840,7 +5967,7 @@ mod tests {
             notes: String::new(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: vec![],
             attachments: vec![AttachmentInput {
@@ -5999,7 +6126,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -6107,7 +6234,7 @@ mod tests {
             notes: "".into(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: vec![],
             attachments: vec![],
@@ -6153,7 +6280,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -6184,7 +6311,7 @@ mod tests {
             notes: "".into(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: vec![],
             attachments: vec![],
@@ -6238,7 +6365,7 @@ mod tests {
                     notes: "".into(),
                     totp: None,
                     expires: None,
-                    icon: None,
+                    icon: Some(None),
                     color: None,
                     custom_fields: vec![CustomField {
                         name: "Customer Id".into(),
@@ -6275,7 +6402,7 @@ mod tests {
                 notes: "".into(),
                 totp: None,
                 expires: None,
-                icon: None,
+                icon: Some(None),
                 color: None,
                 custom_fields: vec![],
                 attachments: vec![],
@@ -6357,7 +6484,7 @@ mod tests {
             notes: String::new(),
             totp: None,
             expires: None,
-            icon: None,
+            icon: Some(None),
             color: None,
             custom_fields: Vec::new(),
             attachments: Vec::new(),

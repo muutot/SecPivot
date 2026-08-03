@@ -43,6 +43,8 @@ The vault session is held in backend managed state and returned to the frontend 
 
 `EntryPatch` (batch edit payload) = optional `title`, `username`, `password`, `url`, `notes`, `totp` (empty string clears the seed), `expires` (empty string clears the expiry), `icon`, `color` (empty string clears the tag) plus boolean `clearExpires` / `clearIcon` / `clearColor`. An absent field leaves every target entry untouched — passwords are never fetched or re-sent for unchanged fields. camelCase both sides (`clearExpires` ↔ `clear_expires`).
 
+`EntryInput` (`add_entry`/`update_entry` payload) = full-field rewrite via a `VaultState` snapshot; icon is a tri-state: `icon` a number → set that built-in index; `icon: null` → reset to the KeePass default icon; `icon` omitted → **keep the entry's current icon** so custom favicon icons survive content-only edits. (The editor tracks an `iconTouched` flag: untouched icons are never sent, and custom-favicon entries show the web icon as the first option in the icon picker.)
+
 The root group is the virtual top-level (uuid `"root"`); it is not persisted as a KeePass group — its `children` map to top-level groups and its `entries` map to the DB root group entries.
 
 ### Commands

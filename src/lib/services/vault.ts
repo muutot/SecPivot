@@ -434,11 +434,18 @@ export const vault: VaultStore = {
       for (const group of groups) {
         const entry = group.entries.find((e) => e.uuid === uuid);
         if (entry) {
-          Object.assign(entry, input, {
+          // `icon` follows the backend contract: absent keeps the current
+          // icon (custom favicons survive content-only edits), `null` clears
+          // it. `Object.assign` would copy `icon: undefined` over the entry,
+          // so the icon key is excluded from the merge and applied explicitly.
+          const { icon, ...rest } = input;
+          Object.assign(entry, rest, {
             groupUuid: input.groupUuid,
             hasTotp: Boolean(input.totp),
             modified: new Date().toISOString(),
           });
+          if (icon === null) entry.icon = undefined;
+          else if (icon !== undefined) entry.icon = icon;
           return;
         }
       }

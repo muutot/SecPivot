@@ -68,6 +68,18 @@
         : "",
   );
   let iconIndex = $state<number | null>(multi ? null : (initialEntry?.icon ?? null));
+  /** Whether the user clicked an icon in single mode; untouched means the
+   * backend keeps the entry's current icon (custom favicons survive
+   * content-only edits). */
+  let iconTouched = $state(false);
+  /** Data URL of the entry's database custom icon (web favicon), if any.
+   * Only single mode renders it, as the first icon option. */
+  const customIconUrl =
+    !multi && initialEntry?.customIcon
+      ? (get(vault)?.customIcons ?? {})[initialEntry.customIcon]
+      : undefined;
+  /** Whether the custom favicon option is the active selection. */
+  let customIconSelected = $state(!!customIconUrl);
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
   let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
@@ -224,7 +236,16 @@
 
   function pickIcon(index: number): void {
     markTouched("icon");
+    iconTouched = true;
+    if (customIconUrl && iconIndex === null) customIconSelected = false;
     iconIndex = iconIndex === index ? null : index;
+  }
+
+  function pickCustomIcon(): void {
+    markTouched("icon");
+    iconTouched = true;
+    iconIndex = null;
+    customIconSelected = true;
   }
 
   function pickColor(color: string): void {
@@ -266,6 +287,15 @@
       return;
     }
     if (!title.trim() && !username.trim() && !password) return;
+    // Tri-state icon: untouched = key omitted (backend keeps the current
+    // icon); a picked index sets the built-in; `null` resets to default.
+    const iconValue: number | null | undefined = !iconTouched
+      ? undefined
+      : iconIndex !== null
+        ? iconIndex
+        : customIconSelected
+          ? undefined
+          : null;
     onsaved(
       {
         groupUuid: targetGroupUuid,
@@ -276,7 +306,7 @@
         notes,
         totp: totp.trim() || undefined,
         expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
-        icon: iconIndex ?? undefined,
+        ...(iconValue !== undefined ? { icon: iconValue } : {}),
         color: colorHex || undefined,
         customFields: customFields
           .map((f) => ({ name: f.name.trim(), value: f.value }))
@@ -493,6 +523,18 @@
         <section class="field full">
           <span class="section-title">图标</span>
           <div class="icon-grid">
+            {#if !multi && customIconUrl}
+              <button
+                type="button"
+                class="icon-option"
+                class:selected={customIconSelected}
+                onclick={pickCustomIcon}
+                title="自定义图标(网页图标)"
+                aria-pressed={customIconSelected}
+              >
+                <img class="icon-option-img" src={customIconUrl} alt="" draggable="false" />
+              </button>
+            {/if}
             {#each Array.from({ length: ICON_PICKER_COUNT }, (_, i) => i) as index}
               <button
                 type="button"
@@ -947,6 +989,12 @@
     color: var(--text-muted);
     background: var(--input-bg);
     cursor: pointer;
+  }
+
+  .icon-option-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
   }
 
   .icon-option:hover {
