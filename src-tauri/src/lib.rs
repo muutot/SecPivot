@@ -601,16 +601,21 @@ async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
     None
 }
 
-/// Download favicons for every entry URL host and write them back into the
-/// database as custom icons (persisted immediately).
+/// Download favicons for the given entry URLs (or every entry when `uuids`
+/// is empty/None) and write them back into the database as custom icons
+/// (persisted immediately). Only the listed entries receive icons.
 #[tauri::command]
 async fn download_favicons(
     session: tauri::State<'_, Mutex<VaultSession>>,
+    uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
-    let jobs = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .favicon_jobs()?;
+    let jobs = {
+        let session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        match &uuids {
+            Some(selected) if !selected.is_empty() => session.favicon_jobs_selected(selected)?,
+            _ => session.favicon_jobs()?,
+        }
+    };
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();

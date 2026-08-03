@@ -59,7 +59,7 @@ interface VaultStore {
   getEntryPassword: (uuid: string) => Promise<string>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
-  downloadFavicons: () => Promise<FaviconReport>;
+  downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
@@ -518,9 +518,11 @@ export const vault: VaultStore = {
     return computeSecurityReport(current.root);
   },
 
-  async downloadFavicons(): Promise<FaviconReport> {
+  async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
-    const report = await backendInvoke<FaviconReport>("download_favicons");
+    const report = await backendInvoke<FaviconReport>("download_favicons", {
+      uuids: uuids && uuids.length > 0 ? uuids : undefined,
+    });
     await refreshInternal();
     return report;
   },

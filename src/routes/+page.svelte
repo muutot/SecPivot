@@ -19,6 +19,7 @@
     VaultGroup,
     VaultState,
     SecurityReport,
+    FaviconReport,
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
@@ -574,16 +575,35 @@
     busy = true;
     try {
       const report = await vault.downloadFavicons();
-      flash(
-        report.attempted === 0
-          ? "没有可下载的网址图标"
-          : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
-      );
+      flashFaviconReport(report, "没有可下载的网址图标");
     } catch (e) {
       flash(`图标下载失败：${e}`);
     } finally {
       busy = false;
     }
+  }
+
+  /** Download icons for the selected entries only (context menu, multi-select aware). */
+  async function downloadSelectedFavicons(entry: VaultEntry): Promise<void> {
+    if (busy) return;
+    const uuids = selectedUuids.size > 1 ? Array.from(selectedUuids) : [entry.uuid];
+    busy = true;
+    try {
+      const report = await vault.downloadFavicons(uuids);
+      flashFaviconReport(report, "所选条目没有可下载的网址图标");
+    } catch (e) {
+      flash(`图标下载失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function flashFaviconReport(report: FaviconReport, noneMessage: string): void {
+    flash(
+      report.attempted === 0
+        ? noneMessage
+        : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
+    );
   }
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
@@ -1039,6 +1059,12 @@
       { id: "autotype", label: "自动填充", icon: "keyboard" },
       { id: "autotype-password", label: "自动填充密码", icon: "key" },
       {
+        id: "download-favicon",
+        label: multi ? `下载所选条目图标 (${selectedUuids.size})` : "下载网址图标",
+        icon: "globe",
+        disabled: !isTauriRuntime() || (!multi && !entry.url),
+      },
+      {
         id: "tcato",
         label: "TCATO 覆盖层填充",
         icon: "shield",
@@ -1070,6 +1096,7 @@
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "autotype-password") void runAutoType(entry, AUTOTYPE_PASSWORD_SEQUENCE);
     else if (id === "tcato") void openTcatoOverlay(entry);
+    else if (id === "download-favicon") void downloadSelectedFavicons(entry);
     else if (id === "favorite") void toggleFavorite(entry);
     else if (id === "delete") askDeleteEntry(entry);
     else if (id === "delete-selected") askDeleteEntries();

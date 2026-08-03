@@ -1246,6 +1246,29 @@ impl VaultSession {
             .collect())
     }
 
+    /// Favicon jobs restricted to the given entry UUIDs (multi-select download);
+    /// only those entries get icons, never their same-host siblings. Entries
+    /// without a parseable http(s) URL are skipped; unknown uuids are ignored.
+    pub fn favicon_jobs_selected(&self, uuids: &[String]) -> Result<Vec<FaviconJob>, String> {
+        let db = self.require_db()?;
+        let mut map: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        for uuid in uuids {
+            let id = parse_entry_id(uuid)?;
+            let Some(entry) = db.entry(id) else {
+                continue;
+            };
+            if let Some(host) = extract_host(entry.get(FIELD_URL).unwrap_or_default()) {
+                map.entry(host)
+                    .or_default()
+                    .push(entry.id().uuid().to_string());
+            }
+        }
+        Ok(map
+            .into_iter()
+            .map(|(host, entry_uuids)| FaviconJob { host, entry_uuids })
+            .collect())
+    }
+
     /// Store fetched favicon bytes as database custom icons and point every
     /// entry of the same host at that icon. An entry that already references
     /// an identical icon keeps it; otherwise the icon data is replaced (or a
@@ -3146,6 +3169,63 @@ mod tests {
             }
         }
         assert_eq!(icon_datas, vec![bytes.clone(), bytes.clone()]);
+    }
+
+    /// Multi-select "Download Favicons": `favicon_jobs_selected` scopes jobs
+    /// to the given entries only — same-host entries outside the selection
+    /// never share the icon, and URL-less entries are skipped.
+    #[test]
+    fn favicon_jobs_selected_scopes_to_given_entries() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _path) = create_session(&dir);
+        let mut uuids = Vec::new();
+        for (title, url) in [
+            ("Login", "https://example.com/login"),
+            ("Other", "https://example.com/other"),
+            ("Elsewhere", "https://elsewhere.test"),
+            ("NoUrl", ""),
+        ] {
+            let state = session
+                .add_entry(&EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: title.into(),
+                    username: "u".into(),
+                    password: "p".into(),
+                    url: url.into(),
+                    notes: String::new(),
+                    totp: None,
+                    expires: None,
+                    icon: None,
+                    color: None,
+                    custom_fields: Vec::new(),
+                    attachments: Vec::new(),
+                })
+                .unwrap();
+            uuids.push(state.root.entries.last().unwrap().uuid.clone());
+        }
+
+        let jobs = session.favicon_jobs_selected(&[uuids[1].clone()]).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].host, "example.com");
+        assert_eq!(jobs[0].entry_uuids, vec![uuids[1].clone()]);
+
+        let jobs = session
+            .favicon_jobs_selected(&[uuids[0].clone(), uuids[1].clone()])
+            .unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].entry_uuids.len(), 2);
+
+        let jobs = session.favicon_jobs_selected(&[uuids[3].clone()]).unwrap();
+        assert!(jobs.is_empty(), "URL-less entry yields no job");
+
+        let jobs = session
+            .favicon_jobs_selected(&[
+                "00000000-0000-0000-0000-000000000000".to_owned(),
+                uuids[2].clone(),
+            ])
+            .unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].host, "elsewhere.test");
     }
 
     /// The plugin tree served through GetAllDatabases must actually contain
