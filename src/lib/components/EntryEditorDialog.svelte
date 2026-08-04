@@ -14,13 +14,7 @@
   import { formatBytes } from "$lib/utils/format";
   import { toDateTimeInput } from "$lib/utils/date";
   import AppIcon from "$lib/components/AppIcon.svelte";
-  import type { IconName } from "$lib/components/AppIcon.svelte";
-  import {
-    KEEPASS_ICONS,
-    KEEPASS_COLORS,
-    KEEPASS_ICON_CHOICES,
-    ENTRY_DEFAULT_ICON,
-  } from "$lib/utils/keepass-icons";
+  import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
 
   interface Props {
@@ -84,10 +78,7 @@
   let customIconSelected = $state(!!customIconUrl);
   /** Header icon follows the entry being edited (and live picks). In create
    * and batch mode no entry icon exists, so the generic key glyph is shown. */
-  const headerIconName = $derived(
-    ((KEEPASS_ICONS[(iconIndex ?? initialEntry?.icon ?? -1) as number] as string | undefined) ??
-      "key") as IconName,
-  );
+  const headerIconName = $derived(keepassIconName(iconIndex ?? initialEntry?.icon ?? -1));
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
   let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
@@ -220,10 +211,6 @@
 
   function removeAttachment(index: number): void {
     attachments = attachments.filter((_, i) => i !== index);
-  }
-
-  function keepassIconName(index: number): IconName {
-    return (KEEPASS_ICONS[index] ?? ENTRY_DEFAULT_ICON) as IconName;
   }
 
   function pickIcon(index: number): void {

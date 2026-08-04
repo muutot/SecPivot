@@ -28,10 +28,9 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import {
-    KEEPASS_ICONS,
     KEEPASS_ICON_CHOICES,
-    ENTRY_DEFAULT_ICON,
-    GROUP_DEFAULT_ICON,
+    keepassIconName,
+    keepassGroupIconName,
   } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
@@ -88,9 +87,7 @@
   }
 
   function entryIconName(entry: VaultEntry): IconName {
-    const mapped =
-      entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined;
-    return (mapped ?? ENTRY_DEFAULT_ICON) as IconName;
+    return keepassIconName(entry.icon);
   }
 
   /** Data URL of the entry's database-stored custom icon (favicon), if any. */
@@ -99,7 +96,7 @@
   }
 
   function groupIconName(index: number): IconName {
-    return (KEEPASS_ICONS[index] ?? GROUP_DEFAULT_ICON) as IconName;
+    return keepassGroupIconName(index);
   }
 
   onMount(() => {

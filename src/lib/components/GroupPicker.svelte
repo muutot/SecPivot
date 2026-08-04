@@ -2,8 +2,7 @@
   import type { VaultGroup } from "$lib/types/vault";
   import { countEntries } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
-  import type { IconName } from "$lib/components/AppIcon.svelte";
-  import { KEEPASS_ICONS, GROUP_DEFAULT_ICON } from "$lib/utils/keepass-icons";
+  import { keepassGroupIconName } from "$lib/utils/keepass-icons";
 
   interface Props {
     groups: VaultGroup[];
@@ -95,10 +94,8 @@
     }
   }
 
-  function iconOf(group: VaultGroup): IconName {
-    return ((group.icon !== undefined
-      ? (KEEPASS_ICONS[group.icon] as string | undefined)
-      : undefined) ?? GROUP_DEFAULT_ICON) as IconName;
+  function iconOf(group: VaultGroup) {
+    return keepassGroupIconName(group.icon);
   }
 </script>
 

@@ -10,8 +10,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
-  import type { IconName } from "$lib/components/AppIcon.svelte";
-  import { KEEPASS_ICONS, ENTRY_DEFAULT_ICON } from "$lib/utils/keepass-icons";
+  import { keepassIconName } from "$lib/utils/keepass-icons";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
 
   interface Props {
@@ -34,10 +33,7 @@
     onrestore,
   }: Props = $props();
 
-  const iconName = $derived(
-    ((entry.icon !== undefined ? (KEEPASS_ICONS[entry.icon] as string | undefined) : undefined) ??
-      ENTRY_DEFAULT_ICON) as IconName,
-  );
+  const iconName = $derived(keepassIconName(entry.icon));
 
   /** Data URL of the database-stored custom icon (favicon), if any. */
   const customIconUrl = $derived(

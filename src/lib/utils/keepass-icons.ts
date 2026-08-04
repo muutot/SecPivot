@@ -4,6 +4,8 @@
  * caller-provided default.
  */
 
+import type { IconName } from "$lib/components/AppIcon.svelte";
+
 export const KEEPASS_ICONS: Record<number, string> = {
   0: "key",
   1: "globe",
@@ -78,6 +80,20 @@ export const KEEPASS_ICONS: Record<number, string> = {
 
 export const ENTRY_DEFAULT_ICON = "key";
 export const GROUP_DEFAULT_ICON = "folder";
+
+/** Entry icon glyph for a KeePass icon index (undefined → default), typed as
+ *  an `AppIcon` name. */
+export function keepassIconName(index?: number): IconName {
+  const mapped = index !== undefined ? (KEEPASS_ICONS[index] as string | undefined) : undefined;
+  return (mapped ?? ENTRY_DEFAULT_ICON) as IconName;
+}
+
+/** Group icon glyph for a KeePass icon index (undefined → default), typed as
+ *  an `AppIcon` name. */
+export function keepassGroupIconName(index?: number): IconName {
+  const mapped = index !== undefined ? (KEEPASS_ICONS[index] as string | undefined) : undefined;
+  return (mapped ?? GROUP_DEFAULT_ICON) as IconName;
+}
 
 /** Small curated palette offered by the color picker (KeePass-inspired). */
 export const KEEPASS_COLORS: string[] = [
