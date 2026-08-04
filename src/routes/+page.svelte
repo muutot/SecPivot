@@ -44,6 +44,7 @@
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
+  import { parseKdbxXml } from "$lib/utils/kdbx-xml";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
@@ -809,7 +810,7 @@
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".csv,text/csv";
+      input.accept = ".csv,text/csv,.xml,text/xml";
       input.onchange = () => {
         const file = input.files?.[0];
         if (!file) {
@@ -894,6 +895,59 @@
         });
       }
       flash(`已导入 ${rows.length} 个条目`);
+    } catch (e) {
+      flash(`导入失败：${e}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function handleImportXml(): Promise<void> {
+    if (!currentVault) return;
+    let text: string;
+    try {
+      if (isTauriRuntime()) {
+        const selected = await open({
+          multiple: false,
+          filters: [
+            { name: "KeePass XML 文件", extensions: ["xml"] },
+            { name: "CSV 文件", extensions: ["csv"] },
+          ],
+        });
+        if (!selected) return;
+        text = await invoke<string>("read_text_file", { path: String(selected) });
+      } else {
+        const picked = await readPickedFile();
+        if (picked === null) return;
+        text = picked;
+      }
+    } catch (e) {
+      flash(`读取文件失败：${e}`);
+      return;
+    }
+    const entries = parseKdbxXml(text);
+    if (entries.length === 0) {
+      flash("XML 中没有可导入的条目");
+      return;
+    }
+    busy = true;
+    try {
+      let state = currentVault;
+      for (const entry of entries) {
+        const groupUuid = await resolveImportGroup(entry.group, state);
+        state = await vault.addEntry({
+          groupUuid,
+          title: entry.title,
+          username: entry.username,
+          password: entry.password,
+          url: entry.url,
+          notes: entry.notes,
+          totp: entry.totp || undefined,
+          customFields: entry.customFields,
+          attachments: [],
+        });
+      }
+      flash(`已导入 ${entries.length} 个条目`);
     } catch (e) {
       flash(`导入失败：${e}`);
     } finally {
@@ -1270,6 +1324,7 @@
     { id: "new-entry", label: "新建条目", icon: "plus" },
     { id: "new-group", label: "新建分组", icon: "folder-plus" },
     { id: "import-csv", label: "导入 CSV", icon: "upload" },
+    { id: "import-xml", label: "导入 XML", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "save-as", label: "另存为…", icon: "copy" },
@@ -1320,6 +1375,7 @@
     if (id === "new-entry") openCreateEntry();
     else if (id === "new-group") openGroupModal(selectedGroup);
     else if (id === "import-csv") void handleImportCsv();
+    else if (id === "import-xml") void handleImportXml();
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();

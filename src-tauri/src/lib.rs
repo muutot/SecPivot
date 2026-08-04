@@ -39,9 +39,10 @@ const TRAY_MENU_QUIT: &str = "tray-quit";
 /// Emitted to the frontend when the user picks "锁定" from the tray.
 const TRAY_LOCK_EVENT: &str = "tray-lock";
 
-/// CSV import cap (8 MiB): guards the read-text command against oversized
-/// files; the `.csv` extension whitelist stops arbitrary file exfiltration.
-const MAX_CSV_IMPORT_BYTES: u64 = 8 * 1024 * 1024;
+/// CSV/XML import cap (8 MiB): guards the read-text command against oversized
+/// files; the `.csv`/`.xml` extension whitelist stops arbitrary file
+/// exfiltration.
+const MAX_TEXT_IMPORT_BYTES: u64 = 8 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Config commands
@@ -1050,24 +1051,25 @@ fn export_csv(session: tauri::State<'_, Mutex<VaultSession>>, path: String) -> R
     vault::write_csv_file(&path, &content)
 }
 
-/// Read a UTF-8 text file from a user-picked path (CSV import). Only `.csv`
-/// files are accepted: the command must never serve as an arbitrary local
-/// file reader (e.g. for config.json, credentials, or other vaults).
+/// Read a UTF-8 text file from a user-picked path (CSV / KeePass XML import).
+/// Only `.csv` and `.xml` files are accepted: the command must never serve as
+/// an arbitrary local file reader (e.g. for config.json, credentials, or other
+/// vaults).
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     let path = Path::new(&path);
-    let is_csv = path
+    let allowed = path
         .extension()
         .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("csv"));
-    if !is_csv {
-        return Err("仅支持导入 .csv 文件".to_owned());
+        .is_some_and(|e| e.eq_ignore_ascii_case("csv") || e.eq_ignore_ascii_case("xml"));
+    if !allowed {
+        return Err("仅支持导入 .csv 或 .xml 文件".to_owned());
     }
     let meta = std::fs::metadata(path).map_err(|e| format!("读取文件失败: {e}"))?;
-    if meta.len() > MAX_CSV_IMPORT_BYTES {
+    if meta.len() > MAX_TEXT_IMPORT_BYTES {
         return Err(format!(
-            "CSV 文件过大 (最大 {} MiB)",
-            MAX_CSV_IMPORT_BYTES / 1024 / 1024
+            "导入文件过大 (最大 {} MiB)",
+            MAX_TEXT_IMPORT_BYTES / 1024 / 1024
         ));
     }
     std::fs::read_to_string(path).map_err(|e| format!("读取文件失败: {e}"))
@@ -1433,10 +1435,13 @@ mod tests {
     }
 
     #[test]
-    fn read_text_file_accepts_csv_and_rejects_others() {
+    fn read_text_file_accepts_csv_and_xml_and_rejects_others() {
         let dir = TempDir::new().unwrap();
         let csv = write_file(&dir, "import.csv", "title,username,password\n");
         assert_eq!(read_text_file(csv).unwrap(), "title,username,password\n");
+
+        let xml = write_file(&dir, "vault.kdbx.xml", "<KeePassFile/>");
+        assert_eq!(read_text_file(xml).unwrap(), "<KeePassFile/>");
 
         let txt = write_file(&dir, "notes.txt", "secret local text");
         let err = read_text_file(txt).unwrap_err();

@@ -121,7 +121,11 @@
         <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
         <div>
           <strong>服务地址</strong>
-          <p>{remote.kind === "webdav" ? "WebDAV 基地址（如 https://dav.example.com/remote.php/dav/files/user）" : "兼容 AWS S3、MinIO 等 S3 API 服务"}</p>
+          <p>
+            {remote.kind === "webdav"
+              ? "WebDAV 基地址（如 https://dav.example.com/remote.php/dav/files/user）"
+              : "兼容 AWS S3、MinIO 等 S3 API 服务"}
+          </p>
         </div>
       </div>
       <input
@@ -129,7 +133,9 @@
         class="settings-input setting-row-input"
         type="text"
         value={remote.endpoint}
-        placeholder={remote.kind === "webdav" ? "https://dav.example.com/dav" : "https://s3.amazonaws.com"}
+        placeholder={remote.kind === "webdav"
+          ? "https://dav.example.com/dav"
+          : "https://s3.amazonaws.com"}
         oninput={(e) => change("endpoint", e.currentTarget.value)}
       />
     </div>
