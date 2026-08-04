@@ -6,6 +6,8 @@
 //! per the approved security model — they are secondary credentials, distinct
 //! from vault master passwords.
 
+pub(crate) mod backup;
+
 use crate::config::RemoteSettings;
 use quick_xml::events::Event;
 use quick_xml::Reader;

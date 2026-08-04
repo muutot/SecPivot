@@ -13,6 +13,8 @@
 //! requires explicit user approval (see `handle_request`'s `approve` gate).
 //! Secrets are wiped in place before any local key copy is dropped.
 
+pub(crate) mod server;
+
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;

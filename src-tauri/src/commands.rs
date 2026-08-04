@@ -4,7 +4,6 @@
 use crate::autotype;
 use crate::bridge;
 use crate::bridge::BridgeHost;
-use crate::bridge_server;
 use crate::clipboard;
 use crate::config;
 use crate::config::ConfigStore;
@@ -13,7 +12,6 @@ use crate::focus;
 use crate::register_global_hotkey;
 use crate::remote::{local_storage_dir, make_storage, RemoteObject};
 use crate::rpc;
-use crate::rpc_server;
 use crate::shield;
 use crate::vault;
 use crate::vault::{
@@ -67,7 +65,7 @@ pub(crate) fn set_config(
 /// Start or stop the loopback bridge to match `bridge.enabled`; failures are
 /// logged, never fatal (the app stays usable without browser integration).
 pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
-    let state = app.state::<bridge_server::BridgeState>();
+    let state = app.state::<crate::bridge::server::BridgeState>();
     if config.bridge.enabled {
         if let Err(e) = state.start(app) {
             eprintln!("bridge: {e}");
@@ -80,7 +78,7 @@ pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
 /// Start or stop the loopback KeePassRPC server to match `rpc.enabled`;
 /// failures are logged, never fatal (the app stays usable without Kee).
 pub(crate) fn sync_rpc(app: &tauri::AppHandle, config: &config::AppConfig) {
-    let state = app.state::<rpc_server::RpcState>();
+    let state = app.state::<crate::rpc::server::RpcState>();
     if config.rpc.enabled {
         if let Err(e) = state.start(app) {
             eprintln!("rpc: {e}");
@@ -103,7 +101,7 @@ pub(crate) struct BridgeStatus {
 }
 #[tauri::command]
 pub(crate) fn bridge_status(
-    state: tauri::State<'_, bridge_server::BridgeState>,
+    state: tauri::State<'_, crate::bridge::server::BridgeState>,
 ) -> Result<BridgeStatus, String> {
     Ok(BridgeStatus {
         running: state.running(),
@@ -122,7 +120,7 @@ pub(crate) struct RpcStatus {
 
 #[tauri::command]
 pub(crate) fn rpc_status(
-    state: tauri::State<'_, rpc_server::RpcState>,
+    state: tauri::State<'_, crate::rpc::server::RpcState>,
 ) -> Result<RpcStatus, String> {
     Ok(RpcStatus {
         running: state.running(),
@@ -158,7 +156,7 @@ pub(crate) fn bridge_remove_client(
 /// Answer a pending browser-association approval from the settings UI.
 #[tauri::command]
 pub(crate) fn bridge_approve(
-    board: tauri::State<'_, bridge_server::ApprovalBoard>,
+    board: tauri::State<'_, crate::bridge::server::ApprovalBoard>,
     token: String,
     allowed: bool,
 ) -> Result<(), String> {

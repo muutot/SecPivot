@@ -14,6 +14,8 @@
 //! first-time client runs a user-typed side-channel SRP password. Session keys
 //! live in the vault session and are wiped on lock (see security-model.md).
 
+pub(crate) mod server;
+
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

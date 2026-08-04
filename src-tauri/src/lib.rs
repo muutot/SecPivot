@@ -1,6 +1,5 @@
 pub mod autotype;
 pub mod bridge;
-pub mod bridge_server;
 pub mod clipboard;
 pub mod commands;
 pub mod config;
@@ -10,9 +9,7 @@ pub mod dpapi;
 pub mod focus;
 pub mod otp;
 pub mod remote;
-pub mod remote_backup;
 pub mod rpc;
-pub mod rpc_server;
 pub mod shield;
 pub mod util;
 pub mod vault;
@@ -197,9 +194,9 @@ pub fn run() {
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(commands::TcatoTarget(Mutex::new(None)));
-            app.manage(bridge_server::BridgeState::default());
-            app.manage(bridge_server::ApprovalBoard::default());
-            app.manage(rpc_server::RpcState::default());
+            app.manage(crate::bridge::server::BridgeState::default());
+            app.manage(crate::bridge::server::ApprovalBoard::default());
+            app.manage(crate::rpc::server::RpcState::default());
             commands::sync_bridge(app.handle(), &config);
             commands::sync_rpc(app.handle(), &config);
             Ok(())
