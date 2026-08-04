@@ -179,22 +179,10 @@ impl VaultSession {
     /// session becomes a plain local one — later saves go to the new file,
     /// never back to S3. On failure the session is left untouched.
     pub fn save_as(&mut self, path: &Path) -> Result<VaultState, String> {
-        let (db, _, revision) = self.prepare_change()?;
-        let password = self.require_password()?.to_owned();
-        let keyfile = self.keyfile.clone();
-        persist_change(
-            &db,
-            &password,
-            keyfile.as_deref(),
-            &SaveTarget::Local(path.to_path_buf()),
-        )?;
-        self.replace(db, path, &password, keyfile);
-        if self.revision == revision {
-            self.dirty = false;
-            self.modified_at = now_iso();
-            self.cached_snapshot = None;
-        }
-        self.snapshot()
+        let job = self.prepare_save_as(path)?;
+        let revision = job.revision;
+        persist_save(job)?;
+        self.complete_save_as(path.to_path_buf(), revision)
     }
 }
 
@@ -328,6 +316,38 @@ impl VaultSession {
             target,
             revision,
         })
+    }
+
+    /// Locked half of `save_as`: capture the database clone, master key and
+    /// explicit new local path. Cheap — no KDF, no disk I/O, so the heavy
+    /// re-encrypt + write can run outside the lock.
+    pub(crate) fn prepare_save_as(&self, path: &Path) -> Result<SaveJob, String> {
+        let db = self.require_db()?.clone();
+        Ok(SaveJob {
+            db,
+            password: self.require_password()?.to_owned(),
+            keyfile: self.keyfile.clone(),
+            target: SaveTarget::Local(path.to_path_buf()),
+            revision: self.revision,
+        })
+    }
+
+    /// Locked completion of `save_as`: switch the session target to the new
+    /// local path (dropping any remote target) and mark clean unless edits
+    /// landed while the save ran. Only called after the persist succeeded.
+    pub(crate) fn complete_save_as(
+        &mut self,
+        path: PathBuf,
+        revision: u64,
+    ) -> Result<VaultState, String> {
+        self.path = Some(path.to_string_lossy().into_owned());
+        self.remote = None;
+        if self.revision == revision {
+            self.dirty = false;
+            self.modified_at = now_iso();
+            self.cached_snapshot = None;
+        }
+        self.snapshot()
     }
 
     /// Cheap snapshot of the database and save target, used when the caller

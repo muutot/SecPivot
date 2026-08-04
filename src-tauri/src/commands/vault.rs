@@ -6,7 +6,7 @@ use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
 use crate::vault::{EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultSession, VaultState};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
 use zeroize::Zeroize;
@@ -137,10 +137,19 @@ pub(crate) fn save_vault_as(
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
 ) -> Result<VaultState, String> {
+    // Capture a cheap job (db clone + new path) under the lock, run the
+    // re-encrypt (KDF) + serialization + disk write outside it, then switch
+    // the session target under the lock again.
+    let job = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .prepare_save_as(Path::new(&path))?;
+    let revision = job.revision;
+    vault::persist_save(job)?;
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .save_as(Path::new(&path))
+        .complete_save_as(PathBuf::from(path), revision)
 }
 
 #[tauri::command]
