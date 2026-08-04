@@ -12,6 +12,7 @@ pub mod remote;
 pub mod rpc;
 pub mod rpc_server;
 pub mod shield;
+pub mod util;
 pub mod vault;
 
 use crate::bridge::BridgeHost;

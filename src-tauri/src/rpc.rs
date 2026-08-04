@@ -420,21 +420,6 @@ pub fn secret_bytes(secret_hex: &str) -> Result<Vec<u8>, RpcError> {
     Ok(bytes)
 }
 
-/// Lowercased host of a URL (scheme/port/path stripped), for URL matching.
-/// Both sides normalize; `example.com` matches `https://example.com/login`.
-pub fn url_host(url: &str) -> Option<String> {
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .unwrap_or(url);
-    let host = rest
-        .split(['/', ':', '?', '#'])
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    (!host.is_empty()).then_some(host)
-}
-
 fn hex_decode(s: &str) -> Result<Vec<u8>, RpcError> {
     if !s.len().is_multiple_of(2) {
         return Err(RpcError::InvalidMessage("密钥格式无效".to_owned()));
@@ -765,6 +750,7 @@ pub fn handle_jsonrpc(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::url_host;
     use std::collections::HashMap;
 
     fn big(n_hex: &str) -> BigUint {

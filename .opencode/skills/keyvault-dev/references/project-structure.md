@@ -67,6 +67,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/rpc_server.rs`    | Loopback WebSocket server (127.0.0.1:12546), `RpcState` lifecycle, per-connection handshake state machine, side-channel event emission, WS transport tests                                                                                                                                                  |
 | `src-tauri/src/autotype.rs`      | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                                                                                                                   |
 | `src-tauri/src/focus.rs`         | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                                                                                                        |
+| `src-tauri/src/util.rs`          | Small cross-module helpers: URL host extraction (single source for bridge/rpc/vault URL matching)                                                                                                                                                                                                             |
 
 ## Persistent layout
 

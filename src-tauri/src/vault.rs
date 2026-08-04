@@ -10,6 +10,7 @@ use crate::rpc::{
     merge_urls, write_custom_fields, write_password, write_username, RpcDatabase, RpcError,
     RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite,
 };
+use crate::util::url_host;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -2190,7 +2191,7 @@ fn collect_rpc_logins(
 /// Title for entries created by the browser bridge: the URL host, or the raw
 /// URL when it has no parseable host.
 fn bridge_entry_title(url: &str) -> String {
-    let host = url_host(url);
+    let host = url_host(url).unwrap_or_default();
     if host.is_empty() {
         url.trim().to_owned()
     } else {
@@ -2315,8 +2316,8 @@ fn collect_bridge_logins(
 /// as a domain suffix (`example.com` ↔ `www.example.com`). Empty hosts never
 /// match, so entries without a URL are invisible to the bridge.
 fn bridge_host_matches(entry_url: &str, request_url: &str) -> bool {
-    let entry_host = url_host(entry_url);
-    let request_host = url_host(request_url);
+    let entry_host = url_host(entry_url).unwrap_or_default();
+    let request_host = url_host(request_url).unwrap_or_default();
     if entry_host.is_empty() || request_host.is_empty() {
         return false;
     }
@@ -2789,16 +2790,6 @@ fn recycle_bin_id(db: &Database) -> Option<GroupId> {
     db.meta.recyclebin_uuid.map(GroupId::from_uuid)
 }
 
-/// Lower-cased host part of a URL, without scheme, port, or path.
-fn url_host(url: &str) -> String {
-    let rest = url.split("://").nth(1).unwrap_or(url);
-    rest.split(['/', ':', '?', '#'])
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_lowercase()
-}
-
 /// Depth-first scan of `group`'s subtree for a `{REF:...}` match. First
 /// matching entry wins (KeePass semantics); the recycle bin is skipped.
 fn walk_ref_match(
@@ -2883,7 +2874,7 @@ fn walk_match(
     }
     for entry in group.entries() {
         let mut score = 0;
-        let host = url_host(entry.get(FIELD_URL).unwrap_or_default());
+        let host = url_host(entry.get(FIELD_URL).unwrap_or_default()).unwrap_or_default();
         if !host.is_empty() && window_title.contains(&host) {
             score += 2;
         }
@@ -6420,10 +6411,13 @@ mod tests {
 
     #[test]
     fn url_host_strips_scheme_port_and_path() {
-        assert_eq!(url_host("https://github.com/login"), "github.com");
-        assert_eq!(url_host("http://a.b.c:8080/x?y=1"), "a.b.c");
-        assert_eq!(url_host("plain-host"), "plain-host");
-        assert_eq!(url_host(""), "");
+        assert_eq!(
+            url_host("https://github.com/login"),
+            Some("github.com".into())
+        );
+        assert_eq!(url_host("http://a.b.c:8080/x?y=1"), Some("a.b.c".into()));
+        assert_eq!(url_host("plain-host"), Some("plain-host".into()));
+        assert_eq!(url_host(""), None);
     }
 
     #[test]
