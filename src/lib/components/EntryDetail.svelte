@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
-  import { copyText } from "$lib/utils/clipboard";
-  import { copySensitive } from "$lib/services/security";
+  import { copyValue } from "$lib/services/security";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
@@ -126,11 +125,7 @@
 
   async function handleCopy(value: string, kind: string, sensitive = false): Promise<void> {
     try {
-      if (sensitive) {
-        await copySensitive(value);
-      } else {
-        await copyText(value);
-      }
+      await copyValue(value, sensitive);
       flash(kind);
     } catch {
       flash("error");

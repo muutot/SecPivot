@@ -14,8 +14,7 @@
   } from "$lib/components/ColumnConfigMenu.svelte";
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
-  import { armIdleLock, lockVault, copySensitive } from "$lib/services/security";
-  import { copyText } from "$lib/utils/clipboard";
+  import { armIdleLock, lockVault, copyValue } from "$lib/services/security";
   import type {
     EntryInput,
     EntryPatch,
@@ -1223,11 +1222,7 @@
 
   async function copyEntryValue(value: string, label: string, sensitive = false): Promise<void> {
     try {
-      if (sensitive) {
-        await copySensitive(value);
-      } else {
-        await copyText(value);
-      }
+      await copyValue(value, sensitive);
       flash(`已复制${label}`);
     } catch {
       flash("复制失败");

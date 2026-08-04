@@ -39,6 +39,17 @@ export async function copySensitive(value: string): Promise<void> {
   }
 }
 
+/** Copy a value, applying the sensitive copy path (with `lockAfterAction`)
+ *  when the flag is set, otherwise a plain copy. Single dispatch used by every
+ *  copy target so lock-after-action always behaves the same. */
+export async function copyValue(value: string, sensitive: boolean): Promise<void> {
+  if (sensitive) {
+    await copySensitive(value);
+  } else {
+    await copyText(value);
+  }
+}
+
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let idleDeadline = 0;
 
