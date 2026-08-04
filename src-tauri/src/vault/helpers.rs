@@ -8,8 +8,8 @@ use super::{
     FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD, FIELD_STEAM_OTP, FIELD_STEAM_OTP_ALT, FIELD_TIME_OTP,
     FIELD_URL, FIELD_USERNAME, RESERVED_FIELDS, ROOT_GROUP_UUID,
 };
-use crate::autotype;
-use crate::otp;
+use crate::crypto::otp;
+use crate::platform::autotype;
 use crate::util::url_host;
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{Entry, EntryId, GroupId, GroupRef};

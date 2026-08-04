@@ -1,6 +1,6 @@
 //! Clipboard read/clear IPC commands (extracted from commands.rs).
 
-use crate::clipboard;
+use crate::platform::clipboard;
 // ---------------------------------------------------------------------------
 // Clipboard commands
 // ---------------------------------------------------------------------------

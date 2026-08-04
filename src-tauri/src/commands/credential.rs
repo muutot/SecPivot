@@ -1,7 +1,7 @@
 //! Credential-store commands (Windows Hello quick unlock; extracted from
 //! commands.rs).
 
-use crate::credential;
+use crate::platform::credential;
 use zeroize::Zeroize;
 /// Store the master password for a vault path in the OS credential store.
 #[tauri::command]

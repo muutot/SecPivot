@@ -1,16 +1,10 @@
-pub mod autotype;
 pub mod bridge;
-pub mod clipboard;
 pub mod commands;
 pub mod config;
-pub mod credential;
 pub mod crypto;
-pub mod dpapi;
-pub mod focus;
-pub mod otp;
+pub mod platform;
 pub mod remote;
 pub mod rpc;
-pub mod shield;
 pub mod util;
 pub mod vault;
 
@@ -63,7 +57,7 @@ pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
 /// Replay the auto-type sequence of the entry matching the focused window.
 /// Runs on a background thread; failures are logged only.
 fn handle_global_hotkey(app: &tauri::AppHandle) {
-    let Some(window_title) = focus::foreground_window_title() else {
+    let Some(window_title) = platform::focus::foreground_window_title() else {
         return;
     };
     let Some(session) = app.try_state::<Mutex<VaultSession>>() else {
@@ -90,7 +84,7 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
         }
     };
     std::thread::spawn(move || {
-        if let Err(e) = autotype::run_sequence(GLOBAL_AUTOTYPE_SEQUENCE, &ctx) {
+        if let Err(e) = platform::autotype::run_sequence(GLOBAL_AUTOTYPE_SEQUENCE, &ctx) {
             eprintln!("global auto-type: {e}");
         }
     });

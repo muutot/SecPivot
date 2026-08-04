@@ -22,12 +22,14 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         let mut value: AppConfig =
             serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
         for profile in &mut value.remote_profiles {
-            profile.settings.access_key = crate::dpapi::decrypt(&profile.settings.access_key);
-            profile.settings.secret_key = crate::dpapi::decrypt(&profile.settings.secret_key);
+            profile.settings.access_key =
+                crate::platform::dpapi::decrypt(&profile.settings.access_key);
+            profile.settings.secret_key =
+                crate::platform::dpapi::decrypt(&profile.settings.secret_key);
         }
         if let Some(legacy) = &mut value.remote {
-            legacy.access_key = crate::dpapi::decrypt(&legacy.access_key);
-            legacy.secret_key = crate::dpapi::decrypt(&legacy.secret_key);
+            legacy.access_key = crate::platform::dpapi::decrypt(&legacy.access_key);
+            legacy.secret_key = crate::platform::dpapi::decrypt(&legacy.secret_key);
         }
         Ok(normalize_config(value))
     } else {
@@ -42,9 +44,9 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
         profile.settings.access_key =
-            crate::dpapi::encrypt_for_storage(&profile.settings.access_key)?;
+            crate::platform::dpapi::encrypt_for_storage(&profile.settings.access_key)?;
         profile.settings.secret_key =
-            crate::dpapi::encrypt_for_storage(&profile.settings.secret_key)?;
+            crate::platform::dpapi::encrypt_for_storage(&profile.settings.secret_key)?;
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;

@@ -1,7 +1,7 @@
 //! TCATO (two-channel auto-type overlay) commands + managed target state
 //! (extracted from commands.rs).
 
-use crate::focus;
+use crate::platform::focus;
 use crate::vault::VaultSession;
 use std::sync::Mutex;
 use tauri::Manager;

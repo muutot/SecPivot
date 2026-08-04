@@ -1,9 +1,9 @@
 //! Vault lifecycle + entry/group CRUD IPC commands. Thin wrappers; passwords
 //! and keys never cross IPC (extracted from commands.rs).
 
-use crate::autotype;
 use crate::config::ConfigStore;
-use crate::shield;
+use crate::platform::autotype;
+use crate::platform::shield;
 use crate::vault;
 use crate::vault::{EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultSession, VaultState};
 use std::path::Path;

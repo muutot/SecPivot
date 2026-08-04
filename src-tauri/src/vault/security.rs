@@ -7,8 +7,8 @@ use super::helpers::{
 };
 use super::serialize::{collect_favicon_hosts, escape_csv, estimate_entropy, extract_host};
 use super::*;
-use crate::autotype::{self, AutotypeContext};
-use crate::otp;
+use crate::crypto::otp;
+use crate::platform::autotype::{self, AutotypeContext};
 use keepass::db::{EntryId, Icon, Value};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};

@@ -1,5 +1,5 @@
 use super::helpers::{save_database, wipe_secret_bytes, wipe_secret_string};
-use crate::otp;
+use crate::crypto::otp;
 use crate::util::url_host;
 use crate::vault::helpers::otp_kind_name;
 use keepass::db::Icon;

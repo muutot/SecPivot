@@ -63,7 +63,9 @@ pub fn send_text_to_foreground(text: &str) -> Result<(), String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        crate::autotype::execute_tokens(&[crate::autotype::AutotypeToken::Text(text.to_owned())])
-            .map_err(|e| e.to_string())
+        crate::platform::autotype::execute_tokens(&[
+            crate::platform::autotype::AutotypeToken::Text(text.to_owned()),
+        ])
+        .map_err(|e| e.to_string())
     }
 }
