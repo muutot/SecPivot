@@ -58,7 +58,18 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | Path                               | Ownership                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src-tauri/src/lib.rs`             | Tauri builder, managed state (`AppState`), command registration, setup, system tray (Show/Lock/Quit + minimize-to-tray close handling), global auto-type hotkey (register/re-register + handler), window close handling                                                                                             |
-| `src-tauri/src/commands.rs`        | All Tauri IPC command handlers, grouped by domain: config, bridge/RPC status + approval, credential store, vault open/create/save/change-key, entry & group CRUD, favicon download, TCATO overlay, clipboard, S3 remote (extracted from lib.rs)                                                                     |
+| `src-tauri/src/commands/mod.rs` | All Tauri IPC command handlers, grouped by domain; module root re-exports every command + `sync_bridge`/`sync_rpc`/`TcatoTarget` for `lib.rs` (extracted from lib.rs) |
+| `src-tauri/src/commands/config.rs` | Config IPC: `get_config`/`set_config`, bridge/RPC server sync, backup-template normalization |
+| `src-tauri/src/commands/bridge.rs` | KeePassHttp/RPC status + browser-association approval commands |
+| `src-tauri/src/commands/credential.rs` | Credential-store (Windows Hello quick unlock) commands |
+| `src-tauri/src/commands/vault.rs` | Vault lifecycle (open/create/close/state/save/save-as/change-key) + entry CRUD + TOTP/favorite/auto-type + screen-capture guard |
+| `src-tauri/src/commands/groups.rs` | Group CRUD + recycle-bin empty commands |
+| `src-tauri/src/commands/entries.rs` | On-demand password/TOTP fetch, security report, CSV export, CSV/XML import reader |
+| `src-tauri/src/commands/favicon.rs` | Favicon download command + WinINET proxy parse + HTTP fan-out helpers |
+| `src-tauri/src/commands/tcato.rs` | TCATO overlay commands + managed target state |
+| `src-tauri/src/commands/clipboard.rs` | Clipboard read/clear commands |
+| `src-tauri/src/commands/remote.rs` | S3 remote: list objects, open remote, create + upload |
+| `src-tauri/src/commands/tests.rs` | Command-layer unit tests |
 | `src-tauri/src/config/mod.rs` | Config module root: `pub mod settings`/`store`, re-exports (`AppConfig`, `normalize_config`, `ConfigStore`, `RECENT_FILES_MAX`, `DEFAULT_BACKUP_TEMPLATE`)                                                                    |
 | `src-tauri/src/config/settings.rs` | `config.json` serde shapes (mirror `AppSettings`), defaults, normalization incl. remote backup template + file extension (extracted from config.rs)                                                                    |
 | `src-tauri/src/config/store.rs` | Atomic persistence to `<project_dir>/conf/config.json` (`read_config`/`write_config`) + managed `ConfigStore` (extracted from config.rs)                                                                    |
@@ -103,6 +114,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src/lib/types/settings.ts` + `src/lib/types/vault.ts`
 - `src/lib/services/settings.ts` + `src/lib/services/vault.ts`
 - `src-tauri/src/lib.rs`
+- `src-tauri/src/commands/` (mod + config + bridge + credential + vault + groups + entries + favicon + tcato + clipboard + remote + tests)
 - `src-tauri/src/config/` (mod + settings + store + tests)
 - `src-tauri/src/vault/mod.rs`
 - `src-tauri/src/bridge/mod.rs` + `src-tauri/src/bridge/server.rs` + `src-tauri/src/rpc/mod.rs` + `src-tauri/src/rpc/server.rs` + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
