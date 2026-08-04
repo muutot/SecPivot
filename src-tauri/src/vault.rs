@@ -6,6 +6,7 @@ use crate::autotype::{self, AutotypeContext};
 use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::otp;
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
+use crate::remote_backup::{remote_key_basename, validate_remote_key, write_local_copy};
 use crate::rpc::{
     merge_urls, write_custom_fields, write_password, write_username, RpcDatabase, RpcError,
     RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite,
@@ -33,10 +34,9 @@ pub const ROOT_GROUP_UUID: &str = "root";
 pub const ROOT_GROUP_NAME: &str = "Root";
 
 /// Default backup file name template. `{name}` = file stem, `{timestamp}` =
-/// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension. Kept in sync with
-/// `config::DEFAULT_BACKUP_TEMPLATE`; used only when a saved session carries
-/// no template (defensive fallback).
-pub const DEFAULT_BACKUP_TEMPLATE: &str = "{name}.{timestamp}.{ext}.bak";
+/// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension. Single source lives in
+/// `config`; re-exported here for callers that reference it via `vault::`.
+pub(crate) use crate::config::DEFAULT_BACKUP_TEMPLATE;
 
 const FIELD_TITLE: &str = "Title";
 const FIELD_USERNAME: &str = "UserName";
@@ -3020,106 +3020,6 @@ fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), Str
 /// Atomic write of already-serialized KDBX bytes (local vault save).
 fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), String> {
     crate::util::atomic_write(path, buffer, "数据库")
-}
-
-/// Validate an S3 object key for a vault file. Keys need not end in `.kdbx`:
-/// whether the object really is a database is decided by the KDBX parse.
-fn validate_remote_key(key: &str) -> Result<String, String> {
-    let key = key.trim().trim_start_matches('/').to_owned();
-    if key.is_empty() {
-        return Err("远程文件 Key 不能为空".to_owned());
-    }
-    Ok(key)
-}
-
-/// Basename of an S3 object key, used as the local mirror file name.
-fn remote_key_basename(key: &str) -> String {
-    key.rsplit('/').next().unwrap_or(key).to_owned()
-}
-
-/// Expand a backup name template. `{name}` → file stem, `{timestamp}` →
-/// `YYYYMMDDHHmmssSSS`, `{ext}` → extension without the dot (falls back to
-/// the caller's `default_ext` when the source file has none). Unknown tokens
-/// are kept verbatim so a typo cannot silently drop the extension.
-fn expand_backup_template(template: &str, name: &str, stamp: &str, ext: &str) -> String {
-    template
-        .replace("{name}", name)
-        .replace("{timestamp}", stamp)
-        .replace("{ext}", ext)
-}
-
-/// Whether `candidate` matches the shape a template produces: the template is
-/// filled in for `{name}`/`{ext}` and `{timestamp}` acts as a wildcard run.
-/// A template without `{timestamp}` matches only the exact filled name.
-fn template_matches(candidate: &str, name: &str, ext: &str, template: &str) -> bool {
-    let filled = template.replace("{name}", name).replace("{ext}", ext);
-    match filled.split_once("{timestamp}") {
-        Some((before, after)) => {
-            candidate.len() >= before.len() + after.len()
-                && candidate.starts_with(before)
-                && candidate.ends_with(after)
-        }
-        None => candidate == filled,
-    }
-}
-
-/// Write the local mirror of a remote vault under `dir`, rotating up to
-/// `backup_count` timestamped backups (named via `backup_template`) of the
-/// previous file first.
-fn write_local_copy(
-    dir: &Path,
-    name: &str,
-    bytes: &[u8],
-    backup_count: usize,
-    backup_template: &str,
-) -> Result<(), String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
-    let dest = dir.join(name);
-    if backup_count > 0 && dest.exists() {
-        let stem = dest
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(name)
-            .to_owned();
-        let ext = dest
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("kdbx")
-            .to_owned();
-        let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f").to_string();
-        let backup = dir.join(expand_backup_template(backup_template, &stem, &stamp, &ext));
-        if backup != dest {
-            std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
-        }
-        prune_local_backups(dir, &stem, &ext, backup_count, backup_template)?;
-    }
-    std::fs::write(&dest, bytes).map_err(|e| format!("写入本地副本失败: {e}"))
-}
-
-/// Keep only the newest `keep` backup files matching `backup_template`.
-fn prune_local_backups(
-    dir: &Path,
-    stem: &str,
-    ext: &str,
-    keep: usize,
-    backup_template: &str,
-) -> Result<(), String> {
-    let mut backups: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map_err(|e| format!("读取本地备份目录失败: {e}"))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|name| template_matches(name, stem, ext, backup_template))
-        })
-        .collect();
-    backups.sort();
-    let total = backups.len();
-    for path in backups.into_iter().take(total.saturating_sub(keep)) {
-        let _ = std::fs::remove_file(path);
-    }
-    Ok(())
 }
 
 fn apply_kdf(db: &mut Database, kdf: &str) -> Result<(), String> {

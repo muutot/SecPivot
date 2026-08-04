@@ -15,7 +15,7 @@ const RECENT_FILES_MAX: usize = 8;
 
 /// Default backup file name template. `{name}` = file stem, `{timestamp}` =
 /// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension.
-const DEFAULT_BACKUP_TEMPLATE: &str = "{name}.{timestamp}.{ext}.bak";
+pub(crate) const DEFAULT_BACKUP_TEMPLATE: &str = "{name}.{timestamp}.{ext}.bak";
 // ---------------------------------------------------------------------------
 // Serde shapes (camelCase on the wire)
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ pub mod dpapi;
 pub mod focus;
 pub mod otp;
 pub mod remote;
+pub mod remote_backup;
 pub mod rpc;
 pub mod rpc_server;
 pub mod shield;
