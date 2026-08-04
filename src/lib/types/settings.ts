@@ -41,8 +41,6 @@ export interface RemoteSettings {
   secretKey: string;
   /** Optional key prefix (folder) used by the remote file browser. */
   prefix: string;
-  /** Subdirectory under `Storage/remote/` for local copies ("保存到本地" mode). */
-  localDir: string;
   /** Number of timestamped `.bak` backups kept beside the local copy; 0 disables. */
   backupCount: number;
   /** Backup file name template. Placeholders: `{name}` (file stem),
@@ -50,7 +48,9 @@ export interface RemoteSettings {
   backupTemplate: string;
 }
 
-/** One named S3 configuration shown in the profile selector. */
+/** One named S3 configuration shown in the profile selector. The name must be
+ *  unique across profiles — it also names the local mirror folder
+ *  (`Storage/remote/<sanitized name>` for "保存到本地" mode). */
 export interface RemoteProfile {
   name: string;
   settings: RemoteSettings;

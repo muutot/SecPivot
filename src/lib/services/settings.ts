@@ -125,7 +125,6 @@ export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
   accessKey: "",
   secretKey: "",
   prefix: "",
-  localDir: "remote",
   backupCount: 3,
   backupTemplate: "{name}.{timestamp}.{ext}.bak",
 };
@@ -222,7 +221,6 @@ export function normalizeRemoteSettings(
     accessKey: str("accessKey", fallback.accessKey),
     secretKey: str("secretKey", fallback.secretKey),
     prefix: str("prefix", fallback.prefix),
-    localDir: str("localDir", fallback.localDir),
     backupCount: clampInt(
       typeof r.backupCount === "number" ? r.backupCount : fallback.backupCount,
       0,
@@ -246,6 +244,21 @@ export function normalizeFileExtension(ext: string): string {
   return cleaned === "" ? "kdbx" : cleaned;
 }
 
+/** Sanitize a remote profile name into a safe mirror folder name, mirroring
+ *  `sanitize_dir_name` in `src-tauri/src/remote.rs`: keeps letters/digits
+ *  (Unicode-aware, so Chinese names survive) plus `-`/`_`; anything else
+ *  becomes `_`. Empty/whitespace → `remote`. Used for the "保存到本地" hints so
+ *  what the UI shows matches the real folder. */
+export function sanitizeDirName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "remote";
+  let out = "";
+  for (const ch of trimmed) {
+    out += /\p{L}|\p{N}|[-_]/u.test(ch) ? ch : "_";
+  }
+  return out === "" ? "remote" : out;
+}
+
 /** Normalize `remoteProfiles` (at least one profile always survives), with a
  * legacy single `remote` object promoted to the first profile. */
 export function normalizeRemoteProfiles(
@@ -259,6 +272,19 @@ export function normalizeRemoteProfiles(
         settings: normalizeRemoteSettings(p?.settings, fallback),
       }))
     : [];
+  // Mirror the backend's name dedup (mirror folder is derived from the name).
+  const seen = new Set<string>();
+  for (const profile of profiles) {
+    const base = profile.name;
+    let candidate = base;
+    let n = 2;
+    while (seen.has(candidate)) {
+      candidate = `${base} (${n})`;
+      n += 1;
+    }
+    seen.add(candidate);
+    profile.name = candidate;
+  }
   if (profiles.length > 0) return profiles;
   return [{ name: "默认", settings: normalizeRemoteSettings(legacy ?? undefined, fallback) }];
 }
@@ -592,10 +618,18 @@ export const appSettings: AppSettingsStore = {
 
   addRemoteProfile(name): void {
     settings.update((s) => {
+      const base = name.trim() || `配置 ${s.remoteProfiles.length + 1}`;
+      const taken = new Set(s.remoteProfiles.map((p) => p.name.trim()));
+      let candidate = base;
+      let n = 2;
+      while (taken.has(candidate)) {
+        candidate = `${base} (${n})`;
+        n += 1;
+      }
       const remoteProfiles = [
         ...s.remoteProfiles,
         {
-          name: name.trim() || `配置 ${s.remoteProfiles.length + 1}`,
+          name: candidate,
           settings: { ...DEFAULT_REMOTE_SETTINGS },
         },
       ];
@@ -617,7 +651,16 @@ export const appSettings: AppSettingsStore = {
 
   renameRemoteProfile(index, name): void {
     settings.update((s) => {
-      const remoteProfiles = s.remoteProfiles.map((p, i) => (i === index ? { ...p, name } : p));
+      // The name also names the local mirror folder, so duplicates are
+      // forbidden. Empty / colliding names are rejected (the last valid unique
+      // name stays in the store; the UI shows an inline error while typing).
+      const trimmed = name.trim();
+      if (trimmed === "") return s;
+      const collides = s.remoteProfiles.some((p, i) => i !== index && p.name.trim() === trimmed);
+      if (collides) return s;
+      const remoteProfiles = s.remoteProfiles.map((p, i) =>
+        i === index ? { ...p, name: trimmed } : p,
+      );
       return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
     });
     schedulePersist();

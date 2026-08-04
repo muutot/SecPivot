@@ -3,7 +3,7 @@
 //! to `<project_dir>/conf/config.json`.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -403,9 +403,6 @@ pub struct RemoteSettings {
     pub secret_key: String,
     /// Optional key prefix (folder) used by the remote file browser.
     pub prefix: String,
-    /// Subdirectory name under `Storage/remote/` for local copies of remote
-    /// vaults ("保存到本地" mode).
-    pub local_dir: String,
     /// Number of timestamped `.bak` backups kept beside the local copy;
     /// 0 disables backups.
     pub backup_count: i32,
@@ -424,7 +421,6 @@ impl Default for RemoteSettings {
             access_key: String::new(),
             secret_key: String::new(),
             prefix: String::new(),
-            local_dir: "remote".into(),
             backup_count: 3,
             backup_template: DEFAULT_BACKUP_TEMPLATE.into(),
         }
@@ -432,7 +428,9 @@ impl Default for RemoteSettings {
 }
 
 /// One named S3 configuration. Multiple profiles can coexist; the frontend
-/// picks the active one per command (`cfg` travels with every call).
+/// picks the active one per command (`cfg` travels with every call). The
+/// profile `name` is unique and also names the local mirror folder
+/// (`Storage/remote/<sanitized name>` for "保存到本地" mode).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RemoteProfile {
@@ -670,6 +668,21 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
             profile.name = "默认".into();
         }
     }
+    // Remote names must be unique — the local mirror folder is derived from
+    // the name ("保存到本地" mode), so duplicates would collide. Dedup by
+    // suffixing later occurrences (the frontend enforces this too; this is a
+    // safety net for hand-edited configs).
+    let mut seen_names: HashSet<String> = HashSet::new();
+    for profile in &mut config.remote_profiles {
+        let base = profile.name.clone();
+        let mut candidate = base.clone();
+        let mut n = 2;
+        while !seen_names.insert(candidate.clone()) {
+            candidate = format!("{base} ({n})");
+            n += 1;
+        }
+        profile.name = candidate;
+    }
     config.active_remote = clamp_i32(
         config.active_remote as i32,
         0,
@@ -705,10 +718,6 @@ fn normalize_remote_settings(settings: &mut RemoteSettings) {
     settings.access_key = settings.access_key.trim().to_owned();
     settings.secret_key = settings.secret_key.trim().to_owned();
     settings.prefix = settings.prefix.trim().to_owned();
-    settings.local_dir = settings.local_dir.trim().to_owned();
-    if settings.local_dir.is_empty() {
-        settings.local_dir = "remote".into();
-    }
     settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
     settings.backup_template = settings.backup_template.trim().to_owned();
     if settings.backup_template.is_empty() {
@@ -767,8 +776,10 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let tmp = dir.join("config.json.tmp");
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
-        profile.settings.access_key = crate::dpapi::encrypt(&profile.settings.access_key)?;
-        profile.settings.secret_key = crate::dpapi::encrypt(&profile.settings.secret_key)?;
+        profile.settings.access_key =
+            crate::dpapi::encrypt_for_storage(&profile.settings.access_key)?;
+        profile.settings.secret_key =
+            crate::dpapi::encrypt_for_storage(&profile.settings.secret_key)?;
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
@@ -815,6 +826,17 @@ impl ConfigStore {
         let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
         let idx = index.min(guard.remote_profiles.len().saturating_sub(1));
         Ok(guard.remote_profiles[idx].settings.clone())
+    }
+
+    /// Name + settings of the profile at `index`, clamped to the last valid
+    /// profile (mirrors `remote_settings`). Commands resolve the profile here
+    /// so the mirror folder can be named after the profile name without
+    /// sending the name over IPC.
+    pub fn remote_profile(&self, index: usize) -> Result<(String, RemoteSettings), String> {
+        let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
+        let idx = index.min(guard.remote_profiles.len().saturating_sub(1));
+        let profile = &guard.remote_profiles[idx];
+        Ok((profile.name.clone(), profile.settings.clone()))
     }
 }
 
@@ -890,7 +912,6 @@ mod tests {
                 access_key: "AKIA-test".into(),
                 secret_key: "s3cret".into(),
                 prefix: "vaults/".into(),
-                local_dir: "backups".into(),
                 backup_count: 5,
                 backup_template: "{name}.{timestamp}.{ext}.bak".into(),
             },
@@ -912,7 +933,6 @@ mod tests {
         );
         assert_eq!(again.remote_profiles[1].settings.bucket, "my-vaults");
         assert_eq!(again.remote_profiles[1].settings.secret_key, "s3cret");
-        assert_eq!(again.remote_profiles[1].settings.local_dir, "backups");
         assert_eq!(again.remote_profiles[1].settings.backup_count, 5);
         // active index is clamped to the last valid profile
         assert_eq!(again.active_remote, 1);
@@ -984,12 +1004,10 @@ mod tests {
             config.remote_profiles[0].settings.endpoint,
             "https://s3.amazonaws.com"
         );
-        assert_eq!(config.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(config.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(config.remote_profiles[0].settings.kind, "s3");
 
         config.remote_profiles[0].settings.endpoint = "  https://s3.example.com  ".into();
-        config.remote_profiles[0].settings.local_dir = "   ".into();
         config.remote_profiles[0].settings.backup_count = 99;
         config.active_remote = 42;
         let normalized = normalize_config(config);
@@ -997,9 +1015,33 @@ mod tests {
             normalized.remote_profiles[0].settings.endpoint,
             "https://s3.example.com"
         );
-        assert_eq!(normalized.remote_profiles[0].settings.local_dir, "remote");
         assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
         assert_eq!(normalized.active_remote, 0);
+    }
+
+    #[test]
+    fn remote_profile_names_are_unique_and_suffixed_on_normalize() {
+        let mut config = AppConfig::default();
+        config.remote_profiles.push(RemoteProfile {
+            name: "Bitiful".into(),
+            settings: RemoteSettings::default(),
+        });
+        config.remote_profiles.push(RemoteProfile {
+            name: " 默认 ".into(),
+            settings: RemoteSettings::default(),
+        });
+        config.remote_profiles.push(RemoteProfile {
+            name: "Bitiful".into(),
+            settings: RemoteSettings::default(),
+        });
+        let normalized = normalize_config(config);
+        let names: Vec<&str> = normalized
+            .remote_profiles
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        // Empty → 默认 (deduped to 默认 (2)), duplicate → suffixed.
+        assert_eq!(names, vec!["默认", "Bitiful", "默认 (2)", "Bitiful (2)"]);
     }
 
     #[test]
@@ -1077,6 +1119,13 @@ mod tests {
         // out-of-range indices clamp to the last valid profile
         let clamped = store.remote_settings(9).unwrap();
         assert_eq!(clamped.endpoint, "http://127.0.0.1:9000");
+
+        // remote_profile returns the same profile's name + settings
+        let (name, settings) = store.remote_profile(1).unwrap();
+        assert_eq!(name, "Bitiful");
+        assert_eq!(settings.endpoint, "http://127.0.0.1:9000");
+        let (clamped_name, _) = store.remote_profile(9).unwrap();
+        assert_eq!(clamped_name, "Bitiful");
     }
 
     #[test]

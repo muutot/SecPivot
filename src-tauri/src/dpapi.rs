@@ -62,13 +62,36 @@ pub fn encrypt(plain: &str) -> Result<String, String> {
 }
 
 /// Decrypt a value previously produced by [`encrypt`]. Legacy plaintext and
-/// empty values pass through unchanged; corrupted blobs are returned as-is so
-/// the config still loads (the user can re-enter the secret).
+/// empty values pass through unchanged. Wrapped `dpapi1:` layers are unwrapped
+/// repeatedly — including values that were accidentally double-encrypted —
+/// until real plaintext (or an undecryptable layer) is reached. Any layer that
+/// cannot be decrypted (a blob protected by a different user/machine,
+/// corrupted, or a Windows blob read on a non-Windows platform) yields an
+/// *empty* string, never the raw blob, which would otherwise be used verbatim
+/// as the credential and break SigV4 signing (the base64 blob can contain
+/// `/`, which malforms the `/`-delimited `X-Amz-Credential`).
 pub fn decrypt(stored: &str) -> String {
     if stored.is_empty() {
         return String::new();
     }
-    if let Some(encoded) = stored.strip_prefix(PREFIX) {
+    let mut current = stored.to_owned();
+    // Unwrap nested layers (e.g. legacy accidental double-encryption).
+    let mut depth = 0;
+    while current.starts_with(PREFIX) && depth < 4 {
+        current = decrypt_one(&current);
+        depth += 1;
+    }
+    current
+}
+
+/// Decrypt a single `dpapi1:` layer. Returns the plaintext on success, an
+/// empty string on any failure, or the input unchanged when it is not a
+/// `dpapi1:` value.
+fn decrypt_one(stored: &str) -> String {
+    if stored.is_empty() {
+        return String::new();
+    }
+    if stored.strip_prefix(PREFIX).is_some() {
         #[cfg(target_os = "windows")]
         {
             use windows_sys::Win32::Foundation::LocalFree;
@@ -76,8 +99,11 @@ pub fn decrypt(stored: &str) -> String {
                 CryptUnprotectData, CRYPT_INTEGER_BLOB,
             };
 
+            let Some(encoded) = stored.strip_prefix(PREFIX) else {
+                return String::new();
+            };
             let Ok(cipher) = BASE64.decode(encoded) else {
-                return stored.to_owned();
+                return String::new();
             };
             let input = CRYPT_INTEGER_BLOB {
                 cbData: cipher.len() as u32,
@@ -100,9 +126,9 @@ pub fn decrypt(stored: &str) -> String {
                 )
             };
             if ok == 0 {
-                return stored.to_owned();
+                return String::new();
             }
-            // SAFETY: API-owned buffer sized by `cbData`.
+            // SAFETY: plain-owned buffer sized by `cbData`.
             let plain = unsafe {
                 std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec()
             };
@@ -113,11 +139,25 @@ pub fn decrypt(stored: &str) -> String {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            stored.to_owned()
+            String::new()
         }
     } else {
         stored.to_owned()
     }
+}
+
+/// Prepare a secret for disk persistence, guarding against accidental
+/// double-encryption: if `value` is already a `dpapi1:` blob (e.g. a stale
+/// config echoed back through the frontend), it is unwrapped first so the
+/// stored result is a single clean layer. Values that cannot be unwrapped
+/// become empty (cleared) rather than being re-encrypted as garbage.
+pub fn encrypt_for_storage(value: &str) -> Result<String, String> {
+    let plain = if value.starts_with(PREFIX) {
+        decrypt(value)
+    } else {
+        value.to_owned()
+    };
+    encrypt(&plain)
 }
 
 #[cfg(test)]
@@ -139,6 +179,27 @@ mod tests {
     #[test]
     fn legacy_plaintext_passes_through() {
         assert_eq!(decrypt("AKIA-legacy-plain"), "AKIA-legacy-plain");
+    }
+
+    #[test]
+    fn undecryptable_blob_returns_empty_not_raw() {
+        assert_eq!(decrypt("dpapi1:bm90LWEtcmVhbC1ibG9i"), "");
+        assert_eq!(decrypt("dpapi1:###not-valid-base64###"), "");
+    }
+
+    #[test]
+    fn encrypt_for_storage_never_double_wraps() {
+        // A valid plaintext secret is wrapped exactly once.
+        let one = encrypt_for_storage("AKIA-secret").unwrap();
+        assert!(one.starts_with(PREFIX));
+        assert_eq!(decrypt(&one), "AKIA-secret");
+        // An already-wrapped value is unwrapped then re-wrapped, never layered.
+        let twice = encrypt_for_storage(&one).unwrap();
+        assert!(twice.starts_with(PREFIX));
+        assert_eq!(decrypt(&twice), "AKIA-secret");
+        // DPAPI salts per call, so bytes differ — but it must stay a single
+        // layer (a nested wrap would reveal another `dpapi1:` on first unwrap).
+        assert!(!decrypt(&twice).starts_with(PREFIX));
     }
 
     #[cfg(target_os = "windows")]

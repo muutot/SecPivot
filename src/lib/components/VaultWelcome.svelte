@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime, sanitizeDirName } from "$lib/services/settings";
   import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
   import type { RemoteMode, RemoteObject } from "$lib/types/vault";
@@ -28,7 +28,14 @@
 
   const recentFiles = $derived(settings.general.recentFiles);
 
-  const remoteLocalDir = $derived(settings.remote.localDir || "remote");
+  const activeRemoteName = $derived(settings.remoteProfiles[settings.activeRemote].name);
+  /** The mirror folder actually created for "本地镜像" mode. */
+  const remoteMirrorDir = $derived(sanitizeDirName(activeRemoteName));
+  /** True while the 配置名称 field holds a duplicate of another profile's name. */
+  const remoteNameConflict = $derived(
+    activeRemoteName.trim() !== "" &&
+      settings.remoteProfiles.filter((p) => p.name.trim() === activeRemoteName.trim()).length > 1,
+  );
 
   /** Opt-in screen-capture guard: excludes the main window from screenshots/recordings while a vault is open (Windows only). */
   const guardEnabled = $derived(settings.security.screenCaptureGuard);
@@ -88,7 +95,8 @@
     try {
       remoteObjects = await vault.listRemoteObjects();
       if (remoteObjects.length === 0) {
-        error = "未找到远程数据库文件，请检查设置中的服务地址与对象前缀";
+        error =
+          "远程目录连接成功，但该目录下没有数据库文件（.kdbx）。请确认对象前缀指向包含数据库文件的目录，或切换到“新建”在此目录创建数据库";
       }
     } catch (e) {
       error = String(e);
@@ -135,10 +143,6 @@
     }
     if (!password) {
       error = "请输入主密码";
-      return;
-    }
-    if (password !== confirm) {
-      error = "两次输入的密码不一致";
       return;
     }
     busy = true;
@@ -464,6 +468,7 @@
             <span>配置名称</span>
             <input
               class="text-input"
+              class:input-invalid={remoteNameConflict}
               type="text"
               value={settings.remoteProfiles[settings.activeRemote].name}
               placeholder="默认"
@@ -471,6 +476,9 @@
               oninput={(e) =>
                 appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
             />
+            {#if remoteNameConflict}
+              <p class="modal-error">远程名不允许重复，请输入其他名称</p>
+            {/if}
           </div>
           <div class="field">
             <span>传输类型</span>
@@ -610,8 +618,8 @@
                 class:active={remoteMode === "local"}
                 onclick={() => (remoteMode = "local")}
               >
-                <strong>保存到本地</strong>
-                <small>镜像到 Storage/remote/{remoteLocalDir} 并轮换备份</small>
+                <strong>本地镜像</strong>
+                <small>保存时上传回远程并镜像到 Storage/remote/{remoteMirrorDir}</small>
               </button>
             </div>
           </div>

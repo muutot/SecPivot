@@ -78,6 +78,8 @@ impl S3Storage {
         let endpoint = cfg.endpoint.trim();
         let region = cfg.region.trim();
         let bucket_name = cfg.bucket.trim();
+        let access_key = cfg.access_key.trim();
+        let secret_key = cfg.secret_key.trim();
         if endpoint.is_empty() {
             return Err("请先在设置中配置 S3 服务地址".to_owned());
         }
@@ -87,18 +89,26 @@ impl S3Storage {
         if bucket_name.is_empty() {
             return Err("请先在设置中配置 S3 存储桶".to_owned());
         }
+        // An empty or `/`-containing access key would emit a malformed
+        // `X-Amz-Credential` (SigV4 splits it on `/`) and fail with a cryptic
+        // AuthorizationQueryParametersError HTTP 400. Fail early with a clear
+        // message instead; AWS access keys never contain `/`.
+        if access_key.is_empty() {
+            return Err("请先在设置中配置 S3 Access Key".to_owned());
+        }
+        if access_key.contains('/') {
+            return Err("S3 Access Key 无效：包含非法字符 `/`".to_owned());
+        }
+        if secret_key.is_empty() {
+            return Err("请先在设置中配置 S3 Secret Key".to_owned());
+        }
         let region = s3::Region::Custom {
             region: region.to_owned(),
             endpoint: endpoint.to_owned(),
         };
-        let credentials = s3::creds::Credentials::new(
-            Some(cfg.access_key.trim()),
-            Some(cfg.secret_key.trim()),
-            None,
-            None,
-            None,
-        )
-        .map_err(|e| format!("S3 凭据无效: {e}"))?;
+        let credentials =
+            s3::creds::Credentials::new(Some(access_key), Some(secret_key), None, None, None)
+                .map_err(|e| format!("S3 凭据无效: {e}"))?;
         let mut bucket = s3::Bucket::new(bucket_name, region, credentials)
             .map_err(|e| format!("S3 配置无效: {e}"))?
             .with_request_timeout(REMOTE_CONNECT_TIMEOUT)
@@ -347,7 +357,13 @@ fn encode_path_segment(segment: &str) -> String {
 
 impl RemoteStorage for WebDavStorage {
     fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
-        let target = self.url_for(prefix.trim_matches('/'))?;
+        // List always targets a collection; a trailing slash is required by
+        // several servers (Nextcloud, Apache, cloud gateways) — without it they
+        // return just the collection itself instead of Depth:1 children.
+        let mut target = self.url_for(prefix.trim_matches('/'))?;
+        if !target.ends_with('/') {
+            target.push('/');
+        }
         let mut builder = self
             .client
             .request(
@@ -418,6 +434,7 @@ impl RemoteStorage for WebDavStorage {
 }
 
 /// Record a text payload against the element currently open (`current`).
+/// Element names are matched lowercase (see [`local_name`]).
 fn record_prop(
     current: &str,
     href: &mut Option<String>,
@@ -433,23 +450,31 @@ fn record_prop(
     }
 }
 
-/// Parse a PROPFIND `multistatus` body into file objects. Only responses that
-/// carry a `getcontentlength` are files; the requested collection itself and
-/// any sub-collections are dropped.
+/// Parse a PROPFIND `multistatus` body into file objects. A `<response>` is a
+/// file when it is not the requested collection and is not a collection
+/// (`<resourcetype><collection/></resourcetype>`). `getcontentlength` is used
+/// only as a hint — many real servers omit it, and requiring it made every file
+/// silently dropped (list would report "未找到"). A body that is not a
+/// multistatus at all (e.g. a 200 error page) surfaces an actionable error.
 fn parse_multistatus(
     body: &str,
     base_url: &str,
     request_url: &str,
 ) -> Result<Vec<RemoteObject>, String> {
+    if !body.to_ascii_lowercase().contains("multistatus") {
+        return Err("WebDAV 响应不是有效的 multistatus 列表，请检查服务地址与对象前缀".to_owned());
+    }
     let mut reader = Reader::from_str(body);
     reader.trim_text(true);
     let request_key = href_to_key(base_url, request_url);
+    let request_key = request_key.trim_matches('/').to_owned();
     let mut objects = Vec::new();
     let mut in_response = false;
     let mut current = String::new();
     let mut href: Option<String> = None;
     let mut size: Option<usize> = None;
     let mut modified: Option<String> = None;
+    let mut collection = false;
 
     loop {
         match reader.read_event() {
@@ -462,10 +487,16 @@ fn parse_multistatus(
                     href = None;
                     size = None;
                     modified = None;
+                    collection = false;
+                } else if current == "collection" {
+                    collection = true;
                 }
             }
             Ok(Event::Empty(e)) => {
                 current = local_name(&e);
+                if current == "collection" {
+                    collection = true;
+                }
             }
             Ok(Event::Text(t)) => {
                 if in_response {
@@ -483,12 +514,19 @@ fn parse_multistatus(
                 let name = end_local_name(&e);
                 if name == "response" {
                     if in_response {
-                        if let (Some(h), Some(s)) = (href.as_deref(), size) {
+                        if let Some(h) = href.as_deref() {
                             let key = href_to_key(base_url, h);
-                            if !key.is_empty() && key != request_key {
+                            // Skip the collection itself, sub-collections, and
+                            // any href that is not a plain file key.
+                            if !collection
+                                && !key.is_empty()
+                                && !key.trim_matches('/').is_empty()
+                                && !h.ends_with('/')
+                                && key.trim_matches('/') != request_key
+                            {
                                 objects.push(RemoteObject {
                                     key,
-                                    size: s,
+                                    size: size.unwrap_or(0),
                                     modified: modified.clone(),
                                 });
                             }
@@ -506,11 +544,15 @@ fn parse_multistatus(
 }
 
 fn local_name(e: &quick_xml::events::BytesStart) -> String {
-    String::from_utf8_lossy(e.local_name().as_ref()).into_owned()
+    String::from_utf8_lossy(e.local_name().as_ref())
+        .into_owned()
+        .to_ascii_lowercase()
 }
 
 fn end_local_name(e: &quick_xml::events::BytesEnd) -> String {
-    String::from_utf8_lossy(e.local_name().as_ref()).into_owned()
+    String::from_utf8_lossy(e.local_name().as_ref())
+        .into_owned()
+        .to_ascii_lowercase()
 }
 
 /// Convert a PROPFIND `href` (absolute URL or absolute path) to a vault key
@@ -584,9 +626,9 @@ impl RemoteStorage for MemoryStorage {
 // Local mirror helpers ("保存到本地" mode)
 // ---------------------------------------------------------------------------
 
-/// Base directory for local copies: `<app_data>/Storage/remote/<local_dir>`.
-/// `local_dir` is user-defined in settings ("在定义一个目录"); the name is
-/// sanitized so it cannot escape the remote storage tree.
+/// Base directory for local copies: `<app_data>/Storage/remote/<profile_name>`.
+/// `local_dir` is the remote profile name (the frontend's 远程名/配置名); the
+/// name is sanitized so it cannot escape the remote storage tree.
 pub fn local_storage_dir(app: &tauri::AppHandle, local_dir: &str) -> Result<PathBuf, String> {
     let base = app
         .path()
@@ -596,6 +638,9 @@ pub fn local_storage_dir(app: &tauri::AppHandle, local_dir: &str) -> Result<Path
     Ok(base.join("Storage").join("remote").join(name))
 }
 
+/// Sanitize a profile name into a safe folder name: keeps letters/digits
+/// (Unicode-aware, so Chinese names survive) plus `-`/`_`; anything else
+/// (spaces, `.`, `/`, `\`, `:` …) becomes `_`. Empty/whitespace → `remote`.
 fn sanitize_dir_name(name: &str) -> String {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -603,7 +648,7 @@ fn sanitize_dir_name(name: &str) -> String {
     }
     let mut out = String::new();
     for ch in trimmed.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+        if ch.is_alphanumeric() || ch == '-' || ch == '_' {
             out.push(ch);
         } else {
             out.push('_');
@@ -647,6 +692,10 @@ mod tests {
         assert_eq!(sanitize_dir_name("my vaults"), "my_vaults");
         assert_eq!(sanitize_dir_name("..\\..\\evil"), "______evil");
         assert_eq!(sanitize_dir_name("safe-dir_1"), "safe-dir_1");
+        // Unicode (Chinese) profile names survive the sanitizer.
+        assert_eq!(sanitize_dir_name("阿里云"), "阿里云");
+        assert_eq!(sanitize_dir_name("默认 备份"), "默认_备份");
+        assert_eq!(sanitize_dir_name("vault/备份"), "vault_备份");
     }
 
     /// S3 transports must share one process-wide runtime: a fresh thread pool
@@ -999,6 +1048,49 @@ mod tests {
         assert_eq!(objects.len(), 2);
         assert_eq!(objects[0].key, "vaults/a.kdbx");
         assert_eq!(objects[1].key, "vaults/z.kdbx");
+    }
+
+    /// Cloud-drive gateways often omit `getcontentlength` (or return it in a
+    /// 404 propstat) and may use uppercase element names. Both must not cause
+    /// every file to be dropped — the empty-list symptom reported against
+    /// 123pan's WebDAV.
+    #[test]
+    fn webdav_parser_keeps_files_without_content_length_and_uppercase_tags() {
+        let body = "<?xml version=\"1.0\"?><D:MULTISTATUS xmlns:D=\"DAV:\">\
+<D:RESPONSE><D:HREF>/dav/</D:HREF><D:PROPSTAT><D:PROP>\
+<D:RESOURCETYPE><D:COLLECTION/></D:RESOURCETYPE></D:PROP>\
+<D:STATUS>HTTP/1.1 200 OK</D:STATUS></D:PROPSTAT></D:RESPONSE>\
+<D:RESPONSE><D:HREF>/dav/a.kdbx</D:HREF><D:PROPSTAT><D:PROP>\
+<D:GETCONTENTLENGTH>3</D:GETCONTENTLENGTH></D:PROP>\
+<D:STATUS>HTTP/1.1 200 OK</D:STATUS></D:PROPSTAT></D:RESPONSE>\
+<D:RESPONSE><D:HREF>/dav/z.kdbx</D:HREF><D:PROPSTAT>\
+<D:STATUS>HTTP/1.1 404 Not Found</D:STATUS></D:PROPSTAT></D:RESPONSE>\
+</D:MULTISTATUS>";
+        let objects = parse_multistatus(
+            body,
+            "http://dav.example.com/dav",
+            "http://dav.example.com/dav/",
+        )
+        .expect("parse");
+        let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+        // a.kdbx keeps its size; z.kdbx survives without any getcontentlength.
+        assert_eq!(keys, ["a.kdbx", "z.kdbx"]);
+        assert_eq!(objects[0].size, 3);
+        assert_eq!(objects[1].size, 0);
+    }
+
+    /// A 200 response that is not a multistatus (an HTML/JSON error page from a
+    /// misconfigured endpoint) must surface an actionable error instead of
+    /// silently reporting "no files".
+    #[test]
+    fn webdav_parser_rejects_non_multistatus_body() {
+        let err = parse_multistatus(
+            "<html><body>Invalid request</body></html>",
+            "http://dav.example.com/dav",
+            "http://dav.example.com/dav/",
+        )
+        .expect_err("must fail");
+        assert!(err.contains("multistatus"), "unexpected error: {err}");
     }
 
     #[test]

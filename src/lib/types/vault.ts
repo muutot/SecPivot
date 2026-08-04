@@ -196,7 +196,8 @@ export interface RemoteObject {
 }
 
 /** Remote save semantics: `memory` uploads back to S3 only; `local` also
- * mirrors the file under `Storage/remote/<local_dir>` with rotated backups. */
+ * mirrors the file under `Storage/remote/<sanitized profile name>` with
+ * rotated backups. */
 export type RemoteMode = "memory" | "local";
 
 export const ROOT_GROUP_NAME = "Root";

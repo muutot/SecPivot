@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-  import { appSettings } from "$lib/services/settings";
+  import { appSettings, sanitizeDirName } from "$lib/services/settings";
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
@@ -20,6 +20,15 @@
   });
 
   const remote = $derived(s.remote);
+
+  const activeName = $derived(s.remoteProfiles[s.activeRemote].name);
+  /** True while the name field holds a duplicate of another profile's name. */
+  const nameConflict = $derived(
+    activeName.trim() !== "" &&
+      s.remoteProfiles.filter((p) => p.name.trim() === activeName.trim()).length > 1,
+  );
+  /** The mirror folder actually created for "本地镜像" mode. */
+  const mirrorDir = $derived(sanitizeDirName(activeName));
 
   function change<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
     appSettings.updateRemote(key, value);
@@ -65,17 +74,21 @@
         <span class="setting-icon"><AppIcon name="edit" size={17} /></span>
         <div>
           <strong>配置名称</strong>
-          <p>当前配置的显示名称</p>
+          <p>当前配置的显示名称，也是本地镜像目录名，不允许重复</p>
         </div>
       </div>
       <input
         id="remote-profile-name"
         class="settings-input setting-row-input"
+        class:input-invalid={nameConflict}
         type="text"
         value={s.remoteProfiles[s.activeRemote].name}
         oninput={(e) => appSettings.renameRemoteProfile(s.activeRemote, e.currentTarget.value)}
       />
     </div>
+    {#if nameConflict}
+      <p class="settings-note input-error">远程名不允许重复，请输入其他名称</p>
+    {/if}
     <div class="profile-actions">
       <button
         class="profile-action-button"
@@ -245,20 +258,13 @@
         <span class="setting-icon"><AppIcon name="download" size={17} /></span>
         <div>
           <strong>本地镜像目录</strong>
-          <p>“保存到本地”模式的落盘目录</p>
+          <p>“本地镜像”模式的落盘目录，自动随远程名命名</p>
         </div>
       </div>
-      <input
-        id="remote-local-dir"
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.localDir}
-        placeholder="remote"
-        oninput={(e) => change("localDir", e.currentTarget.value)}
-      />
+      <code class="mirror-dir">{mirrorDir}</code>
     </div>
     <p class="settings-note">
-      本地副本保存在 Storage/remote/{remote.localDir || "remote"}/ 下，仅允许字母、数字、- 与 _。
+      本地副本保存在 Storage/remote/{mirrorDir}/ 下，由远程名自动命名；因此远程名不允许重复。
     </p>
   </section>
 

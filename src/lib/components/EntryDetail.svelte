@@ -278,8 +278,7 @@
         void loadHistory();
       }}
     >
-      历史{#if historyVersions.length > 0 && activeTab === "history"}
-        ({historyVersions.length}){/if}
+      历史
     </button>
   </div>
 

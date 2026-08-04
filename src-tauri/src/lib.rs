@@ -1111,7 +1111,8 @@ async fn s3_list_objects(
 }
 
 /// Download a vault from S3 and open it. `mode` is `"memory"` (upload back
-/// only) or `"local"` (also mirror locally under `Storage/remote/<local_dir>`).
+/// only) or `"local"` (also mirror locally under
+/// `Storage/remote/<sanitized profile name>`).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn open_remote_vault(
@@ -1124,10 +1125,10 @@ async fn open_remote_vault(
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
-    let cfg = config.remote_settings(profile)?;
+    let (profile_name, cfg) = config.remote_profile(profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
-    let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
+    let local_dir = local_storage_dir(&app, &profile_name)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
     let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);
@@ -1195,10 +1196,10 @@ async fn create_remote_vault(
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
-    let cfg = config.remote_settings(profile)?;
+    let (profile_name, cfg) = config.remote_profile(profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
-    let local_dir = local_storage_dir(&app, &cfg.local_dir)?;
+    let local_dir = local_storage_dir(&app, &profile_name)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
     let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);

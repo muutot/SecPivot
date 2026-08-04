@@ -404,6 +404,30 @@ header p {
   background: color-mix(in srgb, var(--success-color) 12%, var(--surface-bg));
 }
 
+/* ── inline field validation ── */
+.settings-input.input-invalid {
+  border-color: color-mix(in srgb, var(--danger-color) 60%, var(--border-color));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger-color) 25%, transparent);
+}
+
+.input-error {
+  color: var(--danger-color);
+}
+
+/* ── read-only value display (e.g. derived mirror folder) ── */
+.mirror-dir {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--settings-control-radius, 6px);
+  color: var(--text-secondary);
+  background: var(--input-bg);
+  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+}
+
 /* ── misc ── */
 .auto-save-note {
   margin: 0;

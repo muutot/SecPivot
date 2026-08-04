@@ -80,6 +80,12 @@
       : undefined;
   /** Whether the custom favicon option is the active selection. */
   let customIconSelected = $state(!!customIconUrl);
+  /** Header icon follows the entry being edited (and live picks). In create
+   * and batch mode no entry icon exists, so the generic key glyph is shown. */
+  const headerIconName = $derived(
+    ((KEEPASS_ICONS[(iconIndex ?? initialEntry?.icon ?? -1) as number] as string | undefined) ??
+      "key") as IconName,
+  );
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
   let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
@@ -328,7 +334,13 @@
     aria-label={mode === "create" ? "新建条目" : "编辑条目"}
   >
     <div class="modal-head">
-      <span class="modal-icon"><AppIcon name="key" size={18} /></span>
+      <span class="modal-icon"
+        >{#if customIconSelected && customIconUrl}
+          <img class="modal-icon-img" src={customIconUrl} alt="" draggable="false" />
+        {:else}
+          <AppIcon name={headerIconName} size={18} />
+        {/if}</span
+      >
       <div>
         <strong
           >{mode === "create"
@@ -715,6 +727,12 @@
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--selection-color);
     background: var(--hover-bg);
+  }
+
+  .modal-icon-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
   }
 
   .modal-head strong {
