@@ -328,7 +328,13 @@ mod tests {
 
     /// RFC 6238 Appendix B — ASCII secrets and step 0..=9 codes.
     /// Each row is (secret_bytes, algorithm, times, expected 8-digit codes).
-    const APPENDIX_B: [(&'static [u8], &str, &[u64], &[&str]); 3] = [
+    type AppendixRow = (
+        &'static [u8],
+        &'static str,
+        &'static [u64],
+        &'static [&'static str],
+    );
+    const APPENDIX_B: [AppendixRow; 3] = [
         (
             b"12345678901234567890",
             "SHA1",
