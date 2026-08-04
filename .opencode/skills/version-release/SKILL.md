@@ -142,6 +142,9 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml` which:
 
 - Builds for Windows (x64), macOS (arm64 + x64), Linux (x64)
 - Creates a draft GitHub Release with artifacts using `RELEASE.md` as the release body
+- Packages a portable (no-install) ZIP on the Windows job (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`
+
+The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name, so manual re-releases name the release and portable ZIP consistently even when no tag is pushed yet.
 
 ## Version source files
 

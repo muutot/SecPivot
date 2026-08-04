@@ -14,6 +14,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # Tag push → use the pushed tag; manual dispatch → build the tag from the
+  # version input so `tauri-action` names the release/tag consistently.
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+
 jobs:
   verify:
     name: Verify
@@ -122,9 +127,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
+          tagName: ${{ env.RELEASE_TAG }}
           releaseName: "SecPivot Desktop v__VERSION__"
           releaseBody: ${{ steps.release_body.outputs.body }}
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           args: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+
+      - name: Package portable ZIP (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          $exe = "${{ github.workspace }}\src-tauri\target\${{ matrix.target }}\release\secpivot-desktop.exe"
+          $ver = $env:RELEASE_TAG.TrimStart("v")
+          if (Test-Path $exe) {
+            & scripts/package-portable.ps1 -SkipBuild -ReleaseExe $exe -Version $ver
+          } else {
+            Write-Host "Portable exe not found at $exe — skipping portable package."
+          }
+
+      - name: Upload portable ZIP to release (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          $zip = Get-ChildItem "dist\SecPivot-*-portable.zip" -ErrorAction SilentlyContinue
+          if ($zip) {
+            gh release upload "$env:RELEASE_TAG" $zip.FullName --clobber
+            Write-Host "Uploaded $($zip.Name)"
+          } else {
+            Write-Host "No portable ZIP found — nothing to upload."
+          }

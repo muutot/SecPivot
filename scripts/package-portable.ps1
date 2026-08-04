@@ -10,18 +10,25 @@
 # Usage:
 #   powershell -File scripts/package-portable.ps1          # full build + zip
 #   powershell -File scripts/package-portable.ps1 -SkipBuild  # zip existing exe
+#   powershell -File scripts/package-portable.ps1 -SkipBuild -ReleaseExe <path>  # zip a specific exe
 #
 # Output: dist/SecPivot-<version>-portable.zip
 
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$ReleaseExe,
+    [string]$Version
 )
 
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
-$Version = (Get-Content "$Root\package.json" -Raw | ConvertFrom-Json).version
-$ReleaseExe = "$Root\src-tauri\target\release\secpivot-desktop.exe"
+if (-not $Version) {
+    $Version = (Get-Content "$Root\package.json" -Raw | ConvertFrom-Json).version
+}
+if (-not $ReleaseExe) {
+    $ReleaseExe = "$Root\src-tauri\target\release\secpivot-desktop.exe"
+}
 $OutDir = "$Root\dist\portable"
 $Zip = "$Root\dist\SecPivot-$Version-portable.zip"
 
