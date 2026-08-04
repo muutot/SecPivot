@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { vault } from "$lib/services/vault";
-  import { copyText } from "$lib/utils/clipboard";
-  import type { TotpCode } from "$lib/types/vault";
+  import { useTotpCode } from "$lib/composables/useTotpCode.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -10,82 +8,22 @@
 
   let { entryUuid }: Props = $props();
 
-  let code = $state("");
-  let remaining = $state(0);
-  let period = $state(30);
-  let kind = $state<"totp" | "hotp" | "steam">("totp");
-  let error = $state(false);
-  let copied = $state(false);
-
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  async function refresh(): Promise<boolean> {
-    try {
-      const result: TotpCode = await vault.totpCode(entryUuid);
-      code = result.code;
-      remaining = result.validFor;
-      period = result.period;
-      kind = result.kind;
-      error = false;
-      return true;
-    } catch {
-      code = "";
-      error = true;
-      return false;
-    }
-  }
-
-  $effect(() => {
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const tick = async (): Promise<void> => {
-      // A failing seed (invalid TOTP URI) must stop the per-second loop
-      // instead of hammering the backend forever.
-      if (!(await refresh()) && timer) clearInterval(timer);
-    };
-    void tick();
-    // Counter-driven HOTP never counts down; show one static code.
-    if (kind !== "hotp") {
-      timer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) void tick();
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  });
-
-  const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
-
-  async function copy(): Promise<void> {
-    if (!code) return;
-    try {
-      await copyText(code);
-      copied = true;
-      if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => {
-        copied = false;
-        copiedTimer = undefined;
-      }, 1200);
-    } catch {
-      // clipboard unavailable; ignore
-    }
-  }
+  const totp = useTotpCode(() => entryUuid);
 </script>
 
 <button
   class="totp-badge"
-  title={code ? "点击复制验证码" : "无法生成验证码"}
-  onclick={() => void copy()}
-  disabled={!code}
+  title={totp.code ? "点击复制验证码" : "无法生成验证码"}
+  onclick={() => void totp.copy()}
+  disabled={!totp.code}
 >
-  <span class="totp-badge-code">{error ? "—" : code || "••••••"}</span>
-  {#if kind !== "hotp"}
+  <span class="totp-badge-code">{totp.error ? "—" : totp.code || "••••••"}</span>
+  {#if !totp.isHotp}
     <span class="totp-badge-bar" aria-hidden="true">
-      <span class:low={fraction < 0.25} style:width={`${fraction * 100}%`}></span>
+      <span class:low={totp.fraction < 0.25} style:width={`${totp.fraction * 100}%`}></span>
     </span>
   {/if}
-  {#if copied}
+  {#if totp.copied}
     <span class="totp-badge-copied"><AppIcon name="check" size={11} /></span>
   {/if}
 </button>
