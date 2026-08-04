@@ -50,11 +50,11 @@ const FIELD_HMAC_OTP: &str = "HmacOtp";
 const FIELD_STEAM_OTP: &str = "SteamOtp";
 const FIELD_STEAM_OTP_ALT: &str = "steam";
 /// Custom field used to mark an entry as pinned/favorite.
-pub(crate) const FIELD_FAVORITE: &str = "KeyVault.Favorite";
+pub(crate) const FIELD_FAVORITE: &str = "SecPivot.Favorite";
 pub(crate) const FIELD_FAVORITE_TRUE: &str = "true";
 /// Custom field recording the group an entry lived in before being recycled,
 /// so it can be restored to its original location.
-const FIELD_ORIGINAL_GROUP: &str = "KeyVault.OriginalGroup";
+const FIELD_ORIGINAL_GROUP: &str = "SecPivot.OriginalGroup";
 
 /// Standard fields that are surfaced through the entry's own columns and must
 /// not leak into the generic custom-fields list.

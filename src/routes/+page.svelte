@@ -628,7 +628,7 @@
     try {
       if (isTauriRuntime()) {
         const ext = get(appSettings).database.fileExtension;
-        const baseName = (currentVault.fileName.replace(/\.\w+$/i, "") || "keyvault") + "." + ext;
+        const baseName = (currentVault.fileName.replace(/\.\w+$/i, "") || "secpivot") + "." + ext;
         const selected = await save({
           defaultPath: baseName,
           filters: [{ name: "KeePass 数据库", extensions: [ext] }],
@@ -650,7 +650,7 @@
     try {
       if (isTauriRuntime()) {
         const selected = await save({
-          defaultPath: (currentVault.fileName.replace(/\.kdbx$/i, "") || "keyvault") + ".csv",
+          defaultPath: (currentVault.fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".csv",
           filters: [{ name: "CSV 文件", extensions: ["csv"] }],
         });
         if (!selected) return;
@@ -671,7 +671,7 @@
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = "keyvault-export.csv";
+        anchor.download = "secpivot-export.csv";
         anchor.click();
         URL.revokeObjectURL(url);
       }
@@ -1323,7 +1323,7 @@
 </script>
 
 <svelte:head>
-  <title>KeyVault</title>
+  <title>SecPivot</title>
 </svelte:head>
 
 <svelte:window onkeydowncapture={handleShortcutKeydown} />
@@ -1541,7 +1541,7 @@
                         ? Array.from(selectedUuids)
                         : [row.entry.uuid];
                       e.dataTransfer?.setData(
-                        "application/x-keyvault-entries",
+                        "application/x-secpivot-entries",
                         JSON.stringify(targets),
                       );
                       if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";

@@ -22,4 +22,4 @@
 ### 🔧 Chores
 
 - **ci**: add GitHub Actions verify CI and tagged release pipeline (d0bde90a)
-- scaffold KeyVault Svelte 5 + Tauri 2 project (2002b79d)
+- scaffold SecPivot Svelte 5 + Tauri 2 project (2002b79d)

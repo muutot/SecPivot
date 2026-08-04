@@ -9,7 +9,7 @@
 //! - `otp` or `TimeOtp` — TOTP seed: an `otpauth://totp/...` URI (honoring
 //!   `secret`, `algorithm`, `digits`, `period`) or a bare Base32 key (RFC 6238
 //!   defaults: SHA-1, 6 digits, 30 s). Backward compatible with KeePassXC /
-//!   KeeWeb and with KeyVault's previous `otp` field.
+//!   KeeWeb and with SecPivot's previous `otp` field.
 //! - `HmacOtp` — HOTP seed: `<Base32>[:<digits>][:<counter>]` (6 digits, 0
 //!   counter by default). The counter advances on each code request and is
 //!   written back to the same field server-side.

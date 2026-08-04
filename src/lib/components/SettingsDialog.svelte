@@ -107,7 +107,7 @@
     <div class="settings-brand">
       <span class="brand-icon"><AppIcon name="key" size={17} /></span>
       <div class="brand-text">
-        <strong>KeyVault</strong>
+        <strong>SecPivot</strong>
         <small>v{appVersion}</small>
       </div>
     </div>

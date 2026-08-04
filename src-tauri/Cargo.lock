@@ -2558,44 +2558,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keyvault-desktop"
-version = "0.1.0"
-dependencies = [
- "aes 0.8.4",
- "base64 0.22.1",
- "block-padding 0.3.3",
- "cbc 0.1.2",
- "chrono",
- "cipher 0.4.4",
- "enigo",
- "getrandom 0.2.17",
- "hmac 0.12.1",
- "keepass",
- "keyring",
- "num-bigint",
- "quick-xml 0.30.0",
- "reqwest",
- "rust-argon2",
- "rust-s3",
- "serde",
- "serde_json",
- "sha1 0.10.7",
- "sha2 0.10.9",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-opener",
- "tempfile",
- "tokio",
- "tungstenite",
- "url",
- "uuid",
- "windows-sys 0.59.0",
- "zeroize",
-]
-
-[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4055,6 +4017,44 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "secpivot-desktop"
+version = "0.1.0"
+dependencies = [
+ "aes 0.8.4",
+ "base64 0.22.1",
+ "block-padding 0.3.3",
+ "cbc 0.1.2",
+ "chrono",
+ "cipher 0.4.4",
+ "enigo",
+ "getrandom 0.2.17",
+ "hmac 0.12.1",
+ "keepass",
+ "keyring",
+ "num-bigint",
+ "quick-xml 0.30.0",
+ "reqwest",
+ "rust-argon2",
+ "rust-s3",
+ "serde",
+ "serde_json",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-opener",
+ "tempfile",
+ "tokio",
+ "tungstenite",
+ "url",
+ "uuid",
+ "windows-sys 0.59.0",
+ "zeroize",
+]
 
 [[package]]
 name = "secrecy"

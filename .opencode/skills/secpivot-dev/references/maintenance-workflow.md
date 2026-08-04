@@ -4,7 +4,7 @@ Read this before any repository change. It is the operating contract for every e
 
 ## Workspace discipline
 
-- Work in `B:\Program\Project\KeyVault` unless told otherwise. The sibling projects (`clipboard`, `MuuPass`) are read-only references for style and conventions; never edit them during KeyVault work.
+- Work in `B:\Program\Project\SecPivot` unless told otherwise. The sibling projects (`clipboard`, `MuuPass`) are read-only references for style and conventions; never edit them during SecPivot work.
 - Treat `clipboard` as the style source of truth for the approved visual language. `MuuPass` is the reference for KeePass domain behavior (TOTP, KDF choices, auto-type). Borrow patterns, do not copy implementation wholesale.
 - Preserve unrelated user changes. Inspect `git status --short --branch` before starting and re-inspect before committing.
 
@@ -53,4 +53,4 @@ Use the sibling `version-release` skill (`.opencode/skills/version-release/SKILL
 
 ## Packaging verification
 
-`npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/KeyVault_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; they require a configured `origin` remote and GitHub to provide runtime evidence, so their TODO items stay unchecked until a real CI run passes.
+`npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/SecPivot_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; they require a configured `origin` remote and GitHub to provide runtime evidence, so their TODO items stay unchecked until a real CI run passes.

@@ -1,4 +1,4 @@
-# KeyVault Roadmap
+# SecPivot Roadmap
 
 Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` partial/blocked.
 
@@ -36,11 +36,11 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Password strength meter in entry editor (`estimateEntropy`/`entropyLabel`, `password.ts`)
 - [x] URL quick-open via `@tauri-apps/plugin-opener` (detail + list rows)
 - [x] Autotype sequence runner (`auto_type` + `autotype.rs`: KeePass placeholders/keys, `enigo` replay, 7 parser tests)
-- [x] Favorite/pin entries with `--warning-color` accent (`toggle_favorite` + `KeyVault.Favorite` field)
+- [x] Favorite/pin entries with `--warning-color` accent (`toggle_favorite` + `SecPivot.Favorite` field)
 
 ## Stage 5 — Packaging & release
 
-- [x] App icons (committed `src-tauri/icons/*`), bundle branding metadata (`publisher`/`copyright`/descriptions), custom NSIS template (`src-tauri/windows/installer.nsi`) — verified: `tauri build` produced `KeyVault_0.1.0_x64-setup.exe`
+- [x] App icons (committed `src-tauri/icons/*`), bundle branding metadata (`publisher`/`copyright`/descriptions), custom NSIS template (`src-tauri/windows/installer.nsi`) — verified: `tauri build` produced `SecPivot_0.1.0_x64-setup.exe`
 - [ ] GitHub Actions CI mirroring `npm run verify` (`.github/workflows/ci.yml` added; unverified in this environment — no `origin` remote to run it)
 - [ ] Release workflow via version-release skill (`.opencode/skills/version-release` + `scripts/*.mjs` added; `release.mjs --dry-run` verified through step 3, tag/push unverified — no remote)
 
@@ -67,7 +67,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 字段引用 `{REF:...}` 支持 + TCATO (two-channel auto-type;REF 支持 UUID/标准字段/自定义字段名检索,跳过回收站;TCATO 覆盖层窗口 + `WM_CHAR` 通道注入,密码不离开后端)
 - [x] 防截屏 (窗口守卫):库打开期间主窗口 `WDA_EXCLUDEFROMCAPTURE` 守卫(窗口保持可见但不出现在截屏/录屏/共享中),锁定/关闭释放 (`shield.rs`);默认关闭,欢迎页可配置 (`security.screenCaptureGuard`,后端在 open/create 时读取;`WDA_MONITOR` 会导致物理屏黑块/窗口消失,已列入 PITFALLS)
 - [x] DPAPI 加密本地配置:S3 密钥 `CryptProtectData` 加密落盘(`dpapi1:` 前缀),旧明文配置兼容读入,`remote_secrets_never_persist_in_plaintext` 测试
-- [x] 便携版打包:`scripts/package-portable.ps1`(tauri build + 复制 exe + README,输出 `dist/KeyVault-<version>-portable.zip`,已验证 zip 内容)
+- [x] 便携版打包:`scripts/package-portable.ps1`(tauri build + 复制 exe + README,输出 `dist/SecPivot-<version>-portable.zip`,已验证 zip 内容)
 - [x] 全选 + 多选批量编辑:条目列表 Ctrl+A 全选当前视图(分组/搜索过滤后)全部条目;右键「编辑所选条目」打开批量编辑器,字段值不一致时输入框显示「多个值」占位(KeePass 语义:未修改字段保持各条目原值,含密码/TOTP 不加载不覆盖),图标/颜色/过期/分组等可选属性支持显式清除;后端 `update_entries` 单事务原子应用(任一 uuid 无效整批不生效),174 后端测试通过
 - [x] 另存为:工具栏「另存为」按钮 + 空白区右键菜单「另存为…」,系统对话框选路径后以当前密钥写入新文件并将会话切换到新目标(后续保存写新文件,原文件不变);远程会话另存后转为本地会话(S3 不再接收后续保存);保存失败会话不变,177 后端测试通过
 

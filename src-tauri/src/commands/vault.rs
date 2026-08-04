@@ -319,7 +319,7 @@ pub(crate) fn toggle_favorite(
 /// Executes on a background thread; returns once parsing succeeds.
 ///
 /// The main window is minimized first so keystrokes land in the window the
-/// user switches to during the replay delay, never in KeyVault itself.
+/// user switches to during the replay delay, never in SecPivot itself.
 #[tauri::command]
 pub(crate) fn auto_type(
     app: tauri::AppHandle,

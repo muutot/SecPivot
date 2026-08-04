@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-  <title>KeyVault · 设置</title>
+  <title>SecPivot · 设置</title>
 </svelte:head>
 
 <div class="settings-shell">

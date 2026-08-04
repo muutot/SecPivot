@@ -26,7 +26,7 @@
     <div class="about-brand">
       <span class="about-logo"><AppIcon name="key" size={26} /></span>
       <div>
-        <strong class="about-name">KeyVault</strong>
+        <strong class="about-name">SecPivot</strong>
         <p class="about-version">v{appVersion}</p>
         <p class="about-tagline">专业、紧凑、高密度的开源 KeePass 客户端</p>
       </div>

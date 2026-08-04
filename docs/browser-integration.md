@@ -4,7 +4,7 @@
 
 ## 目标
 
-让 KeyVault 作为 KDBX 客户端,能被 **KeePass 生态**的浏览器扩展当作凭据来源,复用现有 `VaultSession`(解锁校验、条目匹配、回收站跳过、密码不落地 IPC 的安全模型),不外发主密钥。
+让 SecPivot 作为 KDBX 客户端,能被 **KeePass 生态**的浏览器扩展当作凭据来源,复用现有 `VaultSession`(解锁校验、条目匹配、回收站跳过、密码不落地 IPC 的安全模型),不外发主密钥。
 
 ## 现状(已实现)
 
@@ -15,13 +15,13 @@
 
 ## 生态:候选协议
 
-| 协议                                     | 服务端                                                         | 传输                                        | 加密/认证                                          | 典型客户端                                                        | 与 KeyVault 兼容方式                                                                                                                                        |
+| 协议                                     | 服务端                                                         | 传输                                        | 加密/认证                                          | 典型客户端                                                        | 与 SecPivot 兼容方式                                                                                                                                        |
 | ---------------------------------------- | -------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **KeePassHttp**(官方推荐之一)            | KeePass 插件监听 `localhost:19455`                             | HTTP POST JSON,无扩展消息框架               | AES-256-CBC (PKCS7),每请求 Nonce 作 IV+HMAC-SHA256 | ChromeIPass/PassIFox、KeePassHelper、KeePassXC(legacy mode)、Dash | 由一个 Tauri 后台常驻 loopback HTTP 服务实现同样 API(`associate`/`test-associate`/`get-logins`/`set-login`/`get-logins-count`/`generate-password`)          |
 | **KeePassRPC**(Kee 官方)                 | KeePass 插件监听 WebSocket `localhost:12546`                   | WebSocket,JSON-RPC                          | SRP(首连)+ 每消息 AES 加密 + HMAC                  | Kee(Firefox/Chrome 官方扩展)                                      | 需要实现 SRP + AES-JSON-RPC,浏览器扩展 Origin 白名单(`moz-extension://`、`chrome-extension://`)                                                             |
 | **KeePassXC-Browser / native messaging** | `keepassxc-proxy`(独立进程)+ 主进程 `QLocalSocket`/Unix socket | 浏览器原生消息(stdin/stdout 4 字节长度前缀) | TweetNaCl box (XSalsa20-Poly1305 + curve25519)     | keepassxc-browser 扩展(Ke数据库 XC 专用)                          | 需注册原生消息宿主 manifest(Windows 为注册表)+ 实现协议,并能与 **keepassxc-proxy 同名冲突**——扩展按固定宿主名 `keepassxc-proxy` 调用,除非替换它否则无法共存 |
 
-**结论一**:KeePassXC-Browser 扩展绑定 `keepassxc-proxy` 固定宿主名与 XC 专用协议,不与经典 KeePass 生态兼容;KeyVault 若接它需要伪装成该宿主名,与真实 KeePassXC 冲突,不推荐。
+**结论一**:KeePassXC-Browser 扩展绑定 `keepassxc-proxy` 固定宿主名与 XC 专用协议,不与经典 KeePass 生态兼容;SecPivot 若接它需要伪装成该宿主名,与真实 KeePassXC 冲突,不推荐。
 
 **结论二**:经典 KeePass 官方浏览器集成实际上是两条路径——KeePassHttp(长势最成熟、客户端最多)与 KeePassRPC(官方 Kee 扩展)。二者面向的都不是原生消息而是 loopback socket 监听,与 Tauri 后台架构天然融合。
 
@@ -36,7 +36,7 @@
 - 服务:标准库 `std::net` 单线程 accept + 每连接独立线程(无 async 运行时负担),loopback 绑定 `127.0.0.1:19455`;请求头 16 KiB / 请求体 1 MiB 上限,读超时 10 s。
 - 密钥杂凑:`aes` + `cbc`(AES-256-CBC, PKCS7)+ `hmac`/`sha2`(HMAC-SHA256),`getrandom` 生成 nonce/客户端 id。
 - 字段按 KeePassHttp 规范逐字段加密(`Url`/`SubmitUrl`/`Login`/`Password`/`Uuid`/`Realm`/`Names[]`),每响应独立 `Nonce`(作 IV)。
-- `associate` 密钥存储:KeyVault 侧密钥落在 **会话内**(与 keyfile 同理),不落 `config.json`,锁定即销毁——`security-model.md` 已增补不变式。
+- `associate` 密钥存储:SecPivot 侧密钥落在 **会话内**(与 keyfile 同理),不落 `config.json`,锁定即销毁——`security-model.md` 已增补不变式。
 - 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),避免两套匹配规则。
 
 安全约束(已落实):
@@ -72,13 +72,13 @@
 - **AddLogin**(v1 名,扩展实际调用):`[EntryDTO login, String parentUUID, String dbFileName]` → `EntryDTO + db`(DatabaseSummaryDTO)。
   - 服务端新建条目:条目 UUID 由服务端生成(Kee 4.0.7 的 `Entry.toKPRPCEntryDTO` 不含 `uniqueID`);字段映射按插件 `setPwEntryFromEntry`:
     - 第一个 `FFTpassword` 字段 → `Password`;所有 `FFTusername` 字段 → `UserName`;
-    - 其余字段 → 按 `displayName`(回退 `name`)存为附加字段。插件写入「KPRPC JSON」自定义配置;KeyVault 决策:写入 KDBX 自定义字符串字段(与 Phase 1 `set-login` 一致,不引入 KPRPC JSON 格式);
+    - 其余字段 → 按 `displayName`(回退 `name`)存为附加字段。插件写入「KPRPC JSON」自定义配置;SecPivot 决策:写入 KDBX 自定义字符串字段(与 Phase 1 `set-login` 一致,不引入 KPRPC JSON 格式);
     - `uRLs[0]` → `URL`,`uRLs[1..]` → 备用 URL;`title` → `Title`;`hTTPRealm` → 条目配置。
-  - `parentUUID` 空 → 根分组;非空按 UUID 查找分组,未找到回退根分组。`dbFileName` 空 → 当前库;KeyVault 单库会话:路径不匹配回退当前库(插件 `SelectDatabase` 同语义)。
+  - `parentUUID` 空 → 根分组;非空按 UUID 查找分组,未找到回退根分组。`dbFileName` 空 → 当前库;SecPivot 单库会话:路径不匹配回退当前库(插件 `SelectDatabase` 同语义)。
   - 成功返回新条目的 `EntryDTO`(含 `db` 摘要);库锁定 → 错误信封。
 - **UpdateLogin**(v1 名):`[EntryDTO login, String oldLoginUUID, int urlMergeMode, String dbFileName]` → `EntryDTO + db`。
   - 前置校验:`login` 缺失 / `oldLoginUUID` 空 / `dbFileName` 空 / `oldLoginUUID` 无法解析到条目 → JSON-RPC error;目标条目位于回收站 → 拒绝。
-  - 合并语义(插件 `MergeEntries`):Title/UserName/Password/附加字段/HTTPRealm/图标从 DTO 覆盖;更新前创建历史快照(`CreateBackup`,对应 KeyVault 条目历史机制);URL 按 `urlMergeMode` 合并(`MergeInNewURLs` 语义:源 URL 逆序插入、去重、原备用 URL 提升为主 URL):
+  - 合并语义(插件 `MergeEntries`):Title/UserName/Password/附加字段/HTTPRealm/图标从 DTO 覆盖;更新前创建历史快照(`CreateBackup`,对应 SecPivot 条目历史机制);URL 按 `urlMergeMode` 合并(`MergeInNewURLs` 语义:源 URL 逆序插入、去重、原备用 URL 提升为主 URL):
     - `1` = 合并源 URL(保留旧 URL,新 URL 置顶,旧 URL 仍可匹配)
     - `2` = 删除旧主 URL 后合并源 URL
     - `3` = 保留旧 URL,仅追加源中不存在的 URL

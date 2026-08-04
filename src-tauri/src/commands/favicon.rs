@@ -15,7 +15,7 @@ use tauri::Emitter;
 /// (`ProxyEnable`/`ProxyServer` in the Internet Settings registry hive, the
 /// same source .NET/KeePass uses); reqwest's `system-proxy` feature only
 /// reads environment variables, which is why KeePass can reach hosts that
-/// KeyVault could not. Other platforms rely on the env-var proxy instead.
+/// SecPivot could not. Other platforms rely on the env-var proxy instead.
 ///
 /// The timeout is generous (20 s) on purpose: the first TLS handshake
 /// through a proxy frequently takes ~5-10 s, and a tight timeout kills the
@@ -23,7 +23,7 @@ use tauri::Emitter;
 fn build_favicon_client() -> Option<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
-        .user_agent("KeyVault/0.1");
+        .user_agent("SecPivot/0.1");
     if let Some(proxy) = wininet_https_proxy() {
         if let Ok(proxy) = reqwest::Proxy::https(proxy) {
             builder = builder.proxy(proxy);

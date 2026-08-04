@@ -1,4 +1,4 @@
-# KeyVault
+# SecPivot
 
 专业、紧凑、信息密度高、简约现代的 KeePass 客户端，基于 Svelte 5 + Tauri 2 + Rust 构建。界面语言与视觉体系取自 Clipboard Desktop（同级项目的设置样式规约），本地优先、无同步上传。
 
@@ -34,10 +34,10 @@ npm run verify       # 全量校验：格式化 + svelte-check + build + rust te
 
 ## 文档
 
-- 开发规约与任务流程：`.opencode/skills/keyvault-dev/SKILL.md`
-- 样式与主题规约：`.opencode/skills/keyvault-dev/references/css-theming.md`
-- 前后端契约：`.opencode/skills/keyvault-dev/references/data-contracts.md`
-- 安全模型：`.opencode/skills/keyvault-dev/references/security-model.md`
+- 开发规约与任务流程：`.opencode/skills/secpivot-dev/SKILL.md`
+- 样式与主题规约：`.opencode/skills/secpivot-dev/references/css-theming.md`
+- 前后端契约：`.opencode/skills/secpivot-dev/references/data-contracts.md`
+- 安全模型：`.opencode/skills/secpivot-dev/references/security-model.md`
 - 路线图与验收：`TODO.md` · 坑位清单：`docs/PITFALLS.md`
 
 ## 许可证

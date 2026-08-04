@@ -116,9 +116,9 @@ mod tests {
     #[test]
     fn clipboard_read_write_round_trip() {
         let _guard = CLIPBOARD_LOCK.lock().unwrap();
-        let _ = write_clipboard_text("keyvault-clipboard-test");
+        let _ = write_clipboard_text("secpivot-clipboard-test");
         match read_clipboard_text() {
-            Ok(Some(text)) => assert_eq!(text, "keyvault-clipboard-test"),
+            Ok(Some(text)) => assert_eq!(text, "secpivot-clipboard-test"),
             // CI machines may have no interactive window station; the API
             // must then degrade gracefully instead of panicking.
             Ok(None) => {}

@@ -63,7 +63,7 @@
   const isBin = $derived(group.isRecycleBin);
   const iconName = $derived(keepassGroupIconName(group.icon));
 
-  const DRAG_MIME = "application/x-keyvault-entries";
+  const DRAG_MIME = "application/x-secpivot-entries";
 
   const menuItems: ContextMenuItem[] = $derived(
     isBin

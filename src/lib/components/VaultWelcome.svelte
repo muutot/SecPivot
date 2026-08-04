@@ -291,7 +291,7 @@
 <div class="welcome">
   <div class="welcome-inner">
     <div class="welcome-logo"><AppIcon name="key" size={34} /></div>
-    <h1 class="welcome-title">KeyVault</h1>
+    <h1 class="welcome-title">SecPivot</h1>
     <p class="welcome-subtitle">本地优先的 KeePass 密码管理器</p>
 
     <div class="welcome-actions">

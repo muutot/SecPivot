@@ -90,7 +90,7 @@ const state = writable<VaultState | null>(null);
 /** Last opened/created vault path, kept across lock so the lock screen can offer a quick reopen. */
 const remembered = writable<RememberedVault | null>(null);
 
-const BROWSER_KEY = "keyvault-browser-vault";
+const BROWSER_KEY = "secpivot-browser-vault";
 
 let browserState: VaultState | null = null;
 let initialized = false;

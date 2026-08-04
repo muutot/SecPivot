@@ -1,5 +1,5 @@
 {
-  "name": "keyvault-desktop",
+  "name": "secpivot-desktop",
   "version": "0.1.0",
   "description": "A professional, compact KeePass client built with Tauri and Rust.",
   "type": "module",

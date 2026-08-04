@@ -1,6 +1,6 @@
 # Project-wide UI Style and Theming
 
-This is the authoritative style reference for KeyVault UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
+This is the authoritative style reference for SecPivot UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
 
 ## Style source-of-truth order
 

@@ -1,6 +1,6 @@
 # Pitfalls
 
-Recurring traps discovered while developing KeyVault. Read before touching the relevant subsystem.
+Recurring traps discovered while developing SecPivot. Read before touching the relevant subsystem.
 
 ## Frontend
 
@@ -49,4 +49,4 @@ Recurring traps discovered while developing KeyVault. Read before touching the r
 - **Group/entry lookups must be downward-only recursion.** `GroupRef` borrows the `Database`, so walking `parent()` chains back toward the root produces E0597/E0515 lifetime errors. Find groups/entries by descending the tree (see `find_rpc_group_id` / `find_rpc_entry_urls` in `vault.rs`); the root group itself is reachable via `db.root()` / `root_mut()`.
 - **`Database::entry_mut(id)` / `group_mut(id)` are flat lookups** — they resolve any group id at any depth, so no recursive walk is needed for the write itself, only for the read-side checks (recycle-bin containment etc.).
 - **History snapshots come from `EntryTrack`, not manual clones.** `entry.edit_tracking(|tracked| { let mut e = tracked.as_mut(); /* edits */ })` snapshots the pre-edit entry into `entry.history` on drop (the plugin's `CreateBackup` equivalent). The historical clone strips its own history, so nested edits do not grow history exponentially. Do not hand-roll a clone-and-insert approach.
-- **Do not delete stale custom fields on `UpdateLogin`.** The plugin's update path overwrites fields but never removes custom fields the extension no longer sends; KeyVault mirrors that (deviation documented in `data-contracts.md`), otherwise app-managed fields would be destroyed.
+- **Do not delete stale custom fields on `UpdateLogin`.** The plugin's update path overwrites fields but never removes custom fields the extension no longer sends; otherwise app-managed fields would be destroyed (SecPivot mirrors that, as documented in `data-contracts.md`).

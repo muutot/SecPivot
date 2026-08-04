@@ -498,7 +498,7 @@ interface AppSettingsStore {
 
 const settings = writable<AppSettings>(DEFAULT_APP_SETTINGS);
 
-const STORAGE_KEY = "keyvault-settings";
+const STORAGE_KEY = "secpivot-settings";
 
 let dirty = false;
 let pending: AppSettings | null = null;

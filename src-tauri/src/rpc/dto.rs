@@ -98,7 +98,7 @@ pub enum RpcError {
     Locked,
     /// `oldLoginUUID` did not resolve to an entry (KeePassRPC's exception).
     EntryNotFound,
-    /// Target entry lives in the recycle bin �?KeyVault policy rejects the
+    /// Target entry lives in the recycle bin; SecPivot policy rejects the
     /// write (Kee's read paths never surface recycled entries, so this is
     /// unreachable through the extension and purely defense-in-depth).
     InRecycleBin,

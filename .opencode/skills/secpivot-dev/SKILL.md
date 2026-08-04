@@ -1,8 +1,8 @@
-# Skill: keyvault-dev
+# Skill: secpivot-dev
 
-# KeyVault Desktop Development
+# SecPivot Desktop Development
 
-KeyVault is a professional, compact, high-information-density, minimalist modern KeePass client built with Svelte 5 + Tauri 2 + Rust. Its visual language and settings architecture are derived from the Clipboard Desktop project (see `css-theming.md`).
+SecPivot is a professional, compact, high-information-density, minimalist modern KeePass client built with Svelte 5 + Tauri 2 + Rust. Its visual language and settings architecture are derived from the Clipboard Desktop project (see `css-theming.md`).
 
 ## Start every task
 
@@ -111,7 +111,7 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 ### Examples
 
 ```
-🎉 chore: scaffold KeyVault Svelte 5 + Tauri 2 project
+🎉 chore: scaffold SecPivot Svelte 5 + Tauri 2 project
 📝 docs[skill]: document theme-token gate and settings primitives
 ✨ feat[vault]: add open_vault/create_vault backend session
 ⚙️ feat[settings]: add general/security/database settings panels
@@ -126,5 +126,5 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 4. Write the commit message in the gitmoji format described above.
 5. Recheck `git status` after committing and report verification plus any evidence gaps.
 
-Base directory for this skill: B:\Program\Project\KeyVault\.opencode\skills\keyvault-dev
+Base directory for this skill: B:\Program\Project\SecPivot\.opencode\skills\secpivot-dev
 Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.

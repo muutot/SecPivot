@@ -1,6 +1,6 @@
 # Security Model
 
-KeyVault stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
+SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 
 ## Core invariants
 

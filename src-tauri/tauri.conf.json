@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "KeyVault",
+  "productName": "SecPivot",
   "version": "0.1.0",
-  "identifier": "com.keyvault.desktop",
+  "identifier": "com.secpivot.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "KeyVault",
+        "title": "SecPivot",
         "width": 1100,
         "height": 720,
         "minWidth": 560,
@@ -33,11 +33,11 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "KeyVault",
-    "copyright": "© 2026 KeyVault",
+    "publisher": "SecPivot",
+    "copyright": "© 2026 SecPivot",
     "category": "Utility",
     "shortDescription": "专业、紧凑、信息密度高的 KeePass 桌面客户端",
-    "longDescription": "KeyVault 是一个专业、紧凑、信息密度高的 KeePass 客户端，基于 Svelte 5 + Tauri 2 + Rust 构建，本地优先、无同步上传。",
+    "longDescription": "SecPivot 是一个专业、紧凑、信息密度高的 KeePass 客户端，基于 Svelte 5 + Tauri 2 + Rust 构建，本地优先、无同步上传。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -1,6 +1,6 @@
-# KeyVault repository instructions
+# SecPivot repository instructions
 
-KeyVault is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `.opencode/skills/keyvault-dev/SKILL.md` completely and follow its linked maintenance workflow.
+SecPivot is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `.opencode/skills/secpivot-dev/SKILL.md` completely and follow its linked maintenance workflow.
 
 In particular:
 
@@ -58,4 +58,4 @@ Run the narrowest relevant checks during implementation and the full set at inte
 ## Reference projects
 
 - `clipboard` (sibling): source of truth for the approved visual language and settings primitives.
-- `MuuPass` (sibling): reference for KeePass domain behavior (TOTP, KDF, auto-type). Do not edit either during KeyVault work.
+- `MuuPass` (sibling): reference for KeePass domain behavior (TOTP, KDF, auto-type). Do not edit either during SecPivot work.

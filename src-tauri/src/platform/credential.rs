@@ -4,7 +4,7 @@
 
 use keyring::Entry;
 
-const SERVICE: &str = "KeyVault";
+const SERVICE: &str = "SecPivot";
 
 fn entry_for(path: &str) -> Result<Entry, String> {
     if path.is_empty() {
@@ -47,7 +47,7 @@ mod tests {
     /// availability probe so the suite still passes in CI/headless shells.
     #[test]
     fn credential_round_trip_when_store_available() {
-        let path = "keyvault-test://credential-round-trip";
+        let path = "secpivot-test://credential-round-trip";
         let _ = forget(path);
         match remember(path, "s3cret-master") {
             Ok(()) => {

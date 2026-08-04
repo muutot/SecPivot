@@ -433,7 +433,7 @@ fn find_rpc_group_id(group: GroupRef<'_>, id: GroupId, bin_id: Option<GroupId>) 
 /// Outcome of resolving an entry during the write pass.
 enum FindEntryOutcome {
     NotFound,
-    /// Found, but inside the recycle bin subtree (KeyVault rejects the write).
+    /// Found, but inside the recycle bin subtree (SecPivot rejects the write).
     InRecycleBin,
     /// Found outside the recycle bin, with its current URL list.
     Found(Vec<String>),
