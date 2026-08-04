@@ -74,28 +74,32 @@ export function armIdleLock(): void {
 }
 
 /**
- * Activity handler shared by all idle-watch events. High-frequency events
+ * Activity handler shared by all idle-watch events. Discrete user actions
+ * (`pointerdown`/`keydown`) always re-arm the timer: a key press 20 s before
+ * the deadline is still real activity. High-frequency events
  * (`mousemove`/`wheel`/`scroll`) only re-arm when less than 15 s of the
  * timeout remain, so the timer is not churned on every fire.
  */
-function onActivity(): void {
-  if (Date.now() >= idleDeadline - 15_000) armIdleLock();
+function onActivity(discrete: boolean): void {
+  if (discrete || Date.now() >= idleDeadline - 15_000) armIdleLock();
 }
 
 /** Install user-activity listeners that keep the idle timer fresh. Returns a cleanup. */
 export function installAutoLock(): () => void {
-  window.addEventListener("pointerdown", onActivity);
-  window.addEventListener("keydown", onActivity);
-  window.addEventListener("mousemove", onActivity);
-  window.addEventListener("wheel", onActivity, { capture: true, passive: true });
-  window.addEventListener("scroll", onActivity, { capture: true, passive: true });
+  const onDiscrete = (): void => onActivity(true);
+  const onContinuous = (): void => onActivity(false);
+  window.addEventListener("pointerdown", onDiscrete);
+  window.addEventListener("keydown", onDiscrete);
+  window.addEventListener("mousemove", onContinuous);
+  window.addEventListener("wheel", onContinuous, { capture: true, passive: true });
+  window.addEventListener("scroll", onContinuous, { capture: true, passive: true });
   armIdleLock();
   return () => {
-    window.removeEventListener("pointerdown", onActivity);
-    window.removeEventListener("keydown", onActivity);
-    window.removeEventListener("mousemove", onActivity);
-    window.removeEventListener("wheel", onActivity, true);
-    window.removeEventListener("scroll", onActivity, true);
+    window.removeEventListener("pointerdown", onDiscrete);
+    window.removeEventListener("keydown", onDiscrete);
+    window.removeEventListener("mousemove", onContinuous);
+    window.removeEventListener("wheel", onContinuous, true);
+    window.removeEventListener("scroll", onContinuous, true);
     clearIdleTimer();
   };
 }

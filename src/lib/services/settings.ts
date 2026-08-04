@@ -382,9 +382,15 @@ export function normalizeSettings(
   };
 
   const s = source.security ?? fallback.security;
+  const asBool = (v: unknown, fallback: boolean): boolean =>
+    typeof v === "boolean" ? v : fallback;
   const security: SecuritySettings = {
-    ...fallback.security,
-    ...(typeof s === "object" ? s : {}),
+    minimizeToTray: asBool(s.minimizeToTray, fallback.security.minimizeToTray),
+    clearOnLock: asBool(s.clearOnLock, fallback.security.clearOnLock),
+    lockAfterAction: asBool(s.lockAfterAction, fallback.security.lockAfterAction),
+    lockOnFocusLoss: asBool(s.lockOnFocusLoss, fallback.security.lockOnFocusLoss),
+    rememberPassword: asBool(s.rememberPassword, fallback.security.rememberPassword),
+    screenCaptureGuard: asBool(s.screenCaptureGuard, fallback.security.screenCaptureGuard),
     autoLockMinutes: clampInt(s.autoLockMinutes ?? fallback.security.autoLockMinutes, 0, 240, 5),
     clipboardClearSeconds: clampInt(
       s.clipboardClearSeconds ?? fallback.security.clipboardClearSeconds,
@@ -496,30 +502,70 @@ const STORAGE_KEY = "keyvault-settings";
 
 let dirty = false;
 let pending: AppSettings | null = null;
-let inFlight: Promise<void> | null = null;
+/** In-flight single-flight persist chain; `null` when idle. Used to serialize
+ * writes and to let `flush()` await the chain that keeps draining newer
+ * changes (fixes a lost-update race where a change arriving mid-write was
+ * never persisted). */
+let persistPromise: Promise<void> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let initialized = false;
 
+/** Strip remote credentials from a settings clone so the browser-preview
+ *  persistence never writes `accessKey`/`secretKey` to localStorage (mirrors
+ *  `withoutSecrets` in vault.ts for the vault demo). */
+function withoutSecrets(value: AppSettings): AppSettings {
+  const strip = (settings: RemoteSettings): RemoteSettings => ({
+    ...settings,
+    accessKey: "",
+    secretKey: "",
+  });
+  return {
+    ...value,
+    remoteProfiles: value.remoteProfiles.map((p) => ({ ...p, settings: strip(p.settings) })),
+    remote: strip(value.remote),
+  };
+}
+
+/** Write every queued value in order. The `while` loop re-checks `pending`
+ * after each write, so changes that land while an earlier write is in flight
+ * are drained by the same chain instead of being dropped. */
 async function persist(): Promise<void> {
-  if (!dirty || !pending) return;
-  const value = pending;
-  pending = null;
-  dirty = false;
-  if (isTauriRuntime()) {
-    try {
-      const saved = await invoke<AppSettings>("set_config", { config: value });
-      settings.set(normalizeSettings(saved, value));
-    } catch {
-      pending = value;
-      dirty = true;
-    }
-  } else {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    } catch {
-      // storage unavailable; keep running without persistence
+  while (dirty && pending) {
+    const value = pending;
+    pending = null;
+    dirty = false;
+    if (isTauriRuntime()) {
+      try {
+        const saved = await invoke<AppSettings>("set_config", { config: value });
+        settings.set(normalizeSettings(saved, value));
+      } catch {
+        // Re-queue the failed value for a retry only when no newer change has
+        // superseded it (a mid-flight edit already replaced `pending`).
+        if (pending === null) {
+          pending = value;
+          dirty = true;
+        }
+        return;
+      }
+    } else {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(withoutSecrets(value)));
+      } catch {
+        // storage unavailable; keep running without persistence
+      }
     }
   }
+}
+
+/** Single-flight runner: concurrent callers share one chain, and the chain
+ * keeps draining `pending` until it is empty, so the debounce timer can never
+ * abandon a queued value. */
+async function runPersist(): Promise<void> {
+  if (persistPromise) return persistPromise;
+  persistPromise = persist().finally(() => {
+    persistPromise = null;
+  });
+  return persistPromise;
 }
 
 function schedulePersist(): void {
@@ -528,14 +574,7 @@ function schedulePersist(): void {
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
-    if (inFlight) return;
-    inFlight = persist().finally(() => {
-      inFlight = null;
-      if (persistTimer) {
-        persistTimer = null;
-        void persist();
-      }
-    });
+    void runPersist();
   }, PERSIST_DEBOUNCE_MS);
 }
 
@@ -697,7 +736,7 @@ export const appSettings: AppSettingsStore = {
       persistTimer = null;
     }
     if (dirty && pending) {
-      await persist();
+      await runPersist();
     }
   },
 

@@ -614,10 +614,13 @@ export const vault: VaultStore = {
     const result = applyEdit((draft) => {
       const entry = findEntry(draft.root, uuid);
       if (!entry) throw new Error("entry not found");
+      // Validate the target group before touching the tree, so an invalid
+      // `groupUuid` fails atomically instead of silently dropping the entry.
+      const target = findGroup(draft.root, groupUuid);
+      if (!target) throw new Error("target group not found");
       removeEntryFromGroup(draft.root, uuid);
       entry.groupUuid = groupUuid;
-      const target = findGroup(draft.root, groupUuid);
-      if (target) target.entries.push(entry);
+      target.entries.push(entry);
     });
     state.set(result);
     return result;

@@ -18,8 +18,9 @@ export async function copyText(text: string): Promise<void> {
 
 export function scheduleClipboardClear(): void {
   const seconds = get(appSettings).security.clipboardClearSeconds;
-  if (seconds <= 0) return;
   if (clearTimer) clearTimeout(clearTimer);
+  clearTimer = null;
+  if (seconds <= 0) return;
   clearTimer = setTimeout(() => void clearClipboardIfUnchanged(), seconds * 1000);
 }
 
@@ -51,8 +52,14 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
   }
 }
 
-/** Immediately wipe the clipboard (used by lock when `clearOnLock` is enabled). */
+/** Immediately wipe the clipboard (used by lock when `clearOnLock` is enabled)
+ *  and drop all in-memory traces of what this session copied: the scheduled
+ *  wipe timer and the remembered text, so the password string does not outlive
+ *  the lock. */
 export async function clearClipboard(): Promise<void> {
+  if (clearTimer) clearTimeout(clearTimer);
+  clearTimer = null;
+  lastCopiedText = null;
   try {
     if (isTauriRuntime()) {
       await invoke("clipboard_clear");
