@@ -3,6 +3,8 @@
   import type { HistoryVersion } from "$lib/types/vault";
   import { copyText } from "$lib/utils/clipboard";
   import { copySensitive } from "$lib/services/security";
+  import { formatBytes } from "$lib/utils/format";
+  import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -146,19 +148,6 @@
     } else {
       window.open(entry.url, "_blank", "noopener,noreferrer");
     }
-  }
-
-  function formatTime(value?: string): string {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   function toastMessage(): string {
@@ -375,14 +364,14 @@
       <div class="field-block">
         <span class="field-label">创建时间</span>
         <div class="field-value">
-          <span class="field-text">{formatTime(entry.created)}</span>
+          <span class="field-text">{formatLocalDate(entry.created)}</span>
         </div>
       </div>
 
       <div class="field-block">
         <span class="field-label">修改时间</span>
         <div class="field-value">
-          <span class="field-text">{formatTime(entry.modified)}</span>
+          <span class="field-text">{formatLocalDate(entry.modified)}</span>
         </div>
       </div>
 
@@ -391,7 +380,7 @@
           <span class="field-label">过期时间</span>
           <div class="field-value">
             <span class="field-text" class:expired-text={entry.expired}>
-              {formatTime(entry.expires)}{entry.expired ? " · 已过期" : ""}
+              {formatLocalDate(entry.expires)}{entry.expired ? " · 已过期" : ""}
             </span>
           </div>
         </div>
@@ -426,7 +415,7 @@
             <div class="attachment-item" title={attachment.name}>
               <AppIcon name="file" size={14} />
               <span class="attachment-name">{attachment.name}</span>
-              <span class="attachment-size">{formatSize(attachment.size)}</span>
+              <span class="attachment-size">{formatBytes(attachment.size)}</span>
               <button
                 class="copy-btn"
                 onclick={() => saveAttachment(attachment.name)}

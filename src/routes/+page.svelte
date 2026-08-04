@@ -45,6 +45,7 @@
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
+  import { formatDateOnly } from "$lib/utils/date";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
@@ -397,17 +398,10 @@
       return entry.customFields?.find((f) => f.name === name)?.value ?? "";
     }
     if (colId === "created" || colId === "modified" || colId === "expires") {
-      return formatDateValue(entry[colId] as string | undefined);
+      return formatDateOnly(entry[colId] as string | undefined);
     }
     if (colId === "password") return entry.password ? "••••••" : "";
     return String(entry[colId as keyof VaultEntry] ?? "");
-  }
-  function formatDateValue(value: string | undefined): string {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    const p = (n: number): string => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   }
   let groupWidth = $state(get(appSettings).general.panelWidths.group);
   let detailWidth = $state(get(appSettings).general.panelWidths.detail);

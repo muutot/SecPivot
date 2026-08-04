@@ -11,6 +11,8 @@
   import { appSettings } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import { generatePassword, estimateEntropy, entropyLabel } from "$lib/utils/password";
+  import { formatBytes } from "$lib/utils/format";
+  import { toDateTimeInput } from "$lib/utils/date";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import {
@@ -64,7 +66,7 @@
     multi
       ? (sharedValue((e) => e.expires ?? "") ?? "")
       : initialEntry?.expires
-        ? toLocalInput(initialEntry.expires)
+        ? toDateTimeInput(initialEntry.expires)
         : "",
   );
   let iconIndex = $state<number | null>(multi ? null : (initialEntry?.icon ?? null));
@@ -218,22 +220,6 @@
 
   function removeAttachment(index: number): void {
     attachments = attachments.filter((_, i) => i !== index);
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  /** Convert an ISO-8601 UTC timestamp to the `datetime-local` input format. */
-  function toLocalInput(iso: string): string {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "";
-    const pad = (n: number): string => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-      date.getHours(),
-    )}:${pad(date.getMinutes())}`;
   }
 
   function keepassIconName(index: number): IconName {
@@ -651,7 +637,7 @@
             <div class="attachment-row">
               <AppIcon name="file" size={14} />
               <span class="attachment-name" title={attachment.name}>{attachment.name}</span>
-              <span class="attachment-size">{formatSize(attachment.size)}</span>
+              <span class="attachment-size">{formatBytes(attachment.size)}</span>
               <button
                 class="icon-btn"
                 onclick={() => removeAttachment(i)}

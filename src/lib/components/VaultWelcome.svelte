@@ -8,6 +8,7 @@
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import { formatBytes } from "$lib/utils/format";
 
   interface Props {
     onopened: () => void;
@@ -69,12 +70,6 @@
 
   function changeRemote<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
     appSettings.updateRemote(key, value);
-  }
-
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   async function handleRemoteOpen(): Promise<void> {
