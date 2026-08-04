@@ -38,6 +38,8 @@ export function generatePassword(settings: PasswordGeneratorSettings): string {
   return result;
 }
 
+/** Entropy estimate in bits. Mirror of the Rust `estimate_entropy` in
+ *  `src-tauri/src/vault.rs`; keep both in sync. */
 export function estimateEntropy(password: string): number {
   let pool = 0;
   if (/[A-Z]/.test(password)) pool += 26;

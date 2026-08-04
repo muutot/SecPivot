@@ -1,15 +1,5 @@
 import type { SecurityReport, VaultGroup } from "$lib/types/vault";
-
-/** Mirror of the Rust `estimate_entropy` in vault.rs; keep both in sync. */
-export function estimateEntropyBits(password: string): number {
-  let pool = 0;
-  if (/[A-Z]/.test(password)) pool += 26;
-  if (/[a-z]/.test(password)) pool += 26;
-  if (/[0-9]/.test(password)) pool += 10;
-  if (/[^A-Za-z0-9]/.test(password)) pool += 32;
-  if (pool === 0) return 0;
-  return Math.round(password.length * Math.log2(pool));
-}
+import { estimateEntropy } from "$lib/utils/password";
 
 /** Browser fallback: analyze the local state (passwords stay in-memory here). */
 export function computeSecurityReport(root: VaultGroup): SecurityReport {
@@ -26,7 +16,7 @@ export function computeSecurityReport(root: VaultGroup): SecurityReport {
         empty.push(entry.uuid);
         continue;
       }
-      const bits = estimateEntropyBits(password);
+      const bits = estimateEntropy(password);
       if (bits < 72) weak.push({ uuid: entry.uuid, bits });
       const list = byPassword.get(password) ?? [];
       list.push(entry.uuid);
