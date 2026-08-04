@@ -69,6 +69,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/focus.rs`         | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                                                                                                        |
 | `src-tauri/src/remote_backup.rs` | Local mirror write + backup rotation for remote vaults: key validation/basename, backup-template expand/match, write + prune retention (pure std + chrono; extracted from vault.rs)                                                                                                                            |
 | `src-tauri/src/util.rs`          | Small cross-module helpers: URL host extraction (single source for bridge/rpc/vault URL matching), atomic tmp+rename file write                                                                                                                                                                                |
+| `src-tauri/src/vault_dto.rs`     | IPC serde DTOs (camelCase) shared with the frontend: entries/groups/state/inputs/patch/OTP/security/favicon shapes + tri-state icon deserializer (re-exported via `vault::*`)                                                                     |
 
 ## Persistent layout
 

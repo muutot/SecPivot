@@ -15,6 +15,7 @@ pub mod rpc_server;
 pub mod shield;
 pub mod util;
 pub mod vault;
+pub mod vault_dto;
 
 use crate::bridge::BridgeHost;
 use crate::config::ConfigStore;
