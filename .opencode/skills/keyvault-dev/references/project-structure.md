@@ -82,7 +82,11 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/vault/helpers.rs` | Free functions shared by the session: `parse_entry_id`/`parse_group_id`/`recycle_bin_id`, auto-type match walkers, OTP field resolution, `build_database_key`, `save_database`/`write_database_bytes`, KDF/cipher/compression application, secret wipe helpers (extracted from mod.rs)                          |
 | `src-tauri/src/vault/tests.rs` | Session/entry/group/OTP/favicon/security/remote/autotype/RPC/bridge test suite (extracted from mod.rs)                                                                                                                                                                                                     |
 | `src-tauri/src/vault/hosts.rs` | Host adapters over `VaultSession`: `BridgeHost` impl (association keys, logins, `db_hash`) + `RpcHost` impl (SRP session keys, RPC DTOs, `AddLogin`/`UpdateLogin` write path with history snapshots) + pure helpers (RPC/bridge tree building, URL matching, write-path field application; extracted from vault.rs) |
-| `src-tauri/src/bridge/mod.rs` | KeePassHttp protocol core: request/response types, AES-256-CBC per-field crypto, verifier/HMAC, request dispatch (pure, no sockets)                                                                                                                                                                                 |
+| `src-tauri/src/bridge/mod.rs` | KeePassHttp protocol module root: `BRIDGE_PORT` + shared constants (`KEY_LEN`/`NONCE_LEN`/`PROTOCOL_VERSION`), re-exports `crypto`/`types`/`dispatch` |
+| `src-tauri/src/bridge/crypto.rs` | Field crypto: `encrypt_field`/`decrypt_field` (AES-256-CBC + PKCS7), `make_verifier`/`check_verifier`, response `response_hmac` |
+| `src-tauri/src/bridge/types.rs` | Wire shapes (exact camelCase): `BridgeRequest`/`BridgeEntry`/`BridgeResponse` (+ success/failure envelope builders), `BridgeLogin` + `BridgeHost` trait, `decrypt_request_field` |
+| `src-tauri/src/bridge/dispatch.rs` | Request dispatch: verifier gate + `handle_request`, `associate` approval flow, `new_client_id`, `dispatch`, entries build/decrypt helpers, `generate_password` |
+| `src-tauri/src/bridge/tests.rs` | Protocol-core tests: crypto vectors, verifier/HMAC, dispatch + associate/reject flows (extracted from mod.rs) |
 | `src-tauri/src/bridge/server.rs` | Loopback HTTP server (127.0.0.1:19455), `BridgeState` lifecycle, `ApprovalBoard`, HTTP framing, server tests                                                                                                                                                                                                        |
 | `src-tauri/src/crypto.rs`          | Shared loopback crypto: AES-256-CBC + PKCS7 (raw/b64), HMAC-SHA256, SHA-1/SHA-256, hex/base64, CSPRNG, constant-time MAC compare (single source for bridge/rpc/vault)                                                                                                                                               |
 | `src-tauri/src/rpc/mod.rs` | KeePassRPC protocol module root: constants (`RPC_PORT`/`PROTOCOL_VERSION`/`SECURITY_LEVEL`/`FEATURES`), SRP group + mod-pow math, `hex`/`random_hex` re-exports, re-exports `dto`/`srp`/`keys`/`dispatch` |
@@ -129,7 +133,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src-tauri/src/remote/` (mod + s3 + webdav + memory + local + backup + tests)
 - `src-tauri/src/config/` (mod + settings + store + tests)
 - `src-tauri/src/vault/mod.rs`
-- `src-tauri/src/bridge/` + `src-tauri/src/rpc/` (mod + dto + srp + keys + dispatch + server + tests) + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
+- `src-tauri/src/bridge/` (mod + crypto + types + dispatch + server + tests) + `src-tauri/src/rpc/` (mod + dto + srp + keys + dispatch + server + tests) + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
 - `TODO.md`
 - `SKILL.md` and shared references
 
