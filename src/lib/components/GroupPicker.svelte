@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
-  import { countEntries } from "$lib/services/vault";
+  import { countEntries } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassGroupIconName } from "$lib/utils/keepass-icons";
 
@@ -18,15 +18,6 @@
   let pickerEl = $state<HTMLDivElement>();
 
   const root = $derived(groups[0] ?? null);
-
-  function findGroup(parent: VaultGroup, uuid: string): VaultGroup | null {
-    if (parent.uuid === uuid) return parent;
-    for (const child of parent.children) {
-      const found = findGroup(child, uuid);
-      if (found) return found;
-    }
-    return null;
-  }
 
   /** Path from root to the browsed/committed group (top-down). */
   const chain = $derived.by(() => {

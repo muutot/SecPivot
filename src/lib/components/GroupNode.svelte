@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
-  import { countEntries } from "$lib/services/vault";
+  import { countEntries } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassGroupIconName } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";

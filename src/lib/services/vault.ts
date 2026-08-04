@@ -20,6 +20,12 @@ import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
 import { computeSecurityReport } from "$lib/utils/security-report";
+import {
+  collectGroups as collectAllGroups,
+  findBinGroup,
+  findEntry,
+  findGroup,
+} from "$lib/utils/tree";
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
@@ -101,38 +107,6 @@ function applyEdit(mutator: (draft: VaultState) => void): VaultState {
   mutator(next);
   browserState = next;
   return deepClone(next);
-}
-
-function findGroup(root: VaultGroup, uuid: string): VaultGroup | null {
-  if (root.uuid === uuid) return root;
-  for (const child of root.children) {
-    const found = findGroup(child, uuid);
-    if (found) return found;
-  }
-  return null;
-}
-
-function findEntry(root: VaultGroup, uuid: string): VaultEntry | null {
-  for (const entry of root.entries) {
-    if (entry.uuid === uuid) return entry;
-  }
-  for (const child of root.children) {
-    const found = findEntry(child, uuid);
-    if (found) return found;
-  }
-  return null;
-}
-
-function collectGroups(root: VaultGroup, out: VaultGroup[]): void {
-  out.push(root);
-  for (const child of root.children) collectGroups(child, out);
-}
-
-function findBinGroup(root: VaultGroup): VaultGroup | null {
-  for (const child of root.children) {
-    if (child.isRecycleBin) return child;
-  }
-  return null;
 }
 
 function ensureBinGroup(root: VaultGroup): VaultGroup {
@@ -429,8 +403,7 @@ export const vault: VaultStore = {
       return result;
     }
     const result = applyEdit((draft) => {
-      const groups: VaultGroup[] = [];
-      collectGroups(draft.root, groups);
+      const groups = collectAllGroups(draft.root);
       for (const group of groups) {
         const entry = group.entries.find((e) => e.uuid === uuid);
         if (entry) {
@@ -462,8 +435,7 @@ export const vault: VaultStore = {
       return result;
     }
     const result = applyEdit((draft) => {
-      const groups: VaultGroup[] = [];
-      collectGroups(draft.root, groups);
+      const groups = collectAllGroups(draft.root);
       for (const group of groups) {
         for (const entry of group.entries) {
           if (!uuids.includes(entry.uuid)) continue;
@@ -695,8 +667,7 @@ export const vault: VaultStore = {
     if (uuid === "root") throw new Error("cannot delete root");
     const result = applyEdit((draft) => {
       const bin = ensureBinGroup(draft.root);
-      const groups: VaultGroup[] = [];
-      collectGroups(draft.root, groups);
+      const groups = collectAllGroups(draft.root);
       for (const group of groups) {
         const index = group.children.findIndex((c) => c.uuid === uuid);
         if (index >= 0) {
@@ -758,11 +729,5 @@ export const vault: VaultStore = {
     await refreshInternal();
   },
 };
-
-export function countEntries(root: VaultGroup): number {
-  let total = root.entries.length;
-  for (const child of root.children) total += countEntries(child);
-  return total;
-}
 
 export { ROOT_GROUP_NAME };

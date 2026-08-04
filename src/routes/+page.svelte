@@ -44,6 +44,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
+  import { collectGroups, collectEntries, findEntry } from "$lib/utils/tree";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
@@ -80,9 +81,7 @@
   let expiredNotifiedPath = $state<string | null>(null);
 
   function countExpiredEntries(group: VaultGroup): number {
-    let count = group.entries.filter((e) => e.expired).length;
-    for (const child of group.children) count += countExpiredEntries(child);
-    return count;
+    return collectEntries(group).filter((e) => e.expired).length;
   }
 
   function entryIconName(entry: VaultEntry): IconName {
@@ -203,13 +202,7 @@
 
   const allGroups = $derived.by((): VaultGroup[] => {
     if (!currentVault) return [];
-    const list: VaultGroup[] = [];
-    function walk(group: VaultGroup): void {
-      list.push(group);
-      for (const child of group.children) walk(child);
-    }
-    walk(currentVault.root);
-    return list;
+    return collectGroups(currentVault.root);
   });
 
   const allEntries = $derived.by((): VaultEntry[] => {
@@ -276,13 +269,7 @@
     if (selectedGroup === null) return allGroups.filter((g) => !groupInBin(g.uuid));
     const group = allGroups.find((g) => g.uuid === selectedGroup);
     if (!group) return allGroups;
-    const list: VaultGroup[] = [];
-    function collect(g: VaultGroup): void {
-      list.push(g);
-      for (const child of g.children) collect(child);
-    }
-    collect(group);
-    return list;
+    return collectGroups(group);
   });
 
   const filteredEntries = $derived.by((): { entry: VaultEntry }[] => {
@@ -325,11 +312,9 @@
   const customColumnNames = $derived.by(() => {
     if (!currentVault) return [];
     const names = new Map<string, number>();
-    for (const group of allGroupsOf(currentVault.root)) {
-      for (const e of group.entries) {
-        for (const f of e.customFields ?? []) {
-          names.set(f.name, (names.get(f.name) ?? 0) + 1);
-        }
+    for (const e of collectEntries(currentVault.root)) {
+      for (const f of e.customFields ?? []) {
+        names.set(f.name, (names.get(f.name) ?? 0) + 1);
       }
     }
     return [...names.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
@@ -572,21 +557,7 @@
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
     if (!state || !uuid) return null;
-    for (const group of allGroupsOf(state.root)) {
-      const found = group.entries.find((e) => e.uuid === uuid);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function allGroupsOf(root: VaultGroup): VaultGroup[] {
-    const list: VaultGroup[] = [];
-    function walk(group: VaultGroup): void {
-      list.push(group);
-      for (const child of group.children) walk(child);
-    }
-    walk(root);
-    return list;
+    return findEntry(state.root, uuid);
   }
 
   function setSingleSelection(entry: VaultEntry | null): void {
@@ -825,14 +796,14 @@
     let state = startState;
     let parentUuid: string | null = selectedGroup ?? null;
     for (const name of parts) {
-      const existing = allGroupsOf(state.root).find(
+      const existing = collectGroups(state.root).find(
         (g) => g.parentUuid === parentUuid && g.name === name,
       );
       if (existing) {
         parentUuid = existing.uuid;
       } else {
         state = await vault.addGroup({ parentUuid, name });
-        const created = allGroupsOf(state.root).find(
+        const created = collectGroups(state.root).find(
           (g) => g.parentUuid === parentUuid && g.name === name,
         );
         if (!created) throw new Error("创建分组失败");
@@ -1029,9 +1000,7 @@
   /** Collect the fully-populated entries behind the current selection. */
   function selectedEntries(): VaultEntry[] {
     if (!currentVault) return [];
-    return allGroupsOf(currentVault.root)
-      .flatMap((g) => g.entries)
-      .filter((e) => selectedUuids.has(e.uuid));
+    return collectEntries(currentVault.root).filter((e) => selectedUuids.has(e.uuid));
   }
 
   function openEditEntry(entry: VaultEntry): void {
