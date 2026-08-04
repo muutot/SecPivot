@@ -89,6 +89,12 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/rpc/server.rs` | Loopback WebSocket server (127.0.0.1:12546), `RpcState` lifecycle, per-connection handshake state machine, side-channel event emission, WS transport tests                                                                                                                                                          |
 | `src-tauri/src/autotype.rs`        | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                                                                                                                           |
 | `src-tauri/src/focus.rs`           | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                                                                                                                |
+| `src-tauri/src/remote/mod.rs` | Remote module root: `RemoteStorage` trait, `RemoteObject`, shared tokio runtime, `make_storage` factory, `list_objects_async`, `local_storage_dir`/`MemoryStorage` re-exports |
+| `src-tauri/src/remote/s3.rs` | S3 transport (rust-s3, path-style `Region::Custom` so MinIO works): `S3Storage` + list/get/put over a shared tokio runtime |
+| `src-tauri/src/remote/webdav.rs` | WebDAV transport: blocking reqwest + PROPFIND multistatus parsing (quick-xml), Basic auth, `url_for`/`encode_path_segment`/`href_to_key` helpers |
+| `src-tauri/src/remote/memory.rs` | In-memory fake storage (`MemoryStorage`, `Arc<RwLock<HashMap>>`) for offline tests |
+| `src-tauri/src/remote/local.rs` | Local mirror folder resolution: `local_storage_dir(app, profile)` → `<app_data>/Storage/remote/<sanitized>`, `sanitize_dir_name` |
+| `src-tauri/src/remote/tests.rs` | Transport tests: in-memory fake, S3 + WebDAV local TCP mocks, multistatus parser, URL encoding |
 | `src-tauri/src/remote/backup.rs` | Local mirror write + backup rotation for remote vaults: key validation/basename, backup-template expand/match, write + prune retention (pure std + chrono; extracted from vault.rs)                                                                                                                                 |
 | `src-tauri/src/util.rs`            | Small cross-module helpers: URL host extraction (single source for bridge/rpc/vault URL matching), atomic tmp+rename file write                                                                                                                                                                                     |
 | `src-tauri/src/vault/dto.rs`       | IPC serde DTOs (camelCase) shared with the frontend: entries/groups/state/inputs/patch/OTP/security/favicon shapes + tri-state icon deserializer (re-exported via `vault::*`)                                                                                                                                       |
@@ -115,6 +121,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src/lib/services/settings.ts` + `src/lib/services/vault.ts`
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/commands/` (mod + config + bridge + credential + vault + groups + entries + favicon + tcato + clipboard + remote + tests)
+- `src-tauri/src/remote/` (mod + s3 + webdav + memory + local + backup + tests)
 - `src-tauri/src/config/` (mod + settings + store + tests)
 - `src-tauri/src/vault/mod.rs`
 - `src-tauri/src/bridge/mod.rs` + `src-tauri/src/bridge/server.rs` + `src-tauri/src/rpc/mod.rs` + `src-tauri/src/rpc/server.rs` + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
