@@ -3019,13 +3019,7 @@ fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), Str
 
 /// Atomic write of already-serialized KDBX bytes (local vault save).
 fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), String> {
-    let tmp = path.with_extension("kdbx.tmp");
-    std::fs::write(&tmp, buffer).map_err(|e| format!("写入数据库失败: {e}"))?;
-    if let Err(e) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!("保存数据库失败: {e}"));
-    }
-    Ok(())
+    crate::util::atomic_write(path, buffer, "数据库")
 }
 
 /// Validate an S3 object key for a vault file. Keys need not end in `.kdbx`:

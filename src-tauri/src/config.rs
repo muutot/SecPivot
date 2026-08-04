@@ -773,7 +773,6 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let dir = project_dir.join(CONFIG_SUBDIR);
     fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {e}"))?;
     let path = dir.join(CONFIG_FILE);
-    let tmp = dir.join("config.json.tmp");
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
         profile.settings.access_key =
@@ -783,9 +782,7 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
-    fs::write(&tmp, text).map_err(|e| format!("写入配置失败: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| format!("保存配置失败: {e}"))?;
-    Ok(())
+    crate::util::atomic_write(&path, text.as_bytes(), "配置")
 }
 
 /// Managed state: the in-memory normalized config plus its project dir.
