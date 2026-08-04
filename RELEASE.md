@@ -31,3 +31,4 @@
 ## 构建产物
 
 - **NSIS 安装包**: `SecPivot_0.1.0_x64-setup.exe`
+- **便携版 (免安装)**: `SecPivot-0.1.0-portable.zip`

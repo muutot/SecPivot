@@ -8,12 +8,8 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    name: Frontend
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -31,26 +27,14 @@ jobs:
       - run: npm run build
 
   rust:
-    name: Rust (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    name: Rust
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt update
-          sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev libgtk-3-dev \
-            libjavascriptcoregtk-4.1-dev libsoup-3.0-dev
 
       - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check

@@ -138,11 +138,12 @@ After a successful release, report:
 
 ## CI/CD
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml` which:
+Pushing a `v*` tag triggers `.github/workflows/release.yml` which (Windows-only target — the app is Windows-first and bundles only the NSIS installer):
 
-- Builds for Windows (x64), macOS (arm64 + x64), Linux (x64)
-- Creates a draft GitHub Release with artifacts using `RELEASE.md` as the release body
-- Packages a portable (no-install) ZIP on the Windows job (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`
+- Runs `npm run verify` on `windows-latest`
+- Builds the Windows x64 bundle (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
+- Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`
+- Creates a draft GitHub Release with these artifacts using `RELEASE.md` as the release body
 
 The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name, so manual re-releases name the release and portable ZIP consistently even when no tag is pushed yet.
 
