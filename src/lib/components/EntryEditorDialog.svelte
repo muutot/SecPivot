@@ -52,10 +52,19 @@
   );
   let password = $state("");
   let passwordLoading = $state(false);
+  /** Whether the current password is known. In single edit mode the value is
+   * fetched on demand; saving before it settles would re-encrypt the entry
+   * with an empty password (a data-loss wipe). True only once the load
+   * succeeds (or there is nothing to preserve, e.g. create mode). */
+  let passwordReady = $state(multi);
   let url = $state(multi ? (sharedValue((e) => e.url) ?? "") : (initialEntry?.url ?? ""));
   let notes = $state(multi ? (sharedValue((e) => e.notes) ?? "") : (initialEntry?.notes ?? ""));
   let totp = $state("");
   let totpLoading = $state(false);
+  /** Whether the current TOTP seed is known. Same data-loss reasoning as
+   * `passwordReady`: saving while the seed load is pending sends `totp:
+   * undefined`, which the backend interprets as "remove the seed". */
+  let totpReady = $state(multi);
   let expiresLocal = $state(
     multi
       ? (sharedValue((e) => e.expires ?? "") ?? "")
@@ -131,16 +140,25 @@
     if (multi) return;
     const targetUuid = entry?.uuid;
     password = "";
-    if (!targetUuid) return;
+    // Create mode (no entry yet): nothing to preserve, so the field is ready.
+    if (!targetUuid) {
+      passwordReady = true;
+      return;
+    }
     passwordLoading = true;
+    passwordReady = false;
     void vault
       .getEntryPassword(targetUuid)
       .then((value) => {
         password = value;
         passwordLoading = false;
+        passwordReady = true;
       })
       .catch(() => {
         passwordLoading = false;
+        // The value is unknown, so saving must not overwrite it with an empty
+        // one; keep the field gated (the save button stays disabled).
+        passwordReady = false;
       });
   });
 
@@ -150,16 +168,25 @@
     if (multi) return;
     const targetUuid = entry?.uuid;
     totp = "";
-    if (!targetUuid || !entry?.hasTotp) return;
+    // Create mode: no existing seed to preserve; the empty field is the user's
+    // intent (no seed). Entry without a seed: nothing to preserve either.
+    if (!targetUuid || !entry?.hasTotp) {
+      totpReady = true;
+      return;
+    }
     totpLoading = true;
+    totpReady = false;
     void vault
       .getEntryTotp(targetUuid)
       .then((value) => {
         totp = value ?? "";
         totpLoading = false;
+        totpReady = true;
       })
       .catch(() => {
         totpLoading = false;
+        // Unknown seed: keep the save gated so it is not wiped.
+        totpReady = false;
       });
   });
 
@@ -238,6 +265,7 @@
   }
 
   function submit(): void {
+    if (!multi && (!passwordReady || !totpReady)) return;
     if (multi) {
       const patch: EntryPatch = {};
       if (!untouched.has("title")) patch.title = title.trim();
@@ -653,7 +681,13 @@
 
     <div class="modal-actions">
       <button class="modal-button" onclick={onclose}>取消</button>
-      <button class="modal-button primary" onclick={submit}>保存</button>
+      <button
+        class="modal-button primary"
+        onclick={submit}
+        disabled={!multi && (!passwordReady || !totpReady)}
+        title={!multi && (!passwordReady || !totpReady) ? "正在载入敏感字段…" : undefined}
+        >保存</button
+      >
     </div>
   </div>
 </div>
@@ -1051,6 +1085,14 @@
   .modal-button:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .modal-button:disabled {
+    color: var(--text-faint);
+    background: var(--card-bg);
+    border-color: var(--border-subtle);
+    cursor: default;
+    opacity: 0.6;
   }
 
   .modal-button.primary {

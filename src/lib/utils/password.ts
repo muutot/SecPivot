@@ -24,18 +24,38 @@ export function generatePassword(settings: PasswordGeneratorSettings): string {
 
   const arr = new Uint32Array(settings.length);
   crypto.getRandomValues(arr);
-  let result = "";
+  const chars = new Array<string>(settings.length);
   for (let i = 0; i < settings.length; i++) {
-    result += pool[arr[i] % pool.length];
+    chars[i] = pool[arr[i] % pool.length];
   }
 
-  if (settings.includeUpper && !/[A-Z]/.test(result)) result = result.slice(1) + pool[0];
-  if (settings.includeLower && !/[a-z]/.test(result))
-    result = result.slice(1) + pool[Math.floor(Math.random() * pool.length)];
-  if (settings.includeDigits && !/[0-9]/.test(result))
-    result = result.slice(1) + pool[Math.floor(Math.random() * pool.length)];
+  // Guarantee at least one char per requested class (mirrors the Rust
+  // `generate_password` in bridge/dispatch.rs): overwrite distinct random
+  // positions with a char drawn from each missing category — never from the
+  // whole pool, which could still miss the requested class.
+  const wantUpper = settings.includeUpper;
+  const wantLower = settings.includeLower;
+  const wantDigits = settings.includeDigits;
+  const candidates: { category: string; re: RegExp; enabled: boolean }[] = [
+    { category: UPPER, re: /[A-Z]/, enabled: wantUpper },
+    { category: LOWER, re: /[a-z]/, enabled: wantLower },
+    { category: DIGITS, re: /[0-9]/, enabled: wantDigits },
+  ];
+  let fixIndex = 0;
+  for (const { category, re, enabled } of candidates) {
+    if (!enabled || re.test(chars.join(""))) continue;
+    const categoryPool = [...category].filter((c) => {
+      if (settings.excludeSimilar && SIMILAR.includes(c)) return false;
+      if (settings.excludeAmbiguous && AMBIGUOUS.includes(c)) return false;
+      return true;
+    });
+    if (categoryPool.length === 0) continue;
+    const pos = fixIndex % settings.length;
+    fixIndex += 1;
+    chars[pos] = categoryPool[Math.floor(Math.random() * categoryPool.length)];
+  }
 
-  return result;
+  return chars.join("");
 }
 
 /** Entropy estimate in bits. Mirror of the Rust `estimate_entropy` in
