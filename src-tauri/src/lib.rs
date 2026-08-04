@@ -17,6 +17,7 @@ pub mod shield;
 pub mod util;
 pub mod vault;
 pub mod vault_dto;
+pub mod vault_hosts;
 pub mod vault_serialize;
 
 use crate::config::ConfigStore;
