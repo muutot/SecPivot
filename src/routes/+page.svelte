@@ -813,89 +813,42 @@
     return parentUuid ?? state.root.uuid;
   }
 
-  async function handleImportCsv(): Promise<void> {
-    if (!currentVault) return;
-    let text: string;
+  /** Normalized import row shared by the CSV and KeePass-XML importers. */
+  type ImportEntry = {
+    group: string;
+    title: string;
+    username: string;
+    password: string;
+    url: string;
+    notes: string;
+    totp?: string;
+    customFields: { name: string; value: string }[];
+  };
+
+  /** Pick an import file via the Tauri dialog (desktop) or a hidden file input,
+   *  returning its text, or `null` when cancelled / unreadable. */
+  async function pickImportFile(
+    filters: { name: string; extensions: string[] }[],
+  ): Promise<string | null> {
     try {
       if (isTauriRuntime()) {
-        const selected = await open({
-          multiple: false,
-          filters: [{ name: "CSV 文件", extensions: ["csv"] }],
-        });
-        if (!selected) return;
-        text = await invoke<string>("read_text_file", { path: String(selected) });
-      } else {
-        const picked = await readPickedFile();
-        if (picked === null) return;
-        text = picked;
+        const selected = await open({ multiple: false, filters });
+        return selected ? await invoke<string>("read_text_file", { path: String(selected) }) : null;
       }
+      return await readPickedFile();
     } catch (e) {
       flash(`读取文件失败：${e}`);
-      return;
-    }
-    const rows = parseCsvRows(parseCsv(text));
-    if (rows.length === 0) {
-      flash("CSV 中没有可导入的条目");
-      return;
-    }
-    busy = true;
-    try {
-      let state = currentVault;
-      for (const row of rows) {
-        const groupUuid = await resolveImportGroup(row.group, state);
-        state = await vault.addEntry({
-          groupUuid,
-          title: row.title,
-          username: row.username,
-          password: row.password,
-          url: row.url,
-          notes: row.notes,
-          totp: row.totp || undefined,
-          customFields: [],
-          attachments: [],
-        });
-      }
-      flash(`已导入 ${rows.length} 个条目`);
-    } catch (e) {
-      flash(`导入失败：${e}`);
-    } finally {
-      busy = false;
+      return null;
     }
   }
 
-  async function handleImportXml(): Promise<void> {
-    if (!currentVault) return;
-    let text: string;
-    try {
-      if (isTauriRuntime()) {
-        const selected = await open({
-          multiple: false,
-          filters: [
-            { name: "KeePass XML 文件", extensions: ["xml"] },
-            { name: "CSV 文件", extensions: ["csv"] },
-          ],
-        });
-        if (!selected) return;
-        text = await invoke<string>("read_text_file", { path: String(selected) });
-      } else {
-        const picked = await readPickedFile();
-        if (picked === null) return;
-        text = picked;
-      }
-    } catch (e) {
-      flash(`读取文件失败：${e}`);
-      return;
-    }
-    const entries = parseKdbxXml(text);
-    if (entries.length === 0) {
-      flash("XML 中没有可导入的条目");
-      return;
-    }
+  /** Resolve each row's group and add it as an entry; reports a one-shot summary. */
+  async function importEntries(entries: ImportEntry[]): Promise<void> {
     busy = true;
     try {
       let state = currentVault;
       for (const entry of entries) {
-        const groupUuid = await resolveImportGroup(entry.group, state);
+        const groupUuid = await resolveImportGroup(entry.group, state!);
         state = await vault.addEntry({
           groupUuid,
           title: entry.title,
@@ -914,6 +867,36 @@
     } finally {
       busy = false;
     }
+  }
+
+  async function handleImportCsv(): Promise<void> {
+    if (!currentVault) return;
+    const text = await pickImportFile([{ name: "CSV 文件", extensions: ["csv"] }]);
+    if (text === null) return;
+    const entries: ImportEntry[] = parseCsvRows(parseCsv(text)).map((row) => ({
+      ...row,
+      customFields: [],
+    }));
+    if (entries.length === 0) {
+      flash("CSV 中没有可导入的条目");
+      return;
+    }
+    await importEntries(entries);
+  }
+
+  async function handleImportXml(): Promise<void> {
+    if (!currentVault) return;
+    const text = await pickImportFile([
+      { name: "KeePass XML 文件", extensions: ["xml"] },
+      { name: "CSV 文件", extensions: ["csv"] },
+    ]);
+    if (text === null) return;
+    const entries: ImportEntry[] = parseKdbxXml(text);
+    if (entries.length === 0) {
+      flash("XML 中没有可导入的条目");
+      return;
+    }
+    await importEntries(entries);
   }
 
   function openSettings(): void {
