@@ -9,12 +9,12 @@ use keepass::Database;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
+use crate::vault::dto::{
+    AttachmentInfo, AttachmentInput, CustomField, EntryInput, EntryPatch, VaultEntry, VaultGroup,
+};
 use crate::vault::{
     entry_has_otp, FIELD_FAVORITE, FIELD_FAVORITE_TRUE, FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD,
     FIELD_TITLE, FIELD_URL, FIELD_USERNAME, RESERVED_FIELDS, ROOT_GROUP_NAME, ROOT_GROUP_UUID,
-};
-use crate::vault_dto::{
-    AttachmentInfo, AttachmentInput, CustomField, EntryInput, EntryPatch, VaultEntry, VaultGroup,
 };
 
 /// Collect every entry URL host under `group` into `map`, keyed by host.

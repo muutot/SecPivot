@@ -2,16 +2,20 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
+pub mod dto;
+mod hosts;
+mod serialize;
+
+use self::serialize::{
+    apply_patch_fields, build_group_tree, collect_favicon_hosts, decode_attachments, escape_csv,
+    estimate_entropy, extract_host, format_iso, icon_to_data_url, now_iso, sync_attachments,
+    sync_custom_fields, trim_entry_history, write_fields,
+};
 use crate::autotype::{self, AutotypeContext};
 use crate::otp;
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use crate::remote_backup::{remote_key_basename, validate_remote_key, write_local_copy};
 use crate::util::url_host;
-use crate::vault_serialize::{
-    apply_patch_fields, build_group_tree, collect_favicon_hosts, decode_attachments, escape_csv,
-    estimate_entropy, extract_host, format_iso, icon_to_data_url, now_iso, sync_attachments,
-    sync_custom_fields, trim_entry_history, write_fields,
-};
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{Entry, EntryId, GroupId, GroupRef, Icon, Times, Value};
 use keepass::{Database, DatabaseKey};
@@ -76,10 +80,10 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 // ---------------------------------------------------------------------------
 // Serde DTOs (camelCase on the wire)
 // ---------------------------------------------------------------------------
-// Type definitions live in `crate::vault_dto`; re-exported here so the session
+// Type definitions live in `vault::dto`; re-exported here so the session
 // code and `lib.rs` keep referencing them via `vault::*`.
 
-pub use crate::vault_dto::{
+pub use self::dto::{
     AttachmentInfo, AttachmentInput, CustomField, DuplicatePasswords, EntryInput, EntryPatch,
     FaviconFetch, FaviconJob, FaviconProgress, FaviconReport, GroupInput, HistoryVersion,
     SecurityReport, TotpCode, VaultEntry, VaultGroup, VaultState, WeakEntry,
@@ -1835,10 +1839,10 @@ fn apply_compression(db: &mut Database, compression: &str) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
+    use super::serialize::parse_expiry;
     use super::*;
     use crate::bridge::BridgeHost;
     use crate::rpc::{RpcError, RpcHost, RpcLoginWrite};
-    use crate::vault_serialize::parse_expiry;
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
     use tempfile::TempDir;
