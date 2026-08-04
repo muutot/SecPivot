@@ -795,10 +795,7 @@ mod tests {
     }
 
     fn sha256(input: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(input);
-        hex(&hasher.finalize())
+        crate::crypto::sha256_hex(input)
     }
 
     fn setup_env(

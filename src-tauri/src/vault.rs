@@ -2328,13 +2328,13 @@ fn bridge_host_matches(entry_url: &str, request_url: &str) -> bool {
 /// KeePassHttp database hash: SHA1 of (root uuid bytes + recycle-bin uuid
 /// bytes), hex-encoded, as a change signal for browser extensions.
 fn bridge_db_hash(db: &Database) -> String {
-    use sha1::{Digest, Sha1};
-    let mut hasher = Sha1::new();
-    hasher.update(db.root().id().uuid().as_bytes());
+    use crate::crypto::{hex, sha1_bytes};
+    let mut data = Vec::with_capacity(20);
+    data.extend_from_slice(db.root().id().uuid().as_bytes());
     if let Some(bin) = db.meta.recyclebin_uuid {
-        hasher.update(bin.as_bytes());
+        data.extend_from_slice(bin.as_bytes());
     }
-    format!("{:x}", hasher.finalize())
+    hex(&sha1_bytes(&data))
 }
 
 // ---------------------------------------------------------------------------

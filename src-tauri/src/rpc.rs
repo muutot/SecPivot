@@ -14,23 +14,18 @@
 //! first-time client runs a user-typed side-channel SRP password. Session keys
 //! live in the vault session and are wiped on lock (see security-model.md).
 
-use aes::Aes256;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use block_padding::Pkcs7;
-use cbc::{Decryptor, Encryptor};
-use cipher::{generic_array::GenericArray, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha1::Sha1;
-use sha2::{Digest, Sha256};
+
+use crate::crypto::{
+    aes_cbc_decrypt, aes_cbc_encrypt, b64_decode, b64_encode, mac_eq, random_bytes, sha1_bytes,
+    sha256_hex, KEY_LEN, NONCE_LEN,
+};
+pub(crate) use crate::crypto::{hex, random_hex};
 
 /// KeePassRPC default loopback port (hard-coded into the Kee extension).
 pub const RPC_PORT: u16 = 12546;
-type Aes256CbcEnc = Encryptor<Aes256>;
-type Aes256CbcDec = Decryptor<Aes256>;
-const KEY_LEN: usize = 32;
-const NONCE_LEN: usize = 16;
 /// Server-reported version (KeePassRPC 1.8.4 packed as major<<16|minor<<8|patch).
 pub(crate) const PROTOCOL_VERSION: u32 = 0x010804;
 /// Security level the server offers; the client accepts >= its configured
@@ -56,42 +51,9 @@ const SRP_K_HEX: &str = "b7867f1299da8cc24ab93e08986ebc4d6a478ad0";
 // ---------------------------------------------------------------------------
 // Hash / crypto primitives
 // ---------------------------------------------------------------------------
-
-/// SHA-256 of a string, lowercase hex (the client's `utils.hash` default).
-pub fn sha256_hex(input: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        out.push_str(&format!("{byte:02x}"));
-    }
-    out
-}
-
-fn sha1_bytes(input: &[u8]) -> [u8; 20] {
-    let mut hasher = Sha1::new();
-    hasher.update(input);
-    hasher.finalize().into()
-}
-
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push_str(&format!("{byte:02x}"));
-    }
-    out
-}
-
-fn random_bytes(len: usize) -> Vec<u8> {
-    let mut buf = vec![0u8; len];
-    getrandom::getrandom(&mut buf).expect("OS RNG must be available");
-    buf
-}
-
-pub(crate) fn random_hex(len: usize) -> String {
-    hex(&random_bytes(len))
-}
+// sha256_hex / sha1_bytes / random_bytes / hex / random_hex live in
+// `crate::crypto`; `hex` and `random_hex` are re-exported above for the
+// server layer and tests.
 
 /// The SRP group prime N as lowercase hex �?used by client-side test math
 /// (the extension's own `SRPc` numbers live in `num-bigint` on both sides).
@@ -316,61 +278,37 @@ pub fn key_auth_sr(secret_hex: &str, sc: &str, cc: &str) -> String {
 /// Encrypt one JSON-RPC payload under the session key (fresh IV).
 pub fn encrypt_frame(secret: &[u8], plaintext: &str) -> JsonRpcFrame {
     let iv = random_bytes(NONCE_LEN);
-    let ciphertext = Aes256CbcEnc::new(
-        GenericArray::from_slice(secret),
-        GenericArray::from_slice(&iv),
-    )
-    .encrypt_padded_vec_mut::<Pkcs7>(plaintext.as_bytes());
+    let ciphertext = aes_cbc_encrypt(secret, &iv, plaintext.as_bytes());
     JsonRpcFrame {
-        message: STANDARD.encode(&ciphertext),
-        iv: STANDARD.encode(&iv),
+        message: b64_encode(&ciphertext),
+        iv: b64_encode(&iv),
         hmac: frame_mac(secret, &ciphertext, &iv),
     }
 }
 
 /// Decrypt a frame after verifying its keyed SHA-1 "hmac".
 pub fn decrypt_frame(secret: &[u8], frame: &JsonRpcFrame) -> Result<String, RpcError> {
-    let iv = STANDARD
-        .decode(&frame.iv)
-        .map_err(|_| RpcError::InvalidMessage("IV 格式无效".to_owned()))?;
-    let ciphertext = STANDARD
-        .decode(&frame.message)
+    let iv =
+        b64_decode(&frame.iv).map_err(|_| RpcError::InvalidMessage("IV 格式无效".to_owned()))?;
+    let ciphertext = b64_decode(&frame.message)
         .map_err(|_| RpcError::InvalidMessage("密文格式无效".to_owned()))?;
     let expected = frame_mac(secret, &ciphertext, &iv);
     if !mac_eq(&expected, &frame.hmac) {
         return Err(RpcError::AuthFailed);
     }
-    let plaintext = Aes256CbcDec::new(
-        GenericArray::from_slice(secret),
-        GenericArray::from_slice(&iv),
-    )
-    .decrypt_padded_vec_mut::<Pkcs7>(&ciphertext)
-    .map_err(|_| RpcError::InvalidMessage("解密失败".to_owned()))?;
-    String::from_utf8(plaintext).map_err(|_| RpcError::InvalidMessage("明文�?UTF-8".to_owned()))
+    let plaintext = aes_cbc_decrypt(secret, &iv, &ciphertext)
+        .map_err(|_| RpcError::InvalidMessage("解密失败".to_owned()))?;
+    String::from_utf8(plaintext).map_err(|_| RpcError::InvalidMessage("明文不是 UTF-8".to_owned()))
 }
 
-/// base64(SHA-1(SHA-1(key) || ciphertext || iv)) �?the protocol's naive MAC.
+/// base64(SHA-1(SHA-1(key) || ciphertext || iv)) — the protocol's naive MAC.
 fn frame_mac(secret: &[u8], ciphertext: &[u8], iv: &[u8]) -> String {
     let key_hash = sha1_bytes(secret);
-    let mut hasher = Sha1::new();
-    hasher.update(key_hash);
-    hasher.update(ciphertext);
-    hasher.update(iv);
-    STANDARD.encode(hasher.finalize())
-}
-
-/// Constant-time-ish equality for the base64 MAC comparison.
-fn mac_eq(a: &str, b: &str) -> bool {
-    let a = a.as_bytes();
-    let b = b.as_bytes();
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    let mut data = Vec::with_capacity(key_hash.len() + ciphertext.len() + iv.len());
+    data.extend_from_slice(&key_hash);
+    data.extend_from_slice(ciphertext);
+    data.extend_from_slice(iv);
+    b64_encode(&sha1_bytes(&data))
 }
 
 // ---------------------------------------------------------------------------

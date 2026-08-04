@@ -4,6 +4,7 @@ pub mod bridge_server;
 pub mod clipboard;
 pub mod config;
 pub mod credential;
+pub mod crypto;
 pub mod dpapi;
 pub mod focus;
 pub mod otp;

@@ -13,15 +13,11 @@
 //! requires explicit user approval (see `handle_request`'s `approve` gate).
 //! Secrets are wiped in place before any local key copy is dropped.
 
-use aes::Aes256;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use block_padding::Pkcs7;
-use cbc::{Decryptor, Encryptor};
-use cipher::{generic_array::GenericArray, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use zeroize::Zeroize;
+
+use crate::crypto::{aes_cbc_decrypt_b64, aes_cbc_encrypt_b64, hmac_sha256, random_bytes};
 
 /// KeePassHttp default loopback port (hard-coded into chromeIPass).
 pub const BRIDGE_PORT: u16 = 19455;
@@ -29,43 +25,19 @@ const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 16;
 const PROTOCOL_VERSION: &str = "1.8.4";
 
-type Aes256CbcEnc = Encryptor<Aes256>;
-type Aes256CbcDec = Decryptor<Aes256>;
-type HmacSha256 = Hmac<Sha256>;
-
 // ---------------------------------------------------------------------------
-// Crypto primitives
+// Crypto primitives (shared helpers live in `crate::crypto`)
 // ---------------------------------------------------------------------------
-
-fn random_bytes(len: usize) -> Vec<u8> {
-    let mut buf = vec![0u8; len];
-    getrandom::getrandom(&mut buf).expect("OS RNG must be available");
-    buf
-}
 
 /// AES-256-CBC encrypt `plaintext` with PKCS7 padding, base64-encoded.
 /// `key` must be 32 bytes and `iv` 16 bytes (the request/response nonce).
 pub fn encrypt_field(key: &[u8], iv: &[u8], plaintext: &str) -> String {
-    let ciphertext = Aes256CbcEnc::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
-        .encrypt_padded_vec_mut::<Pkcs7>(plaintext.as_bytes());
-    STANDARD.encode(ciphertext)
+    aes_cbc_encrypt_b64(key, iv, plaintext)
 }
 
 /// AES-256-CBC decrypt with PKCS7 padding; base64 on the wire.
 pub fn decrypt_field(key: &[u8], iv: &[u8], encoded: &str) -> Result<String, String> {
-    let ciphertext = STANDARD
-        .decode(encoded)
-        .map_err(|_| "加密字段格式无效".to_owned())?;
-    let plaintext = Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
-        .decrypt_padded_vec_mut::<Pkcs7>(&ciphertext)
-        .map_err(|_| "加密字段无法解密".to_owned())?;
-    String::from_utf8(plaintext).map_err(|_| "解密内容不是有效文本".to_owned())
-}
-
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
-    mac.update(data);
-    mac.finalize().into_bytes().to_vec()
+    aes_cbc_decrypt_b64(key, iv, encoded)
 }
 
 /// KeePassHttp verifier: AES-256-CBC of the base64 string of `nonce` bytes,
@@ -504,21 +476,12 @@ mod tests {
         let plaintext = hex_bytes("6bc1bee22e409f96e93d7e117393172a");
         let expected_ct = hex_bytes("f58c4c04d6e5f1ba779eabfb5f7bfbd6");
 
-        let ciphertext = Aes256CbcEnc::new(
-            GenericArray::from_slice(&key),
-            GenericArray::from_slice(&iv),
-        )
-        .encrypt_padded_vec_mut::<Pkcs7>(&plaintext);
+        let ciphertext = crate::crypto::aes_cbc_encrypt(&key, &iv, &plaintext);
         assert_eq!(&ciphertext[..16], expected_ct.as_slice());
         // PKCS7 appends one full padding block (0x10 × 16); the padded API
         // strips it again on decrypt, so the round trip is the plaintext.
         assert_eq!(ciphertext.len(), 32);
-        let round_trip = Aes256CbcDec::new(
-            GenericArray::from_slice(&key),
-            GenericArray::from_slice(&iv),
-        )
-        .decrypt_padded_vec_mut::<Pkcs7>(&ciphertext)
-        .unwrap();
+        let round_trip = crate::crypto::aes_cbc_decrypt(&key, &iv, &ciphertext).unwrap();
         assert_eq!(round_trip, plaintext);
     }
 
