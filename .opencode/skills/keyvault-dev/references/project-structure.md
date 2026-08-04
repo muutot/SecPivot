@@ -85,7 +85,12 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/bridge/mod.rs` | KeePassHttp protocol core: request/response types, AES-256-CBC per-field crypto, verifier/HMAC, request dispatch (pure, no sockets)                                                                                                                                                                                 |
 | `src-tauri/src/bridge/server.rs` | Loopback HTTP server (127.0.0.1:19455), `BridgeState` lifecycle, `ApprovalBoard`, HTTP framing, server tests                                                                                                                                                                                                        |
 | `src-tauri/src/crypto.rs`          | Shared loopback crypto: AES-256-CBC + PKCS7 (raw/b64), HMAC-SHA256, SHA-1/SHA-256, hex/base64, CSPRNG, constant-time MAC compare (single source for bridge/rpc/vault)                                                                                                                                               |
-| `src-tauri/src/rpc/mod.rs` | KeePassRPC protocol core: SRP-6a server math, key-auth challenge/response, AES-256-CBC + SHA-1 MAC frames, v1 JSON-RPC dispatch (pure, no sockets), write-path DTOs + `merge_urls` (KeePassRPC `MergeInNewURLs` semantics)                                                                                          |
+| `src-tauri/src/rpc/mod.rs` | KeePassRPC protocol module root: constants (`RPC_PORT`/`PROTOCOL_VERSION`/`SECURITY_LEVEL`/`FEATURES`), SRP group + mod-pow math, `hex`/`random_hex` re-exports, re-exports `dto`/`srp`/`keys`/`dispatch` |
+| `src-tauri/src/rpc/dto.rs` | Wire shapes (KeePassRPC v1 camelCase): `Envelope`/`SrpMessage`/`KeyMessage`/`ErrorMessage`/`JsonRpcFrame`, `RpcError`, host DTOs + `RpcHost` trait, write-path `RpcFieldWrite`/`RpcLoginWrite`, `write_username/password/custom_fields`, `merge_urls` (`MergeInNewURLs` semantics) |
+| `src-tauri/src/rpc/srp.rs` | SRP-6a server handshake: `SrpServer::begin`/`verify_proof` (incl. Kee SRPc negative-S quirk)/`secret_key` (pure, no sockets) |
+| `src-tauri/src/rpc/keys.rs` | Session-key handling: key-auth challenge/response (`key_auth_cr`/`key_auth_sr`), `secret_bytes`/`hex_decode`, AES-256-CBC + keyed SHA-1 MAC frame `encrypt_frame`/`decrypt_frame` |
+| `src-tauri/src/rpc/dispatch.rs` | v1 JSON-RPC dispatch: DTO-to-wire conversion fns + `handle_jsonrpc` (GetAllDatabases/FindLogins/GetPasswordProfiles/GeneratePassword/AddLogin/UpdateLogin) |
+| `src-tauri/src/rpc/tests.rs` | Protocol-core tests: SRP math/proofs, key-auth, frame encrypt/decrypt/tamper, URL merging, JSON-RPC dispatch (extracted from mod.rs) |
 | `src-tauri/src/rpc/server.rs` | Loopback WebSocket server (127.0.0.1:12546), `RpcState` lifecycle, per-connection handshake state machine, side-channel event emission, WS transport tests                                                                                                                                                          |
 | `src-tauri/src/autotype.rs`        | KeePass-style auto-type sequence parser + `enigo` keystroke replay; `{REF:...}` field-reference expansion                                                                                                                                                                                                           |
 | `src-tauri/src/focus.rs`           | Windows-only foreground-window title reader (Win32) for global auto-type matching; TCATO `WM_CHAR` channel injection                                                                                                                                                                                                |
@@ -124,7 +129,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src-tauri/src/remote/` (mod + s3 + webdav + memory + local + backup + tests)
 - `src-tauri/src/config/` (mod + settings + store + tests)
 - `src-tauri/src/vault/mod.rs`
-- `src-tauri/src/bridge/mod.rs` + `src-tauri/src/bridge/server.rs` + `src-tauri/src/rpc/mod.rs` + `src-tauri/src/rpc/server.rs` + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
+- `src-tauri/src/bridge/` + `src-tauri/src/rpc/` (mod + dto + srp + keys + dispatch + server + tests) + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
 - `TODO.md`
 - `SKILL.md` and shared references
 
