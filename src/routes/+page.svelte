@@ -44,7 +44,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
-  import { collectGroups, collectEntries, findEntry } from "$lib/utils/tree";
+  import { collectGroups, collectEntries, findEntry, findEntryIn } from "$lib/utils/tree";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
@@ -557,7 +557,7 @@
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
     if (!state || !uuid) return null;
-    return findEntry(state.root, uuid);
+    return findEntryIn(state.root, uuid);
   }
 
   function setSingleSelection(entry: VaultEntry | null): void {

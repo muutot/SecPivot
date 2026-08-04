@@ -4,7 +4,9 @@ import { copyText } from "$lib/utils/clipboard";
 /** Reactive one-time-password state shared by every OTP skin (detail widget,
  *  list badge). Centralizes the per-period fetch loop, HOTP static-code
  *  handling, countdown and copy+flash behavior so one change fixes every
- *  surface. */
+ *  surface. All instances for the same entry uuid share one fetch loop and
+ *  one countdown clock, so rendering N badges never means N IPC round-trips
+ *  per period (a shared single ticker drives every entry). */
 export interface TotpCodeState {
   code: string;
   remaining: number;
@@ -21,6 +23,119 @@ export interface TotpCodeState {
   refresh: () => Promise<boolean>;
 }
 
+/** Per-entry shared state, keyed by entry uuid. Lives outside Svelte's
+ *  reactivity (module scope); each `useTotpCode` instance copies the values
+ *  it needs into its own `$state` via a listener. */
+interface SharedTotp {
+  refcount: number;
+  listeners: Set<() => void>;
+  code: string;
+  /** Absolute timestamp when the current code expires (`0` while unknown). */
+  validUntil: number;
+  period: number;
+  kind: "totp" | "hotp" | "steam";
+  counter: number | undefined;
+  error: string;
+  fetching: boolean;
+}
+
+const cache = new Map<string, SharedTotp>();
+let tickTimer: ReturnType<typeof setInterval> | undefined;
+let lastTick = Date.now();
+let visibilityBound = false;
+
+function newShared(): SharedTotp {
+  return {
+    refcount: 0,
+    listeners: new Set(),
+    code: "",
+    validUntil: 0,
+    period: 30,
+    kind: "totp",
+    counter: undefined,
+    error: "",
+    fetching: false,
+  };
+}
+
+function notify(uuid: string): void {
+  const entry = cache.get(uuid);
+  if (!entry) return;
+  for (const listener of entry.listeners) listener();
+}
+
+/** Remaining seconds of the current code, from the expiry timestamp. */
+function remainingOf(entry: SharedTotp): number {
+  if (entry.validUntil <= 0) return 0;
+  return Math.max(0, Math.ceil((entry.validUntil - Date.now()) / 1000));
+}
+
+/** Fetch (and cache) the current code for `uuid`. Transient failures never
+ *  kill the loop: the next period boundary retries, so a one-off IPC hiccup
+ *  does not freeze the badge on a stale code. */
+async function fetchEntry(uuid: string, entry: SharedTotp): Promise<void> {
+  if (entry.fetching) return;
+  entry.fetching = true;
+  try {
+    const result = await vault.totpCode(uuid);
+    entry.code = result.code;
+    entry.period = result.period;
+    entry.kind = result.kind;
+    entry.counter = result.counter;
+    entry.validUntil = Date.now() + result.validFor * 1000;
+    entry.error = "";
+  } catch (e) {
+    // Keep showing "无法生成验证码" and retry once per period instead of
+    // hammering every second or stopping forever.
+    entry.code = "";
+    entry.error = String(e);
+    entry.validUntil = Date.now() + Math.max(entry.period, 1) * 1000;
+  } finally {
+    entry.fetching = false;
+    notify(uuid);
+  }
+}
+
+/** Single 1 s clock shared by every cached entry. Decrements each countdown
+ *  from its wall-clock expiry (drift-free) and re-fetches codes that expired
+ *  while the loop was paused. */
+function tick(): void {
+  if (typeof document !== "undefined" && document.hidden) return;
+  const now = Date.now();
+  const elapsed = Math.floor((now - lastTick) / 1000);
+  lastTick = now;
+  if (elapsed < 1) return;
+  for (const [uuid, entry] of cache) {
+    if (entry.kind === "hotp") continue;
+    if (entry.validUntil > 0 && now >= entry.validUntil) {
+      void fetchEntry(uuid, entry);
+    }
+    notify(uuid);
+  }
+}
+
+function ensureTicker(): void {
+  if (tickTimer) return;
+  lastTick = Date.now();
+  tickTimer = setInterval(tick, 1000);
+  if (typeof document !== "undefined" && !visibilityBound) {
+    visibilityBound = true;
+    document.addEventListener("visibilitychange", () => {
+      // On return to a visible window, resync every countdown immediately so
+      // badges are never stale after a pause.
+      lastTick = Date.now();
+      tick();
+    });
+  }
+}
+
+function stopTickerIfIdle(): void {
+  if (cache.size === 0 && tickTimer) {
+    clearInterval(tickTimer);
+    tickTimer = undefined;
+  }
+}
+
 export function useTotpCode(getUuid: () => string): TotpCodeState {
   let code = $state("");
   let remaining = $state(0);
@@ -31,41 +146,35 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function refresh(): Promise<boolean> {
-    try {
-      const result = await vault.totpCode(getUuid());
-      code = result.code;
-      remaining = result.validFor;
-      period = result.period;
-      kind = result.kind;
-      counter = result.counter;
-      error = "";
-      return true;
-    } catch (e) {
-      code = "";
-      error = String(e);
-      return false;
-    }
-  }
-
+  /** Subscribe to the shared per-entry state; one fetch loop and one countdown
+   *  drive every badge for the same entry. Re-runs if `getUuid()` changes. */
   $effect(() => {
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const tick = async (): Promise<void> => {
-      // A failing seed (invalid TOTP URI) must stop the per-second loop
-      // instead of hammering the backend forever.
-      if (!(await refresh()) && timer) clearInterval(timer);
-    };
-    void tick();
-    // HOTP is counter-driven, not clock-driven: fetch once, never count down
-    // (the counter only advances when a code is requested).
-    if (kind !== "hotp") {
-      timer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) void tick();
-      }, 1000);
+    const uuid = getUuid();
+    let entry = cache.get(uuid);
+    if (!entry) {
+      entry = newShared();
+      cache.set(uuid, entry);
+      void fetchEntry(uuid, entry);
     }
+    entry.refcount += 1;
+    const sync = (): void => {
+      code = entry.code;
+      remaining = remainingOf(entry);
+      period = entry.period;
+      kind = entry.kind;
+      counter = entry.counter;
+      error = entry.error;
+    };
+    entry.listeners.add(sync);
+    sync();
+    ensureTicker();
     return () => {
-      if (timer) clearInterval(timer);
+      entry.listeners.delete(sync);
+      entry.refcount -= 1;
+      if (entry.refcount === 0) {
+        cache.delete(uuid);
+        stopTickerIfIdle();
+      }
     };
   });
 
@@ -73,9 +182,10 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
 
   async function copy(): Promise<void> {
-    if (!code) return;
+    const entry = cache.get(getUuid());
+    if (!entry || !entry.code) return;
     try {
-      await copyText(code);
+      await copyText(entry.code);
       copied = true;
       if (copiedTimer) clearTimeout(copiedTimer);
       copiedTimer = setTimeout(() => {
@@ -85,6 +195,13 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
     } catch {
       // clipboard unavailable; ignore
     }
+  }
+
+  async function refresh(): Promise<boolean> {
+    const entry = cache.get(getUuid());
+    if (!entry) return false;
+    await fetchEntry(getUuid(), entry);
+    return entry.error === "";
   }
 
   return {
