@@ -12,18 +12,7 @@ let lastCopiedText: string | null = null;
 
 export async function copyText(text: string): Promise<void> {
   lastCopiedText = text;
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-  } else {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
-  }
+  await copyRaw(text);
   scheduleClipboardClear();
 }
 
@@ -79,17 +68,19 @@ export async function clearClipboard(): Promise<void> {
   }
 }
 
+/** Best-effort write: modern async Clipboard API, falling back to a hidden
+ *  textarea + `execCommand("copy")` when unavailable. */
 async function copyRaw(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
-  } else {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
+    return;
   }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }
