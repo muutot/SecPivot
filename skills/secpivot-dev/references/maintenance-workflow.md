@@ -49,7 +49,7 @@ Before every commit, inspect the staged diff and update `SKILL.md`/`references/*
 
 ## Version bump and release
 
-Use the sibling `version-release` skill (`.opencode/skills/version-release/SKILL.md`) when bumping the version, releasing, or regenerating a release. It drives `scripts/release.mjs` through a two-pass flow (script bumps + changelog, LLM curates `RELEASE.md`, script commits/tags/pushes). Before any release, run `npm run verify` and commit all non-release changes separately so the release commit contains only version files.
+Use the sibling `version-release` skill (`skills/version-release/SKILL.md`) when bumping the version, releasing, or regenerating a release. It drives `scripts/release.mjs` through a two-pass flow (script bumps + changelog, LLM curates `RELEASE.md`, script commits/tags/pushes). Before any release, run `npm run verify` and commit all non-release changes separately so the release commit contains only version files.
 
 ## Packaging verification
 

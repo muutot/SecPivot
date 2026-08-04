@@ -58,7 +58,7 @@ Steps 1–2 run, then Step 3 detects stale `RELEASE.md` and exits.
 
 ### Between passes — LLM generates RELEASE.md
 
-Read `CHANGELOG.md` and use `.opencode/skills/version-release/release_template.md` as a format reference:
+Read `CHANGELOG.md` and use `skills/version-release/release_template.md` as a format reference:
 
 1. Group related commits into feature areas
 2. Attach commit hash links (use the actual repository URL once a remote is configured):
@@ -124,7 +124,7 @@ node scripts/changelog.mjs --preview       # preview without writing
 
 ## Release body (`RELEASE.md`)
 
-`RELEASE.md` is the canonical release body for GitHub Releases. It is **manually curated** by the LLM during each release, following the format in `.opencode/skills/version-release/release_template.md`.
+`RELEASE.md` is the canonical release body for GitHub Releases. It is **manually curated** by the LLM during each release, following the format in `skills/version-release/release_template.md`.
 
 Pushing the tag triggers CI/CD which reads `RELEASE.md` automatically as the GitHub Release body.
 

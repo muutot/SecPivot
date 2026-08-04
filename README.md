@@ -34,10 +34,10 @@ npm run verify       # 全量校验：格式化 + svelte-check + build + rust te
 
 ## 文档
 
-- 开发规约与任务流程：`.opencode/skills/secpivot-dev/SKILL.md`
-- 样式与主题规约：`.opencode/skills/secpivot-dev/references/css-theming.md`
-- 前后端契约：`.opencode/skills/secpivot-dev/references/data-contracts.md`
-- 安全模型：`.opencode/skills/secpivot-dev/references/security-model.md`
+- 开发规约与任务流程：`skills/secpivot-dev/SKILL.md`
+- 样式与主题规约：`skills/secpivot-dev/references/css-theming.md`
+- 前后端契约：`skills/secpivot-dev/references/data-contracts.md`
+- 安全模型：`skills/secpivot-dev/references/security-model.md`
 - 路线图与验收：`TODO.md` · 坑位清单：`docs/PITFALLS.md`
 
 ## 许可证

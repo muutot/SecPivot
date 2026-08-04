@@ -1,6 +1,6 @@
 # SecPivot repository instructions
 
-SecPivot is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `.opencode/skills/secpivot-dev/SKILL.md` completely and follow its linked maintenance workflow.
+SecPivot is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `skills/secpivot-dev/SKILL.md` completely and follow its linked maintenance workflow.
 
 In particular:
 
