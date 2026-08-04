@@ -59,7 +59,10 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src-tauri/src/lib.rs`             | Tauri builder, managed state (`AppState`), command registration, setup, system tray (Show/Lock/Quit + minimize-to-tray close handling), global auto-type hotkey (register/re-register + handler), window close handling                                                                                             |
 | `src-tauri/src/commands.rs`        | All Tauri IPC command handlers, grouped by domain: config, bridge/RPC status + approval, credential store, vault open/create/save/change-key, entry & group CRUD, favicon download, TCATO overlay, clipboard, S3 remote (extracted from lib.rs)                                                                     |
-| `src-tauri/src/config.rs`          | `config.json` schema, defaults, normalization, atomic persistence                                                                                                                                                                                                                                                   |
+| `src-tauri/src/config/mod.rs` | Config module root: `pub mod settings`/`store`, re-exports (`AppConfig`, `normalize_config`, `ConfigStore`, `RECENT_FILES_MAX`, `DEFAULT_BACKUP_TEMPLATE`)                                                                    |
+| `src-tauri/src/config/settings.rs` | `config.json` serde shapes (mirror `AppSettings`), defaults, normalization incl. remote backup template + file extension (extracted from config.rs)                                                                    |
+| `src-tauri/src/config/store.rs` | Atomic persistence to `<project_dir>/conf/config.json` (`read_config`/`write_config`) + managed `ConfigStore` (extracted from config.rs)                                                                    |
+| `src-tauri/src/config/tests.rs` | Config schema/defaults/normalization/persistence test suite (extracted from config.rs)                                                                    |
 | `src-tauri/src/vault/mod.rs` | Vault module root: `VaultSession` struct + `RemoteMode`/`RemoteTarget`, shared field constants, `vault::*` re-exports (`dto` types, `helpers`/`persist` free functions)                                                                                                                                       |
 | `src-tauri/src/vault/session.rs` | `VaultSession` lifecycle impl: open/create/close/state/save/change_master_key/save-as, adopt/replace, snapshot + prepare_save/change/complete_save/change internals (extracted from mod.rs)                                                                                                                    |
 | `src-tauri/src/vault/entries.rs` | `VaultSession` entry & group CRUD impl: add/update/move/delete, history + restore, group add/rename/delete/restore, recycle-bin empty (extracted from mod.rs)                                                                                                                                                |
@@ -100,7 +103,7 @@ Treat these as integration points and avoid concurrent edits:
 - `src/lib/types/settings.ts` + `src/lib/types/vault.ts`
 - `src/lib/services/settings.ts` + `src/lib/services/vault.ts`
 - `src-tauri/src/lib.rs`
-- `src-tauri/src/config.rs`
+- `src-tauri/src/config/` (mod + settings + store + tests)
 - `src-tauri/src/vault/mod.rs`
 - `src-tauri/src/bridge/mod.rs` + `src-tauri/src/bridge/server.rs` + `src-tauri/src/rpc/mod.rs` + `src-tauri/src/rpc/server.rs` + `src-tauri/src/vault/hosts.rs` (protocol ↔ server ↔ session boundaries)
 - `TODO.md`
