@@ -187,6 +187,34 @@ function newUuid(): string {
   return crypto.randomUUID();
 }
 
+function removeGroupFromTree(group: VaultGroup, uuid: string): boolean {
+  const index = group.children.findIndex((c) => c.uuid === uuid);
+  if (index >= 0) {
+    group.children.splice(index, 1);
+    return true;
+  }
+  for (const child of group.children) {
+    if (removeGroupFromTree(child, uuid)) return true;
+  }
+  return false;
+}
+
+/** Whether `uuid`'s group already lives inside the recycle-bin subtree. */
+function groupInBin(root: VaultGroup, uuid: string): boolean {
+  const bin = findBinGroup(root);
+  if (!bin) return false;
+  if (uuid === bin.uuid) return true;
+  const byUuid = new Map(collectAllGroups(root).map((g) => [g.uuid, g]));
+  const target = byUuid.get(uuid);
+  if (!target) return false;
+  let cursor = byUuid.get(target.parentUuid ?? "");
+  while (cursor) {
+    if (cursor.uuid === bin.uuid) return true;
+    cursor = byUuid.get(cursor.parentUuid ?? "");
+  }
+  return false;
+}
+
 /** Move a successfully opened/created vault path to the front of the recent list.
  * Remote (`s3://`) paths are excluded — the local open flow cannot reopen them. */
 function rememberRecent(path: string): void {
@@ -310,6 +338,9 @@ export const vault: VaultStore = {
       mode,
     });
     state.set(result);
+    // A remote session cannot be reopened from the lock screen; clear the
+    // remembered local path so unlocking never silently targets the old vault.
+    remembered.set(null);
     rememberRecent(result.path);
     return result;
   },
@@ -328,6 +359,9 @@ export const vault: VaultStore = {
       mode,
     });
     state.set(result);
+    // See `openRemote`: a remote session is never the lock-screen quick-reopen
+    // target, so drop any stale remembered local path.
+    remembered.set(null);
     rememberRecent(result.path);
     return result;
   },
@@ -354,9 +388,17 @@ export const vault: VaultStore = {
       state.set(result);
       return result;
     }
-    const result = await this.save();
+    const current = browserState ?? (await ensureBrowserLoaded());
+    const saved = deepClone(current);
+    saved.path = path;
+    saved.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
+    saved.dirty = false;
+    browserState = saved;
+    state.set(saved);
+    remembered.set({ path: saved.path, fileName: saved.fileName });
     rememberRecent(path);
-    return result;
+    await browserPersist(saved);
+    return saved;
   },
 
   async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
@@ -697,6 +739,12 @@ export const vault: VaultStore = {
     }
     if (uuid === "root") throw new Error("cannot delete root");
     const result = applyEdit((draft) => {
+      // A group already inside the recycle bin is permanently deleted; any
+      // other group moves (with its contents) into the bin.
+      if (groupInBin(draft.root, uuid)) {
+        if (!removeGroupFromTree(draft.root, uuid)) throw new Error("group not found");
+        return;
+      }
       const bin = ensureBinGroup(draft.root);
       const groups = collectAllGroups(draft.root);
       for (const group of groups) {
