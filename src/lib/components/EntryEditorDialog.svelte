@@ -25,7 +25,7 @@
     /** All selected entries in batch mode (`mode === "edit-multi"`). */
     entries: VaultEntry[];
     onclose: () => void;
-    onsaved: (input: EntryInput | null, patch: EntryPatch | null) => void;
+    onsaved: (input: EntryInput | null, patch: EntryPatch | null) => Promise<void> | void;
   }
 
   let { mode, groups, groupUuid, entry, entries, onclose, onsaved }: Props = $props();
@@ -36,6 +36,19 @@
   const multi = mode === "edit-multi";
   const initialEntry = (() => entry)();
   const initialGroupUuid = (() => groupUuid)();
+
+  /** Guards against double-submit: the button disables while a save is in
+   *  flight, and re-submits are ignored until the previous attempt settles. */
+  let saving = $state(false);
+  async function runSave(fire: () => Promise<void> | void): Promise<void> {
+    if (saving) return;
+    saving = true;
+    try {
+      await fire();
+    } finally {
+      saving = false;
+    }
+  }
 
   /** Shared value of a field across batch targets, or `null` when the values
    * differ (KeePass's "multiple values" case). */
@@ -374,7 +387,7 @@
         onclose();
         return;
       }
-      onsaved(null, patch);
+      void runSave(() => onsaved(null, patch));
       return;
     }
     if (!title.trim() && !username.trim() && !password) return;
@@ -387,30 +400,32 @@
         : customIconSelected
           ? undefined
           : null;
-    onsaved(
-      {
-        groupUuid: targetGroupUuid,
-        title: title.trim(),
-        username: username.trim(),
-        password,
-        url: url.trim(),
-        notes,
-        totp: totp.trim() || undefined,
-        expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
-        ...(iconValue !== undefined ? { icon: iconValue } : {}),
-        color: colorHex || undefined,
-        customFields: customFields
-          .map((f) => ({
-            name: f.name.trim(),
-            value: f.value,
-            protected: f.protected ?? false,
-          }))
-          .filter((f) => f.name !== ""),
-        attachments: attachments.map((a) =>
-          a.data ? { name: a.name, data: a.data } : { name: a.name },
-        ),
-      },
-      null,
+    void runSave(() =>
+      onsaved(
+        {
+          groupUuid: targetGroupUuid,
+          title: title.trim(),
+          username: username.trim(),
+          password,
+          url: url.trim(),
+          notes,
+          totp: totp.trim() || undefined,
+          expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
+          ...(iconValue !== undefined ? { icon: iconValue } : {}),
+          color: colorHex || undefined,
+          customFields: customFields
+            .map((f) => ({
+              name: f.name.trim(),
+              value: f.value,
+              protected: f.protected ?? false,
+            }))
+            .filter((f) => f.name !== ""),
+          attachments: attachments.map((a) =>
+            a.data ? { name: a.name, data: a.data } : { name: a.name },
+          ),
+        },
+        null,
+      ),
     );
   }
 </script>
@@ -792,7 +807,7 @@
       <button
         class="modal-button primary"
         onclick={submit}
-        disabled={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)}
+        disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
         title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
           ? "正在载入敏感字段…"
           : undefined}>保存</button

@@ -169,6 +169,8 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
     sync();
     ensureTicker();
     return () => {
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = undefined;
       entry.listeners.delete(sync);
       entry.refcount -= 1;
       if (entry.refcount === 0) {

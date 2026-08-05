@@ -14,7 +14,7 @@
   } from "$lib/components/ColumnConfigMenu.svelte";
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
-  import { armIdleLock, lockVault, copyValue } from "$lib/services/security";
+  import { armIdleLock, lockVault, copyValue, setTcatoOverlayOpen } from "$lib/services/security";
   import type {
     EntryInput,
     EntryPatch,
@@ -65,6 +65,7 @@
   let groupModalParent = $state<string | null>(null);
   let newGroupName = $state("");
   let groupIconIndex = $state<number | null>(null);
+  let groupCreating = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let statusMsg = $state("");
   let busy = $state(false);
@@ -104,6 +105,8 @@
     // resize the fixed-size overlay.
     if (isTcatoOverlay) return;
     const unsubscribe = vault.subscribe((value) => {
+      const opened = Boolean(value) && !currentVault;
+      const closed = !value;
       currentVault = value;
       if (value && value.path !== expiredNotifiedPath) {
         expiredNotifiedPath = value.path;
@@ -121,7 +124,10 @@
       } else {
         selectedEntry = findEntryByUuid(value, selectedEntry?.uuid ?? null);
       }
-      armIdleLock();
+      // Re-arm the idle timer only on open/close transitions; every refresh
+      // (save, favicon run, RPC write) otherwise silently resets the deadline
+      // and auto-lock stops measuring real user inactivity.
+      if (opened || closed) armIdleLock();
     });
     const unsubRemembered = vault.remembered((value) => {
       rememberedPath = value;
@@ -187,13 +193,24 @@
   const WELCOME_WINDOW_SIZE = { width: 620, height: 480 };
   let lastAppliedSize = $state("");
   let windowResizeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Mirror of the window-size settings; `get(appSettings)` is untracked in
+   *  an effect, so a plain read would freeze at the initial value. */
+  let winSize = $state({
+    width: get(appSettings).general.windowWidth,
+    height: get(appSettings).general.windowHeight,
+  });
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((s) => {
+      winSize = { width: s.general.windowWidth, height: s.general.windowHeight };
+    });
+    return unsubscribe;
+  });
 
   $effect(() => {
-    const g = get(appSettings).general;
     const view = currentVault === null ? (showLockScreen ? "lock" : "welcome") : "main";
     if (!isTauriRuntime() || isTcatoOverlay || view === "lock") return;
-    const width = view === "welcome" ? WELCOME_WINDOW_SIZE.width : g.windowWidth;
-    const height = view === "welcome" ? WELCOME_WINDOW_SIZE.height : g.windowHeight;
+    const width = view === "welcome" ? WELCOME_WINDOW_SIZE.width : winSize.width;
+    const height = view === "welcome" ? WELCOME_WINDOW_SIZE.height : winSize.height;
     const key = `${width}x${height}`;
     if (lastAppliedSize === key) return;
     lastAppliedSize = key;
@@ -319,11 +336,15 @@
     }
     return [...names.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
   });
-  let entryColumns = $state<EntryColumnState[]>(
-    get(appSettings).general.entryColumns.map((c) => ({ ...c })),
-  );
+  let entryColumns = $state<EntryColumnState[]>([]);
   $effect(() => {
-    entryColumns = get(appSettings).general.entryColumns.map((c) => ({ ...c }));
+    // `get(appSettings)` inside an effect is untracked and would freeze the
+    // mirror on the initial value; subscribe instead so edits in the settings
+    // window re-apply immediately.
+    const unsubscribe = appSettings.subscribe((s) => {
+      entryColumns = s.general.entryColumns.map((c) => ({ ...c }));
+    });
+    return unsubscribe;
   });
   /** Persisted state of a column id (built-in or `custom:<name>`). */
   function colState(id: string): EntryColumnState {
@@ -563,6 +584,18 @@
     return findEntryIn(state.root, uuid);
   }
 
+  /** The just-created entry is the one with the newest `created` stamp in its
+   *  target group (the backend generates its uuid, so we locate it this way). */
+  function findNewestEntryInGroup(state: VaultState, groupUuid: string): VaultEntry | null {
+    const group = collectGroups(state.root).find((g) => g.uuid === groupUuid);
+    if (!group) return null;
+    let newest: VaultEntry | null = null;
+    for (const entry of group.entries) {
+      if (!newest || (entry.created ?? "") >= (newest.created ?? "")) newest = entry;
+    }
+    return newest;
+  }
+
   function setSingleSelection(entry: VaultEntry | null): void {
     selectedUuids = entry ? new Set([entry.uuid]) : new Set();
     selectionAnchor = entry?.uuid ?? null;
@@ -723,25 +756,29 @@
       result: "正在连接站点…",
       error: false,
     };
-    const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
-      faviconDialog = {
-        phase: "working",
-        progress: e.payload,
-        result: `正在下载，已完成 ${e.payload.done}/${e.payload.total}`,
-        error: false,
-      };
-    });
     try {
-      const report = await vault.downloadFavicons(uuids);
-      faviconDialog = {
-        phase: "done",
-        progress: { done: report.attempted, total: report.attempted },
-        result:
-          report.attempted === 0
-            ? noneMessage
-            : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
-        error: false,
-      };
+      const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
+        faviconDialog = {
+          phase: "working",
+          progress: e.payload,
+          result: `正在下载，已完成 ${e.payload.done}/${e.payload.total}`,
+          error: false,
+        };
+      });
+      try {
+        const report = await vault.downloadFavicons(uuids);
+        faviconDialog = {
+          phase: "done",
+          progress: { done: report.attempted, total: report.attempted },
+          result:
+            report.attempted === 0
+              ? noneMessage
+              : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
+          error: false,
+        };
+      } finally {
+        unlisten();
+      }
     } catch (e) {
       faviconDialog = {
         phase: "done",
@@ -750,7 +787,6 @@
         error: true,
       };
     } finally {
-      unlisten();
       busy = false;
     }
   }
@@ -907,6 +943,7 @@
   }
 
   async function handleLock(): Promise<void> {
+    if (currentVault?.dirty && !window.confirm("有未保存的修改，仍要锁定吗？")) return;
     await lockVault();
     flash("数据库已锁定");
   }
@@ -946,6 +983,9 @@
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
     if (isTcatoOverlay || !currentVault) return;
+    // Holding a key fires repeats: never dispatch the same shortcut twice, and
+    // never start a second action while another (import/favicon/save) is running.
+    if (event.repeat || busy) return;
     if (editorOpen || groupModalOpen || reportOpen || confirmState || entryMenu || blankMenu)
       return;
     const target = event.target as HTMLElement | null;
@@ -1016,7 +1056,7 @@
     try {
       if (editorMode === "create" && input) {
         const state = await vault.addEntry(input);
-        setSingleSelection(findEntryByUuid(state, null));
+        setSingleSelection(findNewestEntryInGroup(state, input.groupUuid));
         editorOpen = false;
         flash("已创建条目");
       } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
@@ -1045,7 +1085,8 @@
 
   async function confirmCreateGroup(): Promise<void> {
     const name = newGroupName.trim();
-    if (!name) return;
+    if (!name || groupCreating) return;
+    groupCreating = true;
     try {
       await vault.addGroup({
         parentUuid: groupModalParent,
@@ -1056,6 +1097,8 @@
       flash("已创建分组");
     } catch (e) {
       flash(`创建失败：${e}`);
+    } finally {
+      groupCreating = false;
     }
   }
 
@@ -1305,9 +1348,14 @@
 
   /** Open the always-on-top two-channel overlay for manual channel injection. */
   async function openTcatoOverlay(entry: VaultEntry): Promise<void> {
+    // Mark the overlay active *synchronously*: focusing it blurs the main
+    // window, which would otherwise trip the focus-loss lock before the
+    // backend's open event is delivered.
+    setTcatoOverlayOpen(true);
     try {
       await invoke("open_tcato_overlay", { uuid: entry.uuid });
     } catch (e) {
+      setTcatoOverlayOpen(false);
       flash(`TCATO 覆盖层打开失败：${e}`);
     }
   }
@@ -1595,12 +1643,13 @@
                           {/if}
                         </span>
                       {:else}
+                        {@const text = colText(row.entry, col.id)}
                         <span
                           class="entry-row-col"
                           class:col-masked={col.id === "password"}
-                          title={colText(row.entry, col.id) || undefined}
+                          title={text || undefined}
                         >
-                          <span class="entry-row-col-text">{colText(row.entry, col.id)}</span>
+                          <span class="entry-row-col-text">{text}</span>
                         </span>
                       {/if}
                     {/each}
@@ -1784,7 +1833,7 @@
         <button
           class="modal-button primary"
           onclick={() => void confirmCreateGroup()}
-          disabled={!newGroupName.trim()}
+          disabled={!newGroupName.trim() || groupCreating}
         >
           创建
         </button>
