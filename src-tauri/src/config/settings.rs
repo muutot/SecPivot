@@ -465,6 +465,12 @@ pub struct RpcSettings {
     /// without re-authorizing (official KeePassRPC behavior).
     #[serde(default = "default_true")]
     pub keep_session_after_lock: bool,
+    /// Match the Domain tier by registrable domain (PSL) instead of strict
+    /// host/subdomain. `false` (default) keeps SecPivot's strict behavior;
+    /// `true` mirrors KeePassRPC, so `account.aliyun.com` and
+    /// `passport.aliyun.com` both match an entry filed under `aliyun.com`.
+    #[serde(default)]
+    pub match_by_registrable_domain: bool,
 }
 
 impl Default for RpcSettings {
@@ -472,6 +478,7 @@ impl Default for RpcSettings {
         Self {
             enabled: false,
             keep_session_after_lock: true,
+            match_by_registrable_domain: false,
         }
     }
 }

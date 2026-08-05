@@ -4611,6 +4611,46 @@ fn domain_accuracy_alt_url_matches_deep_login_path_with_query() {
 }
 
 #[test]
+fn registrable_domain_match_connects_sibling_hosts_when_enabled() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "阿里云",
+        "", // primary URL empty; match comes from altURLs
+        serde_json::json!({
+            "version": 1,
+            "altURLs": ["https://account.aliyun.com"]
+        }),
+    );
+    // Strict host mode (config off): sibling hosts never connect.
+    assert!(session
+        .logins_for(
+            "https://passport.aliyun.com/havanaone/login/login.htm",
+            None
+        )
+        .is_empty());
+    // Registrable-domain mode (KeePassRPC): both share `aliyun.com`.
+    session.match_registrable_domain = true;
+    let logins = session.logins_for(
+        "https://passport.aliyun.com/havanaone/login/login.htm?lang=zh_CN",
+        None,
+    );
+    assert_eq!(logins.len(), 1);
+    // The configured host itself still matches, as in strict mode.
+    let logins = session.logins_for("https://account.aliyun.com/login/login.htm", None);
+    assert_eq!(logins.len(), 1);
+    // RPC find_logins. shares the same mode.
+    let found = session.find_logins(
+        &["https://passport.aliyun.com/login".to_owned()],
+        None,
+        None,
+        None,
+    );
+    assert_eq!(found.len(), 1);
+}
+
+#[test]
 fn match_accuracy_exact_blocks_subdomains() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

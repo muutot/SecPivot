@@ -155,4 +155,10 @@ pub struct VaultSession {
     /// KeePassRPC session keys (client username → 32-byte SRP-derived key).
     /// Same lifecycle as `bridge_keys`: in-memory only, wiped on close.
     pub(crate) rpc_keys: HashMap<String, Vec<u8>>,
+    /// URL matching mode for the bridge/RPC Domain tier, driven by the config
+    /// `rpc.matchByRegistrableDomain` (applied via `set_config`): `false`
+    /// matches strict host/subdomain, `true` matches registrable domain (PSL,
+    /// so `account.aliyun.com` and `passport.aliyun.com` both match under
+    /// `aliyun.com`, mirroring KeePassRPC).
+    pub(crate) match_registrable_domain: bool,
 }

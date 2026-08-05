@@ -628,20 +628,24 @@ fn rpc_defaults_off_keep_session_on_and_survive_round_trip() {
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(!store.get().unwrap().rpc.enabled);
     assert!(store.get().unwrap().rpc.keep_session_after_lock);
+    assert!(!store.get().unwrap().rpc.match_by_registrable_domain);
 
     let mut config = AppConfig::default();
     config.rpc.enabled = true;
     config.rpc.keep_session_after_lock = false;
+    config.rpc.match_by_registrable_domain = true;
     store.set(config.clone()).unwrap();
 
     let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
     assert!(text.contains("\"rpc\": {"));
     assert!(text.contains("\"enabled\": true"));
     assert!(text.contains("\"keepSessionAfterLock\": false"));
+    assert!(text.contains("\"matchByRegistrableDomain\": true"));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(reloaded.get().unwrap().rpc.enabled);
     assert!(!reloaded.get().unwrap().rpc.keep_session_after_lock);
+    assert!(reloaded.get().unwrap().rpc.match_by_registrable_domain);
 }
 
 #[test]

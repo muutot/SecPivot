@@ -48,7 +48,14 @@ impl BridgeHost for VaultSession {
         };
         let bin_id = recycle_bin_id(db);
         let mut out = Vec::new();
-        collect_bridge_logins(db.root(), bin_id, url, submit_url, &mut out);
+        collect_bridge_logins(
+            db.root(),
+            bin_id,
+            url,
+            submit_url,
+            self.match_registrable_domain,
+            &mut out,
+        );
         out
     }
 
@@ -155,7 +162,15 @@ impl RpcHost for VaultSession {
             username,
         };
         let mut out = Vec::new();
-        collect_rpc_logins(db.root(), bin_id, &filter, ROOT_GROUP_NAME, "", &mut out);
+        collect_rpc_logins(
+            db.root(),
+            bin_id,
+            &filter,
+            ROOT_GROUP_NAME,
+            "",
+            self.match_registrable_domain,
+            &mut out,
+        );
         out
     }
 
@@ -260,7 +275,15 @@ fn rpc_login_by_uuid(session: &VaultSession, uuid: &str) -> Option<RpcLogin> {
         username: None,
     };
     let mut out = Vec::new();
-    collect_rpc_logins(db.root(), bin_id, &filter, ROOT_GROUP_NAME, "", &mut out);
+    collect_rpc_logins(
+        db.root(),
+        bin_id,
+        &filter,
+        ROOT_GROUP_NAME,
+        "",
+        session.match_registrable_domain,
+        &mut out,
+    );
     out.into_iter().next()
 }
 
@@ -334,6 +357,7 @@ fn collect_rpc_logins(
     filter: &RpcLoginFilter<'_>,
     group_title: &str,
     parent_path: &str,
+    registrable: bool,
     out: &mut Vec<RpcLogin>,
 ) {
     if bin_id == Some(group.id()) {
@@ -346,7 +370,10 @@ fn collect_rpc_logins(
     };
     for entry in group.entries() {
         let entry_urls = entry_match_urls(&entry);
-        let by_url = filter.urls.iter().any(|u| kprpc_matches_url(&entry, u));
+        let by_url = filter
+            .urls
+            .iter()
+            .any(|u| kprpc_matches_url(&entry, u, registrable));
         let by_uuid = filter
             .uuid
             .is_some_and(|id| entry.id().uuid().to_string() == id);
@@ -379,7 +406,15 @@ fn collect_rpc_logins(
     }
     for child in group.groups() {
         let child_title = child.name.clone();
-        collect_rpc_logins(child, bin_id, filter, &child_title, &group_path, out);
+        collect_rpc_logins(
+            child,
+            bin_id,
+            filter,
+            &child_title,
+            &group_path,
+            registrable,
+            out,
+        );
     }
 }
 
@@ -475,6 +510,7 @@ fn collect_bridge_logins(
     bin_id: Option<GroupId>,
     url: &str,
     submit_url: Option<&str>,
+    registrable: bool,
     out: &mut Vec<BridgeLogin>,
 ) {
     if bin_id == Some(group.id()) {
@@ -483,10 +519,10 @@ fn collect_bridge_logins(
     let url = url.to_lowercase();
     let submit_url = submit_url.map(str::to_lowercase);
     for entry in group.entries() {
-        let matches = kprpc_matches_url(&entry, &url)
+        let matches = kprpc_matches_url(&entry, &url, registrable)
             || submit_url
                 .as_deref()
-                .is_some_and(|s| kprpc_matches_url(&entry, s));
+                .is_some_and(|s| kprpc_matches_url(&entry, s, registrable));
         if matches {
             out.push(BridgeLogin {
                 uuid: entry.id().uuid().to_string(),
@@ -497,7 +533,14 @@ fn collect_bridge_logins(
         }
     }
     for child in group.groups() {
-        collect_bridge_logins(child, bin_id, url.as_str(), submit_url.as_deref(), out);
+        collect_bridge_logins(
+            child,
+            bin_id,
+            url.as_str(),
+            submit_url.as_deref(),
+            registrable,
+            out,
+        );
     }
 }
 

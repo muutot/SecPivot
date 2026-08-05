@@ -157,8 +157,15 @@ pub(crate) fn kprpc_config(entry: &keepass::db::EntryRef<'_>) -> KprpcConfig {
 /// at least as similar as `min` requires.
 /// - `Exact`: the two URLs are equal discounting scheme/query/port-noise.
 /// - `Hostname`: same host:port (subdomains never spill).
-/// - `Domain`: same host, or one is a subdomain of the other.
-fn url_matches_accuracy(entry_url: &str, request_url: &str, min: MatchAccuracy) -> bool {
+/// - `Domain`: same host, or one is a subdomain of the other — or, when
+///   `registrable` is set (config `rpc.matchByRegistrableDomain`), the same
+///   registrable domain (PSL), so sibling hosts under one domain match.
+fn url_matches_accuracy(
+    entry_url: &str,
+    request_url: &str,
+    min: MatchAccuracy,
+    registrable: bool,
+) -> bool {
     let entry_host = url_host(entry_url).unwrap_or_default();
     let request_host = url_host(request_url).unwrap_or_default();
     if entry_host.is_empty() || request_host.is_empty() {
@@ -173,7 +180,13 @@ fn url_matches_accuracy(entry_url: &str, request_url: &str, min: MatchAccuracy) 
             host_equal && strip_query(entry_url) == strip_query(request_url)
         }
         MatchAccuracy::Hostname => host_equal,
-        MatchAccuracy::Domain => host_equal || subdomain_cover,
+        MatchAccuracy::Domain => {
+            if registrable {
+                registrable_domain(&entry_host) == registrable_domain(&request_host)
+            } else {
+                host_equal || subdomain_cover
+            }
+        }
     }
 }
 
@@ -189,6 +202,35 @@ fn strip_query(url: &str) -> String {
         end = end.min(i);
     }
     rest[..end].to_ascii_lowercase()
+}
+
+/// Multi-label public suffixes that must not be stripped to the last label,
+/// so the registrable domain is the third label from the end (e.g. `co.uk`).
+const MULTI_LABEL_SUFFIX: [&str; 41] = [
+    "ac.uk", "co.uk", "gov.uk", "org.uk", "net.uk", "me.uk", "ltd.uk", "plc.uk", "com.cn",
+    "net.cn", "org.cn", "gov.cn", "edu.cn", "com.hk", "com.mo", "com.tw", "co.jp", "ne.jp",
+    "or.jp", "ac.jp", "go.jp", "com.sg", "com.my", "com.vn", "co.za", "org.za", "net.za", "com.au",
+    "net.au", "org.au", "co.nz", "com.br", "com.mx", "co.kr", "or.kr", "ne.kr", "ac.in", "gov.in",
+    "co.in", "net.in", "org.in",
+];
+
+/// Registrable domain of a `host`, mirroring KeePassRPC's PSL-based `Domain`
+/// match: the public-suffix label(s) plus one more label. Used when the app
+/// is configured to match by registrable domain, so `account.aliyun.com` and
+/// `passport.aliyun.com` share `aliyun.com`. Unknown suffixes fall back to the
+/// last two labels; already-short hosts are returned unchanged.
+fn registrable_domain(host: &str) -> String {
+    let labels: Vec<&str> = host.split('.').collect();
+    if labels.len() <= 2 {
+        return host.to_owned();
+    }
+    let suffix = labels[labels.len() - 2..].join(".");
+    if MULTI_LABEL_SUFFIX.contains(&suffix.as_str()) {
+        labels[labels.len() - 3..].join(".")
+    } else {
+        // Most hosts: last two labels are the registrable domain.
+        suffix
+    }
 }
 
 /// Compile a user regex; malformed patterns simply never match (Kee ignores
@@ -215,8 +257,14 @@ fn host_at_or_below(blocked_url: &str, request_url: &str) -> bool {
 /// Whether `request_url` matches the entry under its full KeePassRPC rules:
 /// blocked lists take precedence, then regex match URLs, then the host-tier
 /// match over the primary URL + `altURLs`. This is the single source of truth
-/// for bridge, RPC, and auto-type URL matching.
-pub(crate) fn kprpc_matches_url(entry: &keepass::db::EntryRef<'_>, request_url: &str) -> bool {
+/// for bridge, RPC, and auto-type URL matching. `registrable` selects whether
+/// the Domain tier compares registrable domains (KeePassRPC's PSL behavior)
+/// or strict host/subdomain.
+pub(crate) fn kprpc_matches_url(
+    entry: &keepass::db::EntryRef<'_>,
+    request_url: &str,
+    registrable: bool,
+) -> bool {
     let cfg = kprpc_config(entry);
     // Blocked first: either list vetoes the match regardless of anything else.
     if cfg
@@ -243,7 +291,7 @@ pub(crate) fn kprpc_matches_url(entry: &keepass::db::EntryRef<'_>, request_url: 
         .collect();
     urls.extend(cfg.alt_urls.iter().cloned());
     urls.iter()
-        .any(|u| url_matches_accuracy(u, request_url, cfg.accuracy))
+        .any(|u| url_matches_accuracy(u, request_url, cfg.accuracy, registrable))
 }
 
 /// Every URL an entry exposes to browser-bridge and auto-type matching (for

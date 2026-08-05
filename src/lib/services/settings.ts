@@ -136,6 +136,7 @@ export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
 export const DEFAULT_RPC_SETTINGS: RpcSettings = {
   enabled: false,
   keepSessionAfterLock: true,
+  matchByRegistrableDomain: false,
 };
 
 /** App-window shortcuts start unbound; the panel shows the action's `default`
@@ -472,6 +473,10 @@ export function normalizeSettings(
         typeof source.rpc?.keepSessionAfterLock === "boolean"
           ? source.rpc.keepSessionAfterLock
           : (fallback.rpc?.keepSessionAfterLock ?? true),
+      matchByRegistrableDomain:
+        typeof source.rpc?.matchByRegistrableDomain === "boolean"
+          ? source.rpc.matchByRegistrableDomain
+          : (fallback.rpc?.matchByRegistrableDomain ?? false),
     },
     keyboard,
     favicon: {

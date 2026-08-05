@@ -149,6 +149,11 @@ export interface RpcSettings {
   /** Keep SRP session keys across a vault lock so the extension reconnects
    * without re-authorizing (official KeePassRPC behavior). */
   keepSessionAfterLock: boolean;
+  /** Match the Domain tier by registrable domain (PSL) instead of strict
+   * host/subdomain. Enables the official KeePassRPC behavior where sibling
+   * hosts under one domain (e.g. `account.aliyun.com` / `passport.aliyun.com`
+   * under `aliyun.com`) all match an entry. */
+  matchByRegistrableDomain: boolean;
 }
 
 /** Favicon download behavior ("Download Favicons").

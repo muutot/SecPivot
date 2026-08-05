@@ -131,6 +131,32 @@
     </button>
   </section>
 
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
+      <div>
+        <strong>按注册域匹配（KeePassRPC 兼容）</strong>
+        <p>
+          开启后「域名」匹配按注册域判定（公共后缀表），同一域名下的兄弟子域都会命中——例如
+          account.aliyun.com 与 passport.aliyun.com 同属 aliyun.com 均可匹配。关闭则仅按 host
+          或子域严格匹配
+        </p>
+      </div>
+    </div>
+    <button
+      class="toggle-switch"
+      class:active={rpc.matchByRegistrableDomain}
+      role="switch"
+      aria-checked={rpc.matchByRegistrableDomain}
+      aria-label="按注册域匹配"
+      onclick={() => {
+        change("matchByRegistrableDomain", !rpc.matchByRegistrableDomain);
+      }}
+    >
+      <span class="toggle-knob"></span>
+    </button>
+  </section>
+
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>

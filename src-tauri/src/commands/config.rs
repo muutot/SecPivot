@@ -37,6 +37,13 @@ pub(crate) fn set_config(
     register_global_hotkey(&app, &saved.keyboard.auto_type_global);
     sync_bridge(&app, &saved);
     sync_rpc(&app, &saved);
+    // Keep the session's URL-match mode in sync with the config so bridge and
+    // RPC matching observe the latest `rpc.matchByRegistrableDomain`.
+    if let Some(session) = app.try_state::<std::sync::Mutex<crate::vault::VaultSession>>() {
+        if let Ok(mut session) = session.lock() {
+            session.match_registrable_domain = saved.rpc.match_by_registrable_domain;
+        }
+    }
     Ok(saved)
 }
 
