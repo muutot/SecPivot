@@ -54,6 +54,7 @@
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
   let selectedGroup = $state<string | null>(null);
+  let revealGroupUuid = $state<string | null>(null);
   let selectedEntry = $state<VaultEntry | null>(null);
   let selectedUuids = $state<Set<string>>(new Set());
   let selectionAnchor = $state<string | null>(null);
@@ -1027,6 +1028,13 @@
         case "focus-search":
           searchInputEl?.focus();
           break;
+        case "locate-in-tree":
+          if (selectedEntry && currentVault) {
+            selectedGroup = selectedEntry.groupUuid;
+            revealGroupUuid = selectedEntry.groupUuid;
+            flash("已定位到所在分组");
+          }
+          break;
       }
       return;
     }
@@ -1505,6 +1513,7 @@
           <GroupTree
             root={currentVault.root}
             selected={selectedGroup}
+            reveal={revealGroupUuid}
             customIcons={currentVault.customIcons}
             showIcon={compactMode ? groupDensity.showGroupIcon : true}
             showChevron={compactMode ? groupDensity.showGroupChevron : true}

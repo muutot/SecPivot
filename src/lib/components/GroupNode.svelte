@@ -10,6 +10,8 @@
     group: VaultGroup;
     depth: number;
     selected: string | null;
+    /** When set and matching this node, scroll the row into view. */
+    reveal?: string | null;
     expanded: Set<string>;
     showIcon?: boolean;
     showChevron?: boolean;
@@ -33,6 +35,7 @@
     group,
     depth,
     selected,
+    reveal = null,
     expanded,
     showIcon = true,
     showChevron = true,
@@ -52,8 +55,16 @@
   let renaming = $state(false);
   let nameInput = $state<string>("");
   let inputEl: HTMLInputElement | undefined = $state();
+  let nodeEl: HTMLDivElement | undefined = $state();
   let menu = $state<{ x: number; y: number } | null>(null);
   let dragActive = $state(false);
+
+  $effect(() => {
+    if (reveal === group.uuid) {
+      // Let the ancestor-expansion render settle, then bring the row into view.
+      requestAnimationFrame(() => nodeEl?.scrollIntoView({ block: "nearest" }));
+    }
+  });
 
   const groupName = $derived(group.name);
 
@@ -129,6 +140,7 @@
   class="group-node"
   class:selected={selected === group.uuid}
   style:padding-left={`calc(var(--group-indent, 14px) * ${depth})`}
+  bind:this={nodeEl}
 >
   {#if renaming}
     <div class="rename-row">
@@ -211,6 +223,7 @@
       group={child}
       depth={depth + 1}
       {selected}
+      {reveal}
       {expanded}
       {showIcon}
       {showChevron}

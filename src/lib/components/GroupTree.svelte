@@ -7,6 +7,8 @@
   interface Props {
     root: VaultGroup;
     selected: string | null;
+    /** When set, reveal (expand ancestors + scroll into view) this group. */
+    reveal?: string | null;
     showIcon?: boolean;
     showChevron?: boolean;
     /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
@@ -23,6 +25,7 @@
   let {
     root,
     selected,
+    reveal = null,
     showIcon = true,
     showChevron = true,
     customIcons = {},
@@ -90,14 +93,33 @@
   /** Subtree entry counts per group, computed once per `root` change (a
    *  bottom-up walk) instead of re-walking the tree for every rendered node. */
   const counts = $derived(buildEntryCounts(root));
-
-  /** Total entries outside the recycle bin subtree ("全部条目" count). */
   const total = $derived(
     root.children.reduce(
       (sum, child) => sum + (child.isRecycleBin ? 0 : (counts.get(child.uuid) ?? 0)),
       0,
     ),
   );
+
+  /** Ancestor chain (excluding the target itself, root-adjacent last) of a uuid. */
+  function ancestorsOf(uuid: string): string[] {
+    const chain: string[] = [];
+    let cursor = findParent(root, uuid);
+    while (cursor) {
+      chain.push(cursor.uuid);
+      cursor = findParent(root, cursor.uuid);
+    }
+    return chain;
+  }
+
+  /** Reveal the requested group by expanding every ancestor so its row is
+   *  rendered, then let the matched `GroupNode` scroll itself into view. */
+  $effect(() => {
+    const target = reveal;
+    if (!target) return;
+    const next = new Set(expanded);
+    for (const anc of ancestorsOf(target)) next.add(anc);
+    expanded = next;
+  });
 
   /** Expand every group (keep the root itself; it is not rendered). */
   function expandAll(): void {
@@ -136,6 +158,7 @@
         group={child}
         depth={0}
         {selected}
+        {reveal}
         {expanded}
         {showIcon}
         {showChevron}

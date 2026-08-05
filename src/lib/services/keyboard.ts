@@ -54,6 +54,13 @@ export const KEYBOARD_ACTIONS: KeyboardAction[] = [
     icon: "search",
     default: "Ctrl+K",
   },
+  {
+    id: "locate-in-tree",
+    label: "定位到所在分组",
+    description: "在左侧分组树中选中并展开所选条目所在的分组",
+    icon: "folder",
+    default: "Ctrl+G",
+  },
 ];
 
 /** Stored bindings merged with action defaults, so unrecorded actions still
