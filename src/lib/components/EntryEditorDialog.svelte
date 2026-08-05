@@ -316,6 +316,10 @@
   const KPRPC_FIELD = "KPRPC JSON";
   type KeyVaultAccuracy = "Exact" | "Hostname" | "Domain";
   type KeyVaultRule = { value: string; regex: boolean; block: boolean };
+  /** `KPRPC JSON` is managed by the KeyVault tab, so it is hidden from the
+   * custom-fields tab (but stays in `customFields` state so both KeyVault and
+   * the backend's `sync_custom_fields` still read/write it). */
+  const visibleCustomFields = $derived(customFields.filter((f) => f.name !== KPRPC_FIELD));
 
   let kvAccuracy = $state<KeyVaultAccuracy>("Domain");
   let kvRules = $state<KeyVaultRule[]>([]);
@@ -625,7 +629,7 @@
           aria-selected={activeTab === "custom"}
           onclick={() => activateTab("custom")}
         >
-          自定义字段{#if customFields.length}({customFields.length}){/if}
+          自定义字段{#if visibleCustomFields.length}({visibleCustomFields.length}){/if}
         </button>
         <button
           type="button"
@@ -843,7 +847,7 @@
         {#if kprpcProtected}
           <section class="field full">
             <p class="section-empty">
-              受保护的 `KPRPC JSON` 字段无法在此编辑,请在「自定义字段」中先取消保护。
+              受保护的 `KPRPC JSON` 字段值未载入快照,为避免被清空,无法在此编辑。
             </p>
           </section>
         {:else}
@@ -937,54 +941,56 @@
     {#if !multi && activeTab === "custom"}
       <div class="form-grid" role="tabpanel">
         <section class="field full">
-          {#if customFields.length === 0}
+          {#if visibleCustomFields.length === 0}
             <p class="section-empty">暂无自定义字段</p>
           {/if}
           {#each customFields as field, i (i)}
-            <div class="custom-field-row">
-              <input
-                class="text-input"
-                type="text"
-                placeholder="字段名"
-                value={field.name}
-                oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
-              />
-              <input
-                class="text-input mono"
-                type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
-                placeholder="值"
-                value={field.value}
-                disabled={field.protected && protectedFieldsLoading}
-                oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
-              />
-              {#if field.protected}
+            {#if field.name !== KPRPC_FIELD}
+              <div class="custom-field-row">
+                <input
+                  class="text-input"
+                  type="text"
+                  placeholder="字段名"
+                  value={field.name}
+                  oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
+                />
+                <input
+                  class="text-input mono"
+                  type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
+                  placeholder="值"
+                  value={field.value}
+                  disabled={field.protected && protectedFieldsLoading}
+                  oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
+                />
+                {#if field.protected}
+                  <button
+                    class="icon-btn"
+                    onclick={() => toggleCustomFieldReveal(i)}
+                    aria-label={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                    title={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                  >
+                    <AppIcon name={revealedCustomFields.has(i) ? "eye-off" : "eye"} size={13} />
+                  </button>
+                {/if}
                 <button
                   class="icon-btn"
-                  onclick={() => toggleCustomFieldReveal(i)}
-                  aria-label={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
-                  title={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                  class:active={field.protected}
+                  onclick={() => toggleCustomFieldProtected(i)}
+                  aria-label={field.protected ? "取消保护此字段" : "保护此字段"}
+                  title={field.protected ? "受保护 (值不进入快照)" : "保护此字段 (值不进入快照)"}
                 >
-                  <AppIcon name={revealedCustomFields.has(i) ? "eye-off" : "eye"} size={13} />
+                  <AppIcon name={field.protected ? "lock" : "unlock"} size={13} />
                 </button>
-              {/if}
-              <button
-                class="icon-btn"
-                class:active={field.protected}
-                onclick={() => toggleCustomFieldProtected(i)}
-                aria-label={field.protected ? "取消保护此字段" : "保护此字段"}
-                title={field.protected ? "受保护 (值不进入快照)" : "保护此字段 (值不进入快照)"}
-              >
-                <AppIcon name={field.protected ? "lock" : "unlock"} size={13} />
-              </button>
-              <button
-                class="icon-btn"
-                onclick={() => removeCustomField(i)}
-                aria-label="删除字段"
-                title="删除字段"
-              >
-                <AppIcon name="x" size={13} />
-              </button>
-            </div>
+                <button
+                  class="icon-btn"
+                  onclick={() => removeCustomField(i)}
+                  aria-label="删除字段"
+                  title="删除字段"
+                >
+                  <AppIcon name="x" size={13} />
+                </button>
+              </div>
+            {/if}
           {/each}
           <button class="add-row-btn" onclick={addCustomField}>
             <AppIcon name="plus" size={12} />添加字段

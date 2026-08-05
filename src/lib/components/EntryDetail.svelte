@@ -426,8 +426,8 @@
         </div>
       {/if}
 
-      {#if entry.customFields?.length}
-        {#each entry.customFields as field}
+      {#if entry.customFields?.some((f) => f.name !== "KPRPC JSON")}
+        {#each entry.customFields.filter((f) => f.name !== "KPRPC JSON") as field}
           <div class="field-block">
             <span class="field-label">
               {field.name}

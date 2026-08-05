@@ -87,7 +87,7 @@
       }
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));
-    return rows;
+    return rows.filter((r) => r.name !== "KPRPC JSON");
   });
 
   const customFieldChangedCount = $derived(
