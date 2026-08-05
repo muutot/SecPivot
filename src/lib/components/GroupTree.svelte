@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
+  import { buildEntryCounts } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
 
@@ -86,15 +87,17 @@
     knownUuids = new Set(uuids);
   });
 
-  /** Total entries outside the recycle bin subtree ("全部条目" count). */
-  function countVisibleEntries(group: VaultGroup): number {
-    if (group.isRecycleBin) return 0;
-    let n = group.entries.length;
-    for (const child of group.children) n += countVisibleEntries(child);
-    return n;
-  }
+  /** Subtree entry counts per group, computed once per `root` change (a
+   *  bottom-up walk) instead of re-walking the tree for every rendered node. */
+  const counts = $derived(buildEntryCounts(root));
 
-  const total = $derived(countVisibleEntries(root));
+  /** Total entries outside the recycle bin subtree ("全部条目" count). */
+  const total = $derived(
+    root.children.reduce(
+      (sum, child) => sum + (child.isRecycleBin ? 0 : (counts.get(child.uuid) ?? 0)),
+      0,
+    ),
+  );
 
   /** Expand every group (keep the root itself; it is not rendered). */
   function expandAll(): void {
@@ -137,6 +140,7 @@
         {showIcon}
         {showChevron}
         {customIcons}
+        {counts}
         onselect={(uuid: string) => onselect(uuid)}
         ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}

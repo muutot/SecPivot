@@ -15,6 +15,9 @@
     showChevron?: boolean;
     /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
     customIcons?: Record<string, string>;
+    /** Precomputed subtree entry counts keyed by group uuid (avoid the O(N²)
+     *  per-node `countEntries` walk); falls back to a local walk when absent. */
+    counts?: Map<string, number> | null;
     inRecycleBin?: boolean;
     onselect: (uuid: string) => void;
     ontoggle: (uuid: string) => void;
@@ -34,6 +37,7 @@
     showIcon = true,
     showChevron = true,
     customIcons = {},
+    counts = null,
     inRecycleBin = false,
     onselect,
     ontoggle,
@@ -57,7 +61,7 @@
     nameInput = groupName;
   });
 
-  const count = $derived(countEntries(group));
+  const count = $derived(counts ? (counts.get(group.uuid) ?? 0) : countEntries(group));
   const isExpanded = $derived(expanded.has(group.uuid));
   const hasChildren = $derived(group.children.length > 0);
   const isBin = $derived(group.isRecycleBin);
@@ -211,6 +215,7 @@
       {showIcon}
       {showChevron}
       {customIcons}
+      {counts}
       inRecycleBin={isBin || inRecycleBin}
       {onselect}
       {ontoggle}

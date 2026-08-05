@@ -97,3 +97,17 @@ export function countEntries(root: VaultGroup): number {
   for (const child of root.children) total += countEntries(child);
   return total;
 }
+
+/** Subtree entry counts keyed by group uuid, computed bottom-up in one walk
+ *  (the O(N) counterpart to calling `countEntries` per node, which is O(N²)). */
+export function buildEntryCounts(root: VaultGroup): Map<string, number> {
+  const counts = new Map<string, number>();
+  const visit = (group: VaultGroup): number => {
+    let total = group.entries.length;
+    for (const child of group.children) total += visit(child);
+    counts.set(group.uuid, total);
+    return total;
+  };
+  visit(root);
+  return counts;
+}
