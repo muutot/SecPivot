@@ -329,8 +329,7 @@
       aria-selected={activeTab === "attachments"}
       onclick={() => (activeTab = "attachments")}
     >
-      附件{#if entry.attachments?.length}
-        ({entry.attachments.length}){/if}
+      附件
     </button>
     <button
       type="button"
@@ -369,15 +368,15 @@
         <span class="field-label">密码</span>
         <div class="field-value">
           <span class="field-text mono">{revealPassword ? fetchedPassword : "••••••••••••"}</span>
-          <button class="copy-btn" onclick={copyPassword} title="复制密码">
-            <AppIcon name="copy" size={13} />
-          </button>
           <button
             class="copy-btn"
             onclick={toggleReveal}
             title={revealPassword ? "隐藏密码" : "显示密码"}
           >
             <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
+          </button>
+          <button class="copy-btn" onclick={copyPassword} title="复制密码">
+            <AppIcon name="copy" size={13} />
           </button>
         </div>
       </div>
@@ -387,8 +386,10 @@
           <span class="field-label">网址</span>
           <div class="field-value">
             <button class="url-link" onclick={openUrlExternal} title={entry.url}>
-              <AppIcon name="globe" size={13} />
               <span class="field-text link">{entry.url}</span>
+            </button>
+            <button class="copy-btn" onclick={() => handleCopy(entry.url, "url")} title="复制网址">
+              <AppIcon name="copy" size={13} />
             </button>
           </div>
         </div>
@@ -860,6 +861,7 @@
     color: inherit;
     background: transparent;
     cursor: pointer;
+    text-align: left;
   }
 
   .field-notes {
