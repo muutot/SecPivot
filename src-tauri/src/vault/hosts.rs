@@ -10,8 +10,8 @@ use crate::rpc::{
 };
 use crate::util::url_host;
 use crate::vault::{
-    parse_entry_id, recycle_bin_id, VaultSession, FIELD_PASSWORD, FIELD_TITLE, FIELD_URL,
-    FIELD_USERNAME, ROOT_GROUP_NAME,
+    entry_match_urls, parse_entry_id, recycle_bin_id, VaultSession, FIELD_PASSWORD, FIELD_TITLE,
+    FIELD_URL, FIELD_USERNAME, ROOT_GROUP_NAME,
 };
 use keepass::db::{EntryId, EntryMut, GroupId, GroupRef, Value};
 use keepass::Database;
@@ -293,12 +293,7 @@ fn build_rpc_group(
         entries: group
             .entries()
             .map(|entry| {
-                let urls: Vec<String> = entry
-                    .get(FIELD_URL)
-                    .unwrap_or_default()
-                    .split_whitespace()
-                    .map(str::to_owned)
-                    .collect();
+                let urls: Vec<String> = entry_match_urls(&entry);
                 RpcLogin {
                     uuid: entry.id().uuid().to_string(),
                     title: entry.get_title().unwrap_or_default().to_owned(),
@@ -350,12 +345,7 @@ fn collect_rpc_logins(
         format!("{parent_path}/{group_title}")
     };
     for entry in group.entries() {
-        let entry_urls: Vec<String> = entry
-            .get(FIELD_URL)
-            .unwrap_or_default()
-            .split_whitespace()
-            .map(str::to_owned)
-            .collect();
+        let entry_urls = entry_match_urls(&entry);
         let by_url = filter
             .urls
             .iter()
@@ -449,12 +439,7 @@ fn find_rpc_entry_urls(
 ) -> FindEntryOutcome {
     let in_bin = in_bin || bin_id == Some(group.id());
     if let Some(entry) = group.entry(id) {
-        let urls: Vec<String> = entry
-            .get(FIELD_URL)
-            .unwrap_or_default()
-            .split_whitespace()
-            .map(str::to_owned)
-            .collect();
+        let urls = entry_match_urls(&entry);
         if in_bin {
             FindEntryOutcome::InRecycleBin
         } else {
@@ -501,11 +486,12 @@ fn collect_bridge_logins(
     let url = url.to_lowercase();
     let submit_url = submit_url.map(str::to_lowercase);
     for entry in group.entries() {
-        let entry_url = entry.get(FIELD_URL).unwrap_or_default().to_lowercase();
-        let matches = bridge_host_matches(&entry_url, &url)
-            || submit_url
-                .as_deref()
-                .is_some_and(|s| bridge_host_matches(&entry_url, s));
+        let matches = entry_match_urls(&entry).iter().any(|entry_url| {
+            bridge_host_matches(entry_url, &url)
+                || submit_url
+                    .as_deref()
+                    .is_some_and(|s| bridge_host_matches(entry_url, s))
+        });
         if matches {
             out.push(BridgeLogin {
                 uuid: entry.id().uuid().to_string(),

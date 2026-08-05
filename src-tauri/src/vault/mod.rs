@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use crate::remote::RemoteStorage;
 
-pub(crate) use self::helpers::{entry_has_otp, parse_entry_id, recycle_bin_id};
+pub(crate) use self::helpers::{entry_has_otp, entry_match_urls, parse_entry_id, recycle_bin_id};
 pub(crate) use self::persist::{
     persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
     prepare_remote_open, read_keyfile, write_attachment_file, write_csv_file,
@@ -55,6 +55,10 @@ pub(crate) const FIELD_FAVORITE_TRUE: &str = "true";
 /// Custom field recording the group an entry lived in before being recycled,
 /// so it can be restored to its original location.
 const FIELD_ORIGINAL_GROUP: &str = "SecPivot.OriginalGroup";
+/// KeePassRPC per-entry configuration (JSON: `altURLs`, `blockedURLs`, …),
+/// written by the Kee browser extension. SecPivot reads the `altURLs` array so
+/// entries edited in Kee match against their extra/custom URLs too.
+pub(crate) const FIELD_KPRPC_CONFIG: &str = "KPRPC JSON";
 
 /// Standard fields that are surfaced through the entry's own columns and must
 /// not leak into the generic custom-fields list.

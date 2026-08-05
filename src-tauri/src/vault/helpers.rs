@@ -5,8 +5,9 @@
 
 use super::{
     AES_KDF_ROUNDS, ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM, FIELD_HMAC_OTP,
-    FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD, FIELD_STEAM_OTP, FIELD_STEAM_OTP_ALT, FIELD_TIME_OTP,
-    FIELD_URL, FIELD_USERNAME, RESERVED_FIELDS, ROOT_GROUP_UUID,
+    FIELD_KPRPC_CONFIG, FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD, FIELD_STEAM_OTP,
+    FIELD_STEAM_OTP_ALT, FIELD_TIME_OTP, FIELD_URL, FIELD_USERNAME, RESERVED_FIELDS,
+    ROOT_GROUP_UUID,
 };
 use crate::crypto::otp;
 use crate::platform::autotype;
@@ -72,6 +73,44 @@ pub(crate) fn parse_group_id(s: &str) -> Result<GroupId, String> {
 /// The recycle bin group id, when the database has one.
 pub(crate) fn recycle_bin_id(db: &Database) -> Option<GroupId> {
     db.meta.recyclebin_uuid.map(GroupId::from_uuid)
+}
+
+/// Parse the KeePassRPC per-entry config (`KPRPC JSON` custom field) and
+/// return its `altURLs` array — the extra/custom URLs a Kee browser extension
+/// uses to match an entry. Missing or malformed config degrades to an empty
+/// list (entry then matches on its primary URL only).
+fn kprpc_alt_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
+    let Some(raw) = entry.get(FIELD_KPRPC_CONFIG) else {
+        return Vec::new();
+    };
+    let value: serde_json::Value = match serde_json::from_str(raw) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    value
+        .get("altURLs")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|u| u.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Every URL an entry should match against, for browser-bridge and auto-type
+/// matching: the primary `URL` field (space-separated list) plus any
+/// KeePassRPC `altURLs` custom URLs. Entries edited in Kee match their
+/// alternative URLs too; empty entries (no URL, no altURLs) never match.
+pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
+    let mut urls: Vec<String> = entry
+        .get(FIELD_URL)
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    urls.extend(kprpc_alt_urls(entry));
+    urls
 }
 
 /// Depth-first scan of `group`'s subtree for a `{REF:...}` match. First
@@ -158,8 +197,10 @@ pub(crate) fn walk_match(
     }
     for entry in group.entries() {
         let mut score = 0;
-        let host = url_host(entry.get(FIELD_URL).unwrap_or_default()).unwrap_or_default();
-        if !host.is_empty() && window_title.contains(&host) {
+        if entry_match_urls(&entry).iter().any(|u| {
+            let host = url_host(u).unwrap_or_default();
+            !host.is_empty() && window_title.contains(&host)
+        }) {
             score += 2;
         }
         let title = entry.get_title().unwrap_or_default().to_lowercase();

@@ -4232,6 +4232,194 @@ fn rpc_find_logins_matches_url_uuid_and_free_text() {
     assert!(session.database().is_none());
 }
 
+// -- KeePassRPC altURLs (additional custom match URLs) ----------------
+
+const KPRPC_JSON: &str = "KPRPC JSON";
+
+fn entry_with_alt_urls(
+    session: &mut VaultSession,
+    title: &str,
+    primary_url: &str,
+    alt_urls: Vec<&str>,
+) -> String {
+    let json = format!(
+        "{{\"version\":1,\"altURLs\":{}}}",
+        serde_json::to_string(&alt_urls).unwrap()
+    );
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: title.into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: primary_url.into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![CustomField {
+                name: KPRPC_JSON.to_owned(),
+                value: json,
+                protected: false,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+    // Prove the JSON survived the write as a real KDBX custom field.
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    assert!(entry.get("URL").is_some(), "primary URL must exist");
+    assert!(
+        entry
+            .get(KPRPC_JSON)
+            .unwrap_or_default()
+            .contains("altURLs"),
+        "KPRPC JSON must be persisted"
+    );
+    uuid
+}
+
+#[test]
+fn entry_match_urls_includes_primary_and_alt_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let uuid = entry_with_alt_urls(
+        &mut session,
+        "主站",
+        "https://example.com",
+        vec!["https://alt1.example", "https://alt2.example"],
+    );
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    let urls = super::helpers::entry_match_urls(&entry);
+    assert_eq!(
+        urls,
+        vec![
+            "https://example.com".to_owned(),
+            "https://alt1.example".to_owned(),
+            "https://alt2.example".to_owned()
+        ]
+    );
+}
+
+#[test]
+fn entry_without_kprpc_json_matches_primary_url_only() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "普通",
+            "u",
+            "p",
+            "https://example.com",
+        ))
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    assert_eq!(
+        super::helpers::entry_match_urls(&entry),
+        vec!["https://example.com".to_owned()]
+    );
+}
+
+#[test]
+fn malformed_kprpc_json_degrades_to_primary_url() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "坏".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![CustomField {
+                name: KPRPC_JSON.to_owned(),
+                value: "not-json{{".into(),
+                protected: false,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    assert_eq!(
+        super::helpers::entry_match_urls(&entry),
+        vec!["https://example.com".to_owned()]
+    );
+}
+
+#[test]
+fn bridge_matches_alt_urls_written_by_kee() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_alt_urls(
+        &mut session,
+        "主站",
+        "https://example.com",
+        vec!["https://alt1.example"],
+    );
+
+    // Primary URL still matches.
+    let logins = session.logins_for("https://example.com/login", None);
+    assert_eq!(logins.len(), 1);
+    // The Kee-written alternative URL also matches.
+    let logins = session.logins_for("https://alt1.example/app", None);
+    assert_eq!(logins.len(), 1);
+    // A subdomain of the alternative URL matches too (host-level matching).
+    let logins = session.logins_for("https://sub.alt1.example", None);
+    assert_eq!(logins.len(), 1);
+    // Unrelated host does not match.
+    assert!(session.logins_for("https://elsewhere.io", None).is_empty());
+}
+
+#[test]
+fn rpc_find_logins_matches_alt_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_alt_urls(
+        &mut session,
+        "主站",
+        "https://example.com",
+        vec!["https://alt1.example"],
+    );
+
+    let logins = session.find_logins(&["https://alt1.example".to_owned()], None, None, None);
+    assert_eq!(logins.len(), 1);
+    // The returned entry exposes both the primary and alternative URLs to Kee.
+    assert_eq!(
+        logins[0].urls,
+        vec![
+            "https://example.com".to_owned(),
+            "https://alt1.example".to_owned()
+        ]
+    );
+}
+
+#[test]
+fn autotype_match_considers_alt_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let uuid = entry_with_alt_urls(
+        &mut session,
+        "某站",
+        "https://example.com",
+        vec!["https://alt1.example"],
+    );
+    let matched = session.autotype_match("Login · alt1.example").unwrap();
+    assert_eq!(matched, uuid);
+}
+
 // -- KeePassRPC write path (AddLogin/UpdateLogin) ----------------------
 
 fn rpc_login_write(title: &str, username: &str, password: &str, urls: &[&str]) -> RpcLoginWrite {
