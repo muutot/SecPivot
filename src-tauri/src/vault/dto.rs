@@ -235,6 +235,7 @@ pub struct HistoryVersion {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<String>,
     pub custom_fields: Vec<CustomField>,
+    pub attachments: Vec<AttachmentInfo>,
 }
 
 /// Server-side security analysis. Passwords never cross into the report.

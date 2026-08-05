@@ -6,8 +6,8 @@ use super::helpers::{
     resolve_group_id,
 };
 use super::serialize::{
-    apply_patch_fields, decode_attachments, format_iso, sync_attachments, sync_custom_fields,
-    trim_entry_history, write_fields,
+    apply_patch_fields, attachment_size, decode_attachments, format_iso, sync_attachments,
+    sync_custom_fields, trim_entry_history, write_fields,
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
@@ -192,10 +192,9 @@ impl VaultSession {
         let Some(history) = entry.history.as_ref() else {
             return Ok(Vec::new());
         };
-        Ok(history
-            .get_entries()
-            .iter()
-            .enumerate()
+        let count = history.get_entries().len();
+        Ok((0..count)
+            .filter_map(|index| entry.historical(index).map(|h| (index, h)))
             .map(|(index, historical)| HistoryVersion {
                 index,
                 modified: historical.times.last_modification.map(format_iso),
@@ -226,6 +225,15 @@ impl VaultSession {
                     fields.sort_by(|a, b| a.name.cmp(&b.name));
                     fields
                 },
+                attachments: historical
+                    .attachments_named()
+                    .filter_map(|(name, attachment)| {
+                        attachment_size(&attachment).map(|size| AttachmentInfo {
+                            name: name.to_owned(),
+                            size,
+                        })
+                    })
+                    .collect(),
             })
             .collect())
     }

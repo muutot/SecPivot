@@ -11,6 +11,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassIconName } from "$lib/utils/keepass-icons";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
+  import HistoryVersionDialog from "$lib/components/HistoryVersionDialog.svelte";
 
   interface Props {
     entry: VaultEntry;
@@ -55,6 +56,7 @@
   let historyVersions = $state<HistoryVersion[]>([]);
   let historyLoading = $state(false);
   let historyLoadedUuid = $state<string | null>(null);
+  let viewingVersion = $state<HistoryVersion | null>(null);
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -69,6 +71,7 @@
     customFieldRevealed = {};
     historyLoadedUuid = null;
     historyVersions = [];
+    viewingVersion = null;
   });
 
   async function loadHistory(force = false): Promise<void> {
@@ -534,6 +537,13 @@
                 </span>
                 <span class="history-title">{version.title || "未命名条目"}</span>
               </div>
+              <button
+                class="copy-btn"
+                onclick={() => (viewingVersion = version)}
+                title="查看此版本"
+              >
+                <AppIcon name="eye" size={13} />
+              </button>
               <button class="copy-btn" onclick={() => restoreVersion(version)} title="恢复此版本">
                 <AppIcon name="undo" size={13} />
               </button>
@@ -549,6 +559,14 @@
     <p class="copy-toast" class:error={copied === "error"} aria-live="polite">
       {toastMessage()}
     </p>
+  {/if}
+
+  {#if viewingVersion}
+    <HistoryVersionDialog
+      {entry}
+      version={viewingVersion}
+      onclose={() => (viewingVersion = null)}
+    />
   {/if}
 </div>
 

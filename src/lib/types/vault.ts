@@ -173,6 +173,7 @@ export interface HistoryVersion {
   notes: string;
   expires: string | null;
   customFields: CustomField[];
+  attachments: AttachmentInfo[];
 }
 
 export interface OpenVaultRequest {

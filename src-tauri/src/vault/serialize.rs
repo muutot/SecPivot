@@ -4,7 +4,9 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::NaiveDateTime;
-use keepass::db::{Color, Entry, EntryMut, EntryRef, GroupRef, History, Icon, Value};
+use keepass::db::{
+    AttachmentRef, Color, Entry, EntryMut, EntryRef, GroupRef, History, Icon, Value,
+};
 use keepass::Database;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
@@ -202,6 +204,17 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
 
 pub(crate) fn format_iso(time: NaiveDateTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// Read an attachment's byte size, tolerating a dangling reference.
+///
+/// The `keepass` crate stores attachments in a database-level store shared by
+/// an entry and its history snapshots. Removing an attachment from the current
+/// entry drops it from the store, so older snapshots can still carry the
+/// name→ID mapping while the data is gone; deref panics in that case. Callers
+/// that read historical snapshots use this to skip such attachments.
+pub(crate) fn attachment_size(attachment: &AttachmentRef<'_>) -> Option<usize> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| attachment.data.get().len())).ok()
 }
 
 /// Maximum number of historical snapshots kept per entry (KeePass default).

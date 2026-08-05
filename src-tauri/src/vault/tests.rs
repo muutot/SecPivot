@@ -461,7 +461,7 @@ fn entry_history_tracks_versions_and_restores() {
         .unwrap();
     let uuid = state.root.entries[0].uuid.clone();
 
-    let input = |title: &str, password: &str| EntryInput {
+    let input = |title: &str, password: &str, attachments: Vec<AttachmentInput>| EntryInput {
         group_uuid: ROOT_GROUP_UUID.to_owned(),
         title: title.into(),
         username: "u".into(),
@@ -473,21 +473,49 @@ fn entry_history_tracks_versions_and_restores() {
         icon: Some(None),
         color: None,
         custom_fields: vec![],
-        attachments: vec![],
+        attachments,
     };
 
     assert!(session.get_entry_history(&uuid).unwrap().is_empty());
-    session.update_entry(&uuid, &input("B", "p2")).unwrap();
+    session
+        .update_entry(&uuid, &input("B", "p2", vec![]))
+        .unwrap();
     let history = session.get_entry_history(&uuid).unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].title, "A");
     // Passwords never leave the backend in history payloads.
     assert_eq!(session.get_entry_password(&uuid).unwrap(), "p2");
 
-    session.update_entry(&uuid, &input("C", "p3")).unwrap();
+    session
+        .update_entry(
+            &uuid,
+            &input(
+                "C",
+                "p3",
+                vec![AttachmentInput {
+                    name: "note.txt".into(),
+                    data: Some(BASE64.encode(b"hello attachment")),
+                }],
+            ),
+        )
+        .unwrap();
     let history = session.get_entry_history(&uuid).unwrap();
     assert_eq!(history.len(), 2);
     assert_eq!(history[0].title, "B");
+    assert!(history[0].attachments.is_empty());
+    assert_eq!(history[1].title, "A");
+    assert!(history[1].attachments.is_empty());
+    // The current state carries the attachment, not the history snapshots.
+    let current = session.snapshot().unwrap();
+    let current_entry = current
+        .root
+        .entries
+        .iter()
+        .find(|e| e.uuid == uuid)
+        .unwrap();
+    assert_eq!(current_entry.attachments.len(), 1);
+    assert_eq!(current_entry.attachments[0].name, "note.txt");
+    assert_eq!(current_entry.attachments[0].size, b"hello attachment".len());
 
     // Restoring the snapshot replaces fields and pushes the pre-restore
     // state into the history itself.
@@ -497,6 +525,9 @@ fn entry_history_tracks_versions_and_restores() {
     let history = session.get_entry_history(&uuid).unwrap();
     assert_eq!(history.len(), 3);
     assert_eq!(history[0].title, "C");
+    assert_eq!(history[0].attachments.len(), 1);
+    // Restore overwrites fields only; attachments are left untouched.
+    assert_eq!(state.root.entries[0].attachments.len(), 1);
 
     assert!(session
         .restore_entry_version(&uuid, 99)
