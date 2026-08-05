@@ -61,8 +61,19 @@
 
   $effect(() => {
     if (reveal === group.uuid) {
-      // Let the ancestor-expansion render settle, then bring the row into view.
-      requestAnimationFrame(() => nodeEl?.scrollIntoView({ block: "nearest" }));
+      // Let the ancestor-expansion render settle, then scroll only the tree's
+      // scroll container (`.tree-list`) into place. `scrollIntoView` would also
+      // scroll outer/viewport ancestors and can lock the panel.
+      requestAnimationFrame(() => {
+        const el = nodeEl;
+        if (!el) return;
+        const scroller = el.closest(".tree-list");
+        if (!scroller) return;
+        const elRect = el.getBoundingClientRect();
+        const scrRect = scroller.getBoundingClientRect();
+        const target = Math.max(0, elRect.top - scrRect.top + scroller.scrollTop - 8);
+        scroller.scrollTop = target;
+      });
     }
   });
 
