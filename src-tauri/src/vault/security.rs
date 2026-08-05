@@ -249,6 +249,21 @@ impl VaultSession {
         Ok(entry.get_raw_otp_value().map(str::to_owned))
     }
 
+    /// Fetch one custom field's value on demand. Protected custom fields are
+    /// never part of `VaultState`/`VaultEntry` — the value crosses the IPC only
+    /// on an explicit reveal/copy/edit action. `None` when the field does not
+    /// exist or is a reserved standard column.
+    pub fn get_custom_field_value(&self, uuid: &str, name: &str) -> Result<Option<String>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let trimmed = name.trim();
+        if trimmed.is_empty() || RESERVED_FIELDS.contains(&trimmed) {
+            return Ok(None);
+        }
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(entry.get(trimmed).map(str::to_owned))
+    }
+
     /// Analyze all entries server-side; no passwords leave the session.
     pub fn security_report(&self) -> Result<SecurityReport, String> {
         let db = self.require_db()?;

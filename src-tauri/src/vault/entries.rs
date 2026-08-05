@@ -220,6 +220,7 @@ impl VaultSession {
                         .map(|(name, value)| CustomField {
                             name: name.clone(),
                             value: value.get().clone(),
+                            protected: value.is_protected(),
                         })
                         .collect();
                     fields.sort_by(|a, b| a.name.cmp(&b.name));

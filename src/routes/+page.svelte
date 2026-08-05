@@ -376,7 +376,10 @@
   function colText(entry: VaultEntry, colId: string): string {
     if (colId.startsWith("custom:")) {
       const name = colId.slice("custom:".length);
-      return entry.customFields?.find((f) => f.name === name)?.value ?? "";
+      const field = entry.customFields?.find((f) => f.name === name);
+      if (!field) return "";
+      // Protected values never reach the snapshot; show the masked marker.
+      return field.protected ? "••••••" : field.value;
     }
     if (colId === "created" || colId === "modified" || colId === "expires") {
       return formatDateOnly(entry[colId] as string | undefined);

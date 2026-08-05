@@ -95,6 +95,16 @@
   let customFields = $state<CustomField[]>(
     initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
   );
+  /** Protected custom-field values are absent from `VaultEntry` snapshots, so
+   * editing an existing entry must fetch them on demand. Saving before they
+   * settle would overwrite protected values with empty strings (data-loss);
+   * the editor gates the save until every protected value is loaded. */
+  let protectedFieldsReady = $state(!initialEntry);
+  let protectedFieldsLoading = $state(false);
+  /** Indices of custom fields whose value input is currently revealed while
+   * protected (password-type masking is only a display affordance; the actual
+   * value is never part of the snapshot in the Tauri runtime). */
+  let revealedCustomFields = $state<Set<number>>(new Set());
   /** Editor-local attachment state: `size` is display-only (shown in the UI)
    * and stripped before sending — the backend contract has no `size`. */
   type EditorAttachment = { name: string; size: number; data?: string };
@@ -193,6 +203,52 @@
   const entropy = $derived(estimateEntropy(password));
   const strength = $derived(entropyLabel(entropy));
 
+  /** Names of protected custom fields carried by the original snapshot. Captured
+   * from the immutable `initialEntry` (not the mutable editor state) so the
+   * load effect below never re-runs on its own writes. */
+  const initialProtectedNames = (
+    multi || !initialEntry ? [] : (initialEntry.customFields ?? []).filter((f) => f.protected)
+  ).map((f) => f.name);
+  /** UUID of the entry the protected fields were already loaded for. */
+  let protectedFieldsLoadedFor = $state<string | null>(null);
+
+  /** Protected custom-field values are absent from the snapshot; fetch them on
+   * demand when editing an existing entry so saving never overwrites them with
+   * empty strings. Create mode starts with fresh fields (no values to keep). */
+  $effect(() => {
+    if (multi) return;
+    const targetUuid = entry?.uuid;
+    if (!targetUuid || initialProtectedNames.length === 0) {
+      protectedFieldsReady = true;
+      return;
+    }
+    if (protectedFieldsLoadedFor === targetUuid) return;
+    protectedFieldsLoading = true;
+    protectedFieldsReady = false;
+    void Promise.all(
+      initialProtectedNames.map(async (name) => {
+        const value = await vault.getCustomFieldValue(targetUuid, name);
+        return { name, value };
+      }),
+    )
+      .then((resolved) => {
+        const values = new Map(resolved.map((r) => [r.name, r.value]));
+        customFields = customFields.map((f) => {
+          if (!f.protected) return f;
+          const value = values.get(f.name);
+          return value === undefined ? f : { ...f, value: value ?? "" };
+        });
+        protectedFieldsLoading = false;
+        protectedFieldsReady = true;
+        protectedFieldsLoadedFor = targetUuid;
+      })
+      .catch(() => {
+        protectedFieldsLoading = false;
+        // Unknown values: keep the save gated so protected fields are not wiped.
+        protectedFieldsReady = false;
+      });
+  });
+
   function generate(): void {
     const settings = get(appSettings);
     password = generatePassword(settings.database.generator);
@@ -201,15 +257,43 @@
   }
 
   function addCustomField(): void {
-    customFields = [...customFields, { name: "", value: "" }];
+    customFields = [...customFields, { name: "", value: "", protected: false }];
+    revealedCustomFields = new Set();
   }
 
   function updateCustomField(index: number, patch: Partial<CustomField>): void {
     customFields = customFields.map((f, i) => (i === index ? { ...f, ...patch } : f));
   }
 
+  function toggleCustomFieldProtected(index: number): void {
+    const field = customFields[index];
+    if (!field) return;
+    const nowProtected = !field.protected;
+    customFields = customFields.map((f, i) =>
+      i === index ? { ...f, protected: nowProtected } : f,
+    );
+    if (!nowProtected) {
+      const next = new Set(revealedCustomFields);
+      next.delete(index);
+      revealedCustomFields = next;
+    }
+  }
+
+  function toggleCustomFieldReveal(index: number): void {
+    const next = new Set(revealedCustomFields);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    revealedCustomFields = next;
+  }
+
   function removeCustomField(index: number): void {
     customFields = customFields.filter((_, i) => i !== index);
+    const next = new Set<number>();
+    for (const i of revealedCustomFields) {
+      if (i < index) next.add(i);
+      else if (i > index) next.add(i - 1);
+    }
+    revealedCustomFields = next;
   }
 
   function pickFiles(): void {
@@ -265,7 +349,7 @@
   }
 
   function submit(): void {
-    if (!multi && (!passwordReady || !totpReady)) return;
+    if (!multi && (!passwordReady || !totpReady || !protectedFieldsReady)) return;
     if (multi) {
       const patch: EntryPatch = {};
       if (!untouched.has("title")) patch.title = title.trim();
@@ -316,7 +400,11 @@
         ...(iconValue !== undefined ? { icon: iconValue } : {}),
         color: colorHex || undefined,
         customFields: customFields
-          .map((f) => ({ name: f.name.trim(), value: f.value }))
+          .map((f) => ({
+            name: f.name.trim(),
+            value: f.value,
+            protected: f.protected ?? false,
+          }))
           .filter((f) => f.name !== ""),
         attachments: attachments.map((a) =>
           a.data ? { name: a.name, data: a.data } : { name: a.name },
@@ -619,12 +707,32 @@
                 oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
               />
               <input
-                class="text-input"
-                type="text"
+                class="text-input mono"
+                type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
                 placeholder="值"
                 value={field.value}
+                disabled={field.protected && protectedFieldsLoading}
                 oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
               />
+              {#if field.protected}
+                <button
+                  class="icon-btn"
+                  onclick={() => toggleCustomFieldReveal(i)}
+                  aria-label={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                  title={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                >
+                  <AppIcon name={revealedCustomFields.has(i) ? "eye-off" : "eye"} size={13} />
+                </button>
+              {/if}
+              <button
+                class="icon-btn"
+                class:active={field.protected}
+                onclick={() => toggleCustomFieldProtected(i)}
+                aria-label={field.protected ? "取消保护此字段" : "保护此字段"}
+                title={field.protected ? "受保护 (值不进入快照)" : "保护此字段 (值不进入快照)"}
+              >
+                <AppIcon name={field.protected ? "lock" : "unlock"} size={13} />
+              </button>
               <button
                 class="icon-btn"
                 onclick={() => removeCustomField(i)}
@@ -684,9 +792,10 @@
       <button
         class="modal-button primary"
         onclick={submit}
-        disabled={!multi && (!passwordReady || !totpReady)}
-        title={!multi && (!passwordReady || !totpReady) ? "正在载入敏感字段…" : undefined}
-        >保存</button
+        disabled={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)}
+        title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
+          ? "正在载入敏感字段…"
+          : undefined}>保存</button
       >
     </div>
   </div>
@@ -864,6 +973,12 @@
   .icon-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .icon-btn.active {
+    color: var(--accent-color, var(--primary-color));
+    border-color: var(--accent-color, var(--primary-color));
+    background: color-mix(in srgb, var(--accent-color, var(--primary-color)) 12%, transparent);
   }
 
   .strength-row {

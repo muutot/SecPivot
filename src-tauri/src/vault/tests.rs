@@ -2030,6 +2030,7 @@ fn hotp_code_advances_counter_and_writes_back() {
             custom_fields: vec![CustomField {
                 name: "HmacOtp".into(),
                 value: "JBSWY3DPEHPK3PXP".into(),
+                protected: false,
             }],
             attachments: vec![],
         })
@@ -2075,6 +2076,7 @@ fn steam_code_is_five_chars_with_countdown() {
             custom_fields: vec![CustomField {
                 name: "SteamOtp".into(),
                 value: "CNBNMZBN".into(),
+                protected: false,
             }],
             attachments: vec![],
         })
@@ -2239,10 +2241,12 @@ fn custom_fields_and_attachments_round_trip() {
                 CustomField {
                     name: "PIN".into(),
                     value: "1234".into(),
+                    protected: false,
                 },
                 CustomField {
                     name: "Question".into(),
                     value: "Answer".into(),
+                    protected: false,
                 },
             ],
             attachments: vec![AttachmentInput {
@@ -2284,6 +2288,7 @@ fn custom_fields_and_attachments_round_trip() {
                 custom_fields: vec![CustomField {
                     name: "PIN".into(),
                     value: "9999".into(),
+                    protected: false,
                 }],
                 attachments: vec![
                     AttachmentInput {
@@ -2323,6 +2328,241 @@ fn custom_fields_and_attachments_round_trip() {
 }
 
 #[test]
+fn protected_custom_fields_never_leak_in_snapshot() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            icon: None,
+            name: "G".into(),
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+
+    // Add an entry with a protected PIN plus an unprotected public field.
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_uuid.clone(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![
+                CustomField {
+                    name: "PIN".into(),
+                    value: "s3cret-pin".into(),
+                    protected: true,
+                },
+                CustomField {
+                    name: "Tag".into(),
+                    value: "public".into(),
+                    protected: false,
+                },
+            ],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.children[0].entries[0].uuid.clone();
+
+    // The snapshot must carry the flag but never the protected value.
+    let pin = state.root.children[0].entries[0]
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "PIN")
+        .expect("PIN present");
+    assert!(pin.protected);
+    assert!(
+        pin.value.is_empty(),
+        "protected value must not reach the snapshot"
+    );
+    let public = state.root.children[0].entries[0]
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Tag")
+        .expect("Tag present");
+    assert!(!public.protected);
+    assert_eq!(public.value, "public");
+
+    // On-demand access resolves the real value.
+    assert_eq!(
+        session
+            .get_custom_field_value(&uuid, "PIN")
+            .unwrap()
+            .as_deref(),
+        Some("s3cret-pin")
+    );
+    assert_eq!(
+        session
+            .get_custom_field_value(&uuid, "Tag")
+            .unwrap()
+            .as_deref(),
+        Some("public")
+    );
+    assert_eq!(
+        session.get_custom_field_value(&uuid, "Missing").unwrap(),
+        None,
+        "unknown field resolves to None"
+    );
+    assert_eq!(
+        session.get_custom_field_value(&uuid, "Title").unwrap(),
+        None,
+        "reserved columns are not custom fields"
+    );
+
+    // Persist and reopen: the protected flag survives and the value stays
+    // out of the snapshot while remaining readable on demand.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let state = reopened
+        .open(&dir.path().join("test.kdbx"), "master-password", None)
+        .unwrap();
+    let entry = &state.root.children[0].entries[0];
+    let pin = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "PIN")
+        .unwrap();
+    assert!(pin.protected);
+    assert!(pin.value.is_empty());
+    assert_eq!(
+        reopened
+            .get_custom_field_value(&entry.uuid, "PIN")
+            .unwrap()
+            .as_deref(),
+        Some("s3cret-pin")
+    );
+}
+
+#[test]
+fn protected_custom_fields_round_trip_and_history() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            icon: None,
+            name: "G".into(),
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_uuid.clone(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![CustomField {
+                name: "Secret".into(),
+                value: "hunter2".into(),
+                protected: true,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.children[0].entries[0].uuid.clone();
+
+    // Editing a protected field keeps its value readable on demand and writes
+    // it back as protected; unprotected custom fields stay unprotected.
+    let state = session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: group_uuid.clone(),
+                title: "E".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                custom_fields: vec![
+                    CustomField {
+                        name: "Secret".into(),
+                        value: "hunter2".into(),
+                        protected: true,
+                    },
+                    CustomField {
+                        name: "Public".into(),
+                        value: "hello".into(),
+                        protected: false,
+                    },
+                ],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+    let entry = &state.root.children[0].entries[0];
+    assert_eq!(entry.custom_fields.len(), 2);
+    assert_eq!(
+        session
+            .get_custom_field_value(&uuid, "Secret")
+            .unwrap()
+            .as_deref(),
+        Some("hunter2")
+    );
+    let secret = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Secret")
+        .unwrap();
+    assert!(secret.protected && secret.value.is_empty());
+
+    // History snapshots keep the value server-side for restore (never shown
+    // in the UI), and a restore brings the protected field back intact.
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert!(!history.is_empty());
+    let old_secret = history
+        .last()
+        .expect("a prior snapshot exists")
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Secret")
+        .expect("history keeps the custom field");
+    assert!(old_secret.protected);
+    assert_eq!(old_secret.value, "hunter2");
+    session
+        .restore_entry_version(&uuid, history.len() - 1)
+        .unwrap();
+    let restored = session.snapshot().unwrap();
+    let entry = &restored
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == group_uuid)
+        .unwrap()
+        .entries[0];
+    let secret = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Secret")
+        .unwrap();
+    assert!(secret.protected);
+    assert_eq!(
+        session
+            .get_custom_field_value(&entry.uuid, "Secret")
+            .unwrap()
+            .as_deref(),
+        Some("hunter2")
+    );
+}
+
+#[test]
 fn custom_fields_exclude_reserved_names() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
@@ -2350,18 +2590,22 @@ fn custom_fields_exclude_reserved_names() {
                 CustomField {
                     name: FIELD_OTP.to_owned(),
                     value: "should-not-appear".into(),
+                    protected: false,
                 },
                 CustomField {
                     name: FIELD_TITLE.to_owned(),
                     value: "should-not-appear".into(),
+                    protected: false,
                 },
                 CustomField {
                     name: "   ".into(),
                     value: "ignored".into(),
+                    protected: false,
                 },
                 CustomField {
                     name: "Nickname".into(),
                     value: "alice".into(),
+                    protected: false,
                 },
             ],
             attachments: vec![],
@@ -3327,6 +3571,7 @@ fn expand_autotype_sequence_resolves_refs_across_entries() {
                 custom_fields: vec![CustomField {
                     name: "Customer Id".into(),
                     value: "CUST-42".into(),
+                    protected: false,
                 }],
                 attachments: vec![],
             },

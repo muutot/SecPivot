@@ -32,6 +32,10 @@ export interface VaultEntry {
 export interface CustomField {
   name: string;
   value: string;
+  /** KDBX protected string. In the Tauri runtime the value is absent from
+   * `VaultEntry` snapshots (resolved on demand via `vault.getCustomFieldValue`);
+   * the browser demo fallback keeps it inline. */
+  protected?: boolean;
 }
 
 export interface AttachmentInfo {

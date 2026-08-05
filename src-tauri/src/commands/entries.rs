@@ -36,6 +36,20 @@ pub(crate) fn get_entry_totp(
         .get_entry_totp(&uuid)
 }
 
+/// Fetch one custom field's value on demand; protected custom fields are never
+/// part of `VaultState`/`VaultEntry`.
+#[tauri::command]
+pub(crate) fn get_custom_field_value(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    name: String,
+) -> Result<Option<String>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .get_custom_field_value(&uuid, &name)
+}
+
 /// Server-side security analysis; no passwords leave the session.
 #[tauri::command]
 pub(crate) fn security_report(

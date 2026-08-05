@@ -172,9 +172,19 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
                 .fields
                 .iter()
                 .filter(|(name, _)| !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str()))
-                .map(|(name, value)| CustomField {
-                    name: name.clone(),
-                    value: value.get().clone(),
+                .map(|(name, value)| {
+                    let protected = value.is_protected();
+                    CustomField {
+                        name: name.clone(),
+                        // Protected values never leave the session in the
+                        // snapshot; they are resolved on demand.
+                        value: if protected {
+                            String::new()
+                        } else {
+                            value.get().clone()
+                        },
+                        protected,
+                    }
                 })
                 .collect();
             fields.sort_by(|a, b| a.name.cmp(&b.name));
@@ -373,7 +383,7 @@ pub(crate) fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField
         if name.is_empty() || RESERVED_FIELDS.contains(&name.as_str()) {
             continue;
         }
-        desired.insert(name, field.value.clone());
+        desired.insert(name, (field.value.clone(), field.protected));
     }
     let current: Vec<String> = entry.fields.keys().cloned().collect();
     for name in current {
@@ -381,8 +391,15 @@ pub(crate) fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField
             entry.fields.remove(&name);
         }
     }
-    for (name, value) in desired {
-        entry.set(name, Value::unprotected(value));
+    for (name, (value, protected)) in desired {
+        entry.set(
+            name,
+            if protected {
+                Value::protected(value)
+            } else {
+                Value::unprotected(value)
+            },
+        );
     }
 }
 

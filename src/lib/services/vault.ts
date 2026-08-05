@@ -64,6 +64,7 @@ interface VaultStore {
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
+  getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
@@ -487,6 +488,14 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.totp ?? null;
+  },
+
+  async getCustomFieldValue(uuid: string, name: string): Promise<string | null> {
+    if (isTauriRuntime()) {
+      return backendInvoke<string | null>("get_custom_field_value", { uuid, name });
+    }
+    const current = browserState ?? (await ensureBrowserLoaded());
+    return findEntry(current.root, uuid)?.customFields?.find((f) => f.name === name)?.value ?? null;
   },
 
   async securityReport(): Promise<SecurityReport> {

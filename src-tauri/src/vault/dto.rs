@@ -47,6 +47,11 @@ pub struct VaultEntry {
 pub struct CustomField {
     pub name: String,
     pub value: String,
+    /// Whether the value is a KDBX protected string (masked in the UI,
+    /// never part of the `VaultEntry` snapshot value — it is resolved on
+    /// demand via `get_custom_field_value`).
+    #[serde(default)]
+    pub protected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

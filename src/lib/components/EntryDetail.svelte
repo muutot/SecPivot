@@ -43,6 +43,13 @@
   let fetchedPassword = $state("");
   let passwordLoaded = $state(false);
   let passwordLoading = $state(false);
+  /** Revealed/loaded protected custom-field values, keyed by field name.
+   * Protected values are absent from `VaultEntry`; they are fetched on demand
+   * for reveal and copy, exactly like the password. */
+  let customFieldValues = $state<Record<string, string>>({});
+  let customFieldLoaded = $state<Record<string, boolean>>({});
+  let customFieldLoading = $state<Record<string, boolean>>({});
+  let customFieldRevealed = $state<Record<string, boolean>>({});
   let copied = $state("");
   let activeTab = $state<"fields" | "meta" | "attachments" | "history">("fields");
   let historyVersions = $state<HistoryVersion[]>([]);
@@ -56,6 +63,10 @@
     revealPassword = false;
     passwordLoaded = false;
     fetchedPassword = "";
+    customFieldValues = {};
+    customFieldLoaded = {};
+    customFieldLoading = {};
+    customFieldRevealed = {};
     historyLoadedUuid = null;
     historyVersions = [];
   });
@@ -93,6 +104,44 @@
       passwordLoaded = true;
     } finally {
       passwordLoading = false;
+    }
+  }
+
+  /** Protected custom-field values are fetched on demand, never part of
+   * `VaultEntry` from the backend (mirrors the password flow). */
+  async function ensureCustomField(name: string): Promise<string | null> {
+    if (customFieldLoaded[name]) return customFieldValues[name] ?? null;
+    if (customFieldLoading[name]) return null;
+    customFieldLoading = { ...customFieldLoading, [name]: true };
+    try {
+      const value = await vault.getCustomFieldValue(entry.uuid, name);
+      customFieldValues = { ...customFieldValues, [name]: value ?? "" };
+      customFieldLoaded = { ...customFieldLoaded, [name]: true };
+      return value;
+    } finally {
+      customFieldLoading = { ...customFieldLoading, [name]: false };
+    }
+  }
+
+  async function copyCustomField(name: string): Promise<void> {
+    try {
+      const value = await ensureCustomField(name);
+      if (value === null) {
+        flash("error");
+        return;
+      }
+      await handleCopy(value, "custom", true);
+    } catch {
+      flash("error");
+    }
+  }
+
+  async function toggleCustomFieldReveal(name: string): Promise<void> {
+    try {
+      await ensureCustomField(name);
+      customFieldRevealed = { ...customFieldRevealed, [name]: !customFieldRevealed[name] };
+    } catch {
+      flash("error");
     }
   }
 
@@ -328,17 +377,52 @@
       {#if entry.customFields?.length}
         {#each entry.customFields as field}
           <div class="field-block">
-            <span class="field-label">{field.name}</span>
+            <span class="field-label">
+              {field.name}
+              {#if field.protected}
+                <span class="protected-badge" title="受保护字段 (值不进入快照)">
+                  <AppIcon name="lock" size={10} />
+                </span>
+              {/if}
+            </span>
             <div class="field-value">
-              <span class="field-text" title={field.value}>{field.value || "—"}</span>
-              {#if field.value}
-                <button
-                  class="copy-btn"
-                  onclick={() => handleCopy(field.value, "custom")}
-                  title="复制字段值"
-                >
-                  <AppIcon name="copy" size={13} />
-                </button>
+              {#if field.protected}
+                <span class="field-text mono">
+                  {customFieldRevealed[field.name]
+                    ? customFieldValues[field.name] || ""
+                    : "••••••••••••"}
+                </span>
+                {#if customFieldLoading[field.name]}
+                  <span class="copy-btn" aria-hidden="true">
+                    <AppIcon name="clock" size={13} />
+                  </span>
+                {:else}
+                  <button
+                    class="copy-btn"
+                    onclick={() => toggleCustomFieldReveal(field.name)}
+                    title={customFieldRevealed[field.name] ? "隐藏字段值" : "显示字段值"}
+                  >
+                    <AppIcon name={customFieldRevealed[field.name] ? "eye-off" : "eye"} size={13} />
+                  </button>
+                  <button
+                    class="copy-btn"
+                    onclick={() => copyCustomField(field.name)}
+                    title="复制字段值"
+                  >
+                    <AppIcon name="copy" size={13} />
+                  </button>
+                {/if}
+              {:else}
+                <span class="field-text" title={field.value}>{field.value || "—"}</span>
+                {#if field.value}
+                  <button
+                    class="copy-btn"
+                    onclick={() => handleCopy(field.value, "custom")}
+                    title="复制字段值"
+                  >
+                    <AppIcon name="copy" size={13} />
+                  </button>
+                {/if}
               {/if}
             </div>
           </div>
@@ -642,6 +726,13 @@
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
     letter-spacing: 0.04em;
+  }
+
+  .protected-badge {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-left: 2px;
+    color: var(--accent-color, var(--primary-color));
   }
 
   .field-value {
