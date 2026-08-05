@@ -185,6 +185,7 @@
   .group-tree {
     display: flex;
     flex-direction: column;
+    flex: 1;
     min-height: 0;
   }
 
@@ -228,6 +229,7 @@
   }
 
   .tree-list {
+    flex: 1;
     min-height: 0;
     overflow: auto;
     padding: 0 4px 12px;

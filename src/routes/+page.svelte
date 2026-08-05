@@ -2147,6 +2147,8 @@
   }
 
   .group-panel {
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     overflow: hidden;
     border-right: 1px solid var(--border-subtle);
