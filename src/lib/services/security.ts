@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appSettings, isTauriRuntime } from "$lib/services/settings";
 import { vault } from "$lib/services/vault";
 import { clearClipboard, copyText } from "$lib/utils/clipboard";
@@ -94,14 +95,27 @@ export function installAutoLock(): () => void {
   window.addEventListener("wheel", onContinuous, { capture: true, passive: true });
   window.addEventListener("scroll", onContinuous, { capture: true, passive: true });
   armIdleLock();
+  // Re-arm immediately when `autoLockMinutes` changes instead of waiting for
+  // the next user activity or vault transition.
+  const unsubSettings = appSettings.subscribe(() => armIdleLock());
   return () => {
     window.removeEventListener("pointerdown", onDiscrete);
     window.removeEventListener("keydown", onDiscrete);
     window.removeEventListener("mousemove", onContinuous);
     window.removeEventListener("wheel", onContinuous, true);
     window.removeEventListener("scroll", onContinuous, true);
+    unsubSettings();
     clearIdleTimer();
   };
+}
+
+/** True while the TCATO overlay owns focus. Set synchronously before the
+ *  overlay is opened (the blur it causes would otherwise trip the focus-loss
+ *  lock) and cleared by the backend's open/close events. */
+let tcatoOverlayOpen = false;
+
+export function setTcatoOverlayOpen(open: boolean): void {
+  tcatoOverlayOpen = open;
 }
 
 /**
@@ -110,12 +124,29 @@ export function installAutoLock(): () => void {
  */
 export function installFocusLock(): () => void {
   const onBlur = () => {
+    if (tcatoOverlayOpen) return;
     if (!get(appSettings).security.lockOnFocusLoss) return;
     if (!vault.get()) return;
     void lockVault();
   };
   window.addEventListener("blur", onBlur);
+  let stopOpen: UnlistenFn | undefined;
+  let stopClose: UnlistenFn | undefined;
+  if (isTauriRuntime()) {
+    void listen("tcato-overlay-open", () => {
+      tcatoOverlayOpen = true;
+    }).then((fn) => {
+      stopOpen = fn;
+    });
+    void listen("tcato-overlay-close", () => {
+      tcatoOverlayOpen = false;
+    }).then((fn) => {
+      stopClose = fn;
+    });
+  }
   return () => {
     window.removeEventListener("blur", onBlur);
+    stopOpen?.();
+    stopClose?.();
   };
 }

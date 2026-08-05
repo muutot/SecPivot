@@ -42,6 +42,16 @@ export function generatePassword(settings: PasswordGeneratorSettings): string {
     { category: DIGITS, re: /[0-9]/, enabled: wantDigits },
   ];
   let fixIndex = 0;
+  // Distinct random positions from a CSPRNG Fisher–Yates shuffle, so every
+  // required class lands in its own slot (never `Math.random` or the old
+  // deterministic `fixIndex % length`).
+  const positions = [...Array(settings.length).keys()];
+  const rnd = new Uint32Array(settings.length);
+  crypto.getRandomValues(rnd);
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = rnd[i] % (i + 1);
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
   for (const { category, re, enabled } of candidates) {
     if (!enabled || re.test(chars.join(""))) continue;
     const categoryPool = [...category].filter((c) => {
@@ -50,9 +60,11 @@ export function generatePassword(settings: PasswordGeneratorSettings): string {
       return true;
     });
     if (categoryPool.length === 0) continue;
-    const pos = fixIndex % settings.length;
+    const pos = positions[fixIndex % settings.length];
     fixIndex += 1;
-    chars[pos] = categoryPool[Math.floor(Math.random() * categoryPool.length)];
+    const pick = new Uint32Array(1);
+    crypto.getRandomValues(pick);
+    chars[pos] = categoryPool[pick[0] % categoryPool.length];
   }
 
   return chars.join("");
