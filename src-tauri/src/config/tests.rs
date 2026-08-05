@@ -623,21 +623,25 @@ fn bridge_defaults_off_and_survives_round_trip() {
 }
 
 #[test]
-fn rpc_defaults_off_and_survives_round_trip() {
+fn rpc_defaults_off_keep_session_on_and_survive_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(!store.get().unwrap().rpc.enabled);
+    assert!(store.get().unwrap().rpc.keep_session_after_lock);
 
     let mut config = AppConfig::default();
     config.rpc.enabled = true;
+    config.rpc.keep_session_after_lock = false;
     store.set(config.clone()).unwrap();
 
     let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
     assert!(text.contains("\"rpc\": {"));
     assert!(text.contains("\"enabled\": true"));
+    assert!(text.contains("\"keepSessionAfterLock\": false"));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(reloaded.get().unwrap().rpc.enabled);
+    assert!(!reloaded.get().unwrap().rpc.keep_session_after_lock);
 }
 
 #[test]

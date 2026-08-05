@@ -4154,6 +4154,25 @@ fn rpc_keys_are_session_held_and_wiped_on_close() {
 }
 
 #[test]
+fn close_keeping_rpc_session_retains_rpc_keys_but_wipes_bridge_and_secrets() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+
+    session.register_rpc_key("user@browser", vec![7u8; 32]);
+    session
+        .bridge_keys
+        .insert("bridge".to_owned(), vec![9u8; 24]);
+
+    session.close_keeping_rpc_session();
+
+    assert!(session.rpc_key("user@browser").is_some());
+    assert!(session.bridge_keys.is_empty());
+    assert!(session.password.is_none());
+    assert!(session.keyfile.is_none());
+    assert!(!session.is_open());
+}
+
+#[test]
 fn rpc_database_dto_builds_group_tree_and_skips_recycle_bin() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
@@ -4559,6 +4578,36 @@ fn rpc_and_autotype_honor_blocked_urls() {
         session.autotype_match("Dashboard · example.com").unwrap(),
         uuid
     );
+}
+
+#[test]
+fn domain_accuracy_alt_url_matches_deep_login_path_with_query() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "阿里云",
+        "",
+        serde_json::json!({
+            "version": 1,
+            "altURLs": ["https://account.aliyun.com"]
+        }),
+    );
+    // The real Aliyun login page carries a long oauth_callback query on the
+    // same host; Domain accuracy must still hit (host equal).
+    let logins = session.logins_for(
+        "https://account.aliyun.com/login/login.htm?oauth_callback=https%3A%2F%2Faccount-devops.aliyun.com%2Flogin%3Fnext_url%3Dhttp%253A%252F%252Faccount-devops.aliyun.com%252Flogin%253Fnext_url%253Dhttp%25253A%25252F%25252Fcodeup.aliyun.com%25252F%253FnavKey%25253Dmine",
+        None,
+    );
+    assert_eq!(logins.len(), 1);
+    // A sibling host (not a subdomain) does not match, mirroring KeePassRPC's
+    // host-tier boundary: `login.aliyun.com` is unrelated to `account.aliyun.com`.
+    assert!(session
+        .logins_for("https://login.aliyun.com/login", None)
+        .is_empty());
+    // A true subdomain under the configured host still matches at Domain.
+    let logins = session.logins_for("https://intl.account.aliyun.com/login", None);
+    assert_eq!(logins.len(), 1);
 }
 
 #[test]

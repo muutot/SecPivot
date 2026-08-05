@@ -450,13 +450,34 @@ pub struct BridgeSettings {
     pub enabled: bool,
 }
 
-/// KeePassRPC (Kee 4.x) bridge. Same lifecycle as the KeePassHttp bridge:
-/// the loopback server only runs while `enabled`, and SRP keys are
-/// session-held (never persisted) and wiped on vault lock.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// KeePassRPC (Kee 4.x) bridge. The loopback server only runs while
+/// `enabled`; SRP keys are session-held (never persisted). When
+/// `keep_session_after_lock` is set (default), locking the vault keeps the
+/// SRP session keys in memory so a freshly unlocked vault is reused by the
+/// Kee extension without a new side-channel password — matching the official
+/// KeePassRPC behavior. The loopback server serves nothing sensitive while
+/// locked regardless (data requests still answer "locked").
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RpcSettings {
     pub enabled: bool,
+    /// Keep SRP session keys across a vault lock so the extension reconnects
+    /// without re-authorizing (official KeePassRPC behavior).
+    #[serde(default = "default_true")]
+    pub keep_session_after_lock: bool,
+}
+
+impl Default for RpcSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            keep_session_after_lock: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

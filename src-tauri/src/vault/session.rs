@@ -125,6 +125,21 @@ impl VaultSession {
     }
 
     pub fn close(&mut self) {
+        self.close_impl(true);
+    }
+
+    /// Lock the vault but keep the KeePassRPC SRP session keys in memory, so a
+    /// freshly unlocked vault is reused by the Kee extension without a new
+    /// side-channel password (official KeePassRPC behavior, opt-in via
+    /// `rpc.keep_session_after_lock`). Master password, keyfile, and
+    /// KeePassHttp bridge keys are still wiped — only the RPC keys survive,
+    /// and the server answers "locked" for data requests while the vault is
+    /// closed.
+    pub fn close_keeping_rpc_session(&mut self) {
+        self.close_impl(false);
+    }
+
+    fn close_impl(&mut self, wipe_rpc_keys: bool) {
         self.path = None;
         // Wipe secret material before dropping the buffers: setting `None`
         // alone leaves the master password and keyfile contents on the heap.
@@ -137,8 +152,10 @@ impl VaultSession {
         for (_, mut key) in self.bridge_keys.drain() {
             wipe_secret_bytes(&mut key);
         }
-        for (_, mut key) in self.rpc_keys.drain() {
-            wipe_secret_bytes(&mut key);
+        if wipe_rpc_keys {
+            for (_, mut key) in self.rpc_keys.drain() {
+                wipe_secret_bytes(&mut key);
+            }
         }
         self.db = None;
         self.dirty = false;

@@ -96,10 +96,21 @@ pub(crate) fn close_vault(
     app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
 ) -> Result<(), String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .close();
+    let keep_rpc = app
+        .try_state::<crate::config::ConfigStore>()
+        .map(|store| {
+            store
+                .get()
+                .map(|cfg| cfg.rpc.keep_session_after_lock)
+                .unwrap_or(true)
+        })
+        .unwrap_or(true);
+    let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    if keep_rpc {
+        session.close_keeping_rpc_session();
+    } else {
+        session.close();
+    }
     shield::set_capture_guard(&app, false);
     Ok(())
 }

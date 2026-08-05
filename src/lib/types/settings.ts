@@ -146,6 +146,9 @@ export interface BridgeSettings {
  * session-held, and the side-channel password is shown once per connection. */
 export interface RpcSettings {
   enabled: boolean;
+  /** Keep SRP session keys across a vault lock so the extension reconnects
+   * without re-authorizing (official KeePassRPC behavior). */
+  keepSessionAfterLock: boolean;
 }
 
 /** Favicon download behavior ("Download Favicons").

@@ -106,6 +106,31 @@
     </div>
   </section>
 
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
+      <div>
+        <strong>锁库后保留会话密钥</strong>
+        <p>
+          锁定数据库时保留 SRP 会话密钥，解锁后 Kee 扩展无需重新输入旁路密码（与官方 KeePassRPC
+          一致）。锁库期间扩展仍无法获取任何凭据
+        </p>
+      </div>
+    </div>
+    <button
+      class="toggle-switch"
+      class:active={rpc.keepSessionAfterLock}
+      role="switch"
+      aria-checked={rpc.keepSessionAfterLock}
+      aria-label="锁库后保留 RPC 会话密钥"
+      onclick={() => {
+        change("keepSessionAfterLock", !rpc.keepSessionAfterLock);
+      }}
+    >
+      <span class="toggle-knob"></span>
+    </button>
+  </section>
+
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
@@ -121,7 +146,8 @@
 
   <p class="settings-note">
     旁路密码约 2 分钟有效且仅显示一次；SRP
-    密钥保存在内存中，锁定或关闭数据库时自动清除。数据库未解锁时，扩展无法获取任何凭据。
+    密钥保存在内存中。关闭「锁库后保留会话密钥」后，锁定或关闭数据库时会清除 SRP
+    密钥，扩展需重新授权；否则密钥在锁库期间仍保留，供解锁后直接复用。数据库未解锁时，扩展无法获取任何凭据。
   </p>
 
   <p class="auto-save-note">修改即时生效并自动保存</p>
