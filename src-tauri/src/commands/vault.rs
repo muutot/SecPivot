@@ -155,11 +155,11 @@ pub(crate) fn save_vault_as(
 #[tauri::command]
 pub(crate) fn change_master_key(
     session: tauri::State<'_, Mutex<VaultSession>>,
-    password: String,
+    mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     // Keyfile read, KDF and persistence all happen without the session lock.
-    let keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
+    let mut keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
     let (db, target, revision) = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
@@ -170,7 +170,16 @@ pub(crate) fn change_master_key(
             .lock()
             .map_err(|_| "数据库锁已损坏".to_owned())?
             .complete_change(password, keyfile_bytes, revision),
-        Err(e) => Err(e),
+        // The failure path must not leave the new master password (or keyfile
+        // bytes) on the heap; the success path moved them into the session,
+        // which zeroizes them on close.
+        Err(e) => {
+            password.zeroize();
+            if let Some(bytes) = keyfile_bytes.as_deref_mut() {
+                bytes.zeroize();
+            }
+            Err(e)
+        }
     };
     result
 }

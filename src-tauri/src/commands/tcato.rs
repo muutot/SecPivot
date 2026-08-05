@@ -4,6 +4,7 @@
 use crate::platform::focus;
 use crate::vault::VaultSession;
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
 // ---------------------------------------------------------------------------
 // TCATO (two-channel auto-type overlay)
@@ -21,7 +22,13 @@ pub(crate) struct TcatoInfo {
     has_password: bool,
 }
 
-const TCATO_WINDOW_LABEL: &str = "tcato";
+pub(crate) const TCATO_WINDOW_LABEL: &str = "tcato";
+
+/// Events telling the main window whether the TCATO overlay is active, so its
+/// focus-loss lock does not fire while the overlay owns focus (the overlay
+/// intentionally blurs the main window on open).
+pub(crate) const TCATO_OPEN_EVENT: &str = "tcato-overlay-open";
+pub(crate) const TCATO_CLOSE_EVENT: &str = "tcato-overlay-close";
 
 /// Open (or focus) the small always-on-top overlay that sends one channel of
 /// credentials to the window in focus without simulated key presses.
@@ -42,6 +49,7 @@ pub(crate) fn open_tcato_overlay(
     if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
+        let _ = app.emit(TCATO_OPEN_EVENT, ());
         return Ok(());
     }
     tauri::WebviewWindowBuilder::new(
@@ -58,6 +66,7 @@ pub(crate) fn open_tcato_overlay(
     .initialization_script("window.location.hash = '#/tcato';")
     .build()
     .map_err(|e| format!("无法打开 TCATO 窗口: {e}"))?;
+    let _ = app.emit(TCATO_OPEN_EVENT, ());
     Ok(())
 }
 
@@ -115,4 +124,5 @@ pub(crate) fn close_tcato_overlay(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
         let _ = window.close();
     }
+    let _ = app.emit(TCATO_CLOSE_EVENT, ());
 }

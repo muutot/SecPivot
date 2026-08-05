@@ -21,16 +21,36 @@ pub fn url_host(url: &str) -> Option<String> {
     (!host.is_empty()).then_some(host)
 }
 
-/// Write `bytes` to `path` atomically: write to a sibling `.tmp` file, then
-/// rename it over the target so readers never observe a half-written file. On
-/// rename failure the temp file is removed. `what` names the file type in the
-/// user-facing error messages (e.g. `"配置"`, `"数据库"`).
+/// Write `bytes` to `path` atomically: write to a sibling `.tmp` file, flush
+/// it, then rename it over the target so readers never observe a half-written
+/// file. On any failure the temp file is removed. `what` names the file type
+/// in the user-facing error messages (e.g. `"配置"`, `"数据库"`).
 pub fn atomic_write(path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
     let tmp = temp_sibling(path);
-    std::fs::write(&tmp, bytes).map_err(|e| format!("写入{what}失败: {e}"))?;
+    if let Err(e) = std::fs::write(&tmp, bytes) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("写入{what}失败: {e}"));
+    }
+    // Durability: flush the temp file before renaming so a crash/power loss
+    // cannot leave the target empty or stale. The handle must be writable for
+    // `sync_all` (FlushFileBuffers) on Windows.
+    let sync = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&tmp)
+        .and_then(|f| f.sync_all());
+    if let Err(e) = sync {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("写入{what}失败: {e}"));
+    }
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("保存{what}失败: {e}"));
+    }
+    // Best-effort: persist the rename itself (directory metadata).
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
     }
     Ok(())
 }

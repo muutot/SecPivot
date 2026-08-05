@@ -197,6 +197,13 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                // The TCATO overlay can be dismissed directly (Alt+F4); tell
+                // the main window so its focus-loss lock re-arms.
+                if window.label() == commands::tcato::TCATO_WINDOW_LABEL {
+                    let _ = window
+                        .app_handle()
+                        .emit(commands::tcato::TCATO_CLOSE_EVENT, ());
+                }
                 handle_close_requested(window, api);
             }
         })
@@ -258,5 +265,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|_app_handle, _event| {});
+    app.run(|_app_handle, event| {
+        // The scheduled clipboard wipe lives in the renderer (a JS timer that
+        // dies with the process); quitting via the tray must clear any copied
+        // password now, or it would stay on the system clipboard forever.
+        if let tauri::RunEvent::Exit = event {
+            let _ = crate::platform::clipboard::clear_clipboard();
+        }
+    });
 }
