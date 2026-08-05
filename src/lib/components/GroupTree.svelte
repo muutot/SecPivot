@@ -17,6 +17,7 @@
     onselect: (uuid: string | null) => void;
     onaddsubgroup: (parentUuid: string | null) => void;
     onrename: (uuid: string, name: string) => void;
+    onchangeicon: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -33,6 +34,7 @@
     onselect,
     onaddsubgroup,
     onrename,
+    onchangeicon,
     ondelete,
     onrestore,
     onemptybin,
@@ -172,6 +174,7 @@
         ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}
         {onrename}
+        {onchangeicon}
         {ondelete}
         {onrestore}
         {onemptybin}

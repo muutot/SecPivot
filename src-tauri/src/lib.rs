@@ -241,6 +241,7 @@ pub fn run() {
             commands::close_tcato_overlay,
             commands::add_group,
             commands::rename_group,
+            commands::set_group_icon,
             commands::get_entry_password,
             commands::get_entry_totp,
             commands::get_custom_field_value,

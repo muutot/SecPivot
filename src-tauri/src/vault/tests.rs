@@ -828,6 +828,33 @@ fn group_icon_round_trip() {
 }
 
 #[test]
+fn set_group_icon_updates_and_resets() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let group = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Mail".into(),
+            icon: None,
+        })
+        .unwrap()
+        .root
+        .children
+        .remove(0);
+    // Update to a built-in index.
+    let state = session.set_group_icon(&group.uuid, Some(7)).unwrap();
+    assert_eq!(state.root.children[0].icon, Some(7));
+    assert_eq!(state.root.children[0].name, "Mail");
+    // `None` resets to the default icon.
+    let state = session.set_group_icon(&group.uuid, None).unwrap();
+    assert_eq!(state.root.children[0].icon, None);
+    // Unknown group id still errors.
+    assert!(session
+        .set_group_icon("00000000-0000-0000-0000-000000000000", Some(1))
+        .is_err());
+}
+
+#[test]
 fn move_entry_between_groups() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

@@ -76,6 +76,7 @@ interface VaultStore {
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
+  setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   restoreGroup: (uuid: string) => Promise<VaultState>;
   emptyRecycleBin: () => Promise<VaultState>;
@@ -648,6 +649,22 @@ export const vault: VaultStore = {
       const group = findGroup(draft.root, uuid);
       if (!group) throw new Error("group not found");
       group.name = name;
+    });
+    state.set(result);
+    return result;
+  },
+
+  async setGroupIcon(uuid: string, icon: number | null): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("set_group_icon", { uuid, icon });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, uuid);
+      if (!group) throw new Error("group not found");
+      if (icon === null) group.icon = undefined;
+      else group.icon = icon;
     });
     state.set(result);
     return result;

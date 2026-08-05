@@ -67,6 +67,9 @@
   let newGroupName = $state("");
   let groupIconIndex = $state<number | null>(null);
   let groupCreating = $state(false);
+  let groupIconDialogUuid = $state<string | null>(null);
+  let groupIconPick = $state<number | null>(null);
+  let groupIconSaving = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let statusMsg = $state("");
   let busy = $state(false);
@@ -993,10 +996,25 @@
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
     if (isTcatoOverlay || !currentVault) return;
+    // Close the group icon picker with Escape (mirrors the group modal input).
+    if (event.key === "Escape") {
+      if (groupIconDialogUuid && !groupIconSaving) {
+        groupIconDialogUuid = null;
+      }
+      return;
+    }
     // Holding a key fires repeats: never dispatch the same shortcut twice, and
     // never start a second action while another (import/favicon/save) is running.
     if (event.repeat || busy) return;
-    if (editorOpen || groupModalOpen || reportOpen || confirmState || entryMenu || blankMenu)
+    if (
+      editorOpen ||
+      groupModalOpen ||
+      groupIconDialogUuid ||
+      reportOpen ||
+      confirmState ||
+      entryMenu ||
+      blankMenu
+    )
       return;
     const target = event.target as HTMLElement | null;
     if (
@@ -1132,6 +1150,32 @@
       flash("已重命名分组");
     } catch (e) {
       flash(`重命名失败：${e}`);
+    }
+  }
+
+  /** Open the group icon picker dialog, seeding the selection from the group's
+   *  current built-in icon index (or none when it has no explicit icon). */
+  function openGroupIconDialog(uuid: string): void {
+    const group = currentVault
+      ? collectGroups(currentVault.root).find((g) => g.uuid === uuid)
+      : null;
+    groupIconDialogUuid = uuid;
+    groupIconPick = group?.icon ?? null;
+    groupIconSaving = false;
+  }
+
+  async function confirmChangeGroupIcon(): Promise<void> {
+    const uuid = groupIconDialogUuid;
+    if (!uuid || groupIconSaving) return;
+    groupIconSaving = true;
+    try {
+      await vault.setGroupIcon(uuid, groupIconPick);
+      groupIconDialogUuid = null;
+      flash("已更新分组图标");
+    } catch (e) {
+      flash(`更新图标失败：${e}`);
+    } finally {
+      groupIconSaving = false;
     }
   }
 
@@ -1532,6 +1576,7 @@
             }}
             onaddsubgroup={openGroupModal}
             onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
+            onchangeicon={openGroupIconDialog}
             ondelete={askDeleteGroup}
             onrestore={(uuid: string) => void restoreGroup(uuid)}
             onemptybin={askEmptyRecycleBin}
@@ -1861,6 +1906,45 @@
           disabled={!newGroupName.trim() || groupCreating}
         >
           创建
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if groupIconDialogUuid}
+  <div class="modal-backdrop" role="presentation">
+    <div class="group-modal" role="dialog" aria-modal="true" aria-label="设置分组图标">
+      <div class="modal-head">
+        <span class="modal-icon"><AppIcon name="palette" size={18} /></span>
+        <div>
+          <strong>设置分组图标</strong>
+          <p>选择内置图标,点击保存后生效</p>
+        </div>
+      </div>
+      <span class="group-icon-label">图标</span>
+      <div class="group-icon-grid">
+        {#each KEEPASS_ICON_CHOICES as index}
+          <button
+            type="button"
+            class="icon-option"
+            class:selected={groupIconPick === index}
+            onclick={() => (groupIconPick = groupIconPick === index ? null : index)}
+            title={`内置图标 ${index}`}
+            aria-pressed={groupIconPick === index}
+          >
+            <AppIcon name={groupIconName(index)} size={16} />
+          </button>
+        {/each}
+      </div>
+      <div class="modal-actions">
+        <button class="modal-button" onclick={() => (groupIconDialogUuid = null)}>取消</button>
+        <button
+          class="modal-button primary"
+          onclick={() => void confirmChangeGroupIcon()}
+          disabled={groupIconSaving}
+        >
+          保存
         </button>
       </div>
     </div>

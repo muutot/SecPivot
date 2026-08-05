@@ -536,4 +536,20 @@ impl VaultSession {
         self.mark_dirty();
         self.snapshot()
     }
+
+    /// Set a group's built-in KeePass icon index (`Some(i)`) or reset it to
+    /// the default icon (`None`). The icon does not touch the group name.
+    pub fn set_group_icon(&mut self, uuid: &str, icon: Option<u32>) -> Result<VaultState, String> {
+        let id = parse_group_id(uuid)?;
+        {
+            let db = self.require_db_mut()?;
+            let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            match icon {
+                Some(index) => group.set_icon_builtin(index as usize),
+                None => group.set_icon_none(),
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
 }
