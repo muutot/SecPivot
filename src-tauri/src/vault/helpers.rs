@@ -75,20 +75,38 @@ pub(crate) fn recycle_bin_id(db: &Database) -> Option<GroupId> {
     db.meta.recyclebin_uuid.map(GroupId::from_uuid)
 }
 
-/// Parse the KeePassRPC per-entry config (`KPRPC JSON` custom field) and
-/// return its `altURLs` array — the extra/custom URLs a Kee browser extension
-/// uses to match an entry. Missing or malformed config degrades to an empty
-/// list (entry then matches on its primary URL only).
-fn kprpc_alt_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
-    let Some(raw) = entry.get(FIELD_KPRPC_CONFIG) else {
-        return Vec::new();
-    };
-    let value: serde_json::Value = match serde_json::from_str(raw) {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
+/// Minimum match accuracy for a KeePassRPC entry (the plugin stores it as a
+/// pair of booleans; the constructor maps them back to the enum).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum MatchAccuracy {
+    /// `blockHostnameOnlyMatch`: only URL-exact / close matches count.
+    Exact,
+    /// `blockDomainOnlyMatch`: hostname-and-port matches count.
+    Hostname,
+    /// default (both flags false): registrable-domain matches count.
+    #[default]
+    Domain,
+}
+
+/// Parsed KeePassRPC per-entry config (`KPRPC JSON` custom field), the full
+/// v1 shape Kee writes. Missing or malformed fields degrade to empty lists /
+/// `Domain` accuracy, so the entry still matches on its primary URL.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct KprpcConfig {
+    /// Additional URLs that should match the entry (`altURLs`).
+    pub alt_urls: Vec<String>,
+    /// URLs that block the entry from matching (`blockedURLs`).
+    pub blocked_urls: Vec<String>,
+    /// Regular expressions that match the entry (`regExURLs`).
+    pub regex_urls: Vec<String>,
+    /// Regular expressions that block the entry (`regExBlockedURLs`).
+    pub regex_blocked_urls: Vec<String>,
+    pub accuracy: MatchAccuracy,
+}
+
+fn json_strings(value: &serde_json::Value, key: &str) -> Vec<String> {
     value
-        .get("altURLs")
+        .get(key)
         .and_then(serde_json::Value::as_array)
         .map(|arr| {
             arr.iter()
@@ -98,10 +116,140 @@ fn kprpc_alt_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Every URL an entry should match against, for browser-bridge and auto-type
-/// matching: the primary `URL` field (space-separated list) plus any
-/// KeePassRPC `altURLs` custom URLs. Entries edited in Kee match their
-/// alternative URLs too; empty entries (no URL, no altURLs) never match.
+fn json_bool(value: &serde_json::Value, key: &str) -> bool {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Parse the full KeePassRPC per-entry config from the `KPRPC JSON` field.
+/// Malformed JSON degrades to defaults; the entry then matches via its
+/// primary URL only at `Domain` accuracy.
+pub(crate) fn kprpc_config(entry: &keepass::db::EntryRef<'_>) -> KprpcConfig {
+    let Some(raw) = entry.get(FIELD_KPRPC_CONFIG) else {
+        return KprpcConfig::default();
+    };
+    let value: serde_json::Value = match serde_json::from_str(raw) {
+        Ok(v) => v,
+        Err(_) => return KprpcConfig::default(),
+    };
+    let hostname_only = json_bool(&value, "blockHostnameOnlyMatch");
+    let domain_only = json_bool(&value, "blockDomainOnlyMatch");
+    let accuracy = if hostname_only {
+        MatchAccuracy::Exact
+    } else if domain_only {
+        MatchAccuracy::Hostname
+    } else {
+        MatchAccuracy::Domain
+    };
+    KprpcConfig {
+        alt_urls: json_strings(&value, "altURLs"),
+        blocked_urls: json_strings(&value, "blockedURLs"),
+        regex_urls: json_strings(&value, "regExURLs"),
+        regex_blocked_urls: json_strings(&value, "regExBlockedURLs"),
+        accuracy,
+    }
+}
+
+/// 3-tier URL match mirroring KeePassRPC's `BestMatchAccuracyForAnyURL`
+/// (abridged: no path/port wildcards). Returns `true` when the request URL is
+/// at least as similar as `min` requires.
+/// - `Exact`: the two URLs are equal discounting scheme/query/port-noise.
+/// - `Hostname`: same host:port (subdomains never spill).
+/// - `Domain`: same host, or one is a subdomain of the other.
+fn url_matches_accuracy(entry_url: &str, request_url: &str, min: MatchAccuracy) -> bool {
+    let entry_host = url_host(entry_url).unwrap_or_default();
+    let request_host = url_host(request_url).unwrap_or_default();
+    if entry_host.is_empty() || request_host.is_empty() {
+        return false;
+    }
+    let host_equal = entry_host == request_host;
+    let subdomain_cover = request_host.ends_with(&format!(".{entry_host}"))
+        || entry_host.ends_with(&format!(".{request_host}"));
+    match min {
+        MatchAccuracy::Exact => {
+            // Best/close match: identical normalized hosts, plus the same path.
+            host_equal && strip_query(entry_url) == strip_query(request_url)
+        }
+        MatchAccuracy::Hostname => host_equal,
+        MatchAccuracy::Domain => host_equal || subdomain_cover,
+    }
+}
+
+/// Path part of a URL (host + port + path + query, no scheme), lower-cased, so
+/// two URLs sharing a host and path compare at `Exact` accuracy.
+fn strip_query(url: &str) -> String {
+    let rest = url.split("://").nth(1).unwrap_or(url);
+    let mut end = rest.len();
+    if let Some(i) = rest.find('?') {
+        end = end.min(i);
+    }
+    if let Some(i) = rest.find('#') {
+        end = end.min(i);
+    }
+    rest[..end].to_ascii_lowercase()
+}
+
+/// Compile a user regex; malformed patterns simply never match (Kee ignores
+/// them too rather than failing the whole login lookup).
+fn regex_matches(pattern: &str, text: &str) -> bool {
+    regex::Regex::new(pattern)
+        .ok()
+        .is_some_and(|re| re.is_match(text))
+}
+
+/// Whether a request URL falls under a blocked URL: the blocked host blocks
+/// itself and everything below it (`blog.example.com` blocks that host only,
+/// never the parent `example.com`). Mirrors KeePassRPC's blocked-URL
+/// semantics where the stored rule is the "at-or-under" boundary.
+fn host_at_or_below(blocked_url: &str, request_url: &str) -> bool {
+    let blocked_host = url_host(blocked_url).unwrap_or_default();
+    let request_host = url_host(request_url).unwrap_or_default();
+    if blocked_host.is_empty() || request_host.is_empty() {
+        return false;
+    }
+    request_host == blocked_host || request_host.ends_with(&format!(".{blocked_host}"))
+}
+
+/// Whether `request_url` matches the entry under its full KeePassRPC rules:
+/// blocked lists take precedence, then regex match URLs, then the host-tier
+/// match over the primary URL + `altURLs`. This is the single source of truth
+/// for bridge, RPC, and auto-type URL matching.
+pub(crate) fn kprpc_matches_url(entry: &keepass::db::EntryRef<'_>, request_url: &str) -> bool {
+    let cfg = kprpc_config(entry);
+    // Blocked first: either list vetoes the match regardless of anything else.
+    if cfg
+        .blocked_urls
+        .iter()
+        .any(|b| host_at_or_below(b, request_url))
+        || cfg
+            .regex_blocked_urls
+            .iter()
+            .any(|r| regex_matches(r, request_url))
+    {
+        return false;
+    }
+    // A regex match URL wins even if the host tier would miss.
+    if cfg.regex_urls.iter().any(|r| regex_matches(r, request_url)) {
+        return true;
+    }
+    // Otherwise the amount of host/path similarity decides under `accuracy`.
+    let mut urls: Vec<String> = entry
+        .get(FIELD_URL)
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    urls.extend(cfg.alt_urls.iter().cloned());
+    urls.iter()
+        .any(|u| url_matches_accuracy(u, request_url, cfg.accuracy))
+}
+
+/// Every URL an entry exposes to browser-bridge and auto-type matching (for
+/// DTO `url` lists and title scoring): the primary `URL` field (space-separated)
+/// plus any KeePassRPC `altURLs`. Entries edited in Kee match their alternative
+/// URLs too; empty entries (no URL, no altURLs) never match.
 pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
     let mut urls: Vec<String> = entry
         .get(FIELD_URL)
@@ -109,7 +257,7 @@ pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String>
         .split_whitespace()
         .map(str::to_owned)
         .collect();
-    urls.extend(kprpc_alt_urls(entry));
+    urls.extend(kprpc_config(entry).alt_urls);
     urls
 }
 
@@ -197,10 +345,28 @@ pub(crate) fn walk_match(
     }
     for entry in group.entries() {
         let mut score = 0;
-        if entry_match_urls(&entry).iter().any(|u| {
-            let host = url_host(u).unwrap_or_default();
+        // Blocked lists veto the entry regardless of the window title.
+        let cfg = kprpc_config(&entry);
+        let blocked = cfg.blocked_urls.iter().any(|b| {
+            let host = url_host(b).unwrap_or_default();
             !host.is_empty() && window_title.contains(&host)
-        }) {
+        }) || cfg
+            .regex_blocked_urls
+            .iter()
+            .any(|r| regex_matches(r, window_title));
+        if blocked {
+            continue;
+        }
+        // A regex match URL counts as a URL hit against the raw title.
+        let url_hit = cfg
+            .regex_urls
+            .iter()
+            .any(|r| regex_matches(r, window_title))
+            || entry_match_urls(&entry).iter().any(|u| {
+                let host = url_host(u).unwrap_or_default();
+                !host.is_empty() && window_title.contains(&host)
+            });
+        if url_hit {
             score += 2;
         }
         let title = entry.get_title().unwrap_or_default().to_lowercase();

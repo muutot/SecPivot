@@ -103,7 +103,7 @@
   const headerIconName = $derived(keepassIconName(iconIndex ?? initialEntry?.icon ?? -1));
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
-  let activeTab = $state<"fields" | "meta" | "custom" | "attachments">("fields");
+  let activeTab = $state<"fields" | "meta" | "keyvault" | "custom" | "attachments">("fields");
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(
     initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
@@ -309,6 +309,128 @@
     revealedCustomFields = next;
   }
 
+  // ---------------------------------------------------------------------------
+  // KeyVault (KeePassRPC per-entry match config, stored in `KPRPC JSON`)
+  // ---------------------------------------------------------------------------
+
+  const KPRPC_FIELD = "KPRPC JSON";
+  type KeyVaultAccuracy = "Exact" | "Hostname" | "Domain";
+  type KeyVaultRule = { value: string; regex: boolean; block: boolean };
+
+  let kvAccuracy = $state<KeyVaultAccuracy>("Domain");
+  let kvRules = $state<KeyVaultRule[]>([]);
+  /** A protected `KPRPC JSON` field's value is absent from the snapshot, so it
+   * cannot be edited structurally (would be wiped as empty). */
+  let kprpcProtected = $state(
+    multi ||
+      !initialEntry ||
+      !!initialEntry.customFields?.find((f) => f.name === KPRPC_FIELD)?.protected,
+  );
+
+  function parseKprpcField(): void {
+    const field = customFields.find((f) => f.name === KPRPC_FIELD);
+    if (!field) {
+      kvAccuracy = "Domain";
+      kvRules = [];
+      return;
+    }
+    let config: Record<string, unknown> = {};
+    try {
+      config = JSON.parse(field.value) as Record<string, unknown>;
+    } catch {
+      kvAccuracy = "Domain";
+      kvRules = [];
+      return;
+    }
+    kvAccuracy = config.blockHostnameOnlyMatch
+      ? "Exact"
+      : config.blockDomainOnlyMatch
+        ? "Hostname"
+        : "Domain";
+    const list = (key: string): string[] =>
+      Array.isArray(config[key])
+        ? (config[key] as unknown[]).filter((v): v is string => typeof v === "string")
+        : [];
+    kvRules = [
+      ...list("altURLs").map((value) => ({ value, regex: false, block: false })),
+      ...list("regExURLs").map((value) => ({ value, regex: true, block: false })),
+      ...list("blockedURLs").map((value) => ({ value, regex: false, block: true })),
+      ...list("regExBlockedURLs").map((value) => ({ value, regex: true, block: true })),
+    ];
+  }
+
+  /** Rebuild the `KPRPC JSON` custom field from the structured tab state so the
+   * custom-fields tab and the backend stay in sync with the KeyVault UI. */
+  function syncKprpcField(): void {
+    if (kprpcProtected) return;
+    const trimmed = kvRules.map((r) => r.value.trim()).filter(Boolean).length;
+    const empty = trimmed === 0 && kvAccuracy === "Domain";
+    if (empty) {
+      customFields = customFields.filter((f) => f.name !== KPRPC_FIELD);
+      return;
+    }
+    const config = {
+      version: 1,
+      altURLs: kvRules
+        .filter((r) => !r.regex && !r.block)
+        .map((r) => r.value.trim())
+        .filter(Boolean),
+      regExURLs: kvRules
+        .filter((r) => r.regex && !r.block)
+        .map((r) => r.value.trim())
+        .filter(Boolean),
+      blockedURLs: kvRules
+        .filter((r) => !r.regex && r.block)
+        .map((r) => r.value.trim())
+        .filter(Boolean),
+      regExBlockedURLs: kvRules
+        .filter((r) => r.regex && r.block)
+        .map((r) => r.value.trim())
+        .filter(Boolean),
+      blockHostnameOnlyMatch: kvAccuracy === "Exact",
+      blockDomainOnlyMatch: kvAccuracy === "Hostname",
+    };
+    const json = JSON.stringify(config);
+    const index = customFields.findIndex((f) => f.name === KPRPC_FIELD);
+    customFields =
+      index >= 0
+        ? customFields.map((f, i) => (i === index ? { ...f, value: json, protected: false } : f))
+        : [...customFields, { name: KPRPC_FIELD, value: json, protected: false }];
+  }
+
+  function addKeyVaultRule(): void {
+    kvRules = [...kvRules, { value: "", regex: false, block: false }];
+    syncKprpcField();
+  }
+
+  function updateKeyVaultRule(index: number, patch: Partial<KeyVaultRule>): void {
+    kvRules = kvRules.map((r, i) => (i === index ? { ...r, ...patch } : r));
+    syncKprpcField();
+  }
+
+  function removeKeyVaultRule(index: number): void {
+    kvRules = kvRules.filter((_, i) => i !== index);
+    syncKprpcField();
+  }
+
+  function setKeyVaultAccuracy(accuracy: KeyVaultAccuracy): void {
+    kvAccuracy = accuracy;
+    syncKprpcField();
+  }
+
+  /** Switch tabs; re-parse the KeyVault state when entering its tab so raw
+   * edits made in the custom-fields tab are reflected structurally. */
+  function activateTab(tab: "fields" | "meta" | "custom" | "attachments" | "keyvault"): void {
+    activeTab = tab;
+    if (tab === "keyvault") {
+      // Recompute protection from the live field list (it may have been
+      // unprotected in the custom tab after the dialog opened).
+      kprpcProtected =
+        multi || !initialEntry || !!customFields.find((f) => f.name === KPRPC_FIELD)?.protected;
+      parseKprpcField();
+    }
+  }
+
   function pickFiles(): void {
     fileInputEl?.click();
   }
@@ -470,7 +592,7 @@
         class="editor-tab"
         class:active={activeTab === "fields"}
         aria-selected={activeTab === "fields"}
-        onclick={() => (activeTab = "fields")}
+        onclick={() => activateTab("fields")}
       >
         字段
       </button>
@@ -480,7 +602,7 @@
         class="editor-tab"
         class:active={activeTab === "meta"}
         aria-selected={activeTab === "meta"}
-        onclick={() => (activeTab = "meta")}
+        onclick={() => activateTab("meta")}
       >
         元属性
       </button>
@@ -489,9 +611,19 @@
           type="button"
           role="tab"
           class="editor-tab"
+          class:active={activeTab === "keyvault"}
+          aria-selected={activeTab === "keyvault"}
+          onclick={() => activateTab("keyvault")}
+        >
+          KeyVault
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="editor-tab"
           class:active={activeTab === "custom"}
           aria-selected={activeTab === "custom"}
-          onclick={() => (activeTab = "custom")}
+          onclick={() => activateTab("custom")}
         >
           自定义字段{#if customFields.length}({customFields.length}){/if}
         </button>
@@ -501,7 +633,7 @@
           class="editor-tab"
           class:active={activeTab === "attachments"}
           aria-selected={activeTab === "attachments"}
-          onclick={() => (activeTab = "attachments")}
+          onclick={() => activateTab("attachments")}
         >
           附件{#if attachments.length}({attachments.length}){/if}
         </button>
@@ -703,6 +835,102 @@
             <span class="field-hint">选择颜色将应用到所有选中条目;未选择则保持不变</span>
           {/if}
         </section>
+      </div>
+    {/if}
+
+    {#if !multi && activeTab === "keyvault"}
+      <div class="form-grid" role="tabpanel">
+        {#if kprpcProtected}
+          <section class="field full">
+            <p class="section-empty">
+              受保护的 `KPRPC JSON` 字段无法在此编辑,请在「自定义字段」中先取消保护。
+            </p>
+          </section>
+        {:else}
+          <section class="field full">
+            <span class="section-title">匹配精度</span>
+            <div class="kv-accuracy-row">
+              <button
+                type="button"
+                class="kv-accuracy-option"
+                class:active={kvAccuracy === "Domain"}
+                onclick={() => setKeyVaultAccuracy("Domain")}
+                title="域名相同即匹配(默认)"
+              >
+                域名
+              </button>
+              <button
+                type="button"
+                class="kv-accuracy-option"
+                class:active={kvAccuracy === "Hostname"}
+                onclick={() => setKeyVaultAccuracy("Hostname")}
+                title="主机名+端口相同才匹配"
+              >
+                主机名
+              </button>
+              <button
+                type="button"
+                class="kv-accuracy-option"
+                class:active={kvAccuracy === "Exact"}
+                onclick={() => setKeyVaultAccuracy("Exact")}
+                title="完整网址精确匹配"
+              >
+                精确
+              </button>
+            </div>
+            <span class="field-hint">匹配精度决定一个网址需要多"像"才会命中该条目</span>
+          </section>
+
+          <section class="field full">
+            <span class="section-title">匹配 / 阻止 网址或正则</span>
+            {#if kvRules.length === 0}
+              <p class="section-empty">暂无规则;匹配仅使用主「网址」字段</p>
+            {/if}
+            {#each kvRules as rule, i (i)}
+              <div class="kv-rule-row">
+                <input
+                  class="text-input kv-rule-value"
+                  type="text"
+                  placeholder="https:// 或正则表达式"
+                  value={rule.value}
+                  oninput={(e) => updateKeyVaultRule(i, { value: e.currentTarget.value })}
+                />
+                <button
+                  type="button"
+                  class="kv-tag"
+                  class:active={rule.regex}
+                  onclick={() => updateKeyVaultRule(i, { regex: !rule.regex })}
+                  title="正则表达式"
+                >
+                  .*
+                </button>
+                <button
+                  type="button"
+                  class="kv-tag"
+                  class:active={!rule.block}
+                  class:block={rule.block}
+                  onclick={() => updateKeyVaultRule(i, { block: !rule.block })}
+                  title={rule.block ? "阻止此网址匹配" : "匹配此网址"}
+                >
+                  {rule.block ? "阻止" : "匹配"}
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  onclick={() => removeKeyVaultRule(i)}
+                  aria-label="删除规则"
+                  title="删除规则"
+                >
+                  <AppIcon name="x" size={13} />
+                </button>
+              </div>
+            {/each}
+            <button class="add-row-btn" onclick={addKeyVaultRule}>
+              <AppIcon name="plus" size={12} />添加网址 / 正则
+            </button>
+            <span class="field-hint">以 KeePassRPC `KPRPC JSON` 兼容格式存储;阻止规则优先生效</span>
+          </section>
+        {/if}
       </div>
     {/if}
 
@@ -1086,6 +1314,77 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
+  }
+
+  .kv-accuracy-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .kv-accuracy-option {
+    flex: 1;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .kv-accuracy-option:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .kv-accuracy-option.active {
+    color: var(--selection-color);
+    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
+  }
+
+  .kv-rule-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .kv-rule-value {
+    flex: 1;
+    height: 30px;
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  }
+
+  .kv-tag {
+    height: 30px;
+    padding: 0 10px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    font-size: var(--font-size-secondary, 11px);
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    cursor: pointer;
+  }
+
+  .kv-tag:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .kv-tag.active {
+    color: var(--selection-color);
+    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
+  }
+
+  .kv-tag.block {
+    color: var(--danger-color);
+    border-color: color-mix(in srgb, var(--danger-color) 55%, transparent);
+    background: color-mix(in srgb, var(--danger-color) 12%, transparent);
   }
 
   .attachment-name {

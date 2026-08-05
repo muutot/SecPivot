@@ -4420,6 +4420,161 @@ fn autotype_match_considers_alt_urls() {
     assert_eq!(matched, uuid);
 }
 
+// -- KeePassRPC full KPRPC config (regex / blocked / accuracy) ----------
+
+fn entry_with_kprpc_config(
+    session: &mut VaultSession,
+    title: &str,
+    primary_url: &str,
+    config: serde_json::Value,
+) -> String {
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: title.into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: primary_url.into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![CustomField {
+                name: KPRPC_JSON.to_owned(),
+                value: serde_json::to_string(&config).unwrap(),
+                protected: false,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+    state.root.entries[0].uuid.clone()
+}
+
+#[test]
+fn bridge_matches_regex_match_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "正则站",
+        "",
+        serde_json::json!({
+            "version": 1,
+            "regExURLs": ["https://secure[0-9]+\\.example\\.com"]
+        }),
+    );
+    // Regex triggers a match even without a primary URL or host tier hit.
+    let logins = session.logins_for("https://secure42.example.com/page", None);
+    assert_eq!(logins.len(), 1);
+    // A URL the regex does not cover still misses.
+    assert!(session
+        .logins_for("https://login.example.com", None)
+        .is_empty());
+}
+
+#[test]
+fn bridge_respects_blocked_urls_and_regex_blocked_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "站A",
+        "https://example.com",
+        serde_json::json!({
+            "version": 1,
+            "blockedURLs": ["https://blog.example.com"],
+            "regExBlockedURLs": ["https://secure.*\\.example\\.com"]
+        }),
+    );
+    // Primary URL itself still matches.
+    let logins = session.logins_for("https://example.com/login", None);
+    assert_eq!(logins.len(), 1);
+    // Standard blocked URL vetoes the match.
+    assert!(session
+        .logins_for("https://blog.example.com", None)
+        .is_empty());
+    // Regex blocked URL vetoes the match too.
+    assert!(session
+        .logins_for("https://secure5.example.com", None)
+        .is_empty());
+    // Unrelated subdomain (not blocked) still matches via domain tier.
+    let logins = session.logins_for("https://app.example.com", None);
+    assert_eq!(logins.len(), 1);
+}
+
+#[test]
+fn rpc_and_autotype_honor_blocked_urls() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let uuid = entry_with_kprpc_config(
+        &mut session,
+        "站B",
+        "https://example.com",
+        serde_json::json!({
+            "version": 1,
+            "blockedURLs": ["https://secret.example.com"]
+        }),
+    );
+    // Primary URL matches at domain tier for both surfaces.
+    assert_eq!(
+        session
+            .find_logins(&["https://example.com".to_owned()], None, None, None)
+            .len(),
+        1
+    );
+    // The blocked URL is invisible to RPC find_logins.
+    assert!(session
+        .find_logins(&["https://secret.example.com".to_owned()], None, None, None)
+        .is_empty());
+    // Auto-type still finds the entry via its primary host.
+    assert_eq!(
+        session.autotype_match("Dashboard · example.com").unwrap(),
+        uuid
+    );
+}
+
+#[test]
+fn match_accuracy_exact_blocks_subdomains() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "精确站",
+        "https://example.com/login",
+        serde_json::json!({
+            "version": 1,
+            "blockHostnameOnlyMatch": true
+        }),
+    );
+    // Exact URL matches.
+    let logins = session.logins_for("https://example.com/login", None);
+    assert_eq!(logins.len(), 1);
+    // Same host but a different path no longer matches under Exact.
+    assert!(session
+        .logins_for("https://example.com/dashboard", None)
+        .is_empty());
+    // A subdomain misses as well.
+    assert!(session
+        .logins_for("https://sub.example.com/login", None)
+        .is_empty());
+}
+
+#[test]
+fn malformed_kprpc_config_degrades_to_domain_accuracy() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "回退站",
+        "https://example.com",
+        serde_json::json!({}),
+    );
+    // No flags → Domain accuracy; the primary URL is the only match source.
+    let logins = session.logins_for("https://sub.example.com", None);
+    assert_eq!(logins.len(), 1);
+}
+
 // -- KeePassRPC write path (AddLogin/UpdateLogin) ----------------------
 
 fn rpc_login_write(title: &str, username: &str, password: &str, urls: &[&str]) -> RpcLoginWrite {

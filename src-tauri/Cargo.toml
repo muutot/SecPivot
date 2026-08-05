@@ -55,6 +55,9 @@ url = "2"
 # Parse WebDAV PROPFIND multistatus responses (same minor as keepass/rust-s3's
 # vendored copy, so no extra crate version enters the lock).
 quick-xml = "0.30"
+# KeePassRPC entry match accuracy: Perl-compatible regex matching for
+# per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
+regex = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }

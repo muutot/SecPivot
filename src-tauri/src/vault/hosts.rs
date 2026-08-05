@@ -10,8 +10,8 @@ use crate::rpc::{
 };
 use crate::util::url_host;
 use crate::vault::{
-    entry_match_urls, parse_entry_id, recycle_bin_id, VaultSession, FIELD_PASSWORD, FIELD_TITLE,
-    FIELD_URL, FIELD_USERNAME, ROOT_GROUP_NAME,
+    entry_match_urls, kprpc_matches_url, parse_entry_id, recycle_bin_id, VaultSession,
+    FIELD_PASSWORD, FIELD_TITLE, FIELD_URL, FIELD_USERNAME, ROOT_GROUP_NAME,
 };
 use keepass::db::{EntryId, EntryMut, GroupId, GroupRef, Value};
 use keepass::Database;
@@ -346,10 +346,7 @@ fn collect_rpc_logins(
     };
     for entry in group.entries() {
         let entry_urls = entry_match_urls(&entry);
-        let by_url = filter
-            .urls
-            .iter()
-            .any(|u| entry_urls.iter().any(|eu| bridge_host_matches(eu, u)));
+        let by_url = filter.urls.iter().any(|u| kprpc_matches_url(&entry, u));
         let by_uuid = filter
             .uuid
             .is_some_and(|id| entry.id().uuid().to_string() == id);
@@ -486,12 +483,10 @@ fn collect_bridge_logins(
     let url = url.to_lowercase();
     let submit_url = submit_url.map(str::to_lowercase);
     for entry in group.entries() {
-        let matches = entry_match_urls(&entry).iter().any(|entry_url| {
-            bridge_host_matches(entry_url, &url)
-                || submit_url
-                    .as_deref()
-                    .is_some_and(|s| bridge_host_matches(entry_url, s))
-        });
+        let matches = kprpc_matches_url(&entry, &url)
+            || submit_url
+                .as_deref()
+                .is_some_and(|s| kprpc_matches_url(&entry, s));
         if matches {
             out.push(BridgeLogin {
                 uuid: entry.id().uuid().to_string(),
@@ -504,20 +499,6 @@ fn collect_bridge_logins(
     for child in group.groups() {
         collect_bridge_logins(child, bin_id, url.as_str(), submit_url.as_deref(), out);
     }
-}
-
-/// Host-level URL match: exact host equality, or one host covering the other
-/// as a domain suffix (`example.com` ↔ `www.example.com`). Empty hosts never
-/// match, so entries without a URL are invisible to the bridge.
-fn bridge_host_matches(entry_url: &str, request_url: &str) -> bool {
-    let entry_host = url_host(entry_url).unwrap_or_default();
-    let request_host = url_host(request_url).unwrap_or_default();
-    if entry_host.is_empty() || request_host.is_empty() {
-        return false;
-    }
-    entry_host == request_host
-        || request_host.ends_with(&format!(".{entry_host}"))
-        || entry_host.ends_with(&format!(".{request_host}"))
 }
 
 /// KeePassHttp database hash: SHA1 of (root uuid bytes + recycle-bin uuid

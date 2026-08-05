@@ -4041,6 +4041,7 @@ dependencies = [
  "keyring",
  "num-bigint",
  "quick-xml 0.30.0",
+ "regex",
  "reqwest",
  "rust-argon2",
  "rust-s3",

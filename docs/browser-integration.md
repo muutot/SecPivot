@@ -10,7 +10,7 @@
 
 - 后台 loopback HTTP 服务:`bridge_server.rs` 监听 `127.0.0.1:19455`,每连接一次 JSON POST。
 - 协议核心:`bridge.rs` 实现 `associate`/`test-associate`/`get-logins`/`get-logins-count`/`set-login`/`generate-password`;AES-256-CBC 逐字段加密 + PKCS7;请求 `Verifier` 与响应 `Hmac`(HMAC-SHA256)按 KeePassHttp 语义校验。`generate-password` 返回 20 位随机口令(大小写/数字/符号各至少一位,与应用默认生成器一致)。
-- 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),`db_hash` = SHA1(根分组UUID ‖ 回收站分组UUID)。额外匹配网址:除主 `URL` 字段外,还读取 KeePassRPC 条目级 `KPRPC JSON` 自定义字段的 `altURLs` 数组(bridge 与 RPC 的 `FindLogins`/`GetAllDatabases` 及全局 auto-type 匹配均计入),兼容 Kee 扩展写入的备用 URL;无该字段或 JSON 非法时退化为仅主 URL 匹配。
+- 匹配复用 `VaultSession::autotype_match` 同款 URL 评分逻辑(回收站跳过),`db_hash` = SHA1(根分组UUID ‖ 回收站分组UUID)。额外匹配网址:除主 `URL` 字段外,还读取 KeePassRPC 条目级 `KPRPC JSON` 自定义字段——完整支持 `altURLs`(备用网址)、`regExURLs`(正则命中)、`blockedURLs`/`regExBlockedURLs`(阻止/正则阻止,优先生效)及匹配精度(`blockHostnameOnlyMatch`→Exact、`blockDomainOnlyMatch`→Hostname、默认 Domain)。bridge 与 RPC 的 `FindLogins`/`GetAllDatabases` 及全局 auto-type 匹配均计入;无该字段或 JSON 非法时退化为仅主 URL、Domain 精度匹配。
 - associate 密钥存会话内(`bridge_keys`),锁定即销毁;首次关联由桌面端审批(设置「集成」面板 + 全局审批提示组件)。
 
 ## 生态:候选协议
