@@ -3317,6 +3317,65 @@ fn add_entry_with_invalid_attachment_does_not_partially_commit() {
 }
 
 #[test]
+fn add_entries_batches_multiple_rows_in_one_transaction() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("v.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "pw", "Aes", "Aes256", "None", None)
+        .unwrap();
+
+    let inputs: Vec<EntryInput> = vec![
+        entry_input(ROOT_GROUP_UUID, "A", "u1", "p1", "https://a"),
+        entry_input(ROOT_GROUP_UUID, "B", "u2", "p2", "https://b"),
+        entry_input(ROOT_GROUP_UUID, "C", "u3", "p3", "https://c"),
+    ];
+    let state = session.add_entries(&inputs).unwrap();
+    assert_eq!(state.root.entries.len(), 3);
+    assert!(state.dirty);
+    assert_eq!(session.state().unwrap().unwrap().root.entries.len(), 3);
+}
+
+#[test]
+fn add_entries_empty_input_is_a_noop() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("v.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "pw", "Aes", "Aes256", "None", None)
+        .unwrap();
+    let state = session.add_entries(&[]).unwrap();
+    assert!(state.root.entries.is_empty());
+    assert!(!state.dirty);
+}
+
+#[test]
+fn add_entries_aborts_whole_batch_on_bad_attachment() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("v.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "pw", "Aes", "Aes256", "None", None)
+        .unwrap();
+
+    let inputs: Vec<EntryInput> = vec![
+        entry_input(ROOT_GROUP_UUID, "Good", "u", "p", "https://ok"),
+        EntryInput {
+            attachments: vec![AttachmentInput {
+                name: "a.bin".into(),
+                data: Some("!!!not-base64!!!".into()),
+            }],
+            ..entry_input(ROOT_GROUP_UUID, "Bad", "u", "p", "https://bad")
+        },
+    ];
+    let err = session.add_entries(&inputs).unwrap_err();
+    assert!(err.contains("附件数据解码失败"));
+    let state = session.state().unwrap().unwrap();
+    assert!(state.root.entries.is_empty(), "no entry must be committed");
+    assert!(!state.dirty);
+}
+
+#[test]
 fn update_entry_with_invalid_attachment_keeps_original_and_history() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("v.kdbx");

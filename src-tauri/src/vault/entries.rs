@@ -7,7 +7,7 @@ use super::helpers::{
 };
 use super::serialize::{
     apply_patch_fields, attachment_size, decode_attachments, delete_history_entry, format_iso,
-    sync_attachments, sync_custom_fields, trim_entry_history, write_fields,
+    sync_attachments, sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
@@ -30,6 +30,39 @@ impl VaultSession {
             write_fields(&mut entry, input);
             sync_custom_fields(&mut entry, &input.custom_fields);
             sync_attachments(&mut entry, &input.attachments, &payloads);
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Add many entries in one transaction. Every attachment payload is
+    /// decoded up-front so a bad payload aborts the whole batch (no partial
+    /// import), then all entries are inserted under a single database borrow,
+    /// dirty flag and snapshot — the CSV/XML importer calls this once instead
+    /// of round-tripping one IPC per row.
+    pub fn add_entries(&mut self, inputs: &[EntryInput]) -> Result<VaultState, String> {
+        if inputs.is_empty() {
+            return self.snapshot();
+        }
+        let payloads: Vec<Vec<AttachmentPayload>> = inputs
+            .iter()
+            .map(|input| decode_attachments(&input.attachments))
+            .collect::<Result<_, _>>()?;
+        {
+            let db = self.require_db_mut()?;
+            for (input, payload) in inputs.iter().zip(&payloads) {
+                let mut group = if input.group_uuid == ROOT_GROUP_UUID {
+                    db.root_mut()
+                } else {
+                    let group_id = parse_group_id(&input.group_uuid)?;
+                    db.group_mut(group_id)
+                        .ok_or_else(|| "目标分组不存在".to_owned())?
+                };
+                let mut entry = group.add_entry();
+                write_fields(&mut entry, input);
+                sync_custom_fields(&mut entry, &input.custom_fields);
+                sync_attachments(&mut entry, &input.attachments, payload);
+            }
         }
         self.mark_dirty();
         self.snapshot()

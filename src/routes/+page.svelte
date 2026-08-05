@@ -885,21 +885,30 @@
   async function importEntries(entries: ImportEntry[]): Promise<void> {
     busy = true;
     try {
+      // Resolve every unique group path once (creating missing groups), then
+      // bulk-insert all entries in a single IPC call instead of one
+      // `add_entry` round-trip per row.
+      const groupCache = new Map<string, string>();
       let state = currentVault;
       for (const entry of entries) {
-        const groupUuid = await resolveImportGroup(entry.group, state!);
-        state = await vault.addEntry({
-          groupUuid,
-          title: entry.title,
-          username: entry.username,
-          password: entry.password,
-          url: entry.url,
-          notes: entry.notes,
-          totp: entry.totp || undefined,
-          customFields: entry.customFields,
-          attachments: [],
-        });
+        if (!groupCache.has(entry.group)) {
+          const groupUuid = await resolveImportGroup(entry.group, state!);
+          groupCache.set(entry.group, groupUuid);
+          state = currentVault;
+        }
       }
+      const inputs: EntryInput[] = entries.map((entry) => ({
+        groupUuid: groupCache.get(entry.group)!,
+        title: entry.title,
+        username: entry.username,
+        password: entry.password,
+        url: entry.url,
+        notes: entry.notes,
+        totp: entry.totp || undefined,
+        customFields: entry.customFields,
+        attachments: [],
+      }));
+      await vault.addEntries(inputs);
       flash(`已导入 ${entries.length} 个条目`);
     } catch (e) {
       flash(`导入失败：${e}`);

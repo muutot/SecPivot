@@ -54,6 +54,7 @@ interface VaultStore {
   saveAs: (path: string) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
+  addEntries: (inputs: EntryInput[]) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   updateEntries: (uuids: string[], patch: EntryPatch) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
@@ -437,6 +438,37 @@ export const vault: VaultStore = {
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
       });
+    });
+    state.set(result);
+    return result;
+  },
+
+  async addEntries(inputs: EntryInput[]): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("import_entries", { inputs });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      for (const input of inputs) {
+        const group = findGroup(draft.root, input.groupUuid);
+        if (!group) throw new Error("target group not found");
+        pushEntry(group, {
+          uuid: newUuid(),
+          groupUuid: input.groupUuid,
+          title: input.title,
+          username: input.username,
+          password: input.password,
+          url: input.url,
+          notes: input.notes,
+          hasTotp: Boolean(input.totp),
+          totp: input.totp || undefined,
+          customFields: input.customFields,
+          attachments: input.attachments?.map((a) => ({ name: a.name, size: a.data?.length ?? 0 })),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        });
+      }
     });
     state.set(result);
     return result;

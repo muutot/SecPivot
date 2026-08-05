@@ -195,6 +195,18 @@ pub(crate) fn add_entry(
         .add_entry(&input)
 }
 
+/// Bulk-import many entries in a single IPC call (used by the CSV/XML importer).
+#[tauri::command]
+pub(crate) fn import_entries(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    inputs: Vec<EntryInput>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .add_entries(&inputs)
+}
+
 #[tauri::command]
 pub(crate) fn update_entry(
     session: tauri::State<'_, Mutex<VaultSession>>,
