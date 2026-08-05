@@ -60,21 +60,41 @@
   let dragActive = $state(false);
 
   $effect(() => {
-    if (reveal === group.uuid) {
-      // Let the ancestor-expansion render settle, then scroll only the tree's
-      // scroll container (`.tree-list`) into place. `scrollIntoView` would also
-      // scroll outer/viewport ancestors and can lock the panel.
-      requestAnimationFrame(() => {
-        const el = nodeEl;
-        if (!el) return;
-        const scroller = el.closest(".tree-list");
-        if (!scroller) return;
-        const elRect = el.getBoundingClientRect();
-        const scrRect = scroller.getBoundingClientRect();
-        const target = Math.max(0, elRect.top - scrRect.top + scroller.scrollTop - 8);
-        scroller.scrollTop = target;
-      });
+    if (reveal !== group.uuid) return;
+    // Reveal this row by scrolling only the tree's own scroll container
+    // (`.tree-list`); `scrollIntoView` would also scroll outer/viewport
+    // ancestors and can lock the panel. The target may mount or shift as its
+    // ancestors expand a few paints after this effect runs, so retry on
+    // successive frames until the row is actually visible, or abort.
+    const vpad = 8;
+    let frames = 0;
+    function attempt(): void {
+      const el = nodeEl;
+      if (!el) return;
+      const scroller = el.closest(".tree-list");
+      if (!scroller) return;
+      const elRect = el.getBoundingClientRect();
+      const scrRect = scroller.getBoundingClientRect();
+      if (
+        scrRect.height > vpad &&
+        elRect.top >= scrRect.top + vpad &&
+        elRect.bottom <= scrRect.bottom - vpad
+      ) {
+        return; // already fully within the visible area
+      }
+      let target = scroller.scrollTop;
+      if (elRect.top < scrRect.top) {
+        target += elRect.top - scrRect.top - vpad;
+      } else if (elRect.bottom > scrRect.bottom) {
+        target += elRect.bottom - scrRect.bottom + vpad;
+      }
+      scroller.scrollTop = Math.max(0, target);
+      if (frames < 10) {
+        frames += 1;
+        requestAnimationFrame(attempt);
+      }
     }
+    requestAnimationFrame(attempt);
   });
 
   const groupName = $derived(group.name);

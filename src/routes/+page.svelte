@@ -1030,8 +1030,15 @@
           break;
         case "locate-in-tree":
           if (selectedEntry && currentVault) {
-            selectedGroup = selectedEntry.groupUuid;
-            revealGroupUuid = selectedEntry.groupUuid;
+            const targetGroup = selectedEntry.groupUuid;
+            selectedGroup = targetGroup;
+            // Reset so a repeat locate on the same group still re-expands the
+            // tree even after a full collapse (setting the identical uuid
+            // again would not re-run the reveal effect).
+            revealGroupUuid = null;
+            requestAnimationFrame(() => {
+              revealGroupUuid = targetGroup;
+            });
             flash("已定位到所在分组");
           }
           break;
