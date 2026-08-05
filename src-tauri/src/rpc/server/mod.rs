@@ -330,15 +330,26 @@ fn reply_setup(
             eprintln!("[rpc] VaultSession lock poisoned");
             return false;
         };
-        dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
-            let _ = app.emit(
-                SIDE_CHANNEL_EVENT,
-                SideChannelRequest {
-                    password: password.to_owned(),
-                    expires_in_secs: expires,
-                },
-            );
-        })
+        // Same poison-guard as the bridge server: the guard lives outside the
+        // unwind so a handler panic can't poison the session mutex.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
+                let _ = app.emit(
+                    SIDE_CHANNEL_EVENT,
+                    SideChannelRequest {
+                        password: password.to_owned(),
+                        expires_in_secs: expires,
+                    },
+                );
+            })
+        }));
+        match outcome {
+            Ok(reply) => reply,
+            Err(_) => {
+                eprintln!("[rpc] dispatch_setup panicked");
+                None
+            }
+        }
     }) else {
         eprintln!(
             "[rpc] dispatch_setup returned None (srp={:?} key={:?} error={:?})",
@@ -379,8 +390,11 @@ fn reply_jsonrpc(
     let Ok(mut session) = session_state.lock() else {
         return false;
     };
-    match dispatch_jsonrpc(conn, &env, &mut *session) {
-        Some((reply, method)) => {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        dispatch_jsonrpc(conn, &env, &mut *session)
+    }));
+    match outcome {
+        Ok(Some((reply, method))) => {
             if matches!(method.as_str(), "AddLogin" | "UpdateLogin") {
                 // Writes mutate the vault in place; tell the desktop UI to
                 // refresh so the new/edited entry shows up without a reopen.
@@ -388,7 +402,11 @@ fn reply_jsonrpc(
             }
             send_envelope(ws, &reply)
         }
-        None => false,
+        Ok(None) => false,
+        Err(_) => {
+            eprintln!("[rpc] dispatch_jsonrpc panicked");
+            false
+        }
     }
 }
 fn send_envelope(ws: &mut WebSocket<TcpStream>, env: &Envelope) -> bool {

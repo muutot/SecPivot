@@ -9,7 +9,7 @@
 //! The server itself holds no secrets: keys live in the session and are
 //! wiped on lock, so a locked vault responds with a plain error envelope.
 
-use crate::bridge::{handle_request, new_client_id, BridgeRequest, BRIDGE_PORT};
+use crate::bridge::{handle_request, new_client_id, BridgeRequest, BridgeResponse, BRIDGE_PORT};
 use crate::vault::VaultSession;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -176,7 +176,12 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
         );
         return;
     };
+    let request_type = request.request_type.clone();
     let response = {
+        // The guard must outlive the `catch_unwind` closure: when a handler
+        // panics (e.g. a hypothetical OS RNG failure inside `random_bytes`),
+        // the guard is dropped normally after the panic is caught, so the
+        // session mutex is never poisoned and later requests keep working.
         let Ok(mut session) = session_state.lock() else {
             let _ = write_http_response(
                 &mut stream,
@@ -185,10 +190,19 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
             return;
         };
         let app = app.clone();
-        handle_request(request, &mut *session, move |id| {
-            let app = app.clone();
-            request_approval(&app, &board, id)
-        })
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            handle_request(request, &mut *session, move |id| {
+                let app = app.clone();
+                request_approval(&app, &board, id)
+            })
+        }));
+        match outcome {
+            Ok(response) => response,
+            Err(_) => {
+                eprintln!("[bridge] request handler panicked");
+                BridgeResponse::failure(&request_type, "内部错误")
+            }
+        }
     };
     match serde_json::to_string(&response) {
         Ok(json) => {
