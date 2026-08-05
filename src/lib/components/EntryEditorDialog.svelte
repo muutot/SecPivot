@@ -14,6 +14,7 @@
   import { formatBytes } from "$lib/utils/format";
   import { toDateTimeInput } from "$lib/utils/date";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { shortestMatchable } from "$lib/utils/match-url";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
 
@@ -331,6 +332,13 @@
       !!initialEntry.customFields?.find((f) => f.name === KPRPC_FIELD)?.protected,
   );
 
+  /** Real URL pasted for identification (from Kee's `FindLogins urls=[...]`). */
+  let kvIdentifyInput = $state("");
+  /** Shortest-matchable suggestion, empty until identified. */
+  let kvIdentifySuggestion = $state("");
+  /** Explains the suggestion or an error; `urlHost` of the input is appended. */
+  let kvIdentifyMessage = $state("");
+
   function parseKprpcField(): void {
     const field = customFields.find((f) => f.name === KPRPC_FIELD);
     if (!field) {
@@ -414,6 +422,30 @@
 
   function removeKeyVaultRule(index: number): void {
     kvRules = kvRules.filter((_, i) => i !== index);
+    syncKprpcField();
+  }
+
+  /** Identify the shortest URL that matches the pasted real address under the
+   * currently selected accuracy, and append it as a "match" rule. */
+  function identifyMatchable(): void {
+    const raw = kvIdentifyInput.trim();
+    if (!raw) return;
+    const result = shortestMatchable(raw, kvAccuracy);
+    if (result.startsWith("无法识别")) {
+      kvIdentifyMessage = result;
+      kvIdentifySuggestion = "";
+      return;
+    }
+    kvIdentifyMessage = `从「${raw}」识别 → 建议地址:`;
+    kvIdentifySuggestion = result;
+  }
+
+  function applyIdentifySuggestion(): void {
+    if (!kvIdentifySuggestion) return;
+    kvRules = [...kvRules, { value: kvIdentifySuggestion, regex: false, block: false }];
+    kvIdentifySuggestion = "";
+    kvIdentifyInput = "";
+    kvIdentifyMessage = "";
     syncKprpcField();
   }
 
@@ -934,6 +966,42 @@
             </button>
             <span class="field-hint">以 KeePassRPC `KPRPC JSON` 兼容格式存储;阻止规则优先生效</span>
           </section>
+
+          <section class="field full">
+            <span class="section-title">识别最短匹配地址</span>
+            <div class="kv-identify-row">
+              <input
+                class="text-input kv-identify-input"
+                type="text"
+                placeholder="粘贴浏览器里真实网址(如 Kee 日志 FindLogins urls)"
+                value={kvIdentifyInput}
+                oninput={(e) => (kvIdentifyInput = e.currentTarget.value)}
+              />
+              <button
+                type="button"
+                class="kv-identify-btn"
+                onclick={identifyMatchable}
+                title="按当前匹配精度算出最短仍能命中的地址"
+              >
+                <AppIcon name="search" size={13} />识别
+              </button>
+            </div>
+            {#if kvIdentifyMessage}
+              <p class="field-hint">
+                {kvIdentifyMessage} <code class="kv-identify-code">{kvIdentifySuggestion}</code>
+              </p>
+            {/if}
+            {#if kvIdentifySuggestion}
+              <button
+                type="button"
+                class="add-row-btn"
+                onclick={applyIdentifySuggestion}
+                title="把识别出的建议地址加入匹配规则"
+              >
+                <AppIcon name="check" size={12} />添加到匹配规则
+              </button>
+            {/if}
+          </section>
         {/if}
       </div>
     {/if}
@@ -1431,6 +1499,39 @@
 
   .file-input {
     display: none;
+  }
+
+  .kv-identify-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .kv-identify-input {
+    flex: 1;
+  }
+
+  .kv-identify-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-primary);
+    background: var(--hover-bg);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .kv-identify-btn:hover {
+    background: var(--accent-bg, var(--hover-bg));
+  }
+
+  .kv-identify-code {
+    color: var(--accent-color, var(--text-primary));
+    font-family: var(--font-mono, monospace);
   }
 
   .icon-grid {
