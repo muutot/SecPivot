@@ -268,6 +268,18 @@ pub(crate) fn restore_entry_version(
 }
 
 #[tauri::command]
+pub(crate) fn delete_entry_history(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    index: usize,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .delete_entry_history(&uuid, index)
+}
+
+#[tauri::command]
 pub(crate) fn restore_entry(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,

@@ -535,6 +535,91 @@ fn entry_history_tracks_versions_and_restores() {
 }
 
 #[test]
+fn entry_history_supports_manual_delete() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "v1".into(),
+            username: "u".into(),
+            password: "p1".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    let input = |title: &str, password: &str| EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: password.into(),
+        url: "".into(),
+        notes: "".into(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+
+    // Two updates create two snapshots: [v1, v2] (newest first).
+    session.update_entry(&uuid, &input("v2", "p2")).unwrap();
+    session.update_entry(&uuid, &input("v3", "p3")).unwrap();
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].title, "v2");
+    assert_eq!(history[1].title, "v1");
+
+    // Deleting the newest snapshot leaves only the older one, reordered.
+    let state = session.delete_entry_history(&uuid, 0).unwrap();
+    assert_eq!(state.root.entries[0].title, "v3");
+    assert_eq!(session.get_entry_password(&uuid).unwrap(), "p3");
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].title, "v1");
+
+    // Deleting the remaining snapshot empties the history.
+    session.delete_entry_history(&uuid, 0).unwrap();
+    assert!(session.get_entry_history(&uuid).unwrap().is_empty());
+
+    // Out-of-range and nonexistent indices error out.
+    session.update_entry(&uuid, &input("v4", "p4")).unwrap();
+    assert!(session
+        .delete_entry_history(&uuid, 99)
+        .is_err_and(|err| err.contains("历史版本不存在")));
+    assert!(session
+        .delete_entry_history(&uuid, 99)
+        .is_err_and(|err| err.contains("历史版本不存在")));
+    let _ = session.add_entry(&EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: "fresh".into(),
+        username: "".into(),
+        password: "p".into(),
+        url: "".into(),
+        notes: "".into(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    });
+    let fresh_uuid = session.snapshot().unwrap().root.entries[1].uuid.clone();
+    assert!(session
+        .delete_entry_history(&fresh_uuid, 0)
+        .is_err_and(|err| err.contains("历史版本不存在")));
+}
+
+#[test]
 fn entry_history_caps_at_ten_versions() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

@@ -238,6 +238,31 @@ pub(crate) fn trim_entry_history(entry: &mut Entry) {
     }
 }
 
+/// Remove one historical snapshot from an entry's history, keeping the order
+/// of the remaining snapshots. Returns `false` when the index is out of range
+/// or the entry has no history.
+pub(crate) fn delete_history_entry(entry: &mut Entry, index: usize) -> bool {
+    let Some(history) = entry.history.as_mut() else {
+        return false;
+    };
+    if index >= history.get_entries().len() {
+        return false;
+    }
+    let kept: Vec<Entry> = history
+        .get_entries()
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != index)
+        .map(|(_, snapshot)| snapshot.clone())
+        .collect();
+    let mut rebuilt = History::default();
+    for snapshot in kept.into_iter().rev() {
+        rebuilt.add_entry(snapshot);
+    }
+    entry.history = Some(rebuilt);
+    true
+}
+
 /// RFC 4180 cell escaping: quote when the value contains separators or quotes.
 pub(crate) fn escape_csv(value: &str) -> String {
     if value.contains([',', '"', '\r', '\n']) {

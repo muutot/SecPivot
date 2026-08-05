@@ -218,6 +218,7 @@ pub fn run() {
             commands::move_entry,
             commands::get_entry_history,
             commands::restore_entry_version,
+            commands::delete_entry_history,
             commands::restore_entry,
             commands::delete_group,
             commands::restore_group,

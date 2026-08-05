@@ -6,8 +6,8 @@ use super::helpers::{
     resolve_group_id,
 };
 use super::serialize::{
-    apply_patch_fields, attachment_size, decode_attachments, format_iso, sync_attachments,
-    sync_custom_fields, trim_entry_history, write_fields,
+    apply_patch_fields, attachment_size, decode_attachments, delete_history_entry, format_iso,
+    sync_attachments, sync_custom_fields, trim_entry_history, write_fields,
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
@@ -281,6 +281,21 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry);
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
+
+    /// Permanently delete one historical snapshot from an entry's history.
+    /// The current state is untouched and no new snapshot is created.
+    pub fn delete_entry_history(&mut self, uuid: &str, index: usize) -> Result<VaultState, String> {
+        let id = parse_entry_id(uuid)?;
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            if !delete_history_entry(&mut entry, index) {
+                return Err("历史版本不存在".to_owned());
+            }
         }
         self.mark_dirty();
         self.snapshot()

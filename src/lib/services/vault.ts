@@ -60,6 +60,7 @@ interface VaultStore {
   moveEntry: (uuid: string, groupUuid: string) => Promise<VaultState>;
   restoreEntry: (uuid: string) => Promise<VaultState>;
   getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
+  deleteEntryHistory: (uuid: string, index: number) => Promise<VaultState>;
   restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
@@ -659,6 +660,15 @@ export const vault: VaultStore = {
       return backendInvoke<HistoryVersion[]>("get_entry_history", { uuid });
     }
     return [];
+  },
+
+  async deleteEntryHistory(uuid: string, index: number): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("delete_entry_history", { uuid, index });
+      state.set(result);
+      return result;
+    }
+    throw new Error("浏览器模式不支持删除历史版本");
   },
 
   async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {

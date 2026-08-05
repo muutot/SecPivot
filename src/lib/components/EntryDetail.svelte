@@ -98,6 +98,19 @@
     }
   }
 
+  async function deleteVersion(version: HistoryVersion): Promise<void> {
+    const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
+    if (!window.confirm(`确定删除 ${when} 的历史版本吗？此操作无法撤销。`)) return;
+    try {
+      await vault.deleteEntryHistory(entry.uuid, version.index);
+      historyLoadedUuid = null;
+      await loadHistory(true);
+      flash("deleted");
+    } catch {
+      flash("error");
+    }
+  }
+
   /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
   async function ensurePassword(): Promise<void> {
     if (passwordLoaded || passwordLoading) return;
@@ -205,6 +218,8 @@
         return "已复制密码";
       case "restored":
         return "已恢复历史版本";
+      case "deleted":
+        return "已删除历史版本";
       case "url":
         return "已复制网址";
       default:
@@ -547,6 +562,13 @@
               <button class="copy-btn" onclick={() => restoreVersion(version)} title="恢复此版本">
                 <AppIcon name="undo" size={13} />
               </button>
+              <button
+                class="copy-btn danger"
+                onclick={() => deleteVersion(version)}
+                title="删除此版本"
+              >
+                <AppIcon name="trash" size={13} />
+              </button>
             </div>
           {/each}
         </div>
@@ -863,6 +885,11 @@
   .copy-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .copy-btn.danger:hover {
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 12%, transparent);
   }
 
   .uuid-text {
