@@ -67,12 +67,14 @@
     entry.uuid;
     revealPassword = false;
     passwordLoaded = false;
+    passwordLoading = false;
     fetchedPassword = "";
     customFieldValues = {};
     customFieldLoaded = {};
     customFieldLoading = {};
     customFieldRevealed = {};
     historyLoadedUuid = null;
+    historyLoading = false;
     historyVersions = [];
     viewingVersion = null;
     storage = null;
@@ -81,22 +83,28 @@
 
   async function loadStorage(): Promise<void> {
     if (storageLoading || storage) return;
+    const uuid = entry.uuid;
     storageLoading = true;
     try {
-      storage = await vault.getEntryStorage(entry.uuid);
+      const result = await vault.getEntryStorage(uuid);
+      if (uuid === entry.uuid) storage = result;
     } finally {
-      storageLoading = false;
+      if (uuid === entry.uuid) storageLoading = false;
     }
   }
 
   async function loadHistory(force = false): Promise<void> {
     if (!force && historyLoadedUuid === entry.uuid) return;
+    const uuid = entry.uuid;
     historyLoading = true;
     try {
-      historyVersions = await vault.getEntryHistory(entry.uuid);
-      historyLoadedUuid = entry.uuid;
+      const result = await vault.getEntryHistory(uuid);
+      if (uuid === entry.uuid) {
+        historyVersions = result;
+        historyLoadedUuid = uuid;
+      }
     } finally {
-      historyLoading = false;
+      if (uuid === entry.uuid) historyLoading = false;
     }
   }
 
@@ -129,12 +137,15 @@
   /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
   async function ensurePassword(): Promise<void> {
     if (passwordLoaded || passwordLoading) return;
+    const uuid = entry.uuid;
     passwordLoading = true;
     try {
-      fetchedPassword = await vault.getEntryPassword(entry.uuid);
+      const value = await vault.getEntryPassword(uuid);
+      if (uuid !== entry.uuid) return;
+      fetchedPassword = value;
       passwordLoaded = true;
     } finally {
-      passwordLoading = false;
+      if (uuid === entry.uuid) passwordLoading = false;
     }
   }
 
@@ -143,14 +154,18 @@
   async function ensureCustomField(name: string): Promise<string | null> {
     if (customFieldLoaded[name]) return customFieldValues[name] ?? null;
     if (customFieldLoading[name]) return null;
+    const uuid = entry.uuid;
     customFieldLoading = { ...customFieldLoading, [name]: true };
     try {
-      const value = await vault.getCustomFieldValue(entry.uuid, name);
+      const value = await vault.getCustomFieldValue(uuid, name);
+      if (uuid !== entry.uuid) return null;
       customFieldValues = { ...customFieldValues, [name]: value ?? "" };
       customFieldLoaded = { ...customFieldLoaded, [name]: true };
       return value;
     } finally {
-      customFieldLoading = { ...customFieldLoading, [name]: false };
+      if (uuid === entry.uuid) {
+        customFieldLoading = { ...customFieldLoading, [name]: false };
+      }
     }
   }
 
