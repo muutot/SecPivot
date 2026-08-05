@@ -1,5 +1,75 @@
 # Changelog
 
+## 1.1.0 (2026-08-05)
+
+### ✨ Features
+
+- **vault**: entry storage usage in metadata (01bece84)
+- **vault**: manually delete individual history versions (b320a9b7)
+- **ui**: history version viewer with diff badges (73faf5b1)
+- **vault**: resolve protected custom fields on demand (e492e2ee)
+
+### 🐛 Bug Fixes
+
+- **security**: catch handler panics at bridge/rpc lock sites to avoid mutex poison (2be1377c)
+- **entry-detail**: discard stale password/custom-field/storage fetches on entry switch (943a5b8b)
+- **security**: zeroize new master key on failure, fsync atomic writes, clear clipboard on exit, TCATO overlay events (a3ae08a1)
+- **vault**: permanent-delete binned groups, save-as remembered path, clear remembered on remote sessions (1eda4148)
+- **ui**: main-window audit fixes (live settings, selection, lock confirm, favicon/submit/shortcut guards, TOTP teardown) (5ab8f876)
+- **security**: TCATO focus-lock guard, idle re-arm on change, CSPRNG overwrite (63a539c8)
+
+### 🚀 Performance
+
+- **import**: batch CSV/XML entries into a single import_entries IPC (f0ea7fb4)
+- **tree**: precompute group subtree counts in a single O(N) walk (2b00c5d6)
+
+### 🎨 Styling
+
+- **docs**: re-align ownership tables per prettier (888fae24)
+- **ui**: detail panel tweaks (6c82556f)
+
+### 📝 Documentation
+
+- **skill**: sync references with audit fixes (TCATO events, security guard, tree counts) (c9774ee5)
+- **skill**: move skills to project root and register via skills.paths in opencode.json (30f8f23b)
+
+# Changelog
+
+## 1.1.0 (2026-08-05)
+
+### ✨ Features
+
+- **vault**: entry storage usage in metadata (01bece84)
+- **vault**: manually delete individual history versions (b320a9b7)
+- **ui**: history version viewer with diff badges (73faf5b1)
+- **vault**: resolve protected custom fields on demand (e492e2ee)
+
+### 🐛 Bug Fixes
+
+- **security**: catch handler panics at bridge/rpc lock sites to avoid mutex poison (2be1377c)
+- **entry-detail**: discard stale password/custom-field/storage fetches on entry switch (943a5b8b)
+- **security**: zeroize new master key on failure, fsync atomic writes, clear clipboard on exit, TCATO overlay events (a3ae08a1)
+- **vault**: permanent-delete binned groups, save-as remembered path, clear remembered on remote sessions (1eda4148)
+- **ui**: main-window audit fixes (live settings, selection, lock confirm, favicon/submit/shortcut guards, TOTP teardown) (5ab8f876)
+- **security**: TCATO focus-lock guard, idle re-arm on change, CSPRNG overwrite (63a539c8)
+
+### 🚀 Performance
+
+- **import**: batch CSV/XML entries into a single import_entries IPC (f0ea7fb4)
+- **tree**: precompute group subtree counts in a single O(N) walk (2b00c5d6)
+
+### 🎨 Styling
+
+- **docs**: re-align ownership tables per prettier (888fae24)
+- **ui**: detail panel tweaks (6c82556f)
+
+### 📝 Documentation
+
+- **skill**: sync references with audit fixes (TCATO events, security guard, tree counts) (c9774ee5)
+- **skill**: move skills to project root and register via skills.paths in opencode.json (30f8f23b)
+
+# Changelog
+
 ## 1.0.0 (2026-08-04)
 
 ### ✨ Features
