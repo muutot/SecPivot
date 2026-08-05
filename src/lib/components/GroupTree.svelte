@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
+  import { untrack } from "svelte";
   import { buildEntryCounts } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
@@ -112,13 +113,16 @@
   }
 
   /** Reveal the requested group by expanding every ancestor so its row is
-   *  rendered, then let the matched `GroupNode` scroll itself into view. */
+   *  rendered, then let the matched `GroupNode` scroll itself into view.
+   *  `expanded` is read via `untrack` so writing it does not self-trigger. */
   $effect(() => {
     const target = reveal;
     if (!target) return;
-    const next = new Set(expanded);
-    for (const anc of ancestorsOf(target)) next.add(anc);
-    expanded = next;
+    untrack(() => {
+      const next = new Set(expanded);
+      for (const anc of ancestorsOf(target)) next.add(anc);
+      expanded = next;
+    });
   });
 
   /** Expand every group (keep the root itself; it is not rendered). */
