@@ -11,6 +11,7 @@ import type {
   CreateVaultRequest,
   TotpCode,
   HistoryVersion,
+  EntryStorage,
   SecurityReport,
   FaviconReport,
   RemoteObject,
@@ -61,6 +62,7 @@ interface VaultStore {
   restoreEntry: (uuid: string) => Promise<VaultState>;
   getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
   deleteEntryHistory: (uuid: string, index: number) => Promise<VaultState>;
+  getEntryStorage: (uuid: string) => Promise<EntryStorage>;
   restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
@@ -669,6 +671,13 @@ export const vault: VaultStore = {
       return result;
     }
     throw new Error("浏览器模式不支持删除历史版本");
+  },
+
+  async getEntryStorage(uuid: string): Promise<EntryStorage> {
+    if (isTauriRuntime()) {
+      return backendInvoke<EntryStorage>("get_entry_storage", { uuid });
+    }
+    return { fields: 0, attachments: 0, history: 0, total: 0 };
   },
 
   async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {

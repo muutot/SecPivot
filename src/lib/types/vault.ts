@@ -176,6 +176,18 @@ export interface HistoryVersion {
   attachments: AttachmentInfo[];
 }
 
+/** Byte-size breakdown of everything an entry stores. */
+export interface EntryStorage {
+  /** Bytes of the entry's own field values (including the password). */
+  fields: number;
+  /** Bytes of the entry's own attachment data. */
+  attachments: number;
+  /** Bytes of all historical snapshots (their fields + attachments). */
+  history: number;
+  /** `fields + attachments + history`. */
+  total: number;
+}
+
 export interface OpenVaultRequest {
   path: string;
   password: string;

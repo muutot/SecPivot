@@ -238,6 +238,21 @@ pub struct HistoryVersion {
     pub attachments: Vec<AttachmentInfo>,
 }
 
+/// Byte-size breakdown of everything an entry holds: field text, attachments,
+/// and its historical snapshots (fields + attachments of every version).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryStorage {
+    /// Bytes of the entry's own field values (including the password).
+    pub fields: usize,
+    /// Bytes of the entry's own attachment data.
+    pub attachments: usize,
+    /// Bytes of all historical snapshots (their fields + attachments).
+    pub history: usize,
+    /// `fields + attachments + history`.
+    pub total: usize,
+}
+
 /// Server-side security analysis. Passwords never cross into the report.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -236,6 +236,7 @@ pub fn run() {
             commands::get_entry_password,
             commands::get_entry_totp,
             commands::get_custom_field_value,
+            commands::get_entry_storage,
             commands::security_report,
             commands::export_csv,
             commands::download_favicons,

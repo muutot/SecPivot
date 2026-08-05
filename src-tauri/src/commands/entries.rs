@@ -3,7 +3,7 @@
 //! commands.rs).
 
 use crate::vault;
-use crate::vault::{SecurityReport, VaultSession};
+use crate::vault::{EntryStorage, SecurityReport, VaultSession};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -59,6 +59,18 @@ pub(crate) fn security_report(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .security_report()
+}
+
+/// Byte-size breakdown of an entry's stored data (fields, attachments, history).
+#[tauri::command]
+pub(crate) fn get_entry_storage(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<EntryStorage, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .get_entry_storage(&uuid)
 }
 
 /// Export all entries as CSV to a user-picked path (passwords resolved server-side).

@@ -620,6 +620,76 @@ fn entry_history_supports_manual_delete() {
 }
 
 #[test]
+fn entry_storage_counts_fields_attachments_and_history() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "storage".into(),
+            username: "user".into(),
+            password: "pass".into(),
+            url: "https://example.com".into(),
+            notes: "notes".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            custom_fields: vec![CustomField {
+                name: "custom".into(),
+                value: "value".into(),
+                protected: false,
+            }],
+            attachments: vec![AttachmentInput {
+                name: "payload.bin".into(),
+                data: Some(BASE64.encode(vec![0u8; 128])),
+            }],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    let storage = session.get_entry_storage(&uuid).unwrap();
+    // fields: title+username+password+url+notes+custom (+ "custom" key, not
+    // counted) + empty-key overhead; assert exact field bytes.
+    assert!(storage.fields >= "storage".len() + "user".len() + "pass".len());
+    assert_eq!(storage.attachments, 128);
+    assert_eq!(storage.history, 0);
+    assert_eq!(
+        storage.total,
+        storage.fields + storage.attachments + storage.history
+    );
+
+    // A second update adds one historical snapshot; its fields count toward
+    // history while the current attachment stays.
+    session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "storage2".into(),
+                username: "user".into(),
+                password: "pass2".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+    let storage = session.get_entry_storage(&uuid).unwrap();
+    assert!(storage.history > 0);
+    assert_eq!(storage.attachments, 0);
+    assert_eq!(
+        storage.total,
+        storage.fields + storage.attachments + storage.history
+    );
+}
+
+#[test]
 fn entry_history_caps_at_ten_versions() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

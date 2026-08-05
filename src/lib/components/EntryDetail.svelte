@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
+  import type { EntryStorage } from "$lib/types/vault";
   import { copyValue } from "$lib/services/security";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
@@ -57,6 +58,8 @@
   let historyLoading = $state(false);
   let historyLoadedUuid = $state<string | null>(null);
   let viewingVersion = $state<HistoryVersion | null>(null);
+  let storage = $state<EntryStorage | null>(null);
+  let storageLoading = $state(false);
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -72,7 +75,19 @@
     historyLoadedUuid = null;
     historyVersions = [];
     viewingVersion = null;
+    storage = null;
+    storageLoading = false;
   });
+
+  async function loadStorage(): Promise<void> {
+    if (storageLoading || storage) return;
+    storageLoading = true;
+    try {
+      storage = await vault.getEntryStorage(entry.uuid);
+    } finally {
+      storageLoading = false;
+    }
+  }
 
   async function loadHistory(force = false): Promise<void> {
     if (!force && historyLoadedUuid === entry.uuid) return;
@@ -299,7 +314,10 @@
       class="detail-tab"
       class:active={activeTab === "meta"}
       aria-selected={activeTab === "meta"}
-      onclick={() => (activeTab = "meta")}
+      onclick={() => {
+        activeTab = "meta";
+        void loadStorage();
+      }}
     >
       元属性
     </button>
@@ -465,6 +483,24 @@
         <span class="field-label">修改时间</span>
         <div class="field-value">
           <span class="field-text">{formatLocalDate(entry.modified)}</span>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <span class="field-label">占用空间</span>
+        <div class="field-value">
+          {#if storageLoading}
+            <span class="field-text faint">正在统计…</span>
+          {:else if storage}
+            <span
+              class="field-text"
+              title={`字段 ${formatBytes(storage.fields)} · 附件 ${formatBytes(storage.attachments)} · 历史 ${formatBytes(storage.history)}`}
+            >
+              {formatBytes(storage.total)}
+            </span>
+          {:else}
+            <span class="field-text faint">—</span>
+          {/if}
         </div>
       </div>
 
@@ -807,6 +843,10 @@
 
   .field-text.link {
     color: var(--selection-color);
+  }
+
+  .field-text.faint {
+    color: var(--text-faint);
   }
 
   .url-link {

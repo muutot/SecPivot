@@ -238,6 +238,52 @@ impl VaultSession {
             .collect())
     }
 
+    /// Byte-size breakdown of everything the entry stores: its own field text,
+    /// attachment data, and all historical snapshots (fields + attachments).
+    /// Uses in-memory sizes, so protected values count like any other field.
+    pub fn get_entry_storage(&self, uuid: &str) -> Result<EntryStorage, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+
+        let fields = entry
+            .fields
+            .values()
+            .map(|value| value.get().len())
+            .sum::<usize>();
+        let attachments = entry
+            .attachments_named()
+            .map(|(_, attachment)| attachment.data.get().len())
+            .sum::<usize>();
+        let history = match &entry.history {
+            None => 0,
+            Some(h) => {
+                let count = h.get_entries().len();
+                (0..count)
+                    .filter_map(|index| entry.historical(index))
+                    .map(|historical| {
+                        let f = historical
+                            .fields
+                            .values()
+                            .map(|value| value.get().len())
+                            .sum::<usize>();
+                        let a = historical
+                            .attachments_named()
+                            .filter_map(|(_, attachment)| attachment_size(&attachment))
+                            .sum::<usize>();
+                        f + a
+                    })
+                    .sum()
+            }
+        };
+        Ok(EntryStorage {
+            fields,
+            attachments,
+            history,
+            total: fields + attachments + history,
+        })
+    }
+
     /// Overwrite an entry with a historical snapshot. The current state is
     /// itself pushed into the history first, so the restore can be undone.
     pub fn restore_entry_version(
