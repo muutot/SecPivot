@@ -214,6 +214,47 @@ impl VaultSession {
         .map_err(|e| e.to_string())
     }
 
+    /// Resolve the effective auto-type sequence for an entry, following the
+    /// KeePass lookup order: the entry's own `AutoType.default_sequence`,
+    /// then the nearest ancestor group's `default_autotype_sequence` (walking
+    /// up the tree), then the global default. `AutoType.enabled=false` on the
+    /// entry, or `enable_autotype=false` on an ancestor group, yields `None`
+    /// (auto-type is disabled for this entry entirely).
+    pub fn resolve_autotype_sequence(&self, uuid: &str) -> Result<Option<String>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        // Entry-level AutoType: explicitly disabled entries never auto-type.
+        if let Some(autotype) = &entry.autotype {
+            if !autotype.enabled {
+                return Ok(None);
+            }
+            if let Some(seq) = autotype.default_sequence.as_deref() {
+                if !seq.trim().is_empty() {
+                    return Ok(Some(seq.to_owned()));
+                }
+            }
+        }
+        // Walk ancestor groups; the nearest group with a sequence wins.
+        let mut gid = entry.parent().id();
+        loop {
+            let group = db.group(gid).ok_or_else(|| "分组不存在".to_owned())?;
+            if group.enable_autotype == Some(false) {
+                return Ok(None);
+            }
+            if let Some(seq) = group.default_autotype_sequence.as_deref() {
+                if !seq.trim().is_empty() {
+                    return Ok(Some(seq.to_owned()));
+                }
+            }
+            match group.parent() {
+                Some(parent) => gid = parent.id(),
+                None => break,
+            }
+        }
+        Ok(None)
+    }
+
     /// Best-matching entry for global auto-type given the title of the window
     /// in focus. Matches the URL host or the entry title against the window
     /// title (case-insensitive); entries inside the recycle bin are skipped.

@@ -17,7 +17,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-/// Sequence replayed by the global auto-type hotkey.
+/// Default sequence replayed by the global auto-type hotkey when neither the
+/// entry nor any ancestor group defines its own AutoType sequence.
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 
 /// Tray icon identifiers.
@@ -75,16 +76,37 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
                 return;
             }
         };
-        match session.autotype_context(&uuid) {
+        // Honor the entry's / ancestor group's stored AutoType sequence;
+        // `None` means auto-type is disabled for this entry.
+        let sequence = match session.resolve_autotype_sequence(&uuid) {
+            Ok(seq) => match seq {
+                Some(seq) => seq,
+                None => {
+                    eprintln!("global auto-type: entry auto-type disabled");
+                    return;
+                }
+            },
+            Err(e) => {
+                eprintln!("global auto-type: {e}");
+                return;
+            }
+        };
+        let sequence = if sequence.trim().is_empty() {
+            GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
+        } else {
+            sequence
+        };
+        let ctx = match session.autotype_context(&uuid) {
             Ok(ctx) => ctx,
             Err(e) => {
                 eprintln!("global auto-type: {e}");
                 return;
             }
-        }
+        };
+        (sequence, ctx)
     };
     std::thread::spawn(move || {
-        if let Err(e) = platform::autotype::run_sequence(GLOBAL_AUTOTYPE_SEQUENCE, &ctx) {
+        if let Err(e) = platform::autotype::run_sequence(&ctx.0, &ctx.1) {
             eprintln!("global auto-type: {e}");
         }
     });

@@ -4315,6 +4315,111 @@ fn ref_match_skips_groups_with_searching_disabled() {
 }
 
 #[test]
+fn autotype_sequence_resolves_entry_then_group_then_default() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let entry = |group_uuid: &str, title: &str| EntryInput {
+        group_uuid: group_uuid.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: "p".into(),
+        url: "".into(),
+        notes: "".into(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+
+    // Group G with a default sequence; entry E inside it without its own.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "G".into(),
+            icon: None,
+        })
+        .unwrap();
+    let g = state.root.children[0].uuid.clone();
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db
+            .group_mut(super::helpers::parse_group_id(&g).unwrap())
+            .expect("group must exist");
+        group.default_autotype_sequence = Some("{TITLE}{ENTER}".into());
+    }
+    let state = session.add_entry(&entry(&g, "E")).unwrap();
+    let e = state.root.children[0].entries[0].uuid.clone();
+    assert_eq!(
+        session.resolve_autotype_sequence(&e).unwrap().as_deref(),
+        Some("{TITLE}{ENTER}"),
+        "group sequence is used when the entry defines none"
+    );
+
+    // An entry-level AutoType sequence overrides the group's.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db
+            .entry_mut(parse_entry_id(&e).unwrap())
+            .expect("entry must exist");
+        entry.autotype = Some(keepass::db::AutoType {
+            enabled: true,
+            default_sequence: Some("{USERNAME}{ENTER}".into()),
+            ..Default::default()
+        });
+    }
+    assert_eq!(
+        session.resolve_autotype_sequence(&e).unwrap().as_deref(),
+        Some("{USERNAME}{ENTER}"),
+        "entry sequence overrides the group sequence"
+    );
+
+    // Entry with AutoType disabled yields None (no auto-type at all).
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db
+            .entry_mut(parse_entry_id(&e).unwrap())
+            .expect("entry must exist");
+        if let Some(autotype) = entry.autotype.as_mut() {
+            autotype.enabled = false;
+        }
+    }
+    assert_eq!(
+        session.resolve_autotype_sequence(&e).unwrap(),
+        None,
+        "disabled entry AutoType yields no sequence"
+    );
+
+    // Group with auto-type disabled yields None for a sequence-less entry.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db
+            .group_mut(super::helpers::parse_group_id(&g).unwrap())
+            .expect("group must exist");
+        group.enable_autotype = Some(false);
+        group.default_autotype_sequence = Some("{TITLE}{ENTER}".into());
+    }
+    assert_eq!(
+        session.resolve_autotype_sequence(&e).unwrap(),
+        None,
+        "disabled group auto-type yields no sequence"
+    );
+
+    // Root entry with no sequences anywhere falls back to the global default.
+    let state = session
+        .add_entry(&entry(ROOT_GROUP_UUID, "RootEntry"))
+        .unwrap();
+    let root_entry = state.root.entries[0].uuid.clone();
+    assert_eq!(
+        session.resolve_autotype_sequence(&root_entry).unwrap(),
+        None,
+        "no entry/group sequence resolves to None; caller uses the global default"
+    );
+}
+
+#[test]
 fn expand_autotype_sequence_resolves_refs_across_entries() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
