@@ -1543,6 +1543,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-top: 6px;
   }
 
   .kv-identify-msg {
