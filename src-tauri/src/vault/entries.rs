@@ -565,4 +565,17 @@ impl VaultSession {
         self.mark_dirty();
         self.snapshot()
     }
+
+    /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
+    /// the tree reopens the same groups after a save + reopen.
+    pub fn set_group_expanded(&mut self, uuid: &str, expanded: bool) -> Result<VaultState, String> {
+        let id = parse_group_id(uuid)?;
+        {
+            let db = self.require_db_mut()?;
+            let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            group.is_expanded = expanded;
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
 }

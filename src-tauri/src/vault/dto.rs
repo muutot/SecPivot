@@ -113,6 +113,18 @@ pub struct VaultGroup {
     /// entries but not its descendants, which each carry their own flag.
     /// `None` in the KDBX means enabled (default).
     pub enable_searching: bool,
+    /// KeePass group notes (`Group.notes`). Read-only for now — SecPivot
+    /// surfaces them but does not edit them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// KeePass group tags (`Group.tags`), comma-separated for display parity
+    /// with entry tags. Read-only for now.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<String>,
+    /// KeePass group expand flag (`Group.is_expanded`). Persisted by
+    /// `set_group_expanded` so the tree restores its open state across
+    /// sessions.
+    pub is_expanded: bool,
     /// KDBX `CustomData` map items, sorted by key. Read-only — SecPivot never
     /// writes these, they must survive edits and saves untouched.
     #[serde(skip_serializing_if = "Vec::is_empty")]

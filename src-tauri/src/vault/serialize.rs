@@ -87,6 +87,9 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         custom_icon: None,
         is_recycle_bin: false,
         enable_searching: root_ref.enable_searching.unwrap_or(true),
+        notes: root_ref.notes.clone(),
+        tags: (!root_ref.tags.is_empty()).then(|| root_ref.tags.join(", ")),
+        is_expanded: root_ref.is_expanded,
         custom_data: custom_data_entries(&root_ref.custom_data),
         children: root_ref
             .groups()
@@ -134,6 +137,9 @@ fn build_group(
         },
         is_recycle_bin: is_bin,
         enable_searching: group.enable_searching.unwrap_or(true),
+        notes: group.notes.clone(),
+        tags: (!group.tags.is_empty()).then(|| group.tags.join(", ")),
+        is_expanded: group.is_expanded,
         custom_data: custom_data_entries(&group.custom_data),
         children,
         entries,

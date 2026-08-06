@@ -13,6 +13,7 @@ export function buildDemoVaultState(): VaultState {
       parentUuid: null,
       name: "Root",
       isRecycleBin: false,
+      isExpanded: true,
       enableSearching: true,
       children: [
         {
@@ -20,6 +21,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Web",
           isRecycleBin: false,
+          isExpanded: true,
           enableSearching: true,
           entries: [],
           children: [
@@ -28,6 +30,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-web",
               name: "Email",
               isRecycleBin: false,
+              isExpanded: true,
               enableSearching: true,
               children: [],
               entries: [
@@ -63,6 +66,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-web",
               name: "Social",
               isRecycleBin: false,
+              isExpanded: true,
               enableSearching: true,
               children: [],
               entries: [
@@ -87,6 +91,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Finance",
           isRecycleBin: false,
+          isExpanded: true,
           enableSearching: true,
           children: [],
           entries: [
@@ -121,6 +126,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Work",
           isRecycleBin: false,
+          isExpanded: true,
           enableSearching: true,
           entries: [],
           children: [
@@ -129,6 +135,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-work",
               name: "Infrastructure",
               isRecycleBin: false,
+              isExpanded: true,
               enableSearching: true,
               children: [],
               entries: [
@@ -165,6 +172,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Personal",
           isRecycleBin: false,
+          isExpanded: true,
           enableSearching: true,
           children: [],
           entries: [

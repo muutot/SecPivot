@@ -75,6 +75,13 @@ export interface VaultGroup {
   isRecycleBin: boolean;
   /** KeePass group option: whether this group's own entries are searchable. */
   enableSearching: boolean;
+  /** KeePass group notes. Read-only — SecPivot surfaces but does not edit. */
+  notes?: string;
+  /** KeePass group tags, comma-separated. Read-only for now. */
+  tags?: string;
+  /** KeePass group expand flag — persisted via `set_group_expanded` so the
+   * tree reopens the same groups across sessions. */
+  isExpanded: boolean;
   /** KDBX `CustomData` map items (plugin metadata from other KeePass clients),
    * sorted by key. Read-only — SecPivot never writes these. */
   customData?: CustomDataEntry[];

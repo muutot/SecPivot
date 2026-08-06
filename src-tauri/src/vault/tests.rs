@@ -1148,6 +1148,71 @@ fn set_group_icon_updates_and_resets() {
 }
 
 #[test]
+fn group_expand_state_persists_and_survives_reopen() {
+    use keepass::db::{CustomDataItem, CustomDataValue};
+    use std::collections::HashMap as StdHashMap;
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Mail".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group = state.root.children[0].clone();
+    let group_id = super::helpers::parse_group_id(&group.uuid).unwrap();
+
+    // New groups default to expanded; a collapse writes `is_expanded=false`.
+    assert!(group.is_expanded);
+    let state = session.set_group_expanded(&group.uuid, false).unwrap();
+    assert!(!state.root.children[0].is_expanded);
+
+    // Notes/tags authored by another KeePass client are exposed read-only.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db.group_mut(group_id).expect("group must exist");
+        group.notes = Some("内部账号".into());
+        group.tags = vec!["工作".into(), "紧急".into()];
+        let mut map = StdHashMap::new();
+        map.insert(
+            "grp.key".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("v".into())),
+                last_modification_time: None,
+            },
+        );
+        group.custom_data = map;
+    }
+    // A write op bumps the revision so the snapshot is rebuilt.
+    let state = session.set_group_expanded(&group.uuid, true).unwrap();
+    let group = &state.root.children[0];
+    assert_eq!(group.notes.as_deref(), Some("内部账号"));
+    assert_eq!(group.tags.as_deref(), Some("工作, 紧急"));
+    assert!(group.is_expanded);
+    assert_eq!(group.custom_data.len(), 1);
+
+    // Unknown group id still errors.
+    assert!(session
+        .set_group_expanded("00000000-0000-0000-0000-000000000000", true)
+        .is_err());
+
+    // Save + reopen: expansion, notes, tags, and CustomData all survive.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let _ = reopened
+        .open(&dir.path().join("test.kdbx"), "master-password", None)
+        .unwrap();
+    let group = &reopened.snapshot().unwrap().root.children[0];
+    assert!(group.is_expanded);
+    assert_eq!(group.notes.as_deref(), Some("内部账号"));
+    assert_eq!(group.tags.as_deref(), Some("工作, 紧急"));
+    assert_eq!(group.custom_data.len(), 1);
+}
+
+#[test]
 fn move_entry_between_groups() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

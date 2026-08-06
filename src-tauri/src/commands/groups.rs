@@ -38,6 +38,18 @@ pub(crate) fn set_group_icon(
 }
 
 #[tauri::command]
+pub(crate) fn set_group_expanded(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    expanded: bool,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .set_group_expanded(&uuid, expanded)
+}
+
+#[tauri::command]
 pub(crate) fn delete_group(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,

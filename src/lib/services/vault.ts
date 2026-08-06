@@ -77,6 +77,7 @@ interface VaultStore {
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
+  setGroupExpanded: (uuid: string, expanded: boolean) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   restoreGroup: (uuid: string) => Promise<VaultState>;
   emptyRecycleBin: () => Promise<VaultState>;
@@ -124,6 +125,7 @@ function ensureBinGroup(root: VaultGroup): VaultGroup {
     name: "回收站",
     isRecycleBin: true,
     enableSearching: true,
+    isExpanded: true,
     children: [],
     entries: [],
   };
@@ -636,6 +638,7 @@ export const vault: VaultStore = {
         name: input.name,
         isRecycleBin: false,
         enableSearching: true,
+        isExpanded: true,
         children: [],
         entries: [],
       });
@@ -670,6 +673,21 @@ export const vault: VaultStore = {
       if (!group) throw new Error("group not found");
       if (icon === null) group.icon = undefined;
       else group.icon = icon;
+    });
+    state.set(result);
+    return result;
+  },
+
+  async setGroupExpanded(uuid: string, expanded: boolean): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("set_group_expanded", { uuid, expanded });
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, uuid);
+      if (!group) throw new Error("group not found");
+      group.isExpanded = expanded;
     });
     state.set(result);
     return result;

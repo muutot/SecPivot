@@ -1698,6 +1698,8 @@
             ondelete={askDeleteGroup}
             onrestore={(uuid: string) => void restoreGroup(uuid)}
             onemptybin={askEmptyRecycleBin}
+            ontoggle={(uuid: string, expanded: boolean) =>
+              void vault.setGroupExpanded(uuid, expanded)}
             ondropentry={(groupUuid: string, uuids: string[]) =>
               void moveEntriesTo(groupUuid, uuids)}
           />

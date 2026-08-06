@@ -22,6 +22,8 @@
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
     ondropentry?: (groupUuid: string, uuids: string[]) => void;
+    /** Persist a group's expand state (calls `set_group_expanded`). */
+    ontoggle?: (uuid: string, expanded: boolean) => void;
   }
 
   let {
@@ -39,6 +41,7 @@
     onrestore,
     onemptybin,
     ondropentry,
+    ontoggle,
   }: Props = $props();
 
   function collectUuids(group: VaultGroup, into: Set<string>): void {
@@ -55,10 +58,21 @@
     return null;
   }
 
+  function collectExpanded(group: VaultGroup, into: Set<string>): void {
+    if (group.isExpanded) into.add(group.uuid);
+    for (const child of group.children) collectExpanded(child, into);
+  }
+
   const initialRoot = (() => root)();
-  // Databases open fully collapsed: only the (unrendered) root stays
-  // expanded, so every top-level group starts folded.
-  const initialExpanded = new Set<string>([initialRoot.uuid]);
+  // Restore the groups the user had open last session from the persisted
+  // `Group.is_expanded` flag; the root itself is never rendered but is kept
+  // so a fresh database still has a stable anchor.
+  const initialExpanded = (() => {
+    const set = new Set<string>();
+    collectExpanded(initialRoot, set);
+    set.add(initialRoot.uuid);
+    return set;
+  })();
 
   let expanded = $state<Set<string>>(initialExpanded);
 
@@ -66,9 +80,11 @@
 
   function toggleGroup(uuid: string): void {
     const next = new Set(expanded);
-    if (next.has(uuid)) next.delete(uuid);
-    else next.add(uuid);
+    const nowExpanded = !next.has(uuid);
+    if (nowExpanded) next.add(uuid);
+    else next.delete(uuid);
     expanded = next;
+    ontoggle?.(uuid, nowExpanded);
   }
 
   $effect(() => {
@@ -132,11 +148,18 @@
     const next = new Set<string>();
     collectUuids(root, next);
     expanded = next;
+    for (const uuid of next) {
+      if (uuid !== root.uuid) ontoggle?.(uuid, true);
+    }
   }
 
   /** Collapse every group (keep only the root). */
   function collapseAll(): void {
+    const collapsed = new Set<string>(expanded);
     expanded = new Set([root.uuid]);
+    for (const uuid of collapsed) {
+      if (uuid !== root.uuid) ontoggle?.(uuid, false);
+    }
   }
 </script>
 
