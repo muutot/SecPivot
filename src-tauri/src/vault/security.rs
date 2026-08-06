@@ -323,6 +323,17 @@ impl VaultSession {
             for entry in group.entries() {
                 *total += 1;
                 let password = entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned();
+                by_password
+                    .entry(password.clone())
+                    .or_default()
+                    .push(entry.id().uuid().to_string());
+                // `QualityCheck=false` opts the entry out of password-quality
+                // evaluation entirely (KeePass semantics): neither empty nor
+                // weak passwords are flagged. Duplicate detection is a separate
+                // reuse concern and still applies.
+                if !entry.quality_check {
+                    continue;
+                }
                 if password.is_empty() {
                     empty.push(entry.id().uuid().to_string());
                     continue;
@@ -334,10 +345,6 @@ impl VaultSession {
                         bits,
                     });
                 }
-                by_password
-                    .entry(password)
-                    .or_default()
-                    .push(entry.id().uuid().to_string());
             }
             for child in group.groups() {
                 scan(&child, total, empty, weak, by_password);

@@ -12,15 +12,17 @@ export function computeSecurityReport(root: VaultGroup): SecurityReport {
     for (const entry of group.entries) {
       total += 1;
       const password = entry.password ?? "";
+      byPassword.get(password)?.push(entry.uuid) ?? byPassword.set(password, [entry.uuid]);
+      // `QualityCheck=false` opts the entry out of password-quality evaluation
+      // entirely (KeePass semantics): neither empty nor weak passwords are
+      // flagged. Duplicate detection is a separate reuse concern and applies.
+      if (entry.qualityCheck === false) continue;
       if (!password) {
         empty.push(entry.uuid);
         continue;
       }
       const bits = estimateEntropy(password);
       if (bits < 72) weak.push({ uuid: entry.uuid, bits });
-      const list = byPassword.get(password) ?? [];
-      list.push(entry.uuid);
-      byPassword.set(password, list);
     }
     for (const child of group.children) scan(child);
   }

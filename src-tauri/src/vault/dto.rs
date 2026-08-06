@@ -38,6 +38,13 @@ pub struct VaultEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     pub favorite: bool,
+    /// KeePass per-entry password-quality check flag. When false, the entry is
+    /// excluded from the security report's weak-password findings.
+    pub quality_check: bool,
+    /// KDBX `CustomData` map items, sorted by key. Read-only — SecPivot never
+    /// writes these, they must survive edits and saves untouched.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
 }
@@ -52,6 +59,24 @@ pub struct CustomField {
     /// demand via `get_custom_field_value`).
     #[serde(default)]
     pub protected: bool,
+}
+
+/// One item of a KDBX `CustomData` map (entry, group, or database-meta
+/// level). SecPivot never writes these — they are plugin metadata written by
+/// other KeePass clients — but they must round-trip intact through edits and
+/// saves, so they are exposed read-only.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomDataEntry {
+    pub key: String,
+    /// String value; absent when the item holds binary data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// Base64-encoded binary value; present only for binary items.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,6 +113,10 @@ pub struct VaultGroup {
     /// entries but not its descendants, which each carry their own flag.
     /// `None` in the KDBX means enabled (default).
     pub enable_searching: bool,
+    /// KDBX `CustomData` map items, sorted by key. Read-only — SecPivot never
+    /// writes these, they must survive edits and saves untouched.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub custom_data: Vec<CustomDataEntry>,
     pub children: Vec<VaultGroup>,
     pub entries: Vec<VaultEntry>,
 }
@@ -105,6 +134,11 @@ pub struct VaultState {
     /// Only present when the database carries at least one custom icon.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub custom_icons: HashMap<String, String>,
+    /// Database-meta-level KDBX `CustomData` map items, sorted by key.
+    /// Read-only — SecPivot never writes these, they must survive saves
+    /// untouched.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub meta_custom_data: Vec<CustomDataEntry>,
 }
 
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in

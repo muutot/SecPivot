@@ -3374,6 +3374,216 @@ fn security_report_flags_empty_weak_and_duplicate_passwords() {
 }
 
 #[test]
+fn security_report_skips_entries_with_quality_check_disabled() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            icon: None,
+            name: "G".into(),
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+
+    // Same strong password shared by a checked and an unchecked entry so the
+    // duplicate finding (reuse is independent of quality checking) still fires.
+    let strong_pw = "StrongPass#1!";
+    let weak_uuid = add_entry_with_password(&mut session, &group_uuid, "Weak", "abc");
+    let empty_uuid = add_entry_with_password(&mut session, &group_uuid, "Empty", "");
+    let dup_a = add_entry_with_password(&mut session, &group_uuid, "DupA", strong_pw);
+    let dup_b = add_entry_with_password(&mut session, &group_uuid, "DupB", strong_pw);
+
+    // Disable quality checking on the weak, empty, and one duplicate entry.
+    for uuid in [&weak_uuid, &empty_uuid, &dup_b] {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db
+            .entry_mut(parse_entry_id(uuid).unwrap())
+            .expect("entry must exist");
+        entry.quality_check = false;
+    }
+
+    let report = session.security_report().unwrap();
+    // total still counts every entry, quality-checked or not.
+    assert_eq!(report.total, 4);
+    // The unchecked weak + empty entries vanish from their findings...
+    assert!(!report.weak.iter().any(|w| w.uuid == weak_uuid));
+    assert!(!report.empty.contains(&empty_uuid));
+    // ...but duplicates still include the unchecked entry (reuse check stays).
+    assert_eq!(report.duplicates.len(), 1);
+    assert_eq!(report.duplicates[0].count, 2);
+    assert!(report.duplicates[0].uuids.contains(&dup_a));
+    assert!(report.duplicates[0].uuids.contains(&dup_b));
+
+    // A write op bumps the revision so the snapshot below is rebuilt.
+    session
+        .update_entry(
+            &dup_a,
+            &EntryInput {
+                group_uuid: group_uuid.clone(),
+                title: "DupA".into(),
+                username: "u".into(),
+                password: strong_pw.into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+
+    // The snapshot exposes the per-entry quality-check flag.
+    let state = session.snapshot().unwrap();
+    let by_uuid: HashMap<_, _> = state.root.children[0]
+        .entries
+        .iter()
+        .map(|e| (e.uuid.clone(), e))
+        .collect();
+    assert!(!by_uuid[&weak_uuid].quality_check);
+    assert!(!by_uuid[&empty_uuid].quality_check);
+    assert!(!by_uuid[&dup_b].quality_check);
+    assert!(by_uuid[&dup_a].quality_check);
+}
+
+#[test]
+fn custom_data_round_trips_through_edit_and_save() {
+    use keepass::db::{CustomDataItem, CustomDataValue};
+    use std::collections::HashMap as StdHashMap;
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            icon: None,
+            name: "G".into(),
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_uuid.clone(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let entry_uuid = state.root.children[0].entries[0].uuid.clone();
+    let group_id = super::helpers::parse_group_id(&group_uuid).unwrap();
+    let entry_id = parse_entry_id(&entry_uuid).unwrap();
+
+    // Seed plugin-style CustomData on the entry, its group, and the database
+    // meta — as another KeePass client (e.g. KeePassRPC) would.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db.entry_mut(entry_id).expect("entry must exist");
+        let mut map = StdHashMap::new();
+        map.insert(
+            "plugin.binary".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::Binary(vec![1, 2, 3])),
+                last_modification_time: None,
+            },
+        );
+        entry.custom_data = map;
+        let mut group = db.group_mut(group_id).expect("group must exist");
+        let mut map = StdHashMap::new();
+        map.insert(
+            "grp.key".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("v".into())),
+                last_modification_time: None,
+            },
+        );
+        group.custom_data = map;
+        let mut map = StdHashMap::new();
+        map.insert(
+            "meta.key".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("m".into())),
+                last_modification_time: None,
+            },
+        );
+        db.meta.custom_data = map;
+    }
+
+    // A normal SecPivot edit (bumps the session revision and rebuilds the
+    // snapshot) must not clobber the CustomData at any level.
+    session
+        .update_entry(
+            &entry_uuid,
+            &EntryInput {
+                group_uuid: group_uuid.clone(),
+                title: "E2".into(),
+                username: "u2".into(),
+                password: "pw2".into(),
+                url: "https://x.example".into(),
+                notes: "n".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+
+    // The snapshot exposes all three levels, read-only.
+    let state = session.snapshot().unwrap();
+    assert_eq!(state.meta_custom_data.len(), 1);
+    assert_eq!(state.meta_custom_data[0].key, "meta.key");
+    assert_eq!(state.meta_custom_data[0].value.as_deref(), Some("m"));
+    let group = &state.root.children[0];
+    assert_eq!(group.custom_data.len(), 1);
+    assert_eq!(group.custom_data[0].key, "grp.key");
+    let entry = &group.entries[0];
+    assert_eq!(entry.custom_data.len(), 1);
+    assert_eq!(entry.custom_data[0].key, "plugin.binary");
+    assert_eq!(
+        entry.custom_data[0].binary.as_deref(),
+        Some(BASE64.encode([1u8, 2, 3]).as_str())
+    );
+
+    session.save().unwrap();
+    drop(session);
+
+    // Save + reopen: CustomData survives at every level.
+    let mut reopened = VaultSession::default();
+    let _ = reopened
+        .open(&dir.path().join("test.kdbx"), "master-password", None)
+        .unwrap();
+    let state = reopened.snapshot().unwrap();
+    assert_eq!(state.meta_custom_data.len(), 1);
+    assert_eq!(state.meta_custom_data[0].value.as_deref(), Some("m"));
+    let group = &state.root.children[0];
+    assert_eq!(group.custom_data.len(), 1);
+    assert_eq!(group.custom_data[0].value.as_deref(), Some("v"));
+    let entry = &group.entries[0];
+    assert_eq!(entry.title, "E2");
+    assert_eq!(entry.custom_data.len(), 1);
+    assert_eq!(
+        entry.custom_data[0].binary.as_deref(),
+        Some(BASE64.encode([1u8, 2, 3]).as_str())
+    );
+}
+
+#[test]
 fn export_csv_writes_escaped_rows_and_bom() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

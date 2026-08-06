@@ -6,7 +6,7 @@ use super::persist::{
     persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
     prepare_remote_open, read_keyfile, SaveJob, SaveTarget,
 };
-use super::serialize::{build_group_tree, icon_to_data_url, now_iso};
+use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use keepass::Database;
@@ -316,6 +316,7 @@ impl VaultSession {
                 .iter_all_custom_icons()
                 .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))
                 .collect(),
+            meta_custom_data: custom_data_entries(&db.meta.custom_data),
         };
         self.cached_snapshot = Some((self.revision, state.clone()));
         Ok(state)

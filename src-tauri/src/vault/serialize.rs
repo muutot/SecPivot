@@ -5,14 +5,16 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::NaiveDateTime;
 use keepass::db::{
-    AttachmentRef, Color, Entry, EntryMut, EntryRef, GroupRef, History, Icon, Meta, Value,
+    AttachmentRef, Color, CustomDataItem, CustomDataValue, Entry, EntryMut, EntryRef, GroupRef,
+    History, Icon, Meta, Value,
 };
 use keepass::Database;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use crate::vault::dto::{
-    AttachmentInfo, AttachmentInput, CustomField, EntryInput, EntryPatch, VaultEntry, VaultGroup,
+    AttachmentInfo, AttachmentInput, CustomDataEntry, CustomField, EntryInput, EntryPatch,
+    VaultEntry, VaultGroup,
 };
 use crate::vault::{
     entry_has_otp, FIELD_FAVORITE, FIELD_FAVORITE_TRUE, FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD,
@@ -85,6 +87,7 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         custom_icon: None,
         is_recycle_bin: false,
         enable_searching: root_ref.enable_searching.unwrap_or(true),
+        custom_data: custom_data_entries(&root_ref.custom_data),
         children: root_ref
             .groups()
             .filter_map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
@@ -131,6 +134,7 @@ fn build_group(
         },
         is_recycle_bin: is_bin,
         enable_searching: group.enable_searching.unwrap_or(true),
+        custom_data: custom_data_entries(&group.custom_data),
         children,
         entries,
     })
@@ -162,6 +166,8 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
         color: entry.background_color.as_ref().map(ToString::to_string),
+        quality_check: entry.quality_check,
+        custom_data: custom_data_entries(&entry.custom_data),
         expires: match entry.times.expires {
             Some(true) => entry.times.expiry.map(format_iso),
             _ => None,
@@ -206,6 +212,28 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
 
 pub(crate) fn format_iso(time: NaiveDateTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// Project a KDBX `CustomData` map into the read-only DTO list, sorted by key.
+/// Binary items are base64-encoded; string items carry a plaintext `value`.
+pub(crate) fn custom_data_entries(map: &HashMap<String, CustomDataItem>) -> Vec<CustomDataEntry> {
+    let mut entries: Vec<CustomDataEntry> = map
+        .iter()
+        .map(|(key, item)| CustomDataEntry {
+            key: key.clone(),
+            value: match &item.value {
+                Some(CustomDataValue::String(value)) => Some(value.clone()),
+                _ => None,
+            },
+            binary: match &item.value {
+                Some(CustomDataValue::Binary(bytes)) => Some(BASE64.encode(bytes)),
+                _ => None,
+            },
+            modified: item.last_modification_time.map(format_iso),
+        })
+        .collect();
+    entries.sort_by(|a, b| a.key.cmp(&b.key));
+    entries
 }
 
 /// Read an attachment's byte size, tolerating a dangling reference.

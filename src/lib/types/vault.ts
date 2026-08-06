@@ -25,8 +25,23 @@ export interface VaultEntry {
   expired?: boolean;
   tags?: string;
   favorite?: boolean;
+  /** KeePass per-entry password-quality check flag. When false, the entry is
+   * excluded from the security report's weak-password findings. */
+  qualityCheck?: boolean;
+  /** KDBX `CustomData` map items (plugin metadata from other KeePass clients),
+   * sorted by key. Read-only — SecPivot never writes these. */
+  customData?: CustomDataEntry[];
   customFields?: CustomField[];
   attachments?: AttachmentInfo[];
+}
+
+export interface CustomDataEntry {
+  key: string;
+  /** String value; absent when the item holds binary data. */
+  value?: string;
+  /** Base64-encoded binary value; present only for binary items. */
+  binary?: string;
+  modified?: string;
 }
 
 export interface CustomField {
@@ -60,6 +75,9 @@ export interface VaultGroup {
   isRecycleBin: boolean;
   /** KeePass group option: whether this group's own entries are searchable. */
   enableSearching: boolean;
+  /** KDBX `CustomData` map items (plugin metadata from other KeePass clients),
+   * sorted by key. Read-only — SecPivot never writes these. */
+  customData?: CustomDataEntry[];
   children: VaultGroup[];
   entries: VaultEntry[];
 }
@@ -73,6 +91,9 @@ export interface VaultState {
   /** Database custom icons (favicons) keyed by custom-icon UUID; values are
    * `data:` URLs ready for `<img>`. Present only when the DB carries icons. */
   customIcons?: Record<string, string>;
+  /** Database-meta-level KDBX `CustomData` map items, sorted by key.
+   * Read-only — SecPivot never writes these. */
+  metaCustomData?: CustomDataEntry[];
 }
 
 /** Server-side security analysis; passwords never cross into the report. */
