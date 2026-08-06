@@ -333,9 +333,10 @@ pub(crate) fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
         Some(None) => entry.set_icon_none(),
         None => {}
     }
-    // Background color tags the entry row; foreground is left unset.
+    // Background color tags the entry row; the foreground color is a
+    // separate KDBX attribute SecPivot does not manage, so it is preserved
+    // (never cleared) when an entry created in another KeePass client is edited.
     entry.background_color = parse_color(input.color.as_deref());
-    entry.foreground_color = None;
 }
 
 /// Apply a partial batch-edit patch to an entry. Absent fields are skipped;
@@ -387,7 +388,6 @@ pub(crate) fn apply_patch_fields(entry: &mut EntryMut<'_>, patch: &EntryPatch) {
         entry.background_color = None;
     } else if let Some(color) = &patch.color {
         entry.background_color = parse_color(Some(color));
-        entry.foreground_color = None;
     }
 }
 

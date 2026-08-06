@@ -814,6 +814,94 @@ fn entry_icon_and_color_round_trip_and_clear() {
 }
 
 #[test]
+fn foreground_color_survives_edits_from_other_clients() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    // A foreign KeePass client set both a foreground and background color.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.set_unprotected("Title", "Colored");
+        entry.background_color = Some("#112233".parse().unwrap());
+        entry.foreground_color = Some("#AABBCC".parse().unwrap());
+    }
+    // SecPivot edits the entry (background managed, foreground untouched).
+    let uuid = {
+        let db = session.require_db().unwrap();
+        let root = db.root();
+        let entry = root.entries().next().unwrap();
+        entry.id().uuid().to_string()
+    };
+    let state = session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Colored".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "https://example.com".into(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: Some("#FF8800".into()),
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            },
+        )
+        .unwrap();
+    assert_eq!(state.root.entries[0].color.as_deref(), Some("#FF8800"));
+    {
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(parse_entry_id(&state.root.entries[0].uuid).unwrap())
+            .unwrap();
+        assert_eq!(
+            entry.foreground_color.as_ref().map(ToString::to_string),
+            Some("#AABBCC".to_owned()),
+            "foreground color must survive an edit that only touches background"
+        );
+    }
+    // Batch edit likewise preserves the foreground color.
+    let state = session
+        .update_entries(
+            &[state.root.entries[0].uuid.clone()],
+            &EntryPatch {
+                color: Some("#00CC66".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(state.root.entries[0].color.as_deref(), Some("#00CC66"));
+    {
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(parse_entry_id(&state.root.entries[0].uuid).unwrap())
+            .unwrap();
+        assert_eq!(
+            entry.foreground_color.as_ref().map(ToString::to_string),
+            Some("#AABBCC".to_owned()),
+            "batch color edit must also preserve the foreground color"
+        );
+    }
+    // Save + reopen keeps the foreground color too.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let _state = reopened.open(&path, "master-password", None).unwrap();
+    let db = reopened.require_db().unwrap();
+    let root = db.root();
+    let entry = root.entries().next().unwrap();
+    assert_eq!(
+        entry.foreground_color.as_ref().map(ToString::to_string),
+        Some("#AABBCC".to_owned()),
+        "foreground color survives save/reopen"
+    );
+}
+
+#[test]
 fn group_icon_round_trip() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);
