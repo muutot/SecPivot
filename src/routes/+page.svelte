@@ -572,15 +572,20 @@
   }
 
   function saveLayout(): void {
+    // Write entryColumns first: mirroring settings back into `entryColumns`
+    // (the $effect subscribing to appSettings) resets that state to whatever
+    // is currently in the store. If we wrote panelWidths first, the store's
+    // stale column widths would clobber the freshly dragged widths before this
+    // line reads `entryColumns`, reverting the resize on release.
+    appSettings.updateGeneral(
+      "entryColumns",
+      entryColumns.map((c) => ({ ...c })),
+    );
     appSettings.updateGeneral("panelWidths", {
       group: groupWidth,
       detail: detailWidth,
       urlCol: colState("url").width || 200,
     });
-    appSettings.updateGeneral(
-      "entryColumns",
-      entryColumns.map((c) => ({ ...c })),
-    );
   }
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
