@@ -13,6 +13,7 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 - **`--slider-pct` must be initialized on first render.** Derive it from value/min/max in the template so the filled track is correct before any input event.
 - **The edit tool matches LF only.** Files written by PowerShell tools may carry CRLF (e.g. `VaultWelcome.svelte` did); large `edit` oldStrings then fail with "could not find". Normalize the file to LF with the .NET API (UTF-8, no BOM) first — git's `core.autocrlf` keeps the diff clean — then use small edits.
 - **Remote (`s3://`) paths must stay out of recent files and the lock-screen reopen.** `rememberRecent` skips `s3://` paths and the remote open/create methods never set `vault.remembered`, because the local open flow cannot reopen a remote vault.
+- **Mirrored layout state must be written to the settings store in dependency order.** `saveLayout` writes `entryColumns` before `panelWidths`, because the `$effect` mirroring `appSettings` into `entryColumns` (`+page.svelte`) resets that state to the store's current value synchronously on each `updateGeneral`. Writing `panelWidths` first would re-store the stale pre-drag widths and undo a just-finished column resize.
 
 ## Backend / vault
 
