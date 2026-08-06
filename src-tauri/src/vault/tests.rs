@@ -5120,6 +5120,85 @@ fn autotype_match_considers_alt_urls() {
     assert_eq!(matched, uuid);
 }
 
+// -- OverrideURL ---------------------------------------------------------
+
+#[test]
+fn override_url_replaces_url_for_matching() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let uuid = entry_with_alt_urls(
+        &mut session,
+        "某站",
+        "https://stored.example",
+        vec!["https://alt1.example"],
+    );
+    // OverrideURL is set to the real deployment URL; the URL field holds a
+    // placeholder that must NOT be used for matching.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db
+            .entry_mut(parse_entry_id(&uuid).unwrap())
+            .expect("entry must exist");
+        entry.override_url = Some("https://real.example".into());
+    }
+
+    // The override wins over the URL field in the match-URL list.
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    assert_eq!(
+        super::helpers::entry_match_urls(&entry),
+        vec![
+            "https://real.example".to_owned(),
+            "https://alt1.example".to_owned()
+        ]
+    );
+    // logins_for (bridge) matches on the override host.
+    assert_eq!(
+        session.logins_for("https://real.example/login", None).len(),
+        1
+    );
+    // The stored URL field alone no longer matches.
+    assert!(session
+        .logins_for("https://stored.example/login", None)
+        .is_empty());
+    // find_logins matches on the override.
+    assert_eq!(
+        session
+            .find_logins(&["https://real.example".to_owned()], None, None, None)
+            .len(),
+        1
+    );
+    // Auto-type window detection uses the override too.
+    let matched = session.autotype_match("Login · real.example").unwrap();
+    assert_eq!(matched, uuid);
+}
+
+#[test]
+fn empty_override_url_falls_back_to_url_field() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let uuid = entry_with_alt_urls(&mut session, "某站", "https://stored.example", vec![]);
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db
+            .entry_mut(parse_entry_id(&uuid).unwrap())
+            .expect("entry must exist");
+        entry.override_url = Some("".into());
+    }
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.db.as_ref().unwrap().entry(id).unwrap();
+    assert_eq!(
+        super::helpers::entry_match_urls(&entry),
+        vec!["https://stored.example".to_owned()]
+    );
+    assert_eq!(
+        session
+            .logins_for("https://stored.example/login", None)
+            .len(),
+        1
+    );
+}
+
 // -- KeePassRPC full KPRPC config (regex / blocked / accuracy) ----------
 
 fn entry_with_kprpc_config(

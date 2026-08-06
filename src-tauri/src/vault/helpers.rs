@@ -283,9 +283,7 @@ pub(crate) fn kprpc_matches_url(
         return true;
     }
     // Otherwise the amount of host/path similarity decides under `accuracy`.
-    let mut urls: Vec<String> = entry
-        .get(FIELD_URL)
-        .unwrap_or_default()
+    let mut urls: Vec<String> = entry_primary_url(entry)
         .split_whitespace()
         .map(str::to_owned)
         .collect();
@@ -294,14 +292,24 @@ pub(crate) fn kprpc_matches_url(
         .any(|u| url_matches_accuracy(u, request_url, cfg.accuracy, registrable))
 }
 
+/// The entry's effective primary URL for matching: the `OverrideURL` field
+/// when set, else the `URL` field (KeePass semantics — `OverrideURL` replaces
+/// `URL` for auto-type window detection and browser/bridge matching).
+pub(crate) fn entry_primary_url<'a>(entry: &'a keepass::db::EntryRef<'_>) -> &'a str {
+    entry
+        .override_url
+        .as_deref()
+        .filter(|u| !u.trim().is_empty())
+        .unwrap_or_else(|| entry.get(FIELD_URL).unwrap_or_default())
+}
+
 /// Every URL an entry exposes to browser-bridge and auto-type matching (for
-/// DTO `url` lists and title scoring): the primary `URL` field (space-separated)
-/// plus any KeePassRPC `altURLs`. Entries edited in Kee match their alternative
-/// URLs too; empty entries (no URL, no altURLs) never match.
+/// DTO `url` lists and title scoring): the effective primary URL
+/// (`OverrideURL` when set, else the `URL` field, space-separated) plus any
+/// KeePassRPC `altURLs`. Entries edited in Kee match their alternative URLs
+/// too; empty entries (no URL, no altURLs) never match.
 pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
-    let mut urls: Vec<String> = entry
-        .get(FIELD_URL)
-        .unwrap_or_default()
+    let mut urls: Vec<String> = entry_primary_url(entry)
         .split_whitespace()
         .map(str::to_owned)
         .collect();
