@@ -436,7 +436,7 @@
       kvIdentifySuggestion = "";
       return;
     }
-    kvIdentifyMessage = `从「${raw}」识别 → 建议地址:`;
+    kvIdentifyMessage = `建议地址: ${result}`;
     kvIdentifySuggestion = result;
   }
 
@@ -987,19 +987,24 @@
               </button>
             </div>
             {#if kvIdentifyMessage}
-              <p class="field-hint">
-                {kvIdentifyMessage} <code class="kv-identify-code">{kvIdentifySuggestion}</code>
-              </p>
-            {/if}
-            {#if kvIdentifySuggestion}
-              <button
-                type="button"
-                class="add-row-btn"
-                onclick={applyIdentifySuggestion}
-                title="把识别出的建议地址加入匹配规则"
-              >
-                <AppIcon name="check" size={12} />添加到匹配规则
-              </button>
+              <div class="kv-identify-result">
+                <p class="field-hint kv-identify-msg">
+                  {kvIdentifyMessage}
+                  {#if kvIdentifySuggestion}
+                    <code class="kv-identify-code">{kvIdentifySuggestion}</code>
+                  {/if}
+                </p>
+                {#if kvIdentifySuggestion}
+                  <button
+                    type="button"
+                    class="kv-identify-btn"
+                    onclick={applyIdentifySuggestion}
+                    title="把识别出的建议地址加入匹配规则"
+                  >
+                    <AppIcon name="check" size={12} />应用
+                  </button>
+                {/if}
+              </div>
             {/if}
           </section>
         {/if}
@@ -1532,6 +1537,16 @@
   .kv-identify-code {
     color: var(--accent-color, var(--text-primary));
     font-family: var(--font-mono, monospace);
+  }
+
+  .kv-identify-result {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .kv-identify-msg {
+    margin: 0;
   }
 
   .icon-grid {
