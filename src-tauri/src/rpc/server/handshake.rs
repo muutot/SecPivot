@@ -157,6 +157,14 @@ pub(crate) fn dispatch_jsonrpc(
     let method = request.get("method").and_then(|m| m.as_str())?.to_owned();
     let id = request.get("id").cloned().unwrap_or(Value::Null);
     let params = request.get("params");
+    if method == "FindLogins" {
+        let urls: Vec<&str> = params
+            .and_then(|p| p.get(0))
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        eprintln!("[rpc] FindLogins urls={urls:?}");
+    }
     let response = match handle_jsonrpc(host, &method, params) {
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
         Err(RpcError::Locked) => jsonrpc_error(&id, -32000, "Vault is locked"),
