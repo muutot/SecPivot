@@ -436,7 +436,7 @@
       kvIdentifySuggestion = "";
       return;
     }
-    kvIdentifyMessage = `建议地址: ${result}`;
+    kvIdentifyMessage = "建议地址:";
     kvIdentifySuggestion = result;
   }
 
