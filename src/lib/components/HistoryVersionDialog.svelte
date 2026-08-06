@@ -25,6 +25,15 @@
   const urlDiff = $derived(differs(entry.url, version.url));
   const notesDiff = $derived(differs(entry.notes, version.notes));
   const expiresDiff = $derived(differs(entry.expires ?? "", version.expires ?? ""));
+  const tagsDiff = $derived(differs(entry.tags ?? "", version.tags ?? ""));
+  const hasTotpDiff = $derived((entry.hasTotp ?? false) !== version.hasTotp);
+  const iconDiff = $derived(
+    (entry.icon ?? null) !== (version.icon ?? null) ||
+      (entry.customIcon ?? null) !== (version.customIcon ?? null),
+  );
+  const colorDiff = $derived(differs(entry.color ?? "", version.color ?? ""));
+  const qualityCheckDiff = $derived((entry.qualityCheck ?? true) !== version.qualityCheck);
+  const favoriteDiff = $derived((entry.favorite ?? false) !== version.favorite);
 
   type FieldChange = "unchanged" | "added" | "removed" | "modified";
 
@@ -129,13 +138,55 @@
   const attachmentChangedCount = $derived(
     attachmentRows.filter((r) => r.change !== "unchanged").length,
   );
+
+  interface CustomDataRow {
+    key: string;
+    change: FieldChange;
+    label: string;
+  }
+
+  /** Union of the version's and the current entry's `CustomData` items, tagged
+   * with how each differs. Values are compared by display label (string value
+   * vs `binary <n> bytes`). */
+  const customDataRows = $derived.by<CustomDataRow[]>(() => {
+    const label = (item: { value?: string; binary?: string; modified?: string }) =>
+      item.binary !== undefined ? `二进制 ${item.binary.length} 字节` : (item.value ?? "—");
+    const currentByName = new Map((entry.customData ?? []).map((item) => [item.key, label(item)]));
+    const versionByName = new Map(
+      (version.customData ?? []).map((item) => [item.key, label(item)]),
+    );
+    const rows: CustomDataRow[] = [];
+    for (const [key, value] of versionByName) {
+      const current = currentByName.get(key);
+      const change: FieldChange =
+        current === undefined ? "removed" : current === value ? "unchanged" : "modified";
+      rows.push({ key, change, label: value });
+    }
+    for (const [key, value] of currentByName) {
+      if (!versionByName.has(key)) rows.push({ key, change: "added", label: value });
+    }
+    rows.sort((a, b) => a.key.localeCompare(b.key));
+    return rows;
+  });
+
+  const customDataChangedCount = $derived(
+    customDataRows.filter((r) => r.change !== "unchanged").length,
+  );
+
   const totalDiffs = $derived(
     (titleDiff ? 1 : 0) +
       (usernameDiff ? 1 : 0) +
       (urlDiff ? 1 : 0) +
       (notesDiff ? 1 : 0) +
       (expiresDiff ? 1 : 0) +
+      (tagsDiff ? 1 : 0) +
+      (hasTotpDiff ? 1 : 0) +
+      (iconDiff ? 1 : 0) +
+      (colorDiff ? 1 : 0) +
+      (qualityCheckDiff ? 1 : 0) +
+      (favoriteDiff ? 1 : 0) +
       customFieldChangedCount +
+      customDataChangedCount +
       attachmentChangedCount,
   );
 
@@ -215,6 +266,53 @@
     </div>
 
     <div class="field">
+      <span class="field-label">标签</span>
+      <div class="read-value" class:changed={tagsDiff}>
+        {#if tagsDiff}<span class="diff-badge">已变更</span>{/if}
+        <span class="read-text">{version.tags || "—"}</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">元属性</span>
+      <div class="meta-grid">
+        <div class="read-value" class:changed={hasTotpDiff}>
+          {#if hasTotpDiff}<span class="diff-badge">已变更</span>{/if}
+          <AppIcon name="key" size={12} />
+          <span class="read-text">{version.hasTotp ? "含 TOTP" : "无 TOTP"}</span>
+        </div>
+        <div class="read-value" class:changed={iconDiff}>
+          {#if iconDiff}<span class="diff-badge">已变更</span>{/if}
+          <AppIcon name="grid" size={12} />
+          <span class="read-text"
+            >图标{#if version.icon !== undefined}
+              #{version.icon}{:else if version.customIcon}
+              自定义{/if}</span
+          >
+        </div>
+        <div class="read-value" class:changed={favoriteDiff}>
+          {#if favoriteDiff}<span class="diff-badge">已变更</span>{/if}
+          <AppIcon name="star" size={12} filled={version.favorite} />
+          <span class="read-text">{version.favorite ? "已收藏" : "未收藏"}</span>
+        </div>
+        <div class="read-value" class:changed={qualityCheckDiff}>
+          {#if qualityCheckDiff}<span class="diff-badge">已变更</span>{/if}
+          <AppIcon name="shield" size={12} />
+          <span class="read-text"
+            >{version.qualityCheck ? "密码质量检查开启" : "密码质量检查关闭"}</span
+          >
+        </div>
+        {#if colorDiff || version.color}
+          <div class="read-value" class:changed={colorDiff}>
+            {#if colorDiff}<span class="diff-badge">已变更</span>{/if}
+            <span class="color-swatch" style:--swatch={version.color ?? "transparent"}></span>
+            <span class="read-text">{version.color ?? "无背景色"}</span>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="field">
       <span class="field-label"
         >自定义字段{#if customFieldRows.length}
           ({customFieldRows.length}){/if}</span
@@ -261,6 +359,40 @@
                   <AppIcon name={revealedFields[row.name] ? "eye-off" : "eye"} size={12} />
                 </button>
               {/if}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <div class="field">
+      <span class="field-label"
+        >自定义数据{#if customDataRows.length}
+          ({customDataRows.length}){/if}</span
+      >
+      {#if customDataRows.length === 0}
+        <div class="read-value"><span class="read-text faint">无</span></div>
+      {:else}
+        {#each customDataRows as row (row.key)}
+          <div class="custom-row">
+            <span class="custom-name">
+              {row.key}
+              {#if row.change !== "unchanged"}
+                <span
+                  class="diff-badge"
+                  class:added={row.change === "added"}
+                  class:removed={row.change === "removed"}
+                  class:modified={row.change === "modified"}>{badgeLabel(row.change)}</span
+                >
+              {/if}
+            </span>
+            <div
+              class="read-value"
+              class:added={row.change === "added"}
+              class:removed={row.change === "removed"}
+              class:modified={row.change === "modified"}
+            >
+              <span class="read-text mono">{row.label}</span>
             </div>
           </div>
         {/each}
@@ -368,6 +500,21 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 6px;
+  }
+
+  .color-swatch {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: var(--swatch, transparent);
   }
 
   .field {

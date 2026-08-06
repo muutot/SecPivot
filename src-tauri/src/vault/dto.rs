@@ -298,6 +298,24 @@ pub struct HistoryVersion {
     pub notes: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<String>,
+    /// Whether the snapshot carried a TOTP seed. The seed itself never leaves
+    /// the backend, mirroring `VaultEntry.has_totp`.
+    pub has_totp: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<u32>,
+    /// UUID of the referenced database custom icon, if the snapshot used one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_icon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<String>,
+    /// `#RRGGBB` background color the snapshot carried, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    pub favorite: bool,
+    pub quality_check: bool,
+    /// KDBX `CustomData` map items of the snapshot, sorted by key. Read-only.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
 }

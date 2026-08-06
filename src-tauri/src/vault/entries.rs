@@ -2,13 +2,13 @@
 //! recycle bin (extracted from mod.rs).
 
 use super::helpers::{
-    ensure_recycle_bin, group_contains, parse_entry_id, parse_group_id, recycle_bin_id,
-    resolve_group_id,
+    ensure_recycle_bin, entry_has_otp, group_contains, parse_entry_id, parse_group_id,
+    recycle_bin_id, resolve_group_id,
 };
 use super::serialize::{
-    apply_patch_fields, attachment_size, decode_attachments, delete_history_entry, format_iso,
-    history_cap, sync_attachments, sync_custom_fields, trim_entry_history, write_fields,
-    AttachmentPayload,
+    apply_patch_fields, attachment_size, custom_data_entries, decode_attachments,
+    delete_history_entry, format_iso, history_cap, sync_attachments, sync_custom_fields,
+    trim_entry_history, write_fields, AttachmentPayload,
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
@@ -251,6 +251,27 @@ impl VaultSession {
                     Some(true) => historical.times.expiry.map(format_iso),
                     _ => None,
                 },
+                has_totp: entry_has_otp(&historical),
+                icon: match historical.icon() {
+                    Some(Icon::BuiltIn(id)) => Some(*id as u32),
+                    _ => None,
+                },
+                custom_icon: match historical.icon() {
+                    Some(Icon::Custom(id)) => Some(id.uuid().to_string()),
+                    _ => None,
+                },
+                tags: if historical.tags.is_empty() {
+                    None
+                } else {
+                    Some(historical.tags.join(", "))
+                },
+                color: historical
+                    .background_color
+                    .as_ref()
+                    .map(ToString::to_string),
+                favorite: historical.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+                quality_check: historical.quality_check,
+                custom_data: custom_data_entries(&historical.custom_data),
                 custom_fields: {
                     let mut fields: Vec<CustomField> = historical
                         .fields

@@ -544,6 +544,73 @@ fn entry_history_tracks_versions_and_restores() {
 }
 
 #[test]
+fn entry_history_covers_all_snapshot_fields() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    // v1 carries tags, color, a TOTP seed, the favorite marker and custom data.
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "v1".into(),
+            username: "u".into(),
+            password: "p1".into(),
+            url: "https://example.com".into(),
+            notes: "n1".into(),
+            totp: Some("JBSWY3DPEHPK3PXP".into()),
+            expires: None,
+            icon: Some(Some(3)),
+            color: Some("#336699".into()),
+            tags: Some("work, 高优".into()),
+            custom_fields: vec![CustomField {
+                name: "Note".into(),
+                value: "x".into(),
+                protected: false,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // v2 strips the TOTP, tags and color so the snapshots diverge on them.
+    session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "v2".into(),
+                username: "u".into(),
+                password: "p2".into(),
+                url: "https://example.com".into(),
+                notes: "n1".into(),
+                totp: Some("".into()),
+                expires: None,
+                icon: Some(Some(3)),
+                color: None,
+                tags: Some("".into()),
+                custom_fields: vec![CustomField {
+                    name: "Note".into(),
+                    value: "y".into(),
+                    protected: false,
+                }],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 1);
+    let snapshot = &history[0];
+    assert_eq!(snapshot.title, "v1");
+    assert!(snapshot.has_totp, "v1 carried a TOTP seed");
+    assert_eq!(snapshot.tags.as_deref(), Some("work, 高优"));
+    assert_eq!(snapshot.color.as_deref(), Some("#336699"));
+    assert_eq!(snapshot.icon, Some(3));
+    assert!(!snapshot.favorite);
+    assert!(snapshot.quality_check);
+    assert!(snapshot.custom_fields.iter().any(|f| f.name == "Note"));
+}
+
+#[test]
 fn entry_history_supports_manual_delete() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

@@ -210,6 +210,18 @@ export interface HistoryVersion {
   url: string;
   notes: string;
   expires: string | null;
+  /** Whether this snapshot carried a TOTP seed. */
+  hasTotp: boolean;
+  /** Built-in KeePass icon index the snapshot used, if any. */
+  icon?: number;
+  /** UUID of the database custom icon the snapshot used, if any. */
+  customIcon?: string;
+  tags?: string;
+  /** `#RRGGBB` background color the snapshot carried, if any. */
+  color?: string;
+  favorite: boolean;
+  qualityCheck: boolean;
+  customData?: CustomDataEntry[];
   customFields: CustomField[];
   attachments: AttachmentInfo[];
 }
