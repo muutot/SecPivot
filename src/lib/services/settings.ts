@@ -42,13 +42,18 @@ export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
 
 /** Merge a persisted column list over the defaults: unknown ids (custom-field
  *  columns) survive, widths clamp to 30..=400 (title keeps its 0 auto
- *  sentinel). Mirrors `normalize_entry_columns` in config.rs. */
+ *  sentinel). The persisted array order is the display order and is preserved;
+ *  fallback columns missing from the source are appended at the end so newer
+ *  defaults still appear. Mirrors `normalize_entry_columns` in config.rs. */
 export function normalizeEntryColumns(
   source: EntryColumnState[] | undefined,
   fallback: EntryColumnState[] = DEFAULT_ENTRY_COLUMNS,
 ): EntryColumnState[] {
-  const byId = new Map(fallback.map((c) => [c.id, { ...c }]));
-  for (const col of Array.isArray(source) ? source : []) {
+  if (!Array.isArray(source) || source.length === 0) {
+    return fallback.map((c) => ({ ...c }));
+  }
+  const byId = new Map<string, EntryColumnState>();
+  for (const col of source) {
     if (typeof col !== "object" || col === null) continue;
     const width =
       col.id === "title" && col.width === 0
@@ -59,6 +64,9 @@ export function normalizeEntryColumns(
       visible: typeof col.visible === "boolean" ? col.visible : true,
       width,
     });
+  }
+  for (const col of fallback) {
+    if (!byId.has(col.id)) byId.set(col.id, { ...col });
   }
   return Array.from(byId.values());
 }

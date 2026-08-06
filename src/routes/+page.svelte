@@ -360,12 +360,38 @@
       }
     );
   }
-  /** Visible columns in render order (icon/actions columns excluded). */
+  /** Visible columns in render order (icon/actions columns excluded). The
+   *  `entryColumns` array order is the persisted display order (drag to
+   *  reorder); built-ins/customs not yet present in the array are appended in
+   *  default order as a legacy fallback. */
   const visibleCols = $derived.by(() => {
     const out: { id: string; label: string; width: number; sortable: boolean }[] = [];
+    const seen = new Set<string>();
+    for (const st of entryColumns) {
+      if (!st.visible || seen.has(st.id)) continue;
+      seen.add(st.id);
+      const def = BUILTIN_COLUMNS.find((b) => b.id === st.id);
+      if (def) {
+        out.push({
+          id: def.id,
+          label: def.label,
+          width: st.width,
+          sortable: def.sortable !== false,
+        });
+      } else if (st.id.startsWith("custom:")) {
+        out.push({
+          id: st.id,
+          label: st.id.slice("custom:".length),
+          width: st.width,
+          sortable: true,
+        });
+      }
+    }
     for (const def of BUILTIN_COLUMNS) {
+      if (seen.has(def.id)) continue;
       const st = colState(def.id);
       if (st.visible) {
+        seen.add(def.id);
         out.push({
           id: def.id,
           label: def.label,
@@ -376,8 +402,11 @@
     }
     for (const name of customColumnNames) {
       const id = `custom:${name}`;
-      if (colState(id).visible) {
-        out.push({ id, label: name, width: colState(id).width, sortable: true });
+      if (seen.has(id)) continue;
+      const st = colState(id);
+      if (st.visible) {
+        seen.add(id);
+        out.push({ id, label: name, width: st.width, sortable: true });
       }
     }
     return out;
@@ -521,6 +550,85 @@
       "entryColumns",
       entryColumns.map((c) => ({ ...c })),
     );
+  }
+
+  let entryHeadEl = $state<HTMLElement>();
+  /** Column header currently being dragged (pointer-based, like column resize). */
+  let colDrag = $state<{ id: string; fromIndex: number } | null>(null);
+  /** Insertion index in the visible column order while dragging (0..n). */
+  let colDropIndex = $state<number | null>(null);
+  /** One-shot flag consumed by the header sort button after a completed drag. */
+  let suppressColumnSort = $state(false);
+
+  /** Start a potential header drag; a click that stays under the threshold is
+   *  left untouched so the sort button still works (KeePass behavior). */
+  function startColDrag(e: PointerEvent, colId: string, fromIndex: number): void {
+    if (e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let active = false;
+    const onMove = (ev: PointerEvent): void => {
+      if (!active && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
+        active = true;
+        colDrag = { id: colId, fromIndex };
+        colDropIndex = fromIndex;
+        document.body.classList.add("dragging-column");
+      }
+      if (active) {
+        colDropIndex = computeColumnDropIndex(ev.clientX);
+      }
+    };
+    const onUp = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.classList.remove("dragging-column");
+      if (active) {
+        applyColumnReorder(colId, colDropIndex ?? fromIndex);
+        suppressColumnSort = true;
+        setTimeout(() => (suppressColumnSort = false), 50);
+        saveLayout();
+        colDrag = null;
+        colDropIndex = null;
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  /** Drop index = the header cell whose horizontal midpoint the pointer has
+   *  crossed (insertion before that column; n = append at the end). */
+  function computeColumnDropIndex(clientX: number): number {
+    const cells = Array.from(entryHeadEl?.querySelectorAll<HTMLElement>(".head-cell") ?? []);
+    let idx = cells.length;
+    for (let i = 0; i < cells.length; i++) {
+      const r = cells[i].getBoundingClientRect();
+      if (clientX < r.left + r.width / 2) {
+        idx = i;
+        break;
+      }
+    }
+    return idx;
+  }
+
+  /** Move a column so it renders at the given insertion index of the visible
+   *  order. Hidden columns keep their relative array positions. */
+  function applyColumnReorder(colId: string, toIndex: number): void {
+    const cols = entryColumns.map((c) => ({ ...c }));
+    const from = cols.findIndex((c) => c.id === colId);
+    if (from === -1) return;
+    // Dropping before itself or the column right after it is a no-op.
+    if (toIndex === from || toIndex === from + 1) return;
+    const [moved] = cols.splice(from, 1);
+    const anchorId = toIndex < visibleCols.length ? visibleCols[toIndex].id : null;
+    if (anchorId === null) {
+      cols.push(moved);
+    } else {
+      const anchor = cols.findIndex((c) => c.id === anchorId);
+      cols.splice(anchor === -1 ? cols.length : anchor, 0, moved);
+    }
+    entryColumns = cols;
   }
 
   function startDetailResize(e: PointerEvent): void {
@@ -1600,17 +1708,32 @@
 
         <section class="entry-panel">
           <div class="entry-table" style={`--entry-cols: ${entryGridCols}`}>
-            <div class="entry-table-head" role="row" tabindex="-1" oncontextmenu={openColumnMenu}>
+            <div
+              class="entry-table-head"
+              role="row"
+              tabindex="-1"
+              oncontextmenu={openColumnMenu}
+              bind:this={entryHeadEl}
+            >
               <span class="head-icon-col" aria-hidden="true"></span>
-              {#each visibleCols as col (col.id)}
-                <div class="head-cell" class:head-sortable={col.sortable}>
+              {#each visibleCols as col, i (col.id)}
+                <div
+                  class="head-cell"
+                  class:head-sortable={col.sortable}
+                  class:col-dragging={colDrag?.id === col.id}
+                  class:drop-before={colDrag && colDropIndex === i}
+                  class:drop-after={colDrag && colDropIndex === i + 1}
+                  role="presentation"
+                  onpointerdown={(e) => startColDrag(e, col.id, i)}
+                >
                   <button
                     class="head-button"
                     type="button"
                     onclick={() => {
+                      if (suppressColumnSort) return;
                       if (col.sortable) cycleSort(col.id);
                     }}
-                    title={col.sortable ? "点击排序" : undefined}
+                    title={col.sortable ? "点击排序,按住拖动调整顺序" : "按住拖动调整顺序"}
                   >
                     <span class="head-label">{col.label}</span>
                     {#if sortCol === col.id}
@@ -2352,6 +2475,30 @@
     touch-action: none;
   }
 
+  .head-cell.col-dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  .head-cell.drop-before::after,
+  .head-cell.drop-after::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--selection-color);
+  }
+
+  .head-cell.drop-before::after {
+    left: -2px;
+  }
+
+  .head-cell.drop-after::after {
+    right: -2px;
+  }
+
   .head-actions {
     min-width: 0;
     height: 100%;
@@ -2881,6 +3028,11 @@
 
   :global(body.resizing-column) {
     cursor: col-resize !important;
+    user-select: none;
+  }
+
+  :global(body.dragging-column) {
+    cursor: grabbing !important;
     user-select: none;
   }
 </style>
