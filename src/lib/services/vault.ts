@@ -123,6 +123,7 @@ function ensureBinGroup(root: VaultGroup): VaultGroup {
     parentUuid: root.uuid,
     name: "回收站",
     isRecycleBin: true,
+    enableSearching: true,
     children: [],
     entries: [],
   };
@@ -634,6 +635,7 @@ export const vault: VaultStore = {
         parentUuid: parent.uuid,
         name: input.name,
         isRecycleBin: false,
+        enableSearching: true,
         children: [],
         entries: [],
       });

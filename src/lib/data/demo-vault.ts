@@ -13,12 +13,14 @@ export function buildDemoVaultState(): VaultState {
       parentUuid: null,
       name: "Root",
       isRecycleBin: false,
+      enableSearching: true,
       children: [
         {
           uuid: "grp-web",
           parentUuid: "root",
           name: "Web",
           isRecycleBin: false,
+          enableSearching: true,
           entries: [],
           children: [
             {
@@ -26,6 +28,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-web",
               name: "Email",
               isRecycleBin: false,
+              enableSearching: true,
               children: [],
               entries: [
                 {
@@ -60,6 +63,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-web",
               name: "Social",
               isRecycleBin: false,
+              enableSearching: true,
               children: [],
               entries: [
                 {
@@ -83,6 +87,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Finance",
           isRecycleBin: false,
+          enableSearching: true,
           children: [],
           entries: [
             {
@@ -116,6 +121,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Work",
           isRecycleBin: false,
+          enableSearching: true,
           entries: [],
           children: [
             {
@@ -123,6 +129,7 @@ export function buildDemoVaultState(): VaultState {
               parentUuid: "grp-work",
               name: "Infrastructure",
               isRecycleBin: false,
+              enableSearching: true,
               children: [],
               entries: [
                 {
@@ -158,6 +165,7 @@ export function buildDemoVaultState(): VaultState {
           parentUuid: "root",
           name: "Personal",
           isRecycleBin: false,
+          enableSearching: true,
           children: [],
           entries: [
             {

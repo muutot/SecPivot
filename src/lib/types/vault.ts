@@ -58,6 +58,8 @@ export interface VaultGroup {
   /** UUID of the database custom icon used by this group, if any. */
   customIcon?: string;
   isRecycleBin: boolean;
+  /** KeePass group option: whether this group's own entries are searchable. */
+  enableSearching: boolean;
   children: VaultGroup[];
   entries: VaultEntry[];
 }

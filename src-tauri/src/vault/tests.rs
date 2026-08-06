@@ -4101,6 +4101,123 @@ fn autotype_match_ranks_url_host_above_title_and_skips_recycle_bin() {
 }
 
 #[test]
+fn autotype_match_skips_groups_with_searching_disabled() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    // Group A is normally searchable; its entry matches the window title.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "A".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_a = state.root.children[0].uuid.clone();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_a.clone(),
+            title: "Secret".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://secret.example".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let secret = state.root.children[0].entries[0].uuid.clone();
+    assert_eq!(
+        session.autotype_match("Secret dashboard").unwrap(),
+        secret,
+        "searchable group must match"
+    );
+
+    // Disable searching on the group (KeePass EnableSearching=false); its
+    // entries are then invisible to auto-type matching.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db
+            .group_mut(super::helpers::parse_group_id(&group_a).unwrap())
+            .expect("group must exist");
+        group.enable_searching = Some(false);
+    }
+    let err = session.autotype_match("Secret dashboard").unwrap_err();
+    assert!(
+        err.contains("没有找到匹配"),
+        "disabled group must not match"
+    );
+
+    // The flag is per-group: a descendant group with searching enabled still
+    // matches on its own entries.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(group_a.clone()),
+            name: "A1".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_a1 = state
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == group_a)
+        .unwrap()
+        .children[0]
+        .uuid
+        .clone();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_a1.clone(),
+            title: "Child secret".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://child.example".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let child_uuid = state
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == group_a)
+        .unwrap()
+        .children[0]
+        .entries[0]
+        .uuid
+        .clone();
+    assert_eq!(
+        session.autotype_match("Child secret window").unwrap(),
+        child_uuid,
+        "descendant with searching enabled still matches"
+    );
+    let snapshot = session.snapshot().unwrap();
+    let group = snapshot
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == group_a)
+        .expect("group in snapshot");
+    assert!(
+        !group.enable_searching,
+        "group A must expose the disabled flag"
+    );
+    let a1 = group.children[0].clone();
+    assert!(a1.enable_searching);
+}
+
+#[test]
 fn url_host_strips_scheme_port_and_path() {
     assert_eq!(
         url_host("https://github.com/login"),
@@ -4109,6 +4226,92 @@ fn url_host_strips_scheme_port_and_path() {
     assert_eq!(url_host("http://a.b.c:8080/x?y=1"), Some("a.b.c".into()));
     assert_eq!(url_host("plain-host"), Some("plain-host".into()));
     assert_eq!(url_host(""), None);
+}
+
+#[test]
+fn ref_match_skips_groups_with_searching_disabled() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    // Entry inside a search-disabled group must be invisible to {REF:...}.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Hidden".into(),
+            icon: None,
+        })
+        .unwrap();
+    let hidden = state.root.children[0].uuid.clone();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: hidden.clone(),
+            title: "HiddenBank".into(),
+            username: "h-u".into(),
+            password: "h-pass".into(),
+            url: "https://hidden.example".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db
+            .group_mut(super::helpers::parse_group_id(&hidden).unwrap())
+            .expect("group must exist");
+        group.enable_searching = Some(false);
+    }
+    let err = session
+        .expand_autotype_sequence("{REF:P@T:HiddenBank}")
+        .unwrap_err();
+    assert!(
+        err.contains("未找到匹配"),
+        "entry in a search-disabled group must not resolve by title: {err}"
+    );
+
+    // A sibling entry (searchable) still resolves.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Visible".into(),
+            icon: None,
+        })
+        .unwrap();
+    let visible = state
+        .root
+        .children
+        .iter()
+        .find(|g| g.name == "Visible")
+        .expect("visible group in snapshot")
+        .uuid
+        .clone();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: visible.clone(),
+            title: "VisibleBank".into(),
+            username: "v-u".into(),
+            password: "v-pass".into(),
+            url: "https://visible.example".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    assert_eq!(
+        session
+            .expand_autotype_sequence("{REF:P@T:VisibleBank}")
+            .unwrap(),
+        "v-pass"
+    );
 }
 
 #[test]

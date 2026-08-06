@@ -298,6 +298,9 @@
     const query = search.trim().toLowerCase();
     const result: { entry: VaultEntry }[] = [];
     for (const group of selectedSubtree) {
+      // KeePass: groups with "EnableSearching" off contribute no entries to
+      // search results (per-group; descendants each carry their own flag).
+      if (!group.enableSearching) continue;
       for (const entry of group.entries) {
         const text = [entry.title, entry.username, entry.url, entry.notes, entry.tags]
           .join(" ")

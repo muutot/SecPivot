@@ -320,8 +320,14 @@ pub(crate) fn walk_ref_match(
     if bin_id == Some(group.id()) {
         return;
     }
+    // KeePass: groups with searching disabled contribute no entries to
+    // searches; descendants each carry their own flag, so keep walking.
+    let searchable = group.enable_searching != Some(false);
     let needle = spec.text.to_lowercase();
     for entry in group.entries() {
+        if !searchable {
+            break;
+        }
         let matched = match spec.search.to_ascii_uppercase().as_str() {
             "T" => entry
                 .get_title()
@@ -391,7 +397,13 @@ pub(crate) fn walk_match(
     if bin_id == Some(group.id()) {
         return;
     }
+    // KeePass: groups with searching disabled contribute no entries to
+    // auto-type matching; descendants each carry their own flag.
+    let searchable = group.enable_searching != Some(false);
     for entry in group.entries() {
+        if !searchable {
+            break;
+        }
         let mut score = 0;
         // Blocked lists veto the entry regardless of the window title.
         let cfg = kprpc_config(&entry);

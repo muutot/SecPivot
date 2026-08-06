@@ -84,6 +84,7 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         icon: None,
         custom_icon: None,
         is_recycle_bin: false,
+        enable_searching: root_ref.enable_searching.unwrap_or(true),
         children: root_ref
             .groups()
             .filter_map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
@@ -129,6 +130,7 @@ fn build_group(
             _ => None,
         },
         is_recycle_bin: is_bin,
+        enable_searching: group.enable_searching.unwrap_or(true),
         children,
         entries,
     })

@@ -83,6 +83,11 @@ pub struct VaultGroup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_icon: Option<String>,
     pub is_recycle_bin: bool,
+    /// KeePass group option: whether entries **of this group** participate in
+    /// search. Per-group (KeePass semantics) — it excludes this group's own
+    /// entries but not its descendants, which each carry their own flag.
+    /// `None` in the KDBX means enabled (default).
+    pub enable_searching: bool,
     pub children: Vec<VaultGroup>,
     pub entries: Vec<VaultEntry>,
 }
