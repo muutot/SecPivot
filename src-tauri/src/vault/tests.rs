@@ -754,6 +754,101 @@ fn entry_history_caps_at_ten_versions() {
 }
 
 #[test]
+fn entry_history_cap_reads_database_meta() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    // A cap of 3 snapshots comes from the DB meta (KeePass HistoryMaxItems).
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_items = Some(3);
+    }
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "v0".into(),
+            username: "".into(),
+            password: "p0".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for i in 1..=8 {
+        session
+            .update_entry(
+                &uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: format!("v{i}"),
+                    username: "".into(),
+                    password: format!("p{i}"),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: Some(None),
+                    color: None,
+                    tags: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+    }
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 3, "meta cap of 3 must bound the history");
+    assert_eq!(history[0].title, "v7");
+    assert_eq!(history[2].title, "v5");
+    // Zero in meta means unlimited: no trimming at all.
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_items = Some(0);
+    }
+    for i in 9..=12 {
+        session
+            .update_entry(
+                &uuid,
+                &EntryInput {
+                    group_uuid: ROOT_GROUP_UUID.to_owned(),
+                    title: format!("v{i}"),
+                    username: "".into(),
+                    password: format!("p{i}"),
+                    url: "".into(),
+                    notes: "".into(),
+                    totp: None,
+                    expires: None,
+                    icon: Some(None),
+                    color: None,
+                    tags: None,
+                    custom_fields: vec![],
+                    attachments: vec![],
+                },
+            )
+            .unwrap();
+    }
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 7, "zero cap must keep every snapshot");
+    // The cap is read from the database meta after a save + reopen too.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let _state = reopened
+        .open(&dir.path().join("test.kdbx"), "master-password", None)
+        .unwrap();
+    {
+        let db = reopened.require_db_mut().unwrap();
+        assert_eq!(db.meta.history_max_items, Some(0));
+    }
+}
+
+#[test]
 fn entry_icon_and_color_round_trip_and_clear() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

@@ -7,7 +7,8 @@ use super::helpers::{
 };
 use super::serialize::{
     apply_patch_fields, attachment_size, decode_attachments, delete_history_entry, format_iso,
-    sync_attachments, sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
+    history_cap, sync_attachments, sync_custom_fields, trim_entry_history, write_fields,
+    AttachmentPayload,
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
@@ -74,6 +75,10 @@ impl VaultSession {
         // Decode attachment payloads up-front; a decode failure must not
         // leave a half-applied update (fields written, history snapshotted).
         let payloads = decode_attachments(&input.attachments)?;
+        let cap = {
+            let db = self.require_db()?;
+            history_cap(&db.meta)
+        };
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -93,7 +98,7 @@ impl VaultSession {
                 }
                 tracked.times.last_modification = Some(Times::now());
             }
-            trim_entry_history(&mut entry);
+            trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
         self.snapshot()
@@ -116,6 +121,10 @@ impl VaultSession {
             .iter()
             .map(|uuid| parse_entry_id(uuid))
             .collect::<Result<_, _>>()?;
+        let cap = {
+            let db = self.require_db()?;
+            history_cap(&db.meta)
+        };
         {
             let db = self.require_db_mut()?;
             for id in &ids {
@@ -131,7 +140,7 @@ impl VaultSession {
                     }
                     tracked.times.last_modification = Some(Times::now());
                 }
-                trim_entry_history(&mut entry);
+                trim_entry_history(&mut entry, cap);
             }
         }
         self.mark_dirty();
@@ -339,6 +348,10 @@ impl VaultSession {
                 .clone()
         };
         {
+            let cap = {
+                let db = self.require_db()?;
+                history_cap(&db.meta)
+            };
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             {
@@ -359,7 +372,7 @@ impl VaultSession {
                 }
                 tracked.times.last_modification = Some(Times::now());
             }
-            trim_entry_history(&mut entry);
+            trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
         self.snapshot()

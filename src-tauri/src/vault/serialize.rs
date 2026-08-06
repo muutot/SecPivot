@@ -5,7 +5,7 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::NaiveDateTime;
 use keepass::db::{
-    AttachmentRef, Color, Entry, EntryMut, EntryRef, GroupRef, History, Icon, Value,
+    AttachmentRef, Color, Entry, EntryMut, EntryRef, GroupRef, History, Icon, Meta, Value,
 };
 use keepass::Database;
 use std::collections::{BTreeMap, HashMap};
@@ -217,19 +217,32 @@ pub(crate) fn attachment_size(attachment: &AttachmentRef<'_>) -> Option<usize> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| attachment.data.get().len())).ok()
 }
 
-/// Maximum number of historical snapshots kept per entry (KeePass default).
-const MAX_HISTORY_VERSIONS: usize = 10;
+/// Default maximum number of historical snapshots kept per entry when the
+/// database meta does not specify one (KeePass default).
+const DEFAULT_HISTORY_VERSIONS: usize = 10;
+
+/// Resolve the per-entry history cap from the database meta. KeePass stores
+/// the limit in `Meta.history_max_items`: a positive value caps the number of
+/// snapshots, `0` or a negative value means unlimited, and an absent value
+/// falls back to the KeePass default of 10.
+pub(crate) fn history_cap(meta: &Meta) -> usize {
+    match meta.history_max_items {
+        Some(n) if n > 0 => n as usize,
+        Some(_) => usize::MAX,
+        None => DEFAULT_HISTORY_VERSIONS,
+    }
+}
 
 /// Drop the oldest snapshots until the history fits within the cap. The
 /// crate exposes no mutable access to the history, so it is rebuilt with the
-/// newest `MAX_HISTORY_VERSIONS` snapshots preserved in their original order.
-pub(crate) fn trim_entry_history(entry: &mut Entry) {
+/// newest `cap` snapshots preserved in their original order.
+pub(crate) fn trim_entry_history(entry: &mut Entry, cap: usize) {
     if let Some(history) = entry.history.as_mut() {
         let current = history.get_entries();
-        if current.len() <= MAX_HISTORY_VERSIONS {
+        if current.len() <= cap {
             return;
         }
-        let kept: Vec<Entry> = current.iter().take(MAX_HISTORY_VERSIONS).cloned().collect();
+        let kept: Vec<Entry> = current.iter().take(cap).cloned().collect();
         let mut trimmed = History::default();
         for snapshot in kept.into_iter().rev() {
             trimmed.add_entry(snapshot);
