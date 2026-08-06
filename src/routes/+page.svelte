@@ -299,7 +299,9 @@
     const result: { entry: VaultEntry }[] = [];
     for (const group of selectedSubtree) {
       for (const entry of group.entries) {
-        const text = [entry.title, entry.username, entry.url, entry.notes].join(" ").toLowerCase();
+        const text = [entry.title, entry.username, entry.url, entry.notes, entry.tags]
+          .join(" ")
+          .toLowerCase();
         if (query && !text.includes(query)) continue;
         result.push({ entry });
       }

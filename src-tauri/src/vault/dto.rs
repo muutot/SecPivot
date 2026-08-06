@@ -151,6 +151,10 @@ pub struct EntryInput {
     /// `#RRGGBB` background color; empty/absent clears it.
     #[serde(default)]
     pub color: Option<String>,
+    /// Comma-separated tags; absent keeps the current tags, an empty string
+    /// clears them.
+    #[serde(default)]
+    pub tags: Option<String>,
     #[serde(default)]
     pub custom_fields: Vec<CustomField>,
     #[serde(default)]
@@ -191,6 +195,9 @@ pub struct EntryPatch {
     pub color: Option<String>,
     #[serde(default)]
     pub clear_color: bool,
+    /// Comma-separated tags to set; an empty string clears all tags.
+    #[serde(default)]
+    pub tags: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

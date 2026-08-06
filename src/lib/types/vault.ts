@@ -119,6 +119,8 @@ export interface EntryInput {
   icon?: number | null;
   /** `#RRGGBB` background color; empty/absent clears it. */
   color?: string;
+  /** Comma-separated tags; absent keeps the current tags, empty clears them. */
+  tags?: string;
   customFields?: CustomField[];
   attachments?: AttachmentInput[];
 }
@@ -143,6 +145,8 @@ export interface EntryPatch {
   /** `#RRGGBB` background color; set `clearColor` instead to remove it. */
   color?: string;
   clearColor?: boolean;
+  /** Comma-separated tags to set; an empty string clears all tags. */
+  tags?: string;
 }
 
 export interface GroupInput {

@@ -73,6 +73,9 @@
   let passwordReady = $state(multi);
   let url = $state(multi ? (sharedValue((e) => e.url) ?? "") : (initialEntry?.url ?? ""));
   let notes = $state(multi ? (sharedValue((e) => e.notes) ?? "") : (initialEntry?.notes ?? ""));
+  let tags = $state(
+    multi ? (sharedValue((e) => e.tags ?? "") ?? "") : (initialEntry?.tags ?? ""),
+  );
   let totp = $state("");
   let totpLoading = $state(false);
   /** Whether the current TOTP seed is known. Same data-loss reasoning as
@@ -142,6 +145,7 @@
       "expires",
       "icon",
       "color",
+      "tags",
     ]) {
       untouched.add(key);
     }
@@ -150,6 +154,7 @@
   const usernameMulti = $derived(multi && sharedValue((e) => e.username) === null);
   const urlMulti = $derived(multi && sharedValue((e) => e.url) === null);
   const notesMulti = $derived(multi && sharedValue((e) => e.notes) === null);
+  const tagsMulti = $derived(multi && sharedValue((e) => e.tags ?? "") === null);
   const expiresMulti = $derived(multi && sharedValue((e) => e.expires ?? "") === null);
   const iconMulti = $derived(multi && new Set(entries.map((e) => e.icon ?? -1)).size > 1);
   const colorMulti = $derived(multi && new Set(entries.map((e) => e.color ?? "")).size > 1);
@@ -541,6 +546,7 @@
         if (colorHex) patch.color = colorHex;
         else patch.clearColor = true;
       }
+      if (!untouched.has("tags")) patch.tags = tags.trim() || "";
       if (Object.keys(patch).length === 0) {
         onclose();
         return;
@@ -571,6 +577,7 @@
           expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
           ...(iconValue !== undefined ? { icon: iconValue } : {}),
           color: colorHex || undefined,
+          tags: tags.trim(),
           customFields: customFields
             .map((f) => ({
               name: f.name.trim(),
@@ -769,6 +776,17 @@
             rows={4}
             placeholder={notesMulti ? "多个值" : undefined}
             oninput={() => markTouched("notes")}></textarea>
+        </label>
+
+        <label class="field full">
+          <span>标签</span>
+          <input
+            class="text-input"
+            type="text"
+            bind:value={tags}
+            placeholder={tagsMulti ? "多个值" : "逗号分隔，例如：工作, 邮箱"}
+            oninput={() => markTouched("tags")}
+          />
         </label>
       </div>
     {/if}

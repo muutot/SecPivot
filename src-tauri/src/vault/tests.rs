@@ -56,6 +56,7 @@ fn apply_favicons_persists_custom_icon_across_reopen() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: Vec::new(),
                 attachments: Vec::new(),
             })
@@ -110,6 +111,7 @@ fn update_without_icon_keeps_existing_icon() {
         expires: None,
         icon: None,
         color: None,
+        tags: None,
         custom_fields: Vec::new(),
         attachments: Vec::new(),
     };
@@ -189,6 +191,7 @@ fn favicon_jobs_selected_scopes_to_given_entries() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: Vec::new(),
                 attachments: Vec::new(),
             })
@@ -250,6 +253,7 @@ fn plugin_tree_includes_root_and_subgroup_entries() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: Vec::new(),
             attachments: Vec::new(),
         })
@@ -266,6 +270,7 @@ fn plugin_tree_includes_root_and_subgroup_entries() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: Vec::new(),
             attachments: Vec::new(),
         })
@@ -388,6 +393,7 @@ fn group_and_entry_crud_flow() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -421,6 +427,7 @@ fn group_and_entry_crud_flow() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -455,6 +462,7 @@ fn entry_history_tracks_versions_and_restores() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -472,6 +480,7 @@ fn entry_history_tracks_versions_and_restores() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments,
     };
@@ -550,6 +559,7 @@ fn entry_history_supports_manual_delete() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -567,6 +577,7 @@ fn entry_history_supports_manual_delete() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![],
     };
@@ -610,6 +621,7 @@ fn entry_history_supports_manual_delete() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![],
     });
@@ -635,6 +647,7 @@ fn entry_storage_counts_fields_attachments_and_history() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: "custom".into(),
                 value: "value".into(),
@@ -675,6 +688,7 @@ fn entry_storage_counts_fields_attachments_and_history() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -705,6 +719,7 @@ fn entry_history_caps_at_ten_versions() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -725,6 +740,7 @@ fn entry_history_caps_at_ten_versions() {
                     expires: None,
                     icon: Some(None),
                     color: None,
+                    tags: None,
                     custom_fields: vec![],
                     attachments: vec![],
                 },
@@ -753,6 +769,7 @@ fn entry_icon_and_color_round_trip_and_clear() {
             expires: None,
             icon: Some(Some(1)),
             color: Some("#FF8800".into()),
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -776,6 +793,7 @@ fn entry_icon_and_color_round_trip_and_clear() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -799,6 +817,7 @@ fn entry_icon_and_color_round_trip_and_clear() {
                 expires: None,
                 icon: Some(Some(3)),
                 color: Some("#2288FF".into()),
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -847,6 +866,7 @@ fn foreground_color_survives_edits_from_other_clients() {
                 expires: None,
                 icon: None,
                 color: Some("#FF8800".into()),
+                tags: None,
                 custom_fields: Vec::new(),
                 attachments: Vec::new(),
             },
@@ -870,6 +890,7 @@ fn foreground_color_survives_edits_from_other_clients() {
             &[state.root.entries[0].uuid.clone()],
             &EntryPatch {
                 color: Some("#00CC66".into()),
+                tags: None,
                 ..Default::default()
             },
         )
@@ -898,6 +919,95 @@ fn foreground_color_survives_edits_from_other_clients() {
         entry.foreground_color.as_ref().map(ToString::to_string),
         Some("#AABBCC".to_owned()),
         "foreground color survives save/reopen"
+    );
+}
+
+#[test]
+fn entry_tags_round_trip_and_batch_edit() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    // Create with tags.
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Tagged".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: None,
+            color: None,
+            tags: Some("work,  email ,,".into()),
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    assert_eq!(state.root.entries[0].tags.as_deref(), Some("work, email"));
+
+    // Single edit rewrites tags; empty string clears them.
+    let uuid = state.root.entries[0].uuid.clone();
+    let state = session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Tagged".into(),
+                username: "u".into(),
+                password: "pw".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: None,
+                color: None,
+                tags: Some("  ".into()),
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+    assert_eq!(state.root.entries[0].tags, None);
+
+    // Batch edit sets tags on the target.
+    let state = session
+        .update_entries(
+            std::slice::from_ref(&uuid),
+            &EntryPatch {
+                tags: Some("personal, bank".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        state.root.entries[0].tags.as_deref(),
+        Some("personal, bank")
+    );
+
+    // Untouched tags survive a batch patch that touches other fields.
+    let state = session
+        .update_entries(
+            std::slice::from_ref(&uuid),
+            &EntryPatch {
+                notes: Some("note".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        state.root.entries[0].tags.as_deref(),
+        Some("personal, bank")
+    );
+
+    // Tags survive save + reopen.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+    assert_eq!(
+        state.root.entries[0].tags.as_deref(),
+        Some("personal, bank")
     );
 }
 
@@ -974,6 +1084,7 @@ fn move_entry_between_groups() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1009,6 +1120,7 @@ fn delete_entries_moves_all_to_recycle_bin() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1044,6 +1156,7 @@ fn update_entries_applies_patch_to_all_uuids_and_skips_absent_fields() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1095,6 +1208,7 @@ fn update_entries_empty_strings_and_clear_flags_clear_optional_attributes() {
             expires: Some("2026-12-31T23:59:00Z".into()),
             icon: Some(Some(7)),
             color: Some("#2288FF".into()),
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1142,6 +1256,7 @@ fn update_entries_sets_expiry_icon_and_color() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1152,6 +1267,7 @@ fn update_entries_sets_expiry_icon_and_color() {
         expires: Some("2027-06-01T12:00:00Z".into()),
         icon: Some(5),
         color: Some("#00CC66".into()),
+        tags: None,
         ..EntryPatch::default()
     };
     let state = session.update_entries(&[uuid], &patch).unwrap();
@@ -1206,6 +1322,7 @@ fn update_entries_is_atomic_on_unknown_uuid() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             })
@@ -1259,6 +1376,7 @@ fn save_clears_dirty_and_persists() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1299,6 +1417,7 @@ fn save_as_writes_new_file_and_switches_session_target() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1336,6 +1455,7 @@ fn save_as_writes_new_file_and_switches_session_target() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1411,6 +1531,7 @@ fn save_as_from_remote_session_switches_to_local() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1494,6 +1615,7 @@ fn concurrent_edit_during_save_keeps_dirty_flag() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1597,6 +1719,7 @@ fn entry_expiry_roundtrip_and_clear() {
             expires: Some("2020-01-01T00:00:00Z".to_owned()),
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1620,6 +1743,7 @@ fn entry_expiry_roundtrip_and_clear() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -1644,6 +1768,7 @@ fn entry_expiry_roundtrip_and_clear() {
                 expires: Some("2099-12-31T23:59:59Z".to_owned()),
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![],
                 attachments: vec![],
             },
@@ -1716,6 +1841,7 @@ fn disabled_expiry_flag_never_marks_entry_expired() {
             expires: Some("2020-01-01T00:00:00Z".to_owned()),
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1746,6 +1872,7 @@ fn change_master_key_reencrypts_and_reopens_with_new_credentials() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1789,6 +1916,7 @@ fn change_master_key_supports_keyfile_only_and_keeps_session_alive() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1839,6 +1967,7 @@ fn delete_group_moves_whole_subtree_to_recycle_bin_and_restores() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1889,6 +2018,7 @@ fn recycle_bin_deletes_entry_then_restores_and_empties() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -1948,6 +2078,7 @@ fn recycle_bin_is_persisted_across_reopen() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2012,6 +2143,7 @@ fn rejects_invalid_parameters() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2050,6 +2182,7 @@ fn dto_wire_format_uses_camel_case() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2265,6 +2398,7 @@ fn totp_code_requires_totp_field() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2298,6 +2432,7 @@ fn totp_code_session_returns_current_code() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2328,6 +2463,7 @@ fn hotp_code_advances_counter_and_writes_back() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: "HmacOtp".into(),
                 value: "JBSWY3DPEHPK3PXP".into(),
@@ -2374,6 +2510,7 @@ fn steam_code_is_five_chars_with_countdown() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: "SteamOtp".into(),
                 value: "CNBNMZBN".into(),
@@ -2417,6 +2554,7 @@ fn totp_seed_never_serializes_into_snapshot() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![],
     };
@@ -2457,6 +2595,7 @@ fn toggle_favorite_round_trips_field() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2495,6 +2634,7 @@ fn favorite_persists_after_save_and_reopen() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -2538,6 +2678,7 @@ fn custom_fields_and_attachments_round_trip() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![
                 CustomField {
                     name: "PIN".into(),
@@ -2586,6 +2727,7 @@ fn custom_fields_and_attachments_round_trip() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![CustomField {
                     name: "PIN".into(),
                     value: "9999".into(),
@@ -2654,6 +2796,7 @@ fn protected_custom_fields_never_leak_in_snapshot() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![
                 CustomField {
                     name: "PIN".into(),
@@ -2766,6 +2909,7 @@ fn protected_custom_fields_round_trip_and_history() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: "Secret".into(),
                 value: "hunter2".into(),
@@ -2792,6 +2936,7 @@ fn protected_custom_fields_round_trip_and_history() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![
                     CustomField {
                         name: "Secret".into(),
@@ -2887,6 +3032,7 @@ fn custom_fields_exclude_reserved_names() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![
                 CustomField {
                     name: FIELD_OTP.to_owned(),
@@ -2942,6 +3088,7 @@ fn save_attachment_writes_file() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![AttachmentInput {
                 name: "blob.bin".into(),
@@ -3006,6 +3153,7 @@ fn keyfile_round_trip_requires_the_keyfile() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3069,6 +3217,7 @@ fn add_entry_with_password(
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3153,6 +3302,7 @@ fn export_csv_writes_escaped_rows_and_bom() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3225,6 +3375,7 @@ fn remote_open_save_round_trip_via_memory_storage() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3417,6 +3568,7 @@ fn add_entry_with_invalid_attachment_does_not_partially_commit() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![AttachmentInput {
                 name: "a.bin".into(),
@@ -3510,6 +3662,7 @@ fn update_entry_with_invalid_attachment_keeps_original_and_history() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3527,6 +3680,7 @@ fn update_entry_with_invalid_attachment_keeps_original_and_history() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![AttachmentInput {
             name: "a.bin".into(),
@@ -3686,6 +3840,7 @@ fn remote_create_uploads_and_saves_back() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3794,6 +3949,7 @@ fn autotype_match_ranks_url_host_above_title_and_skips_recycle_bin() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![],
     };
@@ -3840,6 +3996,7 @@ fn autotype_match_ranks_url_host_above_title_and_skips_recycle_bin() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -3874,6 +4031,7 @@ fn expand_autotype_sequence_resolves_refs_across_entries() {
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: vec![],
         attachments: vec![],
     };
@@ -3928,6 +4086,7 @@ fn expand_autotype_sequence_resolves_refs_across_entries() {
                 expires: None,
                 icon: Some(None),
                 color: None,
+                tags: None,
                 custom_fields: vec![CustomField {
                     name: "Customer Id".into(),
                     value: "CUST-42".into(),
@@ -3966,6 +4125,7 @@ fn expand_autotype_sequence_skips_recycle_bin() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![],
             attachments: vec![],
         })
@@ -4048,6 +4208,7 @@ fn entry_input(
         expires: None,
         icon: Some(None),
         color: None,
+        tags: None,
         custom_fields: Vec::new(),
         attachments: Vec::new(),
     }
@@ -4392,6 +4553,7 @@ fn entry_with_alt_urls(
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: KPRPC_JSON.to_owned(),
                 value: json,
@@ -4476,6 +4638,7 @@ fn malformed_kprpc_json_degrades_to_primary_url() {
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: KPRPC_JSON.to_owned(),
                 value: "not-json{{".into(),
@@ -4574,6 +4737,7 @@ fn entry_with_kprpc_config(
             expires: None,
             icon: Some(None),
             color: None,
+            tags: None,
             custom_fields: vec![CustomField {
                 name: KPRPC_JSON.to_owned(),
                 value: serde_json::to_string(&config).unwrap(),

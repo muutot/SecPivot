@@ -337,6 +337,10 @@ pub(crate) fn write_fields(entry: &mut EntryMut<'_>, input: &EntryInput) {
     // separate KDBX attribute SecPivot does not manage, so it is preserved
     // (never cleared) when an entry created in another KeePass client is edited.
     entry.background_color = parse_color(input.color.as_deref());
+    // Tags: comma-separated; `None` (absent) keeps current tags.
+    if let Some(tags) = &input.tags {
+        entry.tags = parse_tags(tags);
+    }
 }
 
 /// Apply a partial batch-edit patch to an entry. Absent fields are skipped;
@@ -389,6 +393,19 @@ pub(crate) fn apply_patch_fields(entry: &mut EntryMut<'_>, patch: &EntryPatch) {
     } else if let Some(color) = &patch.color {
         entry.background_color = parse_color(Some(color));
     }
+    if let Some(tags) = &patch.tags {
+        entry.tags = parse_tags(tags);
+    }
+}
+
+/// Parse a comma-separated tag string into trimmed, non-empty tags.
+pub(crate) fn parse_tags(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// Parse a `#RRGGBB` color string; `None` for empty/absent or invalid input.

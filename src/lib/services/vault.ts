@@ -432,6 +432,7 @@ export const vault: VaultStore = {
         password: input.password,
         url: input.url,
         notes: input.notes,
+        tags: input.tags,
         hasTotp: Boolean(input.totp),
         totp: input.totp || undefined,
         customFields: input.customFields,
@@ -462,6 +463,7 @@ export const vault: VaultStore = {
           password: input.password,
           url: input.url,
           notes: input.notes,
+          tags: input.tags,
           hasTotp: Boolean(input.totp),
           totp: input.totp || undefined,
           customFields: input.customFields,
@@ -533,6 +535,7 @@ export const vault: VaultStore = {
           else if (patch.icon !== undefined) entry.icon = patch.icon;
           if (patch.clearColor) entry.color = undefined;
           else if (patch.color !== undefined) entry.color = patch.color || undefined;
+          if (patch.tags !== undefined) entry.tags = patch.tags || undefined;
           entry.modified = new Date().toISOString();
         }
       }
