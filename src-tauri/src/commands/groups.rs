@@ -50,6 +50,18 @@ pub(crate) fn set_group_expanded(
 }
 
 #[tauri::command]
+pub(crate) fn update_db_meta(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    name: Option<String>,
+    description: Option<String>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_db_meta(name, description)
+}
+
+#[tauri::command]
 pub(crate) fn delete_group(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,

@@ -151,6 +151,12 @@ pub struct VaultState {
     /// untouched.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub meta_custom_data: Vec<CustomDataEntry>,
+    /// KDBX `Meta.DatabaseName`. Editable via `update_db_meta`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database_name: Option<String>,
+    /// KDBX `Meta.DatabaseDescription`. Editable via `update_db_meta`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database_description: Option<String>,
 }
 
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in

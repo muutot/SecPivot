@@ -38,6 +38,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
+  import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
@@ -74,6 +75,7 @@
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
+  let dbMetaOpen = $state(false);
   let securityReport = $state<SecurityReport | null>(null);
   let faviconDialog = $state<{
     phase: "working" | "done";
@@ -1946,7 +1948,13 @@
         <span class="status-msg">{statusMsg}</span>
         <span class="status-right">
           {#if currentVault.path}
-            <span class="status-path" title={currentVault.path}>{currentVault.fileName}</span>
+            <button
+              class="status-path"
+              title={currentVault.path}
+              onclick={() => (dbMetaOpen = true)}
+            >
+              {currentVault.fileName}
+            </button>
           {/if}
         </span>
       </footer>
@@ -1985,6 +1993,14 @@
     report={securityReport}
     entries={reportEntries}
     onclose={() => (reportOpen = false)}
+  />
+{/if}
+
+{#if dbMetaOpen && currentVault}
+  <DbMetaDialog
+    name={currentVault.databaseName ?? ""}
+    description={currentVault.databaseDescription ?? ""}
+    onclose={() => (dbMetaOpen = false)}
   />
 {/if}
 
@@ -2845,6 +2861,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 220px;
+    padding: 1px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-faint);
+    background: transparent;
+    font: inherit;
+    font-size: var(--font-size-tiny, 10px);
+    cursor: pointer;
+  }
+
+  .status-path:hover {
+    color: var(--text-secondary);
+    background: var(--hover-bg);
   }
 
   .modal-backdrop {

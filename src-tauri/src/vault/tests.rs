@@ -1213,6 +1213,44 @@ fn group_expand_state_persists_and_survives_reopen() {
 }
 
 #[test]
+fn db_meta_name_and_description_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    // Fresh database: no name/description set.
+    let state = session.snapshot().unwrap();
+    assert_eq!(state.database_name, None);
+    assert_eq!(state.database_description, None);
+
+    // Set both.
+    let state = session
+        .update_db_meta(Some("工作库".into()), Some("团队共享".into()))
+        .unwrap();
+    assert_eq!(state.database_name.as_deref(), Some("工作库"));
+    assert_eq!(state.database_description.as_deref(), Some("团队共享"));
+
+    // Update name only; description is untouched (absent field).
+    let state = session.update_db_meta(Some("个人库".into()), None).unwrap();
+    assert_eq!(state.database_name.as_deref(), Some("个人库"));
+    assert_eq!(state.database_description.as_deref(), Some("团队共享"));
+
+    // Empty string clears a field.
+    let state = session.update_db_meta(Some("".into()), None).unwrap();
+    assert_eq!(state.database_name, None);
+    assert_eq!(state.database_description.as_deref(), Some("团队共享"));
+
+    // Save + reopen: the meta persists.
+    session.save().unwrap();
+    drop(session);
+    let mut reopened = VaultSession::default();
+    let _ = reopened
+        .open(&dir.path().join("test.kdbx"), "master-password", None)
+        .unwrap();
+    let state = reopened.snapshot().unwrap();
+    assert_eq!(state.database_name, None);
+    assert_eq!(state.database_description.as_deref(), Some("团队共享"));
+}
+
+#[test]
 fn move_entry_between_groups() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

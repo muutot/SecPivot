@@ -78,6 +78,7 @@ interface VaultStore {
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
   setGroupExpanded: (uuid: string, expanded: boolean) => Promise<VaultState>;
+  updateDbMeta: (name?: string, description?: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   restoreGroup: (uuid: string) => Promise<VaultState>;
   emptyRecycleBin: () => Promise<VaultState>;
@@ -688,6 +689,24 @@ export const vault: VaultStore = {
       const group = findGroup(draft.root, uuid);
       if (!group) throw new Error("group not found");
       group.isExpanded = expanded;
+    });
+    state.set(result);
+    return result;
+  },
+
+  async updateDbMeta(name?: string, description?: string): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const args: Record<string, string> = {};
+      if (name !== undefined) args.name = name;
+      if (description !== undefined) args.description = description;
+      const result = await backendInvoke<VaultState>("update_db_meta", args);
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      if (name !== undefined) draft.databaseName = name ? name : undefined;
+      if (description !== undefined)
+        draft.databaseDescription = description ? description : undefined;
     });
     state.set(result);
     return result;

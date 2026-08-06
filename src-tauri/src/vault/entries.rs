@@ -578,4 +578,28 @@ impl VaultSession {
         self.mark_dirty();
         self.snapshot()
     }
+
+    /// Update the database-level `Meta` display fields. `name`/`description`
+    /// are tri-state strings: an empty string clears the field, an absent
+    /// value leaves it untouched.
+    pub fn update_db_meta(
+        &mut self,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            if let Some(name) = &name {
+                db.meta.database_name = (!name.is_empty()).then(|| name.clone());
+                db.meta.database_name_changed = Some(chrono::Utc::now().naive_utc());
+            }
+            if let Some(description) = &description {
+                db.meta.database_description =
+                    (!description.is_empty()).then(|| description.clone());
+                db.meta.database_description_changed = Some(chrono::Utc::now().naive_utc());
+            }
+        }
+        self.mark_dirty();
+        self.snapshot()
+    }
 }

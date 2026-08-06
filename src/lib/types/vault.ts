@@ -101,6 +101,10 @@ export interface VaultState {
   /** Database-meta-level KDBX `CustomData` map items, sorted by key.
    * Read-only — SecPivot never writes these. */
   metaCustomData?: CustomDataEntry[];
+  /** KDBX `Meta.DatabaseName`. Editable via `vault.updateDbMeta`. */
+  databaseName?: string;
+  /** KDBX `Meta.DatabaseDescription`. Editable via `vault.updateDbMeta`. */
+  databaseDescription?: string;
 }
 
 /** Server-side security analysis; passwords never cross into the report. */

@@ -317,6 +317,8 @@ impl VaultSession {
                 .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))
                 .collect(),
             meta_custom_data: custom_data_entries(&db.meta.custom_data),
+            database_name: db.meta.database_name.clone(),
+            database_description: db.meta.database_description.clone(),
         };
         self.cached_snapshot = Some((self.revision, state.clone()));
         Ok(state)
