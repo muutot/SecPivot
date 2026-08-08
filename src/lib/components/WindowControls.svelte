@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { isMobile, isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -48,7 +48,7 @@
   }
 </script>
 
-{#if appWindow}
+{#if appWindow && !isMobile()}
   <div
     class="window-controls"
     class:chrome={variant === "chrome"}

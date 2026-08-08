@@ -24,6 +24,15 @@ export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Whether the app is running in a mobile (Android/iOS) web view. Tauri mobile
+ * web views expose a mobile platform user-agent; the desktop webview does not
+ * match these tokens. Used to hide desktop-only chrome (e.g. window controls)
+ * on platforms that have no window concept. */
+export function isMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 /** Default entry-table columns. `width: 0` on "title" is an auto sentinel
  *  (the frontend renders the default column width). Mirrors
  *  `default_entry_columns` in config.rs. */
