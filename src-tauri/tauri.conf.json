@@ -49,6 +49,9 @@
       "nsis": {
         "template": "windows/installer.nsi"
       }
+    },
+    "android": {
+      "minSdkVersion": 24
     }
   }
 }
