@@ -47,7 +47,8 @@ Keep stable workflow and routing rules in `SKILL.md`. Put module-specific facts,
 | Vault open/create/edit/save flows, IPC, or backend session        | [data-contracts.md](references/data-contracts.md) and [security-model.md](references/security-model.md) |
 | Config defaults, normalization, persistence                       | [data-contracts.md](references/data-contracts.md)                                                       |
 | Password generation, entropy, clipboard clearing, auto-lock       | [security-model.md](references/security-model.md)                                                       |
-| Version bump, release, or regenerate                              | `../version-release/SKILL.md` (sibling skill)                                                           |
+| Version bump, release, or regenerate              | `../version-release/SKILL.md` (sibling skill)                                                   |
+| Android / mobile support or mobile build           | [`../../docs/android.md`](../../docs/android.md)（需有工具链与网络的构建环境）                 |
 
 Also read `docs/PITFALLS.md` when relevant.
 

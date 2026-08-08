@@ -115,6 +115,18 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src-tauri/src/vault/dto.rs`           | IPC serde DTOs (camelCase) shared with the frontend: entries/groups/state/inputs/patch/OTP/security/favicon shapes + tri-state icon deserializer (re-exported via `vault::*`)                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `src-tauri/src/vault/serialize.rs`     | Snapshot building + entry mutation for the vault session: favicon host collection, `VaultState` tree/entry build, CSV/entropy/history helpers, `EntryInput`/`EntryPatch` field writes, custom-fields/attachment sync (extracted from vault.rs)                                                                                                                                                                                                                                                                                                                                                                             |
 
+## Mobile (Android) surface
+
+Android support is scoped but currently inert: platform-specific backend code is
+desktop-gated (`#[cfg(desktop)]`) and mobile-only surface config exists as
+`src-tauri/tauri.android.conf.json` (distinct `identifier`) and
+`src-tauri/capabilities/android.json` (`platforms:["android"]`). The frontend
+hides desktop chrome on mobile via `isMobile()` in `src/lib/services/settings.ts`
+and the viewport `<svelte:head>` meta in `src/routes/+layout.svelte`. A real
+Android build and the remaining `cargo`-level desktop-dependency trimming must be
+done in a toolchain-enabled environment — see `docs/android.md` for the full
+gated/toolchain task list.
+
 ## Persistent layout
 
 ```text
