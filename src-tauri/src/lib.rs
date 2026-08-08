@@ -12,21 +12,32 @@ use crate::config::ConfigStore;
 use crate::vault::VaultSession;
 use std::path::PathBuf;
 use std::sync::Mutex;
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, WindowEvent};
+#[cfg(desktop)]
+use tauri::WindowEvent;
+use tauri::{Emitter, Manager};
+#[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// Default sequence replayed by the global auto-type hotkey when neither the
 /// entry nor any ancestor group defines its own AutoType sequence.
+#[cfg(desktop)]
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 
 /// Tray icon identifiers.
+#[cfg(desktop)]
 const TRAY_ID: &str = "main";
+#[cfg(desktop)]
 const TRAY_MENU_SHOW: &str = "tray-show";
+#[cfg(desktop)]
 const TRAY_MENU_LOCK: &str = "tray-lock";
+#[cfg(desktop)]
 const TRAY_MENU_QUIT: &str = "tray-quit";
 /// Emitted to the frontend when the user picks "锁定" from the tray.
+#[cfg(desktop)]
 const TRAY_LOCK_EVENT: &str = "tray-lock";
 
 // ---------------------------------------------------------------------------
@@ -35,6 +46,7 @@ const TRAY_LOCK_EVENT: &str = "tray-lock";
 
 /// Register (or replace) the global hotkey from `shortcut`; empty disables it.
 /// Failure to register is logged, never fatal: the app stays usable.
+#[cfg(desktop)]
 pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
     let global = app.global_shortcut();
     if let Err(e) = global.unregister_all() {
@@ -57,6 +69,7 @@ pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
 
 /// Replay the auto-type sequence of the entry matching the focused window.
 /// Runs on a background thread; failures are logged only.
+#[cfg(desktop)]
 fn handle_global_hotkey(app: &tauri::AppHandle) {
     let Some(window_title) = platform::focus::foreground_window_title() else {
         return;
@@ -117,6 +130,7 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
 // ---------------------------------------------------------------------------
 
 /// Show (or toggle, when `force_show` is false) the main window.
+#[cfg(desktop)]
 fn toggle_main_window(app: &tauri::AppHandle, force_show: bool) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -134,6 +148,7 @@ fn toggle_main_window(app: &tauri::AppHandle, force_show: bool) {
 
 /// Build the tray icon with Show / Lock / Quit actions. Left-clicking the icon
 /// toggles the main window; the menu always forces a show.
+#[cfg(desktop)]
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let icon = app
         .default_window_icon()
@@ -172,6 +187,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 /// When `minimizeToTray` is enabled, the window close button hides the window
 /// instead of exiting the app; the tray "退出" menu item is the way out.
+#[cfg(desktop)]
 fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
     let app = window.app_handle();
     let minimize_to_tray = app
@@ -190,10 +206,9 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let project_dir = std::env::current_exe()
                 .ok()
@@ -205,7 +220,9 @@ pub fn run() {
                 });
             let store = ConfigStore::load(project_dir)?;
             let config = store.get()?;
+            #[cfg(desktop)]
             register_global_hotkey(app.handle(), &config.keyboard.auto_type_global);
+            #[cfg(desktop)]
             setup_tray(app.handle())?;
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
@@ -216,19 +233,26 @@ pub fn run() {
             commands::sync_bridge(app.handle(), &config);
             commands::sync_rpc(app.handle(), &config);
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                // The TCATO overlay can be dismissed directly (Alt+F4); tell
-                // the main window so its focus-loss lock re-arms.
-                if window.label() == commands::tcato::TCATO_WINDOW_LABEL {
-                    let _ = window
-                        .app_handle()
-                        .emit(commands::tcato::TCATO_CLOSE_EVENT, ());
-                }
-                handle_close_requested(window, api);
+        });
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            // The TCATO overlay can be dismissed directly (Alt+F4); tell
+            // the main window so its focus-loss lock re-arms.
+            if window.label() == commands::tcato::TCATO_WINDOW_LABEL {
+                let _ = window
+                    .app_handle()
+                    .emit(commands::tcato::TCATO_CLOSE_EVENT, ());
             }
-        })
+            handle_close_requested(window, api);
+        }
+    });
+
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
