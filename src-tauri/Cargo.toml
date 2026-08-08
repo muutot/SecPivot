@@ -62,6 +62,13 @@ regex = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
 
+# Android: openssl-sys is pulled in via native-tls (rust-s3's tokio client).
+# The NDK ships no OpenSSL, and openssl-src cannot cross-compile OpenSSL from a
+# native Windows host (OpenSSL refuses the Windows perl path format). A prebuilt
+# aarch64-linux-android OpenSSL is therefore built under MSYS2 and supplied at
+# build time via OPENSSL_DIR/OPENSSL_STATIC. Windows desktop is unaffected
+# (native-tls uses schannel there, no openssl-sys).
+
 [dev-dependencies]
 tempfile = "3"
 

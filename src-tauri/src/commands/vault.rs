@@ -365,6 +365,7 @@ pub(crate) fn toggle_favorite(
 /// The main window is minimized first so keystrokes land in the window the
 /// user switches to during the replay delay, never in SecPivot itself.
 #[tauri::command]
+#[cfg_attr(not(desktop), allow(unused_variables))]
 pub(crate) fn auto_type(
     app: tauri::AppHandle,
     session: tauri::State<'_, Mutex<VaultSession>>,
@@ -377,6 +378,7 @@ pub(crate) fn auto_type(
         let expanded = session.expand_autotype_sequence(&sequence)?;
         (ctx, expanded)
     };
+    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();
     }

@@ -3,23 +3,23 @@
 //! something the user copied in another app while the timer was pending.
 //! `read_clipboard_text` lets the frontend compare before wiping.
 
-use windows_sys::Win32::Foundation::HGLOBAL;
-use windows_sys::Win32::System::DataExchange::CloseClipboard;
-use windows_sys::Win32::System::DataExchange::EmptyClipboard;
-use windows_sys::Win32::System::DataExchange::GetClipboardData;
-use windows_sys::Win32::System::DataExchange::OpenClipboard;
-use windows_sys::Win32::System::DataExchange::SetClipboardData;
-use windows_sys::Win32::System::Memory::GlobalAlloc;
-use windows_sys::Win32::System::Memory::GlobalLock;
-use windows_sys::Win32::System::Memory::GlobalSize;
-use windows_sys::Win32::System::Memory::GlobalUnlock;
-use windows_sys::Win32::System::Memory::GMEM_MOVEABLE;
-use windows_sys::Win32::System::Memory::GMEM_ZEROINIT;
+#[cfg(target_os = "windows")]
+use windows_sys::{
+    Win32::Foundation::HGLOBAL,
+    Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
+    },
+    Win32::System::Memory::{
+        GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE, GMEM_ZEROINIT,
+    },
+};
 
+#[cfg(target_os = "windows")]
 const CF_UNICODETEXT: u32 = 13;
 
 /// Current clipboard text, if the clipboard holds Unicode text. Returns
 /// `None` for empty or non-text content.
+#[cfg(target_os = "windows")]
 pub fn read_clipboard_text() -> Result<Option<String>, String> {
     // SAFETY: clipboard APIs take a nullable HWND; passing null uses the
     // current thread's window station, which is valid for read access.
@@ -53,8 +53,15 @@ pub fn read_clipboard_text() -> Result<Option<String>, String> {
     Ok(Some(text))
 }
 
+/// Non-Windows stub: clipboard is handled by the webview (`navigator.clipboard`).
+#[cfg(not(target_os = "windows"))]
+pub fn read_clipboard_text() -> Result<Option<String>, String> {
+    Ok(None)
+}
+
 /// Empty the clipboard (used when the frontend confirmed the clipboard still
 /// holds our own text, or on lock with `clearOnLock`).
+#[cfg(target_os = "windows")]
 pub fn clear_clipboard() -> Result<(), String> {
     // SAFETY: see `read_clipboard_text`; `EmptyClipboard` requires the
     // clipboard to be open by this thread.
@@ -69,9 +76,16 @@ pub fn clear_clipboard() -> Result<(), String> {
     Ok(())
 }
 
+/// Non-Windows stub: webview clipboard is cleared by the renderer.
+#[cfg(not(target_os = "windows"))]
+pub fn clear_clipboard() -> Result<(), String> {
+    Ok(())
+}
+
 /// Write `text` to the clipboard (fallback path; `navigator.clipboard` is
 /// preferred on the webview side).
 #[allow(dead_code)]
+#[cfg(target_os = "windows")]
 pub fn write_clipboard_text(text: &str) -> Result<(), String> {
     // SAFETY: standard Win32 clipboard flow; the global memory is owned by
     // the clipboard after SetClipboardData, so no manual free.
@@ -100,6 +114,13 @@ pub fn write_clipboard_text(text: &str) -> Result<(), String> {
     if ok.is_null() {
         return Err("写入剪贴板失败".to_owned());
     }
+    Ok(())
+}
+
+/// Non-Windows stub: webview clipboard writes are done by the renderer.
+#[allow(dead_code)]
+#[cfg(not(target_os = "windows"))]
+pub fn write_clipboard_text(_text: &str) -> Result<(), String> {
     Ok(())
 }
 

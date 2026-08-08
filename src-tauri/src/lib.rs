@@ -17,8 +17,10 @@ use tauri::menu::{Menu, MenuItem};
 #[cfg(desktop)]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 #[cfg(desktop)]
+use tauri::Emitter;
+use tauri::Manager;
+#[cfg(desktop)]
 use tauri::WindowEvent;
-use tauri::{Emitter, Manager};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 

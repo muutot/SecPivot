@@ -10,7 +10,9 @@
 //! rendering normally. `WDA_MONITOR` (0x1) must not be used here — it renders
 //! the window as a solid black box on the physical display.
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(target_os = "windows")]
+use tauri::Manager;
 
 /// Enable or disable the capture guard on the main application window.
 pub fn set_capture_guard(app: &AppHandle, enabled: bool) {

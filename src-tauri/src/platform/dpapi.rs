@@ -5,7 +5,9 @@
 //! store plaintext (no protection available). Decryption accepts legacy
 //! plaintext values, so old config files keep working.
 
+#[cfg(target_os = "windows")]
 use base64::engine::general_purpose::STANDARD as BASE64;
+#[cfg(target_os = "windows")]
 use base64::Engine;
 
 const PREFIX: &str = "dpapi1:";

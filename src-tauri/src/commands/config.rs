@@ -3,6 +3,7 @@
 
 use crate::config;
 use crate::config::ConfigStore;
+#[cfg(desktop)]
 use crate::register_global_hotkey;
 use crate::vault;
 use tauri::Manager;
@@ -34,6 +35,7 @@ pub(crate) fn set_config(
     config: config::AppConfig,
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
+    #[cfg(desktop)]
     register_global_hotkey(&app, &saved.keyboard.auto_type_global);
     sync_bridge(&app, &saved);
     sync_rpc(&app, &saved);
