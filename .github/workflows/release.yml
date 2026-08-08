@@ -23,6 +23,9 @@ jobs:
   verify:
     name: Verify
     runs-on: windows-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,17 +34,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache
-        uses: actions/cache@v4
+      - uses: mozilla-actions/sccache-action@v0.0.11
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            node_modules
-          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/package-lock.json') }}
+          workspaces: src-tauri
 
       - name: Install dependencies
         run: npm ci
@@ -49,10 +50,27 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      - name: Verify extreme release build
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "true"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: "3"
+          RUSTFLAGS: -C target-cpu=x86-64-v3
+        run: cargo build -j 2 --profile release --manifest-path src-tauri/Cargo.toml
+
   build:
     name: Build (Windows x64)
     needs: verify
     runs-on: windows-latest
+    env:
+      # Extreme runtime optimization is enabled ONLY here, in the GitHub release
+      # build. Local `tauri build` and CI stay fast (see src-tauri/Cargo.toml).
+      CARGO_PROFILE_RELEASE_LTO: "true"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: "3"
+      RUSTFLAGS: -C target-cpu=x86-64-v3
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,17 +79,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache
-        uses: actions/cache@v4
+      - uses: mozilla-actions/sccache-action@v0.0.11
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            node_modules
-          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/package-lock.json') }}
+          workspaces: src-tauri
 
       - name: Install dependencies
         run: npm ci

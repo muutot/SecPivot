@@ -140,10 +140,12 @@ After a successful release, report:
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml` which (Windows-only target — the app is Windows-first and bundles only the NSIS installer):
 
-- Runs `npm run verify` on `windows-latest`
-- Builds the Windows x64 bundle (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
+- Runs `npm run verify` on `windows-latest`, plus an **extreme-release build** validation that verifies the exact GitHub-release configuration (fat LTO, opt-level 3, codegen-units 1, `target-cpu=x86-64-v3`) compiles and links
+- Builds the Windows x64 bundle with extent runtime optimization via `CARGO_PROFILE_RELEASE_*` + `RUSTFLAGS` (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
 - Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`
 - Creates a draft GitHub Release with these artifacts using `RELEASE.md` as the release body
+
+Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
 
 The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name, so manual re-releases name the release and portable ZIP consistently even when no tag is pushed yet.
 

@@ -64,3 +64,35 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_Wind
 
 [dev-dependencies]
 tempfile = "3"
+
+# Dev-profile tuning for the fastest possible local `tauri dev` builds:
+# - dependencies stay unoptimized (opt-level 0) with no debug symbols, so the
+#   existing cached artifacts are reused and compile/link is as fast as possible.
+# - unpacked split debug info keeps MSVC PDB handling fast (local crate only).
+[profile.dev]
+incremental = true
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 0
+debug = false
+
+# CI profile: same debug symbols as dev, but dependencies stay at opt-level 0
+# so clippy/test runs compile as fast as possible in GitHub Actions.
+[profile.ci]
+inherits = "dev"
+
+[profile.ci.package."*"]
+opt-level = 0
+
+# Release profile for local `tauri build`: like dev, extreme build speed with
+# minimal storage. No debug info, no incremental cache, unoptimized objects.
+# The GitHub Actions release job overrides these via CARGO_PROFILE_RELEASE_*
+# env vars to enable extreme runtime optimization (see release.yml).
+[profile.release]
+opt-level = 0
+codegen-units = 256
+panic = "abort"
+strip = true
+debug = false
+incremental = false

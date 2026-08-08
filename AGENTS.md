@@ -53,7 +53,7 @@ npm run format:check
 npm run verify
 ```
 
-Run the narrowest relevant checks during implementation and the full set at integration milestones.
+Run the narrowest relevant checks during implementation and the full set at integration milestones. Local `dev`/`release`/`ci` Rust profiles are tuned for build speed; the extreme runtime optimization (fat LTO, opt3, cgu1) is applied only by the GitHub Actions release workflow via `CARGO_PROFILE_RELEASE_*` env overrides (see `skills/secpivot-dev/SKILL.md`).
 
 ## Reference projects
 
