@@ -47,7 +47,8 @@
     | "widgets"
     | "minimize"
     | "maximize"
-    | "restore";
+    | "restore"
+    | "menu";
 
   interface Props {
     name: IconName;
@@ -121,6 +122,7 @@
     maximize: '<rect x="5" y="5" width="14" height="14" rx="1"></rect>',
     restore:
       '<rect x="7" y="8" width="10" height="10" rx="1"></rect><path d="M8 7V4h10a1 1 0 0 1 1 1v11h-3"></path>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"></path>',
   };
 </script>
 

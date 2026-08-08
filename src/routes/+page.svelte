@@ -451,6 +451,8 @@
   let groupWidth = $state(get(appSettings).general.panelWidths.group);
   let detailWidth = $state(get(appSettings).general.panelWidths.detail);
   let detailVisible = $state(false);
+  /** Whether the group tree drawer is open on narrow/mobile layouts. */
+  let mobileNavOpen = $state(false);
 
   $effect(() => {
     const p = settings.general.panelWidths;
@@ -1574,6 +1576,7 @@
     class="app-shell"
     class:compact={compactMode}
     class:standalone={!currentVault}
+    class:mobile-nav-open={mobileNavOpen}
     style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
     style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
     style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
@@ -1582,6 +1585,16 @@
     {#if currentVault}
       <div class="toolbar" role="presentation" data-tauri-drag-region>
         <div class="toolbar-left">
+          <button
+            class="mobile-nav-toggle"
+            class:active={mobileNavOpen}
+            onclick={() => (mobileNavOpen = !mobileNavOpen)}
+            title="分组"
+            aria-label="切换分组面板"
+            aria-expanded={mobileNavOpen}
+          >
+            <AppIcon name="menu" size={15} />
+          </button>
           <button
             class="tool-button primary"
             class:icon-only={iconOnlyButtons}
@@ -1680,6 +1693,13 @@
         class="main-content"
         style={`--group-width: ${groupWidth}px; --detail-width: ${detailVisible ? detailWidth : 0}px`}
       >
+        {#if mobileNavOpen}
+          <button
+            class="mobile-drawer-backdrop"
+            aria-label="关闭分组面板"
+            onclick={() => (mobileNavOpen = false)}
+          ></button>
+        {/if}
         <section class="group-panel">
           <GroupTree
             root={currentVault.root}
@@ -1693,6 +1713,7 @@
               selectedEntry = null;
               selectedUuids = new Set();
               selectionAnchor = null;
+              mobileNavOpen = false;
             }}
             onaddsubgroup={openGroupModal}
             onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
@@ -1919,6 +1940,11 @@
                 onedit={openEditEntry}
                 ondelete={askDeleteEntry}
                 onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
+                onback={() => {
+                  selectedEntry = null;
+                  selectedUuids = new Set();
+                  selectionAnchor = null;
+                }}
               />
             {:else}
               <div class="detail-empty">
@@ -2379,6 +2405,11 @@
     border-radius: 10px;
     color: var(--warning-color);
     font-size: var(--font-size-tiny, 10px);
+  }
+
+  .mobile-nav-toggle,
+  .mobile-drawer-backdrop {
+    display: none;
   }
 
   .main-content {
@@ -3053,12 +3084,132 @@
     }
   }
 
+  @media (max-width: 720px) {
+    .app-shell,
+    .app-shell.compact {
+      min-width: 0;
+      height: 100dvh;
+    }
+
+    .toolbar {
+      gap: 6px;
+      padding: 6px 8px;
+    }
+
+    .tool-button {
+      width: 28px;
+      padding: 0;
+      justify-content: center;
+    }
+
+    .tool-button .btn-label {
+      display: none;
+    }
+
+    .tool-button.primary {
+      width: 28px;
+      padding: 0;
+      justify-content: center;
+    }
+
+    .toolbar-center {
+      flex: 1;
+      justify-content: flex-start;
+      min-width: 0;
+    }
+
+    .search-box {
+      width: 100%;
+    }
+
+    .mobile-nav-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: var(--settings-control-radius, 6px);
+      color: var(--text-muted);
+      background: var(--card-bg);
+      cursor: pointer;
+    }
+
+    .mobile-nav-toggle:hover,
+    .mobile-nav-toggle.active {
+      color: var(--text-primary);
+      background: var(--hover-bg);
+    }
+
+    .main-content {
+      display: block;
+      position: relative;
+      min-width: 0;
+    }
+
+    .mobile-drawer-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: block;
+      padding: 0;
+      border: 0;
+      background: color-mix(in srgb, #000 35%, transparent);
+    }
+
+    .group-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: min(82vw, 320px);
+      z-index: 6;
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+      border-right: 1px solid var(--border-color);
+      transform: translateX(-100%);
+      transition: transform 0.16s ease;
+    }
+
+    .app-shell.mobile-nav-open .group-panel {
+      transform: translateX(0);
+    }
+
+    .entry-panel {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .group-resize-handle,
+    .detail-resize-handle {
+      display: none;
+    }
+
+    .detail-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .status-bar {
+      flex-wrap: wrap;
+      gap: 4px 12px;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .progress-fill {
       transition: none;
     }
     .progress-fill.indeterminate {
       animation: none;
+    }
+    .group-panel {
+      transition: none;
     }
   }
 

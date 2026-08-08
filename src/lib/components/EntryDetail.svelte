@@ -22,6 +22,9 @@
     onedit: (entry: VaultEntry) => void;
     ondelete: (entry: VaultEntry) => void;
     onrestore?: (entry: VaultEntry) => void;
+    /** Optional back affordance for narrow/mobile layouts where the detail
+     *  pane is a full-screen overlay; hidden on wide desktop layouts. */
+    onback?: () => void;
   }
 
   let {
@@ -32,6 +35,7 @@
     onedit,
     ondelete,
     onrestore,
+    onback,
   }: Props = $props();
 
   const iconName = $derived(keepassIconName(entry.icon));
@@ -276,6 +280,11 @@
 
 <div class="detail">
   <header class="detail-head">
+    {#if onback}
+      <button class="detail-btn back" onclick={onback} title="返回" aria-label="返回列表">
+        <AppIcon name="chevron-left" size={16} />
+      </button>
+    {/if}
     <div class="detail-title-row">
       <span class="entry-icon" style:--entry-color={entry.color}
         >{#if customIconUrl}
@@ -765,6 +774,19 @@
 
   .detail-btn.restore:hover {
     background: color-mix(in srgb, var(--success-color) 10%, var(--hover-bg));
+  }
+
+  .detail-btn.back {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .detail-btn.back {
+      display: inline-flex;
+    }
+    .detail-head {
+      align-items: center;
+    }
   }
 
   .detail-tabs {
