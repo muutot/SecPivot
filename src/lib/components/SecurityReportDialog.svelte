@@ -109,16 +109,6 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .report-modal {
     display: flex;
     flex-direction: column;

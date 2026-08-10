@@ -80,7 +80,7 @@
 </script>
 
 {#if pending}
-  <div class="modal-backdrop" role="presentation">
+  <div class="modal-backdrop modal-backdrop--prompt" role="presentation">
     <div class="approval-modal" role="dialog" aria-modal="true" aria-label="KeePassRPC 旁路密码">
       <div class="modal-head">
         <span class="modal-icon"><AppIcon name="link" size={18} /></span>
@@ -122,16 +122,6 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .approval-modal {
     display: flex;
     flex-direction: column;

@@ -81,16 +81,6 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .meta-modal {
     width: 360px;
     max-width: calc(100vw - 48px);

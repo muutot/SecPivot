@@ -2906,16 +2906,6 @@
     background: var(--hover-bg);
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .group-modal {
     width: min(340px, calc(100% - 40px));
     padding: 18px;

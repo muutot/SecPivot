@@ -904,16 +904,6 @@
     font-size: var(--font-size-tiny, 10px);
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .password-modal {
     width: min(380px, calc(100% - 40px));
     padding: 18px;

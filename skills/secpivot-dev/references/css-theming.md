@@ -7,7 +7,7 @@ This is the authoritative style reference for SecPivot UI. Read it before any ma
 1. `src/routes/+page.svelte` and the settings shell define the product's visual language.
 2. `src/lib/types/theme.ts::{DARK_THEME_COLORS,LIGHT_THEME_COLORS}` defines preset values.
 3. `src/lib/utils/theme.ts::applyThemeColors` defines the ThemeColors → CSS-variable mapping.
-4. `src/app.css` provides root defaults, global reset, font variables, focus/accessibility rules, and imports shared settings CSS.
+4. `src/app.css` provides root defaults, global reset, font variables, the shared modal backdrop/layer modifiers, focus/accessibility rules, and imports shared settings CSS.
 5. `src/lib/styles/settings-shared.css` owns reusable settings-panel primitives.
 6. `SettingsDialog.svelte` owns settings-shell layout and panel-specific styles.
 7. Component-scoped CSS owns only component-specific layout/visual behavior.
@@ -135,6 +135,10 @@ Do not use a parent scoped selector to style inside a child Svelte component. Pa
 | modal backdrop / dialog                                             | 50              |
 | app-level security prompts (association approval, RPC side-channel) | 80              |
 | context menu / popover                                              | 9999            |
+
+Use `.modal-backdrop` for the shared fixed, centered, dimmed layer at
+z-index 50. App-level security prompts add `.modal-backdrop--prompt` to
+select z-index 80; components own only their dialog surface.
 
 Check the complete stacking context before changing a value; do not solve one overlap by arbitrary escalation.
 

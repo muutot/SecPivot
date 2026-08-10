@@ -116,6 +116,20 @@ select:focus-visible {
   word-wrap: break-word;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--modal-backdrop-z, 50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+
+.modal-backdrop--prompt {
+  --modal-backdrop-z: 80;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

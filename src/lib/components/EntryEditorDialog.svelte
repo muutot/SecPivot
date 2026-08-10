@@ -1142,16 +1142,6 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, #000 45%, transparent);
-  }
-
   .editor-modal {
     width: min(500px, calc(100% - 40px));
     max-height: calc(100% - 48px);
