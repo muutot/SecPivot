@@ -123,4 +123,10 @@
     color: #ffffff;
     background: var(--danger-color);
   }
+
+  @media (max-width: 420px) {
+    .window-controls {
+      display: none;
+    }
+  }
 </style>

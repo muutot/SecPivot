@@ -3203,6 +3203,49 @@
     }
   }
 
+  @media (max-width: 420px) {
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "primary primary"
+        "search secondary";
+      align-items: center;
+    }
+
+    .toolbar-left {
+      grid-area: primary;
+      justify-self: start;
+    }
+
+    .toolbar-center {
+      grid-area: search;
+      width: 100%;
+    }
+
+    .toolbar-right {
+      grid-area: secondary;
+      justify-self: end;
+    }
+
+    .toolbar-divider,
+    .dirty-badge {
+      display: none;
+    }
+
+    .mobile-nav-toggle,
+    .tool-button,
+    .tool-button.primary,
+    .icon-action {
+      width: 32px;
+      height: 32px;
+    }
+
+    .search-box {
+      height: 32px;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .progress-fill {
       transition: none;
