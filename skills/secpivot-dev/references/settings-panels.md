@@ -148,6 +148,10 @@ Before adding CSS:
 - Hide number spin buttons when the control is visually a plain value field.
 - Keep tabular numeric labels stable and non-shrinking.
 - Let long labels/paths/numbers shrink, wrap, or ellipsize without overflowing the card.
+- Add `.settings-scroll--stack-rows` to a panel whose explicit `.setting-row`
+  controls cannot remain readable side-by-side below 720px. Use
+  `.setting-row-input` on both inputs and shared `Select` roots so the modifier
+  can expand the right-side control to the full card width.
 - Use semantic status colors through variables and `color-mix`.
 
 ## New or changed setting checklist

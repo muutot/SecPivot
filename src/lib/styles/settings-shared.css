@@ -53,6 +53,7 @@ header p {
 /* ── scroll container ── */
 .settings-scroll {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
   padding: 14px 18px 48px;
@@ -121,6 +122,7 @@ header p {
   margin: 2px 0 0;
   color: var(--text-muted);
   font-size: var(--settings-description-size, var(--font-size-secondary, 11px));
+  overflow-wrap: anywhere;
 }
 
 .heading-inline {
@@ -358,6 +360,24 @@ header p {
 .setting-row-input {
   flex: 0 0 200px;
   width: 200px;
+}
+
+@media (max-width: 720px) {
+  .settings-scroll--stack-rows .setting-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-scroll--stack-rows .setting-row-input {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .settings-scroll--stack-rows .mirror-dir {
+    align-self: stretch;
+    max-width: 100%;
+  }
 }
 
 /* ── color rows (custom theme) ── */

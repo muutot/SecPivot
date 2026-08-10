@@ -50,7 +50,7 @@
   </header>
 {/if}
 
-<div class="settings-scroll">
+<div class="settings-scroll settings-scroll--stack-rows">
   <section class="setting-card">
     <div class="setting-row">
       <div class="setting-heading">
@@ -62,7 +62,7 @@
       </div>
       <Select
         id="remote-profile-select"
-        className="profile-picker"
+        className="setting-row-input"
         value={s.activeRemote}
         ariaLabel="远程配置"
         options={s.remoteProfiles.map((p, i) => ({ value: i, label: p.name }))}
@@ -335,11 +335,6 @@
 </div>
 
 <style>
-  :global(.profile-picker) {
-    flex: 0 0 200px;
-    width: 200px;
-  }
-
   .remote-group-card .remote-group-heading {
     display: flex;
     align-items: center;

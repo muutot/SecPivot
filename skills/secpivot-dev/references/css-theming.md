@@ -100,6 +100,7 @@ The settings shell defines the settings scope variables consumed by shell and ch
 - `.transparency-slider` including WebKit and Firefox tracks/thumbs;
 - `.settings-input` / `.settings-select` control styles (`.settings-select` is legacy — new code uses the shared `Select.svelte` component);
 - `.settings-action-button` for compact secondary actions, including the `--field` modifier when the button must align with a 30px input;
+- `.settings-scroll--stack-rows` for panels whose fixed right-side row controls stack below the 720px settings breakpoint;
 - `.settings-feedback` success/error states;
 - `.auto-save-note` and the default pointer cursor for buttons.
 
