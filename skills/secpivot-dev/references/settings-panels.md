@@ -6,14 +6,14 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 
 `SettingsDialog.svelte` is the parent shell for the settings page. Its primary categories:
 
-| Primary category | Secondary sections / implementation                                                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop                                                                                                                                                                |
-| Security         | Single current section → `SecuritySettingsPanel`                                                                                                                                                                                           |
-| Database         | Single current section → `DatabaseSettingsPanel`                                                                                                                                                                                           |
-| Remote           | Single current section → `RemoteSettingsPanel` (profile selector + name + transport kind (S3/WebDAV) + endpoint/credentials/mirror; WebDAV hides region/bucket and relabels creds as username/password; edits apply to the active profile) |
-| Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`                                                                                                                                                                 |
-| About            | Single current section → `AboutSettingsPanel`                                                                                                                                                                                              |
+| Primary category | Secondary sections / implementation                                                                                                                                                                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| General          | Appearance / Display / Compact → `GeneralSettingsPanel` with `section` prop                                                                                                                                                                                                        |
+| Security         | Single current section → `SecuritySettingsPanel`                                                                                                                                                                                                                                   |
+| Database         | Single current section → `DatabaseSettingsPanel`                                                                                                                                                                                                                                   |
+| Remote           | S3 / WebDAV tabs → `RemoteSettingsPanel` with a fixed `kind` prop. Each tab lists only that transport's profiles; every profile has canonical path `<kind>/<name>` and stores only that protocol's fields. WebDAV omits region/bucket and labels credentials as username/password. |
+| Integrations     | KeePassHttp / KeePassRPC tabs → `BridgeSettingsPanel` / `RpcSettingsPanel`                                                                                                                                                                                                         |
+| About            | Single current section → `AboutSettingsPanel`                                                                                                                                                                                                                                      |
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.
 
@@ -22,6 +22,12 @@ behavior. `toolbarOverflowMenu` uses the canonical toggle card and applies
 immediately: enabled collects save-as, detail visibility, security report, CSV
 export, and settings into the main toolbar's More menu. Its platform default is
 enabled on Android/iOS and disabled on desktop.
+
+The Remote section uses the same secondary-tab shell as General/Integrations:
+S3 and WebDAV are separate namespaces, names only need to be unique inside the
+current protocol, and entering a tab selects one profile from that protocol.
+The panel displays the canonical path (`s3/config_1`, `webdav/config_1`) and the
+matching local mirror path under `Storage/remote/<kind>/<name>`.
 
 At narrow widths (`max-width: 720px`), the primary sidebar becomes an off-canvas
 drawer. The section header exposes the menu toggle, the content pane uses the

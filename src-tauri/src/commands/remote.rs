@@ -1,4 +1,4 @@
-//! S3 remote vault commands: list objects, open remote, create + upload
+//! S3/WebDAV remote vault commands: list objects, open remote, create + upload
 //! (extracted from commands.rs).
 
 use super::config::normalize_backup_template;
@@ -11,40 +11,41 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use zeroize::Zeroize;
 // ---------------------------------------------------------------------------
-// S3 remote commands
+// Remote vault commands
 // ---------------------------------------------------------------------------
 
-/// List `.kdbx` files under the active profile's prefix (newest key first).
-/// `profile` is the index into `remoteProfiles`; settings (including the
-/// decrypted credentials) are resolved from `ConfigStore`, never sent over IPC.
+/// List remote files under the selected profile's prefix. `profile` is the
+/// canonical `<kind>/<name>` path; decrypted credentials are resolved from
+/// `ConfigStore` and never sent over IPC.
 #[tauri::command]
 pub(crate) async fn s3_list_objects(
-    profile: usize,
+    profile: String,
     config: tauri::State<'_, ConfigStore>,
 ) -> Result<Vec<RemoteObject>, String> {
-    let cfg = config.remote_settings(profile)?;
+    let cfg = config.remote_settings(&profile)?;
     crate::remote::list_objects_async(cfg).await
 }
 
-/// Download a vault from S3 and open it. `mode` is `"memory"` (upload back
+/// Download a vault from the selected remote transport and open it. `mode` is
+/// `"memory"` (upload back
 /// only) or `"local"` (also mirror locally under
-/// `Storage/remote/<sanitized profile name>`).
+/// `Storage/remote/<kind>/<sanitized profile name>`).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn open_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
-    profile: usize,
+    profile: String,
     key: String,
     password: String,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
-    let (profile_name, cfg) = config.remote_profile(profile)?;
+    let (profile_path, cfg) = config.remote_profile(&profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
-    let local_dir = local_storage_dir(&app, &profile_name)?;
+    let local_dir = local_storage_dir(&app, &profile_path)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
     let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);
@@ -96,14 +97,14 @@ pub(crate) async fn open_remote_vault(
     result
 }
 
-/// Create an empty vault and upload it to S3 immediately.
+/// Create an empty vault and upload it to the selected transport immediately.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
-    profile: usize,
+    profile: String,
     key: String,
     password: String,
     kdf: String,
@@ -112,10 +113,10 @@ pub(crate) async fn create_remote_vault(
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultState, String> {
-    let (profile_name, cfg) = config.remote_profile(profile)?;
+    let (profile_path, cfg) = config.remote_profile(&profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
-    let local_dir = local_storage_dir(&app, &profile_name)?;
+    let local_dir = local_storage_dir(&app, &profile_path)?;
     let backup_count = cfg.backup_count.clamp(0, 10) as usize;
     let backup_template = normalize_backup_template(&cfg.backup_template);
     let keyfile_path = keyfile.map(PathBuf::from);

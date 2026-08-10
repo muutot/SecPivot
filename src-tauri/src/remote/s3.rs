@@ -28,11 +28,11 @@ impl S3Storage {
         list_timeout: Duration,
         io_timeout: Duration,
     ) -> Result<Self, String> {
-        let endpoint = cfg.s3.endpoint.trim();
-        let region = cfg.s3.region.trim();
-        let bucket_name = cfg.s3.bucket.trim();
-        let access_key = cfg.s3.access_key.trim();
-        let secret_key = cfg.s3.secret_key.trim();
+        let endpoint = cfg.endpoint.trim();
+        let region = cfg.region.trim();
+        let bucket_name = cfg.bucket.trim();
+        let access_key = cfg.access_key.trim();
+        let secret_key = cfg.secret_key.trim();
         if endpoint.is_empty() {
             return Err("请先在设置中配置 S3 服务地址".to_owned());
         }

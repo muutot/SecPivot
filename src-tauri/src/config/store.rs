@@ -22,10 +22,7 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         let mut value: AppConfig =
             serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
         for profile in &mut value.remote_profiles {
-            decrypt_settings_creds(&mut profile.settings);
-        }
-        if let Some(legacy) = &mut value.remote {
-            decrypt_settings_creds(legacy);
+            decrypt_profile_creds(&mut profile.settings);
         }
         Ok(normalize_config(value))
     } else {
@@ -46,27 +43,14 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     crate::util::atomic_write(&path, text.as_bytes(), "配置")
 }
 
-/// Decrypt the S3 and WebDAV credentials of a `RemoteSettings` in place. The
-/// legacy flat fields are migrated by `normalize_remote_settings` after this
-/// returns, so decrypting them here lets the migration move plaintext creds
-/// into the correct block.
-fn decrypt_settings_creds(settings: &mut RemoteSettings) {
-    settings.s3.access_key = crate::platform::dpapi::decrypt(&settings.s3.access_key);
-    settings.s3.secret_key = crate::platform::dpapi::decrypt(&settings.s3.secret_key);
-    settings.webdav.access_key = crate::platform::dpapi::decrypt(&settings.webdav.access_key);
-    settings.webdav.secret_key = crate::platform::dpapi::decrypt(&settings.webdav.secret_key);
-    // Legacy flat creds (migrated in normalization).
+fn decrypt_profile_creds(settings: &mut RemoteSettings) {
     settings.access_key = crate::platform::dpapi::decrypt(&settings.access_key);
     settings.secret_key = crate::platform::dpapi::decrypt(&settings.secret_key);
 }
 
 fn encrypt_profile_creds(settings: &mut RemoteSettings) -> Result<(), String> {
-    settings.s3.access_key = crate::platform::dpapi::encrypt_for_storage(&settings.s3.access_key)?;
-    settings.s3.secret_key = crate::platform::dpapi::encrypt_for_storage(&settings.s3.secret_key)?;
-    settings.webdav.access_key =
-        crate::platform::dpapi::encrypt_for_storage(&settings.webdav.access_key)?;
-    settings.webdav.secret_key =
-        crate::platform::dpapi::encrypt_for_storage(&settings.webdav.secret_key)?;
+    settings.access_key = crate::platform::dpapi::encrypt_for_storage(&settings.access_key)?;
+    settings.secret_key = crate::platform::dpapi::encrypt_for_storage(&settings.secret_key)?;
     Ok(())
 }
 
@@ -100,24 +84,21 @@ impl ConfigStore {
         Ok(normalized)
     }
 
-    /// Settings of the profile at `index`, clamped to the last valid profile
-    /// (mirrors how `active_remote` is normalized). Returns the decrypted
-    /// in-memory values — commands resolve profiles here instead of taking
-    /// credentials over IPC.
-    pub fn remote_settings(&self, index: usize) -> Result<RemoteSettings, String> {
-        let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
-        let idx = index.min(guard.remote_profiles.len().saturating_sub(1));
-        Ok(guard.remote_profiles[idx].settings.clone())
+    /// Resolve a canonical `<kind>/<name>` path to decrypted settings. Remote
+    /// credentials remain backend-owned and never cross the IPC boundary.
+    pub fn remote_settings(&self, path: &str) -> Result<RemoteSettings, String> {
+        self.remote_profile(path).map(|(_, settings)| settings)
     }
 
-    /// Name + settings of the profile at `index`, clamped to the last valid
-    /// profile (mirrors `remote_settings`). Commands resolve the profile here
-    /// so the mirror folder can be named after the profile name without
-    /// sending the name over IPC.
-    pub fn remote_profile(&self, index: usize) -> Result<(String, RemoteSettings), String> {
+    /// Canonical path + settings for one profile. The path also determines the
+    /// local mirror hierarchy (`Storage/remote/<kind>/<name>`).
+    pub fn remote_profile(&self, path: &str) -> Result<(String, RemoteSettings), String> {
         let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
-        let idx = index.min(guard.remote_profiles.len().saturating_sub(1));
-        let profile = &guard.remote_profiles[idx];
-        Ok((profile.name.clone(), profile.settings.clone()))
+        let profile = guard
+            .remote_profiles
+            .iter()
+            .find(|profile| profile.path() == path)
+            .ok_or_else(|| format!("远程配置不存在: {path}"))?;
+        Ok((profile.path(), profile.settings.clone()))
     }
 }

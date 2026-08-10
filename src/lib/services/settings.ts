@@ -9,6 +9,8 @@ import type {
   RemoteS3Settings,
   RemoteWebDavSettings,
   RemoteProfile,
+  RemoteKind,
+  RemoteProfilePath,
   BridgeSettings,
   RpcSettings,
   KeyboardSettings,
@@ -137,24 +139,32 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
   fileExtension: "kdbx",
 };
 
-export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
+export const DEFAULT_S3_REMOTE_SETTINGS: RemoteS3Settings = {
   kind: "s3",
-  s3: {
-    endpoint: "https://s3.amazonaws.com",
-    region: "us-east-1",
-    bucket: "",
-    accessKey: "",
-    secretKey: "",
-  },
-  webdav: {
-    endpoint: "",
-    accessKey: "",
-    secretKey: "",
-  },
+  endpoint: "https://s3.amazonaws.com",
+  region: "us-east-1",
+  bucket: "",
+  accessKey: "",
+  secretKey: "",
   prefix: "",
   backupCount: 3,
   backupTemplate: "{name}.{timestamp}.{ext}.bak",
 };
+
+export const DEFAULT_WEBDAV_REMOTE_SETTINGS: RemoteWebDavSettings = {
+  kind: "webdav",
+  endpoint: "",
+  accessKey: "",
+  secretKey: "",
+  prefix: "",
+  backupCount: 3,
+  backupTemplate: "{name}.{timestamp}.{ext}.bak",
+};
+
+export const DEFAULT_REMOTE_PROFILES: RemoteProfile[] = [
+  { name: "config_1", settings: DEFAULT_S3_REMOTE_SETTINGS },
+  { name: "config_1", settings: DEFAULT_WEBDAV_REMOTE_SETTINGS },
+];
 
 export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
   enabled: false,
@@ -181,9 +191,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
-  remoteProfiles: [{ name: "默认", settings: DEFAULT_REMOTE_SETTINGS }],
-  activeRemote: 0,
-  remote: DEFAULT_REMOTE_SETTINGS,
+  remoteProfiles: DEFAULT_REMOTE_PROFILES,
+  activeRemote: "s3/config_1",
   bridge: DEFAULT_BRIDGE_SETTINGS,
   rpc: DEFAULT_RPC_SETTINGS,
   keyboard: DEFAULT_KEYBOARD_SETTINGS,
@@ -230,87 +239,15 @@ export function normalizeThemeColors(value: unknown, fallback: ThemeColors): The
 
 export function normalizeRemoteSettings(
   source: Partial<RemoteSettings> | undefined,
-  fallback: RemoteSettings = DEFAULT_REMOTE_SETTINGS,
+  kind: RemoteKind,
 ): RemoteSettings {
-  const r = source ?? {};
+  const r = (source ?? {}) as Record<string, unknown>;
+  const fallback = kind === "webdav" ? DEFAULT_WEBDAV_REMOTE_SETTINGS : DEFAULT_S3_REMOTE_SETTINGS;
   const str = (key: string, fb: string): string => {
-    // Only a missing (non-string) value falls back; an empty string from a
-    // cleared input is preserved so it stays clear while the user types.
-    const value = (r as Record<string, unknown>)[key];
+    const value = r[key];
     return typeof value === "string" ? value.trim() : fb;
   };
-  const snap = <T>(key: string, fb: T): T => {
-    const val = (r as Record<string, unknown>)[key];
-    return val && typeof val === "object" ? (val as T) : fb;
-  };
-  const kind = (() => {
-    const k = typeof r.kind === "string" ? r.kind.trim().toLowerCase() : fallback.kind;
-    return k === "webdav" ? "webdav" : "s3";
-  })();
-  // Legacy flat shape (endpoint/region/bucket/accessKey/secretKey at the top
-  // level) migrates into the block selected by `kind` when that block is
-  // absent. Both blocks always exist afterwards, so S3 and WebDAV hold
-  // independent configs that never contaminate each other.
-  const legacyEndpoint = str("endpoint", "");
-  const hasLegacyEndpoint = legacyEndpoint !== "";
-  const s3Src = snap<Partial<RemoteS3Settings>>("s3", {});
-  const webdavSrc = snap<Partial<RemoteWebDavSettings>>("webdav", {});
-  const s3: RemoteS3Settings = {
-    endpoint:
-      s3Src.endpoint !== undefined
-        ? s3Src.endpoint.trim()
-        : hasLegacyEndpoint
-          ? legacyEndpoint
-          : fallback.s3.endpoint,
-    region:
-      s3Src.region !== undefined
-        ? s3Src.region.trim()
-        : hasLegacyEndpoint
-          ? str("region", fallback.s3.region)
-          : fallback.s3.region,
-    bucket:
-      s3Src.bucket !== undefined
-        ? s3Src.bucket.trim()
-        : hasLegacyEndpoint
-          ? str("bucket", fallback.s3.bucket)
-          : fallback.s3.bucket,
-    accessKey:
-      s3Src.accessKey !== undefined
-        ? s3Src.accessKey.trim()
-        : hasLegacyEndpoint
-          ? str("accessKey", fallback.s3.accessKey)
-          : fallback.s3.accessKey,
-    secretKey:
-      s3Src.secretKey !== undefined
-        ? s3Src.secretKey.trim()
-        : hasLegacyEndpoint
-          ? str("secretKey", fallback.s3.secretKey)
-          : fallback.s3.secretKey,
-  };
-  const webdav: RemoteWebDavSettings = {
-    endpoint:
-      webdavSrc.endpoint !== undefined
-        ? webdavSrc.endpoint.trim()
-        : hasLegacyEndpoint && kind === "webdav"
-          ? legacyEndpoint
-          : fallback.webdav.endpoint,
-    accessKey:
-      webdavSrc.accessKey !== undefined
-        ? webdavSrc.accessKey.trim()
-        : hasLegacyEndpoint && kind === "webdav"
-          ? str("accessKey", fallback.webdav.accessKey)
-          : fallback.webdav.accessKey,
-    secretKey:
-      webdavSrc.secretKey !== undefined
-        ? webdavSrc.secretKey.trim()
-        : hasLegacyEndpoint && kind === "webdav"
-          ? str("secretKey", fallback.webdav.secretKey)
-          : fallback.webdav.secretKey,
-  };
-  return {
-    kind,
-    s3,
-    webdav,
+  const common = {
     prefix: str("prefix", fallback.prefix),
     backupCount: clampInt(
       typeof r.backupCount === "number" ? r.backupCount : fallback.backupCount,
@@ -322,6 +259,24 @@ export function normalizeRemoteSettings(
       typeof r.backupTemplate === "string" && r.backupTemplate.trim() !== ""
         ? r.backupTemplate.trim()
         : fallback.backupTemplate,
+  };
+  if (kind === "webdav") {
+    return {
+      kind,
+      endpoint: str("endpoint", DEFAULT_WEBDAV_REMOTE_SETTINGS.endpoint),
+      accessKey: str("accessKey", DEFAULT_WEBDAV_REMOTE_SETTINGS.accessKey),
+      secretKey: str("secretKey", DEFAULT_WEBDAV_REMOTE_SETTINGS.secretKey),
+      ...common,
+    };
+  }
+  return {
+    kind,
+    endpoint: str("endpoint", DEFAULT_S3_REMOTE_SETTINGS.endpoint),
+    region: str("region", DEFAULT_S3_REMOTE_SETTINGS.region),
+    bucket: str("bucket", DEFAULT_S3_REMOTE_SETTINGS.bucket),
+    accessKey: str("accessKey", DEFAULT_S3_REMOTE_SETTINGS.accessKey),
+    secretKey: str("secretKey", DEFAULT_S3_REMOTE_SETTINGS.secretKey),
+    ...common,
   };
 }
 
@@ -335,11 +290,10 @@ export function normalizeFileExtension(ext: string): string {
   return cleaned === "" ? "kdbx" : cleaned;
 }
 
-/** Sanitize a remote profile name into a safe mirror folder name, mirroring
- *  `sanitize_dir_name` in `src-tauri/src/remote.rs`: keeps letters/digits
+/** Sanitize a remote profile name into a safe path segment, mirroring
+ *  `sanitize_dir_name` in `src-tauri/src/remote/local.rs`: keeps letters/digits
  *  (Unicode-aware, so Chinese names survive) plus `-`/`_`; anything else
- *  becomes `_`. Empty/whitespace → `remote`. Used for the "保存到本地" hints so
- *  what the UI shows matches the real folder. */
+ *  becomes `_`. Empty/whitespace → `remote`. */
 export function sanitizeDirName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "remote";
@@ -350,34 +304,101 @@ export function sanitizeDirName(name: string): string {
   return out === "" ? "remote" : out;
 }
 
-/** Normalize `remoteProfiles` (at least one profile always survives), with a
- * legacy single `remote` object promoted to the first profile. */
+function normalizeRemoteProfileName(name: unknown, fallback: string): string {
+  const trimmed = String(name ?? "").trim();
+  return trimmed === "" ? fallback : sanitizeDirName(trimmed);
+}
+
+export function remoteProfilePath(profile: RemoteProfile): RemoteProfilePath {
+  return `${profile.settings.kind}/${profile.name}`;
+}
+
+export function remoteProfilesForKind(
+  profiles: RemoteProfile[],
+  kind: RemoteKind,
+): RemoteProfile[] {
+  return profiles.filter((profile) => profile.settings.kind === kind);
+}
+
+export function findRemoteProfile(
+  profiles: RemoteProfile[],
+  path: string,
+): RemoteProfile | undefined {
+  return profiles.find((profile) => remoteProfilePath(profile) === path);
+}
+
+export function activeRemoteProfile(settings: AppSettings): RemoteProfile {
+  return (
+    findRemoteProfile(settings.remoteProfiles, settings.activeRemote) ?? settings.remoteProfiles[0]
+  );
+}
+
+export function remoteMirrorPath(profile: RemoteProfile): RemoteProfilePath {
+  return `${profile.settings.kind}/${sanitizeDirName(profile.name)}`;
+}
+
+/** Normalize remote profiles into two transport namespaces. Every namespace
+ * always retains at least one configuration, and names are unique only within
+ * that namespace (`s3/config_1` and `webdav/config_1` may coexist). */
 export function normalizeRemoteProfiles(
   source: Partial<RemoteProfile>[] | undefined,
-  legacy: Partial<RemoteSettings> | undefined,
-  fallback: RemoteSettings,
 ): RemoteProfile[] {
-  const profiles = Array.isArray(source)
-    ? source.map((p, i) => ({
-        name: String(p?.name ?? "").trim() || (i === 0 ? "默认" : `配置 ${i + 1}`),
-        settings: normalizeRemoteSettings(p?.settings, fallback),
-      }))
-    : [];
-  // Mirror the backend's name dedup (mirror folder is derived from the name).
-  const seen = new Set<string>();
+  const counters: Record<RemoteKind, number> = { s3: 0, webdav: 0 };
+  const profiles: RemoteProfile[] = [];
+  for (const profile of Array.isArray(source) ? source : []) {
+    const kind: RemoteKind = profile?.settings?.kind === "webdav" ? "webdav" : "s3";
+    counters[kind] += 1;
+    profiles.push({
+      name: normalizeRemoteProfileName(profile?.name, `config_${counters[kind]}`),
+      settings: normalizeRemoteSettings(profile?.settings, kind),
+    });
+  }
+  for (const kind of ["s3", "webdav"] as const) {
+    if (counters[kind] === 0) {
+      profiles.push({
+        name: "config_1",
+        settings: normalizeRemoteSettings(undefined, kind),
+      });
+    }
+  }
+
+  const seen: Record<RemoteKind, Set<string>> = { s3: new Set(), webdav: new Set() };
   for (const profile of profiles) {
     const base = profile.name;
     let candidate = base;
     let n = 2;
-    while (seen.has(candidate)) {
-      candidate = `${base} (${n})`;
+    const kindSeen = seen[profile.settings.kind];
+    while (kindSeen.has(candidate)) {
+      candidate = `${base}_${n}`;
       n += 1;
     }
-    seen.add(candidate);
+    kindSeen.add(candidate);
     profile.name = candidate;
   }
-  if (profiles.length > 0) return profiles;
-  return [{ name: "默认", settings: normalizeRemoteSettings(legacy ?? undefined, fallback) }];
+  return profiles;
+}
+
+function normalizeActiveRemote(
+  value: unknown,
+  profiles: RemoteProfile[],
+  fallback: RemoteProfilePath,
+): RemoteProfilePath {
+  const normalizePath = (path: unknown): RemoteProfilePath | null => {
+    if (typeof path !== "string") return null;
+    const slash = path.indexOf("/");
+    if (slash <= 0) return null;
+    const kind = path.slice(0, slash) as RemoteKind;
+    if (kind !== "s3" && kind !== "webdav") return null;
+    const name = normalizeRemoteProfileName(path.slice(slash + 1), "");
+    return name ? `${kind}/${name}` : null;
+  };
+  const requested = normalizePath(value);
+  if (requested && findRemoteProfile(profiles, requested)) return requested;
+  const fallbackPath = normalizePath(fallback);
+  if (fallbackPath && findRemoteProfile(profiles, fallbackPath)) return fallbackPath;
+  return remoteProfilePath(
+    profiles.find((profile) => profile.settings.kind === "s3") ?? profiles[0],
+  );
 }
 
 export function normalizeSettings(
@@ -507,18 +528,12 @@ export function normalizeSettings(
     fileExtension: normalizeFileExtension(d.fileExtension ?? fallback.database.fileExtension),
   };
 
-  const remoteProfiles = normalizeRemoteProfiles(
-    source.remoteProfiles,
-    source.remote,
-    fallback.remote,
+  const remoteProfiles = normalizeRemoteProfiles(source.remoteProfiles ?? fallback.remoteProfiles);
+  const activeRemote = normalizeActiveRemote(
+    source.activeRemote,
+    remoteProfiles,
+    fallback.activeRemote,
   );
-  const activeRemote = clampInt(
-    source.activeRemote ?? fallback.activeRemote,
-    0,
-    remoteProfiles.length - 1,
-    0,
-  );
-  const remote = remoteProfiles[activeRemote].settings;
 
   const k = source.keyboard ?? fallback.keyboard;
   const legacyGlobal = (
@@ -550,7 +565,6 @@ export function normalizeSettings(
     database,
     remoteProfiles,
     activeRemote,
-    remote,
     bridge: {
       enabled:
         typeof source.bridge?.enabled === "boolean"
@@ -584,12 +598,15 @@ interface AppSettingsStore {
   updateGeneral: <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => void;
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
-  /** Update a field of the ACTIVE profile's settings (kept in `remote` too). */
-  updateRemote: <K extends RemoteUpdateKey>(key: K, value: RemoteBlockValue<K>) => void;
-  setActiveRemote: (index: number) => void;
-  addRemoteProfile: (name: string) => void;
-  removeRemoteProfile: (index: number) => void;
-  renameRemoteProfile: (index: number, name: string) => void;
+  updateRemote: <K extends RemoteUpdateKey>(
+    path: RemoteProfilePath,
+    key: K,
+    value: RemoteUpdateValue<K>,
+  ) => void;
+  setActiveRemote: (path: RemoteProfilePath) => void;
+  addRemoteProfile: (kind: RemoteKind, name: string) => void;
+  removeRemoteProfile: (path: RemoteProfilePath) => void;
+  renameRemoteProfile: (path: RemoteProfilePath, name: string) => void;
   updateBridge: <K extends keyof BridgeSettings>(key: K, value: BridgeSettings[K]) => void;
   updateRpc: <K extends keyof RpcSettings>(key: K, value: RpcSettings[K]) => void;
   updateKeyboard: <K extends keyof KeyboardSettings>(key: K, value: KeyboardSettings[K]) => void;
@@ -599,38 +616,22 @@ interface AppSettingsStore {
   destroy: () => void;
 }
 
-/** Top-level (transport-agnostic) remote keys that live outside the S3/WebDAV
- *  blocks, plus every S3/WebDAV block key addressed as `"s3.<field>"` /
- *  `"webdav.<field>"` so each transport keeps its own isolated values. */
+/** Editable fields across the two discriminated remote profile shapes. */
 export type RemoteUpdateKey =
-  | `s3.${keyof RemoteS3Settings & string}`
-  | `webdav.${keyof RemoteWebDavSettings & string}`
-  | (keyof Omit<RemoteSettings, "s3" | "webdav"> & string);
+  | (keyof Omit<RemoteS3Settings, "kind"> & string)
+  | (keyof Omit<RemoteWebDavSettings, "kind"> & string);
 
-/** Value type for a remote update, resolving block-dotted keys to the block's
- *  field type and plain keys to the top-level type. */
-export type RemoteBlockValue<K extends RemoteUpdateKey> = K extends `s3.${infer F}`
-  ? Extract<RemoteS3Settings, Record<F, unknown>>[F]
-  : K extends `webdav.${infer F}`
-    ? Extract<RemoteWebDavSettings, Record<F, unknown>>[F]
-    : K extends keyof RemoteSettings
-      ? RemoteSettings[K]
-      : never;
+export type RemoteUpdateValue<K extends RemoteUpdateKey> = K extends "backupCount"
+  ? number
+  : string;
 
-/** Apply a `updateRemote`-style key/value to a `RemoteSettings`, writing into
- *  the S3/WebDAV block for dotted keys or the shared top level otherwise. */
 function updateRemoteBlock(
   settings: RemoteSettings,
   key: RemoteUpdateKey,
   value: unknown,
 ): RemoteSettings {
-  const dot = key.indexOf(".");
-  if (dot > 0 && (key.startsWith("s3.") || key.startsWith("webdav."))) {
-    const block = key.slice(0, dot) as "s3" | "webdav";
-    const field = key.slice(dot + 1);
-    return { ...settings, [block]: { ...settings[block], [field]: value } };
-  }
-  return { ...settings, [key]: value };
+  if (settings.kind === "webdav" && (key === "region" || key === "bucket")) return settings;
+  return { ...settings, [key]: value } as RemoteSettings;
 }
 
 const settings = writable<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -651,15 +652,15 @@ let initialized = false;
  *  persistence never writes `accessKey`/`secretKey` to localStorage (mirrors
  *  `withoutSecrets` in vault.ts for the vault demo). */
 function withoutSecrets(value: AppSettings): AppSettings {
-  const strip = (settings: RemoteSettings): RemoteSettings => ({
-    ...settings,
-    s3: { ...settings.s3, accessKey: "", secretKey: "" },
-    webdav: { ...settings.webdav, accessKey: "", secretKey: "" },
-  });
+  const strip = (settings: RemoteSettings): RemoteSettings =>
+    ({
+      ...settings,
+      accessKey: "",
+      secretKey: "",
+    }) as RemoteSettings;
   return {
     ...value,
     remoteProfiles: value.remoteProfiles.map((p) => ({ ...p, settings: strip(p.settings) })),
-    remote: strip(value.remote),
   };
 }
 
@@ -774,70 +775,86 @@ export const appSettings: AppSettingsStore = {
     schedulePersist();
   },
 
-  updateRemote(key, value): void {
+  updateRemote(path, key, value): void {
     settings.update((s) => {
-      const remoteProfiles = s.remoteProfiles.map((p, i) =>
-        i === s.activeRemote ? { ...p, settings: updateRemoteBlock(p.settings, key, value) } : p,
+      const remoteProfiles = s.remoteProfiles.map((profile) =>
+        remoteProfilePath(profile) === path
+          ? { ...profile, settings: updateRemoteBlock(profile.settings, key, value) }
+          : profile,
       );
-      return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
+      return { ...s, remoteProfiles };
     });
     schedulePersist();
   },
 
-  setActiveRemote(index): void {
+  setActiveRemote(path): void {
     settings.update((s) => {
-      const activeRemote = Math.min(Math.max(0, Math.round(index)), s.remoteProfiles.length - 1);
-      return { ...s, activeRemote, remote: s.remoteProfiles[activeRemote].settings };
+      if (!findRemoteProfile(s.remoteProfiles, path)) return s;
+      return { ...s, activeRemote: path };
     });
     schedulePersist();
   },
 
-  addRemoteProfile(name): void {
+  addRemoteProfile(kind, name): void {
     settings.update((s) => {
-      const base = name.trim() || `配置 ${s.remoteProfiles.length + 1}`;
-      const taken = new Set(s.remoteProfiles.map((p) => p.name.trim()));
+      const sameKind = remoteProfilesForKind(s.remoteProfiles, kind);
+      const base = normalizeRemoteProfileName(name, `config_${sameKind.length + 1}`);
+      const taken = new Set(sameKind.map((profile) => profile.name));
       let candidate = base;
       let n = 2;
       while (taken.has(candidate)) {
-        candidate = `${base} (${n})`;
+        candidate = `${base}_${n}`;
         n += 1;
       }
-      const remoteProfiles = [
-        ...s.remoteProfiles,
-        {
-          name: candidate,
-          settings: { ...DEFAULT_REMOTE_SETTINGS },
-        },
-      ];
-      const activeRemote = remoteProfiles.length - 1;
-      return { ...s, remoteProfiles, activeRemote, remote: remoteProfiles[activeRemote].settings };
+      const settingsForProfile = normalizeRemoteSettings(undefined, kind);
+      const profile: RemoteProfile = { name: candidate, settings: settingsForProfile };
+      const remoteProfiles = [...s.remoteProfiles, profile];
+      return { ...s, remoteProfiles, activeRemote: remoteProfilePath(profile) };
     });
     schedulePersist();
   },
 
-  removeRemoteProfile(index): void {
+  removeRemoteProfile(path): void {
     settings.update((s) => {
-      if (s.remoteProfiles.length <= 1) return s;
-      const remoteProfiles = s.remoteProfiles.filter((_, i) => i !== index);
-      const activeRemote = Math.min(Math.max(0, Math.round(index)), remoteProfiles.length - 1);
-      return { ...s, remoteProfiles, activeRemote, remote: remoteProfiles[activeRemote].settings };
-    });
-    schedulePersist();
-  },
-
-  renameRemoteProfile(index, name): void {
-    settings.update((s) => {
-      // The name also names the local mirror folder, so duplicates are
-      // forbidden. Empty / colliding names are rejected (the last valid unique
-      // name stays in the store; the UI shows an inline error while typing).
-      const trimmed = name.trim();
-      if (trimmed === "") return s;
-      const collides = s.remoteProfiles.some((p, i) => i !== index && p.name.trim() === trimmed);
-      if (collides) return s;
-      const remoteProfiles = s.remoteProfiles.map((p, i) =>
-        i === index ? { ...p, name: trimmed } : p,
+      const current = findRemoteProfile(s.remoteProfiles, path);
+      if (!current) return s;
+      const sameKind = remoteProfilesForKind(s.remoteProfiles, current.settings.kind);
+      if (sameKind.length <= 1) return s;
+      const remoteProfiles = s.remoteProfiles.filter(
+        (profile) => remoteProfilePath(profile) !== path,
       );
-      return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
+      const replacement = remoteProfiles.find(
+        (profile) => profile.settings.kind === current.settings.kind,
+      );
+      const activeRemote =
+        s.activeRemote === path && replacement ? remoteProfilePath(replacement) : s.activeRemote;
+      return { ...s, remoteProfiles, activeRemote };
+    });
+    schedulePersist();
+  },
+
+  renameRemoteProfile(path, name): void {
+    settings.update((s) => {
+      const current = findRemoteProfile(s.remoteProfiles, path);
+      if (!current) return s;
+      const nextName = normalizeRemoteProfileName(name, "");
+      if (nextName === "") return s;
+      const collides = s.remoteProfiles.some(
+        (profile) =>
+          remoteProfilePath(profile) !== path &&
+          profile.settings.kind === current.settings.kind &&
+          profile.name === nextName,
+      );
+      if (collides) return s;
+      const remoteProfiles = s.remoteProfiles.map((profile) =>
+        remoteProfilePath(profile) === path ? { ...profile, name: nextName } : profile,
+      );
+      const renamed = remoteProfiles.find(
+        (profile) => profile.settings.kind === current.settings.kind && profile.name === nextName,
+      );
+      const activeRemote =
+        s.activeRemote === path && renamed ? remoteProfilePath(renamed) : s.activeRemote;
+      return { ...s, remoteProfiles, activeRemote };
     });
     schedulePersist();
   },

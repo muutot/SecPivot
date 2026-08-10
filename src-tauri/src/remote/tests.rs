@@ -1,13 +1,13 @@
 //! Remote transport tests: in-memory fake, S3 and WebDAV local TCP mocks
 //! (extracted from remote/mod.rs).
 
-use super::local::sanitize_dir_name;
+use super::local::{profile_storage_parts, sanitize_dir_name};
 use super::s3::S3Storage;
 use super::shared_runtime;
 use super::webdav::WebDavStorage;
 use super::webdav::{href_to_key, parse_multistatus};
 use super::*;
-use crate::config::{RemoteS3Settings, RemoteSettings, RemoteWebDavSettings};
+use crate::config::RemoteSettings;
 
 #[test]
 fn memory_storage_lists_gets_puts() {
@@ -40,6 +40,17 @@ fn local_dir_name_is_sanitized() {
     assert_eq!(sanitize_dir_name("阿里云"), "阿里云");
     assert_eq!(sanitize_dir_name("默认 备份"), "默认_备份");
     assert_eq!(sanitize_dir_name("vault/备份"), "vault_备份");
+
+    assert_eq!(
+        profile_storage_parts("s3/config_1").unwrap(),
+        ("s3", "config_1".to_owned())
+    );
+    assert_eq!(
+        profile_storage_parts("webdav/默认 备份").unwrap(),
+        ("webdav", "默认_备份".to_owned())
+    );
+    assert!(profile_storage_parts("ftp/config_1").is_err());
+    assert!(profile_storage_parts("s3").is_err());
 }
 
 /// S3 transports must share one process-wide runtime: a fresh thread pool
@@ -146,13 +157,11 @@ fn spawn_s3_mock() -> std::net::SocketAddr {
 fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
     RemoteSettings {
         kind: "s3".into(),
-        s3: RemoteS3Settings {
-            endpoint: format!("http://{addr}"),
-            region: "us-east-1".to_owned(),
-            bucket: "test-bucket".to_owned(),
-            access_key: "AK".to_owned(),
-            secret_key: "SK".to_owned(),
-        },
+        endpoint: format!("http://{addr}"),
+        region: "us-east-1".to_owned(),
+        bucket: "test-bucket".to_owned(),
+        access_key: "AK".to_owned(),
+        secret_key: "SK".to_owned(),
         ..Default::default()
     }
 }
@@ -326,13 +335,11 @@ fn spawn_webdav_mock() -> std::net::SocketAddr {
 fn mock_webdav_config(addr: std::net::SocketAddr) -> RemoteSettings {
     RemoteSettings {
         kind: "webdav".into(),
-        webdav: RemoteWebDavSettings {
-            endpoint: format!("http://{addr}/dav"),
-            access_key: "user".into(),
-            secret_key: "pass".into(),
-        },
+        endpoint: format!("http://{addr}/dav"),
+        access_key: "user".into(),
+        secret_key: "pass".into(),
         prefix: "vaults/".into(),
-        ..Default::default()
+        ..RemoteSettings::webdav_default()
     }
 }
 

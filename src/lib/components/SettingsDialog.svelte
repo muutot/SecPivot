@@ -13,6 +13,7 @@
   type Section =
     "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
   type GeneralTab = "appearance" | "display" | "compact" | "network";
+  type RemoteTab = "s3" | "webdav";
   type IntegrationsTab = "http" | "rpc";
 
   interface Props {
@@ -24,11 +25,18 @@
 
   let active: Section = $state("general");
   let generalTab: GeneralTab = $state("appearance");
+  let remoteTab: RemoteTab = $state("s3");
   let integrationsTab: IntegrationsTab = $state("http");
   let mobileNavOpen = $state(false);
 
   const currentTab = $derived(
-    active === "general" ? generalTab : active === "integrations" ? integrationsTab : null,
+    active === "general"
+      ? generalTab
+      : active === "remote"
+        ? remoteTab
+        : active === "integrations"
+          ? integrationsTab
+          : null,
   );
 
   const sections: {
@@ -78,7 +86,11 @@
       label: "远程",
       icon: "cloud",
       title: "远程",
-      description: "S3 兼容对象存储的连接、凭据与本地镜像设置。",
+      description: "按协议分组管理远程连接、凭据与本地镜像设置。",
+      tabs: [
+        { id: "s3", label: "S3" },
+        { id: "webdav", label: "WebDAV" },
+      ],
     },
     {
       id: "integrations",
@@ -125,6 +137,7 @@
           onclick={() => {
             active = section.id;
             if (section.id === "general") generalTab = "appearance";
+            if (section.id === "remote") remoteTab = "s3";
             if (section.id === "integrations") integrationsTab = "http";
             mobileNavOpen = false;
           }}
@@ -182,6 +195,7 @@
               class:active={currentTab === tab.id}
               onclick={() => {
                 if (active === "general") generalTab = tab.id as GeneralTab;
+                if (active === "remote") remoteTab = tab.id as RemoteTab;
                 if (active === "integrations") integrationsTab = tab.id as IntegrationsTab;
               }}
             >
@@ -207,7 +221,7 @@
     {:else if active === "database"}
       <DatabaseSettingsPanel {onclose} showHeader={false} />
     {:else if active === "remote"}
-      <RemoteSettingsPanel {onclose} showHeader={false} />
+      <RemoteSettingsPanel {onclose} showHeader={false} kind={remoteTab} />
     {:else if active === "integrations"}
       {#if integrationsTab === "rpc"}
         <RpcSettingsPanel {onclose} showHeader={false} />

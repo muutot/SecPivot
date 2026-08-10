@@ -117,7 +117,8 @@ pub(crate) fn prepare_remote_open(
 }
 
 /// Lock-free half of `create_remote`: build the database, run the KDF,
-/// serialize, upload to S3 (network) and mirror locally if requested.
+/// serialize, upload through the configured remote transport and mirror locally
+/// if requested.
 /// Returns the database, keyfile bytes and the normalized object key.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_remote_create(

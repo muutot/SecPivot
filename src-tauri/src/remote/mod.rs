@@ -1,10 +1,10 @@
 //! Remote storage transports shared by the S3 and WebDAV backends: a transport
 //! trait plus the real S3 and WebDAV implementations and an in-memory fake used
 //! by offline tests. The payloads are ordinary KDBX files; only the transport
-//! differs. S3 keys / WebDAV credentials are sent from the frontend config on
-//! every command (never cached in the session) and live in `conf/config.json`
-//! per the approved security model 鈥?they are secondary credentials, distinct
-//! from vault master passwords.
+//! differs. The frontend sends only a canonical profile path; S3 keys / WebDAV
+//! credentials are resolved from backend config for each command (never cached
+//! in the session) and live in `conf/config.json` per the approved security
+//! model — they are secondary credentials, distinct from vault master passwords.
 
 pub(crate) mod backup;
 pub(crate) mod local;

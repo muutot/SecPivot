@@ -1,11 +1,18 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { appSettings, isTauriRuntime, sanitizeDirName } from "$lib/services/settings";
+  import {
+    activeRemoteProfile,
+    appSettings,
+    isTauriRuntime,
+    remoteMirrorPath,
+    remoteProfilePath,
+    remoteProfilesForKind,
+  } from "$lib/services/settings";
   import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
   import type { RemoteMode, RemoteObject } from "$lib/types/vault";
-  import type { RemoteSettings } from "$lib/types/settings";
+  import type { RemoteKind, RemoteProfilePath, RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
   import { formatBytes } from "$lib/utils/format";
@@ -29,13 +36,18 @@
 
   const recentFiles = $derived(settings.general.recentFiles);
 
-  const activeRemoteName = $derived(settings.remoteProfiles[settings.activeRemote].name);
+  const activeProfile = $derived(activeRemoteProfile(settings));
+  const activeRemoteName = $derived(activeProfile.name);
   /** The mirror folder actually created for "本地镜像" mode. */
-  const remoteMirrorDir = $derived(sanitizeDirName(activeRemoteName));
+  const remoteMirrorDir = $derived(remoteMirrorPath(activeProfile));
+  const activeKindProfiles = $derived(
+    remoteProfilesForKind(settings.remoteProfiles, activeProfile.settings.kind),
+  );
   /** True while the 配置名称 field holds a duplicate of another profile's name. */
   const remoteNameConflict = $derived(
     activeRemoteName.trim() !== "" &&
-      settings.remoteProfiles.filter((p) => p.name.trim() === activeRemoteName.trim()).length > 1,
+      activeKindProfiles.filter((profile) => profile.name.trim() === activeRemoteName.trim())
+        .length > 1,
   );
 
   /** Opt-in screen-capture guard: excludes the main window from screenshots/recordings while a vault is open (Windows only). */
@@ -60,42 +72,41 @@
   let remoteMode: RemoteMode = $state("memory");
   let remoteLoading = $state(false);
 
-  const remote = $derived(settings.remote);
+  const remote = $derived(activeProfile.settings);
   const remoteKindLabel = $derived(remote.kind === "webdav" ? "WebDAV" : "S3");
-  const transport = $derived(remote.kind === "webdav" ? remote.webdav : remote.s3);
-  const transportPrefix = $derived(remote.kind === "webdav" ? "webdav" : "s3");
   const remoteConfigured = $derived(
     remote.kind === "webdav"
-      ? Boolean(remote.webdav.endpoint)
-      : Boolean(
-          remote.s3.endpoint && remote.s3.bucket && remote.s3.accessKey && remote.s3.secretKey,
-        ),
+      ? Boolean(remote.endpoint)
+      : Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
   );
 
   /** True when the active profile's transport has the minimum required fields. */
   function isRemoteConfigured(r: import("$lib/types/settings").RemoteSettings): boolean {
     return r.kind === "webdav"
-      ? Boolean(r.webdav.endpoint)
-      : Boolean(r.s3.endpoint && r.s3.bucket && r.s3.accessKey && r.s3.secretKey);
+      ? Boolean(r.endpoint)
+      : Boolean(r.endpoint && r.bucket && r.accessKey && r.secretKey);
   }
 
   function changeRemote<K extends import("$lib/services/settings").RemoteUpdateKey>(
     key: K,
-    value: import("$lib/services/settings").RemoteBlockValue<K>,
+    value: import("$lib/services/settings").RemoteUpdateValue<K>,
   ): void {
-    appSettings.updateRemote(key, value);
+    appSettings.updateRemote(settings.activeRemote, key, value);
   }
 
   /** Kind switch from the modal-head picker: reset the stale object list and
    *  reload for the new transport. On the 打开 tab, an unconfigured new kind
    *  drops into 配置 instead of showing another transport's files. */
   async function changeRemoteKind(v: string): Promise<void> {
-    if (v === remote.kind) return;
-    changeRemote("kind", v);
+    const kind = v as RemoteKind;
+    if (kind === remote.kind) return;
+    const first = remoteProfilesForKind(get(appSettings).remoteProfiles, kind)[0];
+    if (!first) return;
+    appSettings.setActiveRemote(remoteProfilePath(first));
     remoteKey = "";
     error = "";
     remoteObjects = [];
-    const configured = isRemoteConfigured(get(appSettings).remote);
+    const configured = isRemoteConfigured(activeRemoteProfile(get(appSettings)).settings);
     if (remoteTab === "open") {
       if (configured) {
         await loadRemoteObjects();
@@ -484,20 +495,23 @@
                 className="profile-select"
                 value={settings.activeRemote}
                 ariaLabel="远程配置"
-                options={settings.remoteProfiles.map((p, i) => ({ value: i, label: p.name }))}
-                onchange={(v) => appSettings.setActiveRemote(Number(v))}
+                options={activeKindProfiles.map((profile) => ({
+                  value: remoteProfilePath(profile),
+                  label: profile.name,
+                }))}
+                onchange={(path) => appSettings.setActiveRemote(path as RemoteProfilePath)}
               />
               <button
                 class="welcome-button"
                 type="button"
-                onclick={() => appSettings.addRemoteProfile("")}
+                onclick={() => appSettings.addRemoteProfile(remote.kind, "")}
               >
                 添加
               </button>
               <button
                 class="welcome-button"
                 type="button"
-                disabled={settings.remoteProfiles.length <= 1}
+                disabled={activeKindProfiles.length <= 1}
                 onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}
               >
                 删除
@@ -510,25 +524,31 @@
               class="text-input"
               class:input-invalid={remoteNameConflict}
               type="text"
-              value={settings.remoteProfiles[settings.activeRemote].name}
-              placeholder="默认"
+              value={activeRemoteName}
+              placeholder="config_1"
               spellcheck="false"
               oninput={(e) =>
                 appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
             />
             {#if remoteNameConflict}
-              <p class="modal-error">远程名不允许重复，请输入其他名称</p>
+              <p class="modal-error">同一协议下的配置名不允许重复</p>
             {/if}
+          </div>
+          <div class="field">
+            <span>配置路径</span>
+            <code class="remote-profile-path">{settings.activeRemote}</code>
           </div>
           <div class="field">
             <span>服务地址</span>
             <input
               class="text-input"
               type="text"
-              value={transport.endpoint}
-              placeholder="https://s3.amazonaws.com"
+              value={remote.endpoint}
+              placeholder={remote.kind === "webdav"
+                ? "https://dav.example.com/dav"
+                : "https://s3.amazonaws.com"}
               spellcheck="false"
-              oninput={(e) => changeRemote(`${transportPrefix}.endpoint`, e.currentTarget.value)}
+              oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
             />
           </div>
           {#if remote.kind !== "webdav"}
@@ -538,10 +558,10 @@
                 <input
                   class="text-input"
                   type="text"
-                  value={remote.s3.region}
+                  value={remote.region}
                   placeholder="us-east-1"
                   spellcheck="false"
-                  oninput={(e) => changeRemote("s3.region", e.currentTarget.value)}
+                  oninput={(e) => changeRemote("region", e.currentTarget.value)}
                 />
               </div>
               <div class="field">
@@ -549,10 +569,10 @@
                 <input
                   class="text-input"
                   type="text"
-                  value={remote.s3.bucket}
+                  value={remote.bucket}
                   placeholder="my-bucket"
                   spellcheck="false"
-                  oninput={(e) => changeRemote("s3.bucket", e.currentTarget.value)}
+                  oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
                 />
               </div>
             </div>
@@ -562,11 +582,11 @@
             <input
               class="text-input"
               type="text"
-              value={transport.accessKey}
+              value={remote.accessKey}
               placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
               autocomplete="off"
               spellcheck="false"
-              oninput={(e) => changeRemote(`${transportPrefix}.accessKey`, e.currentTarget.value)}
+              oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
             />
           </div>
           <div class="field">
@@ -574,11 +594,11 @@
             <input
               class="text-input"
               type="password"
-              value={transport.secretKey}
+              value={remote.secretKey}
               placeholder="••••••••"
               autocomplete="off"
               spellcheck="false"
-              oninput={(e) => changeRemote(`${transportPrefix}.secretKey`, e.currentTarget.value)}
+              oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
             />
           </div>
           <p class="remote-config-note">
@@ -1212,6 +1232,20 @@
 
   :global(.profile-select) {
     flex: 1;
+  }
+
+  .remote-profile-path {
+    display: block;
+    min-height: 30px;
+    padding: 7px 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--input-bg);
+    font-size: var(--font-size-secondary, 11px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .remote-config-note {

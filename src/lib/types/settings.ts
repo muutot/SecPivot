@@ -6,6 +6,8 @@ export type Language = "en" | "zh-CN";
 export type Kdf = "Argon2id" | "Argon2" | "Aes";
 export type Cipher = "Aes256" | "ChaCha20";
 export type Compression = "None" | "Gzip";
+export type RemoteKind = "s3" | "webdav";
+export type RemoteProfilePath = `${RemoteKind}/${string}`;
 
 export interface PasswordGeneratorSettings {
   length: number;
@@ -26,34 +28,7 @@ export interface DatabaseDefaults {
   fileExtension: string;
 }
 
-/** S3-compatible object-storage connection. Fields are independent of the
- * WebDAV block so switching transports never loses or mixes credentials. */
-export interface RemoteS3Settings {
-  endpoint: string;
-  region: string;
-  bucket: string;
-  accessKey: string;
-  secretKey: string;
-}
-
-/** WebDAV connection settings. `endpoint` is the WebDAV base URL; access
- *  credentials are sent as HTTP Basic auth. Independent of the S3 block. */
-export interface RemoteWebDavSettings {
-  endpoint: string;
-  accessKey: string;
-  secretKey: string;
-}
-
-/** Remote vault settings. `kind` selects which transport block is active
- * (`"s3"` or `"webdav"`); the two blocks hold isolated credentials/URLs so the
- * S3 and WebDAV configs never contaminate each other. Access credentials are
- * secondary credentials, never a vault master password (see `security-model.md`). */
-export interface RemoteSettings {
-  kind: string;
-  /** S3-compatible object-storage connection. Ignored when `kind !== "s3"`. */
-  s3: RemoteS3Settings;
-  /** WebDAV connection (Basic-auth username/password). Ignored when `kind !== "webdav"`. */
-  webdav: RemoteWebDavSettings;
+interface RemoteCommonSettings {
   /** Optional key prefix (folder) used by the remote file browser. */
   prefix: string;
   /** Number of timestamped `.bak` backups kept beside the local file/remote; 0 disables. */
@@ -63,9 +38,31 @@ export interface RemoteSettings {
   backupTemplate: string;
 }
 
-/** One named S3 configuration shown in the profile selector. The name must be
- *  unique across profiles — it also names the local mirror folder
- *  (`Storage/remote/<sanitized name>` for "保存到本地" mode). */
+/** One S3-compatible object-storage configuration. */
+export interface RemoteS3Settings extends RemoteCommonSettings {
+  kind: "s3";
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKey: string;
+  secretKey: string;
+}
+
+/** One WebDAV configuration. `endpoint` is the WebDAV base URL; access
+ * credentials are sent as HTTP Basic auth. */
+export interface RemoteWebDavSettings extends RemoteCommonSettings {
+  kind: "webdav";
+  endpoint: string;
+  accessKey: string;
+  secretKey: string;
+}
+
+/** A profile stores exactly one transport shape; the `kind` discriminant
+ * prevents one configuration from carrying both S3 and WebDAV fields. */
+export type RemoteSettings = RemoteS3Settings | RemoteWebDavSettings;
+
+/** One named remote configuration. Names are unique within their transport,
+ * producing canonical paths such as `s3/config_1` and `webdav/config_1`. */
 export interface RemoteProfile {
   name: string;
   settings: RemoteSettings;
@@ -184,13 +181,11 @@ export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
-  /** Named S3 configurations; `activeRemote` selects the one commands use. */
+  /** S3 and WebDAV configurations share one ordered collection but remain
+   * separated by their discriminated `settings.kind`. */
   remoteProfiles: RemoteProfile[];
-  /** Index into `remoteProfiles` (clamped to a valid index on normalize). */
-  activeRemote: number;
-  /** Active profile's settings — kept in sync as a convenience surface for
-   * the settings UI; sent as `null` by the backend on load. */
-  remote: RemoteSettings;
+  /** Canonical active profile path, e.g. `s3/config_1`. */
+  activeRemote: RemoteProfilePath;
   bridge: BridgeSettings;
   rpc: RpcSettings;
   keyboard: KeyboardSettings;

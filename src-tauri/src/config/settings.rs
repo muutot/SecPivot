@@ -382,50 +382,21 @@ impl Default for FaviconSettings {
     }
 }
 
-/// S3 transport block. Holds the endpoint/region/bucket and credentials,
-/// isolated from the WebDAV block so the two transports never contaminate each
-/// other when `kind` switches.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct RemoteS3Settings {
-    pub endpoint: String,
-    pub region: String,
-    pub bucket: String,
-    pub access_key: String,
-    /// Plaintext in `config.json` by design — a secondary credential, never a
-    /// vault master password. Keep the risk noted in `security-model.md`.
-    pub secret_key: String,
-}
-
-impl Default for RemoteS3Settings {
-    fn default() -> Self {
-        Self {
-            endpoint: "https://s3.amazonaws.com".into(),
-            region: "us-east-1".into(),
-            bucket: String::new(),
-            access_key: String::new(),
-            secret_key: String::new(),
-        }
-    }
-}
-
-/// WebDAV-specific settings: the base URL plus Basic-auth username/password.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct RemoteWebDavSettings {
-    pub endpoint: String,
-    pub access_key: String,
-    pub secret_key: String,
-}
-
+/// One remote configuration. `kind` discriminates the only valid shape:
+/// S3 uses region/bucket, while WebDAV uses endpoint + Basic-auth credentials.
+/// WebDAV normalization clears region/bucket so one profile never carries two
+/// transports' effective configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RemoteSettings {
-    /// Transport kind: `"s3"` (S3-compatible object storage) or `"webdav"`.
-    /// Normalized to one of the two on load.
     pub kind: String,
-    pub s3: RemoteS3Settings,
-    pub webdav: RemoteWebDavSettings,
+    pub endpoint: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub region: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
     /// Optional key prefix (folder) used by the remote file browser.
     pub prefix: String,
     /// Number of timestamped `.bak` backups kept beside the local copy;
@@ -434,47 +405,46 @@ pub struct RemoteSettings {
     /// Backup file name template. Placeholders: `{name}` (file stem),
     /// `{timestamp}` (`YYYYMMDDHHmmssSSS`), `{ext}` (original extension).
     pub backup_template: String,
-    // -- Legacy flat shape (pre-block configs). Deserialized for migration on
-    // load, never re-serialized; see `normalize_remote_settings`. Credentials
-    // here must be decryptable by `config::store` before normalization.
-    #[serde(default, skip_serializing)]
-    pub(crate) endpoint: String,
-    #[serde(default, skip_serializing)]
-    pub(crate) region: String,
-    #[serde(default, skip_serializing)]
-    pub(crate) bucket: String,
-    #[serde(default, skip_serializing)]
-    pub(crate) access_key: String,
-    #[serde(default, skip_serializing)]
-    pub(crate) secret_key: String,
 }
 
 impl Default for RemoteSettings {
     fn default() -> Self {
         Self {
             kind: "s3".into(),
-            s3: RemoteS3Settings::default(),
-            webdav: RemoteWebDavSettings::default(),
+            endpoint: "https://s3.amazonaws.com".into(),
+            region: "us-east-1".into(),
+            bucket: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
             prefix: String::new(),
             backup_count: 3,
             backup_template: DEFAULT_BACKUP_TEMPLATE.into(),
+        }
+    }
+}
+
+impl RemoteSettings {
+    pub fn webdav_default() -> Self {
+        Self {
+            kind: "webdav".into(),
             endpoint: String::new(),
             region: String::new(),
             bucket: String::new(),
             access_key: String::new(),
             secret_key: String::new(),
+            prefix: String::new(),
+            backup_count: 3,
+            backup_template: DEFAULT_BACKUP_TEMPLATE.into(),
         }
     }
 }
 
-/// One named S3 configuration. Multiple profiles can coexist; the frontend
-/// picks the active one per command (`cfg` travels with every call). The
-/// profile `name` is unique and also names the local mirror folder
-/// (`Storage/remote/<sanitized name>` for "保存到本地" mode).
+/// One named remote configuration. Names are unique within a transport, so
+/// `s3/config_1` and `webdav/config_1` are distinct canonical paths. The same
+/// path is used for command resolution and local mirror directory hierarchy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RemoteProfile {
-    /// Display name shown in the profile selector.
     pub name: String,
     pub settings: RemoteSettings,
 }
@@ -482,9 +452,22 @@ pub struct RemoteProfile {
 impl Default for RemoteProfile {
     fn default() -> Self {
         Self {
-            name: "默认".into(),
+            name: "config_1".into(),
             settings: RemoteSettings::default(),
         }
+    }
+}
+
+impl RemoteProfile {
+    pub fn webdav_default() -> Self {
+        Self {
+            name: "config_1".into(),
+            settings: RemoteSettings::webdav_default(),
+        }
+    }
+
+    pub fn path(&self) -> String {
+        format!("{}/{}", self.settings.kind, self.name)
     }
 }
 
@@ -543,16 +526,11 @@ pub struct AppConfig {
     pub security: SecuritySettings,
     #[serde(default)]
     pub database: DatabaseDefaults,
-    /// Named S3 configurations; the browser and commands use the profile at
-    /// `active_remote` (clamped to a valid index on load).
+    /// S3 and WebDAV profiles. Each profile path is `<kind>/<name>`.
     #[serde(default)]
     pub remote_profiles: Vec<RemoteProfile>,
     #[serde(default)]
-    pub active_remote: usize,
-    /// Legacy single-profile field from configs written before profiles
-    /// existed; migrated into `remote_profiles` on load, never re-serialized.
-    #[serde(default, skip_serializing)]
-    pub remote: Option<RemoteSettings>,
+    pub active_remote: String,
     #[serde(default)]
     pub bridge: BridgeSettings,
     #[serde(default)]
@@ -569,9 +547,8 @@ impl Default for AppConfig {
             general: GeneralSettings::default(),
             security: SecuritySettings::default(),
             database: DatabaseDefaults::default(),
-            remote_profiles: vec![RemoteProfile::default()],
-            active_remote: 0,
-            remote: None,
+            remote_profiles: vec![RemoteProfile::default(), RemoteProfile::webdav_default()],
+            active_remote: "s3/config_1".into(),
             bridge: BridgeSettings::default(),
             rpc: RpcSettings::default(),
             keyboard: KeyboardSettings::default(),
@@ -713,45 +690,56 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
     config.database.file_extension = normalize_file_extension(&config.database.file_extension);
 
-    config.remote_profiles = if config.remote_profiles.is_empty() {
-        match config.remote.take() {
-            Some(legacy) => vec![RemoteProfile {
-                name: "默认".into(),
-                settings: legacy,
-            }],
-            None => vec![RemoteProfile::default()],
-        }
-    } else {
-        config.remote_profiles
-    };
+    if config.remote_profiles.is_empty() {
+        config.remote_profiles = vec![RemoteProfile::default(), RemoteProfile::webdav_default()];
+    }
+    let mut kind_counts: HashMap<String, usize> = HashMap::new();
     for profile in &mut config.remote_profiles {
         normalize_remote_settings(&mut profile.settings);
-        profile.name = profile.name.trim().to_owned();
-        if profile.name.is_empty() {
-            profile.name = "默认".into();
-        }
+        let count = kind_counts
+            .entry(profile.settings.kind.clone())
+            .and_modify(|value| *value += 1)
+            .or_insert(1);
+        profile.name = normalize_remote_profile_name(&profile.name, &format!("config_{}", *count));
     }
-    // Remote names must be unique — the local mirror folder is derived from
-    // the name ("保存到本地" mode), so duplicates would collide. Dedup by
-    // suffixing later occurrences (the frontend enforces this too; this is a
-    // safety net for hand-edited configs).
-    let mut seen_names: HashSet<String> = HashSet::new();
+    if !kind_counts.contains_key("s3") {
+        config.remote_profiles.push(RemoteProfile::default());
+    }
+    if !kind_counts.contains_key("webdav") {
+        config.remote_profiles.push(RemoteProfile::webdav_default());
+    }
+
+    // Names only need to be unique within a transport namespace. This permits
+    // both `s3/config_1` and `webdav/config_1` while keeping every canonical
+    // path and local mirror directory unambiguous.
+    let mut seen_names: HashMap<String, HashSet<String>> = HashMap::new();
     for profile in &mut config.remote_profiles {
         let base = profile.name.clone();
         let mut candidate = base.clone();
         let mut n = 2;
-        while !seen_names.insert(candidate.clone()) {
-            candidate = format!("{base} ({n})");
+        let kind_seen = seen_names.entry(profile.settings.kind.clone()).or_default();
+        while !kind_seen.insert(candidate.clone()) {
+            candidate = format!("{base}_{n}");
             n += 1;
         }
         profile.name = candidate;
     }
-    config.active_remote = clamp_i32(
-        config.active_remote as i32,
-        0,
-        config.remote_profiles.len() as i32 - 1,
-        0,
-    ) as usize;
+    let requested_path = normalize_remote_profile_path(&config.active_remote);
+    config.active_remote = requested_path
+        .filter(|path| {
+            config
+                .remote_profiles
+                .iter()
+                .any(|profile| profile.path() == *path)
+        })
+        .unwrap_or_else(|| {
+            config
+                .remote_profiles
+                .iter()
+                .find(|profile| profile.settings.kind == "s3")
+                .unwrap_or(&config.remote_profiles[0])
+                .path()
+        });
 
     // Legacy `general.global_auto_type_shortcut` → `keyboard.auto_type_global`.
     if config.keyboard.auto_type_global.is_empty()
@@ -775,54 +763,58 @@ fn normalize_remote_kind(kind: &str) -> String {
 
 fn normalize_remote_settings(settings: &mut RemoteSettings) {
     settings.kind = normalize_remote_kind(&settings.kind);
+    settings.endpoint = settings.endpoint.trim().to_owned();
+    settings.region = settings.region.trim().to_owned();
+    settings.bucket = settings.bucket.trim().to_owned();
+    settings.access_key = settings.access_key.trim().to_owned();
+    settings.secret_key = settings.secret_key.trim().to_owned();
     settings.prefix = settings.prefix.trim().to_owned();
     settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
     settings.backup_template = settings.backup_template.trim().to_owned();
     if settings.backup_template.is_empty() {
         settings.backup_template = DEFAULT_BACKUP_TEMPLATE.into();
     }
-    // Trim the (already-migrated or present) block values.
-    settings.s3.endpoint = settings.s3.endpoint.trim().to_owned();
-    settings.s3.region = settings.s3.region.trim().to_owned();
-    settings.s3.bucket = settings.s3.bucket.trim().to_owned();
-    settings.s3.access_key = settings.s3.access_key.trim().to_owned();
-    settings.s3.secret_key = settings.s3.secret_key.trim().to_owned();
-    settings.webdav.endpoint = settings.webdav.endpoint.trim().to_owned();
-    settings.webdav.access_key = settings.webdav.access_key.trim().to_owned();
-    settings.webdav.secret_key = settings.webdav.secret_key.trim().to_owned();
-    // Trim the legacy flat fields too, so a hand-edited config that mixes an
-    // old shape is normalized consistently before migration.
-    settings.endpoint = settings.endpoint.trim().to_owned();
-    settings.region = settings.region.trim().to_owned();
-    settings.bucket = settings.bucket.trim().to_owned();
-    settings.access_key = settings.access_key.trim().to_owned();
-    settings.secret_key = settings.secret_key.trim().to_owned();
-    // ---- Legacy flat shape → block migration ------------------------------
-    // Configs written before the split stored a single transport's values flat
-    // at the top level (`kind` picked which). Promote them into the blocks on
-    // load. A config freshly written by the new frontend never carries these
-    // fields (`skip_serializing`), so their presence is authoritative.
-    let legacy = !settings.endpoint.is_empty()
-        || !settings.bucket.is_empty()
-        || !settings.region.is_empty()
-        || !settings.access_key.is_empty()
-        || !settings.secret_key.is_empty();
-    if legacy {
-        settings.s3.endpoint = settings.endpoint.clone();
-        settings.s3.region = settings.region.clone();
-        settings.s3.bucket = settings.bucket.clone();
-        settings.s3.access_key = settings.access_key.clone();
-        settings.s3.secret_key = settings.secret_key.clone();
-        settings.webdav.endpoint = settings.endpoint.clone();
-        settings.webdav.access_key = settings.access_key.clone();
-        settings.webdav.secret_key = settings.secret_key.clone();
+    if settings.kind == "webdav" {
+        settings.region.clear();
+        settings.bucket.clear();
     }
-    // Never re-serialize the legacy fields or leave stale values behind.
-    settings.endpoint.clear();
-    settings.region.clear();
-    settings.bucket.clear();
-    settings.access_key.clear();
-    settings.secret_key.clear();
+}
+
+fn normalize_remote_profile_name(name: &str, fallback: &str) -> String {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return fallback.to_owned();
+    }
+    let normalized: String = trimmed
+        .chars()
+        .map(|ch| {
+            if ch.is_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if normalized.is_empty() {
+        fallback.to_owned()
+    } else {
+        normalized
+    }
+}
+
+fn normalize_remote_profile_path(path: &str) -> Option<String> {
+    let (kind, name) = path.trim().split_once('/')?;
+    let kind = match kind.trim().to_ascii_lowercase().as_str() {
+        "s3" => "s3",
+        "webdav" => "webdav",
+        _ => return None,
+    };
+    let name = normalize_remote_profile_name(name, "");
+    if name.is_empty() {
+        None
+    } else {
+        Some(format!("{kind}/{name}"))
+    }
 }
 
 /// Sanitize a user-supplied file extension: drop the leading dot, keep only

@@ -6,16 +6,29 @@ use tauri::Manager;
 // Local mirror helpers ("保存到本地" mode)
 // ---------------------------------------------------------------------------
 
-/// Base directory for local copies: `<app_data>/Storage/remote/<profile_name>`.
-/// `local_dir` is the remote profile name (the frontend's 远程名/配置名); the
-/// name is sanitized so it cannot escape the remote storage tree.
-pub fn local_storage_dir(app: &tauri::AppHandle, local_dir: &str) -> Result<PathBuf, String> {
+/// Base directory for local copies:
+/// `<app_data>/Storage/remote/<kind>/<profile_name>`. The input is the canonical
+/// profile path (`s3/config_1` or `webdav/config_1`).
+pub fn local_storage_dir(app: &tauri::AppHandle, profile_path: &str) -> Result<PathBuf, String> {
     let base = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("无法定位应用数据目录: {e}"))?;
-    let name = sanitize_dir_name(local_dir);
-    Ok(base.join("Storage").join("remote").join(name))
+    let (kind, name) = profile_storage_parts(profile_path)?;
+    Ok(base.join("Storage").join("remote").join(kind).join(name))
+}
+
+pub(crate) fn profile_storage_parts(profile_path: &str) -> Result<(&str, String), String> {
+    let (kind, name) = profile_path
+        .split_once('/')
+        .ok_or_else(|| format!("远程配置路径无效: {profile_path}"))?;
+    if kind != "s3" && kind != "webdav" {
+        return Err(format!("远程配置类型无效: {kind}"));
+    }
+    if name.is_empty() || name.contains('/') || name.contains('\\') {
+        return Err(format!("远程配置名称无效: {name}"));
+    }
+    Ok((kind, sanitize_dir_name(name)))
 }
 
 /// Sanitize a profile name into a safe folder name: keeps letters/digits

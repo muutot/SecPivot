@@ -44,15 +44,15 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [ ] GitHub Actions CI mirroring `npm run verify` (`.github/workflows/ci.yml` added; unverified in this environment — no `origin` remote to run it)
 - [ ] Release workflow via version-release skill (`skills/version-release` + `scripts/*.mjs` added; `release.mjs --dry-run` verified through step 3, tag/push unverified — no remote)
 
-## Stage 6 — S3 remote vaults
+## Stage 6 — Remote vaults (S3 / WebDAV)
 
-- [x] S3 settings panel (`RemoteSettingsPanel.svelte`; endpoint/region/bucket/accessKey/secretKey/prefix/localDir/backupCount, keys DPAPI-encrypted at rest on Windows)
-- [x] Remote transport: `RemoteStorage` trait + `S3Storage` (rust-s3 0.34, path-style for MinIO) + `MemoryStorage` fake
-- [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back to S3 for remote sessions
-- [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<localDir>` with timestamped `.bak` rotation, `backupCount`)
-- [x] Welcome-screen remote browser: list S3 objects, open (password + keyfile) and create remote vaults
+- [x] Remote settings panel (`RemoteSettingsPanel.svelte`; S3/WebDAV 二级页签与各自 endpoint/credentials/prefix/backup 配置，凭据在 Windows 上经 DPAPI 加密落盘)
+- [x] Remote transport: `RemoteStorage` trait + `S3Storage` (rust-s3 0.34, path-style for MinIO) + `WebDavStorage` + `MemoryStorage` fake
+- [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back through the selected S3/WebDAV transport for remote sessions
+- [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<kind>/<config>` with timestamped `.bak` rotation, `backupCount`)
+- [x] Welcome-screen remote browser: list S3/WebDAV files, open (password + keyfile) and create remote vaults
 - [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport now covered by a local mock HTTP S3 server test: ListObjectsV2 XML parsing, path-style signing, get/put, bounded-timeout behavior — `remote::tests::*`; real-provider behavior still unverified)
-- [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`:后端存储/规范化/旧单配置自动迁移,命令按 profile 索引从 `ConfigStore` 解析凭据不跨 IPC,设置面板 profile 选择器(添加/重命名/删除/切换),欢迎页远程弹窗配置标签 profile 选择器(切换/添加/删除))
+- [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`: S3/WebDAV 二级分组,单 profile 单协议字段,规范路径 `s3/config_1` / `webdav/config_1`,命令按路径从 `ConfigStore` 解析凭据且不跨 IPC,设置页与欢迎页均可添加/重命名/删除/切换)
 - [x] 任意文件可作数据库/密钥文件:远程打开/创建键名不再要求 `.kdbx` 后缀(由 KDBX 解析判定,非库文件报「无法打开数据库」),本地打开/创建选择器加「所有文件」选项,密钥文件选择器(欢迎页 + 改主密钥)放开任意类型
 
 ## Stage 7 — Feature gap list (priority order)

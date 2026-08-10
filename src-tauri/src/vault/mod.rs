@@ -100,8 +100,9 @@ pub use self::dto::{
 // Session
 // ---------------------------------------------------------------------------
 
-/// How a remote vault is persisted. `InMemory` uploads to S3 only; `SaveLocal`
-/// also mirrors the file under `<app_data>/Storage/remote/<local_dir>/`.
+/// How a remote vault is persisted. `InMemory` uploads through the configured
+/// remote transport only; `SaveLocal` also mirrors the file under
+/// `<app_data>/Storage/remote/<kind>/<profile_name>/`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteMode {
     InMemory,

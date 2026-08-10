@@ -1,6 +1,12 @@
-﻿<script lang="ts">
-  import { appSettings, sanitizeDirName } from "$lib/services/settings";
-  import type { RemoteSettings } from "$lib/types/settings";
+<script lang="ts">
+  import {
+    appSettings,
+    findRemoteProfile,
+    remoteMirrorPath,
+    remoteProfilePath,
+    remoteProfilesForKind,
+  } from "$lib/services/settings";
+  import type { RemoteKind, RemoteProfilePath } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
@@ -8,9 +14,10 @@
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
+    kind: RemoteKind;
   }
 
-  let { onclose, showHeader = true }: Props = $props();
+  let { onclose, showHeader = true, kind }: Props = $props();
 
   let s = $state($appSettings);
   $effect(() => {
@@ -20,31 +27,42 @@
     return unsubscribe;
   });
 
-  const remote = $derived(s.remote);
-
-  const activeName = $derived(s.remoteProfiles[s.activeRemote].name);
-  /** True while the name field holds a duplicate of another profile's name. */
+  const profiles = $derived(remoteProfilesForKind(s.remoteProfiles, kind));
+  const activeProfile = $derived.by(() => {
+    const selected = findRemoteProfile(s.remoteProfiles, s.activeRemote);
+    return selected?.settings.kind === kind ? selected : profiles[0];
+  });
+  const activePath = $derived(remoteProfilePath(activeProfile));
+  const remote = $derived(activeProfile.settings);
+  const activeName = $derived(activeProfile.name);
   const nameConflict = $derived(
     activeName.trim() !== "" &&
-      s.remoteProfiles.filter((p) => p.name.trim() === activeName.trim()).length > 1,
+      profiles.some(
+        (profile) =>
+          remoteProfilePath(profile) !== activePath && profile.name.trim() === activeName.trim(),
+      ),
   );
-  /** The mirror folder actually created for "本地镜像" mode. */
-  const mirrorDir = $derived(sanitizeDirName(activeName));
+  const mirrorPath = $derived(remoteMirrorPath(activeProfile));
+  const kindLabel = $derived(kind === "webdav" ? "WebDAV" : "S3");
+
+  $effect(() => {
+    if (s.activeRemote !== activePath) appSettings.setActiveRemote(activePath);
+  });
 
   function change<K extends import("$lib/services/settings").RemoteUpdateKey>(
     key: K,
-    value: import("$lib/services/settings").RemoteBlockValue<K>,
+    value: import("$lib/services/settings").RemoteUpdateValue<K>,
   ): void {
-    appSettings.updateRemote(key, value);
+    appSettings.updateRemote(activePath, key, value);
   }
 </script>
 
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 远程</span>
-      <h2>远程</h2>
-      <p>S3 兼容对象存储或 WebDAV 配置，用于远程打开与创建数据库。</p>
+      <span class="eyebrow">Settings · 远程 · {kindLabel}</span>
+      <h2>{kindLabel}</h2>
+      <p>管理 {kindLabel} 远程数据库配置；每条配置只属于当前协议。</p>
     </div>
     <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
   </header>
@@ -56,17 +74,20 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
         <div>
-          <strong>配置</strong>
-          <p>选择当前使用的远程配置，可维护多套并存</p>
+          <strong>{kindLabel} 配置</strong>
+          <p>配置路径按“协议/配置名”区分，可在同一协议下维护多套连接</p>
         </div>
       </div>
       <Select
         id="remote-profile-select"
         className="setting-row-input"
-        value={s.activeRemote}
-        ariaLabel="远程配置"
-        options={s.remoteProfiles.map((p, i) => ({ value: i, label: p.name }))}
-        onchange={(v) => appSettings.setActiveRemote(Number(v))}
+        value={activePath}
+        ariaLabel={`${kindLabel} 配置`}
+        options={profiles.map((profile) => ({
+          value: remoteProfilePath(profile),
+          label: profile.name,
+        }))}
+        onchange={(path) => appSettings.setActiveRemote(path as RemoteProfilePath)}
       />
     </div>
     <div class="setting-row">
@@ -74,7 +95,7 @@
         <span class="setting-icon"><AppIcon name="edit" size={17} /></span>
         <div>
           <strong>配置名称</strong>
-          <p>当前配置的显示名称，也是本地镜像目录名，不允许重复</p>
+          <p>名称会作为配置路径和本地镜像目录的最后一级</p>
         </div>
       </div>
       <input
@@ -82,25 +103,36 @@
         class="settings-input setting-row-input"
         class:input-invalid={nameConflict}
         type="text"
-        value={s.remoteProfiles[s.activeRemote].name}
-        oninput={(e) => appSettings.renameRemoteProfile(s.activeRemote, e.currentTarget.value)}
+        value={activeName}
+        spellcheck="false"
+        oninput={(event) => appSettings.renameRemoteProfile(activePath, event.currentTarget.value)}
       />
     </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+        <div>
+          <strong>配置路径</strong>
+          <p>S3 与 WebDAV 使用独立命名空间</p>
+        </div>
+      </div>
+      <code class="mirror-dir">{activePath}</code>
+    </div>
     {#if nameConflict}
-      <p class="settings-note input-error">远程名不允许重复，请输入其他名称</p>
+      <p class="settings-note input-error">同一协议下的配置名称不允许重复</p>
     {/if}
     <div class="profile-actions">
       <button
         class="settings-action-button"
-        onclick={() => appSettings.addRemoteProfile("")}
+        onclick={() => appSettings.addRemoteProfile(kind, "")}
         type="button"
       >
         添加配置
       </button>
       <button
         class="settings-action-button"
-        disabled={s.remoteProfiles.length <= 1}
-        onclick={() => appSettings.removeRemoteProfile(s.activeRemote)}
+        disabled={profiles.length <= 1}
+        onclick={() => appSettings.removeRemoteProfile(activePath)}
         type="button"
       >
         删除当前配置
@@ -108,124 +140,70 @@
     </div>
   </section>
 
-  <section class="setting-card remote-group-card">
-    <div class="remote-group-heading">
-      <span class="remote-group-tag">WebDAV</span>
-      <p>网盘 / 自建 WebDAV 服务的连接配置，独立于 S3</p>
-    </div>
+  <section class="setting-card">
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
         <div>
-          <strong>WebDAV 服务地址</strong>
-          <p>基地址（如 https://dav.example.com/remote.php/dav/files/user）</p>
+          <strong>{kind === "webdav" ? "WebDAV 服务地址" : "服务地址"}</strong>
+          <p>
+            {kind === "webdav"
+              ? "基地址（如 https://dav.example.com/remote.php/dav/files/user）"
+              : "兼容 AWS S3、MinIO 等 S3 API 服务"}
+          </p>
         </div>
       </div>
       <input
         class="settings-input setting-row-input"
         type="text"
-        value={remote.webdav.endpoint}
-        placeholder="https://dav.example.com/dav"
-        oninput={(e) => change("webdav.endpoint", e.currentTarget.value)}
-      />
-    </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="key" size={17} /></span>
-        <div>
-          <strong>用户名</strong>
-          <p>WebDAV 登录用户名</p>
-        </div>
-      </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        autocomplete="off"
+        value={remote.endpoint}
+        placeholder={kind === "webdav" ? "https://dav.example.com/dav" : "https://s3.amazonaws.com"}
         spellcheck="false"
-        value={remote.webdav.accessKey}
-        placeholder="user"
-        oninput={(e) => change("webdav.accessKey", e.currentTarget.value)}
+        oninput={(event) => change("endpoint", event.currentTarget.value)}
       />
     </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
-        <div>
-          <strong>密码</strong>
-          <p>WebDAV 登录密码</p>
-        </div>
-      </div>
-      <input
-        class="settings-input setting-row-input"
-        type="password"
-        autocomplete="off"
-        spellcheck="false"
-        value={remote.webdav.secretKey}
-        placeholder="••••••••"
-        oninput={(e) => change("webdav.secretKey", e.currentTarget.value)}
-      />
-    </div>
-  </section>
 
-  <section class="setting-card remote-group-card">
-    <div class="remote-group-heading">
-      <span class="remote-group-tag">S3</span>
-      <p>S3 兼容对象存储（AWS / MinIO / 各类云）的连接配置，独立于 WebDAV</p>
-    </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-        <div>
-          <strong>服务地址</strong>
-          <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
+    {#if remote.kind === "s3"}
+      <div class="setting-row">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+          <div>
+            <strong>区域</strong>
+            <p>存储桶所在的地域</p>
+          </div>
         </div>
+        <input
+          class="settings-input setting-row-input"
+          type="text"
+          value={remote.region}
+          placeholder="us-east-1"
+          oninput={(event) => change("region", event.currentTarget.value)}
+        />
       </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.s3.endpoint}
-        placeholder="https://s3.amazonaws.com"
-        oninput={(e) => change("s3.endpoint", e.currentTarget.value)}
-      />
-    </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-        <div>
-          <strong>区域</strong>
-          <p>存储桶所在的地域</p>
+      <div class="setting-row">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+          <div>
+            <strong>存储桶</strong>
+            <p>对象存储的桶名称</p>
+          </div>
         </div>
+        <input
+          class="settings-input setting-row-input"
+          type="text"
+          value={remote.bucket}
+          placeholder="my-bucket"
+          oninput={(event) => change("bucket", event.currentTarget.value)}
+        />
       </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.s3.region}
-        placeholder="us-east-1"
-        oninput={(e) => change("s3.region", e.currentTarget.value)}
-      />
-    </div>
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-        <div>
-          <strong>存储桶</strong>
-          <p>对象存储的桶名称</p>
-        </div>
-      </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.s3.bucket}
-        placeholder="my-bucket"
-        oninput={(e) => change("s3.bucket", e.currentTarget.value)}
-      />
-    </div>
+    {/if}
+
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="key" size={17} /></span>
         <div>
-          <strong>Access Key</strong>
-          <p>远程存储的访问密钥 ID</p>
+          <strong>{kind === "webdav" ? "用户名" : "Access Key"}</strong>
+          <p>{kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
         </div>
       </div>
       <input
@@ -233,17 +211,17 @@
         type="text"
         autocomplete="off"
         spellcheck="false"
-        value={remote.s3.accessKey}
-        placeholder="AKIA..."
-        oninput={(e) => change("s3.accessKey", e.currentTarget.value)}
+        value={remote.accessKey}
+        placeholder={kind === "webdav" ? "user" : "AKIA..."}
+        oninput={(event) => change("accessKey", event.currentTarget.value)}
       />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
         <div>
-          <strong>Secret Key</strong>
-          <p>与 Access Key 配对的私钥</p>
+          <strong>{kind === "webdav" ? "密码" : "Secret Key"}</strong>
+          <p>{kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
         </div>
       </div>
       <input
@@ -251,9 +229,9 @@
         type="password"
         autocomplete="off"
         spellcheck="false"
-        value={remote.s3.secretKey}
+        value={remote.secretKey}
         placeholder="••••••••"
-        oninput={(e) => change("s3.secretKey", e.currentTarget.value)}
+        oninput={(event) => change("secretKey", event.currentTarget.value)}
       />
     </div>
   </section>
@@ -278,7 +256,7 @@
         type="text"
         value={remote.prefix}
         placeholder="vaults/"
-        oninput={(e) => change("prefix", e.currentTarget.value)}
+        oninput={(event) => change("prefix", event.currentTarget.value)}
       />
     </div>
     <div class="setting-row">
@@ -286,14 +264,12 @@
         <span class="setting-icon"><AppIcon name="download" size={17} /></span>
         <div>
           <strong>本地镜像目录</strong>
-          <p>“本地镜像”模式的落盘目录，自动随远程名命名</p>
+          <p>“本地镜像”模式按协议和配置名分层落盘</p>
         </div>
       </div>
-      <code class="mirror-dir">{mirrorDir}</code>
+      <code class="mirror-dir">{mirrorPath}</code>
     </div>
-    <p class="settings-note">
-      本地副本保存在 Storage/remote/{mirrorDir}/ 下，由远程名自动命名；因此远程名不允许重复。
-    </p>
+    <p class="settings-note">本地副本保存在 Storage/remote/{mirrorPath}/ 下。</p>
   </section>
 
   <SettingRangeCard
@@ -323,7 +299,7 @@
         value={remote.backupTemplate}
         placeholder={"{name}.{timestamp}.{ext}.bak"}
         spellcheck="false"
-        oninput={(e) => change("backupTemplate", e.currentTarget.value)}
+        oninput={(event) => change("backupTemplate", event.currentTarget.value)}
       />
     </div>
     <p class="settings-note">
@@ -335,32 +311,6 @@
 </div>
 
 <style>
-  .remote-group-card .remote-group-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 0 10px;
-    margin: -2px 0 12px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .remote-group-heading p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
-  }
-
-  .remote-group-tag {
-    flex: 0 0 auto;
-    padding: 3px 9px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    font-weight: 560;
-  }
-
   .profile-actions {
     display: flex;
     gap: 8px;
