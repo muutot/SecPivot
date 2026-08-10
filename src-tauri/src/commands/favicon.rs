@@ -138,14 +138,7 @@ fn wininet_https_proxy() -> Option<String> {
 /// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
 /// every failure reason is logged to stderr (full error chain) so server-side
 /// diagnosis is possible without changing the renderer contract.
-async fn fetch_favicon(host: &str) -> Option<Vec<u8>> {
-    let client = match build_favicon_client() {
-        Some(client) => client,
-        None => {
-            eprintln!("[favicon] 构建 HTTP 客户端失败 ({host})");
-            return None;
-        }
-    };
+async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> {
     for path in ["/favicon.ico", "/favicon.png"] {
         let url = format!("https://{host}{path}");
         let response = match client.get(&url).send().await {
@@ -221,16 +214,28 @@ pub(crate) async fn download_favicons(
         .map(|cfg| cfg.favicon.concurrency.max(1) as usize)
         .unwrap_or(8);
     let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    // One client per command keeps a single connection pool for every host.
+    // `reqwest::Client::clone` is cheap (Arc-backed), while rebuilding it per
+    // host discards warm TLS/proxy connections and repeats proxy setup.
+    let client = build_favicon_client();
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();
         let semaphore = semaphore.clone();
+        let client = client.clone();
         set.spawn(async move {
             let host = host;
             // A closed semaphore (only on shutdown) degrades to unlimited
             // concurrency instead of failing the download.
             let _permit = semaphore.acquire_owned().await.ok();
-            (host.clone(), fetch_favicon(&host).await)
+            let bytes = match client.as_ref() {
+                Some(client) => fetch_favicon(client, &host).await,
+                None => {
+                    eprintln!("[favicon] 构建 HTTP 客户端失败 ({host})");
+                    None
+                }
+            };
+            (host, bytes)
         });
     }
     let mut fetched: Vec<vault::FaviconFetch> = Vec::new();
