@@ -123,7 +123,8 @@ function ensureTicker(): void {
     document.addEventListener("visibilitychange", () => {
       // On return to a visible window, resync every countdown immediately so
       // badges are never stale after a pause.
-      lastTick = Date.now();
+      if (document.hidden) return;
+      lastTick = Date.now() - 1000;
       tick();
     });
   }
@@ -207,15 +208,33 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   }
 
   return {
-    code,
-    remaining,
-    period,
-    kind,
-    counter,
-    error,
-    copied,
-    isHotp,
-    fraction,
+    get code() {
+      return code;
+    },
+    get remaining() {
+      return remaining;
+    },
+    get period() {
+      return period;
+    },
+    get kind() {
+      return kind;
+    },
+    get counter() {
+      return counter;
+    },
+    get error() {
+      return error;
+    },
+    get copied() {
+      return copied;
+    },
+    get isHotp() {
+      return isHotp;
+    },
+    get fraction() {
+      return fraction;
+    },
     copy,
     refresh,
   };
