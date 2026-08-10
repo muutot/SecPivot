@@ -65,14 +65,17 @@ fn remote_profiles_survive_deserialize_write_reload() {
         name: "Bitiful".into(),
         settings: RemoteSettings {
             kind: "s3".into(),
-            endpoint: "http://127.0.0.1:9000".into(),
-            region: "cn-east-1".into(),
-            bucket: "my-vaults".into(),
-            access_key: "AKIA-test".into(),
-            secret_key: "s3cret".into(),
+            s3: RemoteS3Settings {
+                endpoint: "http://127.0.0.1:9000".into(),
+                region: "cn-east-1".into(),
+                bucket: "my-vaults".into(),
+                access_key: "AKIA-test".into(),
+                secret_key: "s3cret".into(),
+            },
             prefix: "vaults/".into(),
             backup_count: 5,
             backup_template: "{name}.{timestamp}.{ext}.bak".into(),
+            ..RemoteSettings::default()
         },
     });
     config.active_remote = 1;
@@ -87,11 +90,11 @@ fn remote_profiles_survive_deserialize_write_reload() {
     assert_eq!(again.remote_profiles.len(), 2);
     assert_eq!(again.remote_profiles[1].name, "Bitiful");
     assert_eq!(
-        again.remote_profiles[1].settings.endpoint,
+        again.remote_profiles[1].settings.s3.endpoint,
         "http://127.0.0.1:9000"
     );
-    assert_eq!(again.remote_profiles[1].settings.bucket, "my-vaults");
-    assert_eq!(again.remote_profiles[1].settings.secret_key, "s3cret");
+    assert_eq!(again.remote_profiles[1].settings.s3.bucket, "my-vaults");
+    assert_eq!(again.remote_profiles[1].settings.s3.secret_key, "s3cret");
     assert_eq!(again.remote_profiles[1].settings.backup_count, 5);
     // active index is clamped to the last valid profile
     assert_eq!(again.active_remote, 1);
@@ -115,17 +118,24 @@ fn legacy_single_remote_migrates_into_first_profile() {
     let config = store.get().unwrap();
     assert_eq!(config.remote_profiles.len(), 1);
     assert_eq!(config.remote_profiles[0].name, "默认");
+    // The flat legacy shape migrates into the `s3` block (`kind` defaults to s3).
     assert_eq!(
-        config.remote_profiles[0].settings.endpoint,
+        config.remote_profiles[0].settings.s3.endpoint,
         "https://s3.bitiful.net"
     );
-    assert_eq!(config.remote_profiles[0].settings.bucket, "muuyo");
+    assert_eq!(config.remote_profiles[0].settings.s3.bucket, "muuyo");
     assert_eq!(config.active_remote, 0);
-    // re-saving writes the new shape only
+    // re-saving writes the new nested shape only, and the top-level legacy
+    // `remote` singleton is gone (migrated into `remoteProfiles`).
     store.set(config.clone()).unwrap();
     let text = std::fs::read_to_string(conf.join("config.json")).unwrap();
     assert!(text.contains("\"remoteProfiles\""));
-    assert!(!text.contains("\"accessKey\": \"AK\""));
+    assert!(!text.contains("\"remote\": {"));
+    // the migrated values now live under the nested `s3` block
+    assert!(text.contains("\"s3\": {"));
+    assert!(text.contains("\"endpoint\": \"https://s3.bitiful.net\""));
+    assert!(text.contains("\"region\": \"cn-east-1\""));
+    assert!(text.contains("\"bucket\": \"muuyo\""));
 }
 
 #[cfg(target_os = "windows")]
@@ -134,24 +144,24 @@ fn remote_secrets_never_persist_in_plaintext() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
-    config.remote_profiles[0].settings.access_key = "AKIA-secret-access".into();
-    config.remote_profiles[0].settings.secret_key = "plaintext-s3cret".into();
+    config.remote_profiles[0].settings.s3.access_key = "AKIA-secret-access".into();
+    config.remote_profiles[0].settings.s3.secret_key = "plaintext-s3cret".into();
     store.set(config).unwrap();
 
     let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
     assert!(!text.contains("AKIA-secret-access"));
     assert!(!text.contains("plaintext-s3cret"));
+    assert!(text.contains("\"s3\": {"));
     assert!(text.contains("\"accessKey\": \"dpapi1:"));
-    assert!(text.contains("\"secretKey\": \"dpapi1:"));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let again = reloaded.get().unwrap();
     assert_eq!(
-        again.remote_profiles[0].settings.access_key,
+        again.remote_profiles[0].settings.s3.access_key,
         "AKIA-secret-access"
     );
     assert_eq!(
-        again.remote_profiles[0].settings.secret_key,
+        again.remote_profiles[0].settings.s3.secret_key,
         "plaintext-s3cret"
     );
 }
@@ -160,18 +170,18 @@ fn remote_secrets_never_persist_in_plaintext() {
 fn remote_defaults_and_normalization_rules() {
     let mut config = AppConfig::default();
     assert_eq!(
-        config.remote_profiles[0].settings.endpoint,
+        config.remote_profiles[0].settings.s3.endpoint,
         "https://s3.amazonaws.com"
     );
     assert_eq!(config.remote_profiles[0].settings.backup_count, 3);
     assert_eq!(config.remote_profiles[0].settings.kind, "s3");
 
-    config.remote_profiles[0].settings.endpoint = "  https://s3.example.com  ".into();
+    config.remote_profiles[0].settings.s3.endpoint = "  https://s3.example.com  ".into();
     config.remote_profiles[0].settings.backup_count = 99;
     config.active_remote = 42;
     let normalized = normalize_config(config);
     assert_eq!(
-        normalized.remote_profiles[0].settings.endpoint,
+        normalized.remote_profiles[0].settings.s3.endpoint,
         "https://s3.example.com"
     );
     assert_eq!(normalized.remote_profiles[0].settings.backup_count, 3);
@@ -263,7 +273,10 @@ fn remote_settings_resolves_profile_and_clamps_index() {
     config.remote_profiles.push(RemoteProfile {
         name: "Bitiful".into(),
         settings: RemoteSettings {
-            endpoint: "http://127.0.0.1:9000".into(),
+            s3: RemoteS3Settings {
+                endpoint: "http://127.0.0.1:9000".into(),
+                ..RemoteS3Settings::default()
+            },
             ..RemoteSettings::default()
         },
     });
@@ -271,17 +284,17 @@ fn remote_settings_resolves_profile_and_clamps_index() {
     store.set(config).unwrap();
 
     let first = store.remote_settings(0).unwrap();
-    assert_eq!(first.endpoint, "https://s3.amazonaws.com");
+    assert_eq!(first.s3.endpoint, "https://s3.amazonaws.com");
     let second = store.remote_settings(1).unwrap();
-    assert_eq!(second.endpoint, "http://127.0.0.1:9000");
+    assert_eq!(second.s3.endpoint, "http://127.0.0.1:9000");
     // out-of-range indices clamp to the last valid profile
     let clamped = store.remote_settings(9).unwrap();
-    assert_eq!(clamped.endpoint, "http://127.0.0.1:9000");
+    assert_eq!(clamped.s3.endpoint, "http://127.0.0.1:9000");
 
     // remote_profile returns the same profile's name + settings
     let (name, settings) = store.remote_profile(1).unwrap();
     assert_eq!(name, "Bitiful");
-    assert_eq!(settings.endpoint, "http://127.0.0.1:9000");
+    assert_eq!(settings.s3.endpoint, "http://127.0.0.1:9000");
     let (clamped_name, _) = store.remote_profile(9).unwrap();
     assert_eq!(clamped_name, "Bitiful");
 }

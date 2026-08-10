@@ -6,6 +6,8 @@ import type {
   SecuritySettings,
   DatabaseDefaults,
   RemoteSettings,
+  RemoteS3Settings,
+  RemoteWebDavSettings,
   RemoteProfile,
   BridgeSettings,
   RpcSettings,
@@ -136,11 +138,18 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
 
 export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
   kind: "s3",
-  endpoint: "https://s3.amazonaws.com",
-  region: "us-east-1",
-  bucket: "",
-  accessKey: "",
-  secretKey: "",
+  s3: {
+    endpoint: "https://s3.amazonaws.com",
+    region: "us-east-1",
+    bucket: "",
+    accessKey: "",
+    secretKey: "",
+  },
+  webdav: {
+    endpoint: "",
+    accessKey: "",
+    secretKey: "",
+  },
   prefix: "",
   backupCount: 3,
   backupTemplate: "{name}.{timestamp}.{ext}.bak",
@@ -223,22 +232,84 @@ export function normalizeRemoteSettings(
   fallback: RemoteSettings = DEFAULT_REMOTE_SETTINGS,
 ): RemoteSettings {
   const r = source ?? {};
-  const str = (key: keyof RemoteSettings, fb: string): string => {
+  const str = (key: string, fb: string): string => {
     // Only a missing (non-string) value falls back; an empty string from a
     // cleared input is preserved so it stays clear while the user types.
-    const value = r[key];
+    const value = (r as Record<string, unknown>)[key];
     return typeof value === "string" ? value.trim() : fb;
   };
+  const snap = <T>(key: string, fb: T): T => {
+    const val = (r as Record<string, unknown>)[key];
+    return val && typeof val === "object" ? (val as T) : fb;
+  };
+  const kind = (() => {
+    const k = typeof r.kind === "string" ? r.kind.trim().toLowerCase() : fallback.kind;
+    return k === "webdav" ? "webdav" : "s3";
+  })();
+  // Legacy flat shape (endpoint/region/bucket/accessKey/secretKey at the top
+  // level) migrates into the block selected by `kind` when that block is
+  // absent. Both blocks always exist afterwards, so S3 and WebDAV hold
+  // independent configs that never contaminate each other.
+  const legacyEndpoint = str("endpoint", "");
+  const hasLegacyEndpoint = legacyEndpoint !== "";
+  const s3Src = snap<Partial<RemoteS3Settings>>("s3", {});
+  const webdavSrc = snap<Partial<RemoteWebDavSettings>>("webdav", {});
+  const s3: RemoteS3Settings = {
+    endpoint:
+      s3Src.endpoint !== undefined
+        ? s3Src.endpoint.trim()
+        : hasLegacyEndpoint
+          ? legacyEndpoint
+          : fallback.s3.endpoint,
+    region:
+      s3Src.region !== undefined
+        ? s3Src.region.trim()
+        : hasLegacyEndpoint
+          ? str("region", fallback.s3.region)
+          : fallback.s3.region,
+    bucket:
+      s3Src.bucket !== undefined
+        ? s3Src.bucket.trim()
+        : hasLegacyEndpoint
+          ? str("bucket", fallback.s3.bucket)
+          : fallback.s3.bucket,
+    accessKey:
+      s3Src.accessKey !== undefined
+        ? s3Src.accessKey.trim()
+        : hasLegacyEndpoint
+          ? str("accessKey", fallback.s3.accessKey)
+          : fallback.s3.accessKey,
+    secretKey:
+      s3Src.secretKey !== undefined
+        ? s3Src.secretKey.trim()
+        : hasLegacyEndpoint
+          ? str("secretKey", fallback.s3.secretKey)
+          : fallback.s3.secretKey,
+  };
+  const webdav: RemoteWebDavSettings = {
+    endpoint:
+      webdavSrc.endpoint !== undefined
+        ? webdavSrc.endpoint.trim()
+        : hasLegacyEndpoint && kind === "webdav"
+          ? legacyEndpoint
+          : fallback.webdav.endpoint,
+    accessKey:
+      webdavSrc.accessKey !== undefined
+        ? webdavSrc.accessKey.trim()
+        : hasLegacyEndpoint && kind === "webdav"
+          ? str("accessKey", fallback.webdav.accessKey)
+          : fallback.webdav.accessKey,
+    secretKey:
+      webdavSrc.secretKey !== undefined
+        ? webdavSrc.secretKey.trim()
+        : hasLegacyEndpoint && kind === "webdav"
+          ? str("secretKey", fallback.webdav.secretKey)
+          : fallback.webdav.secretKey,
+  };
   return {
-    kind: (() => {
-      const kind = typeof r.kind === "string" ? r.kind.trim().toLowerCase() : fallback.kind;
-      return kind === "webdav" ? "webdav" : "s3";
-    })(),
-    endpoint: str("endpoint", fallback.endpoint),
-    region: str("region", fallback.region),
-    bucket: str("bucket", fallback.bucket),
-    accessKey: str("accessKey", fallback.accessKey),
-    secretKey: str("secretKey", fallback.secretKey),
+    kind,
+    s3,
+    webdav,
     prefix: str("prefix", fallback.prefix),
     backupCount: clampInt(
       typeof r.backupCount === "number" ? r.backupCount : fallback.backupCount,
@@ -509,7 +580,7 @@ interface AppSettingsStore {
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
   /** Update a field of the ACTIVE profile's settings (kept in `remote` too). */
-  updateRemote: <K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]) => void;
+  updateRemote: <K extends RemoteUpdateKey>(key: K, value: RemoteBlockValue<K>) => void;
   setActiveRemote: (index: number) => void;
   addRemoteProfile: (name: string) => void;
   removeRemoteProfile: (index: number) => void;
@@ -521,6 +592,40 @@ interface AppSettingsStore {
   merge: (partial: Partial<AppSettings>) => void;
   flush: () => Promise<void>;
   destroy: () => void;
+}
+
+/** Top-level (transport-agnostic) remote keys that live outside the S3/WebDAV
+ *  blocks, plus every S3/WebDAV block key addressed as `"s3.<field>"` /
+ *  `"webdav.<field>"` so each transport keeps its own isolated values. */
+export type RemoteUpdateKey =
+  | `s3.${keyof RemoteS3Settings & string}`
+  | `webdav.${keyof RemoteWebDavSettings & string}`
+  | (keyof Omit<RemoteSettings, "s3" | "webdav"> & string);
+
+/** Value type for a remote update, resolving block-dotted keys to the block's
+ *  field type and plain keys to the top-level type. */
+export type RemoteBlockValue<K extends RemoteUpdateKey> = K extends `s3.${infer F}`
+  ? Extract<RemoteS3Settings, Record<F, unknown>>[F]
+  : K extends `webdav.${infer F}`
+    ? Extract<RemoteWebDavSettings, Record<F, unknown>>[F]
+    : K extends keyof RemoteSettings
+      ? RemoteSettings[K]
+      : never;
+
+/** Apply a `updateRemote`-style key/value to a `RemoteSettings`, writing into
+ *  the S3/WebDAV block for dotted keys or the shared top level otherwise. */
+function updateRemoteBlock(
+  settings: RemoteSettings,
+  key: RemoteUpdateKey,
+  value: unknown,
+): RemoteSettings {
+  const dot = key.indexOf(".");
+  if (dot > 0 && (key.startsWith("s3.") || key.startsWith("webdav."))) {
+    const block = key.slice(0, dot) as "s3" | "webdav";
+    const field = key.slice(dot + 1);
+    return { ...settings, [block]: { ...settings[block], [field]: value } };
+  }
+  return { ...settings, [key]: value };
 }
 
 const settings = writable<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -543,8 +648,8 @@ let initialized = false;
 function withoutSecrets(value: AppSettings): AppSettings {
   const strip = (settings: RemoteSettings): RemoteSettings => ({
     ...settings,
-    accessKey: "",
-    secretKey: "",
+    s3: { ...settings.s3, accessKey: "", secretKey: "" },
+    webdav: { ...settings.webdav, accessKey: "", secretKey: "" },
   });
   return {
     ...value,
@@ -667,7 +772,7 @@ export const appSettings: AppSettingsStore = {
   updateRemote(key, value): void {
     settings.update((s) => {
       const remoteProfiles = s.remoteProfiles.map((p, i) =>
-        i === s.activeRemote ? { ...p, settings: { ...p.settings, [key]: value } } : p,
+        i === s.activeRemote ? { ...p, settings: updateRemoteBlock(p.settings, key, value) } : p,
       );
       return { ...s, remoteProfiles, remote: remoteProfiles[s.activeRemote].settings };
     });

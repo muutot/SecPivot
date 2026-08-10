@@ -26,22 +26,37 @@ export interface DatabaseDefaults {
   fileExtension: string;
 }
 
-/** Remote vault settings. Transport kind is `"s3"` (S3-compatible object
- * storage) or `"webdav"` (WebDAV). For WebDAV, `endpoint` is the WebDAV base
- * URL and `accessKey`/`secretKey` are the Basic-auth username/password;
- * `region`/`bucket` are ignored. Access credentials are encrypted at rest with
- * Windows DPAPI (`dpapi1:` prefix in `config.json`) — a secondary credential,
- * never a vault master password (see `security-model.md`). */
-export interface RemoteSettings {
-  kind: string;
+/** S3-compatible object-storage connection. Fields are independent of the
+ * WebDAV block so switching transports never loses or mixes credentials. */
+export interface RemoteS3Settings {
   endpoint: string;
   region: string;
   bucket: string;
   accessKey: string;
   secretKey: string;
+}
+
+/** WebDAV connection settings. `endpoint` is the WebDAV base URL; access
+ *  credentials are sent as HTTP Basic auth. Independent of the S3 block. */
+export interface RemoteWebDavSettings {
+  endpoint: string;
+  accessKey: string;
+  secretKey: string;
+}
+
+/** Remote vault settings. `kind` selects which transport block is active
+ * (`"s3"` or `"webdav"`); the two blocks hold isolated credentials/URLs so the
+ * S3 and WebDAV configs never contaminate each other. Access credentials are
+ * secondary credentials, never a vault master password (see `security-model.md`). */
+export interface RemoteSettings {
+  kind: string;
+  /** S3-compatible object-storage connection. Ignored when `kind !== "s3"`. */
+  s3: RemoteS3Settings;
+  /** WebDAV connection (Basic-auth username/password). Ignored when `kind !== "webdav"`. */
+  webdav: RemoteWebDavSettings;
   /** Optional key prefix (folder) used by the remote file browser. */
   prefix: string;
-  /** Number of timestamped `.bak` backups kept beside the local copy; 0 disables. */
+  /** Number of timestamped `.bak` backups kept beside the local file/remote; 0 disables. */
   backupCount: number;
   /** Backup file name template. Placeholders: `{name}` (file stem),
    * `{timestamp}` (`YYYYMMDDHHmmssSSS`), `{ext}` (original extension). */

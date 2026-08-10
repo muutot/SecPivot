@@ -30,7 +30,10 @@
   /** The mirror folder actually created for "本地镜像" mode. */
   const mirrorDir = $derived(sanitizeDirName(activeName));
 
-  function change<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
+  function change<K extends import("$lib/services/settings").RemoteUpdateKey>(
+    key: K,
+    value: import("$lib/services/settings").RemoteBlockValue<K>,
+  ): void {
     appSettings.updateRemote(key, value);
   }
 
@@ -108,132 +111,160 @@
     </div>
   </section>
 
-  <section class="setting-card">
-    <div class="setting-row">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
-        <div>
-          <strong>传输类型</strong>
-          <p>S3 兼容对象存储，或 WebDAV（网盘/自建服务）</p>
-        </div>
-      </div>
-      <Select
-        id="remote-kind"
-        className="profile-picker"
-        value={remote.kind}
-        ariaLabel="传输类型"
-        options={[
-          { value: "s3", label: "S3 兼容对象存储" },
-          { value: "webdav", label: "WebDAV" },
-        ]}
-        onchange={(v) => change("kind", v)}
-      />
+  <section class="setting-card remote-group-card">
+    <div class="remote-group-heading">
+      <span class="remote-group-tag">WebDAV</span>
+      <p>网盘 / 自建 WebDAV 服务的连接配置，独立于 S3</p>
     </div>
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
         <div>
-          <strong>服务地址</strong>
-          <p>
-            {remote.kind === "webdav"
-              ? "WebDAV 基地址（如 https://dav.example.com/remote.php/dav/files/user）"
-              : "兼容 AWS S3、MinIO 等 S3 API 服务"}
-          </p>
+          <strong>WebDAV 服务地址</strong>
+          <p>基地址（如 https://dav.example.com/remote.php/dav/files/user）</p>
         </div>
       </div>
       <input
-        id="remote-endpoint"
         class="settings-input setting-row-input"
         type="text"
-        value={remote.endpoint}
-        placeholder={remote.kind === "webdav"
-          ? "https://dav.example.com/dav"
-          : "https://s3.amazonaws.com"}
-        oninput={(e) => change("endpoint", e.currentTarget.value)}
+        value={remote.webdav.endpoint}
+        placeholder="https://dav.example.com/dav"
+        oninput={(e) => change("webdav.endpoint", e.currentTarget.value)}
       />
     </div>
-    {#if remote.kind !== "webdav"}
-      <div class="setting-row">
-        <div class="setting-heading">
-          <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-          <div>
-            <strong>区域</strong>
-            <p>存储桶所在的地域</p>
-          </div>
-        </div>
-        <input
-          id="remote-region"
-          class="settings-input setting-row-input"
-          type="text"
-          value={remote.region}
-          placeholder="us-east-1"
-          oninput={(e) => change("region", e.currentTarget.value)}
-        />
-      </div>
-      <div class="setting-row">
-        <div class="setting-heading">
-          <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-          <div>
-            <strong>存储桶</strong>
-            <p>对象存储的桶名称</p>
-          </div>
-        </div>
-        <input
-          id="remote-bucket"
-          class="settings-input setting-row-input"
-          type="text"
-          value={remote.bucket}
-          placeholder="my-bucket"
-          oninput={(e) => change("bucket", e.currentTarget.value)}
-        />
-      </div>
-    {/if}
-  </section>
-
-  <section class="setting-card">
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="key" size={17} /></span>
         <div>
-          <strong>{remote.kind === "webdav" ? "用户名" : "Access Key"}</strong>
-          <p>{remote.kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
+          <strong>用户名</strong>
+          <p>WebDAV 登录用户名</p>
         </div>
       </div>
       <input
-        id="remote-access-key"
         class="settings-input setting-row-input"
         type="text"
         autocomplete="off"
         spellcheck="false"
-        value={remote.accessKey}
-        placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
-        oninput={(e) => change("accessKey", e.currentTarget.value)}
+        value={remote.webdav.accessKey}
+        placeholder="user"
+        oninput={(e) => change("webdav.accessKey", e.currentTarget.value)}
       />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
         <div>
-          <strong>{remote.kind === "webdav" ? "密码" : "Secret Key"}</strong>
-          <p>{remote.kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
+          <strong>密码</strong>
+          <p>WebDAV 登录密码</p>
         </div>
       </div>
       <input
-        id="remote-secret-key"
         class="settings-input setting-row-input"
         type="password"
         autocomplete="off"
         spellcheck="false"
-        value={remote.secretKey}
+        value={remote.webdav.secretKey}
         placeholder="••••••••"
-        oninput={(e) => change("secretKey", e.currentTarget.value)}
+        oninput={(e) => change("webdav.secretKey", e.currentTarget.value)}
       />
     </div>
-    <p class="settings-note warn">
-      风险提示：凭据以 DPAPI 加密后写入
-      config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
-    </p>
   </section>
+
+  <section class="setting-card remote-group-card">
+    <div class="remote-group-heading">
+      <span class="remote-group-tag">S3</span>
+      <p>S3 兼容对象存储（AWS / MinIO / 各类云）的连接配置，独立于 WebDAV</p>
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div>
+          <strong>服务地址</strong>
+          <p>兼容 AWS S3、MinIO 等 S3 API 服务</p>
+        </div>
+      </div>
+      <input
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.s3.endpoint}
+        placeholder="https://s3.amazonaws.com"
+        oninput={(e) => change("s3.endpoint", e.currentTarget.value)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div>
+          <strong>区域</strong>
+          <p>存储桶所在的地域</p>
+        </div>
+      </div>
+      <input
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.s3.region}
+        placeholder="us-east-1"
+        oninput={(e) => change("s3.region", e.currentTarget.value)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
+        <div>
+          <strong>存储桶</strong>
+          <p>对象存储的桶名称</p>
+        </div>
+      </div>
+      <input
+        class="settings-input setting-row-input"
+        type="text"
+        value={remote.s3.bucket}
+        placeholder="my-bucket"
+        oninput={(e) => change("s3.bucket", e.currentTarget.value)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="key" size={17} /></span>
+        <div>
+          <strong>Access Key</strong>
+          <p>远程存储的访问密钥 ID</p>
+        </div>
+      </div>
+      <input
+        class="settings-input setting-row-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        value={remote.s3.accessKey}
+        placeholder="AKIA..."
+        oninput={(e) => change("s3.accessKey", e.currentTarget.value)}
+      />
+    </div>
+    <div class="setting-row">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
+        <div>
+          <strong>Secret Key</strong>
+          <p>与 Access Key 配对的私钥</p>
+        </div>
+      </div>
+      <input
+        class="settings-input setting-row-input"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        value={remote.s3.secretKey}
+        placeholder="••••••••"
+        oninput={(e) => change("s3.secretKey", e.currentTarget.value)}
+      />
+    </div>
+  </section>
+
+  <p class="settings-note warn">
+    风险提示：凭据以 DPAPI 加密后写入
+    config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
+  </p>
 
   <section class="setting-card">
     <div class="setting-row">
@@ -322,6 +353,32 @@
   :global(.profile-picker) {
     flex: 0 0 200px;
     width: 200px;
+  }
+
+  .remote-group-card .remote-group-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 0 10px;
+    margin: -2px 0 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .remote-group-heading p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
+  }
+
+  .remote-group-tag {
+    flex: 0 0 auto;
+    padding: 3px 9px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-primary);
+    background: var(--hover-bg);
+    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+    font-weight: 560;
   }
 
   .profile-actions {

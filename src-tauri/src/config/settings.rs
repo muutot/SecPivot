@@ -379,14 +379,12 @@ impl Default for FaviconSettings {
     }
 }
 
+/// S3 transport block. Holds the endpoint/region/bucket and credentials,
+/// isolated from the WebDAV block so the two transports never contaminate each
+/// other when `kind` switches.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct RemoteSettings {
-    /// Transport kind: `"s3"` (S3-compatible object storage) or `"webdav"`.
-    /// Normalized to one of the two on load.
-    pub kind: String,
-    /// S3-compatible endpoint, e.g. `https://s3.amazonaws.com` or a MinIO URL.
-    /// For WebDAV this is the WebDAV base URL (e.g. a davfs/Nextcloud mount).
+pub struct RemoteS3Settings {
     pub endpoint: String,
     pub region: String,
     pub bucket: String,
@@ -394,6 +392,37 @@ pub struct RemoteSettings {
     /// Plaintext in `config.json` by design — a secondary credential, never a
     /// vault master password. Keep the risk noted in `security-model.md`.
     pub secret_key: String,
+}
+
+impl Default for RemoteS3Settings {
+    fn default() -> Self {
+        Self {
+            endpoint: "https://s3.amazonaws.com".into(),
+            region: "us-east-1".into(),
+            bucket: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
+        }
+    }
+}
+
+/// WebDAV-specific settings: the base URL plus Basic-auth username/password.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteWebDavSettings {
+    pub endpoint: String,
+    pub access_key: String,
+    pub secret_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemoteSettings {
+    /// Transport kind: `"s3"` (S3-compatible object storage) or `"webdav"`.
+    /// Normalized to one of the two on load.
+    pub kind: String,
+    pub s3: RemoteS3Settings,
+    pub webdav: RemoteWebDavSettings,
     /// Optional key prefix (folder) used by the remote file browser.
     pub prefix: String,
     /// Number of timestamped `.bak` backups kept beside the local copy;
@@ -402,20 +431,35 @@ pub struct RemoteSettings {
     /// Backup file name template. Placeholders: `{name}` (file stem),
     /// `{timestamp}` (`YYYYMMDDHHmmssSSS`), `{ext}` (original extension).
     pub backup_template: String,
+    // -- Legacy flat shape (pre-block configs). Deserialized for migration on
+    // load, never re-serialized; see `normalize_remote_settings`. Credentials
+    // here must be decryptable by `config::store` before normalization.
+    #[serde(default, skip_serializing)]
+    pub(crate) endpoint: String,
+    #[serde(default, skip_serializing)]
+    pub(crate) region: String,
+    #[serde(default, skip_serializing)]
+    pub(crate) bucket: String,
+    #[serde(default, skip_serializing)]
+    pub(crate) access_key: String,
+    #[serde(default, skip_serializing)]
+    pub(crate) secret_key: String,
 }
 
 impl Default for RemoteSettings {
     fn default() -> Self {
         Self {
             kind: "s3".into(),
-            endpoint: "https://s3.amazonaws.com".into(),
-            region: "us-east-1".into(),
-            bucket: String::new(),
-            access_key: String::new(),
-            secret_key: String::new(),
+            s3: RemoteS3Settings::default(),
+            webdav: RemoteWebDavSettings::default(),
             prefix: String::new(),
             backup_count: 3,
             backup_template: DEFAULT_BACKUP_TEMPLATE.into(),
+            endpoint: String::new(),
+            region: String::new(),
+            bucket: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
         }
     }
 }
@@ -728,17 +772,54 @@ fn normalize_remote_kind(kind: &str) -> String {
 
 fn normalize_remote_settings(settings: &mut RemoteSettings) {
     settings.kind = normalize_remote_kind(&settings.kind);
-    settings.endpoint = settings.endpoint.trim().to_owned();
-    settings.region = settings.region.trim().to_owned();
-    settings.bucket = settings.bucket.trim().to_owned();
-    settings.access_key = settings.access_key.trim().to_owned();
-    settings.secret_key = settings.secret_key.trim().to_owned();
     settings.prefix = settings.prefix.trim().to_owned();
     settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
     settings.backup_template = settings.backup_template.trim().to_owned();
     if settings.backup_template.is_empty() {
         settings.backup_template = DEFAULT_BACKUP_TEMPLATE.into();
     }
+    // Trim the (already-migrated or present) block values.
+    settings.s3.endpoint = settings.s3.endpoint.trim().to_owned();
+    settings.s3.region = settings.s3.region.trim().to_owned();
+    settings.s3.bucket = settings.s3.bucket.trim().to_owned();
+    settings.s3.access_key = settings.s3.access_key.trim().to_owned();
+    settings.s3.secret_key = settings.s3.secret_key.trim().to_owned();
+    settings.webdav.endpoint = settings.webdav.endpoint.trim().to_owned();
+    settings.webdav.access_key = settings.webdav.access_key.trim().to_owned();
+    settings.webdav.secret_key = settings.webdav.secret_key.trim().to_owned();
+    // Trim the legacy flat fields too, so a hand-edited config that mixes an
+    // old shape is normalized consistently before migration.
+    settings.endpoint = settings.endpoint.trim().to_owned();
+    settings.region = settings.region.trim().to_owned();
+    settings.bucket = settings.bucket.trim().to_owned();
+    settings.access_key = settings.access_key.trim().to_owned();
+    settings.secret_key = settings.secret_key.trim().to_owned();
+    // ---- Legacy flat shape → block migration ------------------------------
+    // Configs written before the split stored a single transport's values flat
+    // at the top level (`kind` picked which). Promote them into the blocks on
+    // load. A config freshly written by the new frontend never carries these
+    // fields (`skip_serializing`), so their presence is authoritative.
+    let legacy = !settings.endpoint.is_empty()
+        || !settings.bucket.is_empty()
+        || !settings.region.is_empty()
+        || !settings.access_key.is_empty()
+        || !settings.secret_key.is_empty();
+    if legacy {
+        settings.s3.endpoint = settings.endpoint.clone();
+        settings.s3.region = settings.region.clone();
+        settings.s3.bucket = settings.bucket.clone();
+        settings.s3.access_key = settings.access_key.clone();
+        settings.s3.secret_key = settings.secret_key.clone();
+        settings.webdav.endpoint = settings.endpoint.clone();
+        settings.webdav.access_key = settings.access_key.clone();
+        settings.webdav.secret_key = settings.secret_key.clone();
+    }
+    // Never re-serialize the legacy fields or leave stale values behind.
+    settings.endpoint.clear();
+    settings.region.clear();
+    settings.bucket.clear();
+    settings.access_key.clear();
+    settings.secret_key.clear();
 }
 
 /// Sanitize a user-supplied file extension: drop the leading dot, keep only

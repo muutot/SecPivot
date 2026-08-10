@@ -7,7 +7,7 @@ use super::shared_runtime;
 use super::webdav::WebDavStorage;
 use super::webdav::{href_to_key, parse_multistatus};
 use super::*;
-use crate::config::RemoteSettings;
+use crate::config::{RemoteS3Settings, RemoteSettings, RemoteWebDavSettings};
 
 #[test]
 fn memory_storage_lists_gets_puts() {
@@ -145,11 +145,14 @@ fn spawn_s3_mock() -> std::net::SocketAddr {
 }
 fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
     RemoteSettings {
-        endpoint: format!("http://{addr}"),
-        region: "us-east-1".to_owned(),
-        bucket: "test-bucket".to_owned(),
-        access_key: "AK".to_owned(),
-        secret_key: "SK".to_owned(),
+        kind: "s3".into(),
+        s3: RemoteS3Settings {
+            endpoint: format!("http://{addr}"),
+            region: "us-east-1".to_owned(),
+            bucket: "test-bucket".to_owned(),
+            access_key: "AK".to_owned(),
+            secret_key: "SK".to_owned(),
+        },
         ..Default::default()
     }
 }
@@ -323,9 +326,11 @@ fn spawn_webdav_mock() -> std::net::SocketAddr {
 fn mock_webdav_config(addr: std::net::SocketAddr) -> RemoteSettings {
     RemoteSettings {
         kind: "webdav".into(),
-        endpoint: format!("http://{addr}/dav"),
-        access_key: "user".into(),
-        secret_key: "pass".into(),
+        webdav: RemoteWebDavSettings {
+            endpoint: format!("http://{addr}/dav"),
+            access_key: "user".into(),
+            secret_key: "pass".into(),
+        },
         prefix: "vaults/".into(),
         ..Default::default()
     }

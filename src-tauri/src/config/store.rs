@@ -22,14 +22,10 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         let mut value: AppConfig =
             serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
         for profile in &mut value.remote_profiles {
-            profile.settings.access_key =
-                crate::platform::dpapi::decrypt(&profile.settings.access_key);
-            profile.settings.secret_key =
-                crate::platform::dpapi::decrypt(&profile.settings.secret_key);
+            decrypt_settings_creds(&mut profile.settings);
         }
         if let Some(legacy) = &mut value.remote {
-            legacy.access_key = crate::platform::dpapi::decrypt(&legacy.access_key);
-            legacy.secret_key = crate::platform::dpapi::decrypt(&legacy.secret_key);
+            decrypt_settings_creds(legacy);
         }
         Ok(normalize_config(value))
     } else {
@@ -43,14 +39,35 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let path = dir.join(CONFIG_FILE);
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
-        profile.settings.access_key =
-            crate::platform::dpapi::encrypt_for_storage(&profile.settings.access_key)?;
-        profile.settings.secret_key =
-            crate::platform::dpapi::encrypt_for_storage(&profile.settings.secret_key)?;
+        encrypt_profile_creds(&mut profile.settings)?;
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
     crate::util::atomic_write(&path, text.as_bytes(), "配置")
+}
+
+/// Decrypt the S3 and WebDAV credentials of a `RemoteSettings` in place. The
+/// legacy flat fields are migrated by `normalize_remote_settings` after this
+/// returns, so decrypting them here lets the migration move plaintext creds
+/// into the correct block.
+fn decrypt_settings_creds(settings: &mut RemoteSettings) {
+    settings.s3.access_key = crate::platform::dpapi::decrypt(&settings.s3.access_key);
+    settings.s3.secret_key = crate::platform::dpapi::decrypt(&settings.s3.secret_key);
+    settings.webdav.access_key = crate::platform::dpapi::decrypt(&settings.webdav.access_key);
+    settings.webdav.secret_key = crate::platform::dpapi::decrypt(&settings.webdav.secret_key);
+    // Legacy flat creds (migrated in normalization).
+    settings.access_key = crate::platform::dpapi::decrypt(&settings.access_key);
+    settings.secret_key = crate::platform::dpapi::decrypt(&settings.secret_key);
+}
+
+fn encrypt_profile_creds(settings: &mut RemoteSettings) -> Result<(), String> {
+    settings.s3.access_key = crate::platform::dpapi::encrypt_for_storage(&settings.s3.access_key)?;
+    settings.s3.secret_key = crate::platform::dpapi::encrypt_for_storage(&settings.s3.secret_key)?;
+    settings.webdav.access_key =
+        crate::platform::dpapi::encrypt_for_storage(&settings.webdav.access_key)?;
+    settings.webdav.secret_key =
+        crate::platform::dpapi::encrypt_for_storage(&settings.webdav.secret_key)?;
+    Ok(())
 }
 
 /// Managed state: the in-memory normalized config plus its project dir.

@@ -62,14 +62,47 @@
 
   const remote = $derived(settings.remote);
   const remoteKindLabel = $derived(remote.kind === "webdav" ? "WebDAV" : "S3");
+  const transport = $derived(remote.kind === "webdav" ? remote.webdav : remote.s3);
+  const transportPrefix = $derived(remote.kind === "webdav" ? "webdav" : "s3");
   const remoteConfigured = $derived(
     remote.kind === "webdav"
-      ? Boolean(remote.endpoint)
-      : Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
+      ? Boolean(remote.webdav.endpoint)
+      : Boolean(
+          remote.s3.endpoint && remote.s3.bucket && remote.s3.accessKey && remote.s3.secretKey,
+        ),
   );
 
-  function changeRemote<K extends keyof RemoteSettings>(key: K, value: RemoteSettings[K]): void {
+  /** True when the active profile's transport has the minimum required fields. */
+  function isRemoteConfigured(r: import("$lib/types/settings").RemoteSettings): boolean {
+    return r.kind === "webdav"
+      ? Boolean(r.webdav.endpoint)
+      : Boolean(r.s3.endpoint && r.s3.bucket && r.s3.accessKey && r.s3.secretKey);
+  }
+
+  function changeRemote<K extends import("$lib/services/settings").RemoteUpdateKey>(
+    key: K,
+    value: import("$lib/services/settings").RemoteBlockValue<K>,
+  ): void {
     appSettings.updateRemote(key, value);
+  }
+
+  /** Kind switch from the modal-head picker: reset the stale object list and
+   *  reload for the new transport. On the 打开 tab, an unconfigured new kind
+   *  drops into 配置 instead of showing another transport's files. */
+  async function changeRemoteKind(v: string): Promise<void> {
+    if (v === remote.kind) return;
+    changeRemote("kind", v);
+    remoteKey = "";
+    error = "";
+    remoteObjects = [];
+    const configured = isRemoteConfigured(get(appSettings).remote);
+    if (remoteTab === "open") {
+      if (configured) {
+        await loadRemoteObjects();
+      } else {
+        remoteTab = "config";
+      }
+    }
   }
 
   async function handleRemoteOpen(): Promise<void> {
@@ -384,6 +417,18 @@
                 : `从 ${remoteKindLabel} 打开或创建数据库`}
           </p>
         </div>
+        {#if modal === "remote"}
+          <Select
+            className="remote-kind-picker"
+            value={remote.kind}
+            ariaLabel="传输类型"
+            options={[
+              { value: "webdav", label: "WebDAV" },
+              { value: "s3", label: "S3" },
+            ]}
+            onchange={changeRemoteKind}
+          />
+        {/if}
       </div>
 
       {#if modal === "create"}
@@ -476,27 +521,14 @@
             {/if}
           </div>
           <div class="field">
-            <span>传输类型</span>
-            <Select
-              className="profile-select"
-              value={remote.kind}
-              ariaLabel="传输类型"
-              options={[
-                { value: "s3", label: "S3 兼容对象存储" },
-                { value: "webdav", label: "WebDAV" },
-              ]}
-              onchange={(v) => changeRemote("kind", v)}
-            />
-          </div>
-          <div class="field">
             <span>服务地址</span>
             <input
               class="text-input"
               type="text"
-              value={remote.endpoint}
+              value={transport.endpoint}
               placeholder="https://s3.amazonaws.com"
               spellcheck="false"
-              oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
+              oninput={(e) => changeRemote(`${transportPrefix}.endpoint`, e.currentTarget.value)}
             />
           </div>
           {#if remote.kind !== "webdav"}
@@ -506,10 +538,10 @@
                 <input
                   class="text-input"
                   type="text"
-                  value={remote.region}
+                  value={remote.s3.region}
                   placeholder="us-east-1"
                   spellcheck="false"
-                  oninput={(e) => changeRemote("region", e.currentTarget.value)}
+                  oninput={(e) => changeRemote("s3.region", e.currentTarget.value)}
                 />
               </div>
               <div class="field">
@@ -517,10 +549,10 @@
                 <input
                   class="text-input"
                   type="text"
-                  value={remote.bucket}
+                  value={remote.s3.bucket}
                   placeholder="my-bucket"
                   spellcheck="false"
-                  oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
+                  oninput={(e) => changeRemote("s3.bucket", e.currentTarget.value)}
                 />
               </div>
             </div>
@@ -530,11 +562,11 @@
             <input
               class="text-input"
               type="text"
-              value={remote.accessKey}
+              value={transport.accessKey}
               placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
               autocomplete="off"
               spellcheck="false"
-              oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
+              oninput={(e) => changeRemote(`${transportPrefix}.accessKey`, e.currentTarget.value)}
             />
           </div>
           <div class="field">
@@ -542,11 +574,11 @@
             <input
               class="text-input"
               type="password"
-              value={remote.secretKey}
+              value={transport.secretKey}
               placeholder="••••••••"
               autocomplete="off"
               spellcheck="false"
-              oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
+              oninput={(e) => changeRemote(`${transportPrefix}.secretKey`, e.currentTarget.value)}
             />
           </div>
           <p class="remote-config-note">
@@ -896,6 +928,16 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
+  }
+
+  .modal-head > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  :global(.remote-kind-picker) {
+    flex: 0 0 auto;
+    width: 110px;
   }
 
   .modal-icon {

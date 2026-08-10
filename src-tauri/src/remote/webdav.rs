@@ -70,18 +70,18 @@ impl WebDavStorage {
         list_timeout: Duration,
         io_timeout: Duration,
     ) -> Result<Self, String> {
-        let endpoint = cfg.endpoint.trim();
+        let endpoint = cfg.webdav.endpoint.trim();
         if endpoint.is_empty() {
             return Err("请先在设置中配置 WebDAV 服务地址".to_owned());
         }
         let base_url = endpoint.trim_end_matches('/').to_owned();
-        let username = cfg.access_key.trim();
+        let username = cfg.webdav.access_key.trim();
         // Skip Basic auth entirely when no credentials are configured (public
         // servers); empty `Basic ` headers can trip up some implementations.
         let auth = if username.is_empty() {
             None
         } else {
-            Some((username.to_owned(), cfg.secret_key.clone()))
+            Some((username.to_owned(), cfg.webdav.secret_key.clone()))
         };
         Ok(Self {
             client: shared_blocking_client().clone(),
