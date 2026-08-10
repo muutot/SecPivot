@@ -167,6 +167,14 @@
   <div class="tree-head">
     <span class="tree-label">分组</span>
     <div class="tree-tools">
+      <button
+        class="tool-btn"
+        title="新建分组"
+        aria-label="在当前分组下新建分组"
+        onclick={() => onaddsubgroup(selected)}
+      >
+        <AppIcon name="folder-plus" size={13} />
+      </button>
       <button class="tool-btn" title="全部展开" aria-label="全部展开" onclick={expandAll}>
         <AppIcon name="chevrons-down" size={13} />
       </button>

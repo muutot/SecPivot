@@ -211,6 +211,8 @@ pub struct GeneralSettings {
     pub panel_widths: PanelWidths,
     /// Toolbar control buttons show icons only (labels on hover tooltips).
     pub icon_only_buttons: bool,
+    /// Collect lower-frequency toolbar actions in a shared More menu.
+    pub toolbar_overflow_menu: bool,
     /// Legacy global auto-type hotkey from configs written before the
     /// `keyboard` section existed; migrated into `keyboard.auto_type_global`
     /// on load, never re-serialized.
@@ -261,6 +263,7 @@ impl Default for GeneralSettings {
             window_height: 720,
             panel_widths: PanelWidths::default(),
             icon_only_buttons: false,
+            toolbar_overflow_menu: cfg!(any(target_os = "android", target_os = "ios")),
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
         }

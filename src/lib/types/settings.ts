@@ -138,6 +138,8 @@ export interface GeneralSettings {
   panelWidths: PanelWidths;
   /** Toolbar control buttons show icons only; button names appear in hover tooltips. */
   iconOnlyButtons: boolean;
+  /** Collect lower-frequency toolbar actions in a shared More menu. */
+  toolbarOverflowMenu: boolean;
   /** Entry-table column layout (visible + px width per column id). */
   entryColumns: EntryColumnState[];
 }

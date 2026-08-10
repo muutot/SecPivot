@@ -14,6 +14,10 @@ fn defaults_round_trip_and_persist() {
     assert_eq!(defaults.general.font_sizes.base, 14);
     assert_eq!(defaults.general.density.group_gap, 2);
     assert_eq!(defaults.general.density.group_radius, 6);
+    assert_eq!(
+        defaults.general.toolbar_overflow_menu,
+        cfg!(any(target_os = "android", target_os = "ios"))
+    );
 
     let saved = store.set(defaults.clone()).unwrap();
     assert_eq!(saved.general.theme, "dark");
@@ -54,6 +58,10 @@ fn old_config_without_density_loads_with_defaults() {
     assert!(config.general.compact_mode);
     assert_eq!(config.general.density.group_gap, 2);
     assert!(config.general.density.show_group_icon);
+    assert_eq!(
+        config.general.toolbar_overflow_menu,
+        cfg!(any(target_os = "android", target_os = "ios"))
+    );
 }
 
 #[test]
@@ -524,6 +532,30 @@ fn density_survives_deserialize_write_reload() {
     assert_eq!(again.general.density.group_gap, 8);
     assert_eq!(again.general.density.group_indent, 20);
     assert!(!again.general.density.show_group_chevron);
+}
+
+#[test]
+fn toolbar_overflow_menu_uses_platform_default_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let platform_default = cfg!(any(target_os = "android", target_os = "ios"));
+    assert_eq!(
+        store.get().unwrap().general.toolbar_overflow_menu,
+        platform_default
+    );
+
+    let mut config = AppConfig::default();
+    config.general.toolbar_overflow_menu = !platform_default;
+    store.set(config).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"toolbarOverflowMenu\""));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(
+        reloaded.get().unwrap().general.toolbar_overflow_menu,
+        !platform_default
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
-  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
   import type { EntryColumnState } from "$lib/types/settings";
   import ColumnConfigMenu, {
     type ColumnMenuSection,
@@ -56,6 +56,7 @@
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
     typeof window !== "undefined" && window.location.hash.startsWith("#/tcato");
+  const showWindowControls = isTauriRuntime() && !isMobile();
 
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
@@ -194,6 +195,7 @@
   const compactMode = $derived(settings.general.compactMode);
   const groupDensity = $derived(settings.general.density);
   const iconOnlyButtons = $derived(settings.general.iconOnlyButtons);
+  const toolbarOverflowMenu = $derived(settings.general.toolbarOverflowMenu);
   const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
@@ -1398,11 +1400,13 @@
 
   let entryMenu = $state<{ x: number; y: number; entry: VaultEntry } | null>(null);
   let blankMenu = $state<{ x: number; y: number } | null>(null);
+  let toolbarMenu = $state<{ x: number; y: number } | null>(null);
 
   function openEntryMenu(event: MouseEvent, entry: VaultEntry): void {
     event.preventDefault();
     event.stopPropagation();
     blankMenu = null;
+    toolbarMenu = null;
     if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
     selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
@@ -1411,7 +1415,20 @@
   function openBlankMenu(event: MouseEvent): void {
     event.preventDefault();
     entryMenu = null;
+    toolbarMenu = null;
     blankMenu = { x: event.clientX, y: event.clientY };
+  }
+
+  function toggleToolbarMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    if (toolbarMenu) {
+      toolbarMenu = null;
+      return;
+    }
+    entryMenu = null;
+    blankMenu = null;
+    const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+    toolbarMenu = { x: rect.left, y: rect.bottom + 4 };
   }
 
   function selectAllEntries(): void {
@@ -1485,6 +1502,18 @@
     { id: "refresh", label: "刷新", icon: "refresh" },
   ]);
 
+  const toolbarMenuItems = $derived<ContextMenuItem[]>([
+    { id: "save-as", label: "另存为…", icon: "copy" },
+    {
+      id: "toggle-detail",
+      label: detailVisible ? "隐藏详情面板" : "显示详情面板",
+      icon: detailVisible ? "eye-off" : "eye",
+    },
+    { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
+    { id: "export-csv", label: "导出 CSV", icon: "download" },
+    { id: "settings", label: "设置", icon: "settings" },
+  ]);
+
   function handleEntryMenuAction(id: string, entry: VaultEntry): void {
     if (id === "edit" || id === "edit-selected") openEditEntry(entry);
     else if (id === "copy-username" && entry.username)
@@ -1540,6 +1569,14 @@
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
   }
+
+  function handleToolbarMenuAction(id: string): void {
+    if (id === "save-as") void handleSaveAs();
+    else if (id === "toggle-detail") detailVisible = !detailVisible;
+    else if (id === "security-report") void handleOpenReport();
+    else if (id === "export-csv") void handleExportCsv();
+    else if (id === "settings") openSettings();
+  }
 </script>
 
 <svelte:head>
@@ -1586,15 +1623,6 @@
           <button
             class="tool-button"
             class:icon-only={iconOnlyButtons}
-            onclick={() => openGroupModal(selectedGroup)}
-            title="新建分组"
-          >
-            <AppIcon name="folder-plus" size={14} />
-            {#if !iconOnlyButtons}<span class="btn-label">分组</span>{/if}
-          </button>
-          <button
-            class="tool-button"
-            class:icon-only={iconOnlyButtons}
             onclick={handleSave}
             disabled={busy || !currentVault.dirty}
             title="保存数据库 (Ctrl+S)"
@@ -1602,15 +1630,17 @@
             <AppIcon name="save" size={14} />
             {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
           </button>
-          <button
-            class="tool-button"
-            class:icon-only={iconOnlyButtons}
-            onclick={() => void handleSaveAs()}
-            title="另存为数据库副本到新路径"
-          >
-            <AppIcon name="copy" size={14} />
-            {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
-          </button>
+          {#if !toolbarOverflowMenu}
+            <button
+              class="tool-button"
+              class:icon-only={iconOnlyButtons}
+              onclick={() => void handleSaveAs()}
+              title="另存为数据库副本到新路径"
+            >
+              <AppIcon name="copy" size={14} />
+              {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
+            </button>
+          {/if}
           <span class="toolbar-divider" aria-hidden="true"></span>
           <button
             class="tool-button"
@@ -1646,25 +1676,41 @@
           {#if currentVault.dirty}
             <span class="dirty-badge">未保存</span>
           {/if}
-          <button
-            class="icon-action"
-            onclick={() => (detailVisible = !detailVisible)}
-            title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
-            aria-pressed={detailVisible}
-          >
-            <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
-          </button>
-          <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
-            <AppIcon name="shield" size={15} />
-          </button>
-          <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
-            <AppIcon name="download" size={15} />
-          </button>
-          <button class="icon-action" onclick={openSettings} title="设置">
-            <AppIcon name="settings" size={16} />
-          </button>
-          <span class="toolbar-divider" aria-hidden="true"></span>
-          <WindowControls variant="toolbar" />
+          {#if toolbarOverflowMenu}
+            <button
+              class="icon-action"
+              class:active={toolbarMenu !== null}
+              onclick={toggleToolbarMenu}
+              title="更多操作"
+              aria-label="更多操作"
+              aria-haspopup="menu"
+              aria-expanded={toolbarMenu !== null}
+            >
+              <AppIcon name="more-horizontal" size={16} />
+            </button>
+          {:else}
+            <button
+              class="icon-action"
+              onclick={() => (detailVisible = !detailVisible)}
+              title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
+              aria-pressed={detailVisible}
+            >
+              <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
+            </button>
+            <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
+              <AppIcon name="shield" size={15} />
+            </button>
+            <button class="icon-action" onclick={() => void handleExportCsv()} title="导出 CSV">
+              <AppIcon name="download" size={15} />
+            </button>
+            <button class="icon-action" onclick={openSettings} title="设置">
+              <AppIcon name="settings" size={16} />
+            </button>
+          {/if}
+          {#if showWindowControls}
+            <span class="toolbar-divider" aria-hidden="true"></span>
+            <WindowControls variant="toolbar" />
+          {/if}
         </div>
       </div>
 
@@ -2177,6 +2223,19 @@
   />
 {/if}
 
+{#if toolbarMenu}
+  <ContextMenu
+    x={toolbarMenu.x}
+    y={toolbarMenu.y}
+    items={toolbarMenuItems}
+    onclose={() => (toolbarMenu = null)}
+    onaction={(id) => {
+      toolbarMenu = null;
+      handleToolbarMenuAction(id);
+    }}
+  />
+{/if}
+
 {#if faviconDialog}
   <div class="modal-backdrop" role="presentation">
     <div class="group-modal">
@@ -2349,7 +2408,8 @@
     cursor: pointer;
   }
 
-  .icon-action:hover {
+  .icon-action:hover,
+  .icon-action.active {
     color: var(--text-primary);
     background: var(--hover-bg);
   }

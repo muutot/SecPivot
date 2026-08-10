@@ -258,6 +258,14 @@
       onchange={(checked) => change("compactMode", checked)}
     />
 
+    <SettingToggleCard
+      icon="menu"
+      label="次要操作收纳菜单"
+      description="将另存为、详情、安全报告、导出和设置集中到“更多”菜单；移动端默认开启"
+      checked={general.toolbarOverflowMenu}
+      onchange={(checked) => change("toolbarOverflowMenu", checked)}
+    />
+
     {#each densitySliders as slider (slider.key)}
       <SettingRangeCard
         icon="sliders"

@@ -17,6 +17,12 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.
 
+The General → Compact section owns both density controls and compact toolbar
+behavior. `toolbarOverflowMenu` uses the canonical toggle card and applies
+immediately: enabled collects save-as, detail visibility, security report, CSV
+export, and settings into the main toolbar's More menu. Its platform default is
+enabled on Android/iOS and disabled on desktop.
+
 At narrow widths (`max-width: 720px`), the primary sidebar becomes an off-canvas
 drawer. The section header exposes the menu toggle, the content pane uses the
 full viewport width, and selecting a primary category or pressing the backdrop
