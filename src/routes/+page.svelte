@@ -45,7 +45,13 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
-  import { collectGroups, collectEntries, findEntry, findEntryIn } from "$lib/utils/tree";
+  import {
+    buildVaultTreeIndex,
+    collectGroups,
+    collectEntries,
+    findEntryIn,
+    findGroupIn,
+  } from "$lib/utils/tree";
 
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
@@ -223,58 +229,25 @@
     void getCurrentWindow().setSize(new LogicalSize(width, height));
   });
 
-  const allGroups = $derived.by((): VaultGroup[] => {
-    if (!currentVault) return [];
-    return collectGroups(currentVault.root);
-  });
-
-  const allEntries = $derived.by((): VaultEntry[] => {
-    if (!currentVault) return [];
-    const list: VaultEntry[] = [];
-    for (const group of allGroups) list.push(...group.entries);
-    return list;
-  });
+  const treeIndex = $derived(currentVault ? buildVaultTreeIndex(currentVault.root) : null);
+  const allGroups = $derived(treeIndex?.groups ?? []);
+  const allEntries = $derived(treeIndex?.entries ?? []);
 
   const reportEntries = $derived.by(() => {
-    const rows: { entry: VaultEntry; path: string }[] = [];
-    for (const group of allGroups) {
-      for (const entry of group.entries) {
-        rows.push({ entry, path: pathOf(entry.groupUuid) });
-      }
-    }
-    return rows;
-  });
-
-  const parentMap = $derived.by((): Map<string, VaultGroup> => {
-    const map = new Map<string, VaultGroup>();
-    for (const group of allGroups) {
-      for (const child of group.children) map.set(child.uuid, group);
-    }
-    return map;
+    if (!treeIndex) return [];
+    return allEntries.map((entry) => ({
+      entry,
+      path: treeIndex.pathByGroupUuid.get(entry.groupUuid) ?? "",
+    }));
   });
 
   function pathOf(groupUuid: string): string {
-    const parts: string[] = [];
-    let current = allGroups.find((g) => g.uuid === groupUuid);
-    let guard = 0;
-    while (current && current.uuid !== currentVault?.root.uuid && guard < 50) {
-      parts.unshift(current.name);
-      current = parentMap.get(current.uuid);
-      guard++;
-    }
-    return parts.join(" / ");
+    return treeIndex?.pathByGroupUuid.get(groupUuid) ?? "";
   }
 
   /** Whether the given group uuid is the recycle bin or nested inside it. */
   function groupInBin(groupUuid: string): boolean {
-    let current = allGroups.find((g) => g.uuid === groupUuid);
-    let guard = 0;
-    while (current && current.uuid !== currentVault?.root.uuid && guard < 50) {
-      if (current.isRecycleBin) return true;
-      current = parentMap.get(current.uuid);
-      guard++;
-    }
-    return false;
+    return treeIndex?.recycleBinUuids.has(groupUuid) ?? false;
   }
 
   function selectedGroupInBin(uuid: string): boolean {
@@ -282,7 +255,7 @@
   }
 
   function entryInBin(entryUuid: string): boolean {
-    const entry = allEntries.find((e) => e.uuid === entryUuid);
+    const entry = treeIndex?.entryByUuid.get(entryUuid);
     if (!entry) return false;
     return groupInBin(entry.groupUuid);
   }
@@ -290,10 +263,24 @@
   const selectedSubtree = $derived.by((): VaultGroup[] => {
     if (!currentVault) return [];
     if (selectedGroup === null) return allGroups.filter((g) => !groupInBin(g.uuid));
-    const group = allGroups.find((g) => g.uuid === selectedGroup);
+    const group = treeIndex?.groupByUuid.get(selectedGroup);
     if (!group) return allGroups;
     return collectGroups(group);
   });
+
+  /** Entry objects are immutable within a vault snapshot, so search text can
+   *  be normalized lazily on the first non-empty query and reused for each
+   *  following keystroke. Replaced snapshots naturally release old entries. */
+  const entrySearchTextCache = new WeakMap<VaultEntry, string>();
+  function searchTextFor(entry: VaultEntry): string {
+    const cached = entrySearchTextCache.get(entry);
+    if (cached !== undefined) return cached;
+    const text = [entry.title, entry.username, entry.url, entry.notes, entry.tags]
+      .join(" ")
+      .toLowerCase();
+    entrySearchTextCache.set(entry, text);
+    return text;
+  }
 
   const filteredEntries = $derived.by((): { entry: VaultEntry }[] => {
     if (!currentVault) return [];
@@ -304,14 +291,10 @@
       // search results (per-group; descendants each carry their own flag).
       if (!group.enableSearching) continue;
       for (const entry of group.entries) {
-        const text = [entry.title, entry.username, entry.url, entry.notes, entry.tags]
-          .join(" ")
-          .toLowerCase();
-        if (query && !text.includes(query)) continue;
+        if (query && !searchTextFor(entry).includes(query)) continue;
         result.push({ entry });
       }
     }
-    result.sort((a, b) => Number(b.entry.favorite) - Number(a.entry.favorite));
     return result;
   });
 
@@ -338,9 +321,8 @@
   ];
   /** Custom-field column names present in the vault, most frequent first. */
   const customColumnNames = $derived.by(() => {
-    if (!currentVault) return [];
     const names = new Map<string, number>();
-    for (const e of collectEntries(currentVault.root)) {
+    for (const e of allEntries) {
       for (const f of e.customFields ?? []) {
         names.set(f.name, (names.get(f.name) ?? 0) + 1);
       }
@@ -713,7 +695,7 @@
   /** The just-created entry is the one with the newest `created` stamp in its
    *  target group (the backend generates its uuid, so we locate it this way). */
   function findNewestEntryInGroup(state: VaultState, groupUuid: string): VaultEntry | null {
-    const group = collectGroups(state.root).find((g) => g.uuid === groupUuid);
+    const group = findGroupIn(state.root, groupUuid);
     if (!group) return null;
     let newest: VaultEntry | null = null;
     for (const entry of group.entries) {
@@ -1189,8 +1171,7 @@
 
   /** Collect the fully-populated entries behind the current selection. */
   function selectedEntries(): VaultEntry[] {
-    if (!currentVault) return [];
-    return collectEntries(currentVault.root).filter((e) => selectedUuids.has(e.uuid));
+    return allEntries.filter((entry) => selectedUuids.has(entry.uuid));
   }
 
   function openEditEntry(entry: VaultEntry): void {
@@ -1278,9 +1259,7 @@
   /** Open the group icon picker dialog, seeding the selection from the group's
    *  current built-in icon index (or none when it has no explicit icon). */
   function openGroupIconDialog(uuid: string): void {
-    const group = currentVault
-      ? collectGroups(currentVault.root).find((g) => g.uuid === uuid)
-      : null;
+    const group = treeIndex?.groupByUuid.get(uuid);
     groupIconDialogUuid = uuid;
     groupIconPick = group?.icon ?? null;
     groupIconSaving = false;

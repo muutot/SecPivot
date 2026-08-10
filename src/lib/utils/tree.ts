@@ -1,49 +1,73 @@
 import type { VaultEntry, VaultGroup } from "$lib/types/vault";
 
-/** Per-root lookup maps built lazily and invalidated by object identity, so
- *  repeated uuid lookups over a large tree (e.g. re-resolving the selection on
- *  every vault-state change) are O(1) instead of a full depth-first walk. */
-const entryIndex = new WeakMap<VaultGroup, Map<string, VaultEntry>>();
-const groupIndex = new WeakMap<VaultGroup, Map<string, VaultGroup>>();
-
-function buildEntryIndex(root: VaultGroup): Map<string, VaultEntry> {
-  const map = new Map<string, VaultEntry>();
-  const visit = (group: VaultGroup): void => {
-    for (const entry of group.entries) map.set(entry.uuid, entry);
-    for (const child of group.children) visit(child);
-  };
-  visit(root);
-  return map;
+export interface VaultTreeIndex {
+  groups: VaultGroup[];
+  entries: VaultEntry[];
+  groupByUuid: Map<string, VaultGroup>;
+  entryByUuid: Map<string, VaultEntry>;
+  pathByGroupUuid: Map<string, string>;
+  recycleBinUuids: Set<string>;
 }
 
-function buildGroupIndex(root: VaultGroup): Map<string, VaultGroup> {
-  const map = new Map<string, VaultGroup>();
-  const visit = (group: VaultGroup): void => {
-    map.set(group.uuid, group);
-    for (const child of group.children) visit(child);
+/** Per-root structural index built lazily and invalidated by object identity.
+ *  A single depth-first walk supplies lookup maps, display paths, recycle-bin
+ *  membership, and flat render lists so consumers do not rescan the same vault
+ *  tree for each derived value or search keystroke. */
+const vaultTreeIndexes = new WeakMap<VaultGroup, VaultTreeIndex>();
+
+export function buildVaultTreeIndex(root: VaultGroup): VaultTreeIndex {
+  const cached = vaultTreeIndexes.get(root);
+  if (cached) return cached;
+
+  const groups: VaultGroup[] = [];
+  const entries: VaultEntry[] = [];
+  const groupByUuid = new Map<string, VaultGroup>();
+  const entryByUuid = new Map<string, VaultEntry>();
+  const pathByGroupUuid = new Map<string, string>();
+  const recycleBinUuids = new Set<string>();
+
+  const visit = (
+    group: VaultGroup,
+    parent: VaultGroup | null,
+    parentPath: string,
+    parentInRecycleBin: boolean,
+  ): void => {
+    const path = parent ? (parentPath ? `${parentPath} / ${group.name}` : group.name) : "";
+    const inRecycleBin = parentInRecycleBin || group.isRecycleBin;
+
+    groups.push(group);
+    groupByUuid.set(group.uuid, group);
+    pathByGroupUuid.set(group.uuid, path);
+    if (inRecycleBin) recycleBinUuids.add(group.uuid);
+
+    for (const entry of group.entries) {
+      entries.push(entry);
+      entryByUuid.set(entry.uuid, entry);
+    }
+    for (const child of group.children) visit(child, group, path, inRecycleBin);
   };
-  visit(root);
-  return map;
+
+  visit(root, null, "", false);
+  const index = {
+    groups,
+    entries,
+    groupByUuid,
+    entryByUuid,
+    pathByGroupUuid,
+    recycleBinUuids,
+  };
+  vaultTreeIndexes.set(root, index);
+  return index;
 }
 
 /** Search the entry index of `root`, scanning the tree only on first use. */
 export function findEntryIn(root: VaultGroup, uuid: string): VaultEntry | null {
-  let map = entryIndex.get(root);
-  if (!map) {
-    map = buildEntryIndex(root);
-    entryIndex.set(root, map);
-  }
-  return map.get(uuid) ?? null;
+  return buildVaultTreeIndex(root).entryByUuid.get(uuid) ?? null;
 }
 
 /** Search the group index of `root`, scanning the tree only on first use. */
 export function findGroupIn(root: VaultGroup, uuid: string): VaultGroup | null {
-  let map = groupIndex.get(root);
-  if (!map) {
-    map = buildGroupIndex(root);
-    groupIndex.set(root, map);
-  }
-  return map.get(uuid) ?? null;
+  return buildVaultTreeIndex(root).groupByUuid.get(uuid) ?? null;
 }
 
 /** Depth-first visit of every group in the tree (root first). */
