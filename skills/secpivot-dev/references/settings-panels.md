@@ -81,47 +81,44 @@ Use `appSettings.flush()` before a close/restart boundary when the UI must guara
 
 ### Toggle/control card
 
+Use `SettingToggleCard.svelte` for a standard switch card so the icon, text,
+ARIA switch state, and shared class hierarchy stay identical across panels.
+
 ```svelte
-<section class="setting-card toggle-card">
-  <div class="setting-heading">
-    <span class="setting-icon"><AppIcon name="..." size={17} /></span>
-    <div>
-      <strong>{label}</strong>
-      <p>{description}</p>
-    </div>
-  </div>
-  <button class="toggle-switch" class:active={enabled} role="switch" aria-checked={enabled}>
-    <span class="toggle-knob"></span>
-  </button>
-</section>
+<SettingToggleCard
+  icon="..."
+  {label}
+  {description}
+  checked={enabled}
+  onchange={(checked) => update(checked)}
+/>
 ```
 
-A select, segmented control, number input, or compact action group may replace the toggle while preserving the same left/right hierarchy.
+A select, segmented control, number input, shortcut binding, or compact action
+group may still use explicit card markup while preserving the same left/right
+hierarchy. Do not force custom right-side controls through the switch template.
 
 ### Slider card
 
+Use `SettingRangeCard.svelte` for a standard numeric range. It owns the range
+markup and derives the clamped `--slider-pct` value from `value` / `min` / `max`.
+
 ```svelte
-<section class="setting-card">
-  <div class="setting-heading">
-    <span class="setting-icon"><AppIcon name="..." size={17} /></span>
-    <div class="heading-inline">
-      <div>
-        <strong>{label}</strong>
-        <p>{description}</p>
-      </div>
-      <span class="value-label">{value}px</span>
-    </div>
-  </div>
-  <input
-    type="range"
-    class="transparency-slider"
-    style:--slider-pct={percentage}
-    oninput={handler}
-  />
-</section>
+<SettingRangeCard
+  icon="..."
+  {label}
+  {description}
+  {value}
+  valueLabel={`${value}px`}
+  {min}
+  {max}
+  onchange={(next) => update(next)}
+/>
 ```
 
-Do not wrap the range input merely for styling. Initialize/update `--slider-pct` from value/min/max so the filled track is correct on first render and after external store changes.
+Do not add another slider-percentage helper in a child panel or wrap the range
+input merely for styling. Extend the shared component only when a recurring
+standard range-card capability is genuinely missing.
 
 ## Feedback and asynchronous state
 

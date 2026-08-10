@@ -6,6 +6,8 @@
   import { vault } from "$lib/services/vault";
   import type { SecuritySettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
+  import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -26,10 +28,6 @@
 
   function change<K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]): void {
     appSettings.updateSecurity(key, value);
-  }
-
-  function sliderPercentage(value: number, min: number, max: number): number {
-    return Math.round(((value - min) / (max - min)) * 100);
   }
 
   let newPassword = $state("");
@@ -89,157 +87,71 @@
 {/if}
 
 <div class="settings-scroll">
-  <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
-      <div class="heading-inline">
-        <div>
-          <strong>自动锁定</strong>
-          <p>无操作达到时长后锁定数据库</p>
-        </div>
-        <span class="value-label"
-          >{s.security.autoLockMinutes > 0 ? `${s.security.autoLockMinutes} 分钟` : "关闭"}</span
-        >
-      </div>
-    </div>
-    <input
-      type="range"
-      class="transparency-slider"
-      min="0"
-      max="60"
-      step="1"
-      value={s.security.autoLockMinutes}
-      style:--slider-pct={sliderPercentage(s.security.autoLockMinutes, 0, 60)}
-      oninput={(e) => change("autoLockMinutes", Number(e.currentTarget.value))}
-    />
-  </section>
+  <SettingRangeCard
+    icon="lock"
+    label="自动锁定"
+    description="无操作达到时长后锁定数据库"
+    value={s.security.autoLockMinutes}
+    valueLabel={s.security.autoLockMinutes > 0 ? `${s.security.autoLockMinutes} 分钟` : "关闭"}
+    min={0}
+    max={60}
+    onchange={(value) => change("autoLockMinutes", value)}
+  />
 
-  <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="clock" size={17} /></span>
-      <div class="heading-inline">
-        <div>
-          <strong>剪贴板自动清理</strong>
-          <p>复制密码后定时清空剪贴板</p>
-        </div>
-        <span class="value-label"
-          >{s.security.clipboardClearSeconds > 0
-            ? `${s.security.clipboardClearSeconds} 秒`
-            : "关闭"}</span
-        >
-      </div>
-    </div>
-    <input
-      type="range"
-      class="transparency-slider"
-      min="0"
-      max="120"
-      step="5"
-      value={s.security.clipboardClearSeconds}
-      style:--slider-pct={sliderPercentage(s.security.clipboardClearSeconds, 0, 120)}
-      oninput={(e) => change("clipboardClearSeconds", Number(e.currentTarget.value))}
-    />
-  </section>
+  <SettingRangeCard
+    icon="clock"
+    label="剪贴板自动清理"
+    description="复制密码后定时清空剪贴板"
+    value={s.security.clipboardClearSeconds}
+    valueLabel={s.security.clipboardClearSeconds > 0
+      ? `${s.security.clipboardClearSeconds} 秒`
+      : "关闭"}
+    min={0}
+    max={120}
+    step={5}
+    onchange={(value) => change("clipboardClearSeconds", value)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="copy" size={17} /></span>
-      <div>
-        <strong>锁定后清空剪贴板</strong>
-        <p>锁定数据库时立即清除剪贴板中的密码</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={security.clearOnLock}
-      role="switch"
-      aria-checked={security.clearOnLock}
-      aria-label="锁定后清空剪贴板"
-      onclick={() => change("clearOnLock", !security.clearOnLock)}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="copy"
+    label="锁定后清空剪贴板"
+    description="锁定数据库时立即清除剪贴板中的密码"
+    checked={security.clearOnLock}
+    onchange={(checked) => change("clearOnLock", checked)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
-      <div>
-        <strong>关闭窗口时最小化到托盘</strong>
-        <p>点击关闭按钮转入系统托盘而非退出</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={security.minimizeToTray}
-      role="switch"
-      aria-checked={security.minimizeToTray}
-      aria-label="关闭窗口时最小化到托盘"
-      onclick={() => change("minimizeToTray", !security.minimizeToTray)}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="shield"
+    label="关闭窗口时最小化到托盘"
+    description="点击关闭按钮转入系统托盘而非退出"
+    checked={security.minimizeToTray}
+    onchange={(checked) => change("minimizeToTray", checked)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="eye-off" size={17} /></span>
-      <div>
-        <strong>复制后自动锁定</strong>
-        <p>复制密码后立即锁定数据库</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={security.lockAfterAction}
-      role="switch"
-      aria-checked={security.lockAfterAction}
-      aria-label="复制后自动锁定"
-      onclick={() => change("lockAfterAction", !security.lockAfterAction)}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="eye-off"
+    label="复制后自动锁定"
+    description="复制密码后立即锁定数据库"
+    checked={security.lockAfterAction}
+    onchange={(checked) => change("lockAfterAction", checked)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="unlock" size={17} /></span>
-      <div>
-        <strong>失去焦点时锁定</strong>
-        <p>切换窗口或最小化时立即锁定数据库</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={security.lockOnFocusLoss}
-      role="switch"
-      aria-checked={security.lockOnFocusLoss}
-      aria-label="失去焦点时锁定"
-      onclick={() => change("lockOnFocusLoss", !security.lockOnFocusLoss)}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="unlock"
+    label="失去焦点时锁定"
+    description="切换窗口或最小化时立即锁定数据库"
+    checked={security.lockOnFocusLoss}
+    onchange={(checked) => change("lockOnFocusLoss", checked)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="key" size={17} /></span>
-      <div>
-        <strong>记住密码(Windows Hello)</strong>
-        <p>将主密码保存到系统凭据管理器,锁定后可用 Windows Hello 快速解锁</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={security.rememberPassword}
-      role="switch"
-      aria-checked={security.rememberPassword}
-      aria-label="记住密码"
-      onclick={() => change("rememberPassword", !security.rememberPassword)}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="key"
+    label="记住密码(Windows Hello)"
+    description="将主密码保存到系统凭据管理器,锁定后可用 Windows Hello 快速解锁"
+    checked={security.rememberPassword}
+    ariaLabel="记住密码"
+    onchange={(checked) => change("rememberPassword", checked)}
+  />
 
   <section class="setting-card">
     <div class="setting-heading">

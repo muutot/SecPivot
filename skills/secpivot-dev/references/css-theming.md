@@ -103,6 +103,9 @@ The settings shell defines the settings scope variables consumed by shell and ch
 - `.auto-save-note` and the default pointer cursor for buttons.
 
 `src/app.css` imports this file globally. Child panels must rely on these primitives and add only their panel-specific layout.
+`SettingToggleCard.svelte` and `SettingRangeCard.svelte` own the canonical
+standard-card markup and consume these classes without defining parallel scoped
+styles.
 
 ## CSS ownership decision
 

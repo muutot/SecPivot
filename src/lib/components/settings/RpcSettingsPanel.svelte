@@ -4,6 +4,7 @@
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import type { RpcSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -65,27 +66,14 @@
 {/if}
 
 <div class="settings-scroll">
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="link" size={17} /></span>
-      <div>
-        <strong>KeePassRPC 桥接</strong>
-        <p>在 127.0.0.1:12546 启用 KeePassRPC 兼容服务（仅本机回环）</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={rpc.enabled}
-      role="switch"
-      aria-checked={rpc.enabled}
-      aria-label="启用 KeePassRPC 桥接"
-      onclick={() => {
-        change("enabled", !rpc.enabled);
-      }}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="link"
+    label="KeePassRPC 桥接"
+    description="在 127.0.0.1:12546 启用 KeePassRPC 兼容服务（仅本机回环）"
+    checked={rpc.enabled}
+    ariaLabel="启用 KeePassRPC 桥接"
+    onchange={(enabled) => change("enabled", enabled)}
+  />
 
   <section class="setting-card">
     <div class="setting-heading">
@@ -106,56 +94,23 @@
     </div>
   </section>
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
-      <div>
-        <strong>锁库后保留会话密钥</strong>
-        <p>
-          锁定数据库时保留 SRP 会话密钥，解锁后 Kee 扩展无需重新输入旁路密码（与官方 KeePassRPC
-          一致）。锁库期间扩展仍无法获取任何凭据
-        </p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={rpc.keepSessionAfterLock}
-      role="switch"
-      aria-checked={rpc.keepSessionAfterLock}
-      aria-label="锁库后保留 RPC 会话密钥"
-      onclick={() => {
-        change("keepSessionAfterLock", !rpc.keepSessionAfterLock);
-      }}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="lock"
+    label="锁库后保留会话密钥"
+    description="锁定数据库时保留 SRP 会话密钥，解锁后 Kee 扩展无需重新输入旁路密码（与官方 KeePassRPC 一致）。锁库期间扩展仍无法获取任何凭据"
+    checked={rpc.keepSessionAfterLock}
+    ariaLabel="锁库后保留 RPC 会话密钥"
+    onchange={(checked) => change("keepSessionAfterLock", checked)}
+  />
 
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
-      <div>
-        <strong>按注册域匹配（KeePassRPC 兼容）</strong>
-        <p>
-          开启后「域名」匹配按注册域判定（公共后缀表），同一域名下的兄弟子域都会命中——例如
-          account.aliyun.com 与 passport.aliyun.com 同属 aliyun.com 均可匹配。关闭则仅按 host
-          或子域严格匹配
-        </p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={rpc.matchByRegistrableDomain}
-      role="switch"
-      aria-checked={rpc.matchByRegistrableDomain}
-      aria-label="按注册域匹配"
-      onclick={() => {
-        change("matchByRegistrableDomain", !rpc.matchByRegistrableDomain);
-      }}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="shield"
+    label="按注册域匹配（KeePassRPC 兼容）"
+    description="开启后「域名」匹配按注册域判定（公共后缀表），同一域名下的兄弟子域都会命中——例如 account.aliyun.com 与 passport.aliyun.com 同属 aliyun.com 均可匹配。关闭则仅按 host 或子域严格匹配"
+    checked={rpc.matchByRegistrableDomain}
+    ariaLabel="按注册域匹配"
+    onchange={(checked) => change("matchByRegistrableDomain", checked)}
+  />
 
   <section class="setting-card">
     <div class="setting-heading">

@@ -4,6 +4,7 @@
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import type { BridgeSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -87,28 +88,17 @@
 {/if}
 
 <div class="settings-scroll">
-  <section class="setting-card toggle-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="plug" size={17} /></span>
-      <div>
-        <strong>浏览器桥接</strong>
-        <p>在 127.0.0.1:19455 启用 KeePassHttp 兼容服务（仅本机回环）</p>
-      </div>
-    </div>
-    <button
-      class="toggle-switch"
-      class:active={bridge.enabled}
-      role="switch"
-      aria-checked={bridge.enabled}
-      aria-label="启用浏览器桥接"
-      onclick={() => {
-        change("enabled", !bridge.enabled);
-        if (bridge.enabled) void refreshClients();
-      }}
-    >
-      <span class="toggle-knob"></span>
-    </button>
-  </section>
+  <SettingToggleCard
+    icon="plug"
+    label="浏览器桥接"
+    description="在 127.0.0.1:19455 启用 KeePassHttp 兼容服务（仅本机回环）"
+    checked={bridge.enabled}
+    ariaLabel="启用浏览器桥接"
+    onchange={(enabled) => {
+      change("enabled", enabled);
+      if (enabled) void refreshClients();
+    }}
+  />
 
   <section class="setting-card">
     <div class="setting-heading">

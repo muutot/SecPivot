@@ -3,6 +3,7 @@
   import type { RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -35,10 +36,6 @@
     value: import("$lib/services/settings").RemoteBlockValue<K>,
   ): void {
     appSettings.updateRemote(key, value);
-  }
-
-  function sliderPercentage(value: number, min: number, max: number): number {
-    return Math.round(((value - min) / (max - min)) * 100);
   }
 </script>
 
@@ -299,28 +296,16 @@
     </p>
   </section>
 
-  <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="clock" size={17} /></span>
-      <div class="heading-inline">
-        <div>
-          <strong>本地备份数量</strong>
-          <p>每次保存时保留的带时间戳备份份数，0 表示不保留</p>
-        </div>
-        <span class="value-label">{remote.backupCount} 份</span>
-      </div>
-    </div>
-    <input
-      type="range"
-      class="transparency-slider"
-      min="0"
-      max="10"
-      step="1"
-      value={remote.backupCount}
-      style:--slider-pct={sliderPercentage(remote.backupCount, 0, 10)}
-      oninput={(e) => change("backupCount", Number(e.currentTarget.value))}
-    />
-  </section>
+  <SettingRangeCard
+    icon="clock"
+    label="本地备份数量"
+    description="每次保存时保留的带时间戳备份份数，0 表示不保留"
+    value={remote.backupCount}
+    valueLabel={`${remote.backupCount} 份`}
+    min={0}
+    max={10}
+    onchange={(value) => change("backupCount", value)}
+  />
 
   <section class="setting-card">
     <div class="setting-row">

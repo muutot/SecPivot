@@ -3,6 +3,7 @@
   import type { Cipher, Compression, Kdf } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -122,29 +123,16 @@
     </div>
   </section>
 
-  <section class="setting-card">
-    <div class="setting-heading">
-      <span class="setting-icon"><AppIcon name="key" size={17} /></span>
-      <div class="heading-inline">
-        <div>
-          <strong>默认密码长度</strong>
-          <p>生成器默认生成的密码长度</p>
-        </div>
-        <span class="value-label">{s.database.generator.length} 位</span>
-      </div>
-    </div>
-    <input
-      type="range"
-      class="transparency-slider"
-      min="8"
-      max="64"
-      step="1"
-      value={s.database.generator.length}
-      style:--slider-pct={((s.database.generator.length - 8) / (64 - 8)) * 100}
-      oninput={(e) =>
-        appSettings.updateDatabase("generator", { ...gen, length: Number(e.currentTarget.value) })}
-    />
-  </section>
+  <SettingRangeCard
+    icon="key"
+    label="默认密码长度"
+    description="生成器默认生成的密码长度"
+    value={s.database.generator.length}
+    valueLabel={`${s.database.generator.length} 位`}
+    min={8}
+    max={64}
+    onchange={(value) => appSettings.updateDatabase("generator", { ...gen, length: value })}
+  />
 
   <section class="setting-card">
     <div class="setting-heading">

@@ -3,6 +3,8 @@
   import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
+  import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
   type Section = "appearance" | "display" | "compact" | "network";
@@ -31,10 +33,6 @@
 
   function updateColor(key: keyof ThemeColors, value: string): void {
     appSettings.updateGeneral("themeColors", { ...s.general.themeColors, [key]: value });
-  }
-
-  function sliderPercentage(value: number, min: number, max: number): number {
-    return Math.round(((value - min) / (max - min)) * 100);
   }
 
   const fontSliders: {
@@ -193,67 +191,33 @@
   {/if}
 
   {#if section === "display"}
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="eye" size={17} /></span>
-        <div>
-          <strong>显示条目描述</strong>
-          <p>在列表中展示用户名与备注预览</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={general.showDescriptions}
-        role="switch"
-        aria-checked={general.showDescriptions}
-        aria-label="显示描述"
-        onclick={() => change("showDescriptions", !general.showDescriptions)}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="eye"
+      label="显示条目描述"
+      description="在列表中展示用户名与备注预览"
+      checked={general.showDescriptions}
+      ariaLabel="显示描述"
+      onchange={(checked) => change("showDescriptions", checked)}
+    />
 
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="eye" size={17} /></span>
-        <div>
-          <strong>工具栏仅显示图标</strong>
-          <p>控制按钮只显示图标，按钮名称在鼠标悬浮时提示</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={general.iconOnlyButtons}
-        role="switch"
-        aria-checked={general.iconOnlyButtons}
-        aria-label="工具栏仅显示图标"
-        onclick={() => change("iconOnlyButtons", !general.iconOnlyButtons)}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="eye"
+      label="工具栏仅显示图标"
+      description="控制按钮只显示图标，按钮名称在鼠标悬浮时提示"
+      checked={general.iconOnlyButtons}
+      onchange={(checked) => change("iconOnlyButtons", checked)}
+    />
 
-    <section class="setting-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
-        <div class="heading-inline">
-          <div>
-            <strong>窗口不透明度</strong>
-            <p>调整主窗口的整体透明度</p>
-          </div>
-          <span class="value-label">{s.general.windowOpacity}%</span>
-        </div>
-      </div>
-      <input
-        type="range"
-        class="transparency-slider"
-        min="40"
-        max="100"
-        value={s.general.windowOpacity}
-        style:--slider-pct={sliderPercentage(s.general.windowOpacity, 40, 100)}
-        oninput={(e) => change("windowOpacity", Number(e.currentTarget.value))}
-      />
-    </section>
+    <SettingRangeCard
+      icon="sliders"
+      label="窗口不透明度"
+      description="调整主窗口的整体透明度"
+      value={s.general.windowOpacity}
+      valueLabel={`${s.general.windowOpacity}%`}
+      min={40}
+      max={100}
+      onchange={(value) => change("windowOpacity", value)}
+    />
 
     <section class="setting-card">
       <div class="setting-heading">
@@ -276,183 +240,94 @@
       </div>
     </section>
 
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-        <div>
-          <strong>记住上次数据库</strong>
-          <p>启动时自动加载最近打开的数据库</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={general.rememberLastDatabase}
-        role="switch"
-        aria-checked={general.rememberLastDatabase}
-        aria-label="记住上次数据库"
-        onclick={() => change("rememberLastDatabase", !general.rememberLastDatabase)}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="folder"
+      label="记住上次数据库"
+      description="启动时自动加载最近打开的数据库"
+      checked={general.rememberLastDatabase}
+      onchange={(checked) => change("rememberLastDatabase", checked)}
+    />
   {/if}
 
   {#if section === "compact"}
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="grid" size={17} /></span>
-        <div>
-          <strong>紧凑模式</strong>
-          <p>缩小间距，提高单屏信息密度</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={general.compactMode}
-        role="switch"
-        aria-checked={general.compactMode}
-        aria-label="紧凑模式"
-        onclick={() => change("compactMode", !general.compactMode)}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="grid"
+      label="紧凑模式"
+      description="缩小间距，提高单屏信息密度"
+      checked={general.compactMode}
+      onchange={(checked) => change("compactMode", checked)}
+    />
 
     {#each densitySliders as slider (slider.key)}
-      <section class="setting-card">
-        <div class="setting-heading">
-          <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
-          <div class="heading-inline">
-            <div>
-              <strong>{slider.label}</strong>
-              <p>{slider.description}</p>
-            </div>
-            <span class="value-label">{s.general.density[slider.key]}px</span>
-          </div>
-        </div>
-        <input
-          type="range"
-          class="transparency-slider"
-          min={slider.min}
-          max={slider.max}
-          value={s.general.density[slider.key]}
-          style:--slider-pct={sliderPercentage(
-            s.general.density[slider.key],
-            slider.min,
-            slider.max,
-          )}
-          oninput={(e) =>
-            change("density", {
-              ...s.general.density,
-              [slider.key]: Number((e.currentTarget as HTMLInputElement).value),
-            })}
-        />
-      </section>
+      <SettingRangeCard
+        icon="sliders"
+        label={slider.label}
+        description={slider.description}
+        value={s.general.density[slider.key]}
+        valueLabel={`${s.general.density[slider.key]}px`}
+        min={slider.min}
+        max={slider.max}
+        onchange={(value) =>
+          change("density", {
+            ...s.general.density,
+            [slider.key]: value,
+          })}
+      />
     {/each}
 
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
-        <div>
-          <strong>显示分组图标</strong>
-          <p>在分组名称前显示文件夹图标</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={s.general.density.showGroupIcon}
-        role="switch"
-        aria-checked={s.general.density.showGroupIcon}
-        aria-label="显示分组图标"
-        onclick={() =>
-          change("density", {
-            ...s.general.density,
-            showGroupIcon: !s.general.density.showGroupIcon,
-          })}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="folder"
+      label="显示分组图标"
+      description="在分组名称前显示文件夹图标"
+      checked={s.general.density.showGroupIcon}
+      onchange={(checked) =>
+        change("density", {
+          ...s.general.density,
+          showGroupIcon: checked,
+        })}
+    />
 
-    <section class="setting-card toggle-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="chevron-down" size={17} /></span>
-        <div>
-          <strong>显示折叠箭头</strong>
-          <p>在可展开分组前显示折叠箭头</p>
-        </div>
-      </div>
-      <button
-        class="toggle-switch"
-        class:active={s.general.density.showGroupChevron}
-        role="switch"
-        aria-checked={s.general.density.showGroupChevron}
-        aria-label="显示折叠箭头"
-        onclick={() =>
-          change("density", {
-            ...s.general.density,
-            showGroupChevron: !s.general.density.showGroupChevron,
-          })}
-      >
-        <span class="toggle-knob"></span>
-      </button>
-    </section>
+    <SettingToggleCard
+      icon="chevron-down"
+      label="显示折叠箭头"
+      description="在可展开分组前显示折叠箭头"
+      checked={s.general.density.showGroupChevron}
+      onchange={(checked) =>
+        change("density", {
+          ...s.general.density,
+          showGroupChevron: checked,
+        })}
+    />
 
     {#each fontSliders as slider (slider.key)}
-      <section class="setting-card">
-        <div class="setting-heading">
-          <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
-          <div class="heading-inline">
-            <div>
-              <strong>{slider.label}</strong>
-              <p>{slider.description}</p>
-            </div>
-            <span class="value-label">{s.general.fontSizes[slider.key]}px</span>
-          </div>
-        </div>
-        <input
-          type="range"
-          class="transparency-slider"
-          min={slider.min}
-          max={slider.max}
-          value={s.general.fontSizes[slider.key]}
-          style:--slider-pct={sliderPercentage(
-            s.general.fontSizes[slider.key],
-            slider.min,
-            slider.max,
-          )}
-          oninput={(e) =>
-            change("fontSizes", {
-              ...s.general.fontSizes,
-              [slider.key]: Number(e.currentTarget.value),
-            })}
-        />
-      </section>
+      <SettingRangeCard
+        icon="keyboard"
+        label={slider.label}
+        description={slider.description}
+        value={s.general.fontSizes[slider.key]}
+        valueLabel={`${s.general.fontSizes[slider.key]}px`}
+        min={slider.min}
+        max={slider.max}
+        onchange={(value) =>
+          change("fontSizes", {
+            ...s.general.fontSizes,
+            [slider.key]: value,
+          })}
+      />
     {/each}
   {/if}
 
   {#if section === "network"}
-    <section class="setting-card">
-      <div class="setting-heading">
-        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-        <div class="heading-inline">
-          <div>
-            <strong>图标下载并发数</strong>
-            <p>下载条目网址图标时同时进行的请求数，默认 8</p>
-          </div>
-          <span class="value-label">{s.favicon.concurrency} 个</span>
-        </div>
-      </div>
-      <input
-        type="range"
-        class="transparency-slider"
-        min="1"
-        max="16"
-        value={s.favicon.concurrency}
-        style:--slider-pct={sliderPercentage(s.favicon.concurrency, 1, 16)}
-        oninput={(e) => appSettings.updateFavicon("concurrency", Number(e.currentTarget.value))}
-      />
-    </section>
+    <SettingRangeCard
+      icon="globe"
+      label="图标下载并发数"
+      description="下载条目网址图标时同时进行的请求数，默认 8"
+      value={s.favicon.concurrency}
+      valueLabel={`${s.favicon.concurrency} 个`}
+      min={1}
+      max={16}
+      onchange={(value) => appSettings.updateFavicon("concurrency", value)}
+    />
   {/if}
 
   <p class="auto-save-note">修改即时生效并自动保存</p>
