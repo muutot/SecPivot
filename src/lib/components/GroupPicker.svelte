@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
-  import { countEntries } from "$lib/utils/tree";
+  import { buildEntryCounts } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassGroupIconName } from "$lib/utils/keepass-icons";
 
@@ -18,6 +18,7 @@
   let pickerEl = $state<HTMLDivElement>();
 
   const root = $derived(groups[0] ?? null);
+  const counts = $derived(root ? buildEntryCounts(root) : new Map<string, number>());
 
   /** Path from root to the browsed/committed group (top-down). */
   const chain = $derived.by(() => {
@@ -132,7 +133,7 @@
             </span>
           {/if}
         {/each}
-        <span class="crumb-count">{countEntries(current)}</span>
+        <span class="crumb-count">{counts.get(current.uuid) ?? 0}</span>
       </div>
 
       <div class="crumb-divider"></div>
@@ -158,7 +159,7 @@
           >
             <AppIcon name={iconOf(child)} size={14} />
             <span class="row-name">{child.name}</span>
-            <span class="row-count">{countEntries(child)}</span>
+            <span class="row-count">{counts.get(child.uuid) ?? 0}</span>
             {#if child.children.length > 0}
               <AppIcon name="chevron-right" size={11} />
             {/if}
