@@ -657,8 +657,11 @@
   .detail {
     display: flex;
     flex-direction: column;
+    width: 100%;
     height: 100%;
+    min-width: 0;
     min-height: 0;
+    overflow: hidden;
     border-left: 1px solid var(--border-subtle);
     background: var(--card-bg);
   }
@@ -668,6 +671,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
+    min-width: 0;
     padding: 12px 14px;
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -676,7 +680,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex: 1;
     min-width: 0;
+    overflow: hidden;
   }
 
   .entry-icon {
@@ -823,14 +829,17 @@
 
   .detail-body {
     flex: 1;
+    min-width: 0;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 12px 14px 40px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .field-block {
+    min-width: 0;
     margin-bottom: 14px;
   }
 
@@ -853,6 +862,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    width: 100%;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
     border: 1px solid var(--border-subtle);
@@ -893,6 +904,7 @@
     gap: 6px;
     min-width: 0;
     flex: 1;
+    overflow: hidden;
     padding: 0;
     border: 0;
     color: inherit;

@@ -33,7 +33,7 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 - **Never re-define shared primitives in a panel.** Before adding CSS, grep `settings-shared.css` and `SettingsDialog.svelte` for the same primitive.
 - **Do not use a parent scoped selector to style a child component.** Pass props/classes or move the rule into the shared stylesheet.
 - **Segmented controls (theme/KDF/charset)** follow one pattern: bordered chip, `--settings-control-radius`, active = selection tint. Do not introduce a second segmented style.
-- **Keep the sidebar width fixed (168px).** Narrow-window behavior hides the sidebar below ~560px; preserve the single-column fallback.
+- **Keep the settings sidebar width fixed (168px) on wide layouts.** At `max-width: 720px` it becomes the approved off-canvas drawer; preserve that full-width content fallback.
 
 ## Remote (S3)
 

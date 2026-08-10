@@ -2217,10 +2217,12 @@
   .app-shell {
     position: relative;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     width: 100%;
     height: 100vh;
     min-width: 760px;
+    overflow: hidden;
     border: 1px solid var(--border-color);
     background: color-mix(in srgb, var(--bg-settings) 98.5%, transparent);
   }
