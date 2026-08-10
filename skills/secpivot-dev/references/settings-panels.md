@@ -98,6 +98,11 @@ A select, segmented control, number input, shortcut binding, or compact action
 group may still use explicit card markup while preserving the same left/right
 hierarchy. Do not force custom right-side controls through the switch template.
 
+Use `.settings-action-button` for compact secondary actions shared across
+panels. Its default height is 26px; add `.settings-action-button--field` only
+when it must align with a 30px settings input. Keep only semantic or local
+layout overrides in the child panel.
+
 ### Slider card
 
 Use `SettingRangeCard.svelte` for a standard numeric range. It owns the range

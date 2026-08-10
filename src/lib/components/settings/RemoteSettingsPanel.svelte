@@ -91,14 +91,14 @@
     {/if}
     <div class="profile-actions">
       <button
-        class="profile-action-button"
+        class="settings-action-button"
         onclick={() => appSettings.addRemoteProfile("")}
         type="button"
       >
         添加配置
       </button>
       <button
-        class="profile-action-button"
+        class="settings-action-button"
         disabled={s.remoteProfiles.length <= 1}
         onclick={() => appSettings.removeRemoteProfile(s.activeRemote)}
         type="button"
@@ -370,22 +370,5 @@
     display: flex;
     gap: 8px;
     margin: 10px 0 2px;
-  }
-
-  .profile-action-button {
-    height: 26px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    flex: 0 0 auto;
-    cursor: pointer;
-  }
-
-  .profile-action-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
   }
 </style>

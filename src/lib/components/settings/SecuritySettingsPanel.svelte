@@ -186,7 +186,7 @@
         {newKeyfile ?? "未选择密钥文件(可选)"}
       </span>
       <button
-        class="settings-action-button"
+        class="settings-action-button settings-action-button--field"
         type="button"
         onclick={pickKeyfile}
         disabled={!isTauriRuntime()}
@@ -195,7 +195,7 @@
       </button>
       {#if newKeyfile}
         <button
-          class="settings-action-button mk-clear-button"
+          class="settings-action-button settings-action-button--field mk-clear-button"
           type="button"
           onclick={() => (newKeyfile = null)}
         >
@@ -243,22 +243,6 @@
 
   .mk-keyfile-name.mk-empty {
     color: var(--text-faint);
-  }
-
-  .settings-action-button {
-    height: 30px;
-    padding: 0 12px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    flex: 0 0 auto;
-  }
-
-  .settings-action-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
   }
 
   .mk-clear-button {

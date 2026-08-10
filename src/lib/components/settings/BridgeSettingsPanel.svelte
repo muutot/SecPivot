@@ -174,23 +174,6 @@
     color: var(--text-faint);
   }
 
-  .settings-action-button {
-    height: 26px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    flex: 0 0 auto;
-    cursor: pointer;
-  }
-
-  .settings-action-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
   .client-list {
     display: flex;
     flex-direction: column;
