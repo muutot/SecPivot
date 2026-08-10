@@ -17,6 +17,12 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 
 The left sidebar retains primary categories. The right content pane owns breadcrumb, secondary row, description, and the selected panel.
 
+At narrow widths (`max-width: 720px`), the primary sidebar becomes an off-canvas
+drawer. The section header exposes the menu toggle, the content pane uses the
+full viewport width, and selecting a primary category or pressing the backdrop
+closes the drawer. Keep the secondary row horizontally scrollable instead of
+wrapping labels character-by-character.
+
 ## Approved shell hierarchy
 
 ```text

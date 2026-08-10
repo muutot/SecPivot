@@ -25,6 +25,7 @@
   let active: Section = $state("general");
   let generalTab: GeneralTab = $state("appearance");
   let integrationsTab: IntegrationsTab = $state("http");
+  let mobileNavOpen = $state(false);
 
   const currentTab = $derived(
     active === "general" ? generalTab : active === "integrations" ? integrationsTab : null,
@@ -102,7 +103,12 @@
   const activeSection = $derived(sections.find((s) => s.id === active) ?? sections[0]);
 </script>
 
-<div class="settings-dialog settings-dialog--standalone" role="dialog" aria-label="设置">
+<div
+  class="settings-dialog settings-dialog--standalone"
+  class:mobile-nav-open={mobileNavOpen}
+  role="dialog"
+  aria-label="设置"
+>
   <aside class="settings-sidebar" data-tauri-drag-region>
     <div class="settings-brand">
       <span class="brand-icon"><AppIcon name="key" size={17} /></span>
@@ -111,7 +117,7 @@
         <small>v{appVersion}</small>
       </div>
     </div>
-    <nav class="settings-primary-nav" aria-label="设置分类">
+    <nav id="settings-primary-nav" class="settings-primary-nav" aria-label="设置分类">
       {#each sections as section (section.id)}
         <button
           class="settings-nav-item"
@@ -120,6 +126,7 @@
             active = section.id;
             if (section.id === "general") generalTab = "appearance";
             if (section.id === "integrations") integrationsTab = "http";
+            mobileNavOpen = false;
           }}
         >
           <AppIcon name={section.icon} size={16} />
@@ -132,10 +139,31 @@
     </div>
   </aside>
 
+  {#if mobileNavOpen}
+    <button
+      class="settings-drawer-backdrop"
+      aria-label="关闭设置分类"
+      onclick={() => (mobileNavOpen = false)}
+    ></button>
+  {/if}
+
   <div id="settings-content" class="settings-content">
     <section class="settings-section-header" data-tauri-drag-region>
       <div class="settings-section-heading-row">
-        <div class="settings-breadcrumb">{activeSection.title}</div>
+        <div class="settings-heading-main">
+          <button
+            class="settings-nav-toggle"
+            class:active={mobileNavOpen}
+            onclick={() => (mobileNavOpen = !mobileNavOpen)}
+            title="设置分类"
+            aria-label="切换设置分类"
+            aria-controls="settings-primary-nav"
+            aria-expanded={mobileNavOpen}
+          >
+            <AppIcon name="menu" size={15} />
+          </button>
+          <div class="settings-breadcrumb">{activeSection.title}</div>
+        </div>
         <div class="settings-section-actions">
           <span class="settings-count"
             >{activeSection.tabs?.length ? `${activeSection.tabs.length} 组` : "1 页"}</span
@@ -194,6 +222,7 @@
 
 <style>
   .settings-dialog {
+    position: relative;
     display: grid;
     grid-template-columns: 168px minmax(0, 1fr);
     width: 100%;
@@ -323,6 +352,18 @@
     gap: 12px;
   }
 
+  .settings-heading-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .settings-nav-toggle,
+  .settings-drawer-backdrop {
+    display: none;
+  }
+
   .settings-breadcrumb {
     color: var(--text-primary);
     font-size: var(--settings-page-title-size, 18px);
@@ -382,5 +423,100 @@
     color: var(--text-muted);
     font-size: var(--settings-description-size, var(--font-size-secondary, 11px));
     line-height: 1.5;
+  }
+
+  @media (max-width: 720px) {
+    .settings-dialog {
+      display: block;
+      min-width: 0;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .settings-sidebar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      z-index: 6;
+      width: min(82vw, 300px);
+      border-right: 1px solid var(--border-color);
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateX(-100%);
+      transition:
+        transform 0.16s ease,
+        visibility 0s linear 0.16s;
+    }
+
+    .settings-dialog.mobile-nav-open .settings-sidebar {
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition-delay: 0s;
+    }
+
+    .settings-drawer-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: block;
+      padding: 0;
+      border: 0;
+      background: color-mix(in srgb, #000 35%, transparent);
+    }
+
+    .settings-content {
+      width: 100%;
+      height: 100%;
+    }
+
+    .settings-section-header {
+      padding: 10px 12px 9px;
+    }
+
+    .settings-nav-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: var(--settings-control-radius, 6px);
+      color: var(--text-muted);
+      background: var(--card-bg);
+      cursor: pointer;
+    }
+
+    .settings-nav-toggle:hover,
+    .settings-nav-toggle.active {
+      color: var(--text-primary);
+      background: var(--hover-bg);
+    }
+
+    .settings-nav-item {
+      min-height: 40px;
+    }
+
+    .settings-subnav {
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .settings-subnav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .settings-subnav-item {
+      flex: 0 0 auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .settings-sidebar {
+      transition: none;
+    }
   }
 </style>
