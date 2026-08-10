@@ -71,6 +71,41 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 全选 + 多选批量编辑:条目列表 Ctrl+A 全选当前视图(分组/搜索过滤后)全部条目;右键「编辑所选条目」打开批量编辑器,字段值不一致时输入框显示「多个值」占位(KeePass 语义:未修改字段保持各条目原值,含密码/TOTP 不加载不覆盖),图标/颜色/过期/分组等可选属性支持显式清除;后端 `update_entries` 单事务原子应用(任一 uuid 无效整批不生效),174 后端测试通过
 - [x] 另存为:工具栏「另存为」按钮 + 空白区右键菜单「另存为…」,系统对话框选路径后以当前密钥写入新文件并将会话切换到新目标(后续保存写新文件,原文件不变);远程会话另存后转为本地会话(S3 不再接收后续保存);保存失败会话不变,177 后端测试通过
 
+## Stage 8 — 结构、性能与 KeePass 2.x 原生能力差距（按实施优先级）
+
+产品约束：暂不接入通用插件系统；优秀插件能力仅在安全边界、维护成本和产品价值明确时作为原生功能实现。KDBX `CustomData` 继续只读保真，不提供任意插件元数据编辑器。
+
+### P0 — 当前架构放大器与前端一致性
+
+- [ ] 批量分组展开/折叠：新增单次 IPC 的批量命令，一次事务写入所有目标分组的 `isExpanded`，前端「全部展开/全部折叠」不得再为每个分组接收一份完整 `VaultState`；补后端原子性/未知 UUID 测试与前端 browser fallback 等价行为
+- [ ] 条目列表窗口化：提取 `EntryTable`/表格状态逻辑，仅挂载可视区及缓冲行；保持固定列宽、横向滚动、列排序/拖拽/缩放、多选、Ctrl+A、键盘导航、条目拖拽和移动端摘要布局语义
+- [ ] 统一弹窗基础设施：新增使用现有 theme tokens 的 `ModalShell`（header/body/actions、size/tone），迁移重复的 `.modal-head/.modal-icon/.modal-actions/.modal-button/.text-input`，禁止形成第二套圆角、阴影、按钮和输入框样式
+- [ ] 统一 viewport 菜单与凭据表单：抽取 `ViewportMenuShell`（viewport clamp、Escape、click-outside）供右键菜单/列配置复用；抽取欢迎页与锁屏共用的 `StandaloneVaultShell`/`VaultCredentialFields`
+- [ ] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
+- [ ] 缩小 mutation 状态传输：先将自定义图标资源与树快照拆分缓存，再引入 `revision + mutation result/delta`；不得让收藏、展开等小修改长期重建、编码并跨 IPC 传输完整树和全部图标
+
+### P1 — 数据安全、核心 KeePass 工作流与高价值原生能力
+
+- [~] 官方同步/冲突语义：已完成 KeePass 条目级 merge、冲突历史保留和外部修改检测调研；待实现本地/远程版本检测、同步或覆盖提示、条目级合并及冲突测试。当前远程配置/transport 重构由用户并行处理，完成前不得修改或提交相关文件
+- [ ] 完整 Auto-Type 编辑器：可编辑 entry/group enable 状态、默认序列、窗口过滤与每窗口序列；全局热键多条目命中时显示选择对话框；继续复用现有字段引用、继承解析和 TCATO 后端
+- [ ] 当前数据库设置：允许查看/修改已打开数据库的 KDF、cipher、compression、KDF benchmark、history items/size、回收站策略和模板组；设置变更需重新保存并覆盖 round-trip/旧库兼容测试
+- [ ] 高级搜索与搜索配置档：支持字段范围、自定义字段、正则、排除条件、过期/标签/质量条件及保存搜索；快速搜索保持轻量，不引入与设置 segmented pattern 冲突的新控件样式
+- [ ] 密码生成器配置档：支持命名 profiles、自定义字符集、pattern/规则、必含/排除字符与新条目默认 profile；CSPRNG、安全边界和浏览器 bridge 生成行为保持一致
+- [ ] 多数据库标签页：后端从单一 `VaultSession` 演进为多 session 管理，分别维护密钥、dirty/revision、远程目标、浏览器会话可见性和锁定生命周期
+
+### P2 — KDBX 属性完整度与数据交换
+
+- [ ] 完整条目/分组属性编辑：开放 `OverrideURL`、`QualityCheck`、前景/背景色、group notes/tags、enableSearching、group Auto-Type 等可写契约；`CustomData` 仍只读并覆盖跨客户端保真测试
+- [ ] 安全附件预览/临时打开：文本/图片等优先内存预览；外部打开需显式确认、受控临时目录、关闭后导入或丢弃修改并可靠清理，不记录附件内容或密码
+- [ ] 扩充导入/导出：优先支持 Bitwarden、1Password、LastPass，随后增加 KDBX/XML/HTML/打印/应急表；所有明文导出必须给出明确安全提示
+- [ ] 数据库维护：相似密码、历史清理、过期维护、损坏库修复/尽力恢复，并为不可恢复写入设计只读失败路径
+
+### P3 — 受约束自动化与可选安全增强
+
+- [ ] 原生事件规则：提供有限的事件—条件—动作（打开/保存/锁定/定时、备份/同步/显示筛选），初期不开放任意脚本、任意命令执行或动态代码加载
+- [ ] HIBP 泄露检查：严格 opt-in，仅使用 k-anonymity 前缀查询，绝不发送密码或完整散列；支持离线关闭和隐私说明
+- [ ] 密钥文件生成/纸质备份与安全主密钥输入；Windows 用户账户密钥、YubiKey challenge-response 等在兼容性和恢复方案明确后逐项原生评估
+
 ## 后续候选(差距清单已清空)
 
 - 账户绑定 (Hardware-bound, TPM) —— 用户暂缓
