@@ -127,7 +127,7 @@ standard range-card capability is genuinely missing.
 
 ## Feedback and asynchronous state
 
-- Use `.settings-feedback`; add `.success` for success and default to error styling otherwise.
+- Use `.settings-feedback`; add `.success` for success and default to error styling otherwise. Add `.settings-feedback--inline` when the message belongs in the card flow instead of the panel overlay.
 - Clear feedback with a timer whose cleanup is retained when the component can unmount or messages can be replaced.
 - Disable controls or show a saving/loading state during commands that cannot safely overlap.
 - Keep restart-required state explicit for path/config changes that do not apply live.

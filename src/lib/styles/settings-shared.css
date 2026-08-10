@@ -447,6 +447,14 @@ header p {
   background: color-mix(in srgb, var(--success-color) 12%, var(--surface-bg));
 }
 
+.settings-feedback--inline {
+  position: static;
+  margin: 10px 0 0;
+  padding: 7px 9px;
+  border-radius: var(--settings-control-radius, 6px);
+  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+}
+
 /* ── inline field validation ── */
 .settings-input.input-invalid {
   border-color: color-mix(in srgb, var(--danger-color) 60%, var(--border-color));

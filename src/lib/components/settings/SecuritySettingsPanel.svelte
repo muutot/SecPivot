@@ -214,7 +214,9 @@
       </button>
     </div>
     {#if feedback}
-      <p class="mk-feedback" class:mk-feedback-ok={feedback.ok}>{feedback.message}</p>
+      <p class="settings-feedback settings-feedback--inline" class:success={feedback.ok}>
+        {feedback.message}
+      </p>
     {/if}
   </section>
 
@@ -271,21 +273,5 @@
   .settings-submit-button:disabled {
     cursor: wait;
     opacity: 0.6;
-  }
-
-  .mk-feedback {
-    margin: 10px 0 0;
-    padding: 7px 9px;
-    border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent);
-    border-radius: var(--settings-control-radius, 6px);
-    color: color-mix(in srgb, var(--danger-color) 75%, white);
-    background: color-mix(in srgb, var(--danger-color) 12%, var(--surface-bg));
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-  }
-
-  .mk-feedback.mk-feedback-ok {
-    border-color: color-mix(in srgb, var(--success-color) 35%, transparent);
-    color: color-mix(in srgb, var(--success-color) 75%, white);
-    background: color-mix(in srgb, var(--success-color) 12%, var(--surface-bg));
   }
 </style>

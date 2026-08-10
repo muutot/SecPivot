@@ -101,7 +101,7 @@ The settings shell defines the settings scope variables consumed by shell and ch
 - `.settings-input` / `.settings-select` control styles (`.settings-select` is legacy — new code uses the shared `Select.svelte` component);
 - `.settings-action-button` for compact secondary actions, including the `--field` modifier when the button must align with a 30px input;
 - `.settings-scroll--stack-rows` for panels whose fixed right-side row controls stack below the 720px settings breakpoint;
-- `.settings-feedback` success/error states;
+- `.settings-feedback` success/error states, with `--inline` for card-contained messages;
 - `.auto-save-note` and the default pointer cursor for buttons.
 
 `src/app.css` imports this file globally. Child panels must rely on these primitives and add only their panel-specific layout.
@@ -126,7 +126,7 @@ Do not use a parent scoped selector to style inside a child Svelte component. Pa
 - Slider card: heading/value on one row, unwrapped `input[type="range"].transparency-slider` below, and `--slider-pct` updated from the current value.
 - Number input: use textfield appearance and hide WebKit spin buttons.
 - Select: use the shared `Select.svelte` component (self-drawn trigger + fixed-position listbox, keyboard nav, `role="combobox"`/`listbox`); never introduce raw `<select>` markup. Trigger matches settings control size/radius/colors; the list is a `--surface-bg` popover at the popover z-index with a short pop-in animation that respects reduced motion.
-- Feedback: use `.settings-feedback` with `.success`; keep it dismissible by time and accessible.
+- Feedback: use `.settings-feedback` with `.success`; add `--inline` when the message belongs inside a card, and keep it dismissible by time and accessible.
 - Buttons and inputs need visible focus. Never remove outline without a replacement.
 - Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.
 
