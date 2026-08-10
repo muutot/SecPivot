@@ -1848,6 +1848,20 @@
                         {/if}</span
                       >
                     </span>
+                    <span class="mobile-entry-summary">
+                      <span class="entry-row-main">
+                        <span
+                          class="entry-row-title"
+                          title={row.entry.expired ? "已过期" : undefined}
+                          >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                            <span class="expired-flag">已过期</span>
+                          {/if}</span
+                        >
+                        {#if showDescriptions}
+                          <span class="entry-row-sub">{row.entry.username}</span>
+                        {/if}
+                      </span>
+                    </span>
                     {#each visibleCols as col (col.id)}
                       {#if col.id === "title"}
                         <span class="entry-row-col col-title">
@@ -2644,6 +2658,10 @@
     flex: 1;
   }
 
+  .mobile-entry-summary {
+    display: none;
+  }
+
   .entry-row-title {
     overflow: hidden;
     color: var(--text-primary);
@@ -3181,6 +3199,56 @@
     .entry-panel {
       min-width: 0;
       width: 100%;
+    }
+
+    .entry-table {
+      overflow-x: hidden;
+    }
+
+    .entry-table-head {
+      display: none;
+    }
+
+    .entry-list {
+      width: 100%;
+      overflow-x: hidden;
+    }
+
+    .entry-row,
+    .app-shell.compact .entry-row {
+      grid-template-columns: 44px minmax(0, 1fr) 100px;
+      width: 100%;
+      min-width: 0;
+      height: 48px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .entry-row-col {
+      display: none;
+    }
+
+    .entry-row-icon-cell,
+    .mobile-entry-summary,
+    .entry-row-actions {
+      border: 0;
+    }
+
+    .mobile-entry-summary {
+      display: flex;
+      min-width: 0;
+      height: 100%;
+      padding: 0 6px;
+    }
+
+    .entry-row-actions {
+      gap: 4px;
+      padding: 0 8px 0 2px;
+      opacity: 1;
+    }
+
+    .row-btn {
+      width: 28px;
+      height: 32px;
     }
 
     .group-resize-handle,
