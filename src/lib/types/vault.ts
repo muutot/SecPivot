@@ -79,8 +79,8 @@ export interface VaultGroup {
   notes?: string;
   /** KeePass group tags, comma-separated. Read-only for now. */
   tags?: string;
-  /** KeePass group expand flag — persisted via `set_group_expanded` so the
-   * tree reopens the same groups across sessions. */
+  /** KeePass group expand flag — persisted via `set_group_expanded` or the
+   * batch `set_groups_expanded` command so the tree restores its open state. */
   isExpanded: boolean;
   /** KDBX `CustomData` map items (plugin metadata from other KeePass clients),
    * sorted by key. Read-only — SecPivot never writes these. */

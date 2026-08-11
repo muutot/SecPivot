@@ -122,8 +122,8 @@ pub struct VaultGroup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
     /// KeePass group expand flag (`Group.is_expanded`). Persisted by
-    /// `set_group_expanded` so the tree restores its open state across
-    /// sessions.
+    /// `set_group_expanded` / `set_groups_expanded` so the tree restores its
+    /// open state across sessions.
     pub is_expanded: bool,
     /// KDBX `CustomData` map items, sorted by key. Read-only — SecPivot never
     /// writes these, they must survive edits and saves untouched.

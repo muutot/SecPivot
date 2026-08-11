@@ -111,6 +111,23 @@ export function buildGroupPathIndex(root: VaultGroup): GroupPathIndex {
   return index;
 }
 
+/** Atomically update several group expansion flags in a browser snapshot.
+ *  Every uuid is resolved before the first write so an unknown group leaves
+ *  the draft untouched, matching the backend batch command. */
+export function setGroupsExpandedInTree(
+  root: VaultGroup,
+  uuids: readonly string[],
+  expanded: boolean,
+): void {
+  const groupsByUuid = buildVaultTreeIndex(root).groupByUuid;
+  const groups = uuids.map((uuid) => {
+    const group = groupsByUuid.get(uuid);
+    if (!group || group.uuid === root.uuid) throw new Error("group not found");
+    return group;
+  });
+  for (const group of groups) group.isExpanded = expanded;
+}
+
 /** Find a group by uuid anywhere in the tree. */
 export function findGroup(root: VaultGroup, uuid: string): VaultGroup | null {
   if (root.uuid === uuid) return root;

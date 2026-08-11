@@ -1280,6 +1280,61 @@ fn group_expand_state_persists_and_survives_reopen() {
 }
 
 #[test]
+fn group_expand_batch_is_atomic_and_persists() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Mail".into(),
+            icon: None,
+        })
+        .unwrap();
+    let mail_uuid = state.root.children[0].uuid.clone();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Work".into(),
+            icon: None,
+        })
+        .unwrap();
+    let work_uuid = state
+        .root
+        .children
+        .iter()
+        .find(|group| group.name == "Work")
+        .unwrap()
+        .uuid
+        .clone();
+    session.save().unwrap();
+
+    let unknown = "00000000-0000-0000-0000-000000000000".to_owned();
+    assert!(session
+        .set_groups_expanded(&[mail_uuid.clone(), unknown, work_uuid.clone()], false,)
+        .is_err());
+    let state = session.snapshot().unwrap();
+    assert!(!state.dirty, "failed batch must not mark the vault dirty");
+    assert!(state.root.children.iter().all(|group| group.is_expanded));
+
+    let state = session
+        .set_groups_expanded(&[mail_uuid.clone(), work_uuid.clone()], false)
+        .unwrap();
+    assert!(state.dirty);
+    assert!(state.root.children.iter().all(|group| !group.is_expanded));
+    session.save().unwrap();
+
+    let state = session.set_groups_expanded(&[], true).unwrap();
+    assert!(!state.dirty, "empty batch must remain a no-op");
+    assert!(state.root.children.iter().all(|group| !group.is_expanded));
+
+    drop(session);
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    let state = reopened.snapshot().unwrap();
+    assert!(state.root.children.iter().all(|group| !group.is_expanded));
+}
+
+#[test]
 fn db_meta_name_and_description_round_trip() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

@@ -590,11 +590,33 @@ impl VaultSession {
     /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
     /// the tree reopens the same groups after a save + reopen.
     pub fn set_group_expanded(&mut self, uuid: &str, expanded: bool) -> Result<VaultState, String> {
-        let id = parse_group_id(uuid)?;
+        self.set_groups_expanded(&[uuid.to_owned()], expanded)
+    }
+
+    /// Persist several group expansion flags in one transaction. All ids are
+    /// validated before the first write so an unknown uuid cannot leave a
+    /// partially expanded/collapsed tree; the snapshot is built only once.
+    pub fn set_groups_expanded(
+        &mut self,
+        uuids: &[String],
+        expanded: bool,
+    ) -> Result<VaultState, String> {
+        if uuids.is_empty() {
+            return self.snapshot();
+        }
+        let ids: Vec<GroupId> = uuids
+            .iter()
+            .map(|uuid| parse_group_id(uuid))
+            .collect::<Result<_, _>>()?;
         {
             let db = self.require_db_mut()?;
-            let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
-            group.is_expanded = expanded;
+            for id in &ids {
+                db.group(*id).ok_or_else(|| "分组不存在".to_owned())?;
+            }
+            for id in ids {
+                let mut group = db.group_mut(id).expect("validated group must exist");
+                group.is_expanded = expanded;
+            }
         }
         self.mark_dirty();
         self.snapshot()

@@ -24,6 +24,8 @@
     ondropentry?: (groupUuid: string, uuids: string[]) => void;
     /** Persist a group's expand state (calls `set_group_expanded`). */
     ontoggle?: (uuid: string, expanded: boolean) => void;
+    /** Persist a bulk expand/collapse in one `set_groups_expanded` call. */
+    onsetexpanded: (uuids: string[], expanded: boolean) => void;
   }
 
   let {
@@ -42,6 +44,7 @@
     onemptybin,
     ondropentry,
     ontoggle,
+    onsetexpanded,
   }: Props = $props();
 
   function collectUuids(group: VaultGroup, into: Set<string>): void {
@@ -148,18 +151,17 @@
     const next = new Set<string>();
     collectUuids(root, next);
     expanded = next;
-    for (const uuid of next) {
-      if (uuid !== root.uuid) ontoggle?.(uuid, true);
-    }
+    const uuids = [...next].filter((uuid) => uuid !== root.uuid);
+    if (uuids.length > 0) onsetexpanded(uuids, true);
   }
 
   /** Collapse every group (keep only the root). */
   function collapseAll(): void {
-    const collapsed = new Set<string>(expanded);
+    const all = new Set<string>();
+    collectUuids(root, all);
     expanded = new Set([root.uuid]);
-    for (const uuid of collapsed) {
-      if (uuid !== root.uuid) ontoggle?.(uuid, false);
-    }
+    const uuids = [...all].filter((uuid) => uuid !== root.uuid);
+    if (uuids.length > 0) onsetexpanded(uuids, false);
   }
 </script>
 

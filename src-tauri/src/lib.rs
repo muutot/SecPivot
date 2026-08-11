@@ -291,6 +291,7 @@ pub fn run() {
             commands::rename_group,
             commands::set_group_icon,
             commands::set_group_expanded,
+            commands::set_groups_expanded,
             commands::update_db_meta,
             commands::get_entry_password,
             commands::get_entry_totp,

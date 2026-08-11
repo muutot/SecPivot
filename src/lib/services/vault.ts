@@ -26,6 +26,7 @@ import {
   findBinGroup,
   findEntry,
   findGroup,
+  setGroupsExpandedInTree,
 } from "$lib/utils/tree";
 
 interface VaultStore {
@@ -78,6 +79,7 @@ interface VaultStore {
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
   setGroupExpanded: (uuid: string, expanded: boolean) => Promise<VaultState>;
+  setGroupsExpanded: (uuids: string[], expanded: boolean) => Promise<VaultState>;
   updateDbMeta: (name?: string, description?: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   restoreGroup: (uuid: string) => Promise<VaultState>;
@@ -689,6 +691,24 @@ export const vault: VaultStore = {
       const group = findGroup(draft.root, uuid);
       if (!group) throw new Error("group not found");
       group.isExpanded = expanded;
+    });
+    state.set(result);
+    return result;
+  },
+
+  async setGroupsExpanded(uuids: string[], expanded: boolean): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("set_groups_expanded", { uuids, expanded });
+      state.set(result);
+      return result;
+    }
+    if (uuids.length === 0) {
+      const result = deepClone(browserState ?? buildDemoVaultState());
+      state.set(result);
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      setGroupsExpandedInTree(draft.root, uuids, expanded);
     });
     state.set(result);
     return result;
