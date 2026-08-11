@@ -53,6 +53,8 @@
     findGroupIn,
   } from "$lib/utils/tree";
 
+  const ENTRY_SORT_COLLATOR = new Intl.Collator("zh-CN", { numeric: true });
+
   /** The TCATO overlay window loads the same SPA with a `#/tcato` hash. */
   const isTcatoOverlay =
     typeof window !== "undefined" && window.location.hash.startsWith("#/tcato");
@@ -455,13 +457,17 @@
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     const col = sortCol;
-    return [...filteredEntries].sort((a, b) => {
-      const fav = Number(b.entry.favorite) - Number(a.entry.favorite);
+    const keyedEntries = filteredEntries.map((row) => ({
+      row,
+      favorite: Number(row.entry.favorite),
+      key: sortValue(row.entry, col),
+    }));
+    keyedEntries.sort((a, b) => {
+      const fav = b.favorite - a.favorite;
       if (fav !== 0) return fav;
-      const av = sortValue(a.entry, col);
-      const bv = sortValue(b.entry, col);
-      return av.localeCompare(bv, "zh-CN", { numeric: true }) * dir;
+      return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
     });
+    return keyedEntries.map(({ row }) => row);
   });
 
   function cycleSort(col: SortCol): void {
