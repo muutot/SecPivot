@@ -81,7 +81,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [ ] 条目列表窗口化：提取 `EntryTable`/表格状态逻辑，仅挂载可视区及缓冲行；保持固定列宽、横向滚动、列排序/拖拽/缩放、多选、Ctrl+A、键盘导航、条目拖拽和移动端摘要布局语义
 - [ ] 统一弹窗基础设施：新增使用现有 theme tokens 的 `ModalShell`（header/body/actions、size/tone），迁移重复的 `.modal-head/.modal-icon/.modal-actions/.modal-button/.text-input`，禁止形成第二套圆角、阴影、按钮和输入框样式
 - [ ] 统一 viewport 菜单与凭据表单：抽取 `ViewportMenuShell`（viewport clamp、Escape、click-outside）供右键菜单/列配置复用；抽取欢迎页与锁屏共用的 `StandaloneVaultShell`/`VaultCredentialFields`
-- [ ] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
+- [x] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
 - [ ] 缩小 mutation 状态传输：先将自定义图标资源与树快照拆分缓存，再引入 `revision + mutation result/delta`；不得让收藏、展开等小修改长期重建、编码并跨 IPC 传输完整树和全部图标
 
 ### P1 — 数据安全、核心 KeePass 工作流与高价值原生能力

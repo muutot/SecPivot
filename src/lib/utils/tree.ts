@@ -9,6 +9,8 @@ export interface VaultTreeIndex {
   recycleBinUuids: Set<string>;
 }
 
+export type GroupPathIndex = Map<string, Map<string, string>>;
+
 /** Per-root structural index built lazily and invalidated by object identity.
  *  A single depth-first walk supplies lookup maps, display paths, recycle-bin
  *  membership, and flat render lists so consumers do not rescan the same vault
@@ -88,6 +90,25 @@ export function collectEntries(root: VaultGroup): VaultEntry[] {
   const out: VaultEntry[] = [];
   walkGroups(root, (g) => out.push(...g.entries));
   return out;
+}
+
+/** Direct-child lookup used while resolving imported `A / B` group paths.
+ *  Building it once avoids rescanning the whole vault for every path segment.
+ *  Duplicate sibling names preserve the first depth-first match, matching the
+ *  previous `collectGroups(...).find(...)` behavior. */
+export function buildGroupPathIndex(root: VaultGroup): GroupPathIndex {
+  const index: GroupPathIndex = new Map();
+  walkGroups(root, (group) => {
+    if (group.uuid === root.uuid) return;
+    const parentUuid = group.parentUuid ?? root.uuid;
+    let children = index.get(parentUuid);
+    if (!children) {
+      children = new Map();
+      index.set(parentUuid, children);
+    }
+    if (!children.has(group.name)) children.set(group.name, group.uuid);
+  });
+  return index;
 }
 
 /** Find a group by uuid anywhere in the tree. */
