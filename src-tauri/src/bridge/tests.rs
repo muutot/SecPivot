@@ -1,5 +1,6 @@
 //! Protocol-core tests extracted from `bridge::mod.rs`.
 use super::*;
+use crate::config::PasswordGeneratorSettings;
 use crate::crypto::{hmac_sha256, random_bytes};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use std::collections::HashMap;
@@ -468,4 +469,74 @@ fn hex_bytes(s: &str) -> Vec<u8> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
         .collect()
+}
+
+#[test]
+fn generator_with_custom_charset_and_required() {
+    let settings = PasswordGeneratorSettings {
+        length: 8,
+        include_upper: true,
+        include_lower: true,
+        include_digits: true,
+        include_symbols: true,
+        exclude_similar: false,
+        exclude_ambiguous: false,
+        custom_charset: Some("ABC123".into()),
+        exclude_chars: None,
+        required_chars: Some("A3".into()),
+        pattern: None,
+        ..Default::default()
+    };
+    for _ in 0..20 {
+        let password = generate_password_with(&settings).unwrap();
+        assert_eq!(password.chars().count(), 8);
+        assert!(password.chars().all(|c| "ABC123".contains(c)));
+        assert!(password.contains('A') && password.contains('3'));
+    }
+}
+
+#[test]
+fn generator_with_exclusions_and_pattern() {
+    let settings = PasswordGeneratorSettings {
+        length: 4,
+        include_upper: true,
+        include_lower: true,
+        include_digits: true,
+        include_symbols: true,
+        exclude_similar: false,
+        exclude_ambiguous: false,
+        custom_charset: None,
+        exclude_chars: Some("1".into()),
+        required_chars: None,
+        pattern: Some("udlL".into()),
+        ..Default::default()
+    };
+    for _ in 0..20 {
+        let password = generate_password_with(&settings).unwrap();
+        let chars: Vec<char> = password.chars().collect();
+        assert!("ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(chars[0]));
+        assert!("0123456789".contains(chars[1]));
+        assert!("abcdefghijklmnopqrstuvwxyz".contains(chars[2]));
+        assert_eq!(chars[3], 'L');
+        assert!(!password.contains('1'));
+    }
+}
+
+#[test]
+fn generator_rejects_required_outside_pool() {
+    let settings = PasswordGeneratorSettings {
+        length: 8,
+        include_upper: true,
+        include_lower: true,
+        include_digits: true,
+        include_symbols: true,
+        exclude_similar: false,
+        exclude_ambiguous: false,
+        custom_charset: Some("ABC".into()),
+        exclude_chars: None,
+        required_chars: Some("X".into()),
+        pattern: None,
+        ..Default::default()
+    };
+    assert!(generate_password_with(&settings).is_err());
 }

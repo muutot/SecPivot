@@ -8,7 +8,15 @@ use super::types::{
     decrypt_request_field, BridgeEntry, BridgeHost, BridgeLogin, BridgeRequest, BridgeResponse,
 };
 use super::{KEY_LEN, NONCE_LEN, PROTOCOL_VERSION};
+use crate::config::PasswordGeneratorSettings;
 use crate::crypto::random_bytes;
+
+const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";
+const DIGITS: &str = "0123456789";
+const SYMBOLS: &str = "!@#$%^&*()-_=+[]{};:,.<>?";
+const SIMILAR: &str = "Il1O0";
+const AMBIGUOUS: &str = "{}[]()/\\'\"`~,;:.<>";
 /// Handle one KeePassHttp request against `host`. `approve` is invoked once
 /// for a fresh `associate` (the user's explicit consent in the desktop UI);
 /// returning `false` rejects the client.
@@ -225,22 +233,138 @@ fn rand_index(bound: usize) -> usize {
 /// each category guaranteed — mirrors the app's default generator settings
 /// (`DEFAULT_DATABASE_SETTINGS.generator`). Shared with the KeePassRPC bridge.
 pub(crate) fn generate_password() -> String {
-    const LEN: usize = 20;
-    const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";
-    const DIGITS: &str = "0123456789";
-    const SYMBOLS: &str = "!@#$%^&*()-_=+[]{};:,.<>?";
-    let pool: Vec<char> = format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect();
-    let mut out: Vec<char> = (0..LEN).map(|_| pool[rand_index(pool.len())]).collect();
-    for category in [UPPER, LOWER, DIGITS, SYMBOLS] {
-        if !out.iter().any(|c| category.contains(*c)) {
-            let pos = rand_index(out.len());
-            let category_len = category.chars().count();
-            out[pos] = category
-                .chars()
-                .nth(rand_index(category_len))
-                .expect("category is non-empty");
+    generate_password_with(&PasswordGeneratorSettings::default())
+        .expect("default generator settings are valid")
+}
+
+/// Same rule engine as the renderer `generatePassword` (custom charset,
+/// exclusions, required chars, and `u/l/d/s/a` patterns). Randomness always
+/// comes from the OS RNG; an empty pool falls back to upper+lower+digits.
+pub(crate) fn generate_password_with(
+    settings: &PasswordGeneratorSettings,
+) -> Result<String, String> {
+    let pool = build_pool(settings);
+    let required = unique_chars(settings.required_chars.as_deref().unwrap_or(""));
+    for required_char in &required {
+        if !pool.contains(required_char) {
+            return Err(format!("必含字符 {required_char} 不在字符池中"));
         }
     }
-    out.into_iter().collect()
+
+    if let Some(pattern) = settings.pattern.as_deref() {
+        if !pattern.is_empty() {
+            let mut out: Vec<char> = pattern
+                .chars()
+                .map(|code| match code {
+                    'u' | 'l' | 'd' | 's' => {
+                        let category = category_chars(code, settings);
+                        if category.is_empty() {
+                            pick(&pool)
+                        } else {
+                            pick(&category)
+                        }
+                    }
+                    'a' => pick(&pool),
+                    literal => literal,
+                })
+                .collect();
+            guarantee_required(&mut out, &required);
+            return Ok(out.into_iter().collect());
+        }
+    }
+
+    let len = usize::try_from(settings.length.max(1)).unwrap_or(20);
+    let mut out: Vec<char> = (0..len).map(|_| pick(&pool)).collect();
+    if settings.custom_charset.as_deref().unwrap_or("").is_empty() {
+        for (category, enabled) in [
+            (UPPER, settings.include_upper),
+            (LOWER, settings.include_lower),
+            (DIGITS, settings.include_digits),
+        ] {
+            if enabled && !out.iter().any(|c| category.contains(*c)) {
+                let category_chars = category_chars_for(category, settings);
+                if !category_chars.is_empty() {
+                    let pos = rand_index(out.len());
+                    out[pos] = pick(&category_chars);
+                }
+            }
+        }
+    }
+    guarantee_required(&mut out, &required);
+    Ok(out.into_iter().collect())
+}
+
+fn build_pool(settings: &PasswordGeneratorSettings) -> Vec<char> {
+    let mut pool: Vec<char> = if let Some(custom) = settings.custom_charset.as_deref() {
+        if !custom.is_empty() {
+            custom.chars().collect()
+        } else {
+            format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect()
+        }
+    } else {
+        format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect()
+    };
+    if settings.exclude_similar {
+        pool.retain(|c| !SIMILAR.contains(*c));
+    }
+    if settings.exclude_ambiguous {
+        pool.retain(|c| !AMBIGUOUS.contains(*c));
+    }
+    if let Some(excluded) = settings.exclude_chars.as_deref() {
+        let excluded: Vec<char> = excluded.chars().collect();
+        pool.retain(|c| !excluded.contains(c));
+    }
+    if pool.is_empty() {
+        pool = format!("{UPPER}{LOWER}{DIGITS}").chars().collect();
+    }
+    pool
+}
+
+fn category_chars_for(category: &str, settings: &PasswordGeneratorSettings) -> Vec<char> {
+    let mut chars: Vec<char> = category.chars().collect();
+    if settings.exclude_similar {
+        chars.retain(|c| !SIMILAR.contains(*c));
+    }
+    if settings.exclude_ambiguous {
+        chars.retain(|c| !AMBIGUOUS.contains(*c));
+    }
+    if let Some(excluded) = settings.exclude_chars.as_deref() {
+        let excluded: Vec<char> = excluded.chars().collect();
+        chars.retain(|c| !excluded.contains(c));
+    }
+    chars
+}
+
+fn category_chars(code: char, settings: &PasswordGeneratorSettings) -> Vec<char> {
+    let category = match code {
+        'u' => UPPER,
+        'l' => LOWER,
+        'd' => DIGITS,
+        's' => SYMBOLS,
+        _ => "",
+    };
+    category_chars_for(category, settings)
+}
+
+fn unique_chars(value: &str) -> Vec<char> {
+    let mut seen = Vec::new();
+    for c in value.chars() {
+        if !seen.contains(&c) {
+            seen.push(c);
+        }
+    }
+    seen
+}
+
+fn guarantee_required(out: &mut [char], required: &[char]) {
+    for required_char in required {
+        if out.contains(required_char) {
+            continue;
+        }
+        out[rand_index(out.len())] = *required_char;
+    }
+}
+
+fn pick(pool: &[char]) -> char {
+    pool[rand_index(pool.len())]
 }
