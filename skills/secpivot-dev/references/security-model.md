@@ -6,7 +6,7 @@ SecPivot stores credentials in standard KDBX 4.0 files. This reference documents
 
 - **Local-only**: the vault master password and the derived key never leave the machine. There is no telemetry or automatic upload. The one exception is the opt-in remote vault feature (S3 or WebDAV): opening or creating a remote vault sends the KDBX payload (encrypted with the master key) to the configured endpoint, and `save()` uploads it back. Local vaults never touch the network. Master passwords still never leave the machine — they cross the IPC to the backend only, and never to the remote storage.
 - **In-memory session**: the decrypted database and the master password live only in backend managed state while a vault is open. `close_vault` and lock paths clear the session and zeroize the password buffer.
-- **No persistence of secrets**: config (`config.json`) stores only preferences, never passwords or vault content. The browser demo fallback stores fake demo data only.
+- **No vault-secret persistence**: config (`config.json`) never stores vault master passwords, entry passwords, or vault content. Opt-in remote-storage credentials are the narrow exception: on Windows they are DPAPI-encrypted before persistence; non-Windows currently lacks an equivalent store and retains plaintext. The browser demo fallback stores fake demo data only.
 - **Clipboard hygiene**: copying a password schedules an automatic clear after `clipboardClearSeconds` (0 disables). The timer is reset on each copy and skipped when the user copies other content afterward. Lock clears the clipboard when `clearOnLock` is enabled.
 - **No secret logging**: password and vault content must never be written to logs, debug output, or error strings.
 - **Read-only degradation**: after 3 consecutive failed saves the session reports `readOnly` and refuses the write path (`save`, master-key change, storage re-encrypt) with guidance to use save-as; `save_vault_as` stays available and a successful persist resets the counter. The UI disables the save button and shows a "只读" badge so users never assume changes were persisted.
@@ -35,7 +35,7 @@ With `minimizeToTray` on (default), closing the main window does **not** lock �
 
 ## KeePass strengths
 
-The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCha20), and compression. Defaults favor Argon2id + AES-256 + Gzip. Customizing these only affects newly created databases.
+The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCha20), and compression. Defaults favor Argon2id + AES-256 + Gzip for newly created databases. The database-settings dialog can also change an open vault's KDF, cipher, or compression; the next save re-encrypts the whole database with the existing master key, and the backend persistence test verifies the settings survive reopen.
 
 ## Password generation
 
