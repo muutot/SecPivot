@@ -208,13 +208,14 @@ pub(crate) fn update_database_settings(
 #[tauri::command]
 pub(crate) fn save_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
+    force: bool,
 ) -> Result<VaultState, String> {
     // Capture a cheap job under the lock, then run KDF + serialization +
     // transport outside it, then mark clean under the lock again.
     let job = session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .prepare_save()?;
+        .prepare_save(force)?;
     let revision = job.revision;
     match vault::persist_save(job) {
         Ok(new_hash) => session
@@ -231,6 +232,18 @@ pub(crate) fn save_vault(
             Err(e)
         }
     }
+}
+
+/// Download the remote vault's latest bytes and replace the in-memory
+/// session (discards local unsaved edits). Only for remote sessions.
+#[tauri::command]
+pub(crate) fn refresh_remote_vault(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .refresh_remote()
 }
 
 #[tauri::command]

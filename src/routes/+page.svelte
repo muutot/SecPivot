@@ -104,6 +104,7 @@
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
+  let remoteConflict = $state<string | null>(null);
   let similarOpen = $state(false);
   let expiredOpen = $state(false);
   let hibpOpen = $state(false);
@@ -716,7 +717,41 @@
       selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
       flash("已保存到数据库");
     } catch (e) {
-      flash(`保存失败：${e}`);
+      const message = String(e);
+      if (message.startsWith("REMOTE_CHANGED")) {
+        remoteConflict = message.replace("REMOTE_CHANGED\n", "");
+      } else {
+        flash(`保存失败：${message}`);
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function resolveRemoteConflict(action: "overwrite" | "download"): Promise<void> {
+    const message = remoteConflict;
+    remoteConflict = null;
+    if (!currentVault) return;
+    if (
+      action === "download" &&
+      !window.confirm("下载远程版本将丢弃当前未保存的本地修改，继续？")
+    ) {
+      remoteConflict = message;
+      return;
+    }
+    busy = true;
+    try {
+      if (action === "overwrite") {
+        const saved = await vault.save(true);
+        selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
+        flash("已覆盖远程版本");
+      } else {
+        const refreshed = await vault.refreshRemote();
+        selectedEntry = findEntryByUuid(refreshed, selectedEntry?.uuid ?? null);
+        flash("已下载远程版本");
+      }
+    } catch (e) {
+      flash(`操作失败：${e}`);
     } finally {
       busy = false;
     }
@@ -2235,6 +2270,29 @@
   </ModalShell>
 {/if}
 
+{#if remoteConflict}
+  <ModalShell
+    title="远程库已变更"
+    description="保存前检测到远程版本已被其他设备修改"
+    size="small"
+    closeOnEscape
+    onclose={() => (remoteConflict = null)}
+  >
+    {#snippet children()}
+      <p class="conflict-note">{remoteConflict}</p>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (remoteConflict = null)}>取消（保留本地）</button>
+      <button class="modal-button" onclick={() => void resolveRemoteConflict("download")}>
+        下载远程
+      </button>
+      <button class="modal-button danger" onclick={() => void resolveRemoteConflict("overwrite")}>
+        覆盖远程
+      </button>
+    {/snippet}
+  </ModalShell>
+{/if}
+
 {#if confirmState}
   <ModalShell
     title="确认删除"
@@ -3049,5 +3107,13 @@
     color: var(--danger-color);
     font-size: var(--font-size-secondary, 11px);
     cursor: pointer;
+  }
+
+  .conflict-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+    line-height: 1.6;
+    white-space: pre-wrap;
   }
 </style>

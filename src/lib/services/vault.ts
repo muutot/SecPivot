@@ -72,7 +72,9 @@ interface VaultStore {
   close: () => Promise<void>;
   /** Close every open session (lock path); `remembered` stays for quick-reopen. */
   closeAll: () => Promise<void>;
-  save: () => Promise<VaultState>;
+  save: (force?: boolean) => Promise<VaultState>;
+  /** Download the remote vault's latest bytes and replace the session. */
+  refreshRemote: () => Promise<VaultState>;
   saveAs: (path: string) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
@@ -547,9 +549,9 @@ export const vault: VaultStore = {
     return result.state;
   },
 
-  async save(): Promise<VaultState> {
+  async save(force = false): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("save_vault");
+      const result = await backendInvoke<VaultState>("save_vault", { force });
       state.set(applyBackendState(result));
       await refreshTabs();
       return result;
@@ -561,6 +563,14 @@ export const vault: VaultStore = {
     state.set(saved);
     await browserPersist(saved);
     return saved;
+  },
+
+  async refreshRemote(): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
+    const result = await backendInvoke<VaultState>("refresh_remote_vault");
+    state.set(applyBackendState(result));
+    await refreshTabs();
+    return result;
   },
 
   /** Save As: persist to a new local path and switch the session target. */

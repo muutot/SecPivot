@@ -2548,7 +2548,7 @@ fn concurrent_edit_during_save_keeps_dirty_flag() {
         .unwrap();
     // An edit lands between the save's prepare (locked) and completion
     // (locked again): the completion must not clear the new dirty state.
-    let job = session.prepare_save().unwrap();
+    let job = session.prepare_save(false).unwrap();
     let revision = job.revision;
     persist_save(job).unwrap();
     session.mark_dirty();
@@ -5096,6 +5096,71 @@ fn remote_save_detects_external_change_and_conflicts_do_not_trigger_read_only() 
     storage.put("vaults/seed.kdbx", &[1u8; 64]).unwrap();
     let err = session.save().unwrap_err();
     assert!(err.starts_with("REMOTE_CHANGED"), "unexpected: {err}");
+}
+
+#[test]
+fn remote_conflict_resolution_force_save_and_refresh() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Local".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let original = storage.get("vaults/seed.kdbx").unwrap();
+    storage.put("vaults/seed.kdbx", &[7u8; 32]).unwrap();
+    assert!(session.save().unwrap_err().starts_with("REMOTE_CHANGED"));
+
+    // 覆盖远程: force save overwrites and advances the base hash.
+    let job = session.prepare_save(true).unwrap();
+    let revision = job.revision;
+    let new_hash = persist_save(job).unwrap();
+    session.complete_save(revision, new_hash).unwrap();
+    let remote_now = storage.get("vaults/seed.kdbx").unwrap();
+    assert_ne!(remote_now.as_slice(), [7u8; 32]);
+    storage.put("vaults/seed.kdbx", &[9u8; 32]).unwrap();
+    assert!(session.save().unwrap_err().starts_with("REMOTE_CHANGED"));
+
+    // 下载远程: refresh replaces the session (local edit discarded) and
+    // advances the base hash so the next save succeeds.
+    storage.put("vaults/seed.kdbx", &original).unwrap();
+    let refreshed = session.refresh_remote().unwrap();
+    assert!(!refreshed.dirty);
+    assert!(
+        !refreshed.root.entries.iter().any(|e| e.title == "Local"),
+        "refresh must discard the local unsaved edit"
+    );
+    assert!(
+        session.save().is_ok(),
+        "base hash must advance after refresh"
+    );
 }
 
 #[test]

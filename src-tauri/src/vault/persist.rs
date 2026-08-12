@@ -45,6 +45,8 @@ pub(crate) struct SaveJob {
     pub keyfile: Option<Vec<u8>>,
     pub target: SaveTarget,
     pub revision: u64,
+    /// Skip the remote conflict check (explicit "覆盖远程" user choice).
+    pub force: bool,
 }
 
 /// Read an optional keyfile into memory (called without the session lock).
@@ -178,6 +180,7 @@ pub(crate) fn persist_snapshot(
     db: &Database,
     key: &DatabaseKey,
     target: &SaveTarget,
+    force: bool,
 ) -> Result<[u8; 32], String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key.clone())
@@ -192,17 +195,19 @@ pub(crate) fn persist_snapshot(
             backup_template,
             base_hash,
         } => {
-            // Conflict check: refuse to overwrite a remote file that changed
-            // since it was opened/last saved.
-            let current = storage
-                .get(key)
-                .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
-            if crate::crypto::sha256_bytes(&current) != *base_hash {
-                return Err(format!(
-                    "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择覆盖远程、下载远程或保留本地",
-                    current.len(),
-                    buffer.len(),
-                ));
+            if !force {
+                // Conflict check: refuse to overwrite a remote file that
+                // changed since it was opened/last saved.
+                let current = storage
+                    .get(key)
+                    .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
+                if crate::crypto::sha256_bytes(&current) != *base_hash {
+                    return Err(format!(
+                        "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择覆盖远程、下载远程或保留本地",
+                        current.len(),
+                        buffer.len(),
+                    ));
+                }
             }
             storage
                 .put(key, &buffer)
@@ -230,7 +235,7 @@ pub(crate) fn persist_snapshot(
 /// persist. Secret clones are zeroized afterwards.
 pub(crate) fn persist_save(job: SaveJob) -> Result<[u8; 32], String> {
     let key = build_database_key(&job.password, job.keyfile.as_deref())?;
-    let result = persist_snapshot(&job.db, &key, &job.target);
+    let result = persist_snapshot(&job.db, &key, &job.target, job.force);
     let mut password = job.password;
     wipe_secret_string(&mut password);
     if let Some(mut keyfile) = job.keyfile {
@@ -248,7 +253,7 @@ pub(crate) fn persist_change(
     target: &SaveTarget,
 ) -> Result<[u8; 32], String> {
     let key = build_database_key(password, keyfile)?;
-    persist_snapshot(db, &key, target)
+    persist_snapshot(db, &key, target, false)
 }
 
 /// Write attachment bytes extracted under the lock (file I/O outside it).

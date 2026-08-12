@@ -2,7 +2,8 @@
 //! the lock-free prepare/persist handoff internals (extracted from mod.rs).
 
 use super::helpers::{
-    apply_cipher, apply_compression, apply_kdf, wipe_secret_bytes, wipe_secret_string,
+    apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
+    wipe_secret_bytes, wipe_secret_string,
 };
 use super::persist::{
     persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
@@ -10,6 +11,7 @@ use super::persist::{
 };
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
+use crate::remote::backup::{remote_key_basename, write_local_copy};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::Database;
@@ -302,7 +304,7 @@ impl VaultSession {
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
-        let job = self.prepare_save()?;
+        let job = self.prepare_save(false)?;
         let revision = job.revision;
         let new_hash = match persist_save(job) {
             Ok(hash) => hash,
@@ -335,6 +337,51 @@ impl VaultSession {
             }
         };
         self.complete_change(password.to_owned(), keyfile_bytes, revision, new_hash)
+    }
+
+    /// Download the remote vault's latest bytes, decrypt with the session
+    /// key and replace the in-memory database (discarding local unsaved
+    /// edits). Advances the sync base hash. Only valid for remote sessions.
+    pub fn refresh_remote(&mut self) -> Result<VaultState, String> {
+        let (storage, key, password, keyfile, mode, local_dir, backup_count, backup_template) = {
+            let remote = self
+                .remote
+                .as_ref()
+                .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
+            (
+                remote.storage.clone(),
+                remote.key.clone(),
+                self.require_password()?.to_owned(),
+                self.keyfile.clone(),
+                remote.mode,
+                remote.local_dir.clone(),
+                remote.backup_count,
+                remote.backup_template.clone(),
+            )
+        };
+        let data = storage
+            .get(&key)
+            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
+        let db_key = build_database_key(&password, keyfile.as_deref())?;
+        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
+        self.db = Some(db);
+        self.dirty = false;
+        self.modified_at = now_iso();
+        self.cached_snapshot = None;
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = crate::crypto::sha256_bytes(&data);
+        }
+        if mode == RemoteMode::SaveLocal {
+            write_local_copy(
+                &local_dir,
+                &remote_key_basename(&key),
+                &data,
+                backup_count,
+                &backup_template,
+            )
+            .map_err(|e| format!("刷新本地副本失败: {e}"))?;
+        }
+        self.snapshot()
     }
 
     /// Save As: persist the current database (same master key) to a new local
@@ -521,7 +568,7 @@ impl VaultSession {
     /// Capture everything `persist_save` needs. Cheap (no KDF, no I/O): a
     /// database clone plus the target info, so the slow work can run outside
     /// the session lock.
-    pub(crate) fn prepare_save(&self) -> Result<SaveJob, String> {
+    pub(crate) fn prepare_save(&self, force: bool) -> Result<SaveJob, String> {
         self.ensure_writable()?;
         let (db, target, revision) = self.prepare_change()?;
         Ok(SaveJob {
@@ -530,6 +577,7 @@ impl VaultSession {
             keyfile: self.keyfile.clone(),
             target,
             revision,
+            force,
         })
     }
 
@@ -544,6 +592,7 @@ impl VaultSession {
             keyfile: self.keyfile.clone(),
             target: SaveTarget::Local(path.to_path_buf()),
             revision: self.revision,
+            force: false,
         })
     }
 

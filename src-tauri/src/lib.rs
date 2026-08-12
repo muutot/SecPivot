@@ -284,6 +284,7 @@ pub fn run() {
             commands::get_database_settings,
             commands::update_database_settings,
             commands::save_vault,
+            commands::refresh_remote_vault,
             commands::save_vault_as,
             commands::change_master_key,
             commands::add_entry,
