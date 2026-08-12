@@ -467,6 +467,10 @@
   let groupWidth = $state(get(appSettings).general.panelWidths.group);
   let detailWidth = $state(get(appSettings).general.panelWidths.detail);
   let detailVisible = $state(false);
+  /** Set before a selection change that must not auto-open the detail panel
+   *  (right-click context menu). Consumed by the effect below. Deliberately
+   *  non-reactive: the effect must not track it and re-run when it resets. */
+  let suppressDetailAutoOpen = false;
   /** Whether the group tree drawer is open on narrow/mobile layouts. */
   let mobileNavOpen = $state(false);
 
@@ -478,8 +482,13 @@
 
   $effect(() => {
     if (selectedEntry) {
-      detailVisible = true;
+      if (suppressDetailAutoOpen) {
+        suppressDetailAutoOpen = false;
+      } else {
+        detailVisible = true;
+      }
     } else {
+      suppressDetailAutoOpen = false;
       detailVisible = false;
     }
   });
@@ -1530,6 +1539,9 @@
     event.stopPropagation();
     blankMenu = null;
     toolbarMenu = null;
+    // Right-click updates the selection (so menu actions target this entry)
+    // but must not force the detail panel open.
+    if (selectedEntry !== entry) suppressDetailAutoOpen = true;
     if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
     selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
