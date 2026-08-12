@@ -20,6 +20,7 @@ import type {
   TempAttachmentRef,
   SecurityReport,
   SimilarPasswordGroup,
+  HistoryCleanResult,
   FaviconReport,
   MutationDelta,
   DatabaseSettings,
@@ -91,6 +92,7 @@ interface VaultStore {
   getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
   similarPasswords: () => Promise<SimilarPasswordGroup[]>;
+  clearAllHistory: () => Promise<number>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
@@ -801,6 +803,13 @@ export const vault: VaultStore = {
   async similarPasswords(): Promise<SimilarPasswordGroup[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持相似密码检查");
     return backendInvoke<SimilarPasswordGroup[]>("similar_passwords");
+  },
+
+  async clearAllHistory(): Promise<number> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持历史清理");
+    const result = await backendInvoke<HistoryCleanResult>("clear_all_history");
+    state.set(applyBackendState(result.state));
+    return result.cleared;
   },
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {

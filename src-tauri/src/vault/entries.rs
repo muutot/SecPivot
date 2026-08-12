@@ -459,6 +459,37 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Clear the stored history of every entry in the database. The current
+    /// entry state is kept; only the snapshot history is removed.
+    pub fn clear_all_history(&mut self) -> Result<HistoryCleanResult, String> {
+        let mut ids: Vec<EntryId> = Vec::new();
+        {
+            let db = self.require_db()?;
+            fn collect(group: &keepass::db::GroupRef<'_>, ids: &mut Vec<EntryId>) {
+                for entry in group.entries() {
+                    ids.push(entry.id());
+                }
+                for child in group.groups() {
+                    collect(&child, ids);
+                }
+            }
+            collect(&db.root(), &mut ids);
+        }
+        let mut cleared = 0usize;
+        {
+            let db = self.require_db_mut()?;
+            for id in ids {
+                let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                if entry.history.take().is_some() {
+                    cleared += 1;
+                }
+            }
+        }
+        self.mark_dirty();
+        let state = self.snapshot_without_icons()?;
+        Ok(HistoryCleanResult { cleared, state })
+    }
+
     /// Restore a recycled entry to its original group (or root when the
     /// original group no longer exists).
     pub fn restore_entry(&mut self, uuid: &str) -> Result<VaultState, String> {

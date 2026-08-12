@@ -577,6 +577,15 @@ pub struct SimilarPasswordGroup {
     pub entries: Vec<SimilarEntry>,
 }
 
+/// Result of clearing every entry's stored history: how many entries had
+/// history removed plus the refreshed authoritative state.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryCleanResult {
+    pub cleared: usize,
+    pub state: VaultState,
+}
+
 /// One favicon job: a URL host plus every entry UUID that references it.
 #[derive(Debug, Clone)]
 pub struct FaviconJob {

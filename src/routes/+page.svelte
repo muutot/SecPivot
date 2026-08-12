@@ -793,6 +793,17 @@
     }
   }
 
+  async function handleClearHistory(): Promise<void> {
+    if (!currentVault) return;
+    if (!window.confirm("将删除所有条目的历史版本快照（当前条目内容不受影响）。继续？")) return;
+    try {
+      const cleared = await vault.clearAllHistory();
+      flash(`已清理 ${cleared} 个条目的历史`);
+    } catch (e) {
+      flash(`清理历史失败：${e}`);
+    }
+  }
+
   async function handleOpenReport(): Promise<void> {
     if (reportOpen || busy || !currentVault) return;
     busy = true;
@@ -1570,6 +1581,7 @@
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
+    { id: "clear-history", label: "清理全部历史", icon: "trash" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
@@ -1646,6 +1658,7 @@
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();
     else if (id === "similar-passwords") similarOpen = true;
+    else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
     else if (id === "export-emergency") emergencyExportOpen = true;

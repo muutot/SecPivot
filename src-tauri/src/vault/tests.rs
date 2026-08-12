@@ -3916,6 +3916,41 @@ fn similar_passwords_clusters_edits_and_skips_recycle_bin() {
 }
 
 #[test]
+fn clear_all_history_wipes_every_snapshot_and_persists() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mk = |password: &str| EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: "E".into(),
+        username: "u".into(),
+        password: password.into(),
+        url: String::new(),
+        notes: String::new(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+    let state = session.add_entry(&mk("pw1")).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    session.update_entry(&uuid, &mk("pw2")).unwrap();
+    session.update_entry(&uuid, &mk("pw3")).unwrap();
+    assert!(!session.get_entry_history(&uuid).unwrap().is_empty());
+
+    let result = session.clear_all_history().unwrap();
+    assert!(result.cleared >= 1);
+    assert!(session.get_entry_history(&uuid).unwrap().is_empty());
+
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    assert!(reopened.get_entry_history(&uuid).unwrap().is_empty());
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

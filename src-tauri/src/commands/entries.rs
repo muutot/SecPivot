@@ -73,6 +73,18 @@ pub(crate) fn similar_passwords(
         .similar_passwords()
 }
 
+/// Clear the stored history of every entry; returns how many entries had
+/// history removed plus the refreshed state.
+#[tauri::command]
+pub(crate) fn clear_all_history(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<crate::vault::HistoryCleanResult, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .clear_all_history()
+}
+
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).
 #[tauri::command]
 pub(crate) fn get_entry_storage(

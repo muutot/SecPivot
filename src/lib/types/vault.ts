@@ -237,6 +237,12 @@ export interface SimilarPasswordGroup {
   entries: SimilarEntry[];
 }
 
+/** Result of clearing every entry's stored history. */
+export interface HistoryCleanResult {
+  cleared: number;
+  state: VaultState;
+}
+
 /** Result of `download_favicons` (KeePass "Download Favicons"). */
 export interface FaviconReport {
   attempted: number;

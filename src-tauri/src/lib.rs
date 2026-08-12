@@ -329,6 +329,7 @@ pub fn run() {
             commands::get_entry_storage,
             commands::security_report,
             commands::similar_passwords,
+            commands::clear_all_history,
             commands::export_csv,
             commands::export_emergency_sheet,
             commands::download_favicons,
