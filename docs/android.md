@@ -58,7 +58,8 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 5. 打包与 CI
 
-- 跟随桌面发布：`release.yml` 已新增 `android` job（见 CI 改动），tag 发布时在 GitHub-hosted runner 上构建 **release APK** 并上传至同一次 release
+- 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上构建 **release APK** 并上传至同一次 release；APK 上传前会等待桌面 job 经 tauri-action 创建的 release 就绪。
+- Android 目标需编译 `openssl-sys`（rust-s3 的 native-tls 硬依赖，无特性开关可避）；NDK 不带 OpenSSL，故在 `Cargo.toml` 对 `cfg(target_os = "android")` 启用 `openssl = { features = ["vendored"] }`，由 openssl-src 交叉编译。该交叉编译只能发生在非 Windows host（OpenSSL 拒绝 Windows perl 路径格式），因此 `android` job 固定在 Linux。
 - 签名配置：`scripts/configure-android-signing.ps1` 从 secrets（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS`）生成 `keystore.properties` 并幂等 patch `build.gradle.kts`（Tauri 2 模板默认无 signingConfigs）；需先在任意有 JDK 的机器生成 keystore：
   ```
   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload

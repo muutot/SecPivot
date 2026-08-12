@@ -144,8 +144,11 @@ jobs:
 
   android:
     name: Build (Android APK)
-    needs: build
-    runs-on: windows-latest
+    # Parallel to the Windows build: runs as soon as verification passes. The
+    # job must stay on Linux — openssl-src (vendored OpenSSL for the Android
+    # target) cannot cross-compile OpenSSL from a native Windows host.
+    needs: verify
+    runs-on: ubuntu-latest
     env:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
@@ -189,24 +192,31 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: .\scripts\configure-android-signing.ps1
+        shell: pwsh
+        run: ./scripts/configure-android-signing.ps1
 
       - name: Build Android APK (release)
         run: npx tauri android build
         working-directory: src-tauri
 
       - name: Upload Android APK to release
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: |
-          $apk = Get-ChildItem "src-tauri\gen\android\*.apk" -Recurse -ErrorAction SilentlyContinue
-          if ($apk) {
-            foreach ($a in $apk) {
-              gh release upload "$env:RELEASE_TAG" $a.FullName --clobber
-              Write-Host "Uploaded $($a.Name)"
-            }
-          } else {
-            Write-Host "No Android APK found — nothing to upload."
-          }
+          # The Windows build job creates the release via tauri-action; this job
+          # runs in parallel, so wait for the release to exist before uploading.
+          for i in $(seq 1 90); do
+            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+          apk=$(find "src-tauri/gen/android" -name "*.apk" -type f | head -n 1)
+          if [ -n "$apk" ]; then
+            gh release upload "$RELEASE_TAG" "$apk" --clobber
+            echo "Uploaded $apk"
+          else
+            echo "No Android APK found — nothing to upload."
+          fi
