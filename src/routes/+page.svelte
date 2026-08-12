@@ -41,6 +41,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
+  import AdvancedSearchDialog from "$lib/components/AdvancedSearchDialog.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
@@ -50,6 +51,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
+  import { matchesAdvancedSearch, type AdvancedSearchQuery } from "$lib/utils/entry-search";
   import {
     buildGroupPathIndex,
     buildVaultTreeIndex,
@@ -69,6 +71,8 @@
   let currentVault = $state<VaultState | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
+  let advancedQuery = $state<AdvancedSearchQuery | null>(null);
+  let advancedSearchOpen = $state(false);
   let selectedGroup = $state<string | null>(null);
   let revealGroupUuid = $state<string | null>(null);
   let selectedEntry = $state<VaultEntry | null>(null);
@@ -310,6 +314,7 @@
       if (!group.enableSearching) continue;
       for (const entry of group.entries) {
         if (query && !searchTextFor(entry).includes(query)) continue;
+        if (advancedQuery && !matchesAdvancedSearch(entry, advancedQuery)) continue;
         result.push({ entry });
       }
     }
@@ -1629,6 +1634,15 @@
                 >×</button
               >
             {/if}
+            <button
+              class="filter-button"
+              class:active={advancedQuery !== null}
+              onclick={() => (advancedSearchOpen = true)}
+              title="高级搜索"
+              aria-label="高级搜索"
+            >
+              <AppIcon name="sliders" size={13} />
+            </button>
           </div>
         </div>
 
@@ -1867,6 +1881,15 @@
 
 {#if dbSettingsOpen}
   <DatabaseSettingsDialog onclose={() => (dbSettingsOpen = false)} />
+{/if}
+
+{#if advancedSearchOpen}
+  <AdvancedSearchDialog
+    initialQuery={advancedQuery}
+    onapply={(query) => (advancedQuery = query)}
+    onclear={() => (advancedQuery = null)}
+    onclose={() => (advancedSearchOpen = false)}
+  />
 {/if}
 
 {#if columnMenu}
@@ -2233,6 +2256,30 @@
   .clear-button:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .filter-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-faint);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .filter-button:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .filter-button.active {
+    color: var(--selection-color);
   }
 
   .icon-action {
