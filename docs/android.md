@@ -58,7 +58,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 5. 打包与 CI
 
-- 复用 `.github/workflows/android.yml`（本仓库已备，见 CI 改动）；需自有 SDK 的 runner 与签名配置
+- 跟随桌面发布：`release.yml` 已新增 `android` job（见 CI 改动），tag 发布时在 GitHub-hosted runner 上构建并上传 debug APK 至同一次 release；release APK 仍需签名 keystore
 
 ### 6. 文档与版本
 
@@ -68,6 +68,6 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 ## 环境阻塞记录
 
 - **cargo 依赖线性已解**：本机系统代理 `127.0.0.1:51400` 放行 `github` 与 `crates.io`，缺失的 `keepass 0.13.20` 已补齐，后端全绿（见上）。
-- **Android SDK/NDK 无法在本机取得**：该代理为白名单制，**不含 `dl.google.com`**（`google.com`/`dl.google.com` 均不可达），而 Android 官方 SDK/NDK 只发布在该域；国产镜像（腾讯/阿里/清华）亦不可用。故 JDK/SDK/NDK 无法安装，`tauri android init` 与 `tauri android build` 以及安卓 target 的真实编译（cargocling）在本机无法执行，APK 与真机行为需在**可达 `dl.google.com` 且有 Android 工具链的机器/CI**（如 GitHub-hosted runner，见 `.github/workflows/android.yml`）上闭环。
+- **Android SDK/NDK 无法在本机取得**：该代理为白名单制，**不含 `dl.google.com`**（`google.com`/`dl.google.com` 均不可达），而 Android 官方 SDK/NDK 只发布在该域；国产镜像（腾讯/阿里/清华）亦不可用。故 JDK/SDK/NDK 无法安装，`tauri android init` 与 `tauri android build` 以及安卓 target 的真实编译（cargocling）在本机无法执行，APK 与真机行为需在**可达 `dl.google.com` 且有 Android 工具链的机器/CI**（如 GitHub-hosted runner，见 `.github/workflows/release.yml` 的 `android` job）上闭环。
 
 阻塞项需在具备工具链与网络的机器上按 1–6 执行即可闭环。
