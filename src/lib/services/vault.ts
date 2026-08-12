@@ -62,6 +62,8 @@ interface VaultStore {
     mode: RemoteMode,
   ) => Promise<VaultState>;
   close: () => Promise<void>;
+  /** Close every open session (lock path); `remembered` stays for quick-reopen. */
+  closeAll: () => Promise<void>;
   save: () => Promise<VaultState>;
   saveAs: (path: string) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
@@ -434,7 +436,6 @@ export const vault: VaultStore = {
       if (!remaining) {
         state.set(null);
         iconCache = {};
-        remembered.set(null);
       } else if (remaining.path.startsWith("s3://")) {
         remembered.set(null);
       } else {
@@ -447,6 +448,18 @@ export const vault: VaultStore = {
     iconCache = {};
     state.set(null);
     tabs.set([]);
+  },
+
+  async closeAll(): Promise<void> {
+    if (isTauriRuntime()) {
+      await backendInvoke("close_all_vaults");
+      activeSessionId = null;
+    }
+    browserState = null;
+    iconCache = {};
+    state.set(null);
+    tabs.set([]);
+    activeId.set(null);
   },
 
   async listRemoteObjects(): Promise<RemoteObject[]> {

@@ -276,6 +276,7 @@ pub fn run() {
             commands::open_vault,
             commands::create_vault,
             commands::close_vault,
+            commands::close_all_vaults,
             commands::get_vault_state,
             commands::set_active_session,
             commands::list_sessions,

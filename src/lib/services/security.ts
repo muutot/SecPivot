@@ -8,13 +8,14 @@ import { clearClipboard, copyText } from "$lib/utils/clipboard";
 /**
  * Single lock path shared by the manual lock button, idle auto-lock, and
  * `lockAfterAction`. Wipes the clipboard when `clearOnLock` is enabled, then
- * closes the vault session (backend zeroizes the password).
+ * closes every open session (backend zeroizes the passwords); `remembered`
+ * stays so the lock screen can offer a quick reopen.
  */
 export async function lockVault(): Promise<void> {
   if (get(appSettings).security.clearOnLock) {
     await clearClipboard();
   }
-  await vault.close();
+  await vault.closeAll();
 }
 
 /**

@@ -19,6 +19,18 @@ use zeroize::Zeroize;
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 // ---------------------------------------------------------------------------
 
+/// Whether KeePassRPC session keys survive a lock (`rpc.keep_session_after_lock`).
+fn keep_rpc_session(app: &tauri::AppHandle) -> bool {
+    app.try_state::<crate::config::ConfigStore>()
+        .map(|store| {
+            store
+                .get()
+                .map(|cfg| cfg.rpc.keep_session_after_lock)
+                .unwrap_or(true)
+        })
+        .unwrap_or(true)
+}
+
 #[tauri::command]
 pub(crate) fn open_vault(
     app: tauri::AppHandle,
@@ -107,21 +119,29 @@ pub(crate) fn close_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<(), String> {
-    let keep_rpc = app
-        .try_state::<crate::config::ConfigStore>()
-        .map(|store| {
-            store
-                .get()
-                .map(|cfg| cfg.rpc.keep_session_after_lock)
-                .unwrap_or(true)
-        })
-        .unwrap_or(true);
+    let keep_rpc = keep_rpc_session(&app);
     let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
     vaults.close(&mut active, session_id.as_deref(), keep_rpc)?;
     // The capture guard stays on while any other session is still open.
     if !vaults.any_open(&active) {
         shield::set_capture_guard(&app, false);
     }
+    Ok(())
+}
+
+/// Close every open session (active + parked) and zeroize secrets. The lock
+/// path (toolbar lock, idle auto-lock, lock-after-action) uses this so locking
+/// never leaves other tabs decrypted in memory.
+#[tauri::command]
+pub(crate) fn close_all_vaults(
+    app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<(), String> {
+    let keep_rpc = keep_rpc_session(&app);
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.close_all(&mut active, keep_rpc)?;
+    shield::set_capture_guard(&app, false);
     Ok(())
 }
 

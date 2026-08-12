@@ -116,6 +116,27 @@ impl VaultSessions {
         }
     }
 
+    /// Close every open session (active + parked) and wipe secrets. Used by
+    /// the lock path so idle/manual lock never leaves other tabs decrypted.
+    pub fn close_all(&self, active: &mut VaultSession, keep_rpc: bool) -> Result<(), String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        if keep_rpc {
+            active.close_keeping_rpc_session();
+        } else {
+            active.close();
+        }
+        for (_, mut session) in inner.parked.drain() {
+            if keep_rpc {
+                session.close_keeping_rpc_session();
+            } else {
+                session.close();
+            }
+        }
+        inner.order.clear();
+        inner.active_id = None;
+        Ok(())
+    }
+
     /// Read the addressed session's state (default: active).
     pub fn state(
         &self,
@@ -421,5 +442,36 @@ mod tests {
         assert!(!sessions[0].dirty);
         assert_eq!(sessions[1].session_id, second.session_id);
         assert!(sessions[1].dirty);
+    }
+
+    #[test]
+    fn close_all_locks_every_session_and_clears_registry() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        assert!(registry.any_open(&active));
+
+        registry.close_all(&mut active, false).unwrap();
+        assert!(!active.is_open());
+        assert!(registry
+            .state(&mut active, Some(&first.session_id))
+            .is_err());
+        assert!(registry
+            .state(&mut active, Some(&second.session_id))
+            .is_err());
+        assert!(!registry.any_open(&active));
+        assert!(registry.list(&active).is_empty());
+
+        // A fresh open after lock starts from an empty registry.
+        let again = registry
+            .open(&mut active, create_vault(&dir, "c.kdbx"))
+            .unwrap();
+        assert_eq!(again.session_id, "s3");
     }
 }

@@ -109,7 +109,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 多数据库标签页·会话注册表：`VaultSessions` 托管状态停放非活动会话；`open_vault`/`create_vault`/远端 open/create 返回 `sessionId` 并切换 active；`close_vault`/`get_vault_state` 支持按 sessionId（缺省 active，关闭 active 后自动提升最后停放会话）；round-trip 测试覆盖两库并存
 - [x] 多数据库标签页·会话切换：`set_active_session` 命令在 active 与停放会话间交换（parked ↔ active），保存/数据库设置/条目/分组/favicon/tcato 等命令天然作用于切换后的 active；前端 vault.ts 增加 `setActiveSession(id)` 并同步 remembered
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）
-- [ ] 多数据库标签页·锁定与可见性：锁定/关闭策略与标签联动，bridge/RPC 仅服务 active 会话，quick-reopen 联动
+- [x] 多数据库标签页·锁定与可见性：`close_all_vaults` 锁定全部标签（工具栏锁/空闲锁/锁后操作），bridge/RPC 与全局热键仅服务 active 会话，`remembered` 随切换/关闭/锁定联动（锁屏 quick-reopen 保留）
 
 ### P2 — KDBX 属性完整度与数据交换
 
