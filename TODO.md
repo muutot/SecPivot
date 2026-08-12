@@ -98,7 +98,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 对克隆库应用新存储配置并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过
 - [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入
-- [ ] 高级搜索与搜索配置档：支持字段范围、自定义字段、正则、排除条件、过期/标签/质量条件及保存搜索；快速搜索保持轻量，不引入与设置 segmented pattern 冲突的新控件样式
+- [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；Node 行为测试覆盖
+- [ ] 高级搜索 UI 与保存搜索：搜索框旁高级筛选对话框 + 命名搜索配置持久化；快速搜索保持轻量
 - [x] 密码生成器规则引擎：`customCharset`/`excludeChars`/`requiredChars`/`pattern`（u/l/d/s/a + 字面量）已入设置契约（TS+Rust serde 均保留，round-trip 测试）并在 `generatePassword` 中执行；Node 行为测试覆盖自定义池/必含/排除/pattern/非法必含
 - [x] 密码生成器配置档（存储）：`DatabaseDefaults.generatorProfiles` 命名 profiles（TS+Rust serde 均保留，长度归一化，round-trip 测试）
 - [x] 密码生成器配置档（UI）：数据库设置面板「密码配置档」支持新建/编辑/删除/设为默认（含自定义字符集、排除、必含、pattern）
