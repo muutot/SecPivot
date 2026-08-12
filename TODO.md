@@ -107,7 +107,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 密码生成器规则引擎（Rust）：`generate_password_with(&PasswordGeneratorSettings)` 镜像 TS 规则（自定义字符集/排除/必含/pattern），OS RNG 取随机，覆盖默认包装与错误必含测试
 - [x] 密码生成器配置接线：`BridgeState`/`RpcState` 在配置同步时保存生成器设置，KeePassHttp/RPC `GeneratePassword` 经 `handle_request_with_generator`/`handle_jsonrpc_with_generator` 使用用户规则；含 `generate_password_honors_configured_generator` 测试
 - [x] 多数据库标签页·会话注册表：`VaultSessions` 托管状态停放非活动会话；`open_vault`/`create_vault`/远端 open/create 返回 `sessionId` 并切换 active；`close_vault`/`get_vault_state` 支持按 sessionId（缺省 active，关闭 active 后自动提升最后停放会话）；round-trip 测试覆盖两库并存
-- [ ] 多数据库标签页·会话寻址：`set_active_session` 切换命令 + 保存/数据库设置/条目/分组/favicon/tcato 命令增加 `sessionId`（缺省 active）；前端 vault.ts 携带当前标签 id
+- [x] 多数据库标签页·会话切换：`set_active_session` 命令在 active 与停放会话间交换（parked ↔ active），保存/数据库设置/条目/分组/favicon/tcato 等命令天然作用于切换后的 active；前端 vault.ts 增加 `setActiveSession(id)` 并同步 remembered
 - [ ] 多数据库标签页·前端标签状态：vault.ts 从单状态改为 tabs map + activeTab，页面标签栏（文件名/dirty 标记/关闭/切换）
 - [ ] 多数据库标签页·锁定与可见性：锁定/关闭策略与标签联动，bridge/RPC 仅服务 active 会话，quick-reopen 联动
 

@@ -135,6 +135,36 @@ impl VaultSessions {
         }
     }
 
+    /// Switch the active session to a parked one: the current active session
+    /// is parked under its existing id and the addressed parked session moves
+    /// into the active slot. Returns the newly active state.
+    pub fn switch_active(
+        &self,
+        active: &mut VaultSession,
+        session_id: &str,
+    ) -> Result<VaultState, String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let target = inner
+            .parked
+            .get_mut(session_id)
+            .ok_or_else(|| "找不到数据库会话".to_owned())?;
+        // Validate before mutating so a failure leaves both sessions intact.
+        let state = target
+            .state()?
+            .ok_or_else(|| "数据库会话未打开".to_owned())?;
+        let target = inner.parked.remove(session_id).unwrap();
+        if let Some(current_id) = inner.active_id.take() {
+            inner
+                .parked
+                .insert(current_id.clone(), std::mem::take(active));
+            inner.order.push(current_id);
+        }
+        *active = target;
+        inner.active_id = Some(session_id.to_owned());
+        inner.order.retain(|id| id != session_id);
+        Ok(state)
+    }
+
     /// Whether any session (active or parked) is open.
     pub fn any_open(&self, active: &VaultSession) -> bool {
         let has_parked = self
@@ -239,5 +269,72 @@ mod tests {
         let current = registry.state(&mut active, None).unwrap().unwrap();
         assert_eq!(current.file_name, "a.kdbx");
         assert!(registry.any_open(&active));
+    }
+
+    #[test]
+    fn switch_active_swaps_parked_and_active_with_stable_ids() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+
+        // Switch back to the first (parked) session.
+        let state = registry
+            .switch_active(&mut active, &first.session_id)
+            .unwrap();
+        assert_eq!(state.file_name, "a.kdbx");
+        assert_eq!(
+            registry
+                .state(&mut active, None)
+                .unwrap()
+                .unwrap()
+                .file_name,
+            "a.kdbx"
+        );
+        // The previously active second session is now parked under its id.
+        let parked = registry
+            .state(&mut active, Some(&second.session_id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(parked.file_name, "b.kdbx");
+
+        // Switch back; ids stay stable.
+        let state = registry
+            .switch_active(&mut active, &second.session_id)
+            .unwrap();
+        assert_eq!(state.file_name, "b.kdbx");
+        assert!(registry
+            .switch_active(&mut active, &first.session_id)
+            .is_ok());
+        assert!(registry
+            .switch_active(&mut active, &second.session_id)
+            .is_ok());
+
+        // Unknown ids and the already-active id are rejected without mutation.
+        assert!(registry.switch_active(&mut active, "s999").is_err());
+        assert_eq!(
+            registry
+                .state(&mut active, None)
+                .unwrap()
+                .unwrap()
+                .file_name,
+            "b.kdbx"
+        );
+        assert!(registry
+            .switch_active(&mut active, &second.session_id)
+            .is_err());
+        assert_eq!(
+            registry
+                .state(&mut active, None)
+                .unwrap()
+                .unwrap()
+                .file_name,
+            "b.kdbx"
+        );
     }
 }

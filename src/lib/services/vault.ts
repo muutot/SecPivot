@@ -95,6 +95,8 @@ interface VaultStore {
   restoreGroup: (uuid: string) => Promise<VaultState>;
   emptyRecycleBin: () => Promise<VaultState>;
   refresh: () => Promise<void>;
+  /** Switch the active backend session (multi-database tabs). */
+  setActiveSession: (sessionId: string) => Promise<VaultState>;
   remembered: typeof remembered.subscribe;
   getRemembered: () => RememberedVault | null;
   clearRemembered: () => void;
@@ -1033,6 +1035,21 @@ export const vault: VaultStore = {
       }
     }
     await refreshInternal();
+  },
+
+  async setActiveSession(sessionId: string): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持多库标签");
+    const result = await backendInvoke<VaultState>("set_active_session", { sessionId });
+    activeSessionId = sessionId;
+    state.set(applyBackendState(result));
+    // The lock-screen quick-reopen follows the newly active tab; remote
+    // sessions never become a quick-reopen target.
+    if (result.path.startsWith("s3://")) {
+      remembered.set(null);
+    } else {
+      remembered.set({ path: result.path, fileName: result.fileName });
+    }
+    return result;
   },
 };
 

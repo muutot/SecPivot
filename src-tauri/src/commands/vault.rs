@@ -135,6 +135,18 @@ pub(crate) fn get_vault_state(
     vaults.state(&mut active, session_id.as_deref())
 }
 
+/// Switch the active session to a parked one (multi-database tabs). Returns
+/// the newly active state; every subsequent command targets it.
+#[tauri::command]
+pub(crate) fn set_active_session(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+) -> Result<VaultState, String> {
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.switch_active(&mut active, &session_id)
+}
+
 /// Read the open database's storage settings (KDF/cipher/compression/etc).
 #[tauri::command]
 pub(crate) fn get_database_settings(
