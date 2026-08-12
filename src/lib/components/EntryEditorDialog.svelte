@@ -7,6 +7,7 @@
     VaultGroup,
     CustomField,
     AttachmentInput,
+    EntryAutoTypeConfig,
   } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
@@ -27,7 +28,11 @@
     /** All selected entries in batch mode (`mode === "edit-multi"`). */
     entries: VaultEntry[];
     onclose: () => void;
-    onsaved: (input: EntryInput | null, patch: EntryPatch | null) => Promise<void> | void;
+    onsaved: (
+      input: EntryInput | null,
+      patch: EntryPatch | null,
+      autotype: EntryAutoTypeConfig | null,
+    ) => Promise<void> | void;
   }
 
   let { mode, groups, groupUuid, entry, entries, onclose, onsaved }: Props = $props();
@@ -106,7 +111,9 @@
   const headerIconName = $derived(keepassIconName(iconIndex ?? initialEntry?.icon ?? -1));
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
-  let activeTab = $state<"fields" | "meta" | "keyvault" | "custom" | "attachments">("fields");
+  let activeTab = $state<"fields" | "meta" | "autotype" | "keyvault" | "custom" | "attachments">(
+    "fields",
+  );
   let showPassword = $state(false);
   let customFields = $state<CustomField[]>(
     initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
@@ -128,6 +135,13 @@
     initialEntry?.attachments?.map((a) => ({ name: a.name, size: a.size })) ?? [],
   );
   let fileInputEl: HTMLInputElement | undefined = $state();
+  /** Entry Auto-Type editor state (single mode only; batch edits never touch it). */
+  let autoTypeEnabled = $state(multi ? true : (initialEntry?.autoType?.enabled ?? true));
+  let autoTypeDefaultSeq = $state(multi ? "" : (initialEntry?.autoType?.defaultSequence ?? ""));
+  type EditorAssociation = { window: string; sequence: string };
+  let autoTypeAssociations = $state<EditorAssociation[]>(
+    multi ? [] : (initialEntry?.autoType?.associations ?? []).map((a) => ({ ...a })),
+  );
 
   /** In batch mode every optional field starts "untouched": the displayed
    * placeholder (`多个值`) is not the real value, and a field is applied to
@@ -460,7 +474,9 @@
 
   /** Switch tabs; re-parse the KeyVault state when entering its tab so raw
    * edits made in the custom-fields tab are reflected structurally. */
-  function activateTab(tab: "fields" | "meta" | "custom" | "attachments" | "keyvault"): void {
+  function activateTab(
+    tab: "fields" | "meta" | "autotype" | "custom" | "attachments" | "keyvault",
+  ): void {
     activeTab = tab;
     if (tab === "keyvault") {
       // Recompute protection from the live field list (it may have been
@@ -550,7 +566,7 @@
         onclose();
         return;
       }
-      void runSave(() => onsaved(null, patch));
+      void runSave(() => onsaved(null, patch, null));
       return;
     }
     if (!title.trim() && !username.trim() && !password) return;
@@ -563,6 +579,13 @@
         : customIconSelected
           ? undefined
           : null;
+    const autotype: EntryAutoTypeConfig = {
+      enabled: autoTypeEnabled,
+      defaultSequence: autoTypeDefaultSeq.trim() || undefined,
+      associations: autoTypeAssociations
+        .map((a) => ({ window: a.window.trim(), sequence: a.sequence }))
+        .filter((a) => a.window !== ""),
+    };
     void runSave(() =>
       onsaved(
         {
@@ -589,6 +612,7 @@
           ),
         },
         null,
+        autotype,
       ),
     );
   }
@@ -635,6 +659,16 @@
         元属性
       </button>
       {#if !multi}
+        <button
+          type="button"
+          role="tab"
+          class="editor-tab"
+          class:active={activeTab === "autotype"}
+          aria-selected={activeTab === "autotype"}
+          onclick={() => activateTab("autotype")}
+        >
+          自动填充
+        </button>
         <button
           type="button"
           role="tab"
@@ -874,6 +908,65 @@
             <span class="field-hint">选择颜色将应用到所有选中条目;未选择则保持不变</span>
           {/if}
         </section>
+      </div>
+    {/if}
+
+    {#if !multi && activeTab === "autotype"}
+      <div class="autotype-section" role="tabpanel">
+        <div class="autotype-row">
+          <span class="autotype-label">启用自动填充</span>
+          <button
+            type="button"
+            class="toggle-switch"
+            class:active={autoTypeEnabled}
+            role="switch"
+            aria-checked={autoTypeEnabled}
+            aria-label="启用自动填充"
+            onclick={() => (autoTypeEnabled = !autoTypeEnabled)}
+          ></button>
+        </div>
+        <label class="field">
+          <span>默认序列</span>
+          <input
+            class="text-input mono"
+            type="text"
+            bind:value={autoTypeDefaultSeq}
+            placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"}
+          />
+        </label>
+        <span class="autotype-label">窗口关联</span>
+        {#each autoTypeAssociations as association, index (index)}
+          <div class="association-row">
+            <input
+              class="text-input association-window"
+              type="text"
+              bind:value={association.window}
+              placeholder="窗口标题（* 通配）"
+            />
+            <input
+              class="text-input mono association-sequence"
+              type="text"
+              bind:value={association.sequence}
+              placeholder="序列，留空用默认"
+            />
+            <button
+              class="association-remove"
+              type="button"
+              title="删除关联"
+              onclick={() => autoTypeAssociations.splice(index, 1)}
+            >
+              <AppIcon name="x" size={12} />
+            </button>
+          </div>
+        {/each}
+        <button
+          class="add-row-btn"
+          type="button"
+          onclick={() =>
+            (autoTypeAssociations = [...autoTypeAssociations, { window: "", sequence: "" }])}
+        >
+          <AppIcon name="plus" size={12} />添加窗口关联
+        </button>
       </div>
     {/if}
 
@@ -1425,6 +1518,59 @@
   .add-row-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .autotype-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .autotype-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .autotype-label {
+    display: block;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .association-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .association-window {
+    flex: 1;
+  }
+
+  .association-sequence {
+    flex: 1;
+  }
+
+  .association-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-faint);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .association-remove:hover {
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 10%, transparent);
   }
 
   .file-input {

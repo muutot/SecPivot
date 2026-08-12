@@ -18,6 +18,7 @@
   import type {
     EntryInput,
     EntryPatch,
+    EntryAutoTypeConfig,
     VaultEntry,
     VaultGroup,
     VaultState,
@@ -1135,11 +1136,16 @@
   async function handleEditorSave(
     input: EntryInput | null,
     patch: EntryPatch | null,
+    autotype: EntryAutoTypeConfig | null,
   ): Promise<void> {
     try {
       if (editorMode === "create" && input) {
         const state = await vault.addEntry(input);
-        setSingleSelection(findNewestEntryInGroup(state, input.groupUuid));
+        const created = findNewestEntryInGroup(state, input.groupUuid);
+        if (autotype && created) {
+          await vault.updateEntryAutoType(created.uuid, autotype);
+        }
+        setSingleSelection(created);
         editorOpen = false;
         flash("已创建条目");
       } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
@@ -1150,6 +1156,9 @@
         flash(`已更新 ${uuids.length} 个条目`);
       } else if (editorMode === "edit" && input && editEntry) {
         const state = await vault.updateEntry(editEntry.uuid, input);
+        if (autotype) {
+          await vault.updateEntryAutoType(editEntry.uuid, autotype);
+        }
         setSingleSelection(findEntryByUuid(state, editEntry.uuid));
         editorOpen = false;
         flash("已保存修改");
@@ -1820,7 +1829,7 @@
     entry={editEntry}
     entries={editEntries}
     onclose={() => (editorOpen = false)}
-    onsaved={(input, patch) => void handleEditorSave(input, patch)}
+    onsaved={(input, patch, autotype) => void handleEditorSave(input, patch, autotype)}
   />
 {/if}
 
