@@ -137,7 +137,11 @@ impl VaultSessions {
         Ok(())
     }
 
-    /// Read the addressed session's state (default: active).
+    /// Read the addressed session's state (default: active). The active
+    /// session's own id resolves to the active session too — the frontend
+    /// always addresses the current tab by its id, so rejecting it would
+    /// break every post-mutation refresh (reported as "找不到数据库会话"
+    /// after a favicon download).
     pub fn state(
         &self,
         active: &mut VaultSession,
@@ -146,6 +150,9 @@ impl VaultSessions {
         match session_id {
             Some(id) => {
                 let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+                if inner.active_id.as_deref() == Some(id) {
+                    return active.state();
+                }
                 let session = inner
                     .parked
                     .get_mut(id)
@@ -280,6 +287,40 @@ mod tests {
         registry.close(&mut active, None, true).unwrap();
         assert!(registry.state(&mut active, None).unwrap().is_none());
         assert!(!registry.any_open(&active));
+    }
+
+    #[test]
+    fn state_resolves_the_active_sessions_own_id() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        // Addressing the active session by its own id must work (the
+        // frontend always passes the current tab's id); with several tabs
+        // open the active id is not in `parked`.
+        let current = registry
+            .state(&mut active, Some(&first.session_id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.file_name, "a.kdbx");
+
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        let current = registry
+            .state(&mut active, Some(&second.session_id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.file_name, "b.kdbx");
+        // The now-parked first session still resolves by its id.
+        let parked = registry
+            .state(&mut active, Some(&first.session_id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(parked.file_name, "a.kdbx");
     }
 
     #[test]
