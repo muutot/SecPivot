@@ -17,6 +17,14 @@ export interface PasswordGeneratorSettings {
   includeSymbols: boolean;
   excludeSimilar: boolean;
   excludeAmbiguous: boolean;
+  /** Replaces the built-in character classes entirely when non-empty. */
+  customCharset?: string;
+  /** Characters removed from every pool. */
+  excludeChars?: string;
+  /** Each character must appear at least once in the result. */
+  requiredChars?: string;
+  /** KeePass-style pattern (`u`/`l`/`d`/`s`/`a`, other chars literal). */
+  pattern?: string;
 }
 
 export interface DatabaseDefaults {

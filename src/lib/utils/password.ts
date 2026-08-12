@@ -8,19 +8,32 @@ const SIMILAR = "Il1O0";
 const AMBIGUOUS = "{}[]()/\\'\"`~,;:.<>";
 
 export function generatePassword(settings: PasswordGeneratorSettings): string {
-  let pool = "";
-  if (settings.includeUpper) pool += UPPER;
-  if (settings.includeLower) pool += LOWER;
-  if (settings.includeDigits) pool += DIGITS;
-  if (settings.includeSymbols) pool += SYMBOLS;
+  const pool = buildPool(settings);
+  const required = uniqueChars(settings.requiredChars ?? "");
+  for (const char of required) {
+    if (!pool.includes(char)) {
+      throw new Error(`必含字符 ${char} 不在字符池中`);
+    }
+  }
 
-  if (settings.excludeSimilar) {
-    pool = [...pool].filter((c) => !SIMILAR.includes(c)).join("");
+  if (settings.pattern) {
+    const chars = new Array<string>(settings.pattern.length);
+    for (let i = 0; i < settings.pattern.length; i++) {
+      const code = settings.pattern[i];
+      if (code === "u" || code === "l" || code === "d" || code === "s") {
+        const category =
+          code === "u" ? UPPER : code === "l" ? LOWER : code === "d" ? DIGITS : SYMBOLS;
+        const categoryChars = categoryPool(category, settings);
+        chars[i] = categoryChars.length > 0 ? randomPick(categoryChars) : randomPick(pool);
+      } else if (code === "a") {
+        chars[i] = randomPick(pool);
+      } else {
+        chars[i] = code;
+      }
+    }
+    guaranteeRequired(chars, required);
+    return chars.join("");
   }
-  if (settings.excludeAmbiguous) {
-    pool = [...pool].filter((c) => !AMBIGUOUS.includes(c)).join("");
-  }
-  if (pool.length === 0) pool = UPPER + LOWER + DIGITS;
 
   const arr = new Uint32Array(settings.length);
   crypto.getRandomValues(arr);
@@ -33,41 +46,94 @@ export function generatePassword(settings: PasswordGeneratorSettings): string {
   // `generate_password` in bridge/dispatch.rs): overwrite distinct random
   // positions with a char drawn from each missing category — never from the
   // whole pool, which could still miss the requested class.
-  const wantUpper = settings.includeUpper;
-  const wantLower = settings.includeLower;
-  const wantDigits = settings.includeDigits;
   const candidates: { category: string; re: RegExp; enabled: boolean }[] = [
-    { category: UPPER, re: /[A-Z]/, enabled: wantUpper },
-    { category: LOWER, re: /[a-z]/, enabled: wantLower },
-    { category: DIGITS, re: /[0-9]/, enabled: wantDigits },
+    { category: UPPER, re: /[A-Z]/, enabled: settings.includeUpper },
+    { category: LOWER, re: /[a-z]/, enabled: settings.includeLower },
+    { category: DIGITS, re: /[0-9]/, enabled: settings.includeDigits },
   ];
-  let fixIndex = 0;
-  // Distinct random positions from a CSPRNG Fisher–Yates shuffle, so every
-  // required class lands in its own slot (never `Math.random` or the old
-  // deterministic `fixIndex % length`).
-  const positions = [...Array(settings.length).keys()];
-  const rnd = new Uint32Array(settings.length);
+  // A custom charset replaces the built-in classes entirely, so class
+  // guarantees do not apply; `requiredChars` still enforces inclusions.
+  if (!settings.customCharset) {
+    const positions = shuffledPositions(settings.length);
+    for (const { category, re, enabled } of candidates) {
+      if (!enabled || re.test(chars.join(""))) continue;
+      const categoryChars = categoryPool(category, settings);
+      if (categoryChars.length === 0) continue;
+      const pos = positions.shift() ?? 0;
+      chars[pos] = randomPick(categoryChars);
+    }
+  }
+  guaranteeRequired(chars, required);
+
+  return chars.join("");
+}
+
+function buildPool(settings: PasswordGeneratorSettings): string {
+  let pool = settings.customCharset ?? "";
+  if (pool.length === 0) {
+    if (settings.includeUpper) pool += UPPER;
+    if (settings.includeLower) pool += LOWER;
+    if (settings.includeDigits) pool += DIGITS;
+    if (settings.includeSymbols) pool += SYMBOLS;
+  }
+  if (settings.excludeSimilar) {
+    pool = [...pool].filter((c) => !SIMILAR.includes(c)).join("");
+  }
+  if (settings.excludeAmbiguous) {
+    pool = [...pool].filter((c) => !AMBIGUOUS.includes(c)).join("");
+  }
+  if (settings.excludeChars) {
+    const excluded = uniqueChars(settings.excludeChars);
+    pool = [...pool].filter((c) => !excluded.includes(c)).join("");
+  }
+  if (pool.length === 0) pool = UPPER + LOWER + DIGITS;
+  return pool;
+}
+
+function categoryPool(category: string, settings: PasswordGeneratorSettings): string {
+  let pool = category;
+  if (settings.excludeSimilar) {
+    pool = [...pool].filter((c) => !SIMILAR.includes(c)).join("");
+  }
+  if (settings.excludeAmbiguous) {
+    pool = [...pool].filter((c) => !AMBIGUOUS.includes(c)).join("");
+  }
+  if (settings.excludeChars) {
+    const excluded = uniqueChars(settings.excludeChars);
+    pool = [...pool].filter((c) => !excluded.includes(c)).join("");
+  }
+  return pool;
+}
+
+function uniqueChars(value: string): string[] {
+  return [...value].filter((c, index, all) => all.indexOf(c) === index);
+}
+
+function shuffledPositions(length: number): number[] {
+  const positions = [...Array(length).keys()];
+  const rnd = new Uint32Array(length);
   crypto.getRandomValues(rnd);
   for (let i = positions.length - 1; i > 0; i--) {
     const j = rnd[i] % (i + 1);
     [positions[i], positions[j]] = [positions[j], positions[i]];
   }
-  for (const { category, re, enabled } of candidates) {
-    if (!enabled || re.test(chars.join(""))) continue;
-    const categoryPool = [...category].filter((c) => {
-      if (settings.excludeSimilar && SIMILAR.includes(c)) return false;
-      if (settings.excludeAmbiguous && AMBIGUOUS.includes(c)) return false;
-      return true;
-    });
-    if (categoryPool.length === 0) continue;
-    const pos = positions[fixIndex % settings.length];
-    fixIndex += 1;
-    const pick = new Uint32Array(1);
-    crypto.getRandomValues(pick);
-    chars[pos] = categoryPool[pick[0] % categoryPool.length];
-  }
+  return positions;
+}
 
-  return chars.join("");
+function randomPick(pool: string): string {
+  const pick = new Uint32Array(1);
+  crypto.getRandomValues(pick);
+  return pool[pick[0] % pool.length];
+}
+
+function guaranteeRequired(chars: string[], required: string[]): void {
+  const positions = shuffledPositions(chars.length);
+  let index = 0;
+  for (const char of required) {
+    if (chars.includes(char)) continue;
+    const pos = positions[index++ % chars.length];
+    chars[pos] = char;
+  }
 }
 
 /** Entropy estimate in bits. Mirror of the Rust `estimate_entropy` in

@@ -99,7 +99,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入
 - [ ] 高级搜索与搜索配置档：支持字段范围、自定义字段、正则、排除条件、过期/标签/质量条件及保存搜索；快速搜索保持轻量，不引入与设置 segmented pattern 冲突的新控件样式
-- [ ] 密码生成器配置档：支持命名 profiles、自定义字符集、pattern/规则、必含/排除字符与新条目默认 profile；CSPRNG、安全边界和浏览器 bridge 生成行为保持一致
+- [x] 密码生成器规则引擎：`customCharset`/`excludeChars`/`requiredChars`/`pattern`（u/l/d/s/a + 字面量）已入设置契约（TS+Rust serde 均保留，round-trip 测试）并在 `generatePassword` 中执行；Node 行为测试覆盖自定义池/必含/排除/pattern/非法必含
+- [ ] 密码生成器配置档（剩余）：命名 profiles 列表、编辑器/设置页 profile 管理与新条目默认 profile；Rust bridge `generate_password` 同步同规则
 - [ ] 多数据库标签页：后端从单一 `VaultSession` 演进为多 session 管理，分别维护密钥、dirty/revision、远程目标、浏览器会话可见性和锁定生命周期
 
 ### P2 — KDBX 属性完整度与数据交换

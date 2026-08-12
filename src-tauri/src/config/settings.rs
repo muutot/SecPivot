@@ -325,6 +325,14 @@ pub struct PasswordGeneratorSettings {
     pub include_symbols: bool,
     pub exclude_similar: bool,
     pub exclude_ambiguous: bool,
+    /// Replaces the built-in character classes entirely when non-empty.
+    pub custom_charset: Option<String>,
+    /// Characters removed from every pool.
+    pub exclude_chars: Option<String>,
+    /// Each character must appear at least once in the result.
+    pub required_chars: Option<String>,
+    /// KeePass-style pattern (`u`/`l`/`d`/`s`/`a`, other chars literal).
+    pub pattern: Option<String>,
 }
 
 impl Default for PasswordGeneratorSettings {
@@ -337,6 +345,10 @@ impl Default for PasswordGeneratorSettings {
             include_symbols: true,
             exclude_similar: false,
             exclude_ambiguous: false,
+            custom_charset: None,
+            exclude_chars: None,
+            required_chars: None,
+            pattern: None,
         }
     }
 }

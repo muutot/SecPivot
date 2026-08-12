@@ -105,6 +105,34 @@ fn remote_profiles_survive_deserialize_write_reload() {
 }
 
 #[test]
+fn generator_custom_rules_survive_deserialize_write_reload() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.database.generator.custom_charset = Some("abcXYZ0123".into());
+    config.database.generator.exclude_chars = Some("0".into());
+    config.database.generator.required_chars = Some("X3".into());
+    config.database.generator.pattern = Some("uuullddssaa".into());
+    store.set(config.clone()).unwrap();
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let again = reloaded.get().unwrap();
+    assert_eq!(
+        again.database.generator.custom_charset.as_deref(),
+        Some("abcXYZ0123")
+    );
+    assert_eq!(again.database.generator.exclude_chars.as_deref(), Some("0"));
+    assert_eq!(
+        again.database.generator.required_chars.as_deref(),
+        Some("X3")
+    );
+    assert_eq!(
+        again.database.generator.pattern.as_deref(),
+        Some("uuullddssaa")
+    );
+}
+
+#[test]
 fn remote_profiles_serialize_one_transport_shape_each() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
