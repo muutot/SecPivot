@@ -246,6 +246,16 @@ pub struct AttachmentPreview {
     pub truncated: bool,
 }
 
+/// Reference to an attachment extracted into the controlled temp directory
+/// for external viewing; `token` removes the file on discard/close.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TempAttachmentRef {
+    pub token: String,
+    pub path: String,
+    pub name: String,
+}
+
 /// Lightweight mutation result for small state changes that do not need a
 /// rebuilt tree. The renderer applies the delta locally against its cached
 /// `VaultState`; `revision` lets it order/merge results and detect stale

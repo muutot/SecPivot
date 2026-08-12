@@ -243,6 +243,7 @@ pub fn run() {
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(VaultSessions::default());
+            app.manage(vault::AttachmentTempStore::default());
             app.manage(commands::TcatoTarget(Mutex::new(None)));
             app.manage(crate::bridge::server::BridgeState::default());
             app.manage(crate::bridge::server::ApprovalBoard::default());
@@ -302,6 +303,8 @@ pub fn run() {
             commands::empty_recycle_bin,
             commands::save_attachment,
             commands::preview_attachment,
+            commands::open_attachment_temp,
+            commands::cleanup_attachment_temp,
             commands::totp_code,
             commands::toggle_favorite,
             commands::update_entry_autotype,

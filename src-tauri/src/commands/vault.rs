@@ -142,6 +142,11 @@ pub(crate) fn close_all_vaults(
     let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
     vaults.close_all(&mut active, keep_rpc)?;
     shield::set_capture_guard(&app, false);
+    // Locking wipes extracted temp attachments (external viewers may still
+    // hold the files open; their content is gone from disk).
+    if let Some(store) = app.try_state::<vault::AttachmentTempStore>() {
+        store.discard_all();
+    }
     Ok(())
 }
 
@@ -441,6 +446,36 @@ pub(crate) fn preview_attachment(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .attachment_preview(&uuid, &name)
+}
+
+/// Extract an attachment into the controlled temp directory for external
+/// viewing. The returned token removes the file via `cleanup_attachment_temp`.
+#[tauri::command]
+pub(crate) fn open_attachment_temp(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    store: tauri::State<'_, vault::AttachmentTempStore>,
+    uuid: String,
+    name: String,
+) -> Result<vault::TempAttachmentRef, String> {
+    let data = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .attachment_data(&uuid, &name)?;
+    let (token, path) = store.create(&name, &data)?;
+    Ok(vault::TempAttachmentRef {
+        token,
+        path: path.to_string_lossy().into_owned(),
+        name,
+    })
+}
+
+/// Remove an attachment's temporary extraction (idempotent for unknown tokens).
+#[tauri::command]
+pub(crate) fn cleanup_attachment_temp(
+    store: tauri::State<'_, vault::AttachmentTempStore>,
+    token: String,
+) -> Result<(), String> {
+    store.discard(&token)
 }
 
 #[tauri::command]

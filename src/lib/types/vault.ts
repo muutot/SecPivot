@@ -74,6 +74,14 @@ export interface AttachmentPreview {
   truncated: boolean;
 }
 
+/** Reference to an attachment extracted into the controlled temp directory
+ *  for external viewing; `token` removes the file on discard/close. */
+export interface TempAttachmentRef {
+  token: string;
+  path: string;
+  name: string;
+}
+
 /** One Auto-Type window association (`*` wildcards allowed). */
 export interface AutoTypeAssociation {
   window: string;

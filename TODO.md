@@ -118,7 +118,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 分组属性可写：`update_group_meta` 支持 notes/tags/`enableSearching` + 分组右键「属性」对话框（`GroupMetaDialog`）；round-trip 测试（group Auto-Type 已有）
 - [x] 跨客户端保真：`CustomData` 仍只读 + 新增 `foreign_attributes_survive_edits_and_flags_round_trip` 综合测试（外部客户端属性 + 字段编辑 + flags/分组 meta 编辑后保存/重开全保真）
 - [x] 附件内存预览：`preview_attachment` 返回文本/图片 data URL（2 MiB 截断上限，其余为二进制提示），EntryDetail 附件预览对话框；不落盘
-- [ ] 附件临时打开：`open_attachment_temp`（受控随机临时目录 + token）+ `cleanup_attachment_temp`（丢弃/锁定清理）+ 外部打开显式确认
+- [x] 附件临时打开：`open_attachment_temp`（受控随机临时目录 + token）+ `cleanup_attachment_temp`（丢弃/锁定清理，`close_all_vaults` 联动）+ 预览对话框两步确认后 `openPath`
 - [ ] 附件导入修改：`import_attachment_file` 将外部程序修改后的临时文件写回附件（覆盖同名），UI「导入修改/丢弃」
 - [ ] 扩充导入/导出：优先支持 Bitwarden、1Password、LastPass，随后增加 KDBX/XML/HTML/打印/应急表；所有明文导出必须给出明确安全提示
 - [ ] 数据库维护：相似密码、历史清理、过期维护、损坏库修复/尽力恢复，并为不可恢复写入设计只读失败路径

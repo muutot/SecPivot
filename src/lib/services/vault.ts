@@ -17,6 +17,7 @@ import type {
   HistoryVersion,
   EntryStorage,
   AttachmentPreview,
+  TempAttachmentRef,
   SecurityReport,
   FaviconReport,
   MutationDelta,
@@ -93,6 +94,8 @@ interface VaultStore {
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
   previewAttachment: (uuid: string, name: string) => Promise<AttachmentPreview>;
+  openAttachmentTemp: (uuid: string, name: string) => Promise<TempAttachmentRef>;
+  cleanupAttachmentTemp: (token: string) => Promise<void>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
@@ -136,6 +139,8 @@ let initialized = false;
 /** Registry id of the active backend session (multi-database tabs). `null`
  *  in the browser demo, which has no backend sessions. */
 let activeSessionId: string | null = null;
+/** Tokens of attachments extracted to the temp dir; discarded on lock/close. */
+let tempAttachmentTokens = new Set<string>();
 
 /** Cache of database custom icons, kept across mutation snapshots that omit
  *  the image payload; replaced whenever an authoritative snapshot arrives. */
@@ -341,6 +346,18 @@ async function refreshTabs(): Promise<void> {
   );
 }
 
+/** Best-effort cleanup of every extracted temp attachment (lock/close path). */
+async function discardTempAttachments(): Promise<void> {
+  const tokens = [...tempAttachmentTokens];
+  tempAttachmentTokens.clear();
+  if (!isTauriRuntime()) return;
+  await Promise.all(
+    tokens.map((token) =>
+      backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined),
+    ),
+  );
+}
+
 async function ensureBrowserLoaded(): Promise<VaultState> {
   if (browserState) return browserState;
   browserState = (await browserLoad()) ?? buildDemoVaultState();
@@ -448,6 +465,7 @@ export const vault: VaultStore = {
         remembered.set({ path: remaining.path, fileName: remaining.fileName });
       }
       await refreshTabs();
+      await discardTempAttachments();
       return;
     }
     browserState = null;
@@ -461,6 +479,7 @@ export const vault: VaultStore = {
       await backendInvoke("close_all_vaults");
       activeSessionId = null;
     }
+    await discardTempAttachments();
     browserState = null;
     iconCache = {};
     state.set(null);
@@ -813,6 +832,20 @@ export const vault: VaultStore = {
   async previewAttachment(uuid: string, name: string): Promise<AttachmentPreview> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件预览");
     return backendInvoke<AttachmentPreview>("preview_attachment", { uuid, name });
+  },
+
+  async openAttachmentTemp(uuid: string, name: string): Promise<TempAttachmentRef> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持外部打开附件");
+    const ref = await backendInvoke<TempAttachmentRef>("open_attachment_temp", { uuid, name });
+    tempAttachmentTokens.add(ref.token);
+    return ref;
+  },
+
+  async cleanupAttachmentTemp(token: string): Promise<void> {
+    tempAttachmentTokens.delete(token);
+    if (isTauriRuntime()) {
+      await backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
+    }
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

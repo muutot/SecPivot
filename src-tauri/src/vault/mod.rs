@@ -11,6 +11,7 @@ mod security;
 mod serialize;
 mod session;
 mod sessions;
+mod temp_attachments;
 #[cfg(test)]
 mod tests;
 
@@ -96,11 +97,12 @@ pub use self::dto::{
     CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
     EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
     FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
-    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, TotpCode, VaultEntry, VaultGroup,
-    VaultOpenResult, VaultState, WeakEntry,
+    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, TempAttachmentRef, TotpCode,
+    VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
 };
 
 pub use self::sessions::VaultSessions;
+pub use self::temp_attachments::AttachmentTempStore;
 
 // ---------------------------------------------------------------------------
 // Session
