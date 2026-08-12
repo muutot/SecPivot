@@ -119,6 +119,16 @@ action snippets. `modal-shared.css` owns the reusable `.text-input`,
 Component CSS keeps only dialog-specific content layout; do not reintroduce
 parallel modal surfaces, header/icon blocks, buttons, or standard text inputs.
 
+## Shared viewport-menu primitives
+
+`ViewportMenuShell.svelte` is the canonical viewport-fixed popover menu: it
+clamps to the window with an 8px margin, closes on Escape or click-outside, and
+accepts role/aria label plus a `column-config` modifier for the bounded,
+scrollable column picker. `viewport-menu-shared.css` owns the elevated surface
+and the base `.menu-item`/`.menu-label` states; components keep only their
+item-specific variants (destructive, checked, icons). Do not introduce a second
+fixed-menu surface or duplicate `.menu-item` base rules.
+
 ## CSS ownership decision
 
 Before adding a rule, place it at the narrowest correct stable level:
