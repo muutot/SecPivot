@@ -61,6 +61,18 @@ pub(crate) fn security_report(
         .security_report()
 }
 
+/// Group entries whose passwords are similar (server-side analysis; passwords
+/// never cross IPC).
+#[tauri::command]
+pub(crate) fn similar_passwords(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<Vec<crate::vault::SimilarPasswordGroup>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .similar_passwords()
+}
+
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).
 #[tauri::command]
 pub(crate) fn get_entry_storage(

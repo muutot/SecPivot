@@ -48,6 +48,7 @@
   import AdvancedSearchDialog from "$lib/components/AdvancedSearchDialog.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
+  import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import DatabaseSettingsDialog from "$lib/components/DatabaseSettingsDialog.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
@@ -101,6 +102,7 @@
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
+  let similarOpen = $state(false);
   let emergencyExportOpen = $state(false);
   let emergencyIncludePasswords = $state(false);
   let dbMetaOpen = $state(false);
@@ -1567,6 +1569,7 @@
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "save-as", label: "另存为…", icon: "copy" },
+    { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
@@ -1581,6 +1584,7 @@
       icon: detailVisible ? "eye-off" : "eye",
     },
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
+    { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "export-csv", label: "导出 CSV", icon: "download" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
@@ -1641,6 +1645,7 @@
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();
+    else if (id === "similar-passwords") similarOpen = true;
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
     else if (id === "export-emergency") emergencyExportOpen = true;
@@ -1651,6 +1656,7 @@
     if (id === "save-as") void handleSaveAs();
     else if (id === "toggle-detail") detailVisible = !detailVisible;
     else if (id === "security-report") void handleOpenReport();
+    else if (id === "similar-passwords") similarOpen = true;
     else if (id === "export-csv") void handleExportCsv();
     else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
@@ -1985,6 +1991,19 @@
     report={securityReport}
     entries={reportEntries}
     onclose={() => (reportOpen = false)}
+  />
+{/if}
+
+{#if similarOpen}
+  <SimilarPasswordsDialog
+    onclose={() => (similarOpen = false)}
+    onselect={(uuid: string) => {
+      const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
+      if (target) {
+        setSingleSelection(target);
+        similarOpen = false;
+      }
+    }}
   />
 {/if}
 

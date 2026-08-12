@@ -19,6 +19,7 @@ import type {
   AttachmentPreview,
   TempAttachmentRef,
   SecurityReport,
+  SimilarPasswordGroup,
   FaviconReport,
   MutationDelta,
   DatabaseSettings,
@@ -89,6 +90,7 @@ interface VaultStore {
   getEntryTotp: (uuid: string) => Promise<string | null>;
   getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
   securityReport: () => Promise<SecurityReport>;
+  similarPasswords: () => Promise<SimilarPasswordGroup[]>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
@@ -794,6 +796,11 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return computeSecurityReport(current.root);
+  },
+
+  async similarPasswords(): Promise<SimilarPasswordGroup[]> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持相似密码检查");
+    return backendInvoke<SimilarPasswordGroup[]>("similar_passwords");
   },
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {

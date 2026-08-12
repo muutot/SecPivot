@@ -12,7 +12,7 @@ use crate::crypto::otp;
 use crate::platform::autotype::{self, AutotypeContext};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use keepass::db::{EntryId, Icon, Value};
+use keepass::db::{EntryId, GroupId, Icon, Value};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -545,6 +545,104 @@ impl VaultSession {
         })
     }
 
+    /// Group entries whose passwords are similar (at most two edits apart).
+    /// Passwords never leave the session — groups carry only uuid/title/
+    /// username. Exact duplicates are excluded (see `security_report`), the
+    /// recycle bin is skipped, and the analysis is capped so huge databases
+    /// stay responsive.
+    pub fn similar_passwords(&self) -> Result<Vec<SimilarPasswordGroup>, String> {
+        const MAX_ANALYZED: usize = 2000;
+        const MAX_EDITS: usize = 2;
+        let db = self.require_db()?;
+        let bin_id = recycle_bin_id(db);
+
+        let mut entries: Vec<(String, String, String, String)> = Vec::new();
+        fn collect(
+            group: &keepass::db::GroupRef<'_>,
+            bin_id: Option<GroupId>,
+            entries: &mut Vec<(String, String, String, String)>,
+        ) {
+            if Some(group.id()) == bin_id {
+                return;
+            }
+            for entry in group.entries() {
+                let password = entry.get(FIELD_PASSWORD).unwrap_or_default();
+                if password.is_empty() {
+                    continue;
+                }
+                entries.push((
+                    entry.id().uuid().to_string(),
+                    entry.get_title().unwrap_or_default().to_owned(),
+                    entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                    password.to_owned(),
+                ));
+            }
+            for child in group.groups() {
+                collect(&child, bin_id, entries);
+            }
+        }
+        collect(&db.root(), bin_id, &mut entries);
+        entries.truncate(MAX_ANALYZED);
+
+        let mut parent: Vec<usize> = (0..entries.len()).collect();
+        fn find(parent: &mut [usize], mut i: usize) -> usize {
+            while parent[i] != i {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            i
+        }
+        fn union(parent: &mut [usize], a: usize, b: usize) {
+            let ra = find(parent, a);
+            let rb = find(parent, b);
+            if ra != rb {
+                parent[rb] = ra;
+            }
+        }
+
+        for (i, (_, _, _, a)) in entries.iter().enumerate() {
+            for (j, (_, _, _, b)) in entries.iter().enumerate().skip(i + 1) {
+                let len_diff = a.len().abs_diff(b.len());
+                if len_diff > MAX_EDITS {
+                    continue;
+                }
+                if a == b {
+                    continue;
+                }
+                if levenshtein_at_most(a, b, MAX_EDITS) {
+                    union(&mut parent, i, j);
+                }
+            }
+        }
+
+        let mut clusters: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (index, _) in entries.iter().enumerate() {
+            let root = find(&mut parent, index);
+            clusters.entry(root).or_default().push(index);
+        }
+        let mut groups: Vec<SimilarPasswordGroup> = clusters
+            .into_values()
+            .filter(|indices| indices.len() > 1)
+            .map(|indices| {
+                let mut members: Vec<SimilarEntry> = indices
+                    .iter()
+                    .map(|&index| {
+                        let (uuid, title, username, _) = &entries[index];
+                        SimilarEntry {
+                            uuid: uuid.clone(),
+                            title: title.clone(),
+                            username: username.clone(),
+                        }
+                    })
+                    .collect();
+                members.sort_by(|a, b| a.title.cmp(&b.title));
+                SimilarPasswordGroup { entries: members }
+            })
+            .collect();
+        groups.sort_by_key(|g| std::cmp::Reverse(g.entries.len()));
+        Ok(groups)
+    }
+
     /// Export all entries as CSV (passwords included) straight to a file.
     pub fn export_csv(&self, path: &str) -> Result<(), String> {
         let content = self.export_csv_content()?;
@@ -723,6 +821,33 @@ fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+/// Whether `a` and `b` are at most `k` edits apart (Levenshtein with early
+/// exit; `None` when the DP exceeds the bound).
+fn levenshtein_at_most(a: &str, b: &str, k: usize) -> bool {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    if a.len().abs_diff(b.len()) > k {
+        return false;
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr = vec![0usize; b.len() + 1];
+    for i in 1..=a.len() {
+        curr[0] = i;
+        let mut row_min = usize::MAX;
+        for j in 1..=b.len() {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            let value = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
+            curr[j] = value;
+            row_min = row_min.min(value);
+        }
+        if row_min > k {
+            return false;
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()] <= k
 }
 
 /// MIME type for raster image attachments that can preview in memory.

@@ -3860,6 +3860,62 @@ fn emergency_sheet_includes_passwords_only_when_requested() {
 }
 
 #[test]
+fn similar_passwords_clusters_edits_and_skips_recycle_bin() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let mk = |title: &str, password: &str| EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: password.into(),
+        url: String::new(),
+        notes: String::new(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+    let state = session
+        .add_entries(&[
+            mk("A", "Password1!"),
+            mk("B", "Password2!"),
+            mk("C", "TotallyDifferent9"),
+            mk("D", "Password1!"),
+        ])
+        .unwrap();
+    let uuid_of = |title: &str| {
+        state
+            .root
+            .entries
+            .iter()
+            .find(|e| e.title == title)
+            .unwrap()
+            .uuid
+            .clone()
+    };
+    let a = uuid_of("A");
+
+    // A~B (one edit), D~B and D==A: transitive clustering joins A/B/D; C
+    // stays separate. Passwords never appear in the DTO.
+    let groups = session.similar_passwords().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].entries.len(), 3);
+    let serialized = format!("{groups:?}");
+    assert!(!serialized.contains("Password1!"));
+    assert!(!serialized.contains("TotallyDifferent9"));
+
+    // Deleting A moves it to the recycle bin, which is excluded.
+    session.delete_entry(&a).unwrap();
+    let groups = session.similar_passwords().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].entries.len(), 2);
+    assert!(groups[0].entries.iter().all(|e| e.title != "A"));
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

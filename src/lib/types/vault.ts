@@ -225,6 +225,18 @@ export interface DuplicatePasswords {
   uuids: string[];
 }
 
+/** One entry in a similar-password group (passwords never leave the session). */
+export interface SimilarEntry {
+  uuid: string;
+  title: string;
+  username: string;
+}
+
+/** A cluster of entries whose passwords are similar (at most two edits). */
+export interface SimilarPasswordGroup {
+  entries: SimilarEntry[];
+}
+
 /** Result of `download_favicons` (KeePass "Download Favicons"). */
 export interface FaviconReport {
   attempted: number;

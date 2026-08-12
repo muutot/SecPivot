@@ -98,8 +98,8 @@ pub use self::dto::{
     CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
     EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
     FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
-    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, TempAttachmentRef, TotpCode,
-    VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
+    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup,
+    TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
 };
 
 pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};

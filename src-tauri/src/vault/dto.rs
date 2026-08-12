@@ -560,6 +560,23 @@ pub struct DuplicatePasswords {
     pub uuids: Vec<String>,
 }
 
+/// One entry in a similar-password group (uuid/title/username only — the
+/// passwords themselves never leave the session).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarEntry {
+    pub uuid: String,
+    pub title: String,
+    pub username: String,
+}
+
+/// A cluster of entries whose passwords are similar (at most two edits apart).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarPasswordGroup {
+    pub entries: Vec<SimilarEntry>,
+}
+
 /// One favicon job: a URL host plus every entry UUID that references it.
 #[derive(Debug, Clone)]
 pub struct FaviconJob {
