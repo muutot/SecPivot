@@ -5,10 +5,11 @@ use std::time::Instant;
 use zeroize::Zeroize;
 
 use super::{Conn, SIDE_CHANNEL_BYTES, SIDE_CHANNEL_TTL};
+use crate::config::PasswordGeneratorSettings;
 use crate::rpc::{
-    decrypt_frame, encrypt_frame, handle_jsonrpc, hex, key_auth_cr, key_auth_sr, random_hex,
-    secret_bytes, Envelope, ErrorMessage, KeyMessage, RpcError, SrpMessage, SrpServer, FEATURES,
-    SECURITY_LEVEL,
+    decrypt_frame, encrypt_frame, handle_jsonrpc_with_generator, hex, key_auth_cr, key_auth_sr,
+    random_hex, secret_bytes, Envelope, ErrorMessage, KeyMessage, RpcError, SrpMessage, SrpServer,
+    FEATURES, SECURITY_LEVEL,
 };
 /// Pure setup-protocol state machine; returns the envelope to send (or an
 /// error envelope). Tested directly with a stub host.
@@ -146,6 +147,7 @@ pub(crate) fn dispatch_jsonrpc(
     conn: &mut Conn,
     env: &Envelope,
     host: &mut dyn crate::rpc::RpcHost,
+    generator: &PasswordGeneratorSettings,
 ) -> Option<(Envelope, String)> {
     let frame = env.jsonrpc.as_ref()?;
     let secret = conn.session_key.as_ref()?;
@@ -165,7 +167,7 @@ pub(crate) fn dispatch_jsonrpc(
             .unwrap_or_default();
         eprintln!("[rpc] FindLogins urls={urls:?}");
     }
-    let response = match handle_jsonrpc(host, &method, params) {
+    let response = match handle_jsonrpc_with_generator(host, &method, params, generator) {
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
         Err(RpcError::Locked) => jsonrpc_error(&id, -32000, "Vault is locked"),
         Err(RpcError::Unsupported(m)) => {

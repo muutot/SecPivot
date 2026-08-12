@@ -25,6 +25,22 @@ pub fn handle_request(
     host: &mut dyn BridgeHost,
     approve: impl FnOnce(&str) -> bool,
 ) -> BridgeResponse {
+    handle_request_with_generator(
+        request,
+        host,
+        approve,
+        &PasswordGeneratorSettings::default(),
+    )
+}
+
+/// `handle_request` with an explicit generator settings snapshot (used by the
+/// loopback server so `GeneratePassword` honors the user's configured rules).
+pub fn handle_request_with_generator(
+    request: BridgeRequest,
+    host: &mut dyn BridgeHost,
+    approve: impl FnOnce(&str) -> bool,
+    generator: &PasswordGeneratorSettings,
+) -> BridgeResponse {
     let request_type = request.request_type.clone();
     if request_type.trim().is_empty() {
         return BridgeResponse::failure(&request_type, "缺少 RequestType");
@@ -49,7 +65,14 @@ pub fn handle_request(
         key.zeroize();
         return BridgeResponse::failure(&request_type, "请求校验失败");
     }
-    let response = dispatch(request_type.as_str(), &request, &key, id.as_str(), host);
+    let response = dispatch_with_generator(
+        request_type.as_str(),
+        &request,
+        &key,
+        id.as_str(),
+        host,
+        generator,
+    );
     key.zeroize();
     response
 }
@@ -114,12 +137,13 @@ pub fn new_client_id() -> String {
 
 /// Decrypt-then-serve for the authorized request types. Runs only after the
 /// verifier passed, so `key` is the shared client secret.
-fn dispatch(
+fn dispatch_with_generator(
     request_type: &str,
     request: &BridgeRequest,
     key: &[u8],
     id: &str,
     host: &mut dyn BridgeHost,
+    generator: &PasswordGeneratorSettings,
 ) -> BridgeResponse {
     match request_type {
         "test-associate" => {
@@ -174,7 +198,8 @@ fn dispatch(
         }
         "generate-password" => {
             let mut response = BridgeResponse::success(request_type, key, host);
-            response.password = Some(generate_password());
+            response.password =
+                Some(generate_password_with(generator).unwrap_or_else(|_| generate_password()));
             response
         }
         other => BridgeResponse::failure(other, &format!("不支持的操作: {other}")),

@@ -464,6 +464,35 @@ fn generate_password_meets_default_policy_and_is_fresh() {
     assert_ne!(password, again.password.expect("fresh password"));
 }
 
+#[test]
+fn generate_password_honors_configured_generator() {
+    let settings = PasswordGeneratorSettings {
+        length: 10,
+        include_upper: true,
+        include_lower: true,
+        include_digits: true,
+        include_symbols: true,
+        exclude_similar: false,
+        exclude_ambiguous: false,
+        custom_charset: Some("ABC123".into()),
+        exclude_chars: None,
+        required_chars: Some("A3".into()),
+        pattern: None,
+        ..Default::default()
+    };
+    let mut host = MockHost::open();
+    let response = handle_request_with_generator(
+        authorized_request("generate-password"),
+        &mut host,
+        |_| true,
+        &settings,
+    );
+    let password = response.password.expect("password returned");
+    assert_eq!(password.chars().count(), 10);
+    assert!(password.chars().all(|c| "ABC123".contains(c)));
+    assert!(password.contains('A') && password.contains('3'));
+}
+
 fn hex_bytes(s: &str) -> Vec<u8> {
     (0..s.len())
         .step_by(2)

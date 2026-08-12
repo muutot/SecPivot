@@ -17,6 +17,7 @@
 //! The server itself holds no secrets beyond the per-connection handshake
 //! state, which is zeroized on drop; long-lived keys live in the session.
 
+use crate::config::PasswordGeneratorSettings;
 use crate::rpc::{Envelope, SrpServer, RPC_PORT};
 use crate::vault::VaultSession;
 use serde::Serialize;
@@ -84,6 +85,7 @@ impl ServerHandle {
 pub(crate) struct RpcState {
     server: Mutex<Option<ServerHandle>>,
     last_error: Mutex<Option<String>>,
+    generator: Mutex<PasswordGeneratorSettings>,
 }
 
 impl RpcState {
@@ -93,6 +95,12 @@ impl RpcState {
 
     pub(crate) fn last_error(&self) -> Option<String> {
         self.last_error.lock().ok().and_then(|e| e.clone())
+    }
+
+    pub(crate) fn set_generator(&self, settings: PasswordGeneratorSettings) {
+        if let Ok(mut guard) = self.generator.lock() {
+            *guard = settings;
+        }
     }
 
     pub(crate) fn start(&self, app: &AppHandle) -> Result<(), String> {
@@ -390,8 +398,15 @@ fn reply_jsonrpc(
     let Ok(mut session) = session_state.lock() else {
         return false;
     };
+    let generator = app
+        .state::<RpcState>()
+        .generator
+        .lock()
+        .ok()
+        .map(|guard| guard.clone())
+        .unwrap_or_default();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        dispatch_jsonrpc(conn, &env, &mut *session)
+        dispatch_jsonrpc(conn, &env, &mut *session, &generator)
     }));
     match outcome {
         Ok(Some((reply, method))) => {

@@ -103,7 +103,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 密码生成器配置档（存储）：`DatabaseDefaults.generatorProfiles` 命名 profiles（TS+Rust serde 均保留，长度归一化，round-trip 测试）
 - [x] 密码生成器配置档（UI）：数据库设置面板「密码配置档」支持新建/编辑/删除/设为默认（含自定义字符集、排除、必含、pattern）
 - [x] 密码生成器规则引擎（Rust）：`generate_password_with(&PasswordGeneratorSettings)` 镜像 TS 规则（自定义字符集/排除/必含/pattern），OS RNG 取随机，覆盖默认包装与错误必含测试
-- [ ] 密码生成器配置接线：KeePassHttp/RPC `GeneratePassword` 读取 `ConfigStore` 生成器设置后调用 `generate_password_with`
+- [x] 密码生成器配置接线：`BridgeState`/`RpcState` 在配置同步时保存生成器设置，KeePassHttp/RPC `GeneratePassword` 经 `handle_request_with_generator`/`handle_jsonrpc_with_generator` 使用用户规则；含 `generate_password_honors_configured_generator` 测试
 - [ ] 多数据库标签页：后端从单一 `VaultSession` 演进为多 session 管理，分别维护密钥、dirty/revision、远程目标、浏览器会话可见性和锁定生命周期
 
 ### P2 — KDBX 属性完整度与数据交换

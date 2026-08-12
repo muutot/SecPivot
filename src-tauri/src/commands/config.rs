@@ -53,6 +53,7 @@ pub(crate) fn set_config(
 /// logged, never fatal (the app stays usable without browser integration).
 pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
     let state = app.state::<crate::bridge::server::BridgeState>();
+    state.set_generator(config.database.generator.clone());
     if config.bridge.enabled {
         if let Err(e) = state.start(app) {
             eprintln!("bridge: {e}");
@@ -66,6 +67,7 @@ pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
 /// failures are logged, never fatal (the app stays usable without Kee).
 pub(crate) fn sync_rpc(app: &tauri::AppHandle, config: &config::AppConfig) {
     let state = app.state::<crate::rpc::server::RpcState>();
+    state.set_generator(config.database.generator.clone());
     if config.rpc.enabled {
         if let Err(e) = state.start(app) {
             eprintln!("rpc: {e}");

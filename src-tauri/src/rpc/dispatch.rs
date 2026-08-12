@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use super::dto::{RpcDatabase, RpcError, RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite};
+use crate::config::PasswordGeneratorSettings;
 fn group_summary_dto(g: &RpcGroupRef) -> Value {
     json!({
         "title": g.title,
@@ -91,6 +92,17 @@ pub fn handle_jsonrpc(
     method: &str,
     params: Option<&Value>,
 ) -> Result<Value, RpcError> {
+    handle_jsonrpc_with_generator(host, method, params, &PasswordGeneratorSettings::default())
+}
+
+/// `handle_jsonrpc` with an explicit generator settings snapshot (the loopback
+/// server passes the configured rules so `GeneratePassword` matches the app).
+pub fn handle_jsonrpc_with_generator(
+    host: &mut dyn RpcHost,
+    method: &str,
+    params: Option<&Value>,
+    generator: &PasswordGeneratorSettings,
+) -> Result<Value, RpcError> {
     if !host.is_open() {
         return Err(RpcError::Locked);
     }
@@ -132,7 +144,8 @@ pub fn handle_jsonrpc(
             Ok(json!(result))
         }
         "GetPasswordProfiles" => Ok(json!(["Default"])),
-        "GeneratePassword" => Ok(json!(crate::bridge::generate_password())),
+        "GeneratePassword" => Ok(json!(crate::bridge::generate_password_with(generator)
+            .unwrap_or_else(|_| crate::bridge::generate_password()))),
         "AddLogin" => {
             let db = host.database().ok_or(RpcError::Locked)?;
             let params =

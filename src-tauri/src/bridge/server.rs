@@ -9,7 +9,10 @@
 //! The server itself holds no secrets: keys live in the session and are
 //! wiped on lock, so a locked vault responds with a plain error envelope.
 
-use crate::bridge::{handle_request, new_client_id, BridgeRequest, BridgeResponse, BRIDGE_PORT};
+use crate::bridge::{
+    handle_request_with_generator, new_client_id, BridgeRequest, BridgeResponse, BRIDGE_PORT,
+};
+use crate::config::PasswordGeneratorSettings;
 use crate::vault::VaultSession;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -61,6 +64,7 @@ impl ServerHandle {
 pub(crate) struct BridgeState {
     server: Mutex<Option<ServerHandle>>,
     last_error: Mutex<Option<String>>,
+    generator: Mutex<PasswordGeneratorSettings>,
 }
 
 impl BridgeState {
@@ -70,6 +74,12 @@ impl BridgeState {
 
     pub(crate) fn last_error(&self) -> Option<String> {
         self.last_error.lock().ok().and_then(|e| e.clone())
+    }
+
+    pub(crate) fn set_generator(&self, settings: PasswordGeneratorSettings) {
+        if let Ok(mut guard) = self.generator.lock() {
+            *guard = settings;
+        }
     }
 
     pub(crate) fn start(&self, app: &AppHandle) -> Result<(), String> {
@@ -190,11 +200,23 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
             return;
         };
         let app = app.clone();
+        let generator = app
+            .state::<BridgeState>()
+            .generator
+            .lock()
+            .ok()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handle_request(request, &mut *session, move |id| {
-                let app = app.clone();
-                request_approval(&app, &board, id)
-            })
+            handle_request_with_generator(
+                request,
+                &mut *session,
+                move |id| {
+                    let app = app.clone();
+                    request_approval(&app, &board, id)
+                },
+                &generator,
+            )
         }));
         match outcome {
             Ok(response) => response,

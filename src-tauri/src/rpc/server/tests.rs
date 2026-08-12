@@ -1,6 +1,7 @@
 //! KeePassRPC server tests: WS transport + pure handshake state machines.
 //! Extracted from `rpc::server.rs`.
 use super::*;
+use crate::config::PasswordGeneratorSettings;
 use crate::rpc::{
     decrypt_frame, encrypt_frame, hex, key_auth_cr, key_auth_sr, random_hex, Envelope,
     ErrorMessage, KeyMessage, RpcError, RpcHost, SrpMessage, SECURITY_LEVEL,
@@ -325,7 +326,13 @@ fn full_srp_handshake_registers_key_and_round_trips_jsonrpc() {
         conn.session_key.as_ref().unwrap(),
         &request.to_string(),
     ));
-    let (reply, method) = dispatch_jsonrpc(&mut conn, &env, &mut host).expect("jsonrpc reply");
+    let (reply, method) = dispatch_jsonrpc(
+        &mut conn,
+        &env,
+        &mut host,
+        &PasswordGeneratorSettings::default(),
+    )
+    .expect("jsonrpc reply");
     assert_eq!(method, "GetAllDatabases");
     let frame = reply.jsonrpc.as_ref().unwrap();
     let plaintext = decrypt_frame(conn.session_key.as_ref().unwrap(), frame).expect("decrypt");
@@ -490,11 +497,23 @@ fn tampered_or_keyless_jsonrpc_frames_close() {
     // Key wiped (as on lock) → frame MAC fails → no reply.
     let mut conn = Conn::default();
     conn.session_key = Some(vec![3u8; 32]);
-    assert!(dispatch_jsonrpc(&mut conn, &env, &mut host).is_none());
+    assert!(dispatch_jsonrpc(
+        &mut conn,
+        &env,
+        &mut host,
+        &PasswordGeneratorSettings::default()
+    )
+    .is_none());
 
     // No session key at all → no reply.
     let mut conn = Conn::default();
-    assert!(dispatch_jsonrpc(&mut conn, &env, &mut host).is_none());
+    assert!(dispatch_jsonrpc(
+        &mut conn,
+        &env,
+        &mut host,
+        &PasswordGeneratorSettings::default()
+    )
+    .is_none());
 }
 
 /// Transport-level check: prove the tungstenite accept path works on
