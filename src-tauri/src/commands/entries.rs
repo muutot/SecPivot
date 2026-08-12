@@ -98,9 +98,10 @@ pub(crate) fn read_text_file(path: String) -> Result<String, String> {
         e.eq_ignore_ascii_case("csv")
             || e.eq_ignore_ascii_case("xml")
             || e.eq_ignore_ascii_case("json")
+            || e.eq_ignore_ascii_case("1pif")
     });
     if !allowed {
-        return Err("仅支持导入 .csv / .xml / .json 文件".to_owned());
+        return Err("仅支持导入 .csv / .xml / .json / .1pif 文件".to_owned());
     }
     let meta = std::fs::metadata(path).map_err(|e| format!("读取文件失败: {e}"))?;
     if meta.len() > MAX_TEXT_IMPORT_BYTES {
@@ -118,4 +119,10 @@ pub(crate) fn read_text_file(path: String) -> Result<String, String> {
 #[tauri::command]
 pub(crate) fn parse_bitwarden_json(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
     crate::vault::parse_bitwarden_json(&text)
+}
+
+/// Parse a 1Password Interchange Format (`.1pif`) text export into rows.
+#[tauri::command]
+pub(crate) fn parse_1pif(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
+    Ok(crate::vault::parse_1pif(&text))
 }

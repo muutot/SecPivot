@@ -86,6 +86,12 @@ export interface ImportCsvRow {
 }
 
 const HEADERS = ["group", "title", "username", "password", "url", "notes", "totp"];
+/** LastPass CSV export uses different column names for three fields. */
+const HEADER_ALIASES: Record<string, string> = {
+  name: "title",
+  extra: "notes",
+  grouping: "group",
+};
 
 /**
  * Map raw parsed cells to rows. A leading row matching the known header names
@@ -97,7 +103,13 @@ export function parseCsvRows(raw: string[][]): ImportCsvRow[] {
   let cols: number[] | null = null;
   if (raw.length > 0) {
     const normalized = raw[0].map((c) => c.trim().toLowerCase());
-    const indices = HEADERS.map((h) => normalized.indexOf(h));
+    const indexOf = (header: string): number => {
+      const exact = normalized.indexOf(header);
+      if (exact >= 0) return exact;
+      const alias = HEADER_ALIASES[header];
+      return alias ? normalized.indexOf(alias) : -1;
+    };
+    const indices = HEADERS.map(indexOf);
     if (indices.some((i) => i >= 0)) {
       cols = indices;
       start = 1;

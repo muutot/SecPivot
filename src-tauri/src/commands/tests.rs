@@ -23,6 +23,9 @@ fn read_text_file_accepts_csv_and_xml_and_rejects_others() {
     let json = write_file(&dir, "bitwarden.json", "{\"items\":[]}");
     assert_eq!(read_text_file(json).unwrap(), "{\"items\":[]}");
 
+    let pif = write_file(&dir, "export.1pif", "***Top of File***\n");
+    assert_eq!(read_text_file(pif).unwrap(), "***Top of File***\n");
+
     let txt = write_file(&dir, "notes.txt", "secret local text");
     let err = read_text_file(txt).unwrap_err();
     assert!(err.contains(".csv"), "unexpected error: {err}");

@@ -102,7 +102,7 @@ pub use self::dto::{
     VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
 };
 
-pub use self::import::{parse_bitwarden_json, ImportCustomField, ImportRow};
+pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::AttachmentTempStore;
 
