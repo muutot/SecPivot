@@ -184,6 +184,81 @@ fn s3_transport_round_trips_against_local_mock() {
     storage.put("vaults/b.kdbx", &[9, 9]).expect("put");
 }
 
+/// Live end-to-end S3 round trip against a real local S3-compatible server
+/// (MinIO at `B:\Program\s3\minio`, `http://127.0.0.1:9000`,
+/// `rustfsadmin`/`rustfsadmin`, path-style). It exercises the same
+/// `S3Storage` code path the desktop app uses: bucket create, put/list/get,
+/// then object + bucket delete. The test skips itself when the server is not
+/// running so the suite stays green offline; run it with the server up for
+/// real-provider evidence.
+///
+/// Note: the rustfs 1.0.0-beta.12 binary at `B:\Program\s3\rustfs` cannot
+/// serve as this server on Windows — its storage layer never reaches
+/// readiness (format load hits a Windows sharing violation, `os error 32`,
+/// retries 10× and stays on `storage_quorum`); MinIO is the working local
+/// substitute and is what this test was verified against (see PITFALLS.md).
+#[test]
+fn s3_transport_round_trips_against_live_s3_server() {
+    const ENDPOINT: &str = "http://127.0.0.1:9000";
+    let addr: std::net::SocketAddr = "127.0.0.1:9000".parse().expect("loopback addr");
+    if std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_err() {
+        eprintln!("skip: local S3-compatible server not running at {ENDPOINT}");
+        return;
+    }
+
+    let bucket_name = format!("secpivot-live-{}", std::process::id());
+    let region = ::s3::Region::Custom {
+        region: "us-east-1".to_owned(),
+        endpoint: ENDPOINT.to_owned(),
+    };
+    let credentials =
+        ::s3::creds::Credentials::new(Some("rustfsadmin"), Some("rustfsadmin"), None, None, None)
+            .expect("credentials");
+    let created = shared_runtime()
+        .block_on(::s3::Bucket::create_with_path_style(
+            &bucket_name,
+            region.clone(),
+            credentials.clone(),
+            ::s3::BucketConfiguration::default(),
+        ))
+        .expect("create bucket");
+    assert!(
+        created.response_code == 200 || created.response_code == 409,
+        "unexpected create-bucket HTTP {}",
+        created.response_code
+    );
+
+    let cfg = RemoteSettings {
+        kind: "s3".into(),
+        endpoint: ENDPOINT.to_owned(),
+        region: "us-east-1".to_owned(),
+        bucket: bucket_name.clone(),
+        access_key: "rustfsadmin".to_owned(),
+        secret_key: "rustfsadmin".to_owned(),
+        ..Default::default()
+    };
+    let storage = S3Storage::with_timeouts(&cfg, Duration::from_secs(10), Duration::from_secs(10))
+        .expect("storage");
+
+    let key = "vaults/live.kdbx";
+    storage.put(key, &[1, 2, 3]).expect("put");
+    let objects = storage.list("vaults/").expect("list");
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0].key, key);
+    assert_eq!(objects[0].size, 3);
+    assert_eq!(storage.get(key).expect("get"), vec![1, 2, 3]);
+
+    // Best-effort cleanup so repeated runs on the local server stay tidy.
+    let raw = ::s3::Bucket::new(&bucket_name, region, credentials)
+        .expect("raw bucket")
+        .with_path_style();
+    let _ = shared_runtime().block_on(raw.delete_object(&format!("/{key}")));
+    match shared_runtime().block_on(raw.delete()) {
+        Ok(code) if code == 204 || code == 200 || code == 404 => {}
+        other => eprintln!("note: live test bucket cleanup skipped ({other:?})"),
+    }
+}
+
 /// The Tauri commands run on async runtime worker threads, where
 /// `S3Storage`'s sync methods (`Runtime::block_on`) panic — the command
 /// future aborts and the invoke never resolves, leaving the UI on an

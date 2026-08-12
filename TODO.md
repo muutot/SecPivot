@@ -51,7 +51,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back through the selected S3/WebDAV transport for remote sessions
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<kind>/<config>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3/WebDAV files, open (password + keyfile) and create remote vaults
-- [~] Live S3 end-to-end verification (no docker/minio/aws in this environment; transport now covered by a local mock HTTP S3 server test: ListObjectsV2 XML parsing, path-style signing, get/put, bounded-timeout behavior — `remote::tests::*`; real-provider behavior still unverified)
+- [x] Live S3 end-to-end verification: `s3_transport_round_trips_against_live_s3_server` 对真实本地 S3 服务器(MinIO `B:\Program\s3\minio` :9000,path-style,`rustfsadmin`/`rustfsadmin`)跑通 建桶→put→list→get→删对象→删桶 全链路(测试运行时观察到 MinIO 磁盘上 `secpivot-live-<pid>` 桶目录出现并随清理消失,测试带 `--nocapture` 无 skip);原 rustfs 1.0.0-beta.12 服务端在 Windows 上存储层无法就绪(format 文件加载命中 Windows 共享冲突 `os error 32`,重试 10 次后仍 `storage_quorum` 未就绪,见 `docs/PITFALLS.md`),故以 MinIO 为本地真实服务器验证
 - [x] 多 profile 远程配置 (`remoteProfiles` + `activeRemote`: S3/WebDAV 二级分组,单 profile 单协议字段,规范路径 `s3/config_1` / `webdav/config_1`,命令按路径从 `ConfigStore` 解析凭据且不跨 IPC,设置页与欢迎页均可添加/重命名/删除/切换)
 - [x] 任意文件可作数据库/密钥文件:远程打开/创建键名不再要求 `.kdbx` 后缀(由 KDBX 解析判定,非库文件报「无法打开数据库」),本地打开/创建选择器加「所有文件」选项,密钥文件选择器(欢迎页 + 改主密钥)放开任意类型
 
