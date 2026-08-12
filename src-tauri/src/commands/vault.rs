@@ -142,6 +142,18 @@ pub(crate) fn get_database_settings(
         .database_settings()
 }
 
+/// Apply database-level settings changes (history cap, recycle-bin flag).
+#[tauri::command]
+pub(crate) fn update_database_settings(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    patch: vault::DatabaseSettingsPatch,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_database_settings(&patch)
+}
+
 #[tauri::command]
 pub(crate) fn save_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,

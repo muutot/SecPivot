@@ -155,6 +155,12 @@ export interface DatabaseSettings {
   recycleBinEnabled: boolean;
 }
 
+/** Partial database-settings write; omitted fields are kept, `null` resets. */
+export interface DatabaseSettingsPatch {
+  historyMaxItems?: number | null;
+  recycleBinEnabled?: boolean | null;
+}
+
 /** Server-side security analysis; passwords never cross into the report. */
 export interface SecurityReport {
   total: number;

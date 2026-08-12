@@ -18,6 +18,7 @@ import type {
   FaviconReport,
   MutationDelta,
   DatabaseSettings,
+  DatabaseSettingsPatch,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -37,6 +38,7 @@ interface VaultStore {
   subscribe: typeof state.subscribe;
   get: () => VaultState | null;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
+  updateDatabaseSettings: (patch: DatabaseSettingsPatch) => Promise<VaultState>;
   open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
   create: (request: CreateVaultRequest) => Promise<VaultState>;
   listRemoteObjects: () => Promise<RemoteObject[]>;
@@ -306,6 +308,15 @@ export const vault: VaultStore = {
   async getDatabaseSettings(): Promise<DatabaseSettings | null> {
     if (!isTauriRuntime()) return null;
     return backendInvoke<DatabaseSettings | null>("get_database_settings");
+  },
+
+  async updateDatabaseSettings(patch: DatabaseSettingsPatch): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_database_settings", { patch });
+      state.set(applyBackendState(result));
+      return result;
+    }
+    throw new Error("浏览器预览不支持数据库设置修改");
   },
 
   remembered: remembered.subscribe,

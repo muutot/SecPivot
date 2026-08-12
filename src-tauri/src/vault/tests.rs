@@ -514,6 +514,41 @@ fn database_settings_reports_current_config() {
     assert_eq!(settings.compression, "Gzip");
 }
 
+/// Database-setting writes persist through save/reopen and explicit `null`
+/// resets history/recycle flags to KeePass defaults.
+#[test]
+fn update_database_settings_persists_history_and_recycle_flag() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_items: Some(Some(5)),
+            recycle_bin_enabled: Some(Some(false)),
+        })
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_items, Some(5));
+    assert!(!settings.recycle_bin_enabled);
+
+    session.save().unwrap();
+    drop(session);
+    let mut session = VaultSession::default();
+    session.open(&path, "master-password", None).unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_items, Some(5));
+    assert!(!settings.recycle_bin_enabled);
+
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_items: Some(None),
+            recycle_bin_enabled: Some(None),
+        })
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_items, None);
+    assert!(settings.recycle_bin_enabled);
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

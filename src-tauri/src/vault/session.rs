@@ -206,6 +206,25 @@ impl VaultSession {
         }))
     }
 
+    /// Apply a partial update to database-level settings (history cap and
+    /// recycle-bin flag). Absent fields are kept; `null` resets to default.
+    pub fn update_database_settings(
+        &mut self,
+        patch: &DatabaseSettingsPatch,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            if let Some(history_max_items) = patch.history_max_items {
+                db.meta.history_max_items = history_max_items.map(|value| value as isize);
+            }
+            if let Some(recycle_bin_enabled) = patch.recycle_bin_enabled {
+                db.meta.recyclebin_enabled = recycle_bin_enabled;
+            }
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
     pub fn save(&mut self) -> Result<VaultState, String> {
         let job = self.prepare_save()?;
         let revision = job.revision;

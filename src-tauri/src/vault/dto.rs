@@ -247,6 +247,19 @@ pub struct DatabaseSettings {
     pub recycle_bin_enabled: bool,
 }
 
+/// Partial write for database-level settings. An absent field keeps the
+/// current value; an explicit `null` resets it to the KeePass default
+/// (`historyMaxItems` cleared = default cap, `recycleBinEnabled` cleared =
+/// enabled).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseSettingsPatch {
+    #[serde(default)]
+    pub history_max_items: Option<Option<i64>>,
+    #[serde(default)]
+    pub recycle_bin_enabled: Option<Option<bool>>,
+}
+
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
 /// index, JSON `null` explicitly resets to the default icon, and an absent
 /// field keeps the entry's current icon. Plain `Option<Option<u32>>` serde
