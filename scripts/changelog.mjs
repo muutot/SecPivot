@@ -153,10 +153,18 @@ if (isPreview) {
 } else {
   // Prepend to existing or create new
   if (existsSync(CHANGELOG_PATH)) {
-    const existing = readFileSync(CHANGELOG_PATH, "utf-8");
+    // Normalize line endings so the header/version regexes match on CRLF files
+    const existing = readFileSync(CHANGELOG_PATH, "utf-8").replace(/\r\n/g, "\n");
     // Remove the header line if it exists, then prepend new content
     const existingBody = existing.replace(/^# Changelog\n\n/, "");
-    writeFileSync(CHANGELOG_PATH, changelog + existingBody, "utf-8");
+    // Idempotent re-run: replace the existing section for this version
+    // instead of prepending a duplicate (two-pass release flow).
+    let rest = existingBody;
+    if (existingBody.startsWith(`## ${version} `)) {
+      const firstSectionEnd = existingBody.indexOf("\n## ");
+      rest = firstSectionEnd >= 0 ? existingBody.slice(firstSectionEnd + 1) : "";
+    }
+    writeFileSync(CHANGELOG_PATH, changelog + rest, "utf-8");
   } else {
     writeFileSync(CHANGELOG_PATH, changelog, "utf-8");
   }
