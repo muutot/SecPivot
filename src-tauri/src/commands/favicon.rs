@@ -248,15 +248,64 @@ pub(crate) async fn download_favicons(
     }
     let downloaded = fetched.len();
     let attempted = jobs.len();
-    // Mutate + capture the save job under the lock, then run KDF +
-    // serialization + transport off the async worker, then complete under
-    // the lock again — the same split as `save_vault`. Calling
-    // `session.save()` directly here would run the remote transport's
-    // `Runtime::block_on` on a tokio worker thread, where it panics; that
-    // panic would unwind through the MutexGuard and poison the session
-    // mutex, bricking every later command with "数据库锁已损坏" (see the
-    // note in `list_objects_async`).
-    let job = {
+    let auto_save = config
+        .get()
+        .map(|cfg| cfg.favicon.auto_save)
+        .unwrap_or(false);
+    if auto_save {
+        // Mutate + capture the save job under the lock, then run KDF +
+        // serialization + transport off the async worker, then complete
+        // under the lock again — the same split as `save_vault`. Calling
+        // `session.save()` directly here would run the remote transport's
+        // `Runtime::block_on` on a tokio worker thread, where it panics;
+        // that panic would unwind through the MutexGuard and poison the
+        // session mutex, bricking every later command with "数据库锁已损坏"
+        // (see the note in `list_objects_async`).
+        let job = {
+            let mut session = session.lock().map_err(|_| {
+                eprintln!("[favicon] 数据库锁已损坏");
+                "数据库锁已损坏".to_owned()
+            })?;
+            session.apply_favicons(&jobs, fetched).map_err(|e| {
+                eprintln!("[favicon] 写入图标失败: {e}");
+                e
+            })?;
+            session.prepare_save(false).map_err(|e| {
+                eprintln!("[favicon] 准备保存失败: {e}");
+                e
+            })?
+        };
+        let revision = job.revision;
+        let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_save(job))
+            .await
+            .map_err(|e| format!("图标保存任务异常: {e}"))?;
+        match persisted {
+            Ok(new_hash) => {
+                session
+                    .lock()
+                    .map_err(|_| {
+                        eprintln!("[favicon] 数据库锁已损坏");
+                        "数据库锁已损坏".to_owned()
+                    })?
+                    .complete_save(revision, new_hash)
+                    .map_err(|e| {
+                        eprintln!("[favicon] 完成保存失败: {e}");
+                        e
+                    })?;
+            }
+            Err(e) => {
+                if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                    let _ = session.lock().map(|mut active| active.note_save_failure());
+                }
+                eprintln!("[favicon] 保存数据库失败: {e}");
+                return Err(e);
+            }
+        }
+    } else {
+        // Manual-save mode (default): apply the icons to the open session
+        // only. `apply_favicons` marks the session dirty when bytes were
+        // written, so the tab shows "unsaved" until the user saves; nothing
+        // touches the disk or the remote.
         let mut session = session.lock().map_err(|_| {
             eprintln!("[favicon] 数据库锁已损坏");
             "数据库锁已损坏".to_owned()
@@ -265,36 +314,6 @@ pub(crate) async fn download_favicons(
             eprintln!("[favicon] 写入图标失败: {e}");
             e
         })?;
-        session.prepare_save(false).map_err(|e| {
-            eprintln!("[favicon] 准备保存失败: {e}");
-            e
-        })?
-    };
-    let revision = job.revision;
-    let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_save(job))
-        .await
-        .map_err(|e| format!("图标保存任务异常: {e}"))?;
-    match persisted {
-        Ok(new_hash) => {
-            session
-                .lock()
-                .map_err(|_| {
-                    eprintln!("[favicon] 数据库锁已损坏");
-                    "数据库锁已损坏".to_owned()
-                })?
-                .complete_save(revision, new_hash)
-                .map_err(|e| {
-                    eprintln!("[favicon] 完成保存失败: {e}");
-                    e
-                })?;
-        }
-        Err(e) => {
-            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-                let _ = session.lock().map(|mut active| active.note_save_failure());
-            }
-            eprintln!("[favicon] 保存数据库失败: {e}");
-            return Err(e);
-        }
     }
     Ok(vault::FaviconReport {
         attempted,

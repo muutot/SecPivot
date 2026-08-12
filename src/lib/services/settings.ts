@@ -189,6 +189,7 @@ export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
 
 export const DEFAULT_FAVICON_SETTINGS: FaviconSettings = {
   concurrency: 8,
+  autoSave: false,
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -646,6 +647,10 @@ export function normalizeSettings(
     keyboard,
     favicon: {
       concurrency: clampInt(source.favicon?.concurrency ?? fallback.favicon?.concurrency, 1, 16, 8),
+      autoSave:
+        typeof source.favicon?.autoSave === "boolean"
+          ? source.favicon.autoSave
+          : (fallback.favicon?.autoSave ?? false),
     },
   };
 }

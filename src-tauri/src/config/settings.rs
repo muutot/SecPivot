@@ -432,11 +432,19 @@ pub struct FaviconSettings {
     /// parallel enough to be fast, low enough not to overwhelm the system
     /// proxy (clash-verge & co.) with hundreds of simultaneous tunnels.
     pub concurrency: i32,
+    /// Persist the database immediately after applying downloaded icons.
+    /// Off by default: icons are applied to the open session and the vault
+    /// is left dirty for a manual save, so downloads never write the disk
+    /// behind the user's back.
+    pub auto_save: bool,
 }
 
 impl Default for FaviconSettings {
     fn default() -> Self {
-        Self { concurrency: 8 }
+        Self {
+            concurrency: 8,
+            auto_save: false,
+        }
     }
 }
 

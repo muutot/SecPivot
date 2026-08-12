@@ -326,6 +326,13 @@
   {/if}
 
   {#if section === "network"}
+    <SettingToggleCard
+      icon="save"
+      label="下载图标后自动保存"
+      description="关闭时图标仅应用到当前会话并标记未保存，需手动保存；开启则下载完成后立即写入数据库"
+      checked={s.favicon.autoSave}
+      onchange={(checked) => appSettings.updateFavicon("autoSave", checked)}
+    />
     <SettingRangeCard
       icon="globe"
       label="图标下载并发数"

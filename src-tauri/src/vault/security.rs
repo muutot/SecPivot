@@ -189,7 +189,9 @@ impl VaultSession {
     /// Store fetched favicon bytes as database custom icons and point every
     /// entry of the same host at that icon. An entry that already references
     /// an identical icon keeps it; otherwise the icon data is replaced (or a
-    /// new custom icon is created). Persisting is the caller's job.
+    /// new custom icon is created). Marks the session dirty when any icon
+    /// bytes were actually written, so a manual save (or the favicon
+    /// auto-save path) persists the change; persisting is the caller's job.
     pub fn apply_favicons(
         &mut self,
         jobs: &[FaviconJob],
@@ -197,6 +199,7 @@ impl VaultSession {
     ) -> Result<(), String> {
         let db = self.require_db_mut()?;
         let jobs: HashMap<&str, &FaviconJob> = jobs.iter().map(|j| (j.host.as_str(), j)).collect();
+        let mut changed = false;
         for item in fetched {
             let Some(job) = jobs.get(item.host.as_str()) else {
                 continue;
@@ -219,6 +222,7 @@ impl VaultSession {
                     if !identical {
                         if let Some(mut icon) = db.custom_icon_mut(id) {
                             icon.data = item.bytes.clone();
+                            changed = true;
                         }
                     }
                     id
@@ -227,7 +231,9 @@ impl VaultSession {
                     let Some(mut first_entry) = db.entry_mut(first_id) else {
                         continue;
                     };
-                    first_entry.set_icon_custom_new(item.bytes.clone()).id()
+                    let id = first_entry.set_icon_custom_new(item.bytes.clone()).id();
+                    changed = true;
+                    id
                 }
             };
             for uuid in job.entry_uuids.iter().skip(1) {
@@ -236,6 +242,9 @@ impl VaultSession {
                 };
                 let _ = entry.set_icon_custom(icon_id);
             }
+        }
+        if changed {
+            self.mark_dirty();
         }
         Ok(())
     }

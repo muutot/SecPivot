@@ -195,6 +195,10 @@ export interface RpcSettings {
 export interface FaviconSettings {
   /** How many distinct hosts may be fetched at once (1-16, default 8). */
   concurrency: number;
+  /** Persist the database right after applying downloaded icons. Off by
+   * default: icons apply to the open session and the vault is left dirty
+   * for a manual save. */
+  autoSave: boolean;
 }
 
 export interface AppSettings {

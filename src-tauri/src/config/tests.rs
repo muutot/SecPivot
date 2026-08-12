@@ -802,6 +802,42 @@ fn rpc_defaults_off_keep_session_on_and_survive_round_trip() {
 }
 
 #[test]
+fn favicon_auto_save_defaults_off_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(!store.get().unwrap().favicon.auto_save);
+    assert_eq!(store.get().unwrap().favicon.concurrency, 8);
+
+    let mut config = AppConfig::default();
+    config.favicon.auto_save = true;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"favicon\": {"));
+    assert!(text.contains("\"autoSave\": true"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(reloaded.get().unwrap().favicon.auto_save);
+}
+
+#[test]
+fn favicon_config_without_auto_save_field_loads_with_default_off() {
+    let dir = TempDir::new().unwrap();
+    let conf = dir.path().join("conf");
+    fs::create_dir_all(&conf).unwrap();
+    fs::write(
+        conf.join("config.json"),
+        r#"{ "favicon": { "concurrency": 4 } }"#,
+    )
+    .unwrap();
+
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let config = store.get().unwrap();
+    assert_eq!(config.favicon.concurrency, 4);
+    assert!(!config.favicon.auto_save);
+}
+
+#[test]
 fn normalization_is_idempotent() {
     let mut config = AppConfig::default();
     config.general.compact_mode = true;

@@ -93,6 +93,94 @@ fn apply_favicons_persists_custom_icon_across_reopen() {
     assert_eq!(icon_datas, vec![bytes.clone(), bytes.clone()]);
 }
 
+/// Applying favicon bytes writes real database content, so the session must
+/// be marked dirty: with auto-save off the change is only persisted by an
+/// explicit save, and the UI shows the unsaved state until then.
+#[test]
+fn apply_favicons_marks_session_dirty_until_saved() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    // The entry was just added; make sure the dirty flag reflects the
+    // favicon application, not the add.
+    session.save().unwrap();
+    assert!(!session.state().unwrap().unwrap().dirty);
+
+    let jobs = session.favicon_jobs().unwrap();
+    session
+        .apply_favicons(
+            &jobs,
+            vec![FaviconFetch {
+                host: "example.com".into(),
+                bytes: vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+            }],
+        )
+        .unwrap();
+    assert!(session.state().unwrap().unwrap().dirty);
+
+    session.save().unwrap();
+    assert!(!session.state().unwrap().unwrap().dirty);
+}
+
+/// A no-op download (nothing fetched / nothing matched) must not dirty the
+/// session, so manual-save mode never shows a phantom unsaved state.
+#[test]
+fn apply_favicons_without_changes_keeps_session_clean() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    session.save().unwrap();
+    assert!(!session.state().unwrap().unwrap().dirty);
+
+    let jobs = session.favicon_jobs().unwrap();
+    // Fetched bytes for a host with no job and bytes identical to nothing:
+    // neither case may mark the session dirty.
+    session.apply_favicons(&jobs, vec![]).unwrap();
+    assert!(!session.state().unwrap().unwrap().dirty);
+    session
+        .apply_favicons(
+            &jobs,
+            vec![FaviconFetch {
+                host: "other-host.example".into(),
+                bytes: vec![1, 2, 3],
+            }],
+        )
+        .unwrap();
+    assert!(!session.state().unwrap().unwrap().dirty);
+}
+
 /// Full snapshots carry the authoritative custom-icon map (including a
 /// non-empty one), while mutation results omit it so favorites/expansion/CRUD
 /// no longer re-transmit every favicon over IPC.
