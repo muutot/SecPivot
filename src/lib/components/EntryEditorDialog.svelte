@@ -120,6 +120,7 @@
     "fields",
   );
   let showPassword = $state(false);
+  let generatorError = $state("");
   let customFields = $state<CustomField[]>(
     initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
   );
@@ -288,9 +289,14 @@
 
   function generate(): void {
     const settings = get(appSettings);
-    password = generatePassword(settings.database.generator);
-    showPassword = true;
-    markTouched("password");
+    generatorError = "";
+    try {
+      password = generatePassword(settings.database.generator);
+      showPassword = true;
+      markTouched("password");
+    } catch (error) {
+      generatorError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   function addCustomField(): void {
@@ -754,7 +760,10 @@
               autocomplete="new-password"
               disabled={passwordLoading}
               placeholder={multi ? "多个值" : passwordLoading ? "加载中…" : ""}
-              oninput={() => markTouched("password")}
+              oninput={() => {
+                generatorError = "";
+                markTouched("password");
+              }}
             />
             <button class="icon-btn" onclick={generate} title="生成密码">
               <AppIcon name="refresh" size={14} />
@@ -780,6 +789,9 @@
               >{strength.label} · {entropy} bits</span
             >
           </div>
+          {#if generatorError}
+            <p class="generator-error" role="alert">{generatorError}</p>
+          {/if}
         </label>
 
         <label class="field full">
@@ -1442,6 +1454,12 @@
 
   .strength-label.strong {
     color: var(--success-color);
+  }
+
+  .generator-error {
+    margin: 4px 0 0;
+    color: var(--danger-color);
+    font-size: var(--font-size-secondary, 11px);
   }
 
   .section-title {

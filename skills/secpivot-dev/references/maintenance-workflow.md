@@ -26,16 +26,16 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 ## Verification mapping
 
-| Change scope           | Minimum check                                             | Full gate           |
-| ---------------------- | --------------------------------------------------------- | ------------------- |
-| Frontend-only          | `npm run check` + `npm run build`                         | `npm run verify`    |
-| Backend-only           | `cargo check` / `cargo test` for the module               | `npm run verify`    |
-| Cross frontend/backend | contract-adjacent tests + `npm run check` + `cargo check` | `npm run verify`    |
-| Visual / theme         | structural comparison + rendered dark/light/narrow check  | add `npm run build` |
-| Settings markup / CSS  | `npm run check` + style gate + narrow-window check        | add `npm run build` |
-| Security behavior      | targeted tests for lock/clear/session semantics           | full backend gate   |
+| Change scope           | Minimum check                                                              | Full gate           |
+| ---------------------- | -------------------------------------------------------------------------- | ------------------- |
+| Frontend-only          | relevant `npm run test:frontend` tests + `npm run check` + `npm run build` | `npm run verify`    |
+| Backend-only           | `cargo check` / `cargo test` for the module                                | `npm run verify`    |
+| Cross frontend/backend | contract-adjacent tests + `npm run check` + `cargo check`                  | `npm run verify`    |
+| Visual / theme         | structural comparison + rendered dark/light/narrow check                   | add `npm run build` |
+| Settings markup / CSS  | `npm run check` + style gate + narrow-window check                         | add `npm run build` |
+| Security behavior      | targeted tests for lock/clear/session semantics                            | full backend gate   |
 
-`npm run verify` runs format checks, svelte-check, vite build, Rust tests, and clippy. If an environment prevents a required runtime/visual/platform check, report the missing evidence and keep the corresponding TODO unverified.
+`npm run verify` runs format checks, svelte-check, vite build, Node frontend behavior tests (`tests/*.test.mjs`), Rust tests, and clippy. If an environment prevents a required runtime/visual/platform check, report the missing evidence and keep the corresponding TODO unverified.
 
 ## Browser vs desktop truth
 

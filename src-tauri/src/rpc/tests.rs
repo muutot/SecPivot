@@ -380,6 +380,27 @@ fn password_profiles_and_generation() {
 }
 
 #[test]
+fn configured_password_generation_errors_reach_rpc_clients() {
+    let mut host = mock_host();
+    let settings = crate::config::PasswordGeneratorSettings {
+        include_upper: false,
+        include_lower: false,
+        include_digits: false,
+        include_symbols: false,
+        ..Default::default()
+    };
+    assert_eq!(
+        handle_jsonrpc_with_generator(
+            &mut host,
+            "GeneratePassword",
+            Some(&json!(["Default", ""])),
+            &settings,
+        ),
+        Err(RpcError::InvalidMessage("密码生成字符池为空".to_owned()))
+    );
+}
+
+#[test]
 fn locked_host_answers_error_and_unsupported_method_errors() {
     let mut host = mock_host();
     host.open = false;

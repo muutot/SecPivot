@@ -39,7 +39,7 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCh
 
 ## Password generation
 
-`src/lib/utils/password.ts` generates passwords from the configured charsets. It uses `crypto.getRandomValues`. Entropy is estimated as `length 脳 log2(poolSize)`; strength buckets are `<40` weak, `<72` fair, else strong. Similar/ambiguous exclusion filters `Il1O0` and `{}[]()/\\'"`~,;:.<>` respectively.
+`src/lib/utils/password.ts` and `bridge::generate_password_with` enforce the same generator policy. A non-empty `customCharset` replaces built-in classes; otherwise every enabled upper/lower/digit/symbol class contributes at least one character. Exclusions apply before generation, unique `requiredChars` must fit the result, and pattern slots (`u`/`l`/`d`/`s`/`a`; other characters are literals) are never overwritten with an incompatible required character. Both engines use rejection sampling over OS randomness (`crypto.getRandomValues` / `getrandom`) so character and shuffle indices have no modulo bias. Empty pools, insufficient length, and unsatisfiable pattern/required combinations return an error; the editor displays it and KeePassHttp/KeePassRPC propagate it instead of silently generating with defaults. Entropy is estimated as `length × log2(poolSize)`; strength buckets are `<40` weak, `<72` fair, else strong. Similar/ambiguous exclusion filters `Il1O0` and `{}[]()/\\'"`~,;:.<>` respectively.
 
 ## Threat notes / accepted trade-offs
 

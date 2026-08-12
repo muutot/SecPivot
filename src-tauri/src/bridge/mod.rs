@@ -28,6 +28,5 @@ mod tests;
 mod types;
 
 pub use self::crypto::*;
-pub(crate) use self::dispatch::generate_password;
 pub use self::dispatch::*;
 pub use self::types::*;

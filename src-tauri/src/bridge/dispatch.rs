@@ -196,12 +196,14 @@ fn dispatch_with_generator(
                 Err(e) => BridgeResponse::failure(request_type, &e),
             }
         }
-        "generate-password" => {
-            let mut response = BridgeResponse::success(request_type, key, host);
-            response.password =
-                Some(generate_password_with(generator).unwrap_or_else(|_| generate_password()));
-            response
-        }
+        "generate-password" => match generate_password_with(generator) {
+            Ok(password) => {
+                let mut response = BridgeResponse::success(request_type, key, host);
+                response.password = Some(password);
+                response
+            }
+            Err(error) => BridgeResponse::failure(request_type, &error),
+        },
         other => BridgeResponse::failure(other, &format!("不支持的操作: {other}")),
     }
 }
@@ -247,87 +249,216 @@ fn decrypt_set_login_fields(request: &BridgeRequest, key: &[u8]) -> Result<SetLo
     })
 }
 
-/// Random index in `0..bound` from the OS RNG.
+/// Unbiased random index in `0..bound` from the OS RNG.
 fn rand_index(bound: usize) -> usize {
-    let mut buf = [0u8; 4];
-    getrandom::getrandom(&mut buf).expect("OS RNG must be available");
-    u32::from_le_bytes(buf) as usize % bound
-}
-
-/// Fresh 20-char password over upper/lower/digits/symbols, one character from
-/// each category guaranteed — mirrors the app's default generator settings
-/// (`DEFAULT_DATABASE_SETTINGS.generator`). Shared with the KeePassRPC bridge.
-pub(crate) fn generate_password() -> String {
-    generate_password_with(&PasswordGeneratorSettings::default())
-        .expect("default generator settings are valid")
+    assert!(bound > 0, "random bound must be non-zero");
+    let bound = u64::try_from(bound).expect("usize fits in u64");
+    let zone = u64::MAX - (u64::MAX % bound);
+    loop {
+        let mut buf = [0u8; 8];
+        getrandom::getrandom(&mut buf).expect("OS RNG must be available");
+        let sample = u64::from_le_bytes(buf);
+        if sample < zone {
+            return usize::try_from(sample % bound).expect("index fits in usize");
+        }
+    }
 }
 
 /// Same rule engine as the renderer `generatePassword` (custom charset,
 /// exclusions, required chars, and `u/l/d/s/a` patterns). Randomness always
-/// comes from the OS RNG; an empty pool falls back to upper+lower+digits.
+/// comes from the OS RNG. Unsatisfiable policies return an error instead of
+/// silently falling back to a different character pool.
 pub(crate) fn generate_password_with(
     settings: &PasswordGeneratorSettings,
 ) -> Result<String, String> {
-    let pool = build_pool(settings);
     let required = unique_chars(settings.required_chars.as_deref().unwrap_or(""));
+
+    if let Some(pattern) = settings.pattern.as_deref() {
+        if !pattern.is_empty() {
+            return generate_pattern_password(pattern, settings, &required);
+        }
+    }
+
+    if settings.length <= 0 {
+        return Err("密码长度必须是正整数".to_owned());
+    }
+    let len = usize::try_from(settings.length).map_err(|_| "密码长度无效".to_owned())?;
+    let pool = build_pool(settings)?;
     for required_char in &required {
         if !pool.contains(required_char) {
             return Err(format!("必含字符 {required_char} 不在字符池中"));
         }
     }
 
-    if let Some(pattern) = settings.pattern.as_deref() {
-        if !pattern.is_empty() {
-            let mut out: Vec<char> = pattern
-                .chars()
-                .map(|code| match code {
-                    'u' | 'l' | 'd' | 's' => {
-                        let category = category_chars(code, settings);
-                        if category.is_empty() {
-                            pick(&pool)
-                        } else {
-                            pick(&category)
-                        }
-                    }
-                    'a' => pick(&pool),
-                    literal => literal,
-                })
-                .collect();
-            guarantee_required(&mut out, &required);
-            return Ok(out.into_iter().collect());
-        }
-    }
-
-    let len = usize::try_from(settings.length.max(1)).unwrap_or(20);
-    let mut out: Vec<char> = (0..len).map(|_| pick(&pool)).collect();
-    if settings.custom_charset.as_deref().unwrap_or("").is_empty() {
-        for (category, enabled) in [
-            (UPPER, settings.include_upper),
-            (LOWER, settings.include_lower),
-            (DIGITS, settings.include_digits),
+    let mut mandatory = required.clone();
+    if !uses_custom_charset(settings) {
+        for (label, category, enabled) in [
+            ("大写字母", UPPER, settings.include_upper),
+            ("小写字母", LOWER, settings.include_lower),
+            ("数字", DIGITS, settings.include_digits),
+            ("符号", SYMBOLS, settings.include_symbols),
         ] {
-            if enabled && !out.iter().any(|c| category.contains(*c)) {
-                let category_chars = category_chars_for(category, settings);
-                if !category_chars.is_empty() {
-                    let pos = rand_index(out.len());
-                    out[pos] = pick(&category_chars);
-                }
+            if !enabled {
+                continue;
+            }
+            let category_chars = category_chars_for(category, settings);
+            if category_chars.is_empty() {
+                return Err(format!("{label}字符池为空"));
+            }
+            if !mandatory.iter().any(|char| category_chars.contains(char)) {
+                mandatory.push(pick(&category_chars));
             }
         }
     }
-    guarantee_required(&mut out, &required);
+
+    if mandatory.len() > len {
+        return Err(format!(
+            "密码长度 {len} 无法容纳 {} 个必需字符或类别",
+            mandatory.len()
+        ));
+    }
+
+    let mut out = mandatory;
+    while out.len() < len {
+        out.push(pick(&pool));
+    }
+    shuffle(&mut out);
     Ok(out.into_iter().collect())
 }
 
-fn build_pool(settings: &PasswordGeneratorSettings) -> Vec<char> {
-    let mut pool: Vec<char> = if let Some(custom) = settings.custom_charset.as_deref() {
-        if !custom.is_empty() {
-            custom.chars().collect()
-        } else {
-            format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect()
+#[derive(Clone)]
+enum PatternSlot {
+    Literal(char),
+    Pool(Vec<char>),
+}
+
+fn generate_pattern_password(
+    pattern: &str,
+    settings: &PasswordGeneratorSettings,
+    required: &[char],
+) -> Result<String, String> {
+    let mut general_pool: Option<Vec<char>> = None;
+    let mut slots = Vec::new();
+    for code in pattern.chars() {
+        let slot = match code {
+            'u' | 'l' | 'd' | 's' => {
+                let pool = category_chars(code, settings);
+                if pool.is_empty() {
+                    return Err(format!("pattern 类别 {code} 的字符池为空"));
+                }
+                PatternSlot::Pool(pool)
+            }
+            'a' => {
+                if general_pool.is_none() {
+                    general_pool = Some(build_pool(settings)?);
+                }
+                PatternSlot::Pool(general_pool.clone().expect("pool initialized"))
+            }
+            literal => PatternSlot::Literal(literal),
+        };
+        slots.push(slot);
+    }
+
+    let missing: Vec<char> = required
+        .iter()
+        .copied()
+        .filter(|required_char| {
+            !slots.iter().any(
+                |slot| matches!(slot, PatternSlot::Literal(literal) if literal == required_char),
+            )
+        })
+        .collect();
+    let mut assignments: Vec<Option<usize>> = vec![None; slots.len()];
+    for required_index in 0..missing.len() {
+        let mut seen = vec![false; slots.len()];
+        if !assign_required_slot(
+            required_index,
+            &missing,
+            &slots,
+            &mut assignments,
+            &mut seen,
+        ) {
+            return Err(format!(
+                "pattern 无法容纳必含字符 {}",
+                missing[required_index]
+            ));
         }
+    }
+
+    let mut out = String::with_capacity(pattern.len());
+    for (position, slot) in slots.iter().enumerate() {
+        match slot {
+            PatternSlot::Literal(literal) => out.push(*literal),
+            PatternSlot::Pool(pool) => match assignments[position] {
+                Some(required_index) => out.push(missing[required_index]),
+                None => out.push(pick(pool)),
+            },
+        }
+    }
+    Ok(out)
+}
+
+fn assign_required_slot(
+    required_index: usize,
+    required: &[char],
+    slots: &[PatternSlot],
+    assignments: &mut [Option<usize>],
+    seen: &mut [bool],
+) -> bool {
+    for (position, slot) in slots.iter().enumerate() {
+        let PatternSlot::Pool(pool) = slot else {
+            continue;
+        };
+        if seen[position] || !pool.contains(&required[required_index]) {
+            continue;
+        }
+        seen[position] = true;
+        if assignments[position].is_none()
+            || assign_required_slot(
+                assignments[position].expect("checked Some"),
+                required,
+                slots,
+                assignments,
+                seen,
+            )
+        {
+            assignments[position] = Some(required_index);
+            return true;
+        }
+    }
+    false
+}
+
+fn uses_custom_charset(settings: &PasswordGeneratorSettings) -> bool {
+    settings
+        .custom_charset
+        .as_deref()
+        .is_some_and(|custom| !custom.is_empty())
+}
+
+fn build_pool(settings: &PasswordGeneratorSettings) -> Result<Vec<char>, String> {
+    let mut pool: Vec<char> = if uses_custom_charset(settings) {
+        settings
+            .custom_charset
+            .as_deref()
+            .unwrap_or_default()
+            .chars()
+            .collect()
     } else {
-        format!("{UPPER}{LOWER}{DIGITS}{SYMBOLS}").chars().collect()
+        let mut pool = Vec::new();
+        if settings.include_upper {
+            pool.extend(UPPER.chars());
+        }
+        if settings.include_lower {
+            pool.extend(LOWER.chars());
+        }
+        if settings.include_digits {
+            pool.extend(DIGITS.chars());
+        }
+        if settings.include_symbols {
+            pool.extend(SYMBOLS.chars());
+        }
+        pool
     };
     if settings.exclude_similar {
         pool.retain(|c| !SIMILAR.contains(*c));
@@ -339,10 +470,17 @@ fn build_pool(settings: &PasswordGeneratorSettings) -> Vec<char> {
         let excluded: Vec<char> = excluded.chars().collect();
         pool.retain(|c| !excluded.contains(c));
     }
-    if pool.is_empty() {
-        pool = format!("{UPPER}{LOWER}{DIGITS}").chars().collect();
+    let mut unique = Vec::with_capacity(pool.len());
+    for char in pool {
+        if !unique.contains(&char) {
+            unique.push(char);
+        }
     }
-    pool
+    let pool = unique;
+    if pool.is_empty() {
+        return Err("密码生成字符池为空".to_owned());
+    }
+    Ok(pool)
 }
 
 fn category_chars_for(category: &str, settings: &PasswordGeneratorSettings) -> Vec<char> {
@@ -381,30 +519,10 @@ fn unique_chars(value: &str) -> Vec<char> {
     seen
 }
 
-fn guarantee_required(out: &mut [char], required: &[char]) {
-    // Slots that already hold a required char must never be overwritten.
-    let mut used = std::collections::HashSet::new();
-    for (i, c) in out.iter().enumerate() {
-        if required.contains(c) {
-            used.insert(i);
-        }
-    }
-    let mut candidates: Vec<usize> = (0..out.len()).filter(|i| !used.contains(i)).collect();
-    if candidates.is_empty() {
-        // Degenerate buffer saturated by required chars; any slot works.
-        candidates.push(0);
-    }
-    for i in (1..candidates.len()).rev() {
+fn shuffle(values: &mut [char]) {
+    for i in (1..values.len()).rev() {
         let j = rand_index(i + 1);
-        candidates.swap(i, j);
-    }
-    let mut index = 0;
-    for required_char in required {
-        if out.contains(required_char) {
-            continue;
-        }
-        out[candidates[index % candidates.len()]] = *required_char;
-        index += 1;
+        values.swap(i, j);
     }
 }
 

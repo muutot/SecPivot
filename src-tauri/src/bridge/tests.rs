@@ -493,6 +493,27 @@ fn generate_password_honors_configured_generator() {
     assert!(password.contains('A') && password.contains('3'));
 }
 
+#[test]
+fn configured_generator_failure_is_not_replaced_by_default_password() {
+    let settings = PasswordGeneratorSettings {
+        include_upper: false,
+        include_lower: false,
+        include_digits: false,
+        include_symbols: false,
+        ..Default::default()
+    };
+    let mut host = MockHost::open();
+    let response = handle_request_with_generator(
+        authorized_request("generate-password"),
+        &mut host,
+        |_| true,
+        &settings,
+    );
+    assert!(!response.success);
+    assert!(response.password.is_none());
+    assert_eq!(response.error.as_deref(), Some("密码生成字符池为空"));
+}
+
 fn hex_bytes(s: &str) -> Vec<u8> {
     (0..s.len())
         .step_by(2)
@@ -568,4 +589,104 @@ fn generator_rejects_required_outside_pool() {
         ..Default::default()
     };
     assert!(generate_password_with(&settings).is_err());
+}
+
+#[test]
+fn generator_honors_disabled_categories_and_symbol_guarantee() {
+    let digits_only = PasswordGeneratorSettings {
+        length: 32,
+        include_upper: false,
+        include_lower: false,
+        include_digits: true,
+        include_symbols: false,
+        ..Default::default()
+    };
+    for _ in 0..20 {
+        let password = generate_password_with(&digits_only).unwrap();
+        assert_eq!(password.chars().count(), 32);
+        assert!(password.chars().all(|char| char.is_ascii_digit()));
+    }
+
+    let with_symbols = PasswordGeneratorSettings::default();
+    for _ in 0..100 {
+        let password = generate_password_with(&with_symbols).unwrap();
+        assert!(password
+            .chars()
+            .any(|char| "!@#$%^&*()-_=+[]{};:,.<>?".contains(char)));
+    }
+}
+
+#[test]
+fn generator_rejects_empty_pools_and_insufficient_capacity() {
+    let no_categories = PasswordGeneratorSettings {
+        include_upper: false,
+        include_lower: false,
+        include_digits: false,
+        include_symbols: false,
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_password_with(&no_categories),
+        Err("密码生成字符池为空".to_owned())
+    );
+
+    let excluded_custom = PasswordGeneratorSettings {
+        custom_charset: Some("A".into()),
+        exclude_chars: Some("A".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_password_with(&excluded_custom),
+        Err("密码生成字符池为空".to_owned())
+    );
+
+    let required_overflow = PasswordGeneratorSettings {
+        length: 2,
+        custom_charset: Some("ABC".into()),
+        required_chars: Some("ABC".into()),
+        ..Default::default()
+    };
+    assert!(generate_password_with(&required_overflow)
+        .unwrap_err()
+        .contains("无法容纳"));
+
+    let category_overflow = PasswordGeneratorSettings {
+        length: 3,
+        ..Default::default()
+    };
+    assert!(generate_password_with(&category_overflow)
+        .unwrap_err()
+        .contains("无法容纳"));
+}
+
+#[test]
+fn pattern_required_chars_preserve_slot_constraints() {
+    let settings = PasswordGeneratorSettings {
+        pattern: Some("udl-Ls".into()),
+        required_chars: Some("A1a!".into()),
+        ..Default::default()
+    };
+    for _ in 0..20 {
+        assert_eq!(generate_password_with(&settings).unwrap(), "A1a-L!");
+    }
+
+    let incompatible = PasswordGeneratorSettings {
+        pattern: Some("uL".into()),
+        required_chars: Some("1".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_password_with(&incompatible),
+        Err("pattern 无法容纳必含字符 1".to_owned())
+    );
+
+    let empty_digit_slot = PasswordGeneratorSettings {
+        pattern: Some("d".into()),
+        exclude_chars: Some("0123456789".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_password_with(&empty_digit_slot),
+        Err("pattern 类别 d 的字符池为空".to_owned())
+    );
 }

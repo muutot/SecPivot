@@ -103,11 +103,11 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；Node 行为测试覆盖
 - [x] 高级搜索 UI：搜索框旁「高级搜索」入口 + 过滤对话框（字段范围/正则/排除/过期/收藏/标签/质量），应用于当前视图，快速搜索保持轻量
 - [x] 保存搜索：命名搜索配置持久化（设置契约 + 列表加载/删除）
-- [x] 密码生成器规则引擎：`customCharset`/`excludeChars`/`requiredChars`/`pattern`（u/l/d/s/a + 字面量）已入设置契约（TS+Rust serde 均保留，round-trip 测试）并在 `generatePassword` 中执行；Node 行为测试覆盖自定义池/必含/排除/pattern/非法必含
+- [x] 密码生成器规则引擎：`customCharset`/`excludeChars`/`requiredChars`/`pattern`（u/l/d/s/a + 字面量）已入设置契约（TS+Rust serde 均保留，round-trip 测试）并在 `generatePassword` 中执行；`tests/password.test.mjs` 覆盖类别开关/符号保证、自定义池/必含/排除、pattern 槽约束与不可能策略显式失败
 - [x] 密码生成器配置档（存储）：`DatabaseDefaults.generatorProfiles` 命名 profiles（TS+Rust serde 均保留，长度归一化，round-trip 测试）
 - [x] 密码生成器配置档（UI）：数据库设置面板「密码配置档」支持新建/编辑/删除/设为默认（含自定义字符集、排除、必含、pattern）
-- [x] 密码生成器规则引擎（Rust）：`generate_password_with(&PasswordGeneratorSettings)` 镜像 TS 规则（自定义字符集/排除/必含/pattern），OS RNG 取随机，覆盖默认包装与错误必含测试
-- [x] 密码生成器配置接线：`BridgeState`/`RpcState` 在配置同步时保存生成器设置，KeePassHttp/RPC `GeneratePassword` 经 `handle_request_with_generator`/`handle_jsonrpc_with_generator` 使用用户规则；含 `generate_password_honors_configured_generator` 测试
+- [x] 密码生成器规则引擎（Rust）：`generate_password_with(&PasswordGeneratorSettings)` 镜像 TS 规则（类别开关/符号保证、自定义字符集/排除/必含/pattern），两端均以拒绝采样从 OS RNG 取得无偏索引；空池、容量不足和不兼容 pattern 均显式失败，Rust 行为测试覆盖
+- [x] 密码生成器配置接线：`BridgeState`/`RpcState` 在配置同步时保存生成器设置，KeePassHttp/RPC `GeneratePassword` 经 `handle_request_with_generator`/`handle_jsonrpc_with_generator` 使用用户规则；无效配置返回协议错误而不静默回退默认策略，Bridge/RPC 测试覆盖成功与失败路径
 - [x] 多数据库标签页·会话注册表：`VaultSessions` 托管状态停放非活动会话；`open_vault`/`create_vault`/远端 open/create 返回 `sessionId` 并切换 active；`close_vault`/`get_vault_state` 支持按 sessionId（缺省 active，关闭 active 后自动提升最后停放会话）；round-trip 测试覆盖两库并存
 - [x] 多数据库标签页·会话切换：`set_active_session` 命令在 active 与停放会话间交换（parked ↔ active）；即时命令作用于切换后的 active，长时 save/save-as/change-key/favicon 以稳定 `sessionId` 绑定发起会话并在完成阶段按 id 回写，避免切换期间串库；前端 vault.ts 增加 `setActiveSession(id)` 并同步 remembered
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）

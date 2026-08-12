@@ -144,8 +144,9 @@ pub fn handle_jsonrpc_with_generator(
             Ok(json!(result))
         }
         "GetPasswordProfiles" => Ok(json!(["Default"])),
-        "GeneratePassword" => Ok(json!(crate::bridge::generate_password_with(generator)
-            .unwrap_or_else(|_| crate::bridge::generate_password()))),
+        "GeneratePassword" => crate::bridge::generate_password_with(generator)
+            .map(|password| json!(password))
+            .map_err(RpcError::InvalidMessage),
         "AddLogin" => {
             let db = host.database().ok_or(RpcError::Locked)?;
             let params =

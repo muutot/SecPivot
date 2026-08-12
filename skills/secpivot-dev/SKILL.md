@@ -65,6 +65,7 @@ Also read `docs/PITFALLS.md` when relevant.
 ```powershell
 npm run check
 npm run build
+npm run test:frontend
 npm run test:rust
 npm run lint:rust
 npm run format:check
