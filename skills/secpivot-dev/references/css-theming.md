@@ -7,7 +7,7 @@ This is the authoritative style reference for SecPivot UI. Read it before any ma
 1. `src/routes/+page.svelte` and the settings shell define the product's visual language.
 2. `src/lib/types/theme.ts::{DARK_THEME_COLORS,LIGHT_THEME_COLORS}` defines preset values.
 3. `src/lib/utils/theme.ts::applyThemeColors` defines the ThemeColors → CSS-variable mapping.
-4. `src/app.css` provides root defaults, global reset, font variables, the shared modal backdrop/layer modifiers, focus/accessibility rules, and imports shared settings CSS.
+4. `src/app.css` provides root defaults, global reset, font variables, the shared modal backdrop/layer modifiers, focus/accessibility rules, and imports shared settings/modal CSS.
 5. `src/lib/styles/settings-shared.css` owns reusable settings-panel primitives.
 6. `SettingsDialog.svelte` owns settings-shell layout and panel-specific styles.
 7. Component-scoped CSS owns only component-specific layout/visual behavior.
@@ -109,12 +109,23 @@ The settings shell defines the settings scope variables consumed by shell and ch
 standard-card markup and consume these classes without defining parallel scoped
 styles.
 
+## Shared modal primitives
+
+`ModalShell.svelte` is the canonical dialog surface: backdrop/prompt layer,
+fixed size variants, bordered surface, header icon/title/description, optional
+close button, and optional scroll behavior. Dialogs supply only their body and
+action snippets. `modal-shared.css` owns the reusable `.text-input`,
+`.modal-actions`, and `.modal-button` states (`primary`/`danger`/disabled).
+Component CSS keeps only dialog-specific content layout; do not reintroduce
+parallel modal surfaces, header/icon blocks, buttons, or standard text inputs.
+
 ## CSS ownership decision
 
 Before adding a rule, place it at the narrowest correct stable level:
 
 - Theme color or global accessibility/reset → `app.css`, `ThemeColors`, presets, and `theme.ts` together.
 - Shared settings card/control/feedback primitive → `settings-shared.css`.
+- Shared modal shell/input/action/button primitive → `ModalShell.svelte` and `modal-shared.css`.
 - Settings shell/navigation layout → `SettingsDialog.svelte`.
 - One reusable component's unique layout → that component's scoped `<style>`.
 

@@ -38,6 +38,7 @@
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
@@ -1850,15 +1851,15 @@
 {/if}
 
 {#if groupModalOpen}
-  <div class="modal-backdrop" role="presentation">
-    <div class="group-modal" role="dialog" aria-modal="true" aria-label="新建分组">
-      <div class="modal-head">
-        <span class="modal-icon"><AppIcon name="folder-plus" size={18} /></span>
-        <div>
-          <strong>新建分组</strong>
-          <p>在{groupModalParent ? pathOf(groupModalParent) : "根"}下创建子分组</p>
-        </div>
-      </div>
+  <ModalShell
+    title="新建分组"
+    description={`在${groupModalParent ? pathOf(groupModalParent) : "根"}下创建子分组`}
+    size="small"
+    closeOnEscape
+    onclose={() => (groupModalOpen = false)}
+  >
+    {#snippet icon()}<AppIcon name="folder-plus" size={18} />{/snippet}
+    {#snippet children()}
       <input
         class="text-input"
         type="text"
@@ -1884,30 +1885,30 @@
           </button>
         {/each}
       </div>
-      <div class="modal-actions">
-        <button class="modal-button" onclick={() => (groupModalOpen = false)}>取消</button>
-        <button
-          class="modal-button primary"
-          onclick={() => void confirmCreateGroup()}
-          disabled={!newGroupName.trim() || groupCreating}
-        >
-          创建
-        </button>
-      </div>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (groupModalOpen = false)}>取消</button>
+      <button
+        class="modal-button primary"
+        onclick={() => void confirmCreateGroup()}
+        disabled={!newGroupName.trim() || groupCreating}
+      >
+        创建
+      </button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 {#if groupIconDialogUuid}
-  <div class="modal-backdrop" role="presentation">
-    <div class="group-modal" role="dialog" aria-modal="true" aria-label="设置分组图标">
-      <div class="modal-head">
-        <span class="modal-icon"><AppIcon name="palette" size={18} /></span>
-        <div>
-          <strong>设置分组图标</strong>
-          <p>选择内置图标,点击保存后生效</p>
-        </div>
-      </div>
+  <ModalShell
+    title="设置分组图标"
+    description="选择内置图标,点击保存后生效"
+    size="small"
+    closeOnEscape
+    onclose={() => (groupIconDialogUuid = null)}
+  >
+    {#snippet icon()}<AppIcon name="palette" size={18} />{/snippet}
+    {#snippet children()}
       <span class="group-icon-label">图标</span>
       <div class="group-icon-grid">
         {#each KEEPASS_ICON_CHOICES as index}
@@ -1923,47 +1924,47 @@
           </button>
         {/each}
       </div>
-      <div class="modal-actions">
-        <button class="modal-button" onclick={() => (groupIconDialogUuid = null)}>取消</button>
-        <button
-          class="modal-button primary"
-          onclick={() => void confirmChangeGroupIcon()}
-          disabled={groupIconSaving}
-        >
-          保存
-        </button>
-      </div>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (groupIconDialogUuid = null)}>取消</button>
+      <button
+        class="modal-button primary"
+        onclick={() => void confirmChangeGroupIcon()}
+        disabled={groupIconSaving}
+      >
+        保存
+      </button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 {#if confirmState}
-  <div class="modal-backdrop" role="presentation">
-    <div class="group-modal confirm-modal" role="dialog" aria-modal="true" aria-label="确认操作">
-      <div class="modal-head">
-        <span class="modal-icon danger"><AppIcon name="trash" size={18} /></span>
-        <div>
-          <strong>确认删除</strong>
-          <p>{confirmState.message}</p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="modal-button" onclick={() => (confirmState = null)}>取消</button>
-        <button
-          class="modal-button danger"
-          onclick={() => {
-            const state = confirmState;
-            if (!state) return;
-            const action = state.onconfirm;
-            confirmState = null;
-            action();
-          }}
-        >
-          删除
-        </button>
-      </div>
-    </div>
-  </div>
+  <ModalShell
+    title="确认删除"
+    description={confirmState.message}
+    ariaLabel="确认操作"
+    size="confirm"
+    tone="danger"
+    closeOnEscape
+    onclose={() => (confirmState = null)}
+  >
+    {#snippet icon()}<AppIcon name="trash" size={18} />{/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (confirmState = null)}>取消</button>
+      <button
+        class="modal-button danger"
+        onclick={() => {
+          const state = confirmState;
+          if (!state) return;
+          const action = state.onconfirm;
+          confirmState = null;
+          action();
+        }}
+      >
+        删除
+      </button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 {#if entryMenu}
@@ -2007,32 +2008,35 @@
 {/if}
 
 {#if faviconDialog}
-  <div class="modal-backdrop" role="presentation">
-    <div class="group-modal">
-      <div class="modal-head">
-        <span class="modal-icon" class:danger={faviconDialog.error}>
-          <AppIcon name={faviconDialog.error ? "x" : "globe"} size={16} />
-        </span>
-        <div>
-          <strong>{faviconDialog.error ? "下载图标失败" : "下载网址图标"}</strong>
-          <p>{faviconDialog.result}</p>
-        </div>
-      </div>
-      {#if faviconDialog.phase === "working"}
+  {@const dialog = faviconDialog}
+  <ModalShell
+    title={dialog.error ? "下载图标失败" : "下载网址图标"}
+    description={dialog.result}
+    size="small"
+    tone={dialog.error ? "danger" : "default"}
+    closeOnEscape={dialog.phase !== "working"}
+    onclose={() => (faviconDialog = null)}
+  >
+    {#snippet icon()}
+      <AppIcon name={dialog.error ? "x" : "globe"} size={16} />
+    {/snippet}
+    {#snippet children()}
+      {#if dialog.phase === "working"}
         <div class="progress-track">
           <div
             class="progress-fill"
-            class:indeterminate={faviconDialog.progress.total === 0}
+            class:indeterminate={dialog.progress.total === 0}
             style:--progress-pct={progressPct}
           ></div>
         </div>
-      {:else}
-        <div class="modal-actions">
-          <button class="modal-button primary" onclick={() => (faviconDialog = null)}>关闭</button>
-        </div>
       {/if}
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      {#if dialog.phase !== "working"}
+        <button class="modal-button primary" onclick={() => (faviconDialog = null)}>关闭</button>
+      {/if}
+    {/snippet}
+  </ModalShell>
 {/if}
 
 <style>
@@ -2382,15 +2386,6 @@
     background: var(--hover-bg);
   }
 
-  .group-modal {
-    width: min(340px, calc(100% - 40px));
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
   .group-icon-label {
     display: block;
     margin-top: 12px;
@@ -2405,7 +2400,7 @@
     gap: 4px;
   }
 
-  .group-modal .icon-option {
+  .group-icon-grid .icon-option {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2417,106 +2412,15 @@
     cursor: pointer;
   }
 
-  .group-modal .icon-option:hover {
+  .group-icon-grid .icon-option:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
   }
 
-  .group-modal .icon-option.selected {
+  .group-icon-grid .icon-option.selected {
     color: var(--accent-color, var(--primary-color));
     border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
     background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  }
-
-  .confirm-modal {
-    width: min(380px, calc(100% - 40px));
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: var(--hover-bg);
-  }
-
-  .modal-icon.danger {
-    color: var(--danger-color);
-  }
-
-  .modal-head strong {
-    display: block;
-    font-size: 13px;
-    font-weight: 560;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-  }
-
-  .text-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: 12px;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .modal-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .modal-button.primary {
-    border-color: var(--selection-color);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
-  }
-
-  .modal-button.danger {
-    border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
-    color: color-mix(in srgb, var(--danger-color) 80%, white);
-    background: color-mix(in srgb, var(--danger-color) 14%, var(--card-bg));
-  }
-
-  .modal-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
   }
 
   .progress-track {

@@ -1,0 +1,70 @@
+.text-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--settings-control-radius, 6px);
+  color: var(--text-primary);
+  background: var(--input-bg);
+  font-size: 12px;
+}
+
+.text-input.mono {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+textarea.text-input,
+.text-input.textarea {
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-actions:empty {
+  display: none;
+}
+
+.modal-button {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--settings-control-radius, 6px);
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modal-button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.modal-button.primary {
+  border-color: var(--selection-color);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
+}
+
+.modal-button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--selection-color) 24%, var(--card-bg));
+}
+
+.modal-button.danger {
+  border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
+  color: color-mix(in srgb, var(--danger-color) 80%, white);
+  background: color-mix(in srgb, var(--danger-color) 14%, var(--card-bg));
+}
+
+.modal-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
