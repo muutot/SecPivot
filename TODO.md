@@ -41,8 +41,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## Stage 5 — Packaging & release
 
 - [x] App icons (committed `src-tauri/icons/*`), bundle branding metadata (`publisher`/`copyright`/descriptions), custom NSIS template (`src-tauri/windows/installer.nsi`) — verified: `tauri build` produced `SecPivot_0.1.0_x64-setup.exe`
-- [ ] GitHub Actions CI mirroring `npm run verify` (`.github/workflows/ci.yml` added; unverified in this environment — no `origin` remote to run it)
-- [ ] Release workflow via version-release skill (`skills/version-release` + `scripts/*.mjs` added; `release.mjs --dry-run` verified through step 3, tag/push unverified — no remote)
+- [~] GitHub Actions CI：远端运行 [31619349103](https://github.com/muutot/SecPivot/actions/runs/31619349103) 已在 `13fb228` 通过 Frontend/Rust jobs；但当前 `npm run verify` 已包含 `test:frontend`，`.github/workflows/ci.yml` 尚未执行该步骤，且当前 HEAD 尚无远端运行证据
+- [~] Release workflow：远端运行 [31619359721](https://github.com/muutot/SecPivot/actions/runs/31619359721) 的 Verify 与 Windows x64 build 已通过，Android APK build 失败；`v1.2.0` 尚未创建 GitHub Release/资产，发布链未闭环
 
 ## Stage 6 — Remote vaults (S3 / WebDAV)
 
@@ -79,7 +79,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] 批量分组展开/折叠：新增单次 IPC 的批量命令，一次事务写入所有目标分组的 `isExpanded`，前端「全部展开/全部折叠」不得再为每个分组接收一份完整 `VaultState`；补后端原子性/未知 UUID 测试与前端 browser fallback 等价行为
 - [x] 条目列表窗口化：提取 `EntryTable`/表格状态逻辑，仅挂载可视区及缓冲行；保持固定列宽、横向滚动、列排序/拖拽/缩放、多选、Ctrl+A、键盘导航、条目拖拽和移动端摘要布局语义
-- [x] 统一弹窗基础设施：`ModalShell`（header/body/actions、size/tone）+ `modal-shared.css`（`.text-input`/`.modal-actions`/`.modal-button` primary/danger）为唯一弹窗表面，全部新对话框复用（EntryEditor/GroupMeta/附件预览/相似密码/HIBP/过期条目等），无第二套样式
+- [~] 统一弹窗基础设施：通用业务对话框已迁移到 `ModalShell`（header/body/actions、size/tone）+ `modal-shared.css`（`.text-input`/`.modal-actions`/`.modal-button` primary/danger），包括 EntryEditor/GroupMeta/附件预览/相似密码/HIBP/过期条目等；`VaultWelcome` 的凭据弹窗仍保留独立表面与同名局部样式，受「VaultWelcome/LockScreen 不动」约束暂缓统一
 - [ ] 统一凭据表单：`ViewportMenuShell` 已供右键菜单/列配置复用（ContextMenu、ColumnConfigMenu）；欢迎页与锁屏共用的 `StandaloneVaultShell`/`VaultCredentialFields` 抽取受「VaultWelcome/LockScreen 不动」约束，暂缓
 - [x] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
 - [x] mutation 自定义图标拆分缓存：后端 mutation 快照省略 `customIcons` 图像负载（`Option::None`），前端 `vault.ts` 维护图标缓存并在权威快照/轻量结果间合并；favorite/展开/CRUD 不再跨 IPC 重传全部 favicon，附 `light_mutation_snapshots_omit_custom_icons` 测试
@@ -100,6 +100,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 对克隆库应用新存储配置并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过
 - [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入
+- [ ] 当前数据库设置（KDF benchmark）：尚未实现目标耗时基准测试、参数建议/应用流程及对应验证；不得以固定 Argon2/AES-KDF 参数代替 benchmark 完成证据
 - [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；`tests/entry-search.test.mjs` 覆盖字段隔离、大小写、非法正则与组合条件
 - [x] 高级搜索 UI：搜索框旁「高级搜索」入口 + 过滤对话框（字段范围/正则/排除/过期/收藏/标签/质量），应用于当前视图，快速搜索保持轻量
 - [x] 保存搜索：命名搜索配置持久化（设置契约 + 列表加载/删除）
