@@ -185,6 +185,9 @@ pub struct VaultState {
     pub file_name: String,
     pub root: VaultGroup,
     pub dirty: bool,
+    /// True after several consecutive save failures: the write path is
+    /// disabled until the user saves-as to a writable location.
+    pub read_only: bool,
     pub modified_at: String,
     /// Monotonic session edit revision; incremented by every mutation and
     /// exposed so the renderer can order/merge snapshots and later apply

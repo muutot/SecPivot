@@ -706,6 +706,10 @@
       flash("没有需要保存的修改");
       return;
     }
+    if (currentVault.readOnly) {
+      flash("数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续");
+      return;
+    }
     busy = true;
     try {
       const saved = await vault.save();
@@ -1582,7 +1586,12 @@
     { id: "import-bitwarden", label: "导入 Bitwarden", icon: "upload" },
     { id: "import-1password", label: "导入 1Password (1PIF)", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
-    { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
+    {
+      id: "save",
+      label: "保存数据库",
+      icon: "save",
+      disabled: !currentVault?.dirty || currentVault?.readOnly,
+    },
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "expired-entries", label: "过期条目", icon: "clock" },
@@ -1732,7 +1741,7 @@
             class="tool-button"
             class:icon-only={iconOnlyButtons}
             onclick={handleSave}
-            disabled={busy || !currentVault.dirty}
+            disabled={busy || !currentVault.dirty || currentVault.readOnly}
             title="保存数据库 (Ctrl+S)"
           >
             <AppIcon name="save" size={14} />
@@ -1790,6 +1799,9 @@
         </div>
 
         <div class="toolbar-right">
+          {#if currentVault.readOnly}
+            <span class="readonly-badge" title="连续保存失败，数据库已进入只读模式">只读</span>
+          {/if}
           {#if currentVault.dirty}
             <span class="dirty-badge">未保存</span>
           {/if}
@@ -2574,6 +2586,14 @@
     border: 1px solid color-mix(in srgb, var(--warning-color) 45%, transparent);
     border-radius: 10px;
     color: var(--warning-color);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .readonly-badge {
+    padding: 2px 7px;
+    border: 1px solid color-mix(in srgb, var(--danger-color) 45%, transparent);
+    border-radius: 10px;
+    color: var(--danger-color);
     font-size: var(--font-size-tiny, 10px);
   }
 

@@ -4032,6 +4032,36 @@ fn classify_open_error_suggests_xml_recovery_for_parse_failures() {
 }
 
 #[test]
+fn repeated_save_failures_degrade_to_read_only_and_save_as_recovers() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    assert!(!session.is_read_only());
+
+    // Make the save target unwritable by removing its parent directory.
+    std::fs::remove_dir_all(dir.path()).unwrap();
+    for _ in 0..3 {
+        assert!(session.save().is_err());
+    }
+
+    assert!(session.is_read_only());
+    assert!(session.state().unwrap().unwrap().read_only);
+    // Save and master-key changes are refused while read-only.
+    assert!(session.save().unwrap_err().contains("只读模式"));
+    assert!(session
+        .change_master_key("new-master", None)
+        .unwrap_err()
+        .contains("只读模式"));
+
+    // Save-as stays available as the recovery path and resets the counter.
+    std::fs::create_dir_all(dir.path()).unwrap();
+    let recovered = dir.path().join("recovered.kdbx");
+    session.save_as(&recovered).unwrap();
+    assert!(!session.is_read_only());
+    assert!(!session.state().unwrap().unwrap().read_only);
+    assert!(session.save().is_ok());
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

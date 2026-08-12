@@ -216,7 +216,13 @@ pub(crate) fn save_vault(
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .prepare_save()?;
     let revision = job.revision;
-    vault::persist_save(job)?;
+    if let Err(e) = vault::persist_save(job) {
+        session
+            .lock()
+            .map_err(|_| "数据库锁已损坏".to_owned())?
+            .note_save_failure();
+        return Err(e);
+    }
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
@@ -236,7 +242,13 @@ pub(crate) fn save_vault_as(
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .prepare_save_as(Path::new(&path))?;
     let revision = job.revision;
-    vault::persist_save(job)?;
+    if let Err(e) = vault::persist_save(job) {
+        session
+            .lock()
+            .map_err(|_| "数据库锁已损坏".to_owned())?
+            .note_save_failure();
+        return Err(e);
+    }
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
@@ -265,6 +277,7 @@ pub(crate) fn change_master_key(
         // bytes) on the heap; the success path moved them into the session,
         // which zeroizes them on close.
         Err(e) => {
+            let _ = session.lock().map(|mut active| active.note_save_failure());
             password.zeroize();
             if let Some(bytes) = keyfile_bytes.as_deref_mut() {
                 bytes.zeroize();

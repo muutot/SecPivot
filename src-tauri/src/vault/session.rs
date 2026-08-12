@@ -17,6 +17,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Consecutive failed saves before the vault degrades to read-only.
+const SAVE_FAILURE_READ_ONLY_LIMIT: u32 = 3;
+
 impl VaultSession {
     pub fn is_open(&self) -> bool {
         self.db.is_some()
@@ -271,7 +274,10 @@ impl VaultSession {
         }
         let password = self.require_password()?.to_owned();
         let keyfile = self.keyfile.clone();
-        persist_change(&db, &password, keyfile.as_deref(), &target)?;
+        if let Err(e) = persist_change(&db, &password, keyfile.as_deref(), &target) {
+            self.note_save_failure();
+            return Err(e);
+        }
 
         {
             let live = self.require_db_mut()?;
@@ -291,7 +297,10 @@ impl VaultSession {
     pub fn save(&mut self) -> Result<VaultState, String> {
         let job = self.prepare_save()?;
         let revision = job.revision;
-        persist_save(job)?;
+        if let Err(e) = persist_save(job) {
+            self.note_save_failure();
+            return Err(e);
+        }
         self.complete_save(revision)
     }
 
@@ -304,7 +313,10 @@ impl VaultSession {
     ) -> Result<VaultState, String> {
         let keyfile_bytes = read_keyfile(keyfile)?;
         let (db, target, revision) = self.prepare_change()?;
-        persist_change(&db, password, keyfile_bytes.as_deref(), &target)?;
+        if let Err(e) = persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
+            self.note_save_failure();
+            return Err(e);
+        }
         self.complete_change(password.to_owned(), keyfile_bytes, revision)
     }
 
@@ -389,6 +401,31 @@ impl VaultSession {
         self.modified_at = now_iso();
     }
 
+    /// Whether the write path is disabled after repeated save failures.
+    pub fn is_read_only(&self) -> bool {
+        self.save_failures >= SAVE_FAILURE_READ_ONLY_LIMIT
+    }
+
+    fn ensure_writable(&self) -> Result<(), String> {
+        if self.is_read_only() {
+            return Err(
+                "数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续".to_owned(),
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn note_save_failure(&mut self) {
+        self.save_failures = self.save_failures.saturating_add(1);
+        // The read-only flag lives in the snapshot; invalidate the cache so
+        // the next `state()` reflects it.
+        self.cached_snapshot = None;
+    }
+
+    pub(crate) fn note_save_success(&mut self) {
+        self.save_failures = 0;
+    }
+
     pub(crate) fn require_db(&self) -> Result<&Database, String> {
         self.db.as_ref().ok_or_else(|| "数据库未打开".to_owned())
     }
@@ -444,6 +481,7 @@ impl VaultSession {
                 .to_owned(),
             root: build_group_tree(db),
             dirty: self.dirty,
+            read_only: self.is_read_only(),
             modified_at: self.modified_at.clone(),
             revision: self.revision,
             custom_icons: include_icons.then(|| {
@@ -465,6 +503,7 @@ impl VaultSession {
     /// database clone plus the target info, so the slow work can run outside
     /// the session lock.
     pub(crate) fn prepare_save(&self) -> Result<SaveJob, String> {
+        self.ensure_writable()?;
         let (db, target, revision) = self.prepare_change()?;
         Ok(SaveJob {
             db,
@@ -497,6 +536,7 @@ impl VaultSession {
         path: PathBuf,
         revision: u64,
     ) -> Result<VaultState, String> {
+        self.note_save_success();
         self.path = Some(path.to_string_lossy().into_owned());
         self.remote = None;
         if self.revision == revision {
@@ -511,6 +551,7 @@ impl VaultSession {
     /// supplies a fresh master key (`change_master_key`). Returns the current
     /// edit revision so the completion step can detect concurrent edits.
     pub(crate) fn prepare_change(&self) -> Result<(Database, SaveTarget, u64), String> {
+        self.ensure_writable()?;
         let db = self.require_db()?.clone();
         let target = match &self.remote {
             Some(remote) => SaveTarget::Remote {
@@ -529,6 +570,7 @@ impl VaultSession {
     /// Locked completion of `save`: mark the session clean (unless edits
     /// landed while the save ran) and re-snapshot.
     pub(crate) fn complete_save(&mut self, revision: u64) -> Result<VaultState, String> {
+        self.note_save_success();
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -545,6 +587,7 @@ impl VaultSession {
         keyfile: Option<Vec<u8>>,
         revision: u64,
     ) -> Result<VaultState, String> {
+        self.note_save_success();
         self.password = Some(password);
         self.keyfile = keyfile;
         if self.revision == revision {

@@ -139,6 +139,9 @@ export interface VaultState {
   fileName: string;
   root: VaultGroup;
   dirty: boolean;
+  /** True after repeated save failures: the write path is disabled until a
+   *  save-as to a writable location resets it. */
+  readOnly: boolean;
   modifiedAt: string;
   /** Monotonic session edit revision; every mutation bumps it. */
   revision: number;
