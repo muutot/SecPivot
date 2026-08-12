@@ -116,7 +116,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 条目属性·OverrideURL/QualityCheck 可写：`EntryInput`/`EntryPatch` 三态写入（absent 保留 / Some 设置 / 空清除），`VaultEntry.overrideUrl` 暴露，编辑对话框字段；保存重开 round-trip 测试
 - [x] 条目属性·前景色可写：`update_entry_flags` 增加 `foregroundColor`（`#RRGGBB`，空清除/absent 保留），`VaultEntry.foregroundColor` 暴露，编辑对话框前景色选择；round-trip 测试
 - [x] 分组属性可写：`update_group_meta` 支持 notes/tags/`enableSearching` + 分组右键「属性」对话框（`GroupMetaDialog`）；round-trip 测试（group Auto-Type 已有）
-- [ ] 跨客户端保真：`CustomData` 仍只读 + 新属性编辑后保存/重开综合 round-trip（跨客户端实测缺环境时以 KDBX 层保真为准）
+- [x] 跨客户端保真：`CustomData` 仍只读 + 新增 `foreign_attributes_survive_edits_and_flags_round_trip` 综合测试（外部客户端属性 + 字段编辑 + flags/分组 meta 编辑后保存/重开全保真）
 - [ ] 安全附件预览/临时打开：文本/图片等优先内存预览；外部打开需显式确认、受控临时目录、关闭后导入或丢弃修改并可靠清理，不记录附件内容或密码
 - [ ] 扩充导入/导出：优先支持 Bitwarden、1Password、LastPass，随后增加 KDBX/XML/HTML/打印/应急表；所有明文导出必须给出明确安全提示
 - [ ] 数据库维护：相似密码、历史清理、过期维护、损坏库修复/尽力恢复，并为不可恢复写入设计只读失败路径

@@ -4415,6 +4415,144 @@ fn custom_data_round_trips_through_edit_and_save() {
 }
 
 #[test]
+fn foreign_attributes_survive_edits_and_flags_round_trip() {
+    use keepass::db::{CustomDataItem, CustomDataValue};
+    use std::collections::HashMap as StdHashMap;
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "G".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_uuid.clone(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "https://stored.example".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let entry_uuid = state.root.children[0].entries[0].uuid.clone();
+    let group_id = super::helpers::parse_group_id(&group_uuid).unwrap();
+    let entry_id = parse_entry_id(&entry_uuid).unwrap();
+
+    // Seed attributes as another KeePass client would: entry CustomData,
+    // OverrideURL, disabled quality check, foreground+background colors,
+    // plus group CustomData/notes/tags.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db.entry_mut(entry_id).expect("entry must exist");
+        let mut map = StdHashMap::new();
+        map.insert(
+            "plugin.binary".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::Binary(vec![4, 5, 6])),
+                last_modification_time: None,
+            },
+        );
+        entry.custom_data = map;
+        entry.override_url = Some("https://real.example".into());
+        entry.quality_check = false;
+        entry.background_color = Some("#00FF00".parse().unwrap());
+        entry.foreground_color = Some("#AABBCC".parse().unwrap());
+        let mut group = db.group_mut(group_id).expect("group must exist");
+        let mut map = StdHashMap::new();
+        map.insert(
+            "grp.key".into(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("v".into())),
+                last_modification_time: None,
+            },
+        );
+        group.custom_data = map;
+        group.notes = Some("foreign note".into());
+        group.tags = vec!["legacy".into()];
+    }
+
+    // SecPivot edits the entry fields and then manages the flags/colors.
+    session
+        .update_entry(
+            &entry_uuid,
+            &EntryInput {
+                group_uuid: group_uuid.clone(),
+                title: "E2".into(),
+                username: "u2".into(),
+                password: "pw2".into(),
+                url: "https://stored.example".into(),
+                notes: "edited".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: Some("#00FF00".into()),
+                tags: Some("work".into()),
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+    session
+        .update_entry_flags(
+            &entry_uuid,
+            Some("https://real.example".into()),
+            Some(true),
+            Some("#112233".into()),
+        )
+        .unwrap();
+    session
+        .update_group_meta(
+            &group_uuid,
+            Some("managed note".into()),
+            Some("dev".into()),
+            Some(false),
+        )
+        .unwrap();
+
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+
+    // Entry: field edits applied, flags/colors persisted, CustomData intact.
+    let entry = state.root.children[0].entries[0].clone();
+    assert_eq!(entry.title, "E2");
+    assert_eq!(entry.notes, "edited");
+    assert_eq!(entry.tags.as_deref(), Some("work"));
+    assert_eq!(entry.color.as_deref(), Some("#00FF00"));
+    assert_eq!(entry.override_url.as_deref(), Some("https://real.example"));
+    assert_eq!(entry.foreground_color.as_deref(), Some("#112233"));
+    assert!(entry.quality_check);
+    let binary = entry
+        .custom_data
+        .iter()
+        .find(|item| item.key == "plugin.binary")
+        .unwrap();
+    assert_eq!(binary.binary.as_deref(), Some("BAUG"));
+
+    // Group: managed meta persisted and group CustomData survived.
+    let group = &state.root.children[0];
+    assert_eq!(group.notes.as_deref(), Some("managed note"));
+    assert_eq!(group.tags.as_deref(), Some("dev"));
+    assert!(!group.enable_searching);
+    assert!(group
+        .custom_data
+        .iter()
+        .any(|item| item.key == "grp.key" && item.value.as_deref() == Some("v")));
+}
+
+#[test]
 fn export_csv_writes_escaped_rows_and_bom() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
