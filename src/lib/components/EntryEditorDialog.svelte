@@ -17,6 +17,7 @@
   import { shortestMatchable } from "$lib/utils/match-url";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface Props {
     mode: "create" | "edit" | "edit-multi";
@@ -73,9 +74,7 @@
   let passwordReady = $state(multi);
   let url = $state(multi ? (sharedValue((e) => e.url) ?? "") : (initialEntry?.url ?? ""));
   let notes = $state(multi ? (sharedValue((e) => e.notes) ?? "") : (initialEntry?.notes ?? ""));
-  let tags = $state(
-    multi ? (sharedValue((e) => e.tags ?? "") ?? "") : (initialEntry?.tags ?? ""),
-  );
+  let tags = $state(multi ? (sharedValue((e) => e.tags ?? "") ?? "") : (initialEntry?.tags ?? ""));
   let totp = $state("");
   let totpLoading = $state(false);
   /** Whether the current TOTP seed is known. Same data-loss reasoning as
@@ -595,39 +594,25 @@
   }
 </script>
 
-<div class="modal-backdrop" role="presentation">
-  <div
-    class="editor-modal"
-    role="dialog"
-    aria-modal="true"
-    aria-label={mode === "create" ? "新建条目" : "编辑条目"}
-  >
-    <div class="modal-head">
-      <span class="modal-icon"
-        >{#if customIconSelected && customIconUrl}
-          <img class="modal-icon-img" src={customIconUrl} alt="" draggable="false" />
-        {:else}
-          <AppIcon name={headerIconName} size={18} />
-        {/if}</span
-      >
-      <div>
-        <strong
-          >{mode === "create"
-            ? "新建条目"
-            : multi
-              ? `批量编辑 ${entries.length} 个条目`
-              : "编辑条目"}</strong
-        >
-        <p>
-          {mode === "create"
-            ? "在当前分组创建新条目"
-            : multi
-              ? "修改应用到所有选中条目,未修改的字段保持不变"
-              : "保存对条目的修改"}
-        </p>
-      </div>
-    </div>
-
+<ModalShell
+  title={mode === "create" ? "新建条目" : multi ? `批量编辑 ${entries.length} 个条目` : "编辑条目"}
+  description={mode === "create"
+    ? "在当前分组创建新条目"
+    : multi
+      ? "修改应用到所有选中条目,未修改的字段保持不变"
+      : "保存对条目的修改"}
+  ariaLabel={mode === "create" ? "新建条目" : "编辑条目"}
+  size="large"
+  scrollable
+>
+  {#snippet icon()}
+    {#if customIconSelected && customIconUrl}
+      <img class="modal-icon-img" src={customIconUrl} alt="" draggable="false" />
+    {:else}
+      <AppIcon name={headerIconName} size={18} />
+    {/if}
+  {/snippet}
+  {#snippet children()}
     <div class="editor-tabs" role="tablist" aria-label="条目字段分组">
       <button
         type="button"
@@ -1126,71 +1111,25 @@
         </section>
       </div>
     {/if}
-
-    <div class="modal-actions">
-      <button class="modal-button" onclick={onclose}>取消</button>
-      <button
-        class="modal-button primary"
-        onclick={submit}
-        disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
-        title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
-          ? "正在载入敏感字段…"
-          : undefined}>保存</button
-      >
-    </div>
-  </div>
-</div>
+  {/snippet}
+  {#snippet actions()}
+    <button class="modal-button" onclick={onclose}>取消</button>
+    <button
+      class="modal-button primary"
+      onclick={submit}
+      disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
+      title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
+        ? "正在载入敏感字段…"
+        : undefined}>保存</button
+    >
+  {/snippet}
+</ModalShell>
 
 <style>
-  .editor-modal {
-    width: min(500px, calc(100% - 40px));
-    max-height: calc(100% - 48px);
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-    overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: var(--hover-bg);
-  }
-
   .modal-icon-img {
     width: 16px;
     height: 16px;
     object-fit: contain;
-  }
-
-  .modal-head strong {
-    display: block;
-    font-size: 13px;
-    font-weight: 560;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
   }
 
   .form-grid {
@@ -1254,30 +1193,8 @@
     font-size: var(--font-size-secondary, 11px);
   }
 
-  .text-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: 12px;
-  }
-
-  .text-input.mono {
-    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  }
-
   .text-input.select {
     appearance: none;
-  }
-
-  .textarea {
-    height: auto;
-    padding: 8px 10px;
-    line-height: 1.5;
-    resize: vertical;
   }
 
   .input-row {
@@ -1622,42 +1539,5 @@
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
     cursor: pointer;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .modal-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .modal-button:disabled {
-    color: var(--text-faint);
-    background: var(--card-bg);
-    border-color: var(--border-subtle);
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .modal-button.primary {
-    border-color: var(--selection-color);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
   }
 </style>

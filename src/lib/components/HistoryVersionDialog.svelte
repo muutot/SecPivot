@@ -4,6 +4,7 @@
   import { formatBytes } from "$lib/utils/format";
   import { vault } from "$lib/services/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface Props {
     entry: VaultEntry;
@@ -211,19 +212,16 @@
   }
 </script>
 
-<div class="modal-backdrop" role="presentation">
-  <div class="editor-modal" role="dialog" aria-modal="true" aria-label="历史版本">
-    <div class="modal-head">
-      <span class="modal-icon"><AppIcon name="clock" size={18} /></span>
-      <div>
-        <strong>历史版本</strong>
-        <p>
-          {version.modified ? formatLocalDate(version.modified) : "未知时间"}
-          {#if totalDiffs > 0}· {totalDiffs} 处差异{/if}
-        </p>
-      </div>
-    </div>
-
+<ModalShell
+  title="历史版本"
+  description={`${version.modified ? formatLocalDate(version.modified) : "未知时间"}${totalDiffs > 0 ? `· ${totalDiffs} 处差异` : ""}`}
+  size="large"
+  scrollable
+  closeOnEscape
+  {onclose}
+>
+  {#snippet icon()}<AppIcon name="clock" size={18} />{/snippet}
+  {#snippet children()}
     <div class="field">
       <span class="field-label">标题</span>
       <div class="read-value" class:changed={titleDiff}>
@@ -433,59 +431,13 @@
         {/each}
       {/if}
     </div>
-
-    <div class="modal-actions">
-      <button class="modal-button primary" onclick={onclose}>关闭</button>
-    </div>
-  </div>
-</div>
+  {/snippet}
+  {#snippet actions()}
+    <button class="modal-button primary" onclick={onclose}>关闭</button>
+  {/snippet}
+</ModalShell>
 
 <style>
-  .editor-modal {
-    width: min(500px, calc(100% - 40px));
-    max-height: calc(100% - 48px);
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-    overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: var(--hover-bg);
-  }
-
-  .modal-head strong {
-    display: block;
-    font-size: 13px;
-    font-weight: 560;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-  }
-
   .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -643,34 +595,5 @@
   .copy-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .modal-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .modal-button.primary {
-    border-color: var(--selection-color);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
   }
 </style>

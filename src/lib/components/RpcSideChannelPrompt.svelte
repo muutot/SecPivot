@@ -4,6 +4,7 @@
   import { isTauriRuntime } from "$lib/services/settings";
   import { copyText } from "$lib/utils/clipboard";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface SideChannelRequest {
     password: string;
@@ -80,18 +81,18 @@
 </script>
 
 {#if pending}
-  <div class="modal-backdrop modal-backdrop--prompt" role="presentation">
-    <div class="approval-modal" role="dialog" aria-modal="true" aria-label="KeePassRPC 旁路密码">
-      <div class="modal-head">
-        <span class="modal-icon"><AppIcon name="link" size={18} /></span>
-        <div>
-          <strong>Kee 请求连接</strong>
-          <p>在 Kee 的对话框中输入以下一次性密码完成认证</p>
-        </div>
-      </div>
-
+  {@const request = pending}
+  <ModalShell
+    title="Kee 请求连接"
+    description="在 Kee 的对话框中输入以下一次性密码完成认证"
+    ariaLabel="KeePassRPC 旁路密码"
+    size="medium"
+    prompt
+  >
+    {#snippet icon()}<AppIcon name="link" size={18} />{/snippet}
+    {#snippet children()}
       <div class="side-channel-card">
-        <code class="side-channel-password">{pending.password}</code>
+        <code class="side-channel-password">{request.password}</code>
         <button
           class="copy-button"
           type="button"
@@ -113,59 +114,14 @@
       {#if expired}
         <p class="outcome outcome-expired" aria-live="polite">旁路密码已过期，连接已关闭</p>
       {/if}
-
-      <div class="modal-actions">
-        <button class="modal-button" onclick={close}>关闭</button>
-      </div>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={close}>关闭</button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 <style>
-  .approval-modal {
-    display: flex;
-    flex-direction: column;
-    width: min(400px, calc(100% - 40px));
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
-  }
-
-  .modal-head strong {
-    display: block;
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 590;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-muted);
-    font-size: var(--font-size-secondary, 11px);
-  }
-
   .side-channel-card {
     display: flex;
     align-items: center;
@@ -225,28 +181,5 @@
     margin: 10px 0 0;
     color: var(--danger-color);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    cursor: pointer;
-  }
-
-  .modal-button:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--card-bg);
   }
 </style>

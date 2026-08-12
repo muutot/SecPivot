@@ -4,6 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface AssociateRequest {
     token: string;
@@ -60,19 +61,19 @@
 </script>
 
 {#if pending}
-  <div class="modal-backdrop modal-backdrop--prompt" role="presentation">
-    <div class="approval-modal" role="dialog" aria-modal="true" aria-label="浏览器关联授权">
-      <div class="modal-head">
-        <span class="modal-icon"><AppIcon name="plug" size={18} /></span>
-        <div>
-          <strong>浏览器请求关联</strong>
-          <p>浏览器客户端请求读取当前数据库凭据</p>
-        </div>
-      </div>
-
+  {@const request = pending}
+  <ModalShell
+    title="浏览器请求关联"
+    description="浏览器客户端请求读取当前数据库凭据"
+    ariaLabel="浏览器关联授权"
+    size="medium"
+    prompt
+  >
+    {#snippet icon()}<AppIcon name="plug" size={18} />{/snippet}
+    {#snippet children()}
       <div class="client-card">
         <span class="client-label">客户端 ID</span>
-        <code class="client-id">{pending.id}</code>
+        <code class="client-id">{request.id}</code>
       </div>
 
       <p class="approval-note">
@@ -84,72 +85,27 @@
           {outcomeMsg}
         </p>
       {/if}
-
-      <div class="modal-actions">
-        <button
-          class="modal-button"
-          onclick={() => void decide(false)}
-          disabled={busy || outcome !== null}
-        >
-          拒绝
-        </button>
-        <button
-          class="modal-button primary"
-          onclick={() => void decide(true)}
-          disabled={busy || outcome !== null}
-        >
-          允许
-        </button>
-      </div>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <button
+        class="modal-button"
+        onclick={() => void decide(false)}
+        disabled={busy || outcome !== null}
+      >
+        拒绝
+      </button>
+      <button
+        class="modal-button primary"
+        onclick={() => void decide(true)}
+        disabled={busy || outcome !== null}
+      >
+        允许
+      </button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 <style>
-  .approval-modal {
-    display: flex;
-    flex-direction: column;
-    width: min(400px, calc(100% - 40px));
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
-  }
-
-  .modal-head strong {
-    display: block;
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 590;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-muted);
-    font-size: var(--font-size-secondary, 11px);
-  }
-
   .client-card {
     padding: 10px 12px;
     border: 1px solid var(--border-subtle);
@@ -189,43 +145,5 @@
 
   .outcome.outcome-expired {
     color: var(--warning-color);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    cursor: pointer;
-  }
-
-  .modal-button:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--card-bg);
-  }
-
-  .modal-button.primary {
-    border-color: color-mix(in srgb, var(--selection-color) 45%, transparent);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 16%, var(--card-bg));
-  }
-
-  .modal-button.primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--selection-color) 24%, var(--card-bg));
-  }
-
-  .modal-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
   }
 </style>

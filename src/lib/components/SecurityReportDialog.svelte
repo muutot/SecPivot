@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SecurityReport, VaultEntry } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
   import { entropyLabel } from "$lib/utils/password";
 
   interface EntryRow {
@@ -34,19 +35,16 @@
   }
 </script>
 
-<div class="modal-backdrop" role="presentation">
-  <div class="report-modal" role="dialog" aria-modal="true" aria-label="安全报告">
-    <div class="modal-head">
-      <span class="modal-icon"><AppIcon name="shield" size={18} /></span>
-      <div>
-        <strong>安全报告</strong>
-        <p>基于当前数据库的服务端分析，不发送任何数据</p>
-      </div>
-      <button class="close-button" onclick={onclose} title="关闭" aria-label="关闭"
-        ><AppIcon name="x" size={14} /></button
-      >
-    </div>
-
+<ModalShell
+  title="安全报告"
+  description="基于当前数据库的服务端分析，不发送任何数据"
+  size="report"
+  showClose
+  closeOnEscape
+  {onclose}
+>
+  {#snippet icon()}<AppIcon name="shield" size={18} />{/snippet}
+  {#snippet children()}
     <div class="summary-row">
       <span class="summary-chip"><b>{totals.entries}</b>总条目</span>
       <span class="summary-chip" class:issue={totals.empty > 0}><b>{totals.empty}</b>空密码</span>
@@ -105,79 +103,10 @@
         </ul>
       </section>
     {/if}
-  </div>
-</div>
+  {/snippet}
+</ModalShell>
 
 <style>
-  .report-modal {
-    display: flex;
-    flex-direction: column;
-    width: min(520px, calc(100% - 40px));
-    max-height: min(560px, calc(100% - 80px));
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: var(--hover-bg);
-  }
-
-  .modal-head strong {
-    display: block;
-    font-size: 13px;
-    font-weight: 560;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-  }
-
-  .modal-head div {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .close-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    flex: 0 0 auto;
-    padding: 0;
-    border: 0;
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-faint);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .close-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
   .summary-row {
     display: flex;
     flex-wrap: wrap;
