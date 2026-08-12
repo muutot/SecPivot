@@ -100,7 +100,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 对克隆库应用新存储配置并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过
 - [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入
-- [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；Node 行为测试覆盖
+- [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；`tests/entry-search.test.mjs` 覆盖字段隔离、大小写、非法正则与组合条件
 - [x] 高级搜索 UI：搜索框旁「高级搜索」入口 + 过滤对话框（字段范围/正则/排除/过期/收藏/标签/质量），应用于当前视图，快速搜索保持轻量
 - [x] 保存搜索：命名搜索配置持久化（设置契约 + 列表加载/删除）
 - [x] 密码生成器规则引擎：`customCharset`/`excludeChars`/`requiredChars`/`pattern`（u/l/d/s/a + 字面量）已入设置契约（TS+Rust serde 均保留，round-trip 测试）并在 `generatePassword` 中执行；`tests/password.test.mjs` 覆盖类别开关/符号保证、自定义池/必含/排除、pattern 槽约束与不可能策略显式失败
