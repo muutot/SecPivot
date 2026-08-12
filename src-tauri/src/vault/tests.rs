@@ -3697,6 +3697,67 @@ fn custom_fields_and_attachments_round_trip() {
 }
 
 #[test]
+fn attachment_preview_text_image_and_binary_in_memory() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![
+                AttachmentInput {
+                    name: "note.txt".into(),
+                    data: Some(BASE64.encode(b"hello attachment".as_slice())),
+                },
+                AttachmentInput {
+                    name: "pic.png".into(),
+                    data: Some(BASE64.encode([0x89u8, 0x50, 0x4E, 0x47])),
+                },
+                AttachmentInput {
+                    name: "blob.bin".into(),
+                    data: Some(BASE64.encode([0u8, 1, 2, 3])),
+                },
+                AttachmentInput {
+                    name: "big.log".into(),
+                    data: Some(BASE64.encode(vec![b'x'; 2 * 1024 * 1024 + 4])),
+                },
+            ],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    let text = session.attachment_preview(&uuid, "note.txt").unwrap();
+    assert_eq!(text.kind, "text");
+    assert_eq!(text.data, "hello attachment");
+    assert!(!text.truncated);
+    assert_eq!(text.size, 16);
+
+    let image = session.attachment_preview(&uuid, "pic.png").unwrap();
+    assert_eq!(image.kind, "image");
+    assert!(image.data.starts_with("data:image/png;base64,"));
+    assert!(!image.truncated);
+
+    let binary = session.attachment_preview(&uuid, "blob.bin").unwrap();
+    assert_eq!(binary.kind, "binary");
+    assert!(binary.data.is_empty());
+
+    let big = session.attachment_preview(&uuid, "big.log").unwrap();
+    assert_eq!(big.kind, "text");
+    assert!(big.truncated);
+    assert_eq!(big.size, 2 * 1024 * 1024 + 4);
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

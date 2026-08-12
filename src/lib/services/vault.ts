@@ -16,6 +16,7 @@ import type {
   TotpCode,
   HistoryVersion,
   EntryStorage,
+  AttachmentPreview,
   SecurityReport,
   FaviconReport,
   MutationDelta,
@@ -91,6 +92,7 @@ interface VaultStore {
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
+  previewAttachment: (uuid: string, name: string) => Promise<AttachmentPreview>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
@@ -806,6 +808,11 @@ export const vault: VaultStore = {
 
   async saveAttachment(uuid: string, name: string, dest: string): Promise<void> {
     await backendInvoke<void>("save_attachment", { uuid, name, dest });
+  },
+
+  async previewAttachment(uuid: string, name: string): Promise<AttachmentPreview> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件预览");
+    return backendInvoke<AttachmentPreview>("preview_attachment", { uuid, name });
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

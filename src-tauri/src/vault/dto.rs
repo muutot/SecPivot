@@ -233,6 +233,19 @@ pub struct SessionInfo {
     pub dirty: bool,
 }
 
+/// In-memory attachment preview: `kind` is `"text"` (utf8 content in `data`),
+/// `"image"` (`data:` URL) or `"binary"` (no content). `truncated` marks
+/// previews capped at the 2 MiB preview limit; the attachment itself is never
+/// written to disk by previewing.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentPreview {
+    pub kind: String,
+    pub data: String,
+    pub size: usize,
+    pub truncated: bool,
+}
+
 /// Lightweight mutation result for small state changes that do not need a
 /// rebuilt tree. The renderer applies the delta locally against its cached
 /// `VaultState`; `revision` lets it order/merge results and detect stale

@@ -429,6 +429,20 @@ pub(crate) fn save_attachment(
     vault::write_attachment_file(&data, &dest)
 }
 
+/// In-memory attachment preview (text/image data URL/binary marker); never
+/// writes the attachment to disk.
+#[tauri::command]
+pub(crate) fn preview_attachment(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    name: String,
+) -> Result<vault::AttachmentPreview, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .attachment_preview(&uuid, &name)
+}
+
 #[tauri::command]
 pub(crate) fn totp_code(
     session: tauri::State<'_, Mutex<VaultSession>>,

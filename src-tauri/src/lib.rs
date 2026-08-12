@@ -301,6 +301,7 @@ pub fn run() {
             commands::restore_group,
             commands::empty_recycle_bin,
             commands::save_attachment,
+            commands::preview_attachment,
             commands::totp_code,
             commands::toggle_favorite,
             commands::update_entry_autotype,

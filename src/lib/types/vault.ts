@@ -65,6 +65,15 @@ export interface AttachmentInfo {
   size: number;
 }
 
+/** In-memory attachment preview: `kind` text/image/binary; `data` holds utf8
+ *  text or a `data:` image URL; `truncated` marks the 2 MiB preview cap. */
+export interface AttachmentPreview {
+  kind: "text" | "image" | "binary";
+  data: string;
+  size: number;
+  truncated: boolean;
+}
+
 /** One Auto-Type window association (`*` wildcards allowed). */
 export interface AutoTypeAssociation {
   window: string;

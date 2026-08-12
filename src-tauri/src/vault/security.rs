@@ -10,6 +10,8 @@ use super::serialize::{collect_favicon_hosts, escape_csv, estimate_entropy, extr
 use super::*;
 use crate::crypto::otp;
 use crate::platform::autotype::{self, AutotypeContext};
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use keepass::db::{EntryId, Icon, Value};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,6 +25,40 @@ impl VaultSession {
             .attachment_by_name(name)
             .ok_or_else(|| "附件不存在".to_owned())?;
         Ok(attachment.data.get().to_vec())
+    }
+
+    /// In-memory attachment preview: text stays in memory as utf8, raster
+    /// images become `data:` URLs, anything else reports as binary. Preview
+    /// payloads are capped at [`PREVIEW_MAX_BYTES`]; the full byte size is
+    /// still reported so the UI can show the truncation.
+    pub fn attachment_preview(&self, uuid: &str, name: &str) -> Result<AttachmentPreview, String> {
+        const PREVIEW_MAX_BYTES: usize = 2 * 1024 * 1024;
+        let data = self.attachment_data(uuid, name)?;
+        let truncated = data.len() > PREVIEW_MAX_BYTES;
+        let slice = &data[..data.len().min(PREVIEW_MAX_BYTES)];
+        let size = data.len();
+        if let Some(mime) = preview_image_mime(name) {
+            Ok(AttachmentPreview {
+                kind: "image".into(),
+                data: format!("data:{mime};base64,{}", BASE64.encode(slice)),
+                size,
+                truncated,
+            })
+        } else if is_preview_text_name(name) {
+            Ok(AttachmentPreview {
+                kind: "text".into(),
+                data: String::from_utf8_lossy(slice).into_owned(),
+                size,
+                truncated,
+            })
+        } else {
+            Ok(AttachmentPreview {
+                kind: "binary".into(),
+                data: String::new(),
+                size,
+                truncated,
+            })
+        }
     }
 
     /// Convenience used by tests and callers that may hold the lock anyway.
@@ -553,4 +589,48 @@ impl VaultSession {
 
         Ok(format!("\u{FEFF}{}\r\n", lines.join("\r\n")))
     }
+}
+
+/// MIME type for raster image attachments that can preview in memory.
+fn preview_image_mime(name: &str) -> Option<&'static str> {
+    let lower = name.to_ascii_lowercase();
+    match lower.rsplit('.').next() {
+        Some("png") => Some("image/png"),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg"),
+        Some("gif") => Some("image/gif"),
+        Some("webp") => Some("image/webp"),
+        Some("bmp") => Some("image/bmp"),
+        _ => None,
+    }
+}
+
+/// Extensions whose content is previewed as text (never executed).
+fn is_preview_text_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let ext = lower.rsplit('.').next().unwrap_or("");
+    matches!(
+        ext,
+        "txt"
+            | "md"
+            | "log"
+            | "json"
+            | "xml"
+            | "csv"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "ini"
+            | "cfg"
+            | "conf"
+            | "html"
+            | "htm"
+            | "css"
+            | "js"
+            | "ts"
+            | "rs"
+            | "py"
+            | "sh"
+            | "bat"
+            | "ps1"
+    )
 }

@@ -13,6 +13,7 @@
   import { keepassIconName } from "$lib/utils/keepass-icons";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
   import HistoryVersionDialog from "$lib/components/HistoryVersionDialog.svelte";
+  import AttachmentPreviewDialog from "$lib/components/AttachmentPreviewDialog.svelte";
 
   interface Props {
     entry: VaultEntry;
@@ -64,6 +65,7 @@
   let viewingVersion = $state<HistoryVersion | null>(null);
   let storage = $state<EntryStorage | null>(null);
   let storageLoading = $state(false);
+  let previewAttachmentName = $state<string | null>(null);
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -572,6 +574,13 @@
               <span class="attachment-size">{formatBytes(attachment.size)}</span>
               <button
                 class="copy-btn"
+                onclick={() => (previewAttachmentName = attachment.name)}
+                title="预览附件"
+              >
+                <AppIcon name="eye" size={13} />
+              </button>
+              <button
+                class="copy-btn"
                 onclick={() => saveAttachment(attachment.name)}
                 title="保存附件"
               >
@@ -650,6 +659,17 @@
       version={viewingVersion}
       onclose={() => (viewingVersion = null)}
     />
+  {/if}
+
+  {#if previewAttachmentName}
+    {@const attachment = entry.attachments?.find((a) => a.name === previewAttachmentName)}
+    {#if attachment}
+      <AttachmentPreviewDialog
+        entryUuid={entry.uuid}
+        {attachment}
+        onclose={() => (previewAttachmentName = null)}
+      />
+    {/if}
   {/if}
 </div>
 

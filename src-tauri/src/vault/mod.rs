@@ -92,8 +92,8 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 // code and `lib.rs` keep referencing them via `vault::*`.
 
 pub use self::dto::{
-    AttachmentInfo, AttachmentInput, AutoTypeAssociationDto, AutotypeCandidate, CustomField,
-    DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
+    AttachmentInfo, AttachmentInput, AttachmentPreview, AutoTypeAssociationDto, AutotypeCandidate,
+    CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
     EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
     FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
     HistoryVersion, MutationDelta, SecurityReport, SessionInfo, TotpCode, VaultEntry, VaultGroup,
