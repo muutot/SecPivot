@@ -126,7 +126,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 数据库维护·相似密码检查：`similar_passwords` 服务端分析（编辑距离 ≤ 2 聚类、回收站排除、2000 条上限、密码不外传），`SimilarPasswordsDialog` 报告并可定位条目
 - [x] 数据库维护·历史清理：`clear_all_history` 全库清理（返回清理数量 + 刷新状态，当前条目保留，保存/重开验证），菜单入口带确认
 - [x] 数据库维护·过期维护：`expired_entries` 集中清单（回收站排除、按过期时间排序、无敏感字段），`ExpiredEntriesDialog` 支持单条/全部「延期 30 天」与「删除」（复用 updateEntries/deleteEntries）
-- [ ] 数据库维护·损坏库修复/尽力恢复 + 不可恢复写入只读失败路径
+- [x] 数据库维护·损坏库诊断：`probe_vault` 头部分类（KDBX/KDB/未知 + 大小，不解密），`open_vault` 对非 KDBX 文件快速失败并给出明确提示
+- [ ] 数据库维护·尽力恢复：KDBX 无法解析时提示「导出 XML 后导入」兜底路径 + 失败写入保持会话完整（已有），不可恢复时禁用写操作
 
 ### P3 — 受约束自动化与可选安全增强
 

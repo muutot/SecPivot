@@ -608,6 +608,46 @@ pub(crate) fn classify_open_error<E: std::fmt::Display>(e: E) -> String {
     }
 }
 
+/// Result of a cheap header probe of a vault file (no decryption attempted).
+pub(crate) struct VaultProbe {
+    pub kind: &'static str,
+    pub note: String,
+}
+
+/// KeePass signature bytes: `03 D9 A2 9A` + version marker `67 FB 4B B5`
+/// (KDBX) or `65 FB 4B B5` (legacy KDB).
+const KDBX_SIGNATURE: [u8; 8] = [0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5];
+const KDB_SIGNATURE: [u8; 8] = [0x03, 0xD9, 0xA2, 0x9A, 0x65, 0xFB, 0x4B, 0xB5];
+
+/// Inspect a file's header and size without attempting decryption: classifies
+/// it as `kdbx`, `kdb` or `unknown`. Missing/unreadable files are errors.
+pub(crate) fn probe_vault(path: &Path) -> Result<VaultProbe, String> {
+    let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
+    let head: [u8; 8] = data
+        .get(..8)
+        .and_then(|slice| slice.try_into().ok())
+        .unwrap_or_default();
+    let size = data.len() as u64;
+    if head == KDBX_SIGNATURE {
+        Ok(VaultProbe {
+            kind: "kdbx",
+            note: format!("KeePass 数据库文件（KDBX，大小 {size} 字节）"),
+        })
+    } else if head == KDB_SIGNATURE {
+        Ok(VaultProbe {
+            kind: "kdb",
+            note: format!("KeePass 1.x 数据库（KDB，暂不支持打开，大小 {size} 字节）"),
+        })
+    } else {
+        Ok(VaultProbe {
+            kind: "unknown",
+            note: format!(
+                "不是 KeePass 数据库文件（缺少 KDBX 头，大小 {size} 字节），可能已损坏或选择了错误文件"
+            ),
+        })
+    }
+}
+
 pub(crate) fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key)

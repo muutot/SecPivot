@@ -4,7 +4,7 @@
 
 use super::helpers::{
     apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
-    save_database, wipe_secret_bytes, wipe_secret_string, write_database_bytes,
+    probe_vault, save_database, wipe_secret_bytes, wipe_secret_string, write_database_bytes,
 };
 use super::RemoteMode;
 use crate::remote::backup::{remote_key_basename, validate_remote_key, write_local_copy};
@@ -58,6 +58,10 @@ pub(crate) fn prepare_local_open(
     let keyfile_bytes = read_keyfile(keyfile)?;
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
+    let probe = probe_vault(path)?;
+    if probe.kind == "unknown" {
+        return Err(probe.note);
+    }
     let db = Database::parse(&data, key).map_err(classify_open_error)?;
     Ok((db, keyfile_bytes))
 }

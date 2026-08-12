@@ -3996,6 +3996,31 @@ fn expired_entries_lists_past_expiry_and_skips_recycle_bin() {
 }
 
 #[test]
+fn probe_vault_classifies_headers_and_open_rejects_non_kdbx() {
+    let dir = TempDir::new().unwrap();
+    let garbage = dir.path().join("garbage.kdbx");
+    std::fs::write(&garbage, b"this is not a vault").unwrap();
+
+    let probe = super::helpers::probe_vault(&garbage).unwrap();
+    assert_eq!(probe.kind, "unknown");
+    assert!(probe.note.contains("不是 KeePass"));
+
+    // Opening a non-KDBX file fails fast with the actionable message.
+    let err = super::prepare_local_open(&garbage, "pw", None).unwrap_err();
+    assert!(
+        err.contains("不是 KeePass 数据库"),
+        "unexpected error: {err}"
+    );
+
+    // A real vault probes as kdbx and still opens normally.
+    let (session, path) = create_session(&dir);
+    let probe = super::helpers::probe_vault(&path).unwrap();
+    assert_eq!(probe.kind, "kdbx");
+    assert!(std::fs::metadata(&path).unwrap().len() > 0);
+    assert!(session.is_open());
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
