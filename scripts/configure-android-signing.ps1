@@ -2,8 +2,8 @@ param(
     [string]$ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot "..\src-tauri")).Path
 )
 
-# 配置 Android release 签名：从环境变量/秘密生成 keystore.properties，
-# 并将 keystore 解码到 gen/android 目录。构建前须先执行 tauri android init。
+# 配置 Android release 签名：从环境变量/秘密解码 keystore，并让 Gradle
+# 在构建时直接读取密码环境变量。构建前须先执行 tauri android init。
 #
 # 需要环境变量：
 #   ANDROID_KEYSTORE_BASE64    - keystore 文件 base64（可在任意有 JDK 的机器生成，见 docs/android.md）
@@ -13,55 +13,77 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $env:ANDROID_KEYSTORE_BASE64) {
-    Write-Host "ANDROID_KEYSTORE_BASE64 not set - skipping Android signing setup."
-    exit 0
+$requiredVariables = @(
+    "ANDROID_KEYSTORE_BASE64",
+    "ANDROID_KEYSTORE_PASSWORD",
+    "ANDROID_KEY_PASSWORD",
+    "ANDROID_KEY_ALIAS"
+)
+$missingVariables = @(
+    $requiredVariables | Where-Object {
+        [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+    }
+)
+if ($missingVariables.Count -gt 0) {
+    throw "Missing required Android signing variables: $($missingVariables -join ', ')."
 }
 
 $genDir = Join-Path $ProjectDir "gen\android"
 $keystorePath = Join-Path $genDir "secpivot-release.jks"
-$keystoreProps = Join-Path $genDir "keystore.properties"
-
-$bytes = [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
-[IO.File]::WriteAllBytes($keystorePath, $bytes)
-Write-Host "Wrote keystore to $keystorePath"
-
-$storeFile = $keystorePath -replace "\\", "\\"
-@"
-password=$env:ANDROID_KEYSTORE_PASSWORD
-keyAlias=$env:ANDROID_KEY_ALIAS
-storeFile=$storeFile
-"@ | Set-Content -Path $keystoreProps -Encoding ASCII
-Write-Host "Wrote keystore.properties"
-
+$legacyKeystoreProperties = Join-Path $genDir "keystore.properties"
 $gradleFile = Join-Path $genDir "app\build.gradle.kts"
-$content = Get-Content $gradleFile -Raw
+
+if (-not (Test-Path -LiteralPath $gradleFile -PathType Leaf)) {
+    throw "Android Gradle project not found at $gradleFile; run tauri android init first."
+}
+
+try {
+    $bytes = [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
+} catch {
+    throw "ANDROID_KEYSTORE_BASE64 is not valid base64."
+}
+if ($bytes.Length -eq 0) {
+    throw "ANDROID_KEYSTORE_BASE64 decoded to an empty keystore."
+}
+[IO.File]::WriteAllBytes($keystorePath, $bytes)
+Write-Host "Wrote Android release keystore."
+
+if (Test-Path -LiteralPath $legacyKeystoreProperties -PathType Leaf) {
+    Remove-Item -LiteralPath $legacyKeystoreProperties -Force
+    Write-Host "Removed legacy Android signing properties."
+}
+
+$content = Get-Content -LiteralPath $gradleFile -Raw
 
 if ($content -notmatch "signingConfigs") {
-    $signing = @"
+    if ($content -notmatch "android\s*\{") {
+        throw "Android Gradle file does not contain an android block."
+    }
+    $signing = @'
 
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("keystore.properties")
-            val keystoreProperties = Properties()
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(keystorePropertiesFile.inputStream())
+            val requireSigningEnv = { name: String ->
+                System.getenv(name) ?: error("$name is required for Android release signing")
             }
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["password"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["password"] as String
+            keyAlias = requireSigningEnv("ANDROID_KEY_ALIAS")
+            keyPassword = requireSigningEnv("ANDROID_KEY_PASSWORD")
+            storeFile = rootProject.file("secpivot-release.jks")
+            storePassword = requireSigningEnv("ANDROID_KEYSTORE_PASSWORD")
         }
     }
-"@
-    $content = $content -replace "android \{", "android {$signing"
+'@
+    $content = $content -replace "android\s*\{", "android {$signing"
     Write-Host "Injected signingConfigs block into build.gradle.kts"
 }
 
 if ($content -notmatch "signingConfig = signingConfigs.getByName\(`"release`"\)") {
-    $content = $content -replace "getByName\(`"release`"\) \{", "getByName(`"release`") {`r`n            signingConfig = signingConfigs.getByName(`"release`")"
+    if ($content -notmatch "getByName\(`"release`"\)\s*\{") {
+        throw "Android Gradle file does not contain a release build type."
+    }
+    $content = $content -replace "getByName\(`"release`"\)\s*\{", "getByName(`"release`") {`r`n            signingConfig = signingConfigs.getByName(`"release`")"
     Write-Host "Wired release build type to signing config"
 }
 
-Set-Content -Path $gradleFile -Value $content -Encoding ASCII -NoNewline
+[IO.File]::WriteAllText($gradleFile, $content, [Text.UTF8Encoding]::new($false))
 Write-Host "Android signing configured."

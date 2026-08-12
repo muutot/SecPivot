@@ -122,10 +122,13 @@ jobs:
         run: |
           $exe = "${{ github.workspace }}\src-tauri\target\release\secpivot-desktop.exe"
           $ver = $env:RELEASE_TAG.TrimStart("v")
-          if (Test-Path $exe) {
-            & scripts/package-portable.ps1 -SkipBuild -ReleaseExe $exe -Version $ver
-          } else {
-            Write-Host "Portable exe not found at $exe — skipping portable package."
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "Portable exe not found at $exe."
+          }
+          & scripts/package-portable.ps1 -SkipBuild -ReleaseExe $exe -Version $ver
+          $zip = "${{ github.workspace }}\dist\SecPivot-$ver-portable.zip"
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            throw "Portable ZIP was not produced at $zip."
           }
 
       - name: Upload portable ZIP to release
@@ -134,13 +137,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: |
-          $zip = Get-ChildItem "dist\SecPivot-*-portable.zip" -ErrorAction SilentlyContinue
-          if ($zip) {
-            gh release upload "$env:RELEASE_TAG" $zip.FullName --clobber
-            Write-Host "Uploaded $($zip.Name)"
-          } else {
-            Write-Host "No portable ZIP found — nothing to upload."
+          $ver = $env:RELEASE_TAG.TrimStart("v")
+          $zip = "${{ github.workspace }}\dist\SecPivot-$ver-portable.zip"
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            throw "Portable ZIP not found at $zip."
           }
+          gh release upload "$env:RELEASE_TAG" $zip --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Portable ZIP upload failed with exit code $LASTEXITCODE."
+          }
+          Write-Host "Uploaded $(Split-Path -Leaf $zip)"
 
   android:
     name: Build (Android APK)
@@ -164,7 +170,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - uses: mozilla-actions/sccache-action@v0.0.11
 
@@ -186,6 +192,28 @@ jobs:
         run: npx tauri android init --ci --skip-targets-install
         working-directory: src-tauri
 
+      - name: Configure Android NDK tools
+        shell: bash
+        run: |
+          if [ -n "${NDK_HOME:-}" ] && [ -d "$NDK_HOME" ]; then
+            ndk_dir="$NDK_HOME"
+          else
+            # Match Tauri's fallback: lexically sort installed NDK paths and
+            # select the last one, then pin that same directory for the build.
+            ndk_dir=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | tail -n 1)
+          fi
+          if [ -z "$ndk_dir" ]; then
+            echo "No Android NDK installation found under $ANDROID_HOME/ndk." >&2
+            exit 1
+          fi
+          ranlib="$ndk_dir/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
+          if [ ! -x "$ranlib" ]; then
+            echo "Android NDK llvm-ranlib not found at $ranlib." >&2
+            exit 1
+          fi
+          echo "NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
+          echo "TARGET_RANLIB=$ranlib" >> "$GITHUB_ENV"
+
       - name: Configure Android release signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -196,8 +224,28 @@ jobs:
         run: ./scripts/configure-android-signing.ps1
 
       - name: Build Android APK (release)
-        run: npx tauri android build
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: npx tauri android build --apk --ci
         working-directory: src-tauri
+
+      - name: Verify Android release APK
+        shell: bash
+        run: |
+          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "Android release APK not found at $apk." >&2
+            exit 1
+          fi
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          apksigner="$build_tools/apksigner"
+          if [ ! -x "$apksigner" ]; then
+            echo "Android apksigner not found at $apksigner." >&2
+            exit 1
+          fi
+          "$apksigner" verify --verbose "$apk"
 
       - name: Upload Android APK to release
         shell: bash
@@ -207,16 +255,24 @@ jobs:
         run: |
           # The Windows build job creates the release via tauri-action; this job
           # runs in parallel, so wait for the release to exist before uploading.
+          release_ready=false
           for i in $(seq 1 90); do
             if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              release_ready=true
               break
             fi
             sleep 10
           done
-          apk=$(find "src-tauri/gen/android" -name "*.apk" -type f | head -n 1)
-          if [ -n "$apk" ]; then
-            gh release upload "$RELEASE_TAG" "$apk" --clobber
-            echo "Uploaded $apk"
-          else
-            echo "No Android APK found — nothing to upload."
+          if [ "$release_ready" != true ]; then
+            echo "Release $RELEASE_TAG was not created within 15 minutes." >&2
+            exit 1
           fi
+          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "Android release APK not found at $apk." >&2
+            exit 1
+          fi
+          asset="$RUNNER_TEMP/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
+          cp "$apk" "$asset"
+          gh release upload "$RELEASE_TAG" "$asset" --clobber
+          echo "Uploaded $(basename "$asset")"

@@ -36,6 +36,12 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 - **Segmented controls (theme/KDF/charset)** follow one pattern: bordered chip, `--settings-control-radius`, active = selection tint. Do not introduce a second segmented style.
 - **Keep the settings sidebar width fixed (168px) on wide layouts.** At `max-width: 720px` it becomes the approved off-canvas drawer; preserve that full-width content fallback.
 
+## Android / release
+
+- **Tauri's Android subprocess exports `TARGET_AR`/`TARGET_CC`/`TARGET_CXX`, but not `TARGET_RANLIB`.** With `cc 1.4.2` + `openssl-src 300.6.1`, `llvm-ranlib` is used only when it is discoverable or explicitly configured; otherwise the crate falls back to the removed `aarch64-linux-android-ranlib` name and vendored OpenSSL fails at `make install_dev` after a long successful compile. Select the same NDK as Tauri and export `<ndk>/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib` as `TARGET_RANLIB` before `tauri android build`.
+- **A default Tauri universal Android build targets four ABIs and builds both APK + AAB.** If the release promises one universal APK, install all four Rust targets (`aarch64`, `armv7`, `i686`, `x86_64`) and invoke `tauri android build --apk --ci`; verify and upload only `app/build/outputs/apk/universal/release/app-universal-release.apk`, never `find '*.apk' | head -n 1`.
+- **Release jobs must fail closed on missing signing inputs or artifacts.** Missing Android secrets, keystore, signed APK, Windows exe, portable ZIP, draft release, or upload failure is a failed release. Logging "skipping" or "nothing to upload" turns a broken release into a green job and invalidates TODO evidence.
+
 ## Remote (S3)
 
 - **The crate is `rust-s3`, not `s3`.** `s3 = "0.34"` fails dependency selection. Depends on `tokio` (`rt-multi-thread`) for the internal runtime; default features give the tokio + native-tls backend, which works on Windows via schannel.

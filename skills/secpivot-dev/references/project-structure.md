@@ -4,16 +4,16 @@ This reference is a source map, not a substitute for reading the current files. 
 
 ## Runtime surfaces
 
-| Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                      |
-| ------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main desktop window | `src/routes/+page.svelte`                                                                           | Welcome/unlock, group tree, entry list, detail, search, editor dialogs, status                                                                                                                      |
-| Settings window     | `src/routes/settings/+page.svelte` → `SettingsDialog.svelte`                                        | Standalone settings page, theme/font application, settings navigation/panels                                                                                                                        |
-| Frontend services   | `src/lib/services/*`                                                                                | Settings store + bootstrap, vault IPC wrapper + browser fallback                                                                                                                                    |
-| GUI backend         | `src-tauri/src/lib.rs`                                                                              | Tauri setup, managed config + vault session, commands                                                                                                                                               |
-| Backend modules     | `src-tauri/src/crypto/`, `src-tauri/src/platform/`, `src-tauri/src/config/`, `src-tauri/src/vault/` | Pure security primitives (AES/HMAC/hash/base64/OTP) and OS-integration services (auto-type, focus, shield, clipboard, credential, DPAPI); config persistence; KeePass open/create/edit/save session |
-| Release automation  | `scripts/version.mjs`, `changelog.mjs`, `release.mjs`                                               | Atomic version bump, gitmoji changelog, two-pass release orchestration                                                                                                                              |
-| CI / CD             | `.github/workflows/ci.yml`, `release.yml`                                                           | `npm run verify` on push/PR; tagged build: Windows NSIS + draft release, Android APK job runs on Linux in parallel (openssl-src vendored cross-compile requires a non-Windows host)                 |
-| Windows installer   | `src-tauri/windows/installer.nsi`                                                                   | Custom NSIS template wired via `bundle.windows.nsis.template`                                                                                                                                       |
+| Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main desktop window | `src/routes/+page.svelte`                                                                           | Welcome/unlock, group tree, entry list, detail, search, editor dialogs, status                                                                                                                                                                                |
+| Settings window     | `src/routes/settings/+page.svelte` → `SettingsDialog.svelte`                                        | Standalone settings page, theme/font application, settings navigation/panels                                                                                                                                                                                  |
+| Frontend services   | `src/lib/services/*`                                                                                | Settings store + bootstrap, vault IPC wrapper + browser fallback                                                                                                                                                                                              |
+| GUI backend         | `src-tauri/src/lib.rs`                                                                              | Tauri setup, managed config + vault session, commands                                                                                                                                                                                                         |
+| Backend modules     | `src-tauri/src/crypto/`, `src-tauri/src/platform/`, `src-tauri/src/config/`, `src-tauri/src/vault/` | Pure security primitives (AES/HMAC/hash/base64/OTP) and OS-integration services (auto-type, focus, shield, clipboard, credential, DPAPI); config persistence; KeePass open/create/edit/save session                                                           |
+| Release automation  | `scripts/version.mjs`, `changelog.mjs`, `release.mjs`                                               | Atomic version bump, gitmoji changelog, two-pass release orchestration                                                                                                                                                                                        |
+| CI / CD             | `.github/workflows/ci.yml`, `release.yml`                                                           | `npm run verify` gates push/PR and release; tagged build creates a Windows NSIS + portable ZIP draft release, while a parallel Linux job builds, verifies, and uploads the signed four-ABI universal Android APK; missing artifacts/signing fail the workflow |
+| Windows installer   | `src-tauri/windows/installer.nsi`                                                                   | Custom NSIS template wired via `bundle.windows.nsis.template`                                                                                                                                                                                                 |
 
 SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits `appSettings.initialize()` before route load. `+layout.svelte` imports global CSS and applies settings to the document.
 
@@ -138,15 +138,15 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 ## Mobile (Android) surface
 
-Android support is scoped but currently inert: platform-specific backend code is
-desktop-gated (`#[cfg(desktop)]`) and mobile-only surface config exists as
-`src-tauri/tauri.android.conf.json` (distinct `identifier`) and
-`src-tauri/capabilities/android.json` (`platforms:["android"]`). The frontend
-hides desktop chrome on mobile via `isMobile()` in `src/lib/services/settings.ts`
-and the viewport `<svelte:head>` meta in `src/routes/+layout.svelte`. A real
-Android build and the remaining `cargo`-level desktop-dependency trimming must be
-done in a toolchain-enabled environment — see `docs/android.md` for the full
-gated/toolchain task list.
+Android support is scoped and wired into the release workflow: platform-specific
+backend code is desktop-gated (`#[cfg(desktop)]`), mobile-only config lives in
+`src-tauri/tauri.android.conf.json` and `src-tauri/capabilities/android.json`, and
+the frontend hides desktop chrome through `isMobile()`. GitHub run `31619359721`
+proved project generation, signing setup, and most of the Rust cross-build, then
+failed because vendored OpenSSL could not find NDK `llvm-ranlib`; the workflow now
+exports that tool explicitly and gates the exact signed universal APK, but still
+needs a successful remote run. Mobile file picking, lifecycle locking, touch UX,
+and real-device behavior remain incomplete — see `docs/android.md`.
 
 ## Persistent layout
 

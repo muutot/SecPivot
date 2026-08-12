@@ -53,4 +53,4 @@ Use the sibling `version-release` skill (`skills/version-release/SKILL.md`) when
 
 ## Packaging verification
 
-`npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/SecPivot_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; they require a configured `origin` remote and GitHub to provide runtime evidence, so their TODO items stay unchecked until a real CI run passes.
+`npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/SecPivot_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; inspect the real run/job conclusions plus draft-release assets before changing TODO status. A locally valid YAML diff or a partially successful job is not release evidence: CI remains partial until the current HEAD passes, and release remains partial until every required Windows/portable/Android artifact exists and its job succeeded.

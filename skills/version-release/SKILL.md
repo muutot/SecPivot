@@ -142,8 +142,8 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml` which (desktop is Wi
 
 - Runs `npm run verify` on `windows-latest`, plus an **extreme-release build** validation that verifies the exact GitHub-release configuration (fat LTO, opt-level 3, codegen-units 1, `target-cpu=x86-64-v3`) compiles and links
 - Builds the Windows x64 bundle with extent runtime optimization via `CARGO_PROFILE_RELEASE_*` + `RUSTFLAGS` (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
-- Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`
-- Builds a **release Android APK** in parallel on `ubuntu-latest` (`android` job, `needs: verify`) — the Rust build for the Android target requires `openssl-sys` (rust-s3's native-tls), so `Cargo.toml` enables `openssl` vendored for `cfg(target_os = "android")` and the job must run on Linux where openssl-src can cross-compile OpenSSL with the NDK clang; the APK is uploaded to the same release once it exists
+- Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`; a missing exe/ZIP or failed upload fails the job
+- Builds a four-ABI **universal release Android APK** in parallel on `ubuntu-latest` (`android` job, `needs: verify`) — the Rust build requires vendored `openssl-sys`, and the workflow exports the selected NDK's `llvm-ranlib` as `TARGET_RANLIB` because `openssl-src` otherwise falls back to a removed `<target>-ranlib`; all signing secrets are mandatory, `apksigner verify` gates the exact universal APK, and a missing APK/release or failed upload fails the job
 - Creates a draft GitHub Release with these artifacts using `RELEASE.md` as the release body
 
 Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
