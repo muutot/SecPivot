@@ -17,6 +17,7 @@ import type {
   SecurityReport,
   FaviconReport,
   MutationDelta,
+  DatabaseSettings,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -35,6 +36,7 @@ import {
 interface VaultStore {
   subscribe: typeof state.subscribe;
   get: () => VaultState | null;
+  getDatabaseSettings: () => Promise<DatabaseSettings | null>;
   open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
   create: (request: CreateVaultRequest) => Promise<VaultState>;
   listRemoteObjects: () => Promise<RemoteObject[]>;
@@ -299,6 +301,11 @@ export const vault: VaultStore = {
 
   get(): VaultState | null {
     return get(state);
+  },
+
+  async getDatabaseSettings(): Promise<DatabaseSettings | null> {
+    if (!isTauriRuntime()) return null;
+    return backendInvoke<DatabaseSettings | null>("get_database_settings");
   },
 
   remembered: remembered.subscribe,

@@ -92,10 +92,10 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 
 pub use self::dto::{
     AttachmentInfo, AttachmentInput, AutoTypeAssociationDto, AutotypeCandidate, CustomField,
-    DuplicatePasswords, EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch,
-    EntryStorage, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig,
-    GroupAutoTypeInput, GroupInput, HistoryVersion, MutationDelta, SecurityReport, TotpCode,
-    VaultEntry, VaultGroup, VaultState, WeakEntry,
+    DatabaseSettings, DuplicatePasswords, EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput,
+    EntryPatch, EntryStorage, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport,
+    GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput, HistoryVersion, MutationDelta,
+    SecurityReport, TotpCode, VaultEntry, VaultGroup, VaultState, WeakEntry,
 };
 
 // ---------------------------------------------------------------------------

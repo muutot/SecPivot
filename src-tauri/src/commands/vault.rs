@@ -131,6 +131,17 @@ pub(crate) fn get_vault_state(
         .state()
 }
 
+/// Read the open database's storage settings (KDF/cipher/compression/etc).
+#[tauri::command]
+pub(crate) fn get_database_settings(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<Option<vault::DatabaseSettings>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .database_settings()
+}
+
 #[tauri::command]
 pub(crate) fn save_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,

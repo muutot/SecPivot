@@ -146,6 +146,15 @@ export interface AutotypeCandidate {
   username: string;
 }
 
+/** Read-only storage settings of the open database. */
+export interface DatabaseSettings {
+  kdf: "Aes" | "Argon2" | "Argon2id";
+  cipher: "Aes256" | "Twofish" | "ChaCha20";
+  compression: "None" | "Gzip";
+  historyMaxItems: number | null;
+  recycleBinEnabled: boolean;
+}
+
 /** Server-side security analysis; passwords never cross into the report. */
 export interface SecurityReport {
   total: number;

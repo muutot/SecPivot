@@ -476,6 +476,44 @@ fn autotype_match_candidates_returns_sorted_and_skips_recycle_bin() {
     assert!(!candidates.iter().any(|c| c.uuid == entry_uuid));
 }
 
+/// Database settings read the current KDF/cipher/compression/history/recycle
+/// flags, including the closed-session `None` case.
+#[test]
+fn database_settings_reports_current_config() {
+    assert!(VaultSession::default()
+        .database_settings()
+        .unwrap()
+        .is_none());
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.kdf, "Aes");
+    assert_eq!(settings.cipher, "Aes256");
+    assert_eq!(settings.compression, "None");
+    assert!(settings.recycle_bin_enabled);
+    assert_eq!(settings.history_max_items, None);
+
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_items = Some(3);
+        db.meta.recyclebin_enabled = Some(false);
+    }
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_items, Some(3));
+    assert!(!settings.recycle_bin_enabled);
+
+    let path = dir.path().join("argon.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "master-password", "Argon2", "ChaCha20", "Gzip", None)
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.kdf, "Argon2");
+    assert_eq!(settings.cipher, "ChaCha20");
+    assert_eq!(settings.compression, "Gzip");
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

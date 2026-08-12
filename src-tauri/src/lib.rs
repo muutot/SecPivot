@@ -276,6 +276,7 @@ pub fn run() {
             commands::create_vault,
             commands::close_vault,
             commands::get_vault_state,
+            commands::get_database_settings,
             commands::save_vault,
             commands::save_vault_as,
             commands::change_master_key,

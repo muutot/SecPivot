@@ -93,7 +93,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Auto-Type 编辑器 UI（条目）：条目编辑器新增「自动填充」页签（enable 开关、默认序列、窗口关联增删改），保存后调用 `update_entry_autotype` 持久化
 - [x] Auto-Type 编辑器 UI（分组）：分组右键「自动填充设置」对话框（继承/启用/禁用 + 默认序列），调用 `update_group_autotype` 持久化
 - [x] Auto-Type 全局热键多命中选择：多条目命中时 `autotype-pick-request` 事件 + 候选列表 + `autotype_pick` 命令 + 前端选择对话框，回收站条目排除
-- [ ] 当前数据库设置：允许查看/修改已打开数据库的 KDF、cipher、compression、KDF benchmark、history items/size、回收站策略和模板组；设置变更需重新保存并覆盖 round-trip/旧库兼容测试
+- [x] 当前数据库设置（读取）：`get_database_settings` 返回 KDF/cipher/compression/historyMaxItems/recycleBinEnabled，覆盖 Aes/Argon2/Argon2id 与 Aes256/Twofish/ChaCha20/None/Gzip 映射及关闭会话 `None`
+- [ ] 当前数据库设置（修改）：KDF/cipher/compression 变更重加密并 round-trip 测试；history items/size、回收站策略与模板组写入；设置对话框 UI
 - [ ] 高级搜索与搜索配置档：支持字段范围、自定义字段、正则、排除条件、过期/标签/质量条件及保存搜索；快速搜索保持轻量，不引入与设置 segmented pattern 冲突的新控件样式
 - [ ] 密码生成器配置档：支持命名 profiles、自定义字符集、pattern/规则、必含/排除字符与新条目默认 profile；CSPRNG、安全边界和浏览器 bridge 生成行为保持一致
 - [ ] 多数据库标签页：后端从单一 `VaultSession` 演进为多 session 管理，分别维护密钥、dirty/revision、远程目标、浏览器会话可见性和锁定生命周期

@@ -231,6 +231,22 @@ pub struct AutotypeCandidate {
     pub username: String,
 }
 
+/// Read-only view of the open database's storage settings.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseSettings {
+    /// `"Aes"` / `"Argon2"` / `"Argon2id"`.
+    pub kdf: String,
+    /// `"Aes256"` / `"Twofish"` / `"ChaCha20"`.
+    pub cipher: String,
+    /// `"None"` / `"Gzip"`.
+    pub compression: String,
+    /// KeePass `Meta.history_max_items`; `None` = unlimited/default.
+    pub history_max_items: Option<i64>,
+    /// KeePass recycle-bin flag; `None` in KDBX reads as enabled.
+    pub recycle_bin_enabled: bool,
+}
+
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
 /// index, JSON `null` explicitly resets to the default icon, and an absent
 /// field keeps the entry's current icon. Plain `Option<Option<u32>>` serde

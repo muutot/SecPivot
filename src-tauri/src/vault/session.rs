@@ -9,6 +9,7 @@ use super::persist::{
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
+use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::Database;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -170,6 +171,39 @@ impl VaultSession {
             return Ok(None);
         }
         Ok(Some(self.snapshot()?))
+    }
+
+    /// Read the open database's storage settings (KDF, cipher, compression,
+    /// history cap, recycle-bin flag). `None` when no vault is open.
+    pub fn database_settings(&self) -> Result<Option<DatabaseSettings>, String> {
+        if !self.is_open() {
+            return Ok(None);
+        }
+        let db = self.require_db()?;
+        let kdf = match &db.config.kdf_config {
+            KdfConfig::Aes { .. } => "Aes",
+            KdfConfig::Argon2 { .. } => "Argon2",
+            KdfConfig::Argon2id { .. } => "Argon2id",
+            _ => "Unknown",
+        };
+        let cipher = match &db.config.outer_cipher_config {
+            OuterCipherConfig::AES256 => "Aes256",
+            OuterCipherConfig::Twofish => "Twofish",
+            OuterCipherConfig::ChaCha20 => "ChaCha20",
+            _ => "Unknown",
+        };
+        let compression = match &db.config.compression_config {
+            CompressionConfig::None => "None",
+            CompressionConfig::GZip => "Gzip",
+            _ => "Unknown",
+        };
+        Ok(Some(DatabaseSettings {
+            kdf: kdf.to_owned(),
+            cipher: cipher.to_owned(),
+            compression: compression.to_owned(),
+            history_max_items: db.meta.history_max_items.map(|value| value as i64),
+            recycle_bin_enabled: db.meta.recyclebin_enabled.unwrap_or(true),
+        }))
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
