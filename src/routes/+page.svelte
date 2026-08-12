@@ -2068,7 +2068,8 @@
     entry={editEntry}
     entries={editEntries}
     onclose={() => (editorOpen = false)}
-    onsaved={(input, patch, autotype) => void handleEditorSave(input, patch, autotype)}
+    onsaved={(input, patch, autotype, flags) =>
+      void handleEditorSave(input, patch, autotype, flags)}
   />
 {/if}
 
