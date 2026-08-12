@@ -45,6 +45,36 @@ pub(crate) fn template_matches(candidate: &str, name: &str, ext: &str, template:
     }
 }
 
+/// Pick a backup file path that does not collide with an existing file. When
+/// two saves land in the same millisecond the naive stamp equals the previous
+/// backup name and the rename would silently overwrite it (dropping retention
+/// below the target count); append `_1`, `_2`, … until the name is free. The
+/// `_N` suffix sorts after the plain stamp, so lexicographic pruning keeps the
+/// correct chronological newest. Templates without `{timestamp}` cannot rotate
+/// and keep the legacy single-name behavior (no loop).
+fn unique_backup_path(dir: &Path, template: &str, stem: &str, ext: &str, stamp: &str) -> PathBuf {
+    let dest = dir.join(format!("{stem}.{ext}"));
+    let expand = |suffix: u32| {
+        let stamped = if suffix == 0 {
+            stamp.to_owned()
+        } else {
+            format!("{stamp}_{suffix}")
+        };
+        dir.join(expand_backup_template(template, stem, &stamped, ext))
+    };
+    if !template.contains("{timestamp}") {
+        return expand(0);
+    }
+    let mut suffix = 0u32;
+    loop {
+        let candidate = expand(suffix);
+        if candidate != dest && !candidate.exists() {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
 /// Write the local mirror of a remote vault under `dir`, rotating up to
 /// `backup_count` timestamped backups (named via `backup_template`) of the
 /// previous file first.
@@ -69,7 +99,7 @@ pub(crate) fn write_local_copy(
             .unwrap_or("kdbx")
             .to_owned();
         let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f").to_string();
-        let backup = dir.join(expand_backup_template(backup_template, &stem, &stamp, &ext));
+        let backup = unique_backup_path(dir, backup_template, &stem, &ext, &stamp);
         if backup != dest {
             std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
         }
@@ -230,5 +260,46 @@ mod tests {
             b"data"
         );
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn backup_path_disambiguates_same_stamp_collisions() {
+        let dir = tempfile::tempdir().unwrap();
+        let template = "{name}.{timestamp}.{ext}.bak";
+        let stamp = "20260101120000000";
+        let first = unique_backup_path(dir.path(), template, "seed", "kdbx", stamp);
+        assert_eq!(
+            first.file_name().unwrap().to_str().unwrap(),
+            "seed.20260101120000000.kdbx.bak"
+        );
+        std::fs::write(&first, b"one").unwrap();
+        let second = unique_backup_path(dir.path(), template, "seed", "kdbx", stamp);
+        assert_eq!(
+            second.file_name().unwrap().to_str().unwrap(),
+            "seed.20260101120000000_1.kdbx.bak"
+        );
+        assert!(
+            second > first,
+            "disambiguated name must sort after the plain same-stamp file"
+        );
+        std::fs::write(&second, b"two").unwrap();
+        let third = unique_backup_path(dir.path(), template, "seed", "kdbx", stamp);
+        assert_eq!(
+            third.file_name().unwrap().to_str().unwrap(),
+            "seed.20260101120000000_2.kdbx.bak"
+        );
+    }
+
+    #[test]
+    fn backup_path_without_timestamp_stays_on_template_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = unique_backup_path(
+            dir.path(),
+            "{name}.{ext}",
+            "seed",
+            "kdbx",
+            "20260101120000000",
+        );
+        assert_eq!(path, dir.path().join("seed.kdbx"));
     }
 }
