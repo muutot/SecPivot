@@ -33,6 +33,8 @@ export interface VaultEntry {
   customData?: CustomDataEntry[];
   customFields?: CustomField[];
   attachments?: AttachmentInfo[];
+  /** Entry-level Auto-Type configuration, if stored. */
+  autoType?: EntryAutoTypeConfig;
 }
 
 export interface CustomDataEntry {
@@ -56,6 +58,25 @@ export interface CustomField {
 export interface AttachmentInfo {
   name: string;
   size: number;
+}
+
+/** One Auto-Type window association (`*` wildcards allowed). */
+export interface AutoTypeAssociation {
+  window: string;
+  sequence: string;
+}
+
+/** Entry-level Auto-Type configuration. */
+export interface EntryAutoTypeConfig {
+  enabled: boolean;
+  defaultSequence?: string;
+  associations: AutoTypeAssociation[];
+}
+
+/** Group-level Auto-Type configuration; absent fields inherit. */
+export interface GroupAutoTypeConfig {
+  enabled?: boolean;
+  defaultSequence?: string;
 }
 
 /** Attachment payload sent when saving an entry. `data` (base64) is present
@@ -85,6 +106,8 @@ export interface VaultGroup {
   /** KDBX `CustomData` map items (plugin metadata from other KeePass clients),
    * sorted by key. Read-only — SecPivot never writes these. */
   customData?: CustomDataEntry[];
+  /** Group-level Auto-Type configuration, if stored. */
+  autoType?: GroupAutoTypeConfig;
   children: VaultGroup[];
   entries: VaultEntry[];
 }

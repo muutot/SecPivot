@@ -7,7 +7,9 @@ import type {
   VaultEntry,
   EntryInput,
   EntryPatch,
+  EntryAutoTypeConfig,
   GroupInput,
+  GroupAutoTypeConfig,
   CreateVaultRequest,
   TotpCode,
   HistoryVersion,
@@ -81,6 +83,8 @@ interface VaultStore {
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
   setGroupExpanded: (uuid: string, expanded: boolean) => Promise<VaultState>;
   setGroupsExpanded: (uuids: string[], expanded: boolean) => Promise<VaultState>;
+  updateEntryAutoType: (uuid: string, input: EntryAutoTypeConfig) => Promise<VaultState>;
+  updateGroupAutoType: (uuid: string, input: GroupAutoTypeConfig) => Promise<VaultState>;
   updateDbMeta: (name?: string, description?: string) => Promise<VaultState>;
   deleteGroup: (uuid: string) => Promise<VaultState>;
   restoreGroup: (uuid: string) => Promise<VaultState>;
@@ -755,6 +759,43 @@ export const vault: VaultStore = {
     }
     const result = applyEdit((draft) => {
       setGroupsExpandedInTree(draft.root, uuids, expanded);
+    });
+    state.set(applyBackendState(result));
+    return result;
+  },
+
+  async updateEntryAutoType(uuid: string, input: EntryAutoTypeConfig): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_entry_autotype", { uuid, input });
+      state.set(applyBackendState(result));
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const entry = findEntry(draft.root, uuid);
+      if (!entry) throw new Error("entry not found");
+      entry.autoType = {
+        enabled: input.enabled,
+        defaultSequence: input.defaultSequence,
+        associations: input.associations,
+      };
+    });
+    state.set(applyBackendState(result));
+    return result;
+  },
+
+  async updateGroupAutoType(uuid: string, input: GroupAutoTypeConfig): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_group_autotype", { uuid, input });
+      state.set(applyBackendState(result));
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, uuid);
+      if (!group) throw new Error("group not found");
+      group.autoType = {
+        enabled: input.enabled,
+        defaultSequence: input.defaultSequence,
+      };
     });
     state.set(applyBackendState(result));
     return result;

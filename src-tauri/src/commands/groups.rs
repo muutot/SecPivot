@@ -1,6 +1,6 @@
 //! Group CRUD IPC commands (extracted from commands.rs).
 
-use crate::vault::{GroupInput, MutationDelta, VaultSession, VaultState};
+use crate::vault::{GroupAutoTypeInput, GroupInput, MutationDelta, VaultSession, VaultState};
 use std::sync::Mutex;
 #[tauri::command]
 pub(crate) fn add_group(
@@ -59,6 +59,19 @@ pub(crate) fn set_groups_expanded(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .set_groups_expanded_delta(&uuids, expanded)
+}
+
+/// Update a group's Auto-Type settings.
+#[tauri::command]
+pub(crate) fn update_group_autotype(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    input: GroupAutoTypeInput,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_group_autotype(&uuid, &input)
 }
 
 #[tauri::command]

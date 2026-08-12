@@ -218,6 +218,224 @@ fn group_expand_delta_maps_uuids_and_bumps_revision() {
     assert_eq!(state_after_fail.dirty, state_after_ok.dirty);
 }
 
+/// Entry Auto-Type config (enabled/default sequence/window associations)
+/// round-trips through save + reopen.
+#[test]
+fn entry_autotype_round_trips_save_and_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+    session
+        .update_entry_autotype(
+            &uuid,
+            &EntryAutoTypeInput {
+                enabled: true,
+                default_sequence: Some("{USERNAME}{ENTER}{PASSWORD}{ENTER}".into()),
+                associations: vec![AutoTypeAssociationDto {
+                    window: "GitHub*".into(),
+                    sequence: "{TAB}{PASSWORD}{ENTER}".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let state = session.state().unwrap().unwrap();
+    let autotype = state
+        .root
+        .entries
+        .last()
+        .unwrap()
+        .autotype
+        .as_ref()
+        .unwrap();
+    assert!(autotype.enabled);
+    assert_eq!(
+        autotype.default_sequence.as_deref(),
+        Some("{USERNAME}{ENTER}{PASSWORD}{ENTER}")
+    );
+    assert_eq!(autotype.associations.len(), 1);
+    assert_eq!(autotype.associations[0].window, "GitHub*");
+
+    session.save().unwrap();
+    drop(session);
+    let mut session = VaultSession::default();
+    session.open(&path, "master-password", None).unwrap();
+    let state = session.state().unwrap().unwrap();
+    let autotype = state
+        .root
+        .entries
+        .last()
+        .unwrap()
+        .autotype
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        autotype.default_sequence.as_deref(),
+        Some("{USERNAME}{ENTER}{PASSWORD}{ENTER}")
+    );
+    assert_eq!(autotype.associations[0].sequence, "{TAB}{PASSWORD}{ENTER}");
+}
+
+/// Group Auto-Type settings persist and gate descendants via the existing
+/// inheritance resolution.
+#[test]
+fn group_autotype_round_trip_and_inheritance() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Mail".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+    session
+        .update_group_autotype(
+            &group_uuid,
+            &GroupAutoTypeInput {
+                enabled: Some(false),
+                default_sequence: Some("{USERNAME}{TAB}{PASSWORD}{ENTER}".into()),
+            },
+        )
+        .unwrap();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: group_uuid.clone(),
+            title: "Mail Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://mail.example.com".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let entry_uuid = state.root.children[0].entries.last().unwrap().uuid.clone();
+    assert_eq!(
+        session.resolve_autotype_sequence(&entry_uuid).unwrap(),
+        None,
+        "group-disabled AutoType must disable descendants"
+    );
+    session
+        .update_group_autotype(
+            &group_uuid,
+            &GroupAutoTypeInput {
+                enabled: Some(true),
+                default_sequence: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        session
+            .resolve_autotype_sequence(&entry_uuid)
+            .unwrap()
+            .as_deref(),
+        Some("{USERNAME}{TAB}{PASSWORD}{ENTER}")
+    );
+}
+
+/// Global-hotkey resolution picks the first matching window association
+/// before falling back to the entry/group default sequence.
+#[test]
+fn window_association_picks_sequence() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+    session
+        .update_entry_autotype(
+            &uuid,
+            &EntryAutoTypeInput {
+                enabled: true,
+                default_sequence: Some("{USERNAME}{ENTER}".into()),
+                associations: vec![
+                    AutoTypeAssociationDto {
+                        window: "GitHub*".into(),
+                        sequence: "{TAB}{PASSWORD}{ENTER}".into(),
+                    },
+                    AutoTypeAssociationDto {
+                        window: "*Mail*".into(),
+                        sequence: "{PASSWORD}{ENTER}".into(),
+                    },
+                ],
+            },
+        )
+        .unwrap();
+
+    assert!(VaultSession::window_title_matches(
+        "GitHub*",
+        "GitHub - Home"
+    ));
+    assert!(VaultSession::window_title_matches(
+        "*Mail*",
+        "Inbox - Mail Client"
+    ));
+    assert!(!VaultSession::window_title_matches(
+        "GitHub*",
+        "Mail Client"
+    ));
+
+    assert_eq!(
+        session
+            .resolve_autotype_sequence_for_window(&uuid, "GitHub - Home")
+            .unwrap()
+            .as_deref(),
+        Some("{TAB}{PASSWORD}{ENTER}")
+    );
+    assert_eq!(
+        session
+            .resolve_autotype_sequence_for_window(&uuid, "Mail Client")
+            .unwrap()
+            .as_deref(),
+        Some("{PASSWORD}{ENTER}")
+    );
+    assert_eq!(
+        session
+            .resolve_autotype_sequence_for_window(&uuid, "Other Window")
+            .unwrap()
+            .as_deref(),
+        Some("{USERNAME}{ENTER}")
+    );
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

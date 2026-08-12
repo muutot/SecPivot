@@ -5,6 +5,37 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
+/// One Auto-Type window association (KeePass `Association`): when the focused
+/// window matches `window` (with `*` wildcards), `sequence` is used.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoTypeAssociationDto {
+    pub window: String,
+    pub sequence: String,
+}
+
+/// Entry-level Auto-Type settings, mirrored from KDBX `Entry/AutoType`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryAutoTypeConfig {
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_sequence: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub associations: Vec<AutoTypeAssociationDto>,
+}
+
+/// Group-level Auto-Type settings (inherited by descendants).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupAutoTypeConfig {
+    /// `None` = inherit (KeePass group default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_sequence: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultEntry {
@@ -47,6 +78,9 @@ pub struct VaultEntry {
     pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
+    /// Entry-level Auto-Type config; absent when the entry has none stored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autotype: Option<EntryAutoTypeConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +163,10 @@ pub struct VaultGroup {
     /// writes these, they must survive edits and saves untouched.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub custom_data: Vec<CustomDataEntry>,
+    /// Group-level Auto-Type config; absent when the group stores none
+    /// (inherits from ancestors / global default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autotype: Option<GroupAutoTypeConfig>,
     pub children: Vec<VaultGroup>,
     pub entries: Vec<VaultEntry>,
 }
@@ -281,6 +319,31 @@ pub struct EntryPatch {
     pub tags: Option<String>,
 }
 
+/// Full replacement for an entry's Auto-Type config. `enabled` defaults to
+/// true (KeePass default); an empty `defaultSequence` clears it; `associations`
+/// replaces the stored window-association list.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryAutoTypeInput {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub default_sequence: Option<String>,
+    #[serde(default)]
+    pub associations: Vec<AutoTypeAssociationDto>,
+}
+
+/// Partial update for a group's Auto-Type config. Absent fields keep the
+/// current value; an empty `defaultSequence` clears the group default.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupAutoTypeInput {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub default_sequence: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupInput {
@@ -289,6 +352,10 @@ pub struct GroupInput {
     /// Built-in KeePass icon index; absent = default icon.
     #[serde(default)]
     pub icon: Option<u32>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// A computed one-time password for display. `kind` is `"totp"` / `"hotp"` /

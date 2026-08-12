@@ -11,8 +11,17 @@ use super::serialize::{
     trim_entry_history, write_fields, AttachmentPayload,
 };
 use super::*;
-use keepass::db::{EntryId, GroupId, Icon, Times, Value};
+use keepass::db::{
+    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, GroupId, Icon, Times, Value,
+};
 use std::collections::HashMap;
+
+fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
 
 impl VaultSession {
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
@@ -661,6 +670,64 @@ impl VaultSession {
                 db.meta.database_description =
                     (!description.is_empty()).then(|| description.clone());
                 db.meta.database_description_changed = Some(chrono::Utc::now().naive_utc());
+            }
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
+    /// Replace an entry's Auto-Type configuration (enabled flag, default
+    /// sequence, and window associations) in one write.
+    pub fn update_entry_autotype(
+        &mut self,
+        uuid: &str,
+        input: &EntryAutoTypeInput,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            entry.autotype = Some(AutoType {
+                enabled: input.enabled,
+                default_sequence: normalize_optional_sequence(input.default_sequence.as_deref()),
+                data_transfer_obfuscation: DataTransferObfuscation::None,
+                associations: input
+                    .associations
+                    .iter()
+                    .map(|a| AutoTypeAssociation {
+                        window: a.window.trim().to_owned(),
+                        sequence: a.sequence.clone(),
+                    })
+                    .collect(),
+            });
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
+    /// Update a group's Auto-Type settings (enabled flag and default
+    /// sequence). Absent fields keep the current value; an empty sequence
+    /// clears the group default.
+    pub fn update_group_autotype(
+        &mut self,
+        uuid: &str,
+        input: &GroupAutoTypeInput,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            if uuid == ROOT_GROUP_UUID {
+                let mut root = db.root_mut();
+                root.enable_autotype = input.enabled;
+                if let Some(sequence) = &input.default_sequence {
+                    root.default_autotype_sequence = normalize_optional_sequence(Some(sequence));
+                }
+            } else {
+                let id = parse_group_id(uuid)?;
+                let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+                group.enable_autotype = input.enabled;
+                if let Some(sequence) = &input.default_sequence {
+                    group.default_autotype_sequence = normalize_optional_sequence(Some(sequence));
+                }
             }
         }
         self.mark_dirty();

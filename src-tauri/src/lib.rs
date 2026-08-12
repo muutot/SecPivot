@@ -91,9 +91,10 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
                 return;
             }
         };
-        // Honor the entry's / ancestor group's stored AutoType sequence;
-        // `None` means auto-type is disabled for this entry.
-        let sequence = match session.resolve_autotype_sequence(&uuid) {
+        // Honor window associations first, then the entry's / ancestor
+        // group's stored default sequence; `None` means auto-type is
+        // disabled for this entry.
+        let sequence = match session.resolve_autotype_sequence_for_window(&uuid, &window_title) {
             Ok(seq) => match seq {
                 Some(seq) => seq,
                 None => {
@@ -282,6 +283,7 @@ pub fn run() {
             commands::save_attachment,
             commands::totp_code,
             commands::toggle_favorite,
+            commands::update_entry_autotype,
             commands::auto_type,
             commands::open_tcato_overlay,
             commands::tcato_state,
@@ -292,6 +294,7 @@ pub fn run() {
             commands::set_group_icon,
             commands::set_group_expanded,
             commands::set_groups_expanded,
+            commands::update_group_autotype,
             commands::update_db_meta,
             commands::get_entry_password,
             commands::get_entry_totp,

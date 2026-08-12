@@ -269,6 +269,78 @@ impl VaultSession {
         Ok(None)
     }
 
+    /// Resolve the sequence for a global-hotkey auto-type run given the
+    /// focused window title. KeePass order: the first matching window
+    /// association wins, otherwise the entry/group default resolution applies.
+    pub fn resolve_autotype_sequence_for_window(
+        &self,
+        uuid: &str,
+        window_title: &str,
+    ) -> Result<Option<String>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        if let Some(autotype) = &entry.autotype {
+            if !autotype.enabled {
+                return Ok(None);
+            }
+            for association in &autotype.associations {
+                if Self::window_title_matches(&association.window, window_title) {
+                    if !association.sequence.trim().is_empty() {
+                        return Ok(Some(association.sequence.clone()));
+                    }
+                    break;
+                }
+            }
+            if let Some(sequence) = autotype.default_sequence.as_deref() {
+                if !sequence.trim().is_empty() {
+                    return Ok(Some(sequence.to_owned()));
+                }
+            }
+        }
+        let mut group_id = entry.parent().id();
+        loop {
+            let group = db.group(group_id).ok_or_else(|| "分组不存在".to_owned())?;
+            if group.enable_autotype == Some(false) {
+                return Ok(None);
+            }
+            if let Some(sequence) = group.default_autotype_sequence.as_deref() {
+                if !sequence.trim().is_empty() {
+                    return Ok(Some(sequence.to_owned()));
+                }
+            }
+            match group.parent() {
+                Some(parent) => group_id = parent.id(),
+                None => break,
+            }
+        }
+        Ok(None)
+    }
+
+    /// KeePass-style window matching for Auto-Type associations: case
+    /// insensitive; a bare pattern matches any title containing it, and `*`
+    /// acts as a glob wildcard (anchored prefix/suffix around the literal
+    /// parts).
+    pub fn window_title_matches(pattern: &str, title: &str) -> bool {
+        let pattern = pattern.to_lowercase();
+        let title = title.to_lowercase();
+        if !pattern.contains('*') {
+            return title.contains(&pattern);
+        }
+        let parts: Vec<&str> = pattern.split('*').filter(|part| !part.is_empty()).collect();
+        let mut rest = title.as_str();
+        for (index, part) in parts.iter().enumerate() {
+            let Some(position) = rest.find(part) else {
+                return false;
+            };
+            if index == 0 && !pattern.starts_with('*') && position != 0 {
+                return false;
+            }
+            rest = &rest[position + part.len()..];
+        }
+        pattern.ends_with('*') || rest.is_empty()
+    }
+
     /// Best-matching entry for global auto-type given the title of the window
     /// in focus. Matches the URL host or the entry title against the window
     /// title (case-insensitive); entries inside the recycle bin are skipped.

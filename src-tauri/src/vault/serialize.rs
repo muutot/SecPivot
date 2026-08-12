@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use crate::vault::dto::{
-    AttachmentInfo, AttachmentInput, CustomDataEntry, CustomField, EntryInput, EntryPatch,
-    VaultEntry, VaultGroup,
+    AttachmentInfo, AttachmentInput, AutoTypeAssociationDto, CustomDataEntry, CustomField,
+    EntryAutoTypeConfig, EntryInput, EntryPatch, GroupAutoTypeConfig, VaultEntry, VaultGroup,
 };
 use crate::vault::{
     entry_has_otp, FIELD_FAVORITE, FIELD_FAVORITE_TRUE, FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD,
@@ -91,6 +91,7 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         tags: (!root_ref.tags.is_empty()).then(|| root_ref.tags.join(", ")),
         is_expanded: root_ref.is_expanded,
         custom_data: custom_data_entries(&root_ref.custom_data),
+        autotype: group_autotype_config(&root_ref),
         children: root_ref
             .groups()
             .filter_map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
@@ -141,8 +142,18 @@ fn build_group(
         tags: (!group.tags.is_empty()).then(|| group.tags.join(", ")),
         is_expanded: group.is_expanded,
         custom_data: custom_data_entries(&group.custom_data),
+        autotype: group_autotype_config(group),
         children,
         entries,
+    })
+}
+
+fn group_autotype_config(group: &GroupRef<'_>) -> Option<GroupAutoTypeConfig> {
+    let enabled = group.enable_autotype;
+    let default_sequence = group.default_autotype_sequence.clone();
+    (enabled.is_some() || default_sequence.is_some()).then_some(GroupAutoTypeConfig {
+        enabled,
+        default_sequence,
     })
 }
 
@@ -213,6 +224,18 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
                 size: attachment.data.get().len(),
             })
             .collect(),
+        autotype: entry.autotype.as_ref().map(|at| EntryAutoTypeConfig {
+            enabled: at.enabled,
+            default_sequence: at.default_sequence.clone(),
+            associations: at
+                .associations
+                .iter()
+                .map(|a| AutoTypeAssociationDto {
+                    window: a.window.clone(),
+                    sequence: a.sequence.clone(),
+                })
+                .collect(),
+        }),
     }
 }
 

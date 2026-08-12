@@ -5,7 +5,9 @@ use crate::config::ConfigStore;
 use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
-use crate::vault::{EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultSession, VaultState};
+use crate::vault::{
+    EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultSession, VaultState,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -357,6 +359,19 @@ pub(crate) fn toggle_favorite(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .toggle_favorite_delta(&uuid)
+}
+
+/// Replace an entry's Auto-Type configuration.
+#[tauri::command]
+pub(crate) fn update_entry_autotype(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    input: EntryAutoTypeInput,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_entry_autotype(&uuid, &input)
 }
 
 /// Resolve and replay a KeePass-style auto-type sequence for an entry.
