@@ -16,6 +16,7 @@ import type {
   KeyboardSettings,
   FaviconSettings,
   EntryColumnState,
+  PasswordGeneratorSettings,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
@@ -136,6 +137,7 @@ export const DEFAULT_DATABASE_SETTINGS: DatabaseDefaults = {
     excludeSimilar: false,
     excludeAmbiguous: false,
   },
+  generatorProfiles: [],
   fileExtension: "kdbx",
 };
 
@@ -401,6 +403,27 @@ function normalizeActiveRemote(
   );
 }
 
+function normalizeGeneratorProfiles(
+  profiles: PasswordGeneratorSettings[] | undefined,
+): PasswordGeneratorSettings[] {
+  const seen = new Set<string>();
+  return (profiles ?? []).map((profile, index) => {
+    const base = profile.name?.trim() || `配置 ${index + 1}`;
+    let name = base;
+    let suffix = 2;
+    while (seen.has(name)) {
+      name = `${base} ${suffix}`;
+      suffix += 1;
+    }
+    seen.add(name);
+    return {
+      ...profile,
+      name,
+      length: clampInt(profile.length, 8, 128, 20),
+    };
+  });
+}
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -525,6 +548,7 @@ export function normalizeSettings(
       ...(typeof d.generator === "object" ? d.generator : {}),
       length: clampInt(d.generator?.length ?? fallback.database.generator.length, 8, 128, 20),
     },
+    generatorProfiles: normalizeGeneratorProfiles(d.generatorProfiles),
     fileExtension: normalizeFileExtension(d.fileExtension ?? fallback.database.fileExtension),
   };
 

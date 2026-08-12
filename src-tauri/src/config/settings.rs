@@ -318,6 +318,8 @@ impl Default for SecuritySettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PasswordGeneratorSettings {
+    /// Profile name; absent on the built-in default.
+    pub name: Option<String>,
     pub length: i32,
     pub include_upper: bool,
     pub include_lower: bool,
@@ -338,6 +340,7 @@ pub struct PasswordGeneratorSettings {
 impl Default for PasswordGeneratorSettings {
     fn default() -> Self {
         Self {
+            name: None,
             length: 20,
             include_upper: true,
             include_lower: true,
@@ -360,6 +363,8 @@ pub struct DatabaseDefaults {
     pub cipher: String,
     pub compression: String,
     pub generator: PasswordGeneratorSettings,
+    /// Named generator profiles selectable for new entries.
+    pub generator_profiles: Vec<PasswordGeneratorSettings>,
     /// File extension used as the default in "另存为" and as the fallback
     /// extension when a backup target has none. Stored without the leading dot.
     pub file_extension: String,
@@ -372,6 +377,7 @@ impl Default for DatabaseDefaults {
             cipher: "Aes256".into(),
             compression: "Gzip".into(),
             generator: PasswordGeneratorSettings::default(),
+            generator_profiles: Vec::new(),
             file_extension: "kdbx".into(),
         }
     }
@@ -700,6 +706,9 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         _ => "Gzip".into(),
     };
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
+    for profile in &mut config.database.generator_profiles {
+        profile.length = clamp_i32(profile.length, 8, 128, 20);
+    }
     config.database.file_extension = normalize_file_extension(&config.database.file_extension);
 
     if config.remote_profiles.is_empty() {

@@ -133,6 +133,52 @@ fn generator_custom_rules_survive_deserialize_write_reload() {
 }
 
 #[test]
+fn generator_profiles_survive_deserialize_write_reload_and_clamp() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    let pin = PasswordGeneratorSettings {
+        name: Some("PIN".into()),
+        length: 200, // out of range → fallback default on normalize
+        custom_charset: Some("0123456789".into()),
+        ..Default::default()
+    };
+    config.database.generator_profiles.push(pin);
+    config
+        .database
+        .generator_profiles
+        .push(PasswordGeneratorSettings {
+            name: Some("Letters".into()),
+            length: 4, // below the 8..=128 range → fallback default on normalize
+            include_symbols: false,
+            custom_charset: Some("abcdef".into()),
+            ..Default::default()
+        });
+    store.set(config.clone()).unwrap();
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let again = reloaded.get().unwrap();
+    assert_eq!(again.database.generator_profiles.len(), 2);
+    assert_eq!(
+        again.database.generator_profiles[0].name.as_deref(),
+        Some("PIN")
+    );
+    assert_eq!(
+        again.database.generator_profiles[0]
+            .custom_charset
+            .as_deref(),
+        Some("0123456789")
+    );
+    assert_eq!(again.database.generator_profiles[0].length, 20);
+    assert_eq!(
+        again.database.generator_profiles[1].name.as_deref(),
+        Some("Letters")
+    );
+    assert!(!again.database.generator_profiles[1].include_symbols);
+    assert_eq!(again.database.generator_profiles[1].length, 20);
+}
+
+#[test]
 fn remote_profiles_serialize_one_transport_shape_each() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

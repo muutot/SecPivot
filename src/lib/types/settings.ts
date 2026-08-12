@@ -10,6 +10,8 @@ export type RemoteKind = "s3" | "webdav";
 export type RemoteProfilePath = `${RemoteKind}/${string}`;
 
 export interface PasswordGeneratorSettings {
+  /** Profile name; absent on the built-in default. */
+  name?: string;
   length: number;
   includeUpper: boolean;
   includeLower: boolean;
@@ -32,6 +34,8 @@ export interface DatabaseDefaults {
   cipher: Cipher;
   compression: Compression;
   generator: PasswordGeneratorSettings;
+  /** Named generator profiles selectable for new entries. */
+  generatorProfiles: PasswordGeneratorSettings[];
   /** Default file extension (no leading dot) for "另存为" and as the backup fallback. */
   fileExtension: string;
 }
