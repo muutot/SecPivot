@@ -179,6 +179,47 @@ fn generator_profiles_survive_deserialize_write_reload_and_clamp() {
 }
 
 #[test]
+fn saved_searches_survive_deserialize_write_reload_and_normalize_field() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.general.saved_searches.push(SavedSearch {
+        name: "过期条目".into(),
+        query: AdvancedSearchQuery {
+            text: "github".into(),
+            field: "bogus".into(),
+            only_expired: true,
+            ..Default::default()
+        },
+    });
+    config.general.saved_searches.push(SavedSearch {
+        name: "  过期条目  ".into(),
+        query: AdvancedSearchQuery {
+            text: "work".into(),
+            ..Default::default()
+        },
+    });
+    config.general.saved_searches.push(SavedSearch {
+        name: String::new(),
+        query: AdvancedSearchQuery {
+            text: "blank".into(),
+            ..Default::default()
+        },
+    });
+    store.set(config.clone()).unwrap();
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let again = reloaded.get().unwrap();
+    assert_eq!(again.general.saved_searches.len(), 3);
+    assert_eq!(again.general.saved_searches[0].name, "过期条目");
+    assert_eq!(again.general.saved_searches[0].query.field, "all");
+    assert_eq!(again.general.saved_searches[0].query.text, "github");
+    assert!(again.general.saved_searches[0].query.only_expired);
+    assert_eq!(again.general.saved_searches[1].name, "过期条目 2");
+    assert_eq!(again.general.saved_searches[2].name, "未命名搜索");
+}
+
+#[test]
 fn remote_profiles_serialize_one_transport_shape_each() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

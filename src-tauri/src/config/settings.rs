@@ -188,6 +188,43 @@ pub fn default_entry_columns() -> Vec<EntryColumnState> {
     ]
 }
 
+/// One named advanced-search query (mirrors `AdvancedSearchQuery` in
+/// `src/lib/utils/entry-search.ts`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AdvancedSearchQuery {
+    pub text: String,
+    pub field: String,
+    pub regex: bool,
+    pub exclude: bool,
+    pub only_expired: bool,
+    pub only_favorites: bool,
+    pub tags: String,
+    pub require_quality_check: bool,
+}
+
+impl Default for AdvancedSearchQuery {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            field: "all".into(),
+            regex: false,
+            exclude: false,
+            only_expired: false,
+            only_favorites: false,
+            tags: String::new(),
+            require_quality_check: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedSearch {
+    pub name: String,
+    pub query: AdvancedSearchQuery,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct GeneralSettings {
@@ -220,6 +257,8 @@ pub struct GeneralSettings {
     pub global_auto_type_shortcut: String,
     /// Entry-table column layout (visible + px width per column id).
     pub entry_columns: Vec<EntryColumnState>,
+    /// Named advanced-search queries.
+    pub saved_searches: Vec<SavedSearch>,
 }
 
 /// Resizable pane widths of the main view: group tree, detail panel, and the
@@ -266,6 +305,7 @@ impl Default for GeneralSettings {
             toolbar_overflow_menu: cfg!(any(target_os = "android", target_os = "ios")),
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
+            saved_searches: Vec::new(),
         }
     }
 }
@@ -636,6 +676,35 @@ fn normalize_colors(mut colors: ThemeColors) -> ThemeColors {
     colors
 }
 
+/// Keeps saved-search names non-empty and unique (mirrors
+/// `normalizeSavedSearches` in `src/lib/services/settings.ts`).
+fn normalize_saved_searches(searches: Vec<SavedSearch>) -> Vec<SavedSearch> {
+    let mut seen = HashSet::new();
+    searches
+        .into_iter()
+        .map(|mut saved| {
+            let base = saved.name.trim();
+            let base = if base.is_empty() {
+                "未命名搜索"
+            } else {
+                base
+            };
+            let mut name = base.to_owned();
+            let mut suffix = 2;
+            while !seen.insert(name.clone()) {
+                name = format!("{base} {suffix}");
+                suffix += 1;
+            }
+            saved.name = name;
+            match saved.query.field.as_str() {
+                "all" | "title" | "username" | "url" | "notes" | "tags" | "custom" => {}
+                _ => saved.query.field = "all".into(),
+            }
+            saved
+        })
+        .collect()
+}
+
 /// Apply the same range/default rules as the frontend normalizer.
 pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.language =
@@ -677,6 +746,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.density.group_radius = clamp_i32(config.general.density.group_radius, 0, 12, 6);
 
     config.general.entry_columns = normalize_entry_columns(config.general.entry_columns);
+    config.general.saved_searches = normalize_saved_searches(config.general.saved_searches);
 
     let recent = std::mem::take(&mut config.general.recent_files);
     let mut seen = std::collections::HashSet::new();

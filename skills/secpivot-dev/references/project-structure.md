@@ -61,7 +61,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/components/EntryTotpBadge.svelte`         | List-row OTP badge (TOTP/Steam countdown bar; HOTP static, no bar); copy on click                                                                                                                                           |
 | `src/lib/components/GroupAutoTypeDialog.svelte`    | Group Auto-Type settings dialog (inherit/enable/disable + default sequence) over `ModalShell`                                                                                                                               |
 | `src/lib/components/DatabaseSettingsDialog.svelte` | Database storage-settings dialog (KDF/cipher/compression/history cap/recycle flag) over `ModalShell`; reads via `get_database_settings`, writes via `update_database_settings`                                              |
-| `src/lib/components/AdvancedSearchDialog.svelte`   | Advanced search filters over `ModalShell` (field scope, regex/exclude, expired/favorite/tags/quality); applies to the current view                                                                                          |
+| `src/lib/components/AdvancedSearchDialog.svelte`   | Advanced search filters over `ModalShell` (field scope, regex/exclude, expired/favorite/tags/quality) plus named saved searches (load/delete/save current); applies to the current view                                          |
 
 ## Backend ownership
 

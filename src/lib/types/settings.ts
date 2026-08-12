@@ -1,4 +1,5 @@
 import type { ThemeColors } from "./theme";
+import type { AdvancedSearchQuery } from "$lib/utils/entry-search";
 
 export type ThemeMode = "dark" | "light" | "custom";
 export type WindowEffect = "off" | "acrylic" | "mica";
@@ -8,6 +9,11 @@ export type Cipher = "Aes256" | "ChaCha20";
 export type Compression = "None" | "Gzip";
 export type RemoteKind = "s3" | "webdav";
 export type RemoteProfilePath = `${RemoteKind}/${string}`;
+
+export interface SavedSearch {
+  name: string;
+  query: AdvancedSearchQuery;
+}
 
 export interface PasswordGeneratorSettings {
   /** Profile name; absent on the built-in default. */
@@ -151,6 +157,8 @@ export interface GeneralSettings {
   toolbarOverflowMenu: boolean;
   /** Entry-table column layout (visible + px width per column id). */
   entryColumns: EntryColumnState[];
+  /** Named advanced-search queries. */
+  savedSearches: SavedSearch[];
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

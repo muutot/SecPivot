@@ -17,6 +17,7 @@ import type {
   FaviconSettings,
   EntryColumnState,
   PasswordGeneratorSettings,
+  SavedSearch,
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
@@ -111,6 +112,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   iconOnlyButtons: false,
   toolbarOverflowMenu: isMobile(),
   entryColumns: DEFAULT_ENTRY_COLUMNS,
+  savedSearches: [],
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -424,6 +426,37 @@ function normalizeGeneratorProfiles(
   });
 }
 
+const SEARCH_FIELDS = new Set(["all", "title", "username", "url", "notes", "tags", "custom"]);
+
+function normalizeSavedSearches(searches: SavedSearch[] | undefined): SavedSearch[] {
+  const seen = new Set<string>();
+  return (searches ?? []).map((search) => {
+    const base = search.name.trim();
+    let name = base || "未命名搜索";
+    let suffix = 2;
+    while (seen.has(name)) {
+      name = `${base || "未命名搜索"} ${suffix}`;
+      suffix += 1;
+    }
+    seen.add(name);
+    const field = SEARCH_FIELDS.has(search.query?.field) ? search.query.field : "all";
+    return {
+      name,
+      query: {
+        ...search.query,
+        field,
+        text: search.query?.text ?? "",
+        regex: Boolean(search.query?.regex),
+        exclude: Boolean(search.query?.exclude),
+        onlyExpired: Boolean(search.query?.onlyExpired),
+        onlyFavorites: Boolean(search.query?.onlyFavorites),
+        tags: search.query?.tags ?? "",
+        requireQualityCheck: Boolean(search.query?.requireQualityCheck),
+      },
+    };
+  });
+}
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -442,6 +475,7 @@ export function normalizeSettings(
     customPresets: Array.isArray(g.customPresets)
       ? g.customPresets.map((p: unknown) => normalizeThemeColors(p, DARK_THEME_COLORS))
       : [],
+    savedSearches: normalizeSavedSearches(g.savedSearches),
     fontSizes: {
       ...fallback.general.fontSizes,
       ...(g.fontSizes ?? {}),
