@@ -5,9 +5,10 @@ use super::helpers::{
     apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
     wipe_secret_bytes, wipe_secret_string,
 };
+use super::merge::merge_databases;
 use super::persist::{
-    persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
-    prepare_remote_open, read_keyfile, SaveJob, SaveTarget,
+    persist_change, persist_save, persist_snapshot, prepare_local_create, prepare_local_open,
+    prepare_remote_create, prepare_remote_open, read_keyfile, SaveJob, SaveTarget,
 };
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
@@ -381,6 +382,82 @@ impl VaultSession {
             )
             .map_err(|e| format!("刷新本地副本失败: {e}"))?;
         }
+        self.snapshot()
+    }
+
+    /// Entry-level merge (官方同步·条目级合并): download the remote vault's
+    /// latest bytes, merge them into the session database by entry/group
+    /// UUID + last-modified (histories preserved, recycle bin excluded),
+    /// persist the merged database back and adopt it. Only valid for remote
+    /// sessions. A remote write racing the merge still surfaces
+    /// REMOTE_CHANGED instead of being silently overwritten.
+    pub fn merge_remote(&mut self) -> Result<VaultState, String> {
+        let (storage, key, password, keyfile, mode, local_dir, backup_count, backup_template) = {
+            let remote = self
+                .remote
+                .as_ref()
+                .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
+            (
+                remote.storage.clone(),
+                remote.key.clone(),
+                self.require_password()?.to_owned(),
+                self.keyfile.clone(),
+                remote.mode,
+                remote.local_dir.clone(),
+                remote.backup_count,
+                remote.backup_template.clone(),
+            )
+        };
+        // Key material is needed only to build the DatabaseKey; wipe the
+        // clones right after (same lifecycle as persist_save).
+        let db_key = build_database_key(&password, keyfile.as_deref())?;
+        let mut password = password;
+        wipe_secret_string(&mut password);
+        if let Some(mut keyfile) = keyfile {
+            wipe_secret_bytes(&mut keyfile);
+        }
+
+        let data = storage
+            .get(&key)
+            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
+        let remote_db = Database::parse(&data, db_key.clone()).map_err(classify_open_error)?;
+
+        // Merge into a clone so a failed merge leaves the session untouched.
+        let local_db = self.db.clone().ok_or_else(|| "数据库未打开".to_owned())?;
+        let merged = merge_databases(&local_db, &remote_db)?;
+
+        // Persist with the downloaded bytes as the conflict base: a remote
+        // write racing the merge fails with REMOTE_CHANGED (not counted as a
+        // save failure); genuine persist failures count toward read-only
+        // degradation exactly like save().
+        let target = SaveTarget::Remote {
+            storage,
+            key,
+            mode,
+            local_dir,
+            backup_count,
+            backup_template,
+            base_hash: crate::crypto::sha256_bytes(&data),
+        };
+        let new_hash = match persist_snapshot(&merged, &db_key, &target, false) {
+            Ok(hash) => hash,
+            Err(e) => {
+                if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(e);
+            }
+        };
+
+        self.db = Some(merged);
+        self.dirty = false;
+        self.revision += 1;
+        self.modified_at = now_iso();
+        self.cached_snapshot = None;
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = new_hash;
+        }
+        self.note_save_success();
         self.snapshot()
     }
 

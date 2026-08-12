@@ -8,6 +8,7 @@ mod entries;
 pub(crate) mod helpers;
 mod hosts;
 mod import;
+mod merge;
 mod persist;
 mod security;
 mod serialize;

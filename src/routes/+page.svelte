@@ -737,7 +737,7 @@
     }
   }
 
-  async function resolveRemoteConflict(action: "overwrite" | "download"): Promise<void> {
+  async function resolveRemoteConflict(action: "merge" | "overwrite" | "download"): Promise<void> {
     const message = remoteConflict;
     remoteConflict = null;
     if (!currentVault) return;
@@ -750,7 +750,11 @@
     }
     busy = true;
     try {
-      if (action === "overwrite") {
+      if (action === "merge") {
+        const merged = await vault.mergeRemote();
+        selectedEntry = findEntryByUuid(merged, selectedEntry?.uuid ?? null);
+        flash("已合并本地与远程版本");
+      } else if (action === "overwrite") {
         const saved = await vault.save(true);
         selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
         flash("已覆盖远程版本");
@@ -2295,6 +2299,9 @@
     {/snippet}
     {#snippet actions()}
       <button class="modal-button" onclick={() => (remoteConflict = null)}>取消（保留本地）</button>
+      <button class="modal-button" onclick={() => void resolveRemoteConflict("merge")}>
+        合并本地与远程
+      </button>
       <button class="modal-button" onclick={() => void resolveRemoteConflict("download")}>
         下载远程
       </button>

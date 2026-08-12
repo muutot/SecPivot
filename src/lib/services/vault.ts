@@ -75,6 +75,9 @@ interface VaultStore {
   save: (force?: boolean) => Promise<VaultState>;
   /** Download the remote vault's latest bytes and replace the session. */
   refreshRemote: () => Promise<VaultState>;
+  /** Merge the remote vault's latest bytes into the session by entry/group
+   *  UUID + last-modified (histories preserved, recycle bin excluded). */
+  mergeRemote: () => Promise<VaultState>;
   saveAs: (path: string) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
@@ -568,6 +571,16 @@ export const vault: VaultStore = {
   async refreshRemote(): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
     const result = await backendInvoke<VaultState>("refresh_remote_vault");
+    state.set(applyBackendState(result));
+    await refreshTabs();
+    return result;
+  },
+
+  /** Merge the remote vault's latest bytes into the session by entry/group
+   *  UUID + last-modified, persisting the merged result back. Remote only. */
+  async mergeRemote(): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程合并");
+    const result = await backendInvoke<VaultState>("merge_remote_vault");
     state.set(applyBackendState(result));
     await refreshTabs();
     return result;

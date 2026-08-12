@@ -96,6 +96,9 @@ impl VaultSession {
                 entry
                     .move_to(target_group)
                     .map_err(|e| format!("移动条目失败: {e}"))?;
+                // KeePass stamps LocationChanged on moves; the remote merge
+                // compares it to resolve move/delete conflicts.
+                entry.times.location_changed = Some(Times::now());
             }
             {
                 // Snapshots the pre-change state into the entry's history on drop.
@@ -203,6 +206,7 @@ impl VaultSession {
                 entry
                     .move_to(target)
                     .map_err(|e| format!("移动条目失败: {e}"))?;
+                entry.times.location_changed = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -233,6 +237,9 @@ impl VaultSession {
                     entry
                         .move_to(bin_id)
                         .map_err(|e| format!("移入回收站失败: {e}"))?;
+                    // The move-to-bin timestamp lets the remote merge tell
+                    // "deleted locally" apart from "edited remotely".
+                    entry.times.location_changed = Some(Times::now());
                 }
             }
         }
@@ -263,6 +270,7 @@ impl VaultSession {
                 entry
                     .move_to(bin_id)
                     .map_err(|e| format!("移入回收站失败: {e}"))?;
+                entry.times.location_changed = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -518,6 +526,7 @@ impl VaultSession {
             entry
                 .move_to(target)
                 .map_err(|e| format!("恢复条目失败: {e}"))?;
+            entry.times.location_changed = Some(Times::now());
             entry.fields.remove(FIELD_ORIGINAL_GROUP);
         }
         self.mark_dirty();
@@ -545,6 +554,7 @@ impl VaultSession {
                 group
                     .move_to(bin_id)
                     .map_err(|e| format!("移入回收站失败: {e}"))?;
+                group.times.location_changed = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -568,6 +578,7 @@ impl VaultSession {
             group
                 .move_to(root_id)
                 .map_err(|e| format!("恢复分组失败: {e}"))?;
+            group.times.location_changed = Some(Times::now());
         }
         self.mark_dirty();
         self.snapshot_without_icons()

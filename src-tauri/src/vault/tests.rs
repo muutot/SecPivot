@@ -7437,3 +7437,405 @@ fn rpc_update_login_rejects_unknown_uuid_recycle_bin_and_locked() {
         Err(RpcError::Locked)
     );
 }
+
+// -----------------------------------------------------------------------
+// 官方同步·条目级合并: merge_databases (pure) + VaultSession::merge_remote
+// -----------------------------------------------------------------------
+
+use super::merge::merge_databases;
+use chrono::NaiveDateTime;
+use keepass::db::EntryId;
+
+fn merge_ts(minutes: i64) -> NaiveDateTime {
+    NaiveDateTime::parse_from_str("2026-08-01T00:00:00", "%Y-%m-%dT%H:%M:%S").unwrap()
+        + chrono::Duration::minutes(minutes)
+}
+
+/// Pin every timestamp of an entry to the synthetic timeline so the real
+/// "now" that `Times::new()` stamps (creation, last access, location change)
+/// cannot leak into merge comparisons.
+fn pin_times(db: &mut Database, id: EntryId, modified_at: NaiveDateTime) {
+    let mut entry = db.entry_mut(id).unwrap();
+    entry.times.creation = Some(merge_ts(0));
+    entry.times.last_access = Some(merge_ts(0));
+    entry.times.last_modification = Some(modified_at);
+    entry.times.location_changed = None;
+}
+
+/// Shared base database: one entry "v1" under the root, modified at t10.
+/// Both merge sides are clones of this base (same vault lineage).
+fn merge_base_db() -> (Database, EntryId) {
+    let mut db = Database::new();
+    let entry_id = {
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.set_unprotected("Title", "v1");
+        entry.set_unprotected("UserName", "alice");
+        entry.id()
+    };
+    pin_times(&mut db, entry_id, merge_ts(10));
+    (db, entry_id)
+}
+
+fn add_titled_entry(db: &mut Database, title: &str, at: NaiveDateTime) -> EntryId {
+    let id = {
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.set_unprotected("Title", title);
+        entry.id()
+    };
+    pin_times(db, id, at);
+    id
+}
+
+/// Edit an entry's title through the history-tracking wrapper, then pin the
+/// modification time (the tracking wrapper stamps `now`, which tests cannot
+/// order against).
+fn edit_title(db: &mut Database, id: EntryId, title: &str, at: NaiveDateTime) {
+    {
+        let mut entry = db.entry_mut(id).unwrap();
+        entry.edit_tracking(|tracked| {
+            tracked.as_mut().set_unprotected("Title", title);
+        });
+    }
+    db.entry_mut(id).unwrap().times.last_modification = Some(at);
+}
+
+/// Move an entry to the recycle bin exactly like `delete_entries` does
+/// (move + LocationChanged stamp).
+fn bin_entry(db: &mut Database, id: EntryId, bin_id: keepass::db::GroupId, at: NaiveDateTime) {
+    let mut entry = db.entry_mut(id).unwrap();
+    entry.move_to(bin_id).unwrap();
+    entry.times.location_changed = Some(at);
+}
+
+fn add_bin(db: &mut Database) -> keepass::db::GroupId {
+    let bin_id = {
+        let mut root = db.root_mut();
+        let mut bin = root.add_group();
+        bin.name = "回收站".to_owned();
+        bin.id()
+    };
+    db.meta.recyclebin_uuid = Some(bin_id.uuid());
+    bin_id
+}
+
+fn history_titles(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
+    let mut titles = Vec::new();
+    let mut index = 0;
+    while let Some(historical) = entry.historical(index) {
+        titles.push(historical.get_title().unwrap_or("").to_owned());
+        index += 1;
+    }
+    titles
+}
+
+/// 同改 (remote newer): the newer remote edit wins and the losing local
+/// edit is preserved in the entry history.
+#[test]
+fn merge_databases_remote_newer_edit_wins_and_preserves_local_history() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    edit_title(&mut local, entry_id, "v1-local", merge_ts(20));
+    edit_title(&mut remote, entry_id, "v1-remote", merge_ts(30));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged.entry(entry_id).unwrap();
+    assert_eq!(entry.get_title(), Some("v1-remote"));
+    let titles = history_titles(&entry);
+    assert!(
+        titles.contains(&"v1".to_owned()),
+        "shared base must stay in history: {titles:?}"
+    );
+    assert!(
+        titles.contains(&"v1-local".to_owned()),
+        "losing local edit must land in history: {titles:?}"
+    );
+}
+
+/// 同改 (local newer): the local edit wins and the remote edit is preserved
+/// in the entry history.
+#[test]
+fn merge_databases_local_newer_edit_wins_and_preserves_remote_history() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    edit_title(&mut local, entry_id, "v1-local", merge_ts(40));
+    edit_title(&mut remote, entry_id, "v1-remote", merge_ts(30));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged.entry(entry_id).unwrap();
+    assert_eq!(entry.get_title(), Some("v1-local"));
+    let titles = history_titles(&entry);
+    assert!(
+        titles.contains(&"v1-remote".to_owned()),
+        "losing remote edit must land in history: {titles:?}"
+    );
+}
+
+/// 单改: a remote-only edit applies, and entries created on only one side
+/// are kept (local-only) or added (remote-only).
+#[test]
+fn merge_databases_applies_single_side_changes() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    edit_title(&mut remote, entry_id, "v1-remote-only", merge_ts(30));
+    let local_only = add_titled_entry(&mut local, "LocalOnly", merge_ts(20));
+    let remote_only = add_titled_entry(&mut remote, "RemoteOnly", merge_ts(25));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    assert_eq!(
+        merged.entry(entry_id).unwrap().get_title(),
+        Some("v1-remote-only")
+    );
+    assert_eq!(
+        merged.entry(local_only).unwrap().get_title(),
+        Some("LocalOnly")
+    );
+    assert_eq!(
+        merged.entry(remote_only).unwrap().get_title(),
+        Some("RemoteOnly")
+    );
+}
+
+/// 删除: an entry deleted locally (moved to the bin) stays deleted when the
+/// remote side never touched it after the shared base; the deletion is
+/// recorded in `deleted_objects` so it propagates.
+#[test]
+fn merge_databases_local_deletion_wins_over_older_remote_state() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let remote = base.clone();
+    let bin_id = add_bin(&mut local);
+    bin_entry(&mut local, entry_id, bin_id, merge_ts(40));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged
+        .entry(entry_id)
+        .expect("deleted entry must survive in the bin");
+    assert_eq!(entry.parent().id(), bin_id, "deletion must win the merge");
+    assert!(
+        merged.deleted_objects.contains_key(&entry_id.uuid()),
+        "the winning deletion must be recorded so it propagates"
+    );
+}
+
+/// 删除 (reverse): a remote edit newer than the local deletion resurrects
+/// the entry with the remote content; the stale bin copy is dropped.
+#[test]
+fn merge_databases_remote_edit_wins_over_older_local_deletion() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    let bin_id = add_bin(&mut local);
+    bin_entry(&mut local, entry_id, bin_id, merge_ts(40));
+    edit_title(&mut remote, entry_id, "v1-remote-late", merge_ts(50));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged.entry(entry_id).unwrap();
+    assert_eq!(entry.get_title(), Some("v1-remote-late"));
+    assert_ne!(
+        entry.parent().id(),
+        bin_id,
+        "a newer remote edit resurrects the entry out of the bin"
+    );
+}
+
+/// 回收站排除: remote bin contents never merge in; the local bin is kept
+/// as-is, and no stray remote bin group leaks into the active tree.
+#[test]
+fn merge_databases_excludes_recycle_bin_contents() {
+    let (base, _) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    // Each side created its own bin after the clone (different bin UUIDs).
+    let local_bin = add_bin(&mut local);
+    let remote_bin = add_bin(&mut remote);
+
+    let local_binned = add_titled_entry(&mut local, "LocalBinned", merge_ts(20));
+    bin_entry(&mut local, local_binned, local_bin, merge_ts(30));
+    let remote_binned = add_titled_entry(&mut remote, "RemoteBinned", merge_ts(20));
+    bin_entry(&mut remote, remote_binned, remote_bin, merge_ts(30));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    assert!(
+        merged.entry(remote_binned).is_none(),
+        "remote bin contents must never merge in"
+    );
+    let entry = merged
+        .entry(local_binned)
+        .expect("local bin entry must survive the merge");
+    assert_eq!(entry.parent().id(), local_bin);
+    let root = merged.root();
+    let bin_groups: Vec<_> = root.groups().filter(|g| g.name == "回收站").collect();
+    assert_eq!(
+        bin_groups.len(),
+        1,
+        "the remote bin shell must not leak into the active tree"
+    );
+}
+
+/// 历史保留: histories from both sides union without duplicates, sorted
+/// semantics preserved (the losing side's current state is pushed last).
+#[test]
+fn merge_databases_unions_history_from_both_sides() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    edit_title(&mut local, entry_id, "v2", merge_ts(15));
+    edit_title(&mut local, entry_id, "v2b", merge_ts(20));
+    edit_title(&mut remote, entry_id, "v3", merge_ts(30));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged.entry(entry_id).unwrap();
+    assert_eq!(entry.get_title(), Some("v3"));
+    let titles = history_titles(&entry);
+    assert_eq!(
+        titles.len(),
+        3,
+        "history must dedupe the shared base: {titles:?}"
+    );
+    for expected in ["v1", "v2", "v2b"] {
+        assert!(
+            titles.contains(&expected.to_owned()),
+            "history must contain {expected}: {titles:?}"
+        );
+    }
+}
+
+/// A genuine conflict: same UUID edited on both sides at the same timestamp
+/// with different content cannot be auto-merged.
+#[test]
+fn merge_databases_same_timestamp_divergence_is_an_error() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    edit_title(&mut local, entry_id, "v1-local", merge_ts(20));
+    edit_title(&mut remote, entry_id, "v1-remote", merge_ts(20));
+
+    let err = merge_databases(&local, &remote).unwrap_err();
+    assert!(err.contains("同一时间戳"), "unexpected: {err}");
+}
+
+/// Moving an entry (drag / bin / restore) stamps LocationChanged, which the
+/// merge relies on to resolve deletion-vs-edit conflicts.
+#[test]
+fn move_and_delete_stamp_location_changed() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    session.add_entry(&merge_test_input("ToMove")).unwrap();
+    let uuid = session.state().unwrap().unwrap().root.entries[0]
+        .uuid
+        .clone();
+
+    session.delete_entry(&uuid).unwrap();
+    {
+        let db = session.require_db().unwrap();
+        let id = parse_entry_id(&uuid).unwrap();
+        let entry = db.entry(id).unwrap();
+        assert!(
+            entry.times.location_changed.is_some(),
+            "move-to-bin must stamp LocationChanged"
+        );
+    }
+
+    session.restore_entry(&uuid).unwrap();
+    {
+        let db = session.require_db().unwrap();
+        let id = parse_entry_id(&uuid).unwrap();
+        let entry = db.entry(id).unwrap();
+        assert!(
+            entry.times.location_changed.is_some(),
+            "restore must keep the LocationChanged stamp"
+        );
+    }
+}
+
+fn merge_test_input(title: &str) -> EntryInput {
+    EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: "pw".into(),
+        url: String::new(),
+        notes: String::new(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    }
+}
+
+/// Session-level: merge combines the local unsaved edit with another
+/// device's uploaded edit, persists the merged database back, and advances
+/// the base hash so the next save succeeds without a conflict.
+#[test]
+fn merge_remote_vault_merges_both_sides_and_advances_base_hash() {
+    let dir = TempDir::new().unwrap();
+    let (storage, seed_path) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+
+    // Another device: open the same seed, add an entry, save, upload.
+    let mut other = VaultSession::default();
+    other.open(&seed_path, "pw", None).unwrap();
+    other.add_entry(&merge_test_input("RemoteAdded")).unwrap();
+    other.save().unwrap();
+    storage
+        .put("vaults/seed.kdbx", &std::fs::read(&seed_path).unwrap())
+        .unwrap();
+
+    // Local unsaved edit.
+    session.add_entry(&merge_test_input("LocalAdded")).unwrap();
+
+    let merged = session.merge_remote().unwrap();
+    assert!(!merged.dirty);
+    let titles: Vec<&str> = merged
+        .root
+        .entries
+        .iter()
+        .map(|e| e.title.as_str())
+        .collect();
+    assert!(
+        titles.contains(&"LocalAdded"),
+        "local edit must survive: {titles:?}"
+    );
+    assert!(
+        titles.contains(&"RemoteAdded"),
+        "remote edit must merge in: {titles:?}"
+    );
+
+    // The merged bytes were uploaded: another device opening the remote file
+    // sees both entries.
+    let key = crate::vault::helpers::build_database_key("pw", None).unwrap();
+    let uploaded = Database::parse(&storage.get("vaults/seed.kdbx").unwrap(), key).unwrap();
+    let uploaded_titles: Vec<String> = uploaded
+        .root()
+        .entries()
+        .filter_map(|e| e.get_title().map(|t| t.to_owned()))
+        .collect();
+    assert!(uploaded_titles.contains(&"LocalAdded".to_owned()));
+    assert!(uploaded_titles.contains(&"RemoteAdded".to_owned()));
+
+    // Base hash advanced: a later save no longer reports REMOTE_CHANGED.
+    session.add_entry(&merge_test_input("PostMerge")).unwrap();
+    session.save().unwrap();
+}

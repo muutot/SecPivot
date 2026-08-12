@@ -203,7 +203,7 @@ pub(crate) fn persist_snapshot(
                     .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
                 if crate::crypto::sha256_bytes(&current) != *base_hash {
                     return Err(format!(
-                        "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择覆盖远程、下载远程或保留本地",
+                        "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择合并、覆盖远程、下载远程或保留本地",
                         current.len(),
                         buffer.len(),
                     ));

@@ -90,7 +90,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] 官方同步·远程变更检测：打开/创建远程库记录内容 SHA-256（base hash），保存/改密/存储重加密前 `get` 比对，远程已变更返回 `REMOTE_CHANGED` 冲突错误（附远程/本地大小），成功后推进 base hash；冲突不计入只读降级
 - [x] 官方同步·冲突解析 UI：保存冲突弹窗「覆盖远程（force）/ 下载远程（refresh，确认丢弃本地未保存修改）/ 取消（保留本地）」，`save_vault(force)` 与 `refresh_remote_vault` 后端命令 + `vault.save(force)`/`vault.refreshRemote()` 前端方法
-- [ ] 官方同步·条目级合并：按条目 UUID + 字段 last-modified 合并本地与远程（历史保留、回收站排除），冲突测试覆盖同改/单改/删除
+- [x] 官方同步·条目级合并：按条目 UUID + 字段 last-modified 合并本地与远程（历史保留、回收站排除），冲突测试覆盖同改/单改/删除；`merge_databases` 纯函数 + `VaultSession::merge_remote` + `merge_remote_vault` 命令，冲突弹窗新增「合并本地与远程」入口
 - [x] Auto-Type 后端读写与窗口关联：`VaultEntry.autoType`/`VaultGroup.autoType` 暴露、`update_entry_autotype`/`update_group_autotype` 命令、`resolve_autotype_sequence_for_window`（关联优先 + `*` 通配），全局热键改用窗口关联解析；round-trip/继承/关联选择测试通过
 - [x] Auto-Type 编辑器 UI（条目）：条目编辑器新增「自动填充」页签（enable 开关、默认序列、窗口关联增删改），保存后调用 `update_entry_autotype` 持久化
 - [x] Auto-Type 编辑器 UI（分组）：分组右键「自动填充设置」对话框（继承/启用/禁用 + 默认序列），调用 `update_group_autotype` 持久化

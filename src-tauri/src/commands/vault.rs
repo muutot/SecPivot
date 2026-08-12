@@ -246,6 +246,19 @@ pub(crate) fn refresh_remote_vault(
         .refresh_remote()
 }
 
+/// Merge the remote vault's latest bytes into the session by entry/group
+/// UUID + last-modified (histories preserved, recycle bin excluded), persist
+/// the merged database back and adopt it. Only for remote sessions.
+#[tauri::command]
+pub(crate) fn merge_remote_vault(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .merge_remote()
+}
+
 #[tauri::command]
 pub(crate) fn save_vault_as(
     session: tauri::State<'_, Mutex<VaultSession>>,
