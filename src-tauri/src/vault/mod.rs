@@ -96,11 +96,11 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 pub use self::dto::{
     AttachmentInfo, AttachmentInput, AttachmentPreview, AutoTypeAssociationDto, AutotypeCandidate,
     CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
-    EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
-    FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
-    HistoryCleanResult, HistoryVersion, MutationDelta, SecurityReport, SessionInfo, SimilarEntry,
-    SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult,
-    VaultState, WeakEntry,
+    EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, ExpiredEntry, FaviconFetch,
+    FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput,
+    GroupInput, HistoryCleanResult, HistoryVersion, MutationDelta, SecurityReport, SessionInfo,
+    SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup,
+    VaultOpenResult, VaultState, WeakEntry,
 };
 
 pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};

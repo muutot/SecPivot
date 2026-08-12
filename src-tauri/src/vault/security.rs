@@ -6,7 +6,9 @@ use super::helpers::{
     otp_kind_name, parse_entry_id, parse_entry_otp_spec, recycle_bin_id, walk_match,
     walk_match_candidates, walk_ref_match,
 };
-use super::serialize::{collect_favicon_hosts, escape_csv, estimate_entropy, extract_host};
+use super::serialize::{
+    collect_favicon_hosts, escape_csv, estimate_entropy, extract_host, format_iso,
+};
 use super::*;
 use crate::crypto::otp;
 use crate::platform::autotype::{self, AutotypeContext};
@@ -641,6 +643,45 @@ impl VaultSession {
             .collect();
         groups.sort_by_key(|g| std::cmp::Reverse(g.entries.len()));
         Ok(groups)
+    }
+
+    /// List entries whose expiry is in the past (recycle bin excluded), for
+    /// the maintenance view. No secrets are included.
+    pub fn expired_entries(&self) -> Result<Vec<ExpiredEntry>, String> {
+        let db = self.require_db()?;
+        let bin_id = recycle_bin_id(db);
+        let now = chrono::Utc::now().naive_utc();
+        let mut out = Vec::new();
+
+        fn walk(
+            group: &keepass::db::GroupRef<'_>,
+            bin_id: Option<GroupId>,
+            now: chrono::NaiveDateTime,
+            out: &mut Vec<ExpiredEntry>,
+        ) {
+            if Some(group.id()) == bin_id {
+                return;
+            }
+            for entry in group.entries() {
+                let expired = entry.times.expires == Some(true)
+                    && entry.times.expiry.is_some_and(|expiry| expiry < now);
+                if expired {
+                    out.push(ExpiredEntry {
+                        uuid: entry.id().uuid().to_string(),
+                        title: entry.get_title().unwrap_or_default().to_owned(),
+                        username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                        url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
+                        expires: entry.times.expiry.map(format_iso).unwrap_or_default(),
+                    });
+                }
+            }
+            for child in group.groups() {
+                walk(&child, bin_id, now, out);
+            }
+        }
+        walk(&db.root(), bin_id, now, &mut out);
+        out.sort_by(|a, b| a.expires.cmp(&b.expires));
+        Ok(out)
     }
 
     /// Export all entries as CSV (passwords included) straight to a file.

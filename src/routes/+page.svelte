@@ -49,6 +49,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
+  import ExpiredEntriesDialog from "$lib/components/ExpiredEntriesDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import DatabaseSettingsDialog from "$lib/components/DatabaseSettingsDialog.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
@@ -103,6 +104,7 @@
   let busy = $state(false);
   let reportOpen = $state(false);
   let similarOpen = $state(false);
+  let expiredOpen = $state(false);
   let emergencyExportOpen = $state(false);
   let emergencyIncludePasswords = $state(false);
   let dbMetaOpen = $state(false);
@@ -1581,6 +1583,7 @@
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
+    { id: "expired-entries", label: "过期条目", icon: "clock" },
     { id: "clear-history", label: "清理全部历史", icon: "trash" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
@@ -1658,6 +1661,7 @@
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();
     else if (id === "similar-passwords") similarOpen = true;
+    else if (id === "expired-entries") expiredOpen = true;
     else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
@@ -2015,6 +2019,19 @@
       if (target) {
         setSingleSelection(target);
         similarOpen = false;
+      }
+    }}
+  />
+{/if}
+
+{#if expiredOpen}
+  <ExpiredEntriesDialog
+    onclose={() => (expiredOpen = false)}
+    onselect={(uuid: string) => {
+      const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
+      if (target) {
+        setSingleSelection(target);
+        expiredOpen = false;
       }
     }}
   />

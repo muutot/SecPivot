@@ -330,6 +330,7 @@ pub fn run() {
             commands::security_report,
             commands::similar_passwords,
             commands::clear_all_history,
+            commands::expired_entries,
             commands::export_csv,
             commands::export_emergency_sheet,
             commands::download_favicons,

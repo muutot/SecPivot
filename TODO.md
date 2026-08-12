@@ -125,7 +125,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认
 - [x] 数据库维护·相似密码检查：`similar_passwords` 服务端分析（编辑距离 ≤ 2 聚类、回收站排除、2000 条上限、密码不外传），`SimilarPasswordsDialog` 报告并可定位条目
 - [x] 数据库维护·历史清理：`clear_all_history` 全库清理（返回清理数量 + 刷新状态，当前条目保留，保存/重开验证），菜单入口带确认
-- [ ] 数据库维护·过期维护：过期条目集中视图与批量处理（延期/删除）
+- [x] 数据库维护·过期维护：`expired_entries` 集中清单（回收站排除、按过期时间排序、无敏感字段），`ExpiredEntriesDialog` 支持单条/全部「延期 30 天」与「删除」（复用 updateEntries/deleteEntries）
 - [ ] 数据库维护·损坏库修复/尽力恢复 + 不可恢复写入只读失败路径
 
 ### P3 — 受约束自动化与可选安全增强

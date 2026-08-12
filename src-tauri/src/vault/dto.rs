@@ -586,6 +586,18 @@ pub struct HistoryCleanResult {
     pub state: VaultState,
 }
 
+/// One expired entry for the maintenance view (uuid/title/username/url plus
+/// the expiry timestamp; no secrets).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpiredEntry {
+    pub uuid: String,
+    pub title: String,
+    pub username: String,
+    pub url: String,
+    pub expires: String,
+}
+
 /// One favicon job: a URL host plus every entry UUID that references it.
 #[derive(Debug, Clone)]
 pub struct FaviconJob {

@@ -243,6 +243,15 @@ export interface HistoryCleanResult {
   state: VaultState;
 }
 
+/** One expired entry for the maintenance view (no secrets). */
+export interface ExpiredEntry {
+  uuid: string;
+  title: string;
+  username: string;
+  url: string;
+  expires: string;
+}
+
 /** Result of `download_favicons` (KeePass "Download Favicons"). */
 export interface FaviconReport {
   attempted: number;

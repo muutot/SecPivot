@@ -85,6 +85,18 @@ pub(crate) fn clear_all_history(
         .clear_all_history()
 }
 
+/// List entries whose expiry has passed (maintenance view; recycle bin
+/// excluded, no secrets).
+#[tauri::command]
+pub(crate) fn expired_entries(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<Vec<crate::vault::ExpiredEntry>, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .expired_entries()
+}
+
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).
 #[tauri::command]
 pub(crate) fn get_entry_storage(

@@ -3951,6 +3951,51 @@ fn clear_all_history_wipes_every_snapshot_and_persists() {
 }
 
 #[test]
+fn expired_entries_lists_past_expiry_and_skips_recycle_bin() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let mk = |title: &str, expires: Option<&str>| EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: "pw".into(),
+        url: String::new(),
+        notes: String::new(),
+        totp: None,
+        expires: expires.map(str::to_owned),
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+    let state = session
+        .add_entries(&[
+            mk("Old", Some("2020-01-01T00:00:00.000Z")),
+            mk("Future", Some("2099-01-01T00:00:00.000Z")),
+            mk("NoExpiry", None),
+        ])
+        .unwrap();
+    let old_uuid = state
+        .root
+        .entries
+        .iter()
+        .find(|e| e.title == "Old")
+        .unwrap()
+        .uuid
+        .clone();
+
+    let list = session.expired_entries().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].title, "Old");
+    assert!(list[0].expires.starts_with("2020-"));
+
+    // Deleting moves the entry to the recycle bin, which is excluded.
+    session.delete_entry(&old_uuid).unwrap();
+    assert!(session.expired_entries().unwrap().is_empty());
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

@@ -21,6 +21,7 @@ import type {
   SecurityReport,
   SimilarPasswordGroup,
   HistoryCleanResult,
+  ExpiredEntry,
   FaviconReport,
   MutationDelta,
   DatabaseSettings,
@@ -93,6 +94,7 @@ interface VaultStore {
   securityReport: () => Promise<SecurityReport>;
   similarPasswords: () => Promise<SimilarPasswordGroup[]>;
   clearAllHistory: () => Promise<number>;
+  expiredEntries: () => Promise<ExpiredEntry[]>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
@@ -810,6 +812,11 @@ export const vault: VaultStore = {
     const result = await backendInvoke<HistoryCleanResult>("clear_all_history");
     state.set(applyBackendState(result.state));
     return result.cleared;
+  },
+
+  async expiredEntries(): Promise<ExpiredEntry[]> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持过期维护");
+    return backendInvoke<ExpiredEntry[]>("expired_entries");
   },
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
