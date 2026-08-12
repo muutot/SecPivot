@@ -328,6 +328,7 @@ impl VaultSession {
             root: build_group_tree(db),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
+            revision: self.revision,
             custom_icons: include_icons.then(|| {
                 db.iter_all_custom_icons()
                     .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))

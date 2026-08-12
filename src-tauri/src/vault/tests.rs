@@ -135,6 +135,7 @@ fn light_mutation_snapshots_omit_custom_icons() {
     let uuid = full.root.entries.last().unwrap().uuid.clone();
     let mutated = session.toggle_favorite(&uuid).unwrap();
     assert!(mutated.custom_icons.is_none());
+    assert!(mutated.revision > full.revision);
 }
 
 /// A content-only edit (icon omitted) must keep the entry's icon — both a

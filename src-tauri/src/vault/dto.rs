@@ -141,6 +141,10 @@ pub struct VaultState {
     pub root: VaultGroup,
     pub dirty: bool,
     pub modified_at: String,
+    /// Monotonic session edit revision; incremented by every mutation and
+    /// exposed so the renderer can order/merge snapshots and later apply
+    /// delta results.
+    pub revision: u64,
     /// Database custom icons (favicons) that live in the KDBX Meta section,
     /// keyed by custom-icon UUID; values are `data:` URLs for direct display.
     /// `Some(map)` is authoritative (open/create/full refresh, including an

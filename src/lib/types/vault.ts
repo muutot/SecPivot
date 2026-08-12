@@ -95,6 +95,8 @@ export interface VaultState {
   root: VaultGroup;
   dirty: boolean;
   modifiedAt: string;
+  /** Monotonic session edit revision; every mutation bumps it. */
+  revision: number;
   /** Database custom icons (favicons) keyed by custom-icon UUID; values are
    * `data:` URLs ready for `<img>`. Present only when the DB carries icons. */
   customIcons?: Record<string, string>;

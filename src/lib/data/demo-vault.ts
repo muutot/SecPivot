@@ -8,6 +8,7 @@ export function buildDemoVaultState(): VaultState {
     fileName: "vault.kdbx",
     dirty: false,
     modifiedAt: new Date().toISOString(),
+    revision: 0,
     root: {
       uuid: "root",
       parentUuid: null,

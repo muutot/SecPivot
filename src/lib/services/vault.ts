@@ -170,7 +170,11 @@ function pushEntry(group: VaultGroup, entry: VaultEntry): void {
 async function browserLoad(): Promise<VaultState | null> {
   try {
     const raw = localStorage.getItem(BROWSER_KEY);
-    if (raw) return JSON.parse(raw) as VaultState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as VaultState;
+      parsed.revision ??= 0;
+      return parsed;
+    }
   } catch {
     // ignore corrupted demo persistence
   }
