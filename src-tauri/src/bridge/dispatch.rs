@@ -382,19 +382,28 @@ fn unique_chars(value: &str) -> Vec<char> {
 }
 
 fn guarantee_required(out: &mut [char], required: &[char]) {
-    // Distinct positions so one required char can never overwrite another
-    // (mirrors `guaranteeRequired` in `src/lib/utils/password.ts`).
-    let mut positions: Vec<usize> = (0..out.len()).collect();
-    for i in (1..positions.len()).rev() {
+    // Slots that already hold a required char must never be overwritten.
+    let mut used = std::collections::HashSet::new();
+    for (i, c) in out.iter().enumerate() {
+        if required.contains(c) {
+            used.insert(i);
+        }
+    }
+    let mut candidates: Vec<usize> = (0..out.len()).filter(|i| !used.contains(i)).collect();
+    if candidates.is_empty() {
+        // Degenerate buffer saturated by required chars; any slot works.
+        candidates.push(0);
+    }
+    for i in (1..candidates.len()).rev() {
         let j = rand_index(i + 1);
-        positions.swap(i, j);
+        candidates.swap(i, j);
     }
     let mut index = 0;
     for required_char in required {
         if out.contains(required_char) {
             continue;
         }
-        out[positions[index % positions.len()]] = *required_char;
+        out[candidates[index % candidates.len()]] = *required_char;
         index += 1;
     }
 }

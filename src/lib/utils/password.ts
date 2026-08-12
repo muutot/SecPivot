@@ -127,12 +127,18 @@ function randomPick(pool: string): string {
 }
 
 function guaranteeRequired(chars: string[], required: string[]): void {
-  const positions = shuffledPositions(chars.length);
+  // Slots that already hold a required char must never be overwritten.
+  const used = new Set<number>();
+  chars.forEach((c, i) => {
+    if (required.includes(c)) used.add(i);
+  });
+  let candidates = [...Array(chars.length).keys()].filter((i) => !used.has(i));
+  if (candidates.length === 0) candidates = [0];
+  const order = shuffledPositions(candidates.length);
   let index = 0;
   for (const char of required) {
     if (chars.includes(char)) continue;
-    const pos = positions[index++ % chars.length];
-    chars[pos] = char;
+    chars[candidates[order[index++ % candidates.length]]] = char;
   }
 }
 
