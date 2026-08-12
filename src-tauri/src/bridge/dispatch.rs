@@ -382,11 +382,20 @@ fn unique_chars(value: &str) -> Vec<char> {
 }
 
 fn guarantee_required(out: &mut [char], required: &[char]) {
+    // Distinct positions so one required char can never overwrite another
+    // (mirrors `guaranteeRequired` in `src/lib/utils/password.ts`).
+    let mut positions: Vec<usize> = (0..out.len()).collect();
+    for i in (1..positions.len()).rev() {
+        let j = rand_index(i + 1);
+        positions.swap(i, j);
+    }
+    let mut index = 0;
     for required_char in required {
         if out.contains(required_char) {
             continue;
         }
-        out[rand_index(out.len())] = *required_char;
+        out[positions[index % positions.len()]] = *required_char;
+        index += 1;
     }
 }
 

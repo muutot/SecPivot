@@ -516,7 +516,7 @@ fn generator_with_custom_charset_and_required() {
         pattern: None,
         ..Default::default()
     };
-    for _ in 0..20 {
+    for _ in 0..100 {
         let password = generate_password_with(&settings).unwrap();
         assert_eq!(password.chars().count(), 8);
         assert!(password.chars().all(|c| "ABC123".contains(c)));
