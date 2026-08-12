@@ -41,7 +41,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## Stage 5 — Packaging & release
 
 - [x] App icons (committed `src-tauri/icons/*`), bundle branding metadata (`publisher`/`copyright`/descriptions), custom NSIS template (`src-tauri/windows/installer.nsi`) — verified: `tauri build` produced `SecPivot_0.1.0_x64-setup.exe`
-- [~] GitHub Actions CI：远端运行 [31619349103](https://github.com/muutot/SecPivot/actions/runs/31619349103) 已在 `13fb228` 通过 Frontend/Rust jobs；但当前 `npm run verify` 已包含 `test:frontend`，`.github/workflows/ci.yml` 尚未执行该步骤，且当前 HEAD 尚无远端运行证据
+- [~] GitHub Actions CI：远端运行 [31619349103](https://github.com/muutot/SecPivot/actions/runs/31619349103) 已在 `13fb228` 通过 Frontend/Rust jobs；当前工作流已覆盖 `npm run verify` 的格式、Svelte/Vite、前端行为测试、Rust 测试与 clippy 门禁，但当前 HEAD 尚无远端运行证据
 - [~] Release workflow：远端运行 [31619359721](https://github.com/muutot/SecPivot/actions/runs/31619359721) 的 Verify 与 Windows x64 build 已通过，Android APK build 失败；`v1.2.0` 尚未创建 GitHub Release/资产，发布链未闭环
 
 ## Stage 6 — Remote vaults (S3 / WebDAV)

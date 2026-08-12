@@ -26,6 +26,8 @@ jobs:
 
       - run: npm run build
 
+      - run: npm run test:frontend
+
   rust:
     name: Rust
     runs-on: windows-latest
