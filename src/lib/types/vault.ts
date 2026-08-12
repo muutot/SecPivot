@@ -132,6 +132,15 @@ export interface VaultState {
   databaseDescription?: string;
 }
 
+/** Result of an open/create command: the registry id of the newly active
+ *  session plus its authoritative state. The renderer keeps `sessionId` so
+ *  later commands can address this session (tabs); commands that omit it
+ *  default to the active session. */
+export interface VaultOpenResult {
+  sessionId: string;
+  state: VaultState;
+}
+
 /** Lightweight mutation result for small state changes: the renderer applies
  *  the delta against its cached `VaultState` instead of receiving a rebuilt
  *  tree. `revision` matches the backend session revision after the mutation. */

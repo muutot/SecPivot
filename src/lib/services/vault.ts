@@ -19,6 +19,7 @@ import type {
   MutationDelta,
   DatabaseSettings,
   DatabaseSettingsPatch,
+  VaultOpenResult,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -113,6 +114,9 @@ const BROWSER_KEY = "secpivot-browser-vault";
 
 let browserState: VaultState | null = null;
 let initialized = false;
+/** Registry id of the active backend session (multi-database tabs). `null`
+ *  in the browser demo, which has no backend sessions. */
+let activeSessionId: string | null = null;
 
 /** Cache of database custom icons, kept across mutation snapshots that omit
  *  the image payload; replaced whenever an authoritative snapshot arrives. */
@@ -283,7 +287,9 @@ async function backendInvoke<T>(command: string, args: Record<string, unknown> =
 
 async function refreshInternal(): Promise<VaultState | null> {
   if (isTauriRuntime()) {
-    const value = await backendInvoke<VaultState | null>("get_vault_state");
+    const value = await backendInvoke<VaultState | null>("get_vault_state", {
+      sessionId: activeSessionId,
+    });
     if (value) state.set(applyBackendState(value));
     return value;
   }
@@ -329,15 +335,16 @@ export const vault: VaultStore = {
 
   async open(path, password, keyfile): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("open_vault", {
+      const result = await backendInvoke<VaultOpenResult>("open_vault", {
         path,
         password,
         keyfile: keyfile || null,
       });
-      state.set(applyBackendState(result));
-      remembered.set({ path: result.path, fileName: result.fileName });
-      rememberRecent(result.path);
-      return result;
+      activeSessionId = result.sessionId;
+      state.set(applyBackendState(result.state));
+      remembered.set({ path: result.state.path, fileName: result.state.fileName });
+      rememberRecent(result.state.path);
+      return result.state;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
     browserState.path = path;
@@ -351,14 +358,15 @@ export const vault: VaultStore = {
 
   async create(request: CreateVaultRequest): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("create_vault", {
+      const result = await backendInvoke<VaultOpenResult>("create_vault", {
         ...request,
         keyfile: request.keyfile || null,
       });
-      state.set(applyBackendState(result));
-      remembered.set({ path: result.path, fileName: result.fileName });
-      rememberRecent(result.path);
-      return result;
+      activeSessionId = result.sessionId;
+      state.set(applyBackendState(result.state));
+      remembered.set({ path: result.state.path, fileName: result.state.fileName });
+      rememberRecent(result.state.path);
+      return result.state;
     }
     const fresh = buildDemoVaultState();
     fresh.path = request.path;
@@ -376,7 +384,8 @@ export const vault: VaultStore = {
   async close(): Promise<void> {
     if (isTauriRuntime()) {
       const path = get(state)?.path;
-      await backendInvoke("close_vault");
+      await backendInvoke("close_vault", { sessionId: activeSessionId });
+      activeSessionId = null;
       if (path && !get(appSettings).security.rememberPassword) {
         void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
       }
@@ -397,25 +406,26 @@ export const vault: VaultStore = {
   async openRemote(key, password, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
     await appSettings.flush();
-    const result = await backendInvoke<VaultState>("open_remote_vault", {
+    const result = await backendInvoke<VaultOpenResult>("open_remote_vault", {
       profile: get(appSettings).activeRemote,
       key,
       password,
       keyfile: keyfile || null,
       mode,
     });
-    state.set(applyBackendState(result));
+    activeSessionId = result.sessionId;
+    state.set(applyBackendState(result.state));
     // A remote session cannot be reopened from the lock screen; clear the
     // remembered local path so unlocking never silently targets the old vault.
     remembered.set(null);
-    rememberRecent(result.path);
-    return result;
+    rememberRecent(result.state.path);
+    return result.state;
   },
 
   async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
     await appSettings.flush();
-    const result = await backendInvoke<VaultState>("create_remote_vault", {
+    const result = await backendInvoke<VaultOpenResult>("create_remote_vault", {
       profile: get(appSettings).activeRemote,
       key,
       password,
@@ -425,12 +435,13 @@ export const vault: VaultStore = {
       keyfile: keyfile || null,
       mode,
     });
-    state.set(applyBackendState(result));
+    activeSessionId = result.sessionId;
+    state.set(applyBackendState(result.state));
     // See `openRemote`: a remote session is never the lock-screen quick-reopen
     // target, so drop any stale remembered local path.
     remembered.set(null);
-    rememberRecent(result.path);
-    return result;
+    rememberRecent(result.state.path);
+    return result.state;
   },
 
   async save(): Promise<VaultState> {

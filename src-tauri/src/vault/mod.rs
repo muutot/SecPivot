@@ -10,6 +10,7 @@ mod persist;
 mod security;
 mod serialize;
 mod session;
+mod sessions;
 #[cfg(test)]
 mod tests;
 
@@ -95,9 +96,11 @@ pub use self::dto::{
     DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
     EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
     FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
-    HistoryVersion, MutationDelta, SecurityReport, TotpCode, VaultEntry, VaultGroup, VaultState,
-    WeakEntry,
+    HistoryVersion, MutationDelta, SecurityReport, TotpCode, VaultEntry, VaultGroup,
+    VaultOpenResult, VaultState, WeakEntry,
 };
+
+pub use self::sessions::VaultSessions;
 
 // ---------------------------------------------------------------------------
 // Session

@@ -9,7 +9,7 @@ pub mod util;
 pub mod vault;
 
 use crate::config::ConfigStore;
-use crate::vault::VaultSession;
+use crate::vault::{VaultSession, VaultSessions};
 use std::path::PathBuf;
 use std::sync::Mutex;
 #[cfg(desktop)]
@@ -242,6 +242,7 @@ pub fn run() {
             setup_tray(app.handle())?;
             app.manage(store);
             app.manage(Mutex::new(VaultSession::default()));
+            app.manage(VaultSessions::default());
             app.manage(commands::TcatoTarget(Mutex::new(None)));
             app.manage(crate::bridge::server::BridgeState::default());
             app.manage(crate::bridge::server::ApprovalBoard::default());

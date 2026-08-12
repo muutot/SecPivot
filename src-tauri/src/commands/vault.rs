@@ -6,7 +6,8 @@ use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
 use crate::vault::{
-    EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultSession, VaultState,
+    EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultOpenResult,
+    VaultSession, VaultSessions, VaultState,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -22,11 +23,12 @@ const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 pub(crate) fn open_vault(
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
     mut password: String,
     keyfile: Option<String>,
-) -> Result<VaultState, String> {
+) -> Result<VaultOpenResult, String> {
     // Slow work (file read, KDF, parse) runs outside the session lock; only
     // the state adoption is locked.
     let prepared = vault::prepare_local_open(
@@ -36,10 +38,10 @@ pub(crate) fn open_vault(
     );
     let result = match prepared {
         Ok((db, keyfile_bytes)) => {
-            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-            let result = session.adopt_local(db, Path::new(&path), &password, keyfile_bytes);
-            drop(session);
-            result
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.open(&mut active, |fresh| {
+                fresh.adopt_local(db, Path::new(&path), &password, keyfile_bytes)
+            })
         }
         Err(e) => Err(e),
     };
@@ -63,6 +65,7 @@ pub(crate) fn apply_capture_guard(app: &tauri::AppHandle, config: &ConfigStore) 
 pub(crate) fn create_vault(
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
     mut password: String,
@@ -70,7 +73,7 @@ pub(crate) fn create_vault(
     cipher: String,
     compression: String,
     keyfile: Option<String>,
-) -> Result<VaultState, String> {
+) -> Result<VaultOpenResult, String> {
     // Slow work (KDF, serialization, file write) runs outside the session
     // lock; only the state adoption is locked.
     let prepared = vault::prepare_local_create(
@@ -83,10 +86,10 @@ pub(crate) fn create_vault(
     );
     let result = match prepared {
         Ok((db, keyfile_bytes)) => {
-            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-            let result = session.adopt_local(db, Path::new(&path), &password, keyfile_bytes);
-            drop(session);
-            result
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.open(&mut active, |fresh| {
+                fresh.adopt_local(db, Path::new(&path), &password, keyfile_bytes)
+            })
         }
         Err(e) => Err(e),
     };
@@ -100,7 +103,9 @@ pub(crate) fn create_vault(
 #[tauri::command]
 pub(crate) fn close_vault(
     app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<(), String> {
     let keep_rpc = app
         .try_state::<crate::config::ConfigStore>()
@@ -111,24 +116,23 @@ pub(crate) fn close_vault(
                 .unwrap_or(true)
         })
         .unwrap_or(true);
-    let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    if keep_rpc {
-        session.close_keeping_rpc_session();
-    } else {
-        session.close();
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.close(&mut active, session_id.as_deref(), keep_rpc)?;
+    // The capture guard stays on while any other session is still open.
+    if !vaults.any_open(&active) {
+        shield::set_capture_guard(&app, false);
     }
-    shield::set_capture_guard(&app, false);
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn get_vault_state(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<Option<VaultState>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .state()
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.state(&mut active, session_id.as_deref())
 }
 
 /// Read the open database's storage settings (KDF/cipher/compression/etc).

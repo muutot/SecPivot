@@ -203,6 +203,17 @@ pub struct VaultState {
     pub database_description: Option<String>,
 }
 
+/// Result of an open/create command: the registry id of the newly active
+/// session plus its authoritative `VaultState`. The renderer keeps the id so
+/// later commands can address this session (tabs); commands that omit the id
+/// default to the active session.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultOpenResult {
+    pub session_id: String,
+    pub state: VaultState,
+}
+
 /// Lightweight mutation result for small state changes that do not need a
 /// rebuilt tree. The renderer applies the delta locally against its cached
 /// `VaultState`; `revision` lets it order/merge results and detect stale

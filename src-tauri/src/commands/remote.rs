@@ -6,7 +6,7 @@ use super::vault::apply_capture_guard;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, make_storage, RemoteObject};
 use crate::vault;
-use crate::vault::{RemoteMode, VaultSession, VaultState};
+use crate::vault::{RemoteMode, VaultOpenResult, VaultSession, VaultSessions};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use zeroize::Zeroize;
@@ -33,6 +33,7 @@ pub(crate) async fn s3_list_objects(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn open_remote_vault(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
@@ -41,7 +42,7 @@ pub(crate) async fn open_remote_vault(
     password: String,
     keyfile: Option<String>,
     mode: String,
-) -> Result<VaultState, String> {
+) -> Result<VaultOpenResult, String> {
     let (profile_path, cfg) = config.remote_profile(&profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
@@ -73,20 +74,20 @@ pub(crate) async fn open_remote_vault(
     .map_err(|e| format!("远程打开任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes, key)) => {
-            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-            let result = session.adopt_remote(
-                db,
-                storage,
-                &key,
-                &password,
-                keyfile_bytes,
-                mode,
-                &local_dir,
-                cfg.backup_count.clamp(0, 10) as usize,
-                &backup_template,
-            );
-            drop(session);
-            result
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.open(&mut active, |fresh| {
+                fresh.adopt_remote(
+                    db,
+                    storage,
+                    &key,
+                    &password,
+                    keyfile_bytes,
+                    mode,
+                    &local_dir,
+                    cfg.backup_count.clamp(0, 10) as usize,
+                    &backup_template,
+                )
+            })
         }
         Err(e) => Err(e),
     };
@@ -101,6 +102,7 @@ pub(crate) async fn open_remote_vault(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_remote_vault(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
@@ -112,7 +114,7 @@ pub(crate) async fn create_remote_vault(
     compression: String,
     keyfile: Option<String>,
     mode: String,
-) -> Result<VaultState, String> {
+) -> Result<VaultOpenResult, String> {
     let (profile_path, cfg) = config.remote_profile(&profile)?;
     let storage = make_storage(&cfg)?;
     let mode = RemoteMode::parse(&mode)?;
@@ -146,20 +148,20 @@ pub(crate) async fn create_remote_vault(
     .map_err(|e| format!("远程创建任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes, key)) => {
-            let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-            let result = session.adopt_remote(
-                db,
-                storage,
-                &key,
-                &password,
-                keyfile_bytes,
-                mode,
-                &local_dir,
-                cfg.backup_count.clamp(0, 10) as usize,
-                &backup_template,
-            );
-            drop(session);
-            result
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.open(&mut active, |fresh| {
+                fresh.adopt_remote(
+                    db,
+                    storage,
+                    &key,
+                    &password,
+                    keyfile_bytes,
+                    mode,
+                    &local_dir,
+                    cfg.backup_count.clamp(0, 10) as usize,
+                    &backup_template,
+                )
+            })
         }
         Err(e) => Err(e),
     };
