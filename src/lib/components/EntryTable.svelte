@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { onMount, tick } from "svelte";
   import type { VaultEntry } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
+  import { computeVirtualRange } from "$lib/utils/virtual-list";
 
   export interface EntryTableColumn {
     id: string;
@@ -73,11 +75,67 @@
 
   const COL_WIDTH_MIN = 30;
   const COL_WIDTH_MAX = 400;
+  const ROW_HEIGHT = 40;
+  const COMPACT_ROW_HEIGHT = 34;
+  const NARROW_ROW_HEIGHT = 48;
+  const VIRTUAL_OVERSCAN = 6;
 
   let entryHeadEl = $state<HTMLElement>();
+  let entryListEl = $state<HTMLDivElement>();
   let colDrag = $state<{ id: string; fromIndex: number } | null>(null);
   let colDropIndex = $state<number | null>(null);
   let suppressColumnSort = $state(false);
+  let scrollTop = $state(0);
+  let viewportHeight = $state(0);
+  let narrow = $state(false);
+  let lastFocusedIndex = $state(0);
+
+  const rowHeight = $derived(
+    narrow ? NARROW_ROW_HEIGHT : compact ? COMPACT_ROW_HEIGHT : ROW_HEIGHT,
+  );
+  const virtualRange = $derived(
+    computeVirtualRange({
+      itemCount: rows.length,
+      itemHeight: rowHeight,
+      scrollTop,
+      viewportHeight,
+      overscan: VIRTUAL_OVERSCAN,
+    }),
+  );
+  const virtualRows = $derived(rows.slice(virtualRange.start, virtualRange.end));
+  const topSpacerHeight = $derived(virtualRange.start * rowHeight);
+  const bottomSpacerHeight = $derived((rows.length - virtualRange.end) * rowHeight);
+
+  onMount(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const updateNarrow = (): void => {
+      narrow = media.matches;
+    };
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      viewportHeight = entryListEl?.clientHeight ?? entry.contentRect.height;
+    });
+
+    updateNarrow();
+    media.addEventListener("change", updateNarrow);
+    if (entryListEl) {
+      viewportHeight = entryListEl.clientHeight;
+      resizeObserver.observe(entryListEl);
+    }
+
+    return () => {
+      media.removeEventListener("change", updateNarrow);
+      resizeObserver.disconnect();
+    };
+  });
+
+  $effect(() => {
+    const list = entryListEl;
+    const maxScrollTop = Math.max(0, rows.length * rowHeight - viewportHeight);
+    if (!list) return;
+    const nextScrollTop = Math.min(list.scrollTop, maxScrollTop);
+    if (list.scrollTop !== nextScrollTop) list.scrollTop = nextScrollTop;
+    scrollTop = nextScrollTop;
+  });
 
   function startColResize(event: PointerEvent, colId: string): void {
     event.preventDefault();
@@ -163,6 +221,99 @@
     event.dataTransfer?.setData("application/x-secpivot-entries", JSON.stringify(targets));
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   }
+
+  function handleListScroll(event: Event): void {
+    const list = event.currentTarget as HTMLDivElement;
+    const nextScrollTop = list.scrollTop;
+    const nextRange = computeVirtualRange({
+      itemCount: rows.length,
+      itemHeight: rowHeight,
+      scrollTop: nextScrollTop,
+      viewportHeight: viewportHeight || list.clientHeight,
+      overscan: VIRTUAL_OVERSCAN,
+    });
+    const active = document.activeElement as HTMLElement | null;
+    const activeIndex = Number(active?.dataset.entryIndex);
+    if (
+      active?.classList.contains("entry-row") &&
+      Number.isInteger(activeIndex) &&
+      (activeIndex < nextRange.start || activeIndex >= nextRange.end)
+    ) {
+      lastFocusedIndex = Math.min(
+        rows.length - 1,
+        Math.max(0, Math.floor(nextScrollTop / rowHeight)),
+      );
+      list.focus({ preventScroll: true });
+    }
+    scrollTop = nextScrollTop;
+  }
+
+  async function focusRowAt(index: number): Promise<void> {
+    if (rows.length === 0 || !entryListEl) return;
+    const targetIndex = Math.max(0, Math.min(rows.length - 1, index));
+    const itemTop = targetIndex * rowHeight;
+    const itemBottom = itemTop + rowHeight;
+    const visibleHeight = viewportHeight || entryListEl.clientHeight;
+    let nextScrollTop = entryListEl.scrollTop;
+    if (itemTop < nextScrollTop) {
+      nextScrollTop = itemTop;
+    } else if (itemBottom > nextScrollTop + visibleHeight) {
+      nextScrollTop = itemBottom - visibleHeight;
+    }
+
+    entryListEl.scrollTop = nextScrollTop;
+    scrollTop = nextScrollTop;
+    lastFocusedIndex = targetIndex;
+    await tick();
+    entryListEl
+      ?.querySelector<HTMLElement>(`[data-entry-index="${targetIndex}"]`)
+      ?.focus({ preventScroll: true });
+  }
+
+  function handleListKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      onselectall();
+      return;
+    }
+    if (event.target !== event.currentTarget || rows.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      void focusRowAt(Math.min(rows.length - 1, lastFocusedIndex + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      void focusRowAt(Math.max(0, lastFocusedIndex - 1));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      void focusRowAt(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      void focusRowAt(rows.length - 1);
+    }
+  }
+
+  function handleRowKeydown(event: KeyboardEvent, index: number, entry: VaultEntry): void {
+    if (event.key === "Enter") {
+      onselectentry(entry);
+      return;
+    }
+
+    const pageStep = Math.max(1, Math.floor(viewportHeight / rowHeight) - 1);
+    let targetIndex: number | null = null;
+    if (event.key === "ArrowDown") targetIndex = index + 1;
+    else if (event.key === "ArrowUp") targetIndex = index - 1;
+    else if (event.key === "Home") targetIndex = 0;
+    else if (event.key === "End") targetIndex = rows.length - 1;
+    else if (event.key === "PageDown") targetIndex = index + pageStep;
+    else if (event.key === "PageUp") targetIndex = index - pageStep;
+
+    if (targetIndex !== null) {
+      event.preventDefault();
+      event.stopPropagation();
+      void focusRowAt(targetIndex);
+    }
+  }
 </script>
 
 <div class="entry-table" class:compact style={`--entry-cols: ${entryGridCols}`}>
@@ -216,13 +367,10 @@
     aria-label="条目列表"
     aria-multiselectable="true"
     tabindex="-1"
+    bind:this={entryListEl}
     oncontextmenu={onblankcontextmenu}
-    onkeydown={(event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
-        event.preventDefault();
-        onselectall();
-      }
-    }}
+    onscroll={handleListScroll}
+    onkeydown={handleListKeydown}
   >
     {#if rows.length === 0}
       <div class="empty-state">
@@ -231,22 +379,31 @@
         <p>{searchActive ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
       </div>
     {:else}
-      {#each rows as row (row.entry.uuid)}
+      <div
+        class="virtual-spacer"
+        style:height={`${topSpacerHeight}px`}
+        role="presentation"
+        aria-hidden="true"
+      ></div>
+      {#each virtualRows as row, virtualIndex (row.entry.uuid)}
+        {@const rowIndex = virtualRange.start + virtualIndex}
         <div
           class="entry-row"
           class:selected={selectedUuids.has(row.entry.uuid)}
           class:expired-row={row.entry.expired}
           style:--row-color={row.entry.color ?? "transparent"}
+          data-entry-index={rowIndex}
           role="option"
           aria-selected={selectedUuids.has(row.entry.uuid)}
+          aria-posinset={rowIndex + 1}
+          aria-setsize={rows.length}
           tabindex="0"
           draggable="true"
+          onfocus={() => (lastFocusedIndex = rowIndex)}
           ondragstart={(event) => startEntryDrag(event, row.entry)}
           onclick={(event) => onrowclick(event, row.entry)}
           oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
-          onkeydown={(event) => {
-            if (event.key === "Enter") onselectentry(row.entry);
-          }}
+          onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
         >
           {#if row.entry.color}
             <span class="entry-row-color-bar" aria-hidden="true"></span>
@@ -343,6 +500,12 @@
           </div>
         </div>
       {/each}
+      <div
+        class="virtual-spacer"
+        style:height={`${bottomSpacerHeight}px`}
+        role="presentation"
+        aria-hidden="true"
+      ></div>
     {/if}
   </div>
 </div>
@@ -479,9 +642,16 @@
     width: max-content;
     overflow-y: auto;
     overflow-x: hidden;
+    overflow-anchor: none;
     padding: 0 0 16px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .virtual-spacer {
+    width: 1px;
+    min-width: 1px;
+    pointer-events: none;
   }
 
   .entry-row {
