@@ -9,7 +9,7 @@
 //! parked one. Mutation commands keep targeting the active session until the
 //! session-addressing sub-item lands.
 
-use super::{VaultOpenResult, VaultSession, VaultState};
+use super::{SessionInfo, VaultOpenResult, VaultSession, VaultState};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -165,6 +165,39 @@ impl VaultSessions {
         Ok(state)
     }
 
+    /// All open sessions for the tab bar: active first, then parked in park
+    /// order.
+    pub fn list(&self, active: &VaultSession) -> Vec<SessionInfo> {
+        let inner = match self.inner.lock() {
+            Ok(inner) => inner,
+            Err(_) => return Vec::new(),
+        };
+        let mut sessions = Vec::new();
+        if let (Some(id), Some((path, file_name, dirty))) =
+            (inner.active_id.as_ref(), active.tab_summary())
+        {
+            sessions.push(SessionInfo {
+                session_id: id.clone(),
+                file_name,
+                path,
+                dirty,
+            });
+        }
+        for id in &inner.order {
+            if let Some(session) = inner.parked.get(id) {
+                if let Some((path, file_name, dirty)) = session.tab_summary() {
+                    sessions.push(SessionInfo {
+                        session_id: id.clone(),
+                        file_name,
+                        path,
+                        dirty,
+                    });
+                }
+            }
+        }
+        sessions
+    }
+
     /// Whether any session (active or parked) is open.
     pub fn any_open(&self, active: &VaultSession) -> bool {
         let has_parked = self
@@ -179,6 +212,7 @@ impl VaultSessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::EntryInput;
     use tempfile::TempDir;
 
     fn create_vault<'a>(
@@ -336,5 +370,56 @@ mod tests {
                 .file_name,
             "b.kdbx"
         );
+    }
+
+    #[test]
+    fn list_sessions_orders_active_first_and_reports_dirty() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+
+        // Dirty the active (second) session.
+        active
+            .add_entry(&EntryInput {
+                group_uuid: crate::vault::ROOT_GROUP_UUID.to_owned(),
+                title: "login".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .unwrap();
+
+        let sessions = registry.list(&active);
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].session_id, second.session_id);
+        assert_eq!(sessions[0].file_name, "b.kdbx");
+        assert!(sessions[0].dirty);
+        assert_eq!(sessions[1].session_id, first.session_id);
+        assert_eq!(sessions[1].file_name, "a.kdbx");
+        assert!(!sessions[1].dirty);
+
+        // Switching keeps the tab order (new active first).
+        registry
+            .switch_active(&mut active, &first.session_id)
+            .unwrap();
+        let sessions = registry.list(&active);
+        assert_eq!(sessions[0].session_id, first.session_id);
+        assert!(!sessions[0].dirty);
+        assert_eq!(sessions[1].session_id, second.session_id);
+        assert!(sessions[1].dirty);
     }
 }

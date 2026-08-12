@@ -37,6 +37,7 @@
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
+  import VaultTabs from "$lib/components/VaultTabs.svelte";
   import GroupAutoTypeDialog from "$lib/components/GroupAutoTypeDialog.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
@@ -1687,6 +1688,8 @@
           {/if}
         </div>
       </div>
+
+      <VaultTabs />
 
       <div
         class="main-content"

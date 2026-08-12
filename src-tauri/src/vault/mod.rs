@@ -96,7 +96,7 @@ pub use self::dto::{
     DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
     EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch, FaviconJob,
     FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput,
-    HistoryVersion, MutationDelta, SecurityReport, TotpCode, VaultEntry, VaultGroup,
+    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, TotpCode, VaultEntry, VaultGroup,
     VaultOpenResult, VaultState, WeakEntry,
 };
 

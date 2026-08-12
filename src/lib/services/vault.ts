@@ -20,6 +20,7 @@ import type {
   DatabaseSettings,
   DatabaseSettingsPatch,
   VaultOpenResult,
+  SessionInfo,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -37,6 +38,8 @@ import {
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
+  tabs: typeof tabs;
+  activeId: typeof activeId;
   get: () => VaultState | null;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
   updateDatabaseSettings: (patch: DatabaseSettingsPatch) => Promise<VaultState>;
@@ -97,6 +100,8 @@ interface VaultStore {
   refresh: () => Promise<void>;
   /** Switch the active backend session (multi-database tabs). */
   setActiveSession: (sessionId: string) => Promise<VaultState>;
+  /** Close one tab's backend session (active close promotes the next one). */
+  closeTab: (sessionId: string) => Promise<void>;
   remembered: typeof remembered.subscribe;
   getRemembered: () => RememberedVault | null;
   clearRemembered: () => void;
@@ -108,6 +113,10 @@ export interface RememberedVault {
 }
 
 const state = writable<VaultState | null>(null);
+/** Open sessions for the tab bar (active first, then parked). */
+const tabs = writable<SessionInfo[]>([]);
+/** Id of the active backend session (kept in sync with `tabs`). */
+const activeId = writable<string | null>(null);
 
 /** Last opened/created vault path, kept across lock so the lock screen can offer a quick reopen. */
 const remembered = writable<RememberedVault | null>(null);
@@ -300,6 +309,30 @@ async function refreshInternal(): Promise<VaultState | null> {
   return value;
 }
 
+/** Refresh the tab-bar session list from the backend. */
+async function refreshTabs(): Promise<void> {
+  if (isTauriRuntime()) {
+    const list = await backendInvoke<SessionInfo[]>("list_sessions");
+    tabs.set(list);
+    activeId.set(list[0]?.sessionId ?? null);
+    return;
+  }
+  const current = browserState ?? get(state);
+  activeId.set(current ? "browser" : null);
+  tabs.set(
+    current
+      ? [
+          {
+            sessionId: "browser",
+            fileName: current.fileName,
+            path: current.path,
+            dirty: current.dirty,
+          },
+        ]
+      : [],
+  );
+}
+
 async function ensureBrowserLoaded(): Promise<VaultState> {
   if (browserState) return browserState;
   browserState = (await browserLoad()) ?? buildDemoVaultState();
@@ -308,6 +341,8 @@ async function ensureBrowserLoaded(): Promise<VaultState> {
 
 export const vault: VaultStore = {
   subscribe: state.subscribe,
+  tabs,
+  activeId,
 
   get(): VaultState | null {
     return get(state);
@@ -346,6 +381,7 @@ export const vault: VaultStore = {
       state.set(applyBackendState(result.state));
       remembered.set({ path: result.state.path, fileName: result.state.fileName });
       rememberRecent(result.state.path);
+      await refreshTabs();
       return result.state;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
@@ -355,6 +391,7 @@ export const vault: VaultStore = {
     state.set(applyBackendState(result));
     remembered.set({ path: result.path, fileName: result.fileName });
     rememberRecent(result.path);
+    await refreshTabs();
     return result;
   },
 
@@ -368,6 +405,7 @@ export const vault: VaultStore = {
       state.set(applyBackendState(result.state));
       remembered.set({ path: result.state.path, fileName: result.state.fileName });
       rememberRecent(result.state.path);
+      await refreshTabs();
       return result.state;
     }
     const fresh = buildDemoVaultState();
@@ -380,6 +418,7 @@ export const vault: VaultStore = {
     remembered.set({ path: result.path, fileName: result.fileName });
     rememberRecent(result.path);
     await browserPersist(result);
+    await refreshTabs();
     return result;
   },
 
@@ -391,10 +430,23 @@ export const vault: VaultStore = {
       if (path && !get(appSettings).security.rememberPassword) {
         void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
       }
+      const remaining = await refreshInternal();
+      if (!remaining) {
+        state.set(null);
+        iconCache = {};
+        remembered.set(null);
+      } else if (remaining.path.startsWith("s3://")) {
+        remembered.set(null);
+      } else {
+        remembered.set({ path: remaining.path, fileName: remaining.fileName });
+      }
+      await refreshTabs();
+      return;
     }
     browserState = null;
     iconCache = {};
     state.set(null);
+    tabs.set([]);
   },
 
   async listRemoteObjects(): Promise<RemoteObject[]> {
@@ -421,6 +473,7 @@ export const vault: VaultStore = {
     // remembered local path so unlocking never silently targets the old vault.
     remembered.set(null);
     rememberRecent(result.state.path);
+    await refreshTabs();
     return result.state;
   },
 
@@ -443,6 +496,7 @@ export const vault: VaultStore = {
     // target, so drop any stale remembered local path.
     remembered.set(null);
     rememberRecent(result.state.path);
+    await refreshTabs();
     return result.state;
   },
 
@@ -450,6 +504,7 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("save_vault");
       state.set(applyBackendState(result));
+      await refreshTabs();
       return result;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
@@ -466,6 +521,7 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("save_vault_as", { path });
       state.set(applyBackendState(result));
+      await refreshTabs();
       return result;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
@@ -1035,6 +1091,7 @@ export const vault: VaultStore = {
       }
     }
     await refreshInternal();
+    await refreshTabs();
   },
 
   async setActiveSession(sessionId: string): Promise<VaultState> {
@@ -1049,7 +1106,22 @@ export const vault: VaultStore = {
     } else {
       remembered.set({ path: result.path, fileName: result.fileName });
     }
+    await refreshTabs();
     return result;
+  },
+
+  async closeTab(sessionId: string): Promise<void> {
+    if (sessionId === activeSessionId) {
+      await vault.close();
+      return;
+    }
+    if (!isTauriRuntime()) return;
+    const tab = get(tabs).find((t) => t.sessionId === sessionId);
+    await backendInvoke("close_vault", { sessionId });
+    if (tab?.path && !get(appSettings).security.rememberPassword) {
+      void backendInvoke("clear_saved_credential", { path: tab.path }).catch(() => undefined);
+    }
+    await refreshTabs();
   },
 };
 

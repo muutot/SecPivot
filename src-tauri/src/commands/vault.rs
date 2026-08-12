@@ -147,6 +147,16 @@ pub(crate) fn set_active_session(
     vaults.switch_active(&mut active, &session_id)
 }
 
+/// Open sessions for the tab bar: active first, then parked in park order.
+#[tauri::command]
+pub(crate) fn list_sessions(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+) -> Result<Vec<vault::SessionInfo>, String> {
+    let active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    Ok(vaults.list(&active))
+}
+
 /// Read the open database's storage settings (KDF/cipher/compression/etc).
 #[tauri::command]
 pub(crate) fn get_database_settings(

@@ -141,6 +141,14 @@ export interface VaultOpenResult {
   state: VaultState;
 }
 
+/** One open session shown by the tab bar (active first, then parked). */
+export interface SessionInfo {
+  sessionId: string;
+  fileName: string;
+  path: string;
+  dirty: boolean;
+}
+
 /** Lightweight mutation result for small state changes: the renderer applies
  *  the delta against its cached `VaultState` instead of receiving a rebuilt
  *  tree. `revision` matches the backend session revision after the mutation. */

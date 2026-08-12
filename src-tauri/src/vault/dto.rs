@@ -214,6 +214,18 @@ pub struct VaultOpenResult {
     pub state: VaultState,
 }
 
+/// One open session shown by the tab bar (active first, then parked in park
+/// order). `dirty` is the server-side flag, so parked tabs keep their marker
+/// after switching.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInfo {
+    pub session_id: String,
+    pub file_name: String,
+    pub path: String,
+    pub dirty: bool,
+}
+
 /// Lightweight mutation result for small state changes that do not need a
 /// rebuilt tree. The renderer applies the delta locally against its cached
 /// `VaultState`; `revision` lets it order/merge results and detect stale

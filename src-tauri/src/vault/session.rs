@@ -22,6 +22,16 @@ impl VaultSession {
         self.db.is_some()
     }
 
+    /// Cheap per-tab summary for the tab bar: `(path, file name, dirty)`.
+    pub fn tab_summary(&self) -> Option<(String, String, bool)> {
+        let path = self.path.as_ref()?;
+        let file_name = Path::new(path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.clone());
+        Some((path.clone(), file_name, self.dirty))
+    }
+
     /// Decrypt and open an existing `.kdbx`, optionally with a keyfile.
     pub fn open(
         &mut self,
