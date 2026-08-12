@@ -2552,7 +2552,7 @@ fn concurrent_edit_during_save_keeps_dirty_flag() {
     let revision = job.revision;
     persist_save(job).unwrap();
     session.mark_dirty();
-    let state = session.complete_save(revision).unwrap();
+    let state = session.complete_save(revision, [0u8; 32]).unwrap();
     assert!(state.dirty, "edit during save must stay dirty");
     drop(session);
 
@@ -5038,6 +5038,64 @@ fn remote_open_save_round_trip_via_memory_storage() {
     assert_eq!(state.root.children.len(), 1);
     assert_eq!(state.root.children[0].name, "Web");
     assert_eq!(state.root.children[0].entries.len(), 1);
+}
+
+#[test]
+fn remote_save_detects_external_change_and_conflicts_do_not_trigger_read_only() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Local".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+
+    // Another device overwrites the remote file since we opened it.
+    let original = storage.get("vaults/seed.kdbx").unwrap();
+    storage.put("vaults/seed.kdbx", &[0u8; 64]).unwrap();
+    let err = session.save().unwrap_err();
+    assert!(err.starts_with("REMOTE_CHANGED"), "unexpected: {err}");
+    assert!(
+        !session.is_read_only(),
+        "conflicts must not degrade the session to read-only"
+    );
+    assert!(session.state().unwrap().unwrap().dirty);
+
+    // Restoring the remote bytes makes the save succeed and advances the
+    // base hash, so a second external change is detected again.
+    storage.put("vaults/seed.kdbx", &original).unwrap();
+    let saved = session.save().unwrap();
+    assert!(!saved.dirty);
+    storage.put("vaults/seed.kdbx", &[1u8; 64]).unwrap();
+    let err = session.save().unwrap_err();
+    assert!(err.starts_with("REMOTE_CHANGED"), "unexpected: {err}");
 }
 
 #[test]

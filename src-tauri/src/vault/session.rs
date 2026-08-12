@@ -76,7 +76,7 @@ impl VaultSession {
         backup_count: usize,
         backup_template: &str,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes, key) = prepare_remote_open(
+        let (db, keyfile_bytes, key, base_hash) = prepare_remote_open(
             storage.clone(),
             key,
             password,
@@ -96,6 +96,7 @@ impl VaultSession {
             local_dir,
             backup_count,
             backup_template,
+            base_hash,
         )
     }
 
@@ -115,7 +116,7 @@ impl VaultSession {
         backup_count: usize,
         backup_template: &str,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes, key) = prepare_remote_create(
+        let (db, keyfile_bytes, key, base_hash) = prepare_remote_create(
             storage.clone(),
             key,
             password,
@@ -138,6 +139,7 @@ impl VaultSession {
             local_dir,
             backup_count,
             backup_template,
+            base_hash,
         )
     }
 
@@ -274,10 +276,15 @@ impl VaultSession {
         }
         let password = self.require_password()?.to_owned();
         let keyfile = self.keyfile.clone();
-        if let Err(e) = persist_change(&db, &password, keyfile.as_deref(), &target) {
-            self.note_save_failure();
-            return Err(e);
-        }
+        let new_hash = match persist_change(&db, &password, keyfile.as_deref(), &target) {
+            Ok(hash) => hash,
+            Err(e) => {
+                if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(e);
+            }
+        };
 
         {
             let live = self.require_db_mut()?;
@@ -291,17 +298,22 @@ impl VaultSession {
                 apply_compression(live, compression)?;
             }
         }
-        self.complete_save(revision)
+        self.complete_save(revision, new_hash)
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
         let job = self.prepare_save()?;
         let revision = job.revision;
-        if let Err(e) = persist_save(job) {
-            self.note_save_failure();
-            return Err(e);
-        }
-        self.complete_save(revision)
+        let new_hash = match persist_save(job) {
+            Ok(hash) => hash,
+            Err(e) => {
+                if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(e);
+            }
+        };
+        self.complete_save(revision, new_hash)
     }
 
     /// Re-encrypt and persist the vault with a new master key (password
@@ -313,11 +325,16 @@ impl VaultSession {
     ) -> Result<VaultState, String> {
         let keyfile_bytes = read_keyfile(keyfile)?;
         let (db, target, revision) = self.prepare_change()?;
-        if let Err(e) = persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
-            self.note_save_failure();
-            return Err(e);
-        }
-        self.complete_change(password.to_owned(), keyfile_bytes, revision)
+        let new_hash = match persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
+            Ok(hash) => hash,
+            Err(e) => {
+                if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(e);
+            }
+        };
+        self.complete_change(password.to_owned(), keyfile_bytes, revision, new_hash)
     }
 
     /// Save As: persist the current database (same master key) to a new local
@@ -327,7 +344,7 @@ impl VaultSession {
     pub fn save_as(&mut self, path: &Path) -> Result<VaultState, String> {
         let job = self.prepare_save_as(path)?;
         let revision = job.revision;
-        persist_save(job)?;
+        let _ = persist_save(job)?;
         self.complete_save_as(path.to_path_buf(), revision)
     }
 }
@@ -362,6 +379,7 @@ impl VaultSession {
         local_dir: &Path,
         backup_count: usize,
         backup_template: &str,
+        base_hash: [u8; 32],
     ) -> Result<VaultState, String> {
         self.remote = Some(RemoteTarget {
             storage,
@@ -370,6 +388,7 @@ impl VaultSession {
             local_dir: local_dir.to_path_buf(),
             backup_count,
             backup_template: backup_template.to_owned(),
+            base_hash,
         });
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         self.password = Some(password.to_owned());
@@ -561,6 +580,7 @@ impl VaultSession {
                 local_dir: remote.local_dir.clone(),
                 backup_count: remote.backup_count,
                 backup_template: remote.backup_template.clone(),
+                base_hash: remote.base_hash,
             },
             None => SaveTarget::Local(PathBuf::from(self.require_path()?.to_owned())),
         };
@@ -569,8 +589,15 @@ impl VaultSession {
 
     /// Locked completion of `save`: mark the session clean (unless edits
     /// landed while the save ran) and re-snapshot.
-    pub(crate) fn complete_save(&mut self, revision: u64) -> Result<VaultState, String> {
+    pub(crate) fn complete_save(
+        &mut self,
+        revision: u64,
+        new_hash: [u8; 32],
+    ) -> Result<VaultState, String> {
         self.note_save_success();
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = new_hash;
+        }
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -586,8 +613,12 @@ impl VaultSession {
         password: String,
         keyfile: Option<Vec<u8>>,
         revision: u64,
+        new_hash: [u8; 32],
     ) -> Result<VaultState, String> {
         self.note_save_success();
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = new_hash;
+        }
         self.password = Some(password);
         self.keyfile = keyfile;
         if self.revision == revision {

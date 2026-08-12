@@ -23,8 +23,17 @@ pub(crate) enum SaveTarget {
         local_dir: PathBuf,
         backup_count: usize,
         backup_template: String,
+        base_hash: [u8; 32],
     },
 }
+
+/// Error prefix for a save that detected the remote file changed elsewhere.
+/// The frontend matches this marker to offer 覆盖远程/下载远程/保留本地.
+pub(crate) const REMOTE_CHANGED_MARKER: &str = "REMOTE_CHANGED\n";
+
+/// Result of a remote open/create: database, keyfile bytes, normalized key and
+/// the SHA-256 of the remote file bytes (the sync base hash).
+type PreparedRemote = (Database, Option<Vec<u8>>, String, [u8; 32]);
 
 /// Everything `persist_save` needs. `password`/`keyfile` are clones so the
 /// KDF can run without the lock; both are zeroized after use. `revision`
@@ -100,7 +109,7 @@ pub(crate) fn prepare_remote_open(
     local_dir: &Path,
     backup_count: usize,
     backup_template: &str,
-) -> Result<(Database, Option<Vec<u8>>, String), String> {
+) -> Result<PreparedRemote, String> {
     let key = validate_remote_key(key)?;
     let keyfile_bytes = read_keyfile(keyfile)?;
     let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
@@ -117,7 +126,7 @@ pub(crate) fn prepare_remote_open(
             backup_template,
         )?;
     }
-    Ok((db, keyfile_bytes, key))
+    Ok((db, keyfile_bytes, key, crate::crypto::sha256_bytes(&data)))
 }
 
 /// Lock-free half of `create_remote`: build the database, run the KDF,
@@ -137,7 +146,7 @@ pub(crate) fn prepare_remote_create(
     local_dir: &Path,
     backup_count: usize,
     backup_template: &str,
-) -> Result<(Database, Option<Vec<u8>>, String), String> {
+) -> Result<PreparedRemote, String> {
     let key = validate_remote_key(key)?;
     let keyfile_bytes = read_keyfile(keyfile)?;
     let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
@@ -160,7 +169,7 @@ pub(crate) fn prepare_remote_create(
             backup_template,
         )?;
     }
-    Ok((db, keyfile_bytes, key))
+    Ok((db, keyfile_bytes, key, crate::crypto::sha256_bytes(&buffer)))
 }
 
 /// Serialize `db` with `key` and persist it to the given target. Runs
@@ -169,7 +178,7 @@ pub(crate) fn persist_snapshot(
     db: &Database,
     key: &DatabaseKey,
     target: &SaveTarget,
-) -> Result<(), String> {
+) -> Result<[u8; 32], String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key.clone())
         .map_err(|e| format!("序列化数据库失败: {e}"))?;
@@ -181,7 +190,20 @@ pub(crate) fn persist_snapshot(
             local_dir,
             backup_count,
             backup_template,
+            base_hash,
         } => {
+            // Conflict check: refuse to overwrite a remote file that changed
+            // since it was opened/last saved.
+            let current = storage
+                .get(key)
+                .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
+            if crate::crypto::sha256_bytes(&current) != *base_hash {
+                return Err(format!(
+                    "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择覆盖远程、下载远程或保留本地",
+                    current.len(),
+                    buffer.len(),
+                ));
+            }
             storage
                 .put(key, &buffer)
                 .map_err(|e| format!("上传远程文件失败: {e}"))?;
@@ -195,15 +217,18 @@ pub(crate) fn persist_snapshot(
                 )
                 .map_err(|e| format!("保存本地副本失败: {e}"))?;
             }
-            Ok(())
+            Ok(crate::crypto::sha256_bytes(&buffer))
         }
-        SaveTarget::Local(path) => write_database_bytes(path, &buffer),
+        SaveTarget::Local(path) => {
+            write_database_bytes(path, &buffer)?;
+            Ok(crate::crypto::sha256_bytes(&buffer))
+        }
     }
 }
 
 /// Full lock-free save: derive the session key (KDF), then serialize and
 /// persist. Secret clones are zeroized afterwards.
-pub(crate) fn persist_save(job: SaveJob) -> Result<(), String> {
+pub(crate) fn persist_save(job: SaveJob) -> Result<[u8; 32], String> {
     let key = build_database_key(&job.password, job.keyfile.as_deref())?;
     let result = persist_snapshot(&job.db, &key, &job.target);
     let mut password = job.password;
@@ -221,7 +246,7 @@ pub(crate) fn persist_change(
     password: &str,
     keyfile: Option<&[u8]>,
     target: &SaveTarget,
-) -> Result<(), String> {
+) -> Result<[u8; 32], String> {
     let key = build_database_key(password, keyfile)?;
     persist_snapshot(db, &key, target)
 }

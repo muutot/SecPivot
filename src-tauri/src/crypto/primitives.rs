@@ -69,6 +69,13 @@ pub fn sha1_bytes(input: &[u8]) -> [u8; 20] {
     hasher.finalize().into()
 }
 
+/// SHA-256 digest of raw bytes.
+pub fn sha256_bytes(input: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    hasher.finalize().into()
+}
+
 /// SHA-256 of a string, lowercase hex.
 pub fn sha256_hex(input: &str) -> String {
     let mut hasher = Sha256::new();

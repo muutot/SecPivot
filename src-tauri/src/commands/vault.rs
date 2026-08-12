@@ -216,17 +216,21 @@ pub(crate) fn save_vault(
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .prepare_save()?;
     let revision = job.revision;
-    if let Err(e) = vault::persist_save(job) {
-        session
+    match vault::persist_save(job) {
+        Ok(new_hash) => session
             .lock()
             .map_err(|_| "数据库锁已损坏".to_owned())?
-            .note_save_failure();
-        return Err(e);
+            .complete_save(revision, new_hash),
+        Err(e) => {
+            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                session
+                    .lock()
+                    .map_err(|_| "数据库锁已损坏".to_owned())?
+                    .note_save_failure();
+            }
+            Err(e)
+        }
     }
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .complete_save(revision)
 }
 
 #[tauri::command]
@@ -242,13 +246,11 @@ pub(crate) fn save_vault_as(
         .map_err(|_| "数据库锁已损坏".to_owned())?
         .prepare_save_as(Path::new(&path))?;
     let revision = job.revision;
-    if let Err(e) = vault::persist_save(job) {
-        session
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_owned())?
-            .note_save_failure();
-        return Err(e);
-    }
+    let _ = vault::persist_save(job).inspect_err(|e| {
+        if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+            let _ = session.lock().map(|mut active| active.note_save_failure());
+        }
+    })?;
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
@@ -269,15 +271,17 @@ pub(crate) fn change_master_key(
         .prepare_change()?;
     let persisted = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
     let result = match persisted {
-        Ok(()) => session
+        Ok(new_hash) => session
             .lock()
             .map_err(|_| "数据库锁已损坏".to_owned())?
-            .complete_change(password, keyfile_bytes, revision),
+            .complete_change(password, keyfile_bytes, revision, new_hash),
         // The failure path must not leave the new master password (or keyfile
         // bytes) on the heap; the success path moved them into the session,
         // which zeroizes them on close.
         Err(e) => {
-            let _ = session.lock().map(|mut active| active.note_save_failure());
+            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                let _ = session.lock().map(|mut active| active.note_save_failure());
+            }
             password.zeroize();
             if let Some(bytes) = keyfile_bytes.as_deref_mut() {
                 bytes.zeroize();

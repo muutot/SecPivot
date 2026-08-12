@@ -30,6 +30,7 @@ pub(crate) use self::helpers::{
 pub(crate) use self::persist::{
     persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
     prepare_remote_open, read_keyfile, write_attachment_file, write_csv_file,
+    REMOTE_CHANGED_MARKER,
 };
 
 /// Virtual root group id used by the frontend; maps to the DB root group.
@@ -145,6 +146,9 @@ pub struct RemoteTarget {
     pub local_dir: PathBuf,
     pub backup_count: usize,
     pub backup_template: String,
+    /// SHA-256 of the remote file bytes at open/last successful save, used to
+    /// detect changes made by other devices before overwriting.
+    pub base_hash: [u8; 32],
 }
 
 /// The currently open vault. `db` holds the decrypted database; `password`
