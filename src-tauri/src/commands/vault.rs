@@ -305,6 +305,22 @@ pub(crate) fn update_entry(
         .update_entry(&uuid, &input)
 }
 
+/// Update matching/quality flags without rewriting stored fields:
+/// `overrideUrl` absent = keep, empty string = clear, non-empty = set;
+/// `qualityCheck` absent = keep, present = set.
+#[tauri::command]
+pub(crate) fn update_entry_flags(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    override_url: Option<String>,
+    quality_check: Option<bool>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_entry_flags(&uuid, override_url, quality_check)
+}
+
 #[tauri::command]
 pub(crate) fn update_entries(
     session: tauri::State<'_, Mutex<VaultSession>>,

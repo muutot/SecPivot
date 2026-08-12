@@ -19,6 +19,9 @@ export interface VaultEntry {
   customIcon?: string;
   /** `#RRGGBB` background color tag. */
   color?: string;
+  /** KeePass `OverrideURL`: honored for matching only (bridge/RPC/auto-type),
+   * never shown as the display URL. */
+  overrideUrl?: string;
   created?: string;
   modified?: string;
   expires?: string;
@@ -259,6 +262,14 @@ export interface EntryPatch {
   clearColor?: boolean;
   /** Comma-separated tags to set; an empty string clears all tags. */
   tags?: string;
+}
+
+/** Flags updated separately from stored fields (see `update_entry_flags`):
+ *  `overrideUrl` absent = keep, empty string = clear, non-empty = set;
+ *  `qualityCheck` absent = keep, present = set. */
+export interface EntryFlags {
+  overrideUrl?: string;
+  qualityCheck?: boolean;
 }
 
 export interface GroupInput {

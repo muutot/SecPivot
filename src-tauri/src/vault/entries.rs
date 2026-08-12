@@ -114,6 +114,37 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Update the entry's matching/quality flags without touching its stored
+    /// fields (same pattern as `update_entry_autotype`). `override_url` is
+    /// tri-state: absent keeps the current value, an empty string clears it,
+    /// a non-empty string sets it (trimmed). `quality_check` sets the KDBX
+    /// per-entry password-quality flag when present.
+    pub fn update_entry_flags(
+        &mut self,
+        uuid: &str,
+        override_url: Option<String>,
+        quality_check: Option<bool>,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            if let Some(value) = override_url {
+                let value = value.trim();
+                entry.override_url = if value.is_empty() {
+                    None
+                } else {
+                    Some(value.to_owned())
+                };
+            }
+            if let Some(check) = quality_check {
+                entry.quality_check = check;
+            }
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
     /// Apply one partial patch to several entries in a single transaction.
     /// Only the fields present in the patch are written; the rest of each
     /// entry (including the password) is left untouched. All uuids are

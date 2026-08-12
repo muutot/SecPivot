@@ -6177,6 +6177,74 @@ fn empty_override_url_falls_back_to_url_field() {
     );
 }
 
+#[test]
+fn update_entry_flags_round_trips_override_url_and_quality_check() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://stored.example".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // Set both flags.
+    let updated = session
+        .update_entry_flags(&uuid, Some("https://real.example".into()), Some(false))
+        .unwrap();
+    let entry = updated
+        .root
+        .entries
+        .iter()
+        .find(|e| e.uuid == uuid)
+        .unwrap();
+    assert_eq!(entry.override_url.as_deref(), Some("https://real.example"));
+    assert!(!entry.quality_check);
+
+    // Absent flags keep the current values.
+    let updated = session.update_entry_flags(&uuid, None, None).unwrap();
+    let entry = updated
+        .root
+        .entries
+        .iter()
+        .find(|e| e.uuid == uuid)
+        .unwrap();
+    assert_eq!(entry.override_url.as_deref(), Some("https://real.example"));
+
+    // Empty override clears it; quality check is restored.
+    let updated = session
+        .update_entry_flags(&uuid, Some(String::new()), Some(true))
+        .unwrap();
+    let entry = updated
+        .root
+        .entries
+        .iter()
+        .find(|e| e.uuid == uuid)
+        .unwrap();
+    assert!(entry.override_url.is_none());
+    assert!(entry.quality_check);
+
+    // Save + reopen keeps the flags.
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert!(entry.override_url.is_none());
+    assert!(entry.quality_check);
+}
+
 // -- KeePassRPC full KPRPC config (regex / blocked / accuracy) ----------
 
 fn entry_with_kprpc_config(

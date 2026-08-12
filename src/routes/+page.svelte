@@ -18,6 +18,7 @@
   import type {
     EntryInput,
     EntryPatch,
+    EntryFlags,
     EntryAutoTypeConfig,
     AutotypeCandidate,
     VaultEntry,
@@ -1154,6 +1155,7 @@
     input: EntryInput | null,
     patch: EntryPatch | null,
     autotype: EntryAutoTypeConfig | null,
+    flags?: EntryFlags | null,
   ): Promise<void> {
     try {
       if (editorMode === "create" && input) {
@@ -1161,6 +1163,9 @@
         const created = findNewestEntryInGroup(state, input.groupUuid);
         if (autotype && created) {
           await vault.updateEntryAutoType(created.uuid, autotype);
+        }
+        if (flags && created) {
+          await vault.updateEntryFlags(created.uuid, flags);
         }
         setSingleSelection(created);
         editorOpen = false;
@@ -1175,6 +1180,9 @@
         const state = await vault.updateEntry(editEntry.uuid, input);
         if (autotype) {
           await vault.updateEntryAutoType(editEntry.uuid, autotype);
+        }
+        if (flags) {
+          await vault.updateEntryFlags(editEntry.uuid, flags);
         }
         setSingleSelection(findEntryByUuid(state, editEntry.uuid));
         editorOpen = false;

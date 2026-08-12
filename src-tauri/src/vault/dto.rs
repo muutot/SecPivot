@@ -68,6 +68,10 @@ pub struct VaultEntry {
     /// Built-in KeePass icon index (0-68); absent = default icon.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// KeePass `OverrideURL`: honored for matching only (bridge/RPC/auto-type),
+    /// never surfaced as the display URL. Editable via `update_entry_flags`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_url: Option<String>,
     pub favorite: bool,
     /// KeePass per-entry password-quality check flag. When false, the entry is
     /// excluded from the security report's weak-password findings.

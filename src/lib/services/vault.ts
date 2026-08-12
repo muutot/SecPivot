@@ -7,6 +7,7 @@ import type {
   VaultEntry,
   EntryInput,
   EntryPatch,
+  EntryFlags,
   EntryAutoTypeConfig,
   GroupInput,
   GroupAutoTypeConfig,
@@ -70,6 +71,7 @@ interface VaultStore {
   addEntry: (input: EntryInput) => Promise<VaultState>;
   addEntries: (inputs: EntryInput[]) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
+  updateEntryFlags: (uuid: string, flags: EntryFlags) => Promise<VaultState>;
   updateEntries: (uuids: string[], patch: EntryPatch) => Promise<VaultState>;
   deleteEntry: (uuid: string) => Promise<VaultState>;
   deleteEntries: (uuids: string[]) => Promise<VaultState>;
@@ -647,6 +649,36 @@ export const vault: VaultStore = {
           });
           if (icon === null) entry.icon = undefined;
           else if (icon !== undefined) entry.icon = icon;
+          return;
+        }
+      }
+      throw new Error("entry not found");
+    });
+    state.set(applyBackendState(result));
+    return result;
+  },
+
+  async updateEntryFlags(uuid: string, flags: EntryFlags): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_entry_flags", {
+        uuid,
+        overrideUrl: flags.overrideUrl ?? null,
+        qualityCheck: flags.qualityCheck ?? null,
+      });
+      state.set(applyBackendState(result));
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const groups = collectAllGroups(draft.root);
+      for (const group of groups) {
+        const entry = group.entries.find((e) => e.uuid === uuid);
+        if (entry) {
+          if (flags.overrideUrl !== undefined) {
+            const value = flags.overrideUrl.trim();
+            if (value) entry.overrideUrl = value;
+            else delete entry.overrideUrl;
+          }
+          if (flags.qualityCheck !== undefined) entry.qualityCheck = flags.qualityCheck;
           return;
         }
       }

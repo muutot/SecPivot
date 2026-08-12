@@ -183,6 +183,7 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
         color: entry.background_color.as_ref().map(ToString::to_string),
+        override_url: entry.override_url.clone(),
         quality_check: entry.quality_check,
         custom_data: custom_data_entries(&entry.custom_data),
         expires: match entry.times.expires {

@@ -3,6 +3,7 @@
   import type {
     EntryInput,
     EntryPatch,
+    EntryFlags,
     VaultEntry,
     VaultGroup,
     CustomField,
@@ -32,6 +33,7 @@
       input: EntryInput | null,
       patch: EntryPatch | null,
       autotype: EntryAutoTypeConfig | null,
+      flags?: EntryFlags | null,
     ) => Promise<void> | void;
   }
 
@@ -80,6 +82,8 @@
   let url = $state(multi ? (sharedValue((e) => e.url) ?? "") : (initialEntry?.url ?? ""));
   let notes = $state(multi ? (sharedValue((e) => e.notes) ?? "") : (initialEntry?.notes ?? ""));
   let tags = $state(multi ? (sharedValue((e) => e.tags ?? "") ?? "") : (initialEntry?.tags ?? ""));
+  let overrideUrl = $state(multi ? "" : (initialEntry?.overrideUrl ?? ""));
+  let qualityCheck = $state(multi ? true : (initialEntry?.qualityCheck ?? true));
   let totp = $state("");
   let totpLoading = $state(false);
   /** Whether the current TOTP seed is known. Same data-loss reasoning as
@@ -613,6 +617,7 @@
         },
         null,
         autotype,
+        { overrideUrl: overrideUrl.trim(), qualityCheck },
       ),
     );
   }
@@ -908,6 +913,34 @@
             <span class="field-hint">选择颜色将应用到所有选中条目;未选择则保持不变</span>
           {/if}
         </section>
+
+        <label class="field">
+          <span>覆盖 URL（OverrideURL）</span>
+          <input
+            class="text-input mono"
+            type="text"
+            bind:value={overrideUrl}
+            placeholder="https://real.example"
+            oninput={() => markTouched("overrideUrl")}
+          />
+          <span class="field-hint">仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址</span>
+        </label>
+
+        <label class="field">
+          <span>质量检查</span>
+          <div class="flag-row">
+            <button
+              type="button"
+              class="flag-toggle"
+              class:active={qualityCheck}
+              onclick={() => (qualityCheck = !qualityCheck)}
+              aria-pressed={qualityCheck}
+            >
+              {qualityCheck ? "已启用" : "已禁用"}
+            </button>
+          </div>
+          <span class="field-hint">禁用后条目不参与弱密码安全检查</span>
+        </label>
       </div>
     {/if}
 
@@ -1685,5 +1718,32 @@
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
     cursor: pointer;
+  }
+
+  .flag-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .flag-toggle {
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
+  }
+
+  .flag-toggle:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .flag-toggle.active {
+    color: var(--selection-color);
+    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 </style>

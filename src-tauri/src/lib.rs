@@ -288,6 +288,7 @@ pub fn run() {
             commands::add_entry,
             commands::import_entries,
             commands::update_entry,
+            commands::update_entry_flags,
             commands::update_entries,
             commands::delete_entry,
             commands::delete_entries,
