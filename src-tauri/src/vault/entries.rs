@@ -12,6 +12,7 @@ use super::serialize::{
 };
 use super::*;
 use keepass::db::{EntryId, GroupId, Icon, Times, Value};
+use std::collections::HashMap;
 
 impl VaultSession {
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
@@ -590,7 +591,8 @@ impl VaultSession {
     /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
     /// the tree reopens the same groups after a save + reopen.
     pub fn set_group_expanded(&mut self, uuid: &str, expanded: bool) -> Result<VaultState, String> {
-        self.set_groups_expanded(&[uuid.to_owned()], expanded)
+        self.set_groups_expanded_delta(&[uuid.to_owned()], expanded)?;
+        self.snapshot_without_icons()
     }
 
     /// Persist several group expansion flags in one transaction. All ids are
@@ -601,8 +603,23 @@ impl VaultSession {
         uuids: &[String],
         expanded: bool,
     ) -> Result<VaultState, String> {
+        self.set_groups_expanded_delta(uuids, expanded)?;
+        self.snapshot_without_icons()
+    }
+
+    /// Same batch mutation as `set_groups_expanded`, but returns only the
+    /// delta (new revision + uuid→expanded map) instead of rebuilding and
+    /// serializing the whole tree; the renderer applies it locally.
+    pub fn set_groups_expanded_delta(
+        &mut self,
+        uuids: &[String],
+        expanded: bool,
+    ) -> Result<MutationDelta, String> {
         if uuids.is_empty() {
-            return self.snapshot_without_icons();
+            return Ok(MutationDelta::GroupsExpanded {
+                revision: self.revision,
+                groups: HashMap::new(),
+            });
         }
         let ids: Vec<GroupId> = uuids
             .iter()
@@ -619,7 +636,11 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot_without_icons()
+        let groups = uuids.iter().cloned().map(|uuid| (uuid, expanded)).collect();
+        Ok(MutationDelta::GroupsExpanded {
+            revision: self.revision,
+            groups,
+        })
     }
 
     /// Update the database-level `Meta` display fields. `name`/`description`

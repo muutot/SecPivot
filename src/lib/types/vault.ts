@@ -109,6 +109,13 @@ export interface VaultState {
   databaseDescription?: string;
 }
 
+/** Lightweight mutation result for small state changes: the renderer applies
+ *  the delta against its cached `VaultState` instead of receiving a rebuilt
+ *  tree. `revision` matches the backend session revision after the mutation. */
+export type MutationDelta =
+  | { kind: "favorite"; revision: number; uuid: string; favorite: boolean }
+  | { kind: "groupsExpanded"; revision: number; groups: Record<string, boolean> };
+
 /** Server-side security analysis; passwords never cross into the report. */
 export interface SecurityReport {
   total: number;

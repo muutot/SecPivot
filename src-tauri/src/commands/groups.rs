@@ -1,6 +1,6 @@
 //! Group CRUD IPC commands (extracted from commands.rs).
 
-use crate::vault::{GroupInput, VaultSession, VaultState};
+use crate::vault::{GroupInput, MutationDelta, VaultSession, VaultState};
 use std::sync::Mutex;
 #[tauri::command]
 pub(crate) fn add_group(
@@ -42,11 +42,11 @@ pub(crate) fn set_group_expanded(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
     expanded: bool,
-) -> Result<VaultState, String> {
+) -> Result<MutationDelta, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .set_group_expanded(&uuid, expanded)
+        .set_groups_expanded_delta(&[uuid], expanded)
 }
 
 #[tauri::command]
@@ -54,11 +54,11 @@ pub(crate) fn set_groups_expanded(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuids: Vec<String>,
     expanded: bool,
-) -> Result<VaultState, String> {
+) -> Result<MutationDelta, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .set_groups_expanded(&uuids, expanded)
+        .set_groups_expanded_delta(&uuids, expanded)
 }
 
 #[tauri::command]

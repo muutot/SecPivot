@@ -32,21 +32,35 @@ impl VaultSession {
 
     /// Toggle the favorite/pin marker on an entry (persisted as a custom field).
     pub fn toggle_favorite(&mut self, uuid: &str) -> Result<VaultState, String> {
-        {
+        self.toggle_favorite_delta(uuid)?;
+        self.snapshot_without_icons()
+    }
+
+    /// Same mutation as `toggle_favorite`, but returns only the delta (new
+    /// revision + affected entry) instead of rebuilding/serializing the whole
+    /// tree — the renderer applies it to its local state.
+    pub fn toggle_favorite_delta(&mut self, uuid: &str) -> Result<MutationDelta, String> {
+        let favorite = {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            if entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE) {
-                entry.fields.remove(FIELD_FAVORITE);
-            } else {
+            let favorite = entry.get(FIELD_FAVORITE) != Some(FIELD_FAVORITE_TRUE);
+            if favorite {
                 entry.set(
                     FIELD_FAVORITE,
                     Value::unprotected(FIELD_FAVORITE_TRUE.to_owned()),
                 );
+            } else {
+                entry.fields.remove(FIELD_FAVORITE);
             }
-        }
+            favorite
+        };
         self.mark_dirty();
-        self.snapshot_without_icons()
+        Ok(MutationDelta::Favorite {
+            revision: self.revision,
+            uuid: uuid.to_owned(),
+            favorite,
+        })
     }
 
     /// Compute the one-time password for an entry that carries an OTP seed

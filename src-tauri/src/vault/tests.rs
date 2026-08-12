@@ -138,6 +138,86 @@ fn light_mutation_snapshots_omit_custom_icons() {
     assert!(mutated.revision > full.revision);
 }
 
+/// Favorite toggling returns only the delta (revision + affected entry) and
+/// never rebuilds/serializes the tree; the next full snapshot reflects it.
+#[test]
+fn favorite_delta_skips_tree_rebuild() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+    let before = state.revision;
+    let delta = session.toggle_favorite_delta(&uuid).unwrap();
+    match delta {
+        MutationDelta::Favorite {
+            revision,
+            uuid: delta_uuid,
+            favorite,
+        } => {
+            assert_eq!(delta_uuid, uuid);
+            assert!(favorite);
+            assert!(revision > before);
+        }
+        other => panic!("expected favorite delta, got {other:?}"),
+    }
+    let state = session.state().unwrap().unwrap();
+    assert!(state.root.entries.last().unwrap().favorite);
+}
+
+/// Group expansion returns a uuid→expanded map delta; unknown uuids abort
+/// atomically without marking the vault dirty.
+#[test]
+fn group_expand_delta_maps_uuids_and_bumps_revision() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Mail".into(),
+            icon: None,
+        })
+        .unwrap();
+    let mail_uuid = state.root.children[0].uuid.clone();
+    let before = state.revision;
+    let delta = session
+        .set_groups_expanded_delta(std::slice::from_ref(&mail_uuid), false)
+        .unwrap();
+    match delta {
+        MutationDelta::GroupsExpanded { revision, groups } => {
+            assert!(revision > before);
+            assert_eq!(groups.get(&mail_uuid), Some(&false));
+        }
+        other => panic!("expected groups-expanded delta, got {other:?}"),
+    }
+    let state_after_ok = session.state().unwrap().unwrap();
+    assert!(!state_after_ok.root.children[0].is_expanded);
+    let revision_after_ok = state_after_ok.revision;
+
+    let unknown = "00000000-0000-0000-0000-000000000000".to_owned();
+    assert!(session
+        .set_groups_expanded_delta(&[mail_uuid, unknown], true)
+        .is_err());
+    let state_after_fail = session.state().unwrap().unwrap();
+    assert_eq!(state_after_fail.revision, revision_after_ok);
+    assert_eq!(state_after_fail.dirty, state_after_ok.dirty);
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

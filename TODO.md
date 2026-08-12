@@ -84,7 +84,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
 - [x] mutation 自定义图标拆分缓存：后端 mutation 快照省略 `customIcons` 图像负载（`Option::None`），前端 `vault.ts` 维护图标缓存并在权威快照/轻量结果间合并；favorite/展开/CRUD 不再跨 IPC 重传全部 favicon，附 `light_mutation_snapshots_omit_custom_icons` 测试
 - [x] `VaultState.revision`：后端在每次 mutation 递增并随快照（含轻量 mutation 结果）返回，前端类型/浏览器回退同步，测试断言 `mutated.revision > full.revision`
-- [ ] mutation result/delta：基于 `revision` 引入增量结果，避免收藏、展开等小修改每次重建、编码并跨 IPC 传输完整树
+- [x] mutation result/delta：`toggle_favorite`/`set_group_expanded`/`set_groups_expanded` 改为返回 `MutationDelta`（`kind` + `revision` + 受影响 id），前端 `applyBackendDelta` 在本地 `VaultState` 上应用，收藏/展开不再重建、编码并跨 IPC 传输完整树；附 favorite/group-expand delta 测试
 
 ### P1 — 数据安全、核心 KeePass 工作流与高价值原生能力
 

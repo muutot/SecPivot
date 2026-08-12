@@ -352,11 +352,11 @@ pub(crate) fn totp_code(
 pub(crate) fn toggle_favorite(
     session: tauri::State<'_, Mutex<VaultSession>>,
     uuid: String,
-) -> Result<VaultState, String> {
+) -> Result<vault::MutationDelta, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .toggle_favorite(&uuid)
+        .toggle_favorite_delta(&uuid)
 }
 
 /// Resolve and replay a KeePass-style auto-type sequence for an entry.

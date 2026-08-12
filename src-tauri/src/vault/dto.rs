@@ -165,6 +165,24 @@ pub struct VaultState {
     pub database_description: Option<String>,
 }
 
+/// Lightweight mutation result for small state changes that do not need a
+/// rebuilt tree. The renderer applies the delta locally against its cached
+/// `VaultState`; `revision` lets it order/merge results and detect stale
+/// responses.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum MutationDelta {
+    Favorite {
+        revision: u64,
+        uuid: String,
+        favorite: bool,
+    },
+    GroupsExpanded {
+        revision: u64,
+        groups: HashMap<String, bool>,
+    },
+}
+
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
 /// index, JSON `null` explicitly resets to the default icon, and an absent
 /// field keeps the entry's current icon. Plain `Option<Option<u32>>` serde

@@ -14,6 +14,7 @@ import type {
   EntryStorage,
   SecurityReport,
   FaviconReport,
+  MutationDelta,
   RemoteObject,
   RemoteMode,
 } from "$lib/types/vault";
@@ -112,6 +113,27 @@ let iconCache: Record<string, string> = {};
 function applyBackendState(result: VaultState): VaultState {
   if (result.customIcons !== undefined) iconCache = result.customIcons;
   result.customIcons = { ...iconCache };
+  return result;
+}
+
+/** Apply a lightweight backend mutation delta to the current store state and
+ *  return the merged `VaultState` (or null when no session is open). */
+function applyBackendDelta(delta: MutationDelta): VaultState | null {
+  const current = get(state);
+  if (!current) return null;
+  const next = deepClone(current);
+  next.revision = delta.revision;
+  if (delta.kind === "favorite") {
+    const entry = findEntry(next.root, delta.uuid);
+    if (entry) entry.favorite = delta.favorite;
+  } else if (delta.kind === "groupsExpanded") {
+    for (const [uuid, expanded] of Object.entries(delta.groups)) {
+      const group = findGroup(next.root, uuid);
+      if (group) group.isExpanded = expanded;
+    }
+  }
+  const result = applyBackendState(next);
+  state.set(result);
   return result;
 }
 
@@ -619,8 +641,9 @@ export const vault: VaultStore = {
 
   async toggleFavorite(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("toggle_favorite", { uuid });
-      state.set(applyBackendState(result));
+      const delta = await backendInvoke<MutationDelta>("toggle_favorite", { uuid });
+      const result = applyBackendDelta(delta);
+      if (!result) throw new Error("数据库未打开");
       return result;
     }
     const result = applyEdit((draft) => {
@@ -698,8 +721,12 @@ export const vault: VaultStore = {
 
   async setGroupExpanded(uuid: string, expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("set_group_expanded", { uuid, expanded });
-      state.set(applyBackendState(result));
+      const delta = await backendInvoke<MutationDelta>("set_group_expanded", {
+        uuid,
+        expanded,
+      });
+      const result = applyBackendDelta(delta);
+      if (!result) throw new Error("数据库未打开");
       return result;
     }
     const result = applyEdit((draft) => {
@@ -713,8 +740,12 @@ export const vault: VaultStore = {
 
   async setGroupsExpanded(uuids: string[], expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("set_groups_expanded", { uuids, expanded });
-      state.set(applyBackendState(result));
+      const delta = await backendInvoke<MutationDelta>("set_groups_expanded", {
+        uuids,
+        expanded,
+      });
+      const result = applyBackendDelta(delta);
+      if (!result) throw new Error("数据库未打开");
       return result;
     }
     if (uuids.length === 0) {
