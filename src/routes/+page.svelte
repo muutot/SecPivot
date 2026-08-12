@@ -1311,15 +1311,15 @@
   ): Promise<void> {
     try {
       if (editorMode === "create" && input) {
-        const state = await vault.addEntry(input);
+        let state = await vault.addEntry(input);
         const created = findNewestEntryInGroup(state, input.groupUuid);
         if (autotype && created) {
-          await vault.updateEntryAutoType(created.uuid, autotype);
+          state = await vault.updateEntryAutoType(created.uuid, autotype);
         }
         if (flags && created) {
-          await vault.updateEntryFlags(created.uuid, flags);
+          state = await vault.updateEntryFlags(created.uuid, flags);
         }
-        setSingleSelection(created);
+        setSingleSelection(findEntryByUuid(state, created?.uuid ?? null));
         editorOpen = false;
         flash("已创建条目");
       } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
@@ -1329,12 +1329,12 @@
         editorOpen = false;
         flash(`已更新 ${uuids.length} 个条目`);
       } else if (editorMode === "edit" && input && editEntry) {
-        const state = await vault.updateEntry(editEntry.uuid, input);
+        let state = await vault.updateEntry(editEntry.uuid, input);
         if (autotype) {
-          await vault.updateEntryAutoType(editEntry.uuid, autotype);
+          state = await vault.updateEntryAutoType(editEntry.uuid, autotype);
         }
         if (flags) {
-          await vault.updateEntryFlags(editEntry.uuid, flags);
+          state = await vault.updateEntryFlags(editEntry.uuid, flags);
         }
         setSingleSelection(findEntryByUuid(state, editEntry.uuid));
         editorOpen = false;
