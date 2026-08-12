@@ -93,6 +93,50 @@ fn apply_favicons_persists_custom_icon_across_reopen() {
     assert_eq!(icon_datas, vec![bytes.clone(), bytes.clone()]);
 }
 
+/// Full snapshots carry the authoritative custom-icon map (including a
+/// non-empty one), while mutation results omit it so favorites/expansion/CRUD
+/// no longer re-transmit every favicon over IPC.
+#[test]
+fn light_mutation_snapshots_omit_custom_icons() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Login".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com/login".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let jobs = session.favicon_jobs().unwrap();
+    session
+        .apply_favicons(
+            &jobs,
+            vec![FaviconFetch {
+                host: "example.com".into(),
+                bytes: vec![1, 2, 3],
+            }],
+        )
+        .unwrap();
+    let full = session.state().unwrap().unwrap();
+    assert!(full
+        .custom_icons
+        .as_ref()
+        .is_some_and(|icons| !icons.is_empty()));
+    let uuid = full.root.entries.last().unwrap().uuid.clone();
+    let mutated = session.toggle_favorite(&uuid).unwrap();
+    assert!(mutated.custom_icons.is_none());
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

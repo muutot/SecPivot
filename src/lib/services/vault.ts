@@ -105,6 +105,16 @@ const BROWSER_KEY = "secpivot-browser-vault";
 let browserState: VaultState | null = null;
 let initialized = false;
 
+/** Cache of database custom icons, kept across mutation snapshots that omit
+ *  the image payload; replaced whenever an authoritative snapshot arrives. */
+let iconCache: Record<string, string> = {};
+
+function applyBackendState(result: VaultState): VaultState {
+  if (result.customIcons !== undefined) iconCache = result.customIcons;
+  result.customIcons = { ...iconCache };
+  return result;
+}
+
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -240,11 +250,11 @@ async function backendInvoke<T>(command: string, args: Record<string, unknown> =
 async function refreshInternal(): Promise<VaultState | null> {
   if (isTauriRuntime()) {
     const value = await backendInvoke<VaultState | null>("get_vault_state");
-    state.set(value);
+    if (value) state.set(applyBackendState(value));
     return value;
   }
   const value = browserState ? deepClone(browserState) : null;
-  state.set(value);
+  if (value) state.set(applyBackendState(value));
   return value;
 }
 
@@ -276,7 +286,7 @@ export const vault: VaultStore = {
         password,
         keyfile: keyfile || null,
       });
-      state.set(result);
+      state.set(applyBackendState(result));
       remembered.set({ path: result.path, fileName: result.fileName });
       rememberRecent(result.path);
       return result;
@@ -285,7 +295,7 @@ export const vault: VaultStore = {
     browserState.path = path;
     browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
     const result = deepClone(browserState);
-    state.set(result);
+    state.set(applyBackendState(result));
     remembered.set({ path: result.path, fileName: result.fileName });
     rememberRecent(result.path);
     return result;
@@ -297,7 +307,7 @@ export const vault: VaultStore = {
         ...request,
         keyfile: request.keyfile || null,
       });
-      state.set(result);
+      state.set(applyBackendState(result));
       remembered.set({ path: result.path, fileName: result.fileName });
       rememberRecent(result.path);
       return result;
@@ -308,7 +318,7 @@ export const vault: VaultStore = {
     fresh.dirty = false;
     browserState = fresh;
     const result = deepClone(fresh);
-    state.set(result);
+    state.set(applyBackendState(result));
     remembered.set({ path: result.path, fileName: result.fileName });
     rememberRecent(result.path);
     await browserPersist(result);
@@ -324,6 +334,7 @@ export const vault: VaultStore = {
       }
     }
     browserState = null;
+    iconCache = {};
     state.set(null);
   },
 
@@ -345,7 +356,7 @@ export const vault: VaultStore = {
       keyfile: keyfile || null,
       mode,
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     // A remote session cannot be reopened from the lock screen; clear the
     // remembered local path so unlocking never silently targets the old vault.
     remembered.set(null);
@@ -366,7 +377,7 @@ export const vault: VaultStore = {
       keyfile: keyfile || null,
       mode,
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     // See `openRemote`: a remote session is never the lock-screen quick-reopen
     // target, so drop any stale remembered local path.
     remembered.set(null);
@@ -377,7 +388,7 @@ export const vault: VaultStore = {
   async save(): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("save_vault");
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
@@ -393,7 +404,7 @@ export const vault: VaultStore = {
   async saveAs(path: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("save_vault_as", { path });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
@@ -415,7 +426,7 @@ export const vault: VaultStore = {
         password,
         keyfile,
       });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     return vault.save();
@@ -424,7 +435,7 @@ export const vault: VaultStore = {
   async addEntry(input: EntryInput): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("add_entry", { input });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -447,14 +458,14 @@ export const vault: VaultStore = {
         modified: new Date().toISOString(),
       });
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async addEntries(inputs: EntryInput[]): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("import_entries", { inputs });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -479,14 +490,14 @@ export const vault: VaultStore = {
         });
       }
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async updateEntry(uuid: string, input: EntryInput): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("update_entry", { uuid, input });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -511,14 +522,14 @@ export const vault: VaultStore = {
       }
       throw new Error("entry not found");
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async updateEntries(uuids: string[], patch: EntryPatch): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("update_entries", { uuids, patch });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -546,7 +557,7 @@ export const vault: VaultStore = {
         }
       }
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
@@ -605,7 +616,7 @@ export const vault: VaultStore = {
   async toggleFavorite(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("toggle_favorite", { uuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -613,7 +624,7 @@ export const vault: VaultStore = {
       if (!entry) throw new Error("entry not found");
       entry.favorite = !entry.favorite;
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
@@ -629,7 +640,7 @@ export const vault: VaultStore = {
   async addGroup(input: GroupInput): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("add_group", { input });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -646,14 +657,14 @@ export const vault: VaultStore = {
         entries: [],
       });
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async renameGroup(uuid: string, name: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("rename_group", { uuid, name });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -661,14 +672,14 @@ export const vault: VaultStore = {
       if (!group) throw new Error("group not found");
       group.name = name;
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async setGroupIcon(uuid: string, icon: number | null): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("set_group_icon", { uuid, icon });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -677,14 +688,14 @@ export const vault: VaultStore = {
       if (icon === null) group.icon = undefined;
       else group.icon = icon;
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async setGroupExpanded(uuid: string, expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("set_group_expanded", { uuid, expanded });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -692,25 +703,25 @@ export const vault: VaultStore = {
       if (!group) throw new Error("group not found");
       group.isExpanded = expanded;
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async setGroupsExpanded(uuids: string[], expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("set_groups_expanded", { uuids, expanded });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     if (uuids.length === 0) {
       const result = deepClone(browserState ?? buildDemoVaultState());
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
       setGroupsExpandedInTree(draft.root, uuids, expanded);
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
@@ -720,7 +731,7 @@ export const vault: VaultStore = {
       if (name !== undefined) args.name = name;
       if (description !== undefined) args.description = description;
       const result = await backendInvoke<VaultState>("update_db_meta", args);
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -728,14 +739,14 @@ export const vault: VaultStore = {
       if (description !== undefined)
         draft.databaseDescription = description ? description : undefined;
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async deleteEntry(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("delete_entry", { uuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -746,14 +757,14 @@ export const vault: VaultStore = {
       entry.groupUuid = bin.uuid;
       bin.entries.push(entry);
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async deleteEntries(uuids: string[]): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("delete_entries", { uuids });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -766,14 +777,14 @@ export const vault: VaultStore = {
         bin.entries.push(entry);
       }
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async moveEntry(uuid: string, groupUuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("move_entry", { uuid, groupUuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -787,14 +798,14 @@ export const vault: VaultStore = {
       entry.groupUuid = groupUuid;
       target.entries.push(entry);
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async restoreEntry(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("restore_entry", { uuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -806,7 +817,7 @@ export const vault: VaultStore = {
       entry.groupUuid = draft.root.uuid;
       draft.root.entries.push(entry);
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
@@ -820,7 +831,7 @@ export const vault: VaultStore = {
   async deleteEntryHistory(uuid: string, index: number): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("delete_entry_history", { uuid, index });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     throw new Error("浏览器模式不支持删除历史版本");
@@ -836,7 +847,7 @@ export const vault: VaultStore = {
   async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("restore_entry_version", { uuid, index });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     throw new Error("浏览器模式不支持历史版本恢复");
@@ -845,7 +856,7 @@ export const vault: VaultStore = {
   async deleteGroup(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("delete_group", { uuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     if (uuid === "root") throw new Error("cannot delete root");
@@ -869,14 +880,14 @@ export const vault: VaultStore = {
       }
       throw new Error("group not found");
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async restoreGroup(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("restore_group", { uuid });
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -888,14 +899,14 @@ export const vault: VaultStore = {
       removed.parentUuid = draft.root.uuid;
       draft.root.children.push(removed);
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 
   async emptyRecycleBin(): Promise<VaultState> {
     if (isTauriRuntime()) {
       const result = await backendInvoke<VaultState>("empty_recycle_bin");
-      state.set(result);
+      state.set(applyBackendState(result));
       return result;
     }
     const result = applyEdit((draft) => {
@@ -905,7 +916,7 @@ export const vault: VaultStore = {
         bin.children = [];
       }
     });
-    state.set(result);
+    state.set(applyBackendState(result));
     return result;
   },
 

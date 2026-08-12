@@ -33,7 +33,7 @@ impl VaultSession {
             sync_attachments(&mut entry, &input.attachments, &payloads);
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Add many entries in one transaction. Every attachment payload is
@@ -43,7 +43,7 @@ impl VaultSession {
     /// of round-tripping one IPC per row.
     pub fn add_entries(&mut self, inputs: &[EntryInput]) -> Result<VaultState, String> {
         if inputs.is_empty() {
-            return self.snapshot();
+            return self.snapshot_without_icons();
         }
         let payloads: Vec<Vec<AttachmentPayload>> = inputs
             .iter()
@@ -66,7 +66,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     pub fn update_entry(&mut self, uuid: &str, input: &EntryInput) -> Result<VaultState, String> {
@@ -101,7 +101,7 @@ impl VaultSession {
             trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Apply one partial patch to several entries in a single transaction.
@@ -115,7 +115,7 @@ impl VaultSession {
         patch: &EntryPatch,
     ) -> Result<VaultState, String> {
         if uuids.is_empty() {
-            return self.snapshot();
+            return self.snapshot_without_icons();
         }
         let ids: Vec<EntryId> = uuids
             .iter()
@@ -144,7 +144,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Move an entry into another group (used by drag-and-drop).
@@ -161,7 +161,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Move several entries into the recycle bin (or permanently delete them
@@ -192,7 +192,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Move an entry to the recycle bin (or permanently delete it when it is
@@ -221,7 +221,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// List the historical snapshots of an entry, newest first. Passwords are
@@ -396,7 +396,7 @@ impl VaultSession {
             trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Permanently delete one historical snapshot from an entry's history.
@@ -411,7 +411,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Restore a recycled entry to its original group (or root when the
@@ -445,7 +445,7 @@ impl VaultSession {
             entry.fields.remove(FIELD_ORIGINAL_GROUP);
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Delete a group: move the whole subtree to the recycle bin, or
@@ -472,7 +472,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Restore a recycled group back to the root.
@@ -494,7 +494,7 @@ impl VaultSession {
                 .map_err(|e| format!("恢复分组失败: {e}"))?;
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Permanently delete every entry and group inside the recycle bin,
@@ -522,7 +522,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 }
 
@@ -550,7 +550,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     pub fn rename_group(&mut self, uuid: &str, name: &str) -> Result<VaultState, String> {
@@ -568,7 +568,7 @@ impl VaultSession {
             group.name = name.to_owned();
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Set a group's built-in KeePass icon index (`Some(i)`) or reset it to
@@ -584,7 +584,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
@@ -602,7 +602,7 @@ impl VaultSession {
         expanded: bool,
     ) -> Result<VaultState, String> {
         if uuids.is_empty() {
-            return self.snapshot();
+            return self.snapshot_without_icons();
         }
         let ids: Vec<GroupId> = uuids
             .iter()
@@ -619,7 +619,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Update the database-level `Meta` display fields. `name`/`description`
@@ -643,6 +643,6 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 }

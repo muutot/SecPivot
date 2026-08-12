@@ -46,7 +46,7 @@ impl VaultSession {
             }
         }
         self.mark_dirty();
-        self.snapshot()
+        self.snapshot_without_icons()
     }
 
     /// Compute the one-time password for an entry that carries an OTP seed

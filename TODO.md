@@ -82,7 +82,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [ ] 统一弹窗基础设施：新增使用现有 theme tokens 的 `ModalShell`（header/body/actions、size/tone），迁移重复的 `.modal-head/.modal-icon/.modal-actions/.modal-button/.text-input`，禁止形成第二套圆角、阴影、按钮和输入框样式
 - [ ] 统一 viewport 菜单与凭据表单：抽取 `ViewportMenuShell`（viewport clamp、Escape、click-outside）供右键菜单/列配置复用；抽取欢迎页与锁屏共用的 `StandaloneVaultShell`/`VaultCredentialFields`
 - [x] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
-- [ ] 缩小 mutation 状态传输：先将自定义图标资源与树快照拆分缓存，再引入 `revision + mutation result/delta`；不得让收藏、展开等小修改长期重建、编码并跨 IPC 传输完整树和全部图标
+- [x] mutation 自定义图标拆分缓存：后端 mutation 快照省略 `customIcons` 图像负载（`Option::None`），前端 `vault.ts` 维护图标缓存并在权威快照/轻量结果间合并；favorite/展开/CRUD 不再跨 IPC 重传全部 favicon，附 `light_mutation_snapshots_omit_custom_icons` 测试
+- [ ] revision + mutation result/delta：引入 `revision` 与 mutation delta，避免收藏、展开等小修改每次重建、编码并跨 IPC 传输完整树
 
 ### P1 — 数据安全、核心 KeePass 工作流与高价值原生能力
 

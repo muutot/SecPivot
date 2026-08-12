@@ -293,11 +293,27 @@ impl VaultSession {
     }
 
     pub(crate) fn snapshot(&mut self) -> Result<VaultState, String> {
-        // Rebuild the tree only when the database changed; repeated reads
-        // (e.g. get_vault_state polling) reuse the cached snapshot.
-        if let Some((revision, cached)) = &self.cached_snapshot {
-            if *revision == self.revision {
-                return Ok(cached.clone());
+        self.build_snapshot(true)
+    }
+
+    /// Mutation result: rebuild the tree but omit the custom-icon image
+    /// payload (`custom_icons: None`), so favorites/expansion/CRUD no longer
+    /// re-transmit every favicon over IPC. The renderer caches icons from the
+    /// last authoritative snapshot and merges them back locally.
+    pub(crate) fn snapshot_without_icons(&mut self) -> Result<VaultState, String> {
+        self.build_snapshot(false)
+    }
+
+    fn build_snapshot(&mut self, include_icons: bool) -> Result<VaultState, String> {
+        // Rebuild the tree only when the database changed; repeated full
+        // reads (e.g. get_vault_state polling) reuse the cached snapshot.
+        // Light mutation snapshots bypass the cache because the revision just
+        // changed, and they must never serve as the full-state cache.
+        if include_icons {
+            if let Some((revision, cached)) = &self.cached_snapshot {
+                if *revision == self.revision {
+                    return Ok(cached.clone());
+                }
             }
         }
         let db = self.require_db()?;
@@ -312,15 +328,18 @@ impl VaultSession {
             root: build_group_tree(db),
             dirty: self.dirty,
             modified_at: self.modified_at.clone(),
-            custom_icons: db
-                .iter_all_custom_icons()
-                .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))
-                .collect(),
+            custom_icons: include_icons.then(|| {
+                db.iter_all_custom_icons()
+                    .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))
+                    .collect()
+            }),
             meta_custom_data: custom_data_entries(&db.meta.custom_data),
             database_name: db.meta.database_name.clone(),
             database_description: db.meta.database_description.clone(),
         };
-        self.cached_snapshot = Some((self.revision, state.clone()));
+        if include_icons {
+            self.cached_snapshot = Some((self.revision, state.clone()));
+        }
         Ok(state)
     }
 

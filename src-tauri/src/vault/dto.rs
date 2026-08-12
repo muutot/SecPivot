@@ -143,9 +143,11 @@ pub struct VaultState {
     pub modified_at: String,
     /// Database custom icons (favicons) that live in the KDBX Meta section,
     /// keyed by custom-icon UUID; values are `data:` URLs for direct display.
-    /// Only present when the database carries at least one custom icon.
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub custom_icons: HashMap<String, String>,
+    /// `Some(map)` is authoritative (open/create/full refresh, including an
+    /// empty map); `None` means "unchanged" so mutation snapshots can omit
+    /// the image payload while the renderer keeps its icon cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_icons: Option<HashMap<String, String>>,
     /// Database-meta-level KDBX `CustomData` map items, sorted by key.
     /// Read-only — SecPivot never writes these, they must survive saves
     /// untouched.
