@@ -72,6 +72,9 @@ pub struct VaultEntry {
     /// never surfaced as the display URL. Editable via `update_entry_flags`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_url: Option<String>,
+    /// KeePass `ForegroundColor` (`#RRGGBB`); editable via `update_entry_flags`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreground_color: Option<String>,
     pub favorite: bool,
     /// KeePass per-entry password-quality check flag. When false, the entry is
     /// excluded from the security report's weak-password findings.

@@ -664,6 +664,7 @@ export const vault: VaultStore = {
         uuid,
         overrideUrl: flags.overrideUrl ?? null,
         qualityCheck: flags.qualityCheck ?? null,
+        foregroundColor: flags.foregroundColor ?? null,
       });
       state.set(applyBackendState(result));
       return result;
@@ -679,6 +680,11 @@ export const vault: VaultStore = {
             else delete entry.overrideUrl;
           }
           if (flags.qualityCheck !== undefined) entry.qualityCheck = flags.qualityCheck;
+          if (flags.foregroundColor !== undefined) {
+            const value = flags.foregroundColor.trim();
+            if (value) entry.foregroundColor = value;
+            else delete entry.foregroundColor;
+          }
           return;
         }
       }

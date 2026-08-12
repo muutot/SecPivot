@@ -6200,9 +6200,14 @@ fn update_entry_flags_round_trips_override_url_and_quality_check() {
         .unwrap();
     let uuid = state.root.entries[0].uuid.clone();
 
-    // Set both flags.
+    // Set the flags and a foreground color.
     let updated = session
-        .update_entry_flags(&uuid, Some("https://real.example".into()), Some(false))
+        .update_entry_flags(
+            &uuid,
+            Some("https://real.example".into()),
+            Some(false),
+            Some("#FF0000".into()),
+        )
         .unwrap();
     let entry = updated
         .root
@@ -6212,9 +6217,10 @@ fn update_entry_flags_round_trips_override_url_and_quality_check() {
         .unwrap();
     assert_eq!(entry.override_url.as_deref(), Some("https://real.example"));
     assert!(!entry.quality_check);
+    assert_eq!(entry.foreground_color.as_deref(), Some("#FF0000"));
 
     // Absent flags keep the current values.
-    let updated = session.update_entry_flags(&uuid, None, None).unwrap();
+    let updated = session.update_entry_flags(&uuid, None, None, None).unwrap();
     let entry = updated
         .root
         .entries
@@ -6222,10 +6228,11 @@ fn update_entry_flags_round_trips_override_url_and_quality_check() {
         .find(|e| e.uuid == uuid)
         .unwrap();
     assert_eq!(entry.override_url.as_deref(), Some("https://real.example"));
+    assert_eq!(entry.foreground_color.as_deref(), Some("#FF0000"));
 
-    // Empty override clears it; quality check is restored.
+    // Empty override/color clear them; quality check is restored.
     let updated = session
-        .update_entry_flags(&uuid, Some(String::new()), Some(true))
+        .update_entry_flags(&uuid, Some(String::new()), Some(true), Some(String::new()))
         .unwrap();
     let entry = updated
         .root
@@ -6235,6 +6242,7 @@ fn update_entry_flags_round_trips_override_url_and_quality_check() {
         .unwrap();
     assert!(entry.override_url.is_none());
     assert!(entry.quality_check);
+    assert!(entry.foreground_color.is_none());
 
     // Save + reopen keeps the flags.
     session.save().unwrap();
@@ -6243,6 +6251,7 @@ fn update_entry_flags_round_trips_override_url_and_quality_check() {
     let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
     assert!(entry.override_url.is_none());
     assert!(entry.quality_check);
+    assert!(entry.foreground_color.is_none());
 }
 
 // -- KeePassRPC full KPRPC config (regex / blocked / accuracy) ----------

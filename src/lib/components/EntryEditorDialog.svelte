@@ -84,6 +84,7 @@
   let tags = $state(multi ? (sharedValue((e) => e.tags ?? "") ?? "") : (initialEntry?.tags ?? ""));
   let overrideUrl = $state(multi ? "" : (initialEntry?.overrideUrl ?? ""));
   let qualityCheck = $state(multi ? true : (initialEntry?.qualityCheck ?? true));
+  let foregroundHex = $state(multi ? "" : (initialEntry?.foregroundColor ?? ""));
   let totp = $state("");
   let totpLoading = $state(false);
   /** Whether the current TOTP seed is known. Same data-loss reasoning as
@@ -617,7 +618,7 @@
         },
         null,
         autotype,
-        { overrideUrl: overrideUrl.trim(), qualityCheck },
+        { overrideUrl: overrideUrl.trim(), qualityCheck, foregroundColor: foregroundHex },
       ),
     );
   }
@@ -914,33 +915,70 @@
           {/if}
         </section>
 
-        <label class="field">
-          <span>覆盖 URL（OverrideURL）</span>
-          <input
-            class="text-input mono"
-            type="text"
-            bind:value={overrideUrl}
-            placeholder="https://real.example"
-            oninput={() => markTouched("overrideUrl")}
-          />
-          <span class="field-hint">仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址</span>
-        </label>
+        {#if !multi}
+          <label class="field">
+            <span>覆盖 URL（OverrideURL）</span>
+            <input
+              class="text-input mono"
+              type="text"
+              bind:value={overrideUrl}
+              placeholder="https://real.example"
+              oninput={() => markTouched("overrideUrl")}
+            />
+            <span class="field-hint">仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址</span>
+          </label>
 
-        <label class="field">
-          <span>质量检查</span>
-          <div class="flag-row">
-            <button
-              type="button"
-              class="flag-toggle"
-              class:active={qualityCheck}
-              onclick={() => (qualityCheck = !qualityCheck)}
-              aria-pressed={qualityCheck}
-            >
-              {qualityCheck ? "已启用" : "已禁用"}
-            </button>
-          </div>
-          <span class="field-hint">禁用后条目不参与弱密码安全检查</span>
-        </label>
+          <label class="field">
+            <span>质量检查</span>
+            <div class="flag-row">
+              <button
+                type="button"
+                class="flag-toggle"
+                class:active={qualityCheck}
+                onclick={() => (qualityCheck = !qualityCheck)}
+                aria-pressed={qualityCheck}
+              >
+                {qualityCheck ? "已启用" : "已禁用"}
+              </button>
+            </div>
+            <span class="field-hint">禁用后条目不参与弱密码安全检查</span>
+          </label>
+
+          <section class="field full">
+            <span class="section-title">前景色（文字）</span>
+            <div class="color-row">
+              {#each KEEPASS_COLORS as color (color)}
+                <button
+                  type="button"
+                  class="color-option"
+                  class:selected={foregroundHex.toUpperCase() === color}
+                  style:background={color}
+                  onclick={() =>
+                    (foregroundHex = foregroundHex.toUpperCase() === color ? "" : color)}
+                  title={color}
+                  aria-label={`前景色 ${color}`}
+                ></button>
+              {/each}
+              <input
+                class="color-input"
+                type="color"
+                value={foregroundHex || "#000000"}
+                oninput={(e) => (foregroundHex = e.currentTarget.value.toUpperCase())}
+                title="自定义前景色"
+              />
+              {#if foregroundHex}
+                <button
+                  type="button"
+                  class="icon-btn"
+                  onclick={() => (foregroundHex = "")}
+                  title="清除前景色"
+                >
+                  <AppIcon name="x" size={13} />
+                </button>
+              {/if}
+            </div>
+          </section>
+        {/if}
       </div>
     {/if}
 

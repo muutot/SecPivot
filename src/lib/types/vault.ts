@@ -22,6 +22,8 @@ export interface VaultEntry {
   /** KeePass `OverrideURL`: honored for matching only (bridge/RPC/auto-type),
    * never shown as the display URL. */
   overrideUrl?: string;
+  /** KeePass `ForegroundColor` (`#RRGGBB`). */
+  foregroundColor?: string;
   created?: string;
   modified?: string;
   expires?: string;
@@ -270,6 +272,8 @@ export interface EntryPatch {
 export interface EntryFlags {
   overrideUrl?: string;
   qualityCheck?: boolean;
+  /** `#RRGGBB` foreground color; absent = keep, empty string = clear. */
+  foregroundColor?: string;
 }
 
 export interface GroupInput {

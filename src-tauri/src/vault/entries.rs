@@ -124,6 +124,7 @@ impl VaultSession {
         uuid: &str,
         override_url: Option<String>,
         quality_check: Option<bool>,
+        foreground_color: Option<String>,
     ) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
@@ -139,6 +140,9 @@ impl VaultSession {
             }
             if let Some(check) = quality_check {
                 entry.quality_check = check;
+            }
+            if let Some(color) = foreground_color {
+                entry.foreground_color = super::serialize::parse_color(Some(color.as_str()));
             }
         }
         self.mark_dirty();

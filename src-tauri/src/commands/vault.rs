@@ -314,11 +314,12 @@ pub(crate) fn update_entry_flags(
     uuid: String,
     override_url: Option<String>,
     quality_check: Option<bool>,
+    foreground_color: Option<String>,
 ) -> Result<VaultState, String> {
     session
         .lock()
         .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_entry_flags(&uuid, override_url, quality_check)
+        .update_entry_flags(&uuid, override_url, quality_check, foreground_color)
 }
 
 #[tauri::command]
