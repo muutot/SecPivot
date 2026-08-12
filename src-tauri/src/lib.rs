@@ -313,6 +313,7 @@ pub fn run() {
             commands::add_group,
             commands::rename_group,
             commands::set_group_icon,
+            commands::update_group_meta,
             commands::set_group_expanded,
             commands::set_groups_expanded,
             commands::update_group_autotype,

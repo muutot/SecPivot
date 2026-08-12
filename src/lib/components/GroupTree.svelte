@@ -19,6 +19,7 @@
     onrename: (uuid: string, name: string) => void;
     onchangeicon: (uuid: string) => void;
     onautotype?: (uuid: string) => void;
+    onmeta?: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -41,6 +42,7 @@
     onrename,
     onchangeicon,
     onautotype,
+    onmeta,
     ondelete,
     onrestore,
     onemptybin,
@@ -211,6 +213,7 @@
         {onrename}
         {onchangeicon}
         {onautotype}
+        {onmeta}
         {ondelete}
         {onrestore}
         {onemptybin}

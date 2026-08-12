@@ -632,6 +632,45 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Update group metadata (notes, tags, search participation) without
+    /// touching the name or icon. `notes`: a present value sets it (empty
+    /// string clears), absent keeps. `tags`: a comma-separated string sets
+    /// them (empty clears), absent keeps. `enable_searching`: a present bool
+    /// sets the KDBX group flag, absent keeps.
+    pub fn update_group_meta(
+        &mut self,
+        uuid: &str,
+        notes: Option<String>,
+        tags: Option<String>,
+        enable_searching: Option<bool>,
+    ) -> Result<VaultState, String> {
+        {
+            let db = self.require_db_mut()?;
+            let mut group = if uuid == ROOT_GROUP_UUID {
+                db.root_mut()
+            } else {
+                let id = parse_group_id(uuid)?;
+                db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?
+            };
+            if let Some(notes) = notes {
+                let notes = notes.trim();
+                group.notes = if notes.is_empty() {
+                    None
+                } else {
+                    Some(notes.to_owned())
+                };
+            }
+            if let Some(tags) = tags {
+                group.tags = super::serialize::parse_tags(&tags);
+            }
+            if let Some(flag) = enable_searching {
+                group.enable_searching = Some(flag);
+            }
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
     /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
     /// the tree reopens the same groups after a save + reopen.
     pub fn set_group_expanded(&mut self, uuid: &str, expanded: bool) -> Result<VaultState, String> {

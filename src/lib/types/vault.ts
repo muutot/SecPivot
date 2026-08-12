@@ -283,6 +283,14 @@ export interface GroupInput {
   icon?: number;
 }
 
+/** Group metadata patch: `notes`/`tags` absent = keep, empty string = clear;
+ *  `enableSearching` absent = keep, present = set. */
+export interface GroupMeta {
+  notes?: string;
+  tags?: string;
+  enableSearching?: boolean;
+}
+
 export interface TotpCode {
   code: string;
   /** `"totp"` (RFC 6238), `"hotp"` (RFC 4226 counter), or `"steam"` guard. */

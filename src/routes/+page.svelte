@@ -40,6 +40,7 @@
   import GroupTree from "$lib/components/GroupTree.svelte";
   import VaultTabs from "$lib/components/VaultTabs.svelte";
   import GroupAutoTypeDialog from "$lib/components/GroupAutoTypeDialog.svelte";
+  import GroupMetaDialog from "$lib/components/GroupMetaDialog.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
@@ -91,6 +92,7 @@
   let groupCreating = $state(false);
   let groupIconDialogUuid = $state<string | null>(null);
   let groupAutoTypeUuid = $state<string | null>(null);
+  let groupMetaUuid = $state<string | null>(null);
   let groupIconPick = $state<number | null>(null);
   let groupIconSaving = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
@@ -1228,6 +1230,20 @@
     }
   }
 
+  async function saveGroupMeta(meta: {
+    notes?: string;
+    tags?: string;
+    enableSearching?: boolean;
+  }): Promise<void> {
+    if (!groupMetaUuid) return;
+    try {
+      await vault.updateGroupMeta(groupMetaUuid, meta);
+      flash("已保存分组属性");
+    } catch (e) {
+      flash(`保存分组属性失败：${e}`);
+    }
+  }
+
   /** Open the group icon picker dialog, seeding the selection from the group's
    *  current built-in icon index (or none when it has no explicit icon). */
   function openGroupIconDialog(uuid: string): void {
@@ -1729,6 +1745,7 @@
             onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
             onchangeicon={openGroupIconDialog}
             onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
+            onmeta={(uuid: string) => (groupMetaUuid = uuid)}
             ondelete={askDeleteGroup}
             onrestore={(uuid: string) => void restoreGroup(uuid)}
             onemptybin={askEmptyRecycleBin}
@@ -2005,6 +2022,17 @@
   {@const group = findGroupIn(currentVault.root, groupAutoTypeUuid)}
   {#if group}
     <GroupAutoTypeDialog {group} onclose={() => (groupAutoTypeUuid = null)} />
+  {/if}
+{/if}
+
+{#if groupMetaUuid && currentVault}
+  {@const group = findGroupIn(currentVault.root, groupMetaUuid)}
+  {#if group}
+    <GroupMetaDialog
+      {group}
+      onclose={() => (groupMetaUuid = null)}
+      onsaved={(meta) => void saveGroupMeta(meta)}
+    />
   {/if}
 {/if}
 

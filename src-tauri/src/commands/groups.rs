@@ -37,6 +37,22 @@ pub(crate) fn set_group_icon(
         .set_group_icon(&uuid, icon)
 }
 
+/// Update group metadata: `notes`/`tags` absent = keep, empty string = clear;
+/// `enableSearching` absent = keep, present = set.
+#[tauri::command]
+pub(crate) fn update_group_meta(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+    notes: Option<String>,
+    tags: Option<String>,
+    enable_searching: Option<bool>,
+) -> Result<VaultState, String> {
+    session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .update_group_meta(&uuid, notes, tags, enable_searching)
+}
+
 #[tauri::command]
 pub(crate) fn set_group_expanded(
     session: tauri::State<'_, Mutex<VaultSession>>,

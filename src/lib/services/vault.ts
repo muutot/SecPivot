@@ -11,6 +11,7 @@ import type {
   EntryAutoTypeConfig,
   GroupInput,
   GroupAutoTypeConfig,
+  GroupMeta,
   CreateVaultRequest,
   TotpCode,
   HistoryVersion,
@@ -93,6 +94,7 @@ interface VaultStore {
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
+  updateGroupMeta: (uuid: string, meta: GroupMeta) => Promise<VaultState>;
   setGroupExpanded: (uuid: string, expanded: boolean) => Promise<VaultState>;
   setGroupsExpanded: (uuids: string[], expanded: boolean) => Promise<VaultState>;
   updateEntryAutoType: (uuid: string, input: EntryAutoTypeConfig) => Promise<VaultState>;
@@ -856,6 +858,28 @@ export const vault: VaultStore = {
       if (!group) throw new Error("group not found");
       if (icon === null) group.icon = undefined;
       else group.icon = icon;
+    });
+    state.set(applyBackendState(result));
+    return result;
+  },
+
+  async updateGroupMeta(uuid: string, meta: GroupMeta): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      const result = await backendInvoke<VaultState>("update_group_meta", {
+        uuid,
+        notes: meta.notes ?? null,
+        tags: meta.tags ?? null,
+        enableSearching: meta.enableSearching ?? null,
+      });
+      state.set(applyBackendState(result));
+      return result;
+    }
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, uuid);
+      if (!group) throw new Error("group not found");
+      if (meta.notes !== undefined) group.notes = meta.notes.trim() || undefined;
+      if (meta.tags !== undefined) group.tags = meta.tags.trim() || undefined;
+      if (meta.enableSearching !== undefined) group.enableSearching = meta.enableSearching;
     });
     state.set(applyBackendState(result));
     return result;

@@ -356,6 +356,69 @@ fn group_autotype_round_trip_and_inheritance() {
     );
 }
 
+#[test]
+fn group_meta_notes_tags_search_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Work".into(),
+            icon: None,
+        })
+        .unwrap();
+    let uuid = state.root.children[0].uuid.clone();
+
+    // Set notes/tags and exclude the group from search.
+    let updated = session
+        .update_group_meta(
+            &uuid,
+            Some("shared vault".into()),
+            Some("dev, web".into()),
+            Some(false),
+        )
+        .unwrap();
+    let group = updated
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == uuid)
+        .unwrap();
+    assert_eq!(group.notes.as_deref(), Some("shared vault"));
+    assert_eq!(group.tags.as_deref(), Some("dev, web"));
+    assert!(!group.enable_searching);
+
+    // Clear notes/tags and re-enable search; absent fields keep values.
+    let updated = session
+        .update_group_meta(&uuid, Some(String::new()), Some(String::new()), Some(true))
+        .unwrap();
+    let group = updated
+        .root
+        .children
+        .iter()
+        .find(|g| g.uuid == uuid)
+        .unwrap();
+    assert!(group.notes.is_none());
+    assert!(group.tags.is_none());
+    assert!(group.enable_searching);
+
+    // The root group accepts meta too.
+    let updated = session
+        .update_group_meta(ROOT_GROUP_UUID, Some("root note".into()), None, None)
+        .unwrap();
+    assert_eq!(updated.root.notes.as_deref(), Some("root note"));
+
+    // Save + reopen keeps the group meta.
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+    let group = state.root.children.iter().find(|g| g.uuid == uuid).unwrap();
+    assert!(group.notes.is_none());
+    assert!(group.tags.is_none());
+    assert!(group.enable_searching);
+    assert_eq!(state.root.notes.as_deref(), Some("root note"));
+}
+
 /// Global-hotkey resolution picks the first matching window association
 /// before falling back to the entry/group default sequence.
 #[test]
