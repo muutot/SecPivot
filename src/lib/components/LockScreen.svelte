@@ -220,22 +220,6 @@
     margin-top: 20px;
   }
 
-  .text-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: 12px;
-  }
-
-  .text-input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-
   .browse-button {
     display: inline-flex;
     align-items: center;
