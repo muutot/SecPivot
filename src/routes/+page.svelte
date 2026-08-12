@@ -44,6 +44,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
+  import DatabaseSettingsDialog from "$lib/components/DatabaseSettingsDialog.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
@@ -92,6 +93,7 @@
   let busy = $state(false);
   let reportOpen = $state(false);
   let dbMetaOpen = $state(false);
+  let dbSettingsOpen = $state(false);
   let securityReport = $state<SecurityReport | null>(null);
   let faviconDialog = $state<{
     phase: "working" | "done";
@@ -1454,6 +1456,7 @@
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
+    { id: "db-settings", label: "数据库设置", icon: "settings" },
   ]);
 
   const toolbarMenuItems = $derived<ContextMenuItem[]>([
@@ -1465,6 +1468,7 @@
     },
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
     { id: "export-csv", label: "导出 CSV", icon: "download" },
+    { id: "db-settings", label: "数据库设置", icon: "settings" },
     { id: "settings", label: "设置", icon: "settings" },
   ]);
 
@@ -1522,6 +1526,7 @@
     else if (id === "save-as") void handleSaveAs();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
+    else if (id === "db-settings") dbSettingsOpen = true;
   }
 
   function handleToolbarMenuAction(id: string): void {
@@ -1529,6 +1534,7 @@
     else if (id === "toggle-detail") detailVisible = !detailVisible;
     else if (id === "security-report") void handleOpenReport();
     else if (id === "export-csv") void handleExportCsv();
+    else if (id === "db-settings") dbSettingsOpen = true;
     else if (id === "settings") openSettings();
   }
 </script>
@@ -1857,6 +1863,10 @@
     description={currentVault.databaseDescription ?? ""}
     onclose={() => (dbMetaOpen = false)}
   />
+{/if}
+
+{#if dbSettingsOpen}
+  <DatabaseSettingsDialog onclose={() => (dbSettingsOpen = false)} />
 {/if}
 
 {#if columnMenu}
