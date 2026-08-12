@@ -1,7 +1,9 @@
 //! `VaultSession` lifecycle: open/create/close/save/change-key/save-as plus
 //! the lock-free prepare/persist handoff internals (extracted from mod.rs).
 
-use super::helpers::{wipe_secret_bytes, wipe_secret_string};
+use super::helpers::{
+    apply_cipher, apply_compression, apply_kdf, wipe_secret_bytes, wipe_secret_string,
+};
 use super::persist::{
     persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
     prepare_remote_open, read_keyfile, SaveJob, SaveTarget,
@@ -212,6 +214,7 @@ impl VaultSession {
         &mut self,
         patch: &DatabaseSettingsPatch,
     ) -> Result<VaultState, String> {
+        // Meta flags first so the re-encrypt clone below carries them.
         {
             let db = self.require_db_mut()?;
             if let Some(history_max_items) = patch.history_max_items {
@@ -221,8 +224,44 @@ impl VaultSession {
                 db.meta.recyclebin_enabled = recycle_bin_enabled;
             }
         }
-        self.mark_dirty();
-        self.snapshot_without_icons()
+        let storage_changed =
+            patch.kdf.is_some() || patch.cipher.is_some() || patch.compression.is_some();
+        if !storage_changed {
+            self.mark_dirty();
+            return self.snapshot_without_icons();
+        }
+
+        // Clone the database, apply the new storage config, and re-encrypt it
+        // with the same master key before touching the live session (a failed
+        // write leaves the open session unchanged).
+        let (db, target, revision) = self.prepare_change()?;
+        let mut db = db;
+        if let Some(kdf) = &patch.kdf {
+            apply_kdf(&mut db, kdf)?;
+        }
+        if let Some(cipher) = &patch.cipher {
+            apply_cipher(&mut db, cipher)?;
+        }
+        if let Some(compression) = &patch.compression {
+            apply_compression(&mut db, compression)?;
+        }
+        let password = self.require_password()?.to_owned();
+        let keyfile = self.keyfile.clone();
+        persist_change(&db, &password, keyfile.as_deref(), &target)?;
+
+        {
+            let live = self.require_db_mut()?;
+            if let Some(kdf) = &patch.kdf {
+                apply_kdf(live, kdf)?;
+            }
+            if let Some(cipher) = &patch.cipher {
+                apply_cipher(live, cipher)?;
+            }
+            if let Some(compression) = &patch.compression {
+                apply_compression(live, compression)?;
+            }
+        }
+        self.complete_save(revision)
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {

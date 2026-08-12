@@ -157,6 +157,9 @@ export interface DatabaseSettings {
 
 /** Partial database-settings write; omitted fields are kept, `null` resets. */
 export interface DatabaseSettingsPatch {
+  kdf?: "Aes" | "Argon2" | "Argon2id";
+  cipher?: "Aes256" | "Twofish" | "ChaCha20";
+  compression?: "None" | "Gzip";
   historyMaxItems?: number | null;
   recycleBinEnabled?: boolean | null;
 }

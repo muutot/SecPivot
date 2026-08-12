@@ -254,6 +254,15 @@ pub struct DatabaseSettings {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseSettingsPatch {
+    /// `"Aes"` / `"Argon2"` / `"Argon2id"`; present value re-encrypts.
+    #[serde(default)]
+    pub kdf: Option<String>,
+    /// `"Aes256"` / `"Twofish"` / `"ChaCha20"`; present value re-encrypts.
+    #[serde(default)]
+    pub cipher: Option<String>,
+    /// `"None"` / `"Gzip"`; present value re-encrypts.
+    #[serde(default)]
+    pub compression: Option<String>,
     #[serde(default)]
     pub history_max_items: Option<Option<i64>>,
     #[serde(default)]

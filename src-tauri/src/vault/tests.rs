@@ -524,6 +524,7 @@ fn update_database_settings_persists_history_and_recycle_flag() {
         .update_database_settings(&DatabaseSettingsPatch {
             history_max_items: Some(Some(5)),
             recycle_bin_enabled: Some(Some(false)),
+            ..Default::default()
         })
         .unwrap();
     let settings = session.database_settings().unwrap().unwrap();
@@ -542,11 +543,40 @@ fn update_database_settings_persists_history_and_recycle_flag() {
         .update_database_settings(&DatabaseSettingsPatch {
             history_max_items: Some(None),
             recycle_bin_enabled: Some(None),
+            ..Default::default()
         })
         .unwrap();
     let settings = session.database_settings().unwrap().unwrap();
     assert_eq!(settings.history_max_items, None);
     assert!(settings.recycle_bin_enabled);
+}
+
+/// KDF/cipher/compression changes re-encrypt the database with the same
+/// master key and survive save + reopen.
+#[test]
+fn update_database_settings_reencrypts_storage_config() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            kdf: Some("Argon2".into()),
+            cipher: Some("ChaCha20".into()),
+            compression: Some("Gzip".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.kdf, "Argon2");
+    assert_eq!(settings.cipher, "ChaCha20");
+    assert_eq!(settings.compression, "Gzip");
+
+    drop(session);
+    let mut session = VaultSession::default();
+    session.open(&path, "master-password", None).unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.kdf, "Argon2");
+    assert_eq!(settings.cipher, "ChaCha20");
+    assert_eq!(settings.compression, "Gzip");
 }
 
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
