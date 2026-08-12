@@ -30,7 +30,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 - 安装 JDK（`tauri android init` 硬要求）、Android Studio / SDK（platform + build-tools + NDK）、Gradle
 - `rustup target add aarch64-linux-android`
 - `npx tauri android init` 生成 `src-tauri/gen/android/`（该目录常被 `.gitignore` 排除）
-- 配置签名 keystore，准备 release 出包
+- 签名 keystore 由 `scripts/configure-android-signing.ps1` 在 CI 读取 secrets 自动配置（见下）
 
 ### 2. 一次真实 Android 编译（会暴露全部剩余裁剪点）
 
@@ -58,7 +58,12 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 5. 打包与 CI
 
-- 跟随桌面发布：`release.yml` 已新增 `android` job（见 CI 改动），tag 发布时在 GitHub-hosted runner 上构建并上传 debug APK 至同一次 release；release APK 仍需签名 keystore
+- 跟随桌面发布：`release.yml` 已新增 `android` job（见 CI 改动），tag 发布时在 GitHub-hosted runner 上构建 **release APK** 并上传至同一次 release
+- 签名配置：`scripts/configure-android-signing.ps1` 从 secrets（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS`）生成 `keystore.properties` 并幂等 patch `build.gradle.kts`（Tauri 2 模板默认无 signingConfigs）；需先在任意有 JDK 的机器生成 keystore：
+  ```
+  keytool -genkey -v -keystore upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+  [Convert]::ToBase64String([IO.File]::ReadAllBytes("upload-keystore.jks"))   # 存入 ANDROID_KEYSTORE_BASE64
+  ```
 
 ### 6. 文档与版本
 

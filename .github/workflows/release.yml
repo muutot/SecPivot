@@ -183,8 +183,16 @@ jobs:
         run: npx tauri android init --ci --skip-targets-install
         working-directory: src-tauri
 
-      - name: Build Android APK (debug)
-        run: npx tauri android build --debug
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: .\scripts\configure-android-signing.ps1
+
+      - name: Build Android APK (release)
+        run: npx tauri android build
         working-directory: src-tauri
 
       - name: Upload Android APK to release
