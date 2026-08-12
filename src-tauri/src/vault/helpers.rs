@@ -604,7 +604,9 @@ pub(crate) fn classify_open_error<E: std::fmt::Display>(e: E) -> String {
     {
         "无法打开数据库: 密码或密钥文件错误".to_owned()
     } else {
-        format!("无法打开数据库: {msg}")
+        format!(
+            "无法打开数据库: {msg}；若文件损坏，可在 KeePass 中导出为 XML 后通过「导入 XML」恢复"
+        )
     }
 }
 

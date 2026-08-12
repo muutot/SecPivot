@@ -4021,6 +4021,17 @@ fn probe_vault_classifies_headers_and_open_rejects_non_kdbx() {
 }
 
 #[test]
+fn classify_open_error_suggests_xml_recovery_for_parse_failures() {
+    let key_err = super::helpers::classify_open_error("invalid HMAC");
+    assert!(key_err.contains("密码或密钥文件错误"));
+    assert!(!key_err.contains("导入 XML"));
+
+    let parse_err = super::helpers::classify_open_error("unsupported file version");
+    assert!(parse_err.contains("无法打开数据库"));
+    assert!(parse_err.contains("导入 XML"));
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
