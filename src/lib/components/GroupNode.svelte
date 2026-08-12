@@ -26,6 +26,7 @@
     onaddsubgroup: (parentUuid: string) => void;
     onrename: (uuid: string, name: string) => void;
     onchangeicon: (uuid: string) => void;
+    onautotype?: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -48,6 +49,7 @@
     onaddsubgroup,
     onrename,
     onchangeicon,
+    onautotype,
     ondelete,
     onrestore,
     onemptybin,
@@ -127,6 +129,7 @@
             { id: "add-subgroup", label: "新建子分组", icon: "folder-plus" },
             { id: "rename", label: "重命名", icon: "edit" },
             { id: "change-icon", label: "设置图标", icon: "palette" },
+            { id: "autotype", label: "自动填充设置", icon: "keyboard" },
             { id: "delete", label: "删除分组", icon: "trash", destructive: true },
           ],
   );
@@ -159,6 +162,7 @@
     if (id === "add-subgroup") onaddsubgroup(group.uuid);
     else if (id === "rename") renaming = true;
     else if (id === "change-icon") onchangeicon(group.uuid);
+    else if (id === "autotype") onautotype?.(group.uuid);
     else if (id === "delete") ondelete(group.uuid);
     else if (id === "restore") onrestore?.(group.uuid);
     else if (id === "empty-bin") onemptybin?.();
@@ -270,6 +274,7 @@
       {onaddsubgroup}
       {onrename}
       {onchangeicon}
+      {onautotype}
       {ondelete}
       {onrestore}
       {onemptybin}

@@ -58,6 +58,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/components/EntryTable.svelte`           | Windowed entry-table UI, fixed-height spacers, keyboard focus, and transient column drag/resize state; `+page.svelte` owns sorted data, persisted columns, and vault mutations                                              |
 | `src/lib/components/TotpWidget.svelte`           | OTP code readout with countdown bar; TOTP/Steam refetch per period, HOTP shows a static code + counter                                                                                                                      |
 | `src/lib/components/EntryTotpBadge.svelte`       | List-row OTP badge (TOTP/Steam countdown bar; HOTP static, no bar); copy on click                                                                                                                                           |
+| `src/lib/components/GroupAutoTypeDialog.svelte`  | Group Auto-Type settings dialog (inherit/enable/disable + default sequence) over `ModalShell`                                                                                                                               |
 
 ## Backend ownership
 

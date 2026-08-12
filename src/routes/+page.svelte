@@ -36,6 +36,7 @@
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
+  import GroupAutoTypeDialog from "$lib/components/GroupAutoTypeDialog.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
   import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
@@ -81,6 +82,7 @@
   let groupIconIndex = $state<number | null>(null);
   let groupCreating = $state(false);
   let groupIconDialogUuid = $state<string | null>(null);
+  let groupAutoTypeUuid = $state<string | null>(null);
   let groupIconPick = $state<number | null>(null);
   let groupIconSaving = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
@@ -1688,6 +1690,7 @@
             onaddsubgroup={openGroupModal}
             onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
             onchangeicon={openGroupIconDialog}
+            onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
             ondelete={askDeleteGroup}
             onrestore={(uuid: string) => void restoreGroup(uuid)}
             onemptybin={askEmptyRecycleBin}
@@ -1945,6 +1948,13 @@
       </button>
     {/snippet}
   </ModalShell>
+{/if}
+
+{#if groupAutoTypeUuid && currentVault}
+  {@const group = findGroupIn(currentVault.root, groupAutoTypeUuid)}
+  {#if group}
+    <GroupAutoTypeDialog {group} onclose={() => (groupAutoTypeUuid = null)} />
+  {/if}
 {/if}
 
 {#if confirmState}

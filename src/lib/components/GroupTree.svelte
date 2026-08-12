@@ -18,6 +18,7 @@
     onaddsubgroup: (parentUuid: string | null) => void;
     onrename: (uuid: string, name: string) => void;
     onchangeicon: (uuid: string) => void;
+    onautotype?: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -39,6 +40,7 @@
     onaddsubgroup,
     onrename,
     onchangeicon,
+    onautotype,
     ondelete,
     onrestore,
     onemptybin,
@@ -208,6 +210,7 @@
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}
         {onrename}
         {onchangeicon}
+        {onautotype}
         {ondelete}
         {onrestore}
         {onemptybin}
