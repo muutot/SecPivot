@@ -340,8 +340,9 @@ async function refreshInternal(): Promise<VaultState | null> {
 async function refreshTabs(): Promise<void> {
   if (isTauriRuntime()) {
     const list = await backendInvoke<SessionInfo[]>("list_sessions");
+    activeSessionId = list[0]?.sessionId ?? null;
     tabs.set(list);
-    activeId.set(list[0]?.sessionId ?? null);
+    activeId.set(activeSessionId);
     return;
   }
   const current = browserState ?? get(state);
@@ -554,8 +555,9 @@ export const vault: VaultStore = {
 
   async save(force = false): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("save_vault", { force });
-      state.set(applyBackendState(result));
+      const sessionId = activeSessionId;
+      const result = await backendInvoke<VaultState>("save_vault", { sessionId, force });
+      if (activeSessionId === sessionId) state.set(applyBackendState(result));
       await refreshTabs();
       return result;
     }
@@ -589,8 +591,9 @@ export const vault: VaultStore = {
   /** Save As: persist to a new local path and switch the session target. */
   async saveAs(path: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("save_vault_as", { path });
-      state.set(applyBackendState(result));
+      const sessionId = activeSessionId;
+      const result = await backendInvoke<VaultState>("save_vault_as", { sessionId, path });
+      if (activeSessionId === sessionId) state.set(applyBackendState(result));
       await refreshTabs();
       return result;
     }
@@ -609,11 +612,14 @@ export const vault: VaultStore = {
 
   async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
     if (isTauriRuntime()) {
+      const sessionId = activeSessionId;
       const result = await backendInvoke<VaultState>("change_master_key", {
+        sessionId,
         password,
         keyfile,
       });
-      state.set(applyBackendState(result));
+      if (activeSessionId === sessionId) state.set(applyBackendState(result));
+      await refreshTabs();
       return result;
     }
     return vault.save();
@@ -853,10 +859,13 @@ export const vault: VaultStore = {
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
+    const sessionId = activeSessionId;
     const report = await backendInvoke<FaviconReport>("download_favicons", {
+      sessionId,
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
-    await refreshInternal();
+    if (activeSessionId === sessionId) await refreshInternal();
+    await refreshTabs();
     return report;
   },
 

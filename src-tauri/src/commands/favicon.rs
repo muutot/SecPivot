@@ -4,7 +4,7 @@
 
 use crate::config::ConfigStore;
 use crate::vault;
-use crate::vault::VaultSession;
+use crate::vault::{VaultSession, VaultSessions};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 // ---------------------------------------------------------------------------
@@ -185,28 +185,33 @@ async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> 
 #[tauri::command]
 pub(crate) async fn download_favicons(
     app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     config: tauri::State<'_, ConfigStore>,
+    session_id: Option<String>,
     uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
-    let jobs = {
-        let session = session.lock().map_err(|_| {
-            eprintln!("[favicon] 数据库锁已损坏");
-            "数据库锁已损坏".to_owned()
-        })?;
-        match &uuids {
-            Some(selected) if !selected.is_empty() => {
-                session.favicon_jobs_selected(selected).map_err(|e| {
-                    eprintln!("[favicon] 收集选中条目图标任务失败: {e}");
-                    e
-                })?
-            }
-            _ => session.favicon_jobs().map_err(|e| {
-                eprintln!("[favicon] 收集图标任务失败: {e}");
-                e
-            })?,
-        }
-    };
+    let (session_id, jobs) =
+        {
+            let mut active = session.lock().map_err(|_| {
+                eprintln!("[favicon] 数据库锁已损坏");
+                "数据库锁已损坏".to_owned()
+            })?;
+            vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+                match &uuids {
+                    Some(selected) if !selected.is_empty() => {
+                        target.favicon_jobs_selected(selected).map_err(|e| {
+                            eprintln!("[favicon] 收集选中条目图标任务失败: {e}");
+                            e
+                        })
+                    }
+                    _ => target.favicon_jobs().map_err(|e| {
+                        eprintln!("[favicon] 收集图标任务失败: {e}");
+                        e
+                    }),
+                }
+            })?
+        };
     let total = jobs.len();
     let mut done = 0usize;
     let concurrency = config
@@ -262,17 +267,19 @@ pub(crate) async fn download_favicons(
         // session mutex, bricking every later command with "数据库锁已损坏"
         // (see the note in `list_objects_async`).
         let job = {
-            let mut session = session.lock().map_err(|_| {
+            let mut active = session.lock().map_err(|_| {
                 eprintln!("[favicon] 数据库锁已损坏");
                 "数据库锁已损坏".to_owned()
             })?;
-            session.apply_favicons(&jobs, fetched).map_err(|e| {
-                eprintln!("[favicon] 写入图标失败: {e}");
-                e
-            })?;
-            session.prepare_save(false).map_err(|e| {
-                eprintln!("[favicon] 准备保存失败: {e}");
-                e
+            vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                target.apply_favicons(&jobs, fetched).map_err(|e| {
+                    eprintln!("[favicon] 写入图标失败: {e}");
+                    e
+                })?;
+                target.prepare_save(false).map_err(|e| {
+                    eprintln!("[favicon] 准备保存失败: {e}");
+                    e
+                })
             })?
         };
         let revision = job.revision;
@@ -281,13 +288,14 @@ pub(crate) async fn download_favicons(
             .map_err(|e| format!("图标保存任务异常: {e}"))?;
         match persisted {
             Ok(new_hash) => {
-                session
-                    .lock()
-                    .map_err(|_| {
-                        eprintln!("[favicon] 数据库锁已损坏");
-                        "数据库锁已损坏".to_owned()
-                    })?
-                    .complete_save(revision, new_hash)
+                let mut active = session.lock().map_err(|_| {
+                    eprintln!("[favicon] 数据库锁已损坏");
+                    "数据库锁已损坏".to_owned()
+                })?;
+                vaults
+                    .with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.complete_save(revision, new_hash)
+                    })
                     .map_err(|e| {
                         eprintln!("[favicon] 完成保存失败: {e}");
                         e
@@ -295,7 +303,12 @@ pub(crate) async fn download_favicons(
             }
             Err(e) => {
                 if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-                    let _ = session.lock().map(|mut active| active.note_save_failure());
+                    if let Ok(mut active) = session.lock() {
+                        let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                            target.note_save_failure();
+                            Ok(())
+                        });
+                    }
                 }
                 eprintln!("[favicon] 保存数据库失败: {e}");
                 return Err(e);
@@ -306,13 +319,15 @@ pub(crate) async fn download_favicons(
         // only. `apply_favicons` marks the session dirty when bytes were
         // written, so the tab shows "unsaved" until the user saves; nothing
         // touches the disk or the remote.
-        let mut session = session.lock().map_err(|_| {
+        let mut active = session.lock().map_err(|_| {
             eprintln!("[favicon] 数据库锁已损坏");
             "数据库锁已损坏".to_owned()
         })?;
-        session.apply_favicons(&jobs, fetched).map_err(|e| {
-            eprintln!("[favicon] 写入图标失败: {e}");
-            e
+        vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+            target.apply_favicons(&jobs, fetched).map_err(|e| {
+                eprintln!("[favicon] 写入图标失败: {e}");
+                e
+            })
         })?;
     }
     Ok(vault::FaviconReport {

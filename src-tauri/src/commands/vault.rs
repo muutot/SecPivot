@@ -207,27 +207,35 @@ pub(crate) fn update_database_settings(
 
 #[tauri::command]
 pub(crate) fn save_vault(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     force: bool,
 ) -> Result<VaultState, String> {
     // Capture a cheap job under the lock, then run KDF + serialization +
     // transport outside it, then mark clean under the lock again.
-    let job = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .prepare_save(force)?;
+    let (session_id, job) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_save(force)
+        })?
+    };
     let revision = job.revision;
     match vault::persist_save(job) {
-        Ok(new_hash) => session
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_owned())?
-            .complete_save(revision, new_hash),
+        Ok(new_hash) => {
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                target.complete_save(revision, new_hash)
+            })
+        }
         Err(e) => {
             if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-                session
-                    .lock()
-                    .map_err(|_| "数据库锁已损坏".to_owned())?
-                    .note_save_failure();
+                if let Ok(mut active) = session.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
             }
             Err(e)
         }
@@ -261,52 +269,90 @@ pub(crate) fn merge_remote_vault(
 
 #[tauri::command]
 pub(crate) fn save_vault_as(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     path: String,
 ) -> Result<VaultState, String> {
     // Capture a cheap job (db clone + new path) under the lock, run the
     // re-encrypt (KDF) + serialization + disk write outside it, then switch
     // the session target under the lock again.
-    let job = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .prepare_save_as(Path::new(&path))?;
+    let (session_id, job) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_save_as(Path::new(&path))
+        })?
+    };
     let revision = job.revision;
     let _ = vault::persist_save(job).inspect_err(|e| {
         if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-            let _ = session.lock().map(|mut active| active.note_save_failure());
+            if let Ok(mut active) = session.lock() {
+                let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                    target.note_save_failure();
+                    Ok(())
+                });
+            }
         }
     })?;
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .complete_save_as(PathBuf::from(path), revision)
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        target.complete_save_as(PathBuf::from(path), revision)
+    })
 }
 
 #[tauri::command]
 pub(crate) fn change_master_key(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     // Keyfile read, KDF and persistence all happen without the session lock.
     let mut keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
-    let (db, target, revision) = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .prepare_change()?;
+    let (session_id, (db, target, revision)) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_change()
+        })?
+    };
     let persisted = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
     let result = match persisted {
-        Ok(new_hash) => session
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_owned())?
-            .complete_change(password, keyfile_bytes, revision, new_hash),
+        Ok(new_hash) => {
+            let mut password_slot = Some(password);
+            let mut keyfile_slot = Some(keyfile_bytes);
+            let result = match session.lock() {
+                Ok(mut active) => {
+                    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.complete_change(
+                            password_slot.take().expect("password is available"),
+                            keyfile_slot.take().expect("keyfile is available"),
+                            revision,
+                            new_hash,
+                        )
+                    })
+                }
+                Err(_) => Err("数据库锁已损坏".to_owned()),
+            };
+            if let Some(mut remaining) = password_slot {
+                remaining.zeroize();
+            }
+            if let Some(Some(mut remaining)) = keyfile_slot {
+                remaining.zeroize();
+            }
+            result
+        }
         // The failure path must not leave the new master password (or keyfile
         // bytes) on the heap; the success path moved them into the session,
         // which zeroizes them on close.
         Err(e) => {
             if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-                let _ = session.lock().map(|mut active| active.note_save_failure());
+                if let Ok(mut active) = session.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
             }
             password.zeroize();
             if let Some(bytes) = keyfile_bytes.as_deref_mut() {

@@ -6,8 +6,9 @@
 //! databases stay decrypted in memory at once. Lifecycle commands
 //! (`open`/`create`/`close`/`get_vault_state`) resolve a session by id
 //! (default: active); closing the active session promotes the most recently
-//! parked one. Mutation commands keep targeting the active session until the
-//! session-addressing sub-item lands.
+//! parked one. Immediate mutation commands target the active session, while
+//! long prepare/persist/complete commands retain the originating session id
+//! so a tab switch cannot redirect their completion phase.
 
 use super::{SessionInfo, VaultOpenResult, VaultSession, VaultState};
 use std::collections::HashMap;
@@ -41,6 +42,50 @@ pub struct VaultSessions {
 }
 
 impl VaultSessions {
+    /// Run one operation against a stable session id. Long-running commands
+    /// use this for both their prepare and completion phases so switching tabs
+    /// while persistence is in flight cannot complete against a different
+    /// active database.
+    pub(crate) fn with_session_mut<T>(
+        &self,
+        active: &mut VaultSession,
+        session_id: Option<&str>,
+        operation: impl FnOnce(&mut VaultSession) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.with_resolved_session_mut(active, session_id, operation)
+            .map(|(_, result)| result)
+    }
+
+    /// Resolve the default active session exactly once and return its stable
+    /// id together with the operation result. Prepare phases use this when the
+    /// IPC argument is omitted, then pass the returned id to every later
+    /// completion/failure phase.
+    pub(crate) fn with_resolved_session_mut<T>(
+        &self,
+        active: &mut VaultSession,
+        session_id: Option<&str>,
+        operation: impl FnOnce(&mut VaultSession) -> Result<T, String>,
+    ) -> Result<(String, T), String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let target = match session_id {
+            Some(id) => id.to_owned(),
+            None => inner
+                .active_id
+                .clone()
+                .ok_or_else(|| "没有打开的数据库".to_owned())?,
+        };
+        let result = if inner.active_id.as_deref() == Some(target.as_str()) {
+            operation(active)?
+        } else {
+            let session = inner
+                .parked
+                .get_mut(&target)
+                .ok_or_else(|| "找不到数据库会话".to_owned())?;
+            operation(session)?
+        };
+        Ok((target, result))
+    }
+
     /// Adopt a freshly opened database as the active session. The previously
     /// active session (if any) is parked under a new id and stays decrypted.
     /// `adopt` runs on a fresh session first, so a failed open leaves the
@@ -240,7 +285,7 @@ impl VaultSessions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vault::EntryInput;
+    use crate::vault::{persist_save, EntryInput};
     use tempfile::TempDir;
 
     fn create_vault<'a>(
@@ -483,6 +528,88 @@ mod tests {
         assert!(!sessions[0].dirty);
         assert_eq!(sessions[1].session_id, second.session_id);
         assert!(sessions[1].dirty);
+    }
+
+    #[test]
+    fn long_save_completion_stays_bound_to_originating_session() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        active
+            .add_entry(&EntryInput {
+                group_uuid: crate::vault::ROOT_GROUP_UUID.to_owned(),
+                title: "a-entry".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        active
+            .add_entry(&EntryInput {
+                group_uuid: crate::vault::ROOT_GROUP_UUID.to_owned(),
+                title: "b-entry".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .unwrap();
+
+        registry
+            .switch_active(&mut active, &first.session_id)
+            .unwrap();
+        let (originating_id, job) = registry
+            .with_resolved_session_mut(&mut active, None, |target| target.prepare_save(false))
+            .unwrap();
+        assert_eq!(originating_id, first.session_id);
+        let revision = job.revision;
+
+        // Simulate the user switching tabs while disk/network persistence is
+        // running outside the active-session lock.
+        registry
+            .switch_active(&mut active, &second.session_id)
+            .unwrap();
+        let new_hash = persist_save(job).unwrap();
+        registry
+            .with_session_mut(&mut active, Some(&originating_id), |target| {
+                target.complete_save(revision, new_hash)
+            })
+            .unwrap();
+
+        let current = registry
+            .state(&mut active, Some(&second.session_id))
+            .unwrap()
+            .unwrap();
+        assert!(current.dirty, "the newly active vault must stay dirty");
+        let saved = registry
+            .state(&mut active, Some(&first.session_id))
+            .unwrap()
+            .unwrap();
+        assert!(
+            !saved.dirty,
+            "the originating parked vault must be marked saved"
+        );
     }
 
     #[test]
