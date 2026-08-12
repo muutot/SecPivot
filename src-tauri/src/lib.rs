@@ -331,6 +331,7 @@ pub fn run() {
             commands::export_csv,
             commands::download_favicons,
             commands::read_text_file,
+            commands::parse_bitwarden_json,
             commands::clipboard_read_text,
             commands::clipboard_clear,
             commands::remember_credential,

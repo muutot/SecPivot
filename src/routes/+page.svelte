@@ -20,6 +20,7 @@
     EntryPatch,
     EntryFlags,
     EntryAutoTypeConfig,
+    ImportRow,
     AutotypeCandidate,
     VaultEntry,
     VaultGroup,
@@ -1014,6 +1015,35 @@
     await importEntries(entries);
   }
 
+  async function handleImportBitwarden(): Promise<void> {
+    if (!currentVault) return;
+    const text = await pickImportFile([{ name: "Bitwarden JSON 文件", extensions: ["json"] }]);
+    if (text === null) return;
+    let rows: ImportRow[];
+    try {
+      if (!isTauriRuntime()) throw new Error("浏览器预览不支持 Bitwarden 导入");
+      rows = await invoke<ImportRow[]>("parse_bitwarden_json", { text });
+    } catch (e) {
+      flash(`导入 Bitwarden 失败：${e}`);
+      return;
+    }
+    const entries: ImportEntry[] = rows.map((row) => ({
+      group: row.group,
+      title: row.title,
+      username: row.username,
+      password: row.password,
+      url: row.url,
+      notes: row.notes,
+      totp: row.totp || undefined,
+      customFields: row.customFields,
+    }));
+    if (entries.length === 0) {
+      flash("Bitwarden 文件中没有可导入的条目");
+      return;
+    }
+    await importEntries(entries);
+  }
+
   function openSettings(): void {
     void goto("/settings");
   }
@@ -1481,6 +1511,7 @@
     { id: "new-group", label: "新建分组", icon: "folder-plus" },
     { id: "import-csv", label: "导入 CSV", icon: "upload" },
     { id: "import-xml", label: "导入 XML", icon: "upload" },
+    { id: "import-bitwarden", label: "导入 Bitwarden", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: sortedEntries.length === 0 },
     { id: "save", label: "保存数据库", icon: "save", disabled: !currentVault?.dirty },
     { id: "save-as", label: "另存为…", icon: "copy" },
@@ -1551,6 +1582,7 @@
     else if (id === "new-group") openGroupModal(selectedGroup);
     else if (id === "import-csv") void handleImportCsv();
     else if (id === "import-xml") void handleImportXml();
+    else if (id === "import-bitwarden") void handleImportBitwarden();
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();

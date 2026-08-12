@@ -308,6 +308,18 @@ export interface GroupMeta {
   enableSearching?: boolean;
 }
 
+/** One normalized import row produced by the backend import parsers. */
+export interface ImportRow {
+  group: string;
+  title: string;
+  username: string;
+  password: string;
+  url: string;
+  notes: string;
+  totp?: string;
+  customFields: { name: string; value: string }[];
+}
+
 export interface TotpCode {
   code: string;
   /** `"totp"` (RFC 6238), `"hotp"` (RFC 4226 counter), or `"steam"` guard. */

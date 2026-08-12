@@ -94,12 +94,13 @@ pub(crate) fn export_csv(
 #[tauri::command]
 pub(crate) fn read_text_file(path: String) -> Result<String, String> {
     let path = Path::new(&path);
-    let allowed = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("csv") || e.eq_ignore_ascii_case("xml"));
+    let allowed = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        e.eq_ignore_ascii_case("csv")
+            || e.eq_ignore_ascii_case("xml")
+            || e.eq_ignore_ascii_case("json")
+    });
     if !allowed {
-        return Err("仅支持导入 .csv 或 .xml 文件".to_owned());
+        return Err("仅支持导入 .csv / .xml / .json 文件".to_owned());
     }
     let meta = std::fs::metadata(path).map_err(|e| format!("读取文件失败: {e}"))?;
     if meta.len() > MAX_TEXT_IMPORT_BYTES {
@@ -109,4 +110,12 @@ pub(crate) fn read_text_file(path: String) -> Result<String, String> {
         ));
     }
     std::fs::read_to_string(path).map_err(|e| format!("读取文件失败: {e}"))
+}
+
+/// Parse a Bitwarden `.json` export into normalized import rows. Strict:
+/// malformed documents fail; cards/identities are skipped, logins and secure
+/// notes map to rows (folders become the group path).
+#[tauri::command]
+pub(crate) fn parse_bitwarden_json(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
+    crate::vault::parse_bitwarden_json(&text)
 }

@@ -6,6 +6,7 @@ pub mod dto;
 mod entries;
 pub(crate) mod helpers;
 mod hosts;
+mod import;
 mod persist;
 mod security;
 mod serialize;
@@ -101,6 +102,7 @@ pub use self::dto::{
     VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
 };
 
+pub use self::import::{parse_bitwarden_json, ImportCustomField, ImportRow};
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::AttachmentTempStore;
 
