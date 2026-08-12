@@ -133,7 +133,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ### P3 — 受约束自动化与可选安全增强
 
 - [ ] 原生事件规则：提供有限的事件—条件—动作（打开/保存/锁定/定时、备份/同步/显示筛选），初期不开放任意脚本、任意命令执行或动态代码加载
-- [ ] HIBP 泄露检查：严格 opt-in，仅使用 k-anonymity 前缀查询，绝不发送密码或完整散列；支持离线关闭和隐私说明
+- [x] HIBP 泄露检查：`check_hibp` 严格 opt-in（隐私说明 + 显式开始），仅发送 SHA-1 前 5 位十六进制前缀（k-anonymity，mock 断言 wire 上只有前缀），密码/完整散列绝不出本机；`HibpCheckDialog` 按条目展示泄露次数并可定位
 - [ ] 密钥文件生成/纸质备份与安全主密钥输入；Windows 用户账户密钥、YubiKey challenge-response 等在兼容性和恢复方案明确后逐项原生评估
 
 ## 后续候选(差距清单已清空)

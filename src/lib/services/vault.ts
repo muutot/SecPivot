@@ -22,6 +22,7 @@ import type {
   SimilarPasswordGroup,
   HistoryCleanResult,
   ExpiredEntry,
+  BreachFinding,
   FaviconReport,
   MutationDelta,
   DatabaseSettings,
@@ -95,6 +96,7 @@ interface VaultStore {
   similarPasswords: () => Promise<SimilarPasswordGroup[]>;
   clearAllHistory: () => Promise<number>;
   expiredEntries: () => Promise<ExpiredEntry[]>;
+  checkHibp: (uuids?: string[]) => Promise<BreachFinding[]>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
@@ -817,6 +819,13 @@ export const vault: VaultStore = {
   async expiredEntries(): Promise<ExpiredEntry[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持过期维护");
     return backendInvoke<ExpiredEntry[]>("expired_entries");
+  },
+
+  async checkHibp(uuids?: string[]): Promise<BreachFinding[]> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持 HIBP 检查");
+    return backendInvoke<BreachFinding[]>("check_hibp", {
+      uuids: uuids && uuids.length > 0 ? uuids : undefined,
+    });
   },
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {

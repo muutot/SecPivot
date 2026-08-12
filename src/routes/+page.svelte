@@ -50,6 +50,7 @@
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
   import ExpiredEntriesDialog from "$lib/components/ExpiredEntriesDialog.svelte";
+  import HibpCheckDialog from "$lib/components/HibpCheckDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import DatabaseSettingsDialog from "$lib/components/DatabaseSettingsDialog.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
@@ -105,6 +106,7 @@
   let reportOpen = $state(false);
   let similarOpen = $state(false);
   let expiredOpen = $state(false);
+  let hibpOpen = $state(false);
   let emergencyExportOpen = $state(false);
   let emergencyIncludePasswords = $state(false);
   let dbMetaOpen = $state(false);
@@ -1584,6 +1586,7 @@
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "expired-entries", label: "过期条目", icon: "clock" },
+    { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
     { id: "clear-history", label: "清理全部历史", icon: "trash" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
@@ -1600,6 +1603,7 @@
     },
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
+    { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
     { id: "export-csv", label: "导出 CSV", icon: "download" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
@@ -1662,6 +1666,7 @@
     else if (id === "save-as") void handleSaveAs();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "expired-entries") expiredOpen = true;
+    else if (id === "hibp-check") hibpOpen = true;
     else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
@@ -1674,6 +1679,7 @@
     else if (id === "toggle-detail") detailVisible = !detailVisible;
     else if (id === "security-report") void handleOpenReport();
     else if (id === "similar-passwords") similarOpen = true;
+    else if (id === "hibp-check") hibpOpen = true;
     else if (id === "export-csv") void handleExportCsv();
     else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
@@ -2032,6 +2038,20 @@
       if (target) {
         setSingleSelection(target);
         expiredOpen = false;
+      }
+    }}
+  />
+{/if}
+
+{#if hibpOpen}
+  <HibpCheckDialog
+    uuids={[...selectedUuids]}
+    onclose={() => (hibpOpen = false)}
+    onselect={(uuid: string) => {
+      const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
+      if (target) {
+        setSingleSelection(target);
+        hibpOpen = false;
       }
     }}
   />

@@ -252,6 +252,14 @@ export interface ExpiredEntry {
   expires: string;
 }
 
+/** One password found in known breach data (HIBP k-anonymity check). */
+export interface BreachFinding {
+  uuid: string;
+  title: string;
+  username: string;
+  count: number;
+}
+
 /** Result of `download_favicons` (KeePass "Download Favicons"). */
 export interface FaviconReport {
   attempted: number;

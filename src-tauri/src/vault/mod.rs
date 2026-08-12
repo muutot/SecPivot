@@ -2,6 +2,7 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
+mod breach;
 pub mod dto;
 mod entries;
 pub(crate) mod helpers;
@@ -103,6 +104,8 @@ pub use self::dto::{
     VaultOpenResult, VaultState, WeakEntry,
 };
 
+pub use self::breach::BreachFinding;
+pub(crate) use self::breach::{check_hibp, HIBP_RANGE_URL};
 pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::AttachmentTempStore;

@@ -331,6 +331,7 @@ pub fn run() {
             commands::similar_passwords,
             commands::clear_all_history,
             commands::expired_entries,
+            commands::check_hibp,
             commands::export_csv,
             commands::export_emergency_sheet,
             commands::download_favicons,

@@ -97,6 +97,30 @@ pub(crate) fn expired_entries(
         .expired_entries()
 }
 
+/// Check the selected (or every) entry's passwords against HIBP using
+/// k-anonymity: only the first 5 hex chars of each SHA-1 leave the machine.
+/// Strictly opt-in; network I/O runs off the async runtime.
+#[tauri::command]
+pub(crate) async fn check_hibp(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuids: Option<Vec<String>>,
+) -> Result<Vec<crate::vault::BreachFinding>, String> {
+    let entries = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .hibp_entries(uuids.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
+            .build()
+            .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
+        crate::vault::check_hibp(&entries, &client, crate::vault::HIBP_RANGE_URL)
+    })
+    .await
+    .map_err(|e| format!("HIBP 任务异常: {e}"))?
+}
+
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).
 #[tauri::command]
 pub(crate) fn get_entry_storage(
