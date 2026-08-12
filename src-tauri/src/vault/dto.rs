@@ -243,8 +243,12 @@ pub struct DatabaseSettings {
     pub compression: String,
     /// KeePass `Meta.history_max_items`; `None` = unlimited/default.
     pub history_max_items: Option<i64>,
+    /// KeePass `Meta.history_max_size`; `None` = unlimited/default.
+    pub history_max_size: Option<i64>,
     /// KeePass recycle-bin flag; `None` in KDBX reads as enabled.
     pub recycle_bin_enabled: bool,
+    /// UUID of the KDBX entry-templates group; `None` = not configured.
+    pub entry_templates_group: Option<String>,
 }
 
 /// Partial write for database-level settings. An absent field keeps the
@@ -266,7 +270,12 @@ pub struct DatabaseSettingsPatch {
     #[serde(default)]
     pub history_max_items: Option<Option<i64>>,
     #[serde(default)]
+    pub history_max_size: Option<Option<i64>>,
+    #[serde(default)]
     pub recycle_bin_enabled: Option<Option<bool>>,
+    /// Present string sets the templates-group UUID; `null` clears it.
+    #[serde(default)]
+    pub entry_templates_group: Option<Option<String>>,
 }
 
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in

@@ -152,7 +152,9 @@ export interface DatabaseSettings {
   cipher: "Aes256" | "Twofish" | "ChaCha20";
   compression: "None" | "Gzip";
   historyMaxItems: number | null;
+  historyMaxSize: number | null;
   recycleBinEnabled: boolean;
+  entryTemplatesGroup: string | null;
 }
 
 /** Partial database-settings write; omitted fields are kept, `null` resets. */
@@ -161,7 +163,9 @@ export interface DatabaseSettingsPatch {
   cipher?: "Aes256" | "Twofish" | "ChaCha20";
   compression?: "None" | "Gzip";
   historyMaxItems?: number | null;
+  historyMaxSize?: number | null;
   recycleBinEnabled?: boolean | null;
+  entryTemplatesGroup?: string | null;
 }
 
 /** Server-side security analysis; passwords never cross into the report. */

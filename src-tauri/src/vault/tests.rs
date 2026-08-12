@@ -579,6 +579,63 @@ fn update_database_settings_reencrypts_storage_config() {
     assert_eq!(settings.compression, "Gzip");
 }
 
+/// History-size cap and templates-group UUID persist through save/reopen,
+/// `null` clears them, and an invalid UUID is rejected.
+#[test]
+fn update_database_settings_persists_history_size_and_template_group() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "Templates".into(),
+            icon: None,
+        })
+        .unwrap();
+    let templates_uuid = state.root.children[0].uuid.clone();
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_size: Some(Some(4096)),
+            entry_templates_group: Some(Some(templates_uuid.clone())),
+            ..Default::default()
+        })
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_size, Some(4096));
+    assert_eq!(
+        settings.entry_templates_group.as_deref(),
+        Some(templates_uuid.as_str())
+    );
+
+    session.save().unwrap();
+    drop(session);
+    let mut session = VaultSession::default();
+    session.open(&path, "master-password", None).unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_size, Some(4096));
+    assert_eq!(
+        settings.entry_templates_group.as_deref(),
+        Some(templates_uuid.as_str())
+    );
+
+    assert!(session
+        .update_database_settings(&DatabaseSettingsPatch {
+            entry_templates_group: Some(Some("not-a-uuid".into())),
+            ..Default::default()
+        })
+        .is_err());
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_size: Some(None),
+            entry_templates_group: Some(None),
+            ..Default::default()
+        })
+        .unwrap();
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_size, None);
+    assert_eq!(settings.entry_templates_group, None);
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

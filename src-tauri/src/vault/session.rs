@@ -15,6 +15,7 @@ use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::Database;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use uuid::Uuid;
 
 impl VaultSession {
     pub fn is_open(&self) -> bool {
@@ -204,7 +205,9 @@ impl VaultSession {
             cipher: cipher.to_owned(),
             compression: compression.to_owned(),
             history_max_items: db.meta.history_max_items.map(|value| value as i64),
+            history_max_size: db.meta.history_max_size.map(|value| value as i64),
             recycle_bin_enabled: db.meta.recyclebin_enabled.unwrap_or(true),
+            entry_templates_group: db.meta.entry_templates_group.map(|uuid| uuid.to_string()),
         }))
     }
 
@@ -222,6 +225,17 @@ impl VaultSession {
             }
             if let Some(recycle_bin_enabled) = patch.recycle_bin_enabled {
                 db.meta.recyclebin_enabled = recycle_bin_enabled;
+            }
+            if let Some(history_max_size) = patch.history_max_size {
+                db.meta.history_max_size = history_max_size.map(|value| value as isize);
+            }
+            if let Some(entry_templates_group) = &patch.entry_templates_group {
+                db.meta.entry_templates_group = match entry_templates_group {
+                    Some(uuid) => {
+                        Some(Uuid::parse_str(uuid).map_err(|_| "模板分组 UUID 无效".to_owned())?)
+                    }
+                    None => None,
+                };
             }
         }
         let storage_changed =

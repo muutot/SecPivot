@@ -19,6 +19,8 @@
   let cipher = $state<"Aes256" | "Twofish" | "ChaCha20">("Aes256");
   let compression = $state<"None" | "Gzip">("Gzip");
   let historyInput = $state("");
+  let historySizeInput = $state("");
+  let templateGroupInput = $state("");
   let recycleEnabled = $state(true);
 
   onMount(() => {
@@ -34,6 +36,8 @@
         cipher = value.cipher;
         compression = value.compression;
         historyInput = value.historyMaxItems === null ? "" : String(value.historyMaxItems);
+        historySizeInput = value.historyMaxSize === null ? "" : String(value.historyMaxSize);
+        templateGroupInput = value.entryTemplatesGroup ?? "";
         recycleEnabled = value.recycleBinEnabled;
       })
       .catch((e) => {
@@ -50,6 +54,8 @@
         cipher !== settings.cipher ||
         compression !== settings.compression ||
         (historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems ||
+        (historySizeInput === "" ? null : Number(historySizeInput)) !== settings.historyMaxSize ||
+        (templateGroupInput.trim() || null) !== settings.entryTemplatesGroup ||
         recycleEnabled !== settings.recycleBinEnabled),
   );
 
@@ -64,6 +70,12 @@
       if (compression !== settings.compression) patch.compression = compression;
       if ((historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems) {
         patch.historyMaxItems = historyInput === "" ? null : Number(historyInput);
+      }
+      if ((historySizeInput === "" ? null : Number(historySizeInput)) !== settings.historyMaxSize) {
+        patch.historyMaxSize = historySizeInput === "" ? null : Number(historySizeInput);
+      }
+      if ((templateGroupInput.trim() || null) !== settings.entryTemplatesGroup) {
+        patch.entryTemplatesGroup = templateGroupInput.trim() || null;
       }
       if (recycleEnabled !== settings.recycleBinEnabled) {
         patch.recycleBinEnabled = recycleEnabled;
@@ -143,6 +155,25 @@
           min="0"
           bind:value={historyInput}
           placeholder="默认"
+        />
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">历史总大小上限（字节，留空为默认）</span>
+        <input
+          class="text-input"
+          type="number"
+          min="0"
+          bind:value={historySizeInput}
+          placeholder="默认"
+        />
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">模板分组 UUID（留空清除）</span>
+        <input
+          class="text-input mono"
+          type="text"
+          bind:value={templateGroupInput}
+          placeholder="分组 UUID"
         />
       </div>
       <div class="setting-block setting-row">
