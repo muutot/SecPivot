@@ -436,6 +436,46 @@ fn window_association_picks_sequence() {
     );
 }
 
+/// Global-hotkey multi-match returns every scoring entry (recycle-bin
+/// entries excluded), best first.
+#[test]
+fn autotype_match_candidates_returns_sorted_and_skips_recycle_bin() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    for (title, url) in [
+        ("GitHub", "https://github.com"),
+        ("GitHub", "https://github.com"),
+        ("Mail", "https://mail.example.com"),
+    ] {
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: title.into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: url.into(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .unwrap();
+    }
+    // A matching entry inside the recycle bin must never be offered.
+    let state = session.state().unwrap().unwrap();
+    let entry_uuid = state.root.entries[1].uuid.clone();
+    session.delete_entry(&entry_uuid).unwrap();
+
+    let candidates = session.autotype_match_candidates("GitHub - Home").unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].title, "GitHub");
+    assert!(!candidates.iter().any(|c| c.uuid == entry_uuid));
+}
+
 /// A content-only edit (icon omitted) must keep the entry's icon — both a
 /// built-in icon and a downloaded favicon custom icon — while an explicit
 /// `icon: null` still clears it.

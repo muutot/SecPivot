@@ -450,6 +450,59 @@ pub(crate) fn walk_match(
     }
 }
 
+/// Same matching semantics as `walk_match`, but collects every scoring entry
+/// (not just the best) so the global-hotkey handler can offer a picker when
+/// several entries match the focused window.
+pub(crate) fn walk_match_candidates(
+    group: GroupRef<'_>,
+    bin_id: Option<GroupId>,
+    window_title: &str,
+    out: &mut Vec<(i32, String)>,
+) {
+    if bin_id == Some(group.id()) {
+        return;
+    }
+    let searchable = group.enable_searching != Some(false);
+    for entry in group.entries() {
+        if !searchable {
+            break;
+        }
+        let mut score = 0;
+        let cfg = kprpc_config(&entry);
+        let blocked = cfg.blocked_urls.iter().any(|b| {
+            let host = url_host(b).unwrap_or_default();
+            !host.is_empty() && window_title.contains(&host)
+        }) || cfg
+            .regex_blocked_urls
+            .iter()
+            .any(|r| regex_matches(r, window_title));
+        if blocked {
+            continue;
+        }
+        let url_hit = cfg
+            .regex_urls
+            .iter()
+            .any(|r| regex_matches(r, window_title))
+            || entry_match_urls(&entry).iter().any(|u| {
+                let host = url_host(u).unwrap_or_default();
+                !host.is_empty() && window_title.contains(&host)
+            });
+        if url_hit {
+            score += 2;
+        }
+        let title = entry.get_title().unwrap_or_default().to_lowercase();
+        if !title.is_empty() && window_title.contains(&title) {
+            score += 1;
+        }
+        if score > 0 {
+            out.push((score, entry.id().uuid().to_string()));
+        }
+    }
+    for child in group.groups() {
+        walk_match_candidates(child, bin_id, window_title, out);
+    }
+}
+
 /// Return the recycle bin group id, creating the group under root on first use.
 pub(crate) fn ensure_recycle_bin(db: &mut Database) -> Result<GroupId, String> {
     if let Some(id) = recycle_bin_id(db) {

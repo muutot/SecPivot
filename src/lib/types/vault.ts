@@ -139,6 +139,13 @@ export type MutationDelta =
   | { kind: "favorite"; revision: number; uuid: string; favorite: boolean }
   | { kind: "groupsExpanded"; revision: number; groups: Record<string, boolean> };
 
+/** One entry offered by the global-hotkey auto-type picker. */
+export interface AutotypeCandidate {
+  uuid: string;
+  title: string;
+  username: string;
+}
+
 /** Server-side security analysis; passwords never cross into the report. */
 export interface SecurityReport {
   total: number;

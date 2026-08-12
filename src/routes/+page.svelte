@@ -19,6 +19,7 @@
     EntryInput,
     EntryPatch,
     EntryAutoTypeConfig,
+    AutotypeCandidate,
     VaultEntry,
     VaultGroup,
     VaultState,
@@ -86,6 +87,7 @@
   let groupIconPick = $state<number | null>(null);
   let groupIconSaving = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
+  let autotypePick = $state<AutotypeCandidate[] | null>(null);
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
@@ -155,10 +157,14 @@
     // A browser extension write (AddLogin/UpdateLogin) lands straight into the
     // vault in memory; refresh so the entry list shows it without a reopen.
     let unlistenVaultChanged: UnlistenFn | undefined;
+    let unlistenAutotypePick: UnlistenFn | undefined;
     if (isTauriRuntime()) {
       void listen("rpc-vault-changed", () => void vault.refresh()).then(
         (stop) => (unlistenVaultChanged = stop),
       );
+      void listen<AutotypeCandidate[]>("autotype-pick-request", (event) => {
+        autotypePick = event.payload;
+      }).then((stop) => (unlistenAutotypePick = stop));
     }
     void vault.refresh();
     const rememberWindowSize = (): void => {
@@ -174,6 +180,7 @@
       unsubscribe();
       unsubRemembered();
       void unlistenVaultChanged?.();
+      void unlistenAutotypePick?.();
       window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
     };
@@ -2026,6 +2033,38 @@
   />
 {/if}
 
+{#if autotypePick}
+  <ModalShell
+    title="选择要自动填充的条目"
+    description="多个条目匹配当前窗口，请选择其一"
+    size="small"
+    closeOnEscape
+    onclose={() => (autotypePick = null)}
+  >
+    {#snippet children()}
+      <div class="autotype-pick-list" role="listbox" aria-label="自动填充候选">
+        {#each autotypePick as candidate (candidate.uuid)}
+          <button
+            type="button"
+            class="autotype-pick-item"
+            role="option"
+            aria-selected="false"
+            onclick={() => {
+              void invoke("autotype_pick", { uuid: candidate.uuid });
+              autotypePick = null;
+            }}
+          >
+            <span class="autotype-pick-title">{candidate.title || "未命名条目"}</span>
+            {#if candidate.username}
+              <span class="autotype-pick-username">{candidate.username}</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    {/snippet}
+  </ModalShell>
+{/if}
+
 {#if faviconDialog}
   {@const dialog = faviconDialog}
   <ModalShell
@@ -2343,6 +2382,50 @@
     color: var(--text-faint);
     background: var(--statusbar-bg);
     font-size: var(--font-size-tiny, 10px);
+  }
+
+  .autotype-pick-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 40vh;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .autotype-pick-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .autotype-pick-item:hover {
+    background: var(--hover-bg);
+  }
+
+  .autotype-pick-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .autotype-pick-username {
+    flex: 1;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status-left,

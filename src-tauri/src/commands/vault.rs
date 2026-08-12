@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
 use zeroize::Zeroize;
+
+/// Fallback sequence when an entry resolves no explicit Auto-Type sequence
+/// (mirrors `lib.rs::GLOBAL_AUTOTYPE_SEQUENCE`).
+const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -398,4 +402,43 @@ pub(crate) fn auto_type(
         let _ = window.minimize();
     }
     autotype::run_sequence(&expanded, &ctx).map_err(|e| e.to_string())
+}
+
+/// Run auto-type for the entry the user picked from the global-hotkey
+/// multi-match dialog. The focused window title was captured when the hotkey
+/// fired, so window associations resolve correctly here.
+#[tauri::command]
+pub(crate) fn autotype_pick(
+    app: tauri::AppHandle,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    uuid: String,
+) -> Result<(), String> {
+    let (expanded, ctx) = {
+        let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let window_title = session
+            .take_pending_autotype_window()
+            .ok_or_else(|| "没有待处理的自动填充请求".to_owned())?;
+        let sequence = match session.resolve_autotype_sequence_for_window(&uuid, &window_title)? {
+            Some(sequence) => sequence,
+            None => return Err("条目自动填充已禁用".to_owned()),
+        };
+        let sequence = if sequence.trim().is_empty() {
+            GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
+        } else {
+            sequence
+        };
+        let ctx = session.autotype_context(&uuid)?;
+        let expanded = session.expand_autotype_sequence(&sequence)?;
+        (expanded, ctx)
+    };
+    #[cfg(desktop)]
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.minimize();
+    }
+    std::thread::spawn(move || {
+        if let Err(e) = autotype::run_sequence(&expanded, &ctx) {
+            eprintln!("autotype pick: {e}");
+        }
+    });
+    Ok(())
 }

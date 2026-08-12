@@ -162,6 +162,7 @@ impl VaultSession {
         self.modified_at.clear();
         self.remote = None;
         self.cached_snapshot = None;
+        self.pending_autotype_window = None;
     }
 
     pub fn state(&mut self) -> Result<Option<VaultState>, String> {

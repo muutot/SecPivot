@@ -92,7 +92,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Auto-Type 后端读写与窗口关联：`VaultEntry.autoType`/`VaultGroup.autoType` 暴露、`update_entry_autotype`/`update_group_autotype` 命令、`resolve_autotype_sequence_for_window`（关联优先 + `*` 通配），全局热键改用窗口关联解析；round-trip/继承/关联选择测试通过
 - [x] Auto-Type 编辑器 UI（条目）：条目编辑器新增「自动填充」页签（enable 开关、默认序列、窗口关联增删改），保存后调用 `update_entry_autotype` 持久化
 - [x] Auto-Type 编辑器 UI（分组）：分组右键「自动填充设置」对话框（继承/启用/禁用 + 默认序列），调用 `update_group_autotype` 持久化
-- [ ] Auto-Type 全局热键多命中选择：多条目命中时显示选择对话框后执行
+- [x] Auto-Type 全局热键多命中选择：多条目命中时 `autotype-pick-request` 事件 + 候选列表 + `autotype_pick` 命令 + 前端选择对话框，回收站条目排除
 - [ ] 当前数据库设置：允许查看/修改已打开数据库的 KDF、cipher、compression、KDF benchmark、history items/size、回收站策略和模板组；设置变更需重新保存并覆盖 round-trip/旧库兼容测试
 - [ ] 高级搜索与搜索配置档：支持字段范围、自定义字段、正则、排除条件、过期/标签/质量条件及保存搜索；快速搜索保持轻量，不引入与设置 segmented pattern 冲突的新控件样式
 - [ ] 密码生成器配置档：支持命名 profiles、自定义字符集、pattern/规则、必含/排除字符与新条目默认 profile；CSPRNG、安全边界和浏览器 bridge 生成行为保持一致

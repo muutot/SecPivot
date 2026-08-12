@@ -80,17 +80,30 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
         return;
     };
     let ctx = {
-        let session = match session.lock() {
+        let mut session = match session.lock() {
             Ok(s) => s,
             Err(_) => return,
         };
-        let uuid = match session.autotype_match(&window_title) {
-            Ok(uuid) => uuid,
+        let candidates = match session.autotype_match_candidates(&window_title) {
+            Ok(candidates) => candidates,
             Err(e) => {
                 eprintln!("global auto-type: {e}");
                 return;
             }
         };
+        if candidates.len() > 1 {
+            session.set_pending_autotype_window(Some(window_title.clone()));
+            let _ = app.emit("autotype-pick-request", &candidates);
+            #[cfg(desktop)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+            return;
+        }
+        session.set_pending_autotype_window(None);
+        let uuid = candidates[0].uuid.clone();
         // Honor window associations first, then the entry's / ancestor
         // group's stored default sequence; `None` means auto-type is
         // disabled for this entry.
@@ -285,6 +298,7 @@ pub fn run() {
             commands::toggle_favorite,
             commands::update_entry_autotype,
             commands::auto_type,
+            commands::autotype_pick,
             commands::open_tcato_overlay,
             commands::tcato_state,
             commands::tcato_send,

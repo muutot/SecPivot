@@ -91,11 +91,11 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 // code and `lib.rs` keep referencing them via `vault::*`.
 
 pub use self::dto::{
-    AttachmentInfo, AttachmentInput, AutoTypeAssociationDto, CustomField, DuplicatePasswords,
-    EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, FaviconFetch,
-    FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput,
-    GroupInput, HistoryVersion, MutationDelta, SecurityReport, TotpCode, VaultEntry, VaultGroup,
-    VaultState, WeakEntry,
+    AttachmentInfo, AttachmentInput, AutoTypeAssociationDto, AutotypeCandidate, CustomField,
+    DuplicatePasswords, EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch,
+    EntryStorage, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig,
+    GroupAutoTypeInput, GroupInput, HistoryVersion, MutationDelta, SecurityReport, TotpCode,
+    VaultEntry, VaultGroup, VaultState, WeakEntry,
 };
 
 // ---------------------------------------------------------------------------
@@ -164,4 +164,7 @@ pub struct VaultSession {
     /// so `account.aliyun.com` and `passport.aliyun.com` both match under
     /// `aliyun.com`, mirroring KeePassRPC).
     pub(crate) match_registrable_domain: bool,
+    /// Window title captured by a global-hotkey multi-match request; consumed
+    /// by `autotype_pick` when the user chooses an entry from the picker.
+    pub(crate) pending_autotype_window: Option<String>,
 }

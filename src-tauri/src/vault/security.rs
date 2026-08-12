@@ -3,7 +3,8 @@
 //! mod.rs).
 
 use super::helpers::{
-    otp_kind_name, parse_entry_id, parse_entry_otp_spec, recycle_bin_id, walk_match, walk_ref_match,
+    otp_kind_name, parse_entry_id, parse_entry_otp_spec, recycle_bin_id, walk_match,
+    walk_match_candidates, walk_ref_match,
 };
 use super::serialize::{collect_favicon_hosts, escape_csv, estimate_entropy, extract_host};
 use super::*;
@@ -356,6 +357,51 @@ impl VaultSession {
         walk_match(db.root(), bin_id, &lower, &mut best);
         best.map(|(_, uuid)| uuid)
             .ok_or_else(|| "没有找到匹配的条目".to_owned())
+    }
+
+    /// Collect every entry that matches the focused window title (same
+    /// scoring as `autotype_match`), best first, capped for the picker UI.
+    pub fn autotype_match_candidates(
+        &self,
+        window_title: &str,
+    ) -> Result<Vec<AutotypeCandidate>, String> {
+        let db = self.require_db()?;
+        let lower = window_title.to_lowercase();
+        if lower.trim().is_empty() {
+            return Err("目标窗口标题为空".to_owned());
+        }
+        let bin_id = recycle_bin_id(db);
+        let mut scored: Vec<(i32, String)> = Vec::new();
+        walk_match_candidates(db.root(), bin_id, &lower, &mut scored);
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+        let mut candidates = Vec::new();
+        for (_, uuid) in scored {
+            let id = parse_entry_id(&uuid)?;
+            let Some(entry) = db.entry(id) else {
+                continue;
+            };
+            candidates.push(AutotypeCandidate {
+                title: entry.get_title().unwrap_or_default().to_owned(),
+                username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                uuid,
+            });
+            if candidates.len() >= 8 {
+                break;
+            }
+        }
+        if candidates.is_empty() {
+            return Err("没有找到匹配的条目".to_owned());
+        }
+        Ok(candidates)
+    }
+
+    pub fn set_pending_autotype_window(&mut self, window_title: Option<String>) {
+        self.pending_autotype_window = window_title;
+    }
+
+    pub fn take_pending_autotype_window(&mut self) -> Option<String> {
+        self.pending_autotype_window.take()
     }
 }
 

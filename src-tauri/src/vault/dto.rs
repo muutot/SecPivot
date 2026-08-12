@@ -221,6 +221,16 @@ pub enum MutationDelta {
     },
 }
 
+/// One entry offered by the global-hotkey picker when several entries match
+/// the focused window.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutotypeCandidate {
+    pub uuid: String,
+    pub title: String,
+    pub username: String,
+}
+
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
 /// index, JSON `null` explicitly resets to the default icon, and an absent
 /// field keeps the entry's current icon. Plain `Option<Option<u32>>` serde
