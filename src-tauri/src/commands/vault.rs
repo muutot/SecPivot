@@ -478,6 +478,25 @@ pub(crate) fn cleanup_attachment_temp(
     store.discard(&token)
 }
 
+/// Import the external viewer's changes back into the attachment: replaces
+/// the entry attachment's bytes with the registered temp file's content, then
+/// discards the temp file. Arbitrary paths are never accepted.
+#[tauri::command]
+pub(crate) fn import_attachment_from_temp(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    store: tauri::State<'_, vault::AttachmentTempStore>,
+    uuid: String,
+    name: String,
+    token: String,
+) -> Result<VaultState, String> {
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    let result = active.import_attachment_from_temp(&uuid, &name, &token, store.inner());
+    if result.is_ok() {
+        let _ = store.discard(&token);
+    }
+    result
+}
+
 #[tauri::command]
 pub(crate) fn totp_code(
     session: tauri::State<'_, Mutex<VaultSession>>,

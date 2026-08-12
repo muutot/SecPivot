@@ -70,6 +70,14 @@
     }
   }
 
+  async function importChanges(): Promise<void> {
+    if (!tempRef) return;
+    const token = tempRef.token;
+    tempRef = null;
+    await vault.importAttachmentFromTemp(entryUuid, attachment.name, token);
+    await onsaved?.(attachment.name);
+  }
+
   function close(): void {
     if (tempRef) void vault.cleanupAttachmentTemp(tempRef.token);
     onclose();
@@ -110,7 +118,8 @@
   {#snippet actions()}
     <button class="modal-button" onclick={close}>关闭</button>
     {#if tempRef}
-      <button class="modal-button" onclick={() => void discardTemp()}>清理临时文件</button>
+      <button class="modal-button" onclick={() => void importChanges()}>导入修改</button>
+      <button class="modal-button" onclick={() => void discardTemp()}>丢弃修改</button>
     {/if}
     <button
       class="modal-button"

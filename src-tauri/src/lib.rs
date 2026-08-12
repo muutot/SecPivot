@@ -305,6 +305,7 @@ pub fn run() {
             commands::preview_attachment,
             commands::open_attachment_temp,
             commands::cleanup_attachment_temp,
+            commands::import_attachment_from_temp,
             commands::totp_code,
             commands::toggle_favorite,
             commands::update_entry_autotype,

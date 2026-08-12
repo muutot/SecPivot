@@ -3758,6 +3758,63 @@ fn attachment_preview_text_image_and_binary_in_memory() {
 }
 
 #[test]
+fn import_attachment_from_temp_replaces_bytes_and_persists() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let store = AttachmentTempStore::default();
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![AttachmentInput {
+                name: "note.txt".into(),
+                data: Some(BASE64.encode(b"original".as_slice())),
+            }],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // The external viewer "edited" the registered temp file.
+    let (token, _) = store.create("note.txt", b"edited content").unwrap();
+    let updated = session
+        .import_attachment_from_temp(&uuid, "note.txt", &token, &store)
+        .unwrap();
+    let entry = updated
+        .root
+        .entries
+        .iter()
+        .find(|e| e.uuid == uuid)
+        .unwrap();
+    assert_eq!(entry.attachments[0].size, b"edited content".len());
+    assert_eq!(
+        session.attachment_data(&uuid, "note.txt").unwrap(),
+        b"edited content"
+    );
+
+    // Save + reopen keeps the imported bytes.
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert_eq!(entry.attachments[0].size, b"edited content".len());
+
+    // Unknown tokens are rejected; arbitrary paths are never accepted.
+    assert!(session
+        .import_attachment_from_temp(&uuid, "note.txt", "nope", &store)
+        .is_err());
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

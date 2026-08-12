@@ -671,6 +671,34 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Replace an attachment's bytes with the content of a registered temp
+    /// file (the external viewer's saved changes). Only files created by
+    /// `open_attachment_temp` can be imported — never an arbitrary path.
+    pub fn import_attachment_from_temp(
+        &mut self,
+        uuid: &str,
+        name: &str,
+        token: &str,
+        store: &super::AttachmentTempStore,
+    ) -> Result<VaultState, String> {
+        const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
+        let path = store.path(token)?;
+        let meta = std::fs::metadata(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
+        if meta.len() > MAX_IMPORT_BYTES {
+            return Err(format!("附件过大（{} 字节，上限 64 MiB）", meta.len()));
+        }
+        let data = std::fs::read(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
+        {
+            let db = self.require_db_mut()?;
+            let id = parse_entry_id(uuid)?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            entry.remove_attachment_by_name(name);
+            entry.add_attachment(name.to_owned(), Value::protected(data));
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
     /// Persist a group's expanded state to the KDBX `Group.is_expanded` flag so
     /// the tree reopens the same groups after a save + reopen.
     pub fn set_group_expanded(&mut self, uuid: &str, expanded: bool) -> Result<VaultState, String> {

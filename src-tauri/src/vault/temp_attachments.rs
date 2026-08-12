@@ -49,6 +49,20 @@ impl AttachmentTempStore {
         Ok(())
     }
 
+    /// Resolve a token to its registered temp file path (the caller reads the
+    /// file). Unknown tokens are rejected so only files we extracted can be
+    /// imported back.
+    pub fn path(&self, token: &str) -> Result<PathBuf, String> {
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
+        inner
+            .get(token)
+            .cloned()
+            .ok_or_else(|| "临时附件已清理或不存在".to_owned())
+    }
+
     /// Discard every registered temp file (lock/close path).
     pub fn discard_all(&self) {
         if let Ok(mut inner) = self.inner.lock() {

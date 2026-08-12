@@ -96,6 +96,7 @@ interface VaultStore {
   previewAttachment: (uuid: string, name: string) => Promise<AttachmentPreview>;
   openAttachmentTemp: (uuid: string, name: string) => Promise<TempAttachmentRef>;
   cleanupAttachmentTemp: (token: string) => Promise<void>;
+  importAttachmentFromTemp: (uuid: string, name: string, token: string) => Promise<VaultState>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
@@ -846,6 +847,18 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       await backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
     }
+  },
+
+  async importAttachmentFromTemp(uuid: string, name: string, token: string): Promise<VaultState> {
+    if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件导入");
+    const result = await backendInvoke<VaultState>("import_attachment_from_temp", {
+      uuid,
+      name,
+      token,
+    });
+    tempAttachmentTokens.delete(token);
+    state.set(applyBackendState(result));
+    return result;
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {

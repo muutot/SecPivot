@@ -668,6 +668,7 @@
         entryUuid={entry.uuid}
         {attachment}
         onclose={() => (previewAttachmentName = null)}
+        onsaved={() => void vault.refresh()}
       />
     {/if}
   {/if}
