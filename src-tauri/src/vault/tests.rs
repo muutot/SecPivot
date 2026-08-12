@@ -3815,6 +3815,51 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
 }
 
 #[test]
+fn emergency_sheet_includes_passwords_only_when_requested() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "GitHub".into(),
+            username: "octocat".into(),
+            password: "s3cret".into(),
+            url: "https://github.com".into(),
+            notes: "note <tag>".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+
+    let without = session.emergency_sheet_content(false).unwrap();
+    assert!(without.starts_with("<!doctype html>"));
+    assert!(without.contains("GitHub"));
+    assert!(without.contains("octocat"));
+    assert!(!without.contains("s3cret"));
+    assert!(!without.contains("本文件包含明文密码"));
+    // Notes are HTML-escaped so a `<tag>` can never inject markup.
+    assert!(without.contains("note &lt;tag&gt;"));
+
+    let with_passwords = session.emergency_sheet_content(true).unwrap();
+    assert!(with_passwords.contains("s3cret"));
+    assert!(with_passwords.contains("本文件包含明文密码"));
+    assert!(with_passwords.contains("<td class=\"mono\">s3cret</td>"));
+
+    // The file-write path persists the sheet.
+    let out = dir.path().join("emergency.html");
+    session
+        .export_emergency_sheet(&out.to_string_lossy(), true)
+        .unwrap();
+    let written = std::fs::read_to_string(&out).unwrap();
+    assert!(written.contains("s3cret"));
+}
+
+#[test]
 fn protected_custom_fields_never_leak_in_snapshot() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

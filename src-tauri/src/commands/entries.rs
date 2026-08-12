@@ -87,6 +87,23 @@ pub(crate) fn export_csv(
     vault::write_csv_file(&path, &content)
 }
 
+/// Export a self-contained HTML emergency sheet. `include_passwords` embeds
+/// plaintext passwords and must only be set after an explicit user choice
+/// (the UI shows a warning).
+#[tauri::command]
+pub(crate) fn export_emergency_sheet(
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    path: String,
+    include_passwords: bool,
+) -> Result<(), String> {
+    // Build the payload under the lock, write the file outside it.
+    let content = session
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_owned())?
+        .emergency_sheet_content(include_passwords)?;
+    vault::write_csv_file(&path, &content)
+}
+
 /// Read a UTF-8 text file from a user-picked path (CSV / KeePass XML import).
 /// Only `.csv` and `.xml` files are accepted: the command must never serve as
 /// an arbitrary local file reader (e.g. for config.json, credentials, or other

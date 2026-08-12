@@ -122,7 +122,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 附件导入修改：`import_attachment_from_temp` 仅允许 token 注册的临时文件写回附件（64 MiB 上限，成功后清理），预览对话框「导入修改/丢弃修改」
 - [x] 导入·Bitwarden JSON：后端严格解析（login/secure note、folder→分组、URI/自定义字段/TOTP），`read_text_file` 白名单加 `.json`，右键菜单「导入 Bitwarden」
 - [x] 导入·1Password/LastPass：`parse_1pif`（`***Key:value` 块、续行、Folder/Field 映射，跳过 folder 定义）+ LastPass CSV 表头别名（`name`/`extra`/`grouping`）；1PUX（ZIP/加密导出）暂缓，待引入 zip 依赖后再做
-- [ ] 导出·HTML 应急表/打印：明文导出需明确安全提示，离线 HTML 应急表（含密码需二次确认）
+- [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认
 - [ ] 数据库维护：相似密码、历史清理、过期维护、损坏库修复/尽力恢复，并为不可恢复写入设计只读失败路径
 
 ### P3 — 受约束自动化与可选安全增强

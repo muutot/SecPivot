@@ -589,6 +589,140 @@ impl VaultSession {
 
         Ok(format!("\u{FEFF}{}\r\n", lines.join("\r\n")))
     }
+
+    /// Export a self-contained, print-friendly HTML emergency sheet. When
+    /// `include_passwords` is set, entry passwords are embedded and the sheet
+    /// carries a visible plaintext warning.
+    pub fn export_emergency_sheet(
+        &self,
+        path: &str,
+        include_passwords: bool,
+    ) -> Result<(), String> {
+        let content = self.emergency_sheet_content(include_passwords)?;
+        write_csv_file(path, &content)
+    }
+
+    /// Build the HTML payload under the lock; the caller writes it outside
+    /// the lock (same pattern as `export_csv_content`).
+    pub(crate) fn emergency_sheet_content(
+        &self,
+        include_passwords: bool,
+    ) -> Result<String, String> {
+        let db = self.require_db()?;
+        type SheetRow = (String, String, String, String, String);
+        type SheetSection = (String, Vec<SheetRow>);
+        let mut sections: Vec<SheetSection> = Vec::new();
+
+        fn walk(
+            group: &keepass::db::GroupRef<'_>,
+            group_path: &str,
+            sections: &mut Vec<SheetSection>,
+        ) {
+            let rows = group
+                .entries()
+                .map(|entry| {
+                    (
+                        entry.get_title().unwrap_or_default().to_owned(),
+                        entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                        entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
+                        entry.get(FIELD_URL).unwrap_or_default().to_owned(),
+                        entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            if !rows.is_empty() {
+                sections.push((group_path.to_owned(), rows));
+            }
+            for child in group.groups() {
+                let child_path = if group_path.is_empty() {
+                    child.name.clone()
+                } else {
+                    format!("{group_path} / {}", child.name)
+                };
+                walk(&child, &child_path, sections);
+            }
+        }
+        walk(&db.root(), "", &mut sections);
+
+        let mut html = String::from(
+            "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\">\
+             <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+             <title>SecPivot 应急表</title><style>\
+             body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:24px;color:#1a1a1a;}\
+             h1{font-size:20px;margin:0 0 4px;} .meta{color:#666;font-size:12px;margin:0 0 16px;}\
+             .warning{color:#b00020;border:1px solid #b00020;padding:8px 10px;border-radius:6px;margin:0 0 16px;font-size:13px;}\
+             h2{font-size:15px;border-bottom:1px solid #ddd;padding-bottom:4px;margin:20px 0 8px;}\
+             table{border-collapse:collapse;width:100%;margin-bottom:8px;}\
+             th,td{border:1px solid #ddd;padding:5px 8px;font-size:12px;text-align:left;vertical-align:top;}\
+             th{background:#f5f5f5;} .mono{font-family:Consolas,monospace;word-break:break-all;}\
+             @media print{body{margin:10mm;} .warning{border-color:#b00020;color:#b00020;} a{color:inherit;}}\
+             </style></head><body>",
+        );
+        html.push_str("<h1>SecPivot 应急表</h1>");
+        html.push_str("<p class=\"meta\">导出时间：");
+        html.push_str(&chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+        html.push_str(" · 共 ");
+        let total: usize = sections.iter().map(|(_, rows)| rows.len()).sum();
+        html.push_str(&total.to_string());
+        html.push_str(" 个条目</p>");
+        if include_passwords {
+            html.push_str(
+                "<p class=\"warning\">本文件包含明文密码！请妥善保管，使用后立即删除。</p>",
+            );
+        }
+        for (group_path, rows) in &sections {
+            let heading = if group_path.is_empty() {
+                "根分组"
+            } else {
+                group_path
+            };
+            html.push_str("<h2>");
+            html.push_str(&escape_html(heading));
+            html.push_str("</h2><table><thead><tr><th>标题</th><th>用户名</th>");
+            if include_passwords {
+                html.push_str("<th>密码</th>");
+            }
+            html.push_str("<th>网址</th><th>备注</th></tr></thead><tbody>");
+            for (title, username, password, url, notes) in rows {
+                html.push_str("<tr><td>");
+                html.push_str(&escape_html(title));
+                html.push_str("</td><td>");
+                html.push_str(&escape_html(username));
+                html.push_str("</td>");
+                if include_passwords {
+                    html.push_str("<td class=\"mono\">");
+                    html.push_str(&escape_html(password));
+                    html.push_str("</td>");
+                }
+                html.push_str("<td>");
+                if url.is_empty() {
+                    html.push_str("<span></span>");
+                } else {
+                    html.push_str("<a href=\"");
+                    html.push_str(&escape_html(url));
+                    html.push_str("\">");
+                    html.push_str(&escape_html(url));
+                    html.push_str("</a>");
+                }
+                html.push_str("</td><td>");
+                html.push_str(&escape_html(notes));
+                html.push_str("</td></tr>");
+            }
+            html.push_str("</tbody></table>");
+        }
+        html.push_str("</body></html>\n");
+        Ok(html)
+    }
+}
+
+/// HTML-escape text for the emergency sheet (never inject markup).
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 /// MIME type for raster image attachments that can preview in memory.

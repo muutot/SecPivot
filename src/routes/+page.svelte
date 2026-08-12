@@ -101,6 +101,8 @@
   let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
+  let emergencyExportOpen = $state(false);
+  let emergencyIncludePasswords = $state(false);
   let dbMetaOpen = $state(false);
   let dbSettingsOpen = $state(false);
   let securityReport = $state<SecurityReport | null>(null);
@@ -735,6 +737,7 @@
 
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
+    if (!window.confirm("导出的 CSV 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
     try {
       if (isTauriRuntime()) {
         const selected = await save({
@@ -766,6 +769,25 @@
       flash("已导出 CSV");
     } catch (e) {
       flash(`导出失败：${e}`);
+    }
+  }
+
+  async function confirmExportEmergency(): Promise<void> {
+    if (!currentVault) return;
+    try {
+      const selected = await save({
+        defaultPath: `SecPivot-应急表-${new Date().toISOString().slice(0, 10)}.html`,
+        filters: [{ name: "HTML 文件", extensions: ["html"] }],
+      });
+      if (!selected) return;
+      await invoke("export_emergency_sheet", {
+        path: String(selected),
+        includePasswords: emergencyIncludePasswords,
+      });
+      emergencyExportOpen = false;
+      flash("应急表已导出");
+    } catch (e) {
+      flash(`导出应急表失败：${e}`);
     }
   }
 
@@ -1547,6 +1569,7 @@
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
+    { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
   ]);
 
@@ -1559,6 +1582,7 @@
     },
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
     { id: "export-csv", label: "导出 CSV", icon: "download" },
+    { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
     { id: "settings", label: "设置", icon: "settings" },
   ]);
@@ -1619,6 +1643,7 @@
     else if (id === "save-as") void handleSaveAs();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
+    else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
   }
 
@@ -1627,6 +1652,7 @@
     else if (id === "toggle-detail") detailVisible = !detailVisible;
     else if (id === "security-report") void handleOpenReport();
     else if (id === "export-csv") void handleExportCsv();
+    else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
     else if (id === "settings") openSettings();
   }
@@ -2097,6 +2123,35 @@
       onsaved={(meta) => void saveGroupMeta(meta)}
     />
   {/if}
+{/if}
+
+{#if emergencyExportOpen}
+  <ModalShell
+    title="导出 HTML 应急表"
+    description="生成可离线打开、可直接打印的应急文件"
+    size="small"
+    closeOnEscape
+    onclose={() => (emergencyExportOpen = false)}
+  >
+    {#snippet children()}
+      <div class="export-warning">
+        <p>
+          导出的 HTML
+          是明文文件。若勾选包含密码，文件将写入所有条目的明文密码，请妥善保管并在使用后删除。
+        </p>
+        <label class="export-check">
+          <input type="checkbox" bind:checked={emergencyIncludePasswords} />
+          包含密码（强烈建议不勾选）
+        </label>
+      </div>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (emergencyExportOpen = false)}>取消</button>
+      <button class="modal-button primary" onclick={() => void confirmExportEmergency()}
+        >导出</button
+      >
+    {/snippet}
+  </ModalShell>
 {/if}
 
 {#if confirmState}
@@ -2889,5 +2944,21 @@
   :global(body.resizing-column) {
     cursor: col-resize !important;
     user-select: none;
+  }
+
+  .export-warning p {
+    margin: 0 0 10px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+    line-height: 1.5;
+  }
+
+  .export-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--danger-color);
+    font-size: var(--font-size-secondary, 11px);
+    cursor: pointer;
   }
 </style>
