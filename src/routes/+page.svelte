@@ -37,9 +37,9 @@
   import GroupTree from "$lib/components/GroupTree.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
+  import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
-  import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
@@ -306,9 +306,6 @@
   type SortCol = string;
   let sortCol = $state<SortCol>("title");
   let sortDir = $state<"asc" | "desc">("asc");
-  /** Resizable column width bounds — match config.rs entry-column clamps. */
-  const COL_WIDTH_MIN = 30;
-  const COL_WIDTH_MAX = 400;
   /** Title column width when `width` is `0` (auto sentinel, see settings.ts). */
   const COL_TITLE_DEFAULT = 200;
   /** Built-in entry-table columns, in default display order. */
@@ -359,7 +356,7 @@
    *  reorder); built-ins/customs not yet present in the array are appended in
    *  default order as a legacy fallback. */
   const visibleCols = $derived.by(() => {
-    const out: { id: string; label: string; width: number; sortable: boolean }[] = [];
+    const out: EntryTableColumn[] = [];
     const seen = new Set<string>();
     for (const st of entryColumns) {
       if (!st.visible || seen.has(st.id)) continue;
@@ -480,35 +477,10 @@
     }
   }
 
-  function startColResize(e: PointerEvent, colId: string): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const startX = e.clientX;
-    const cellEl = target.parentElement;
-    const renderW = cellEl ? Math.round(cellEl.getBoundingClientRect().width) : 0;
-    const storedW = colState(colId).width;
-    const startW = storedW > 0 ? storedW : Math.max(renderW, COL_WIDTH_MIN);
-    document.body.classList.add("resizing-column");
-    const onMove = (ev: PointerEvent): void => {
-      const width = Math.min(
-        COL_WIDTH_MAX,
-        Math.max(COL_WIDTH_MIN, startW + (ev.clientX - startX)),
-      );
-      entryColumns = entryColumns.map((c) => (c.id === colId ? { ...c, width } : c));
-    };
-    const onUp = (ev: PointerEvent): void => {
-      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      document.body.classList.remove("resizing-column");
-      saveLayout();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+  function resizeEntryColumn(colId: string, width: number): void {
+    entryColumns = entryColumns.map((column) =>
+      column.id === colId ? { ...column, width } : column,
+    );
   }
 
   /** Right-click a table column header → column config menu. */
@@ -550,66 +522,6 @@
       "entryColumns",
       entryColumns.map((c) => ({ ...c })),
     );
-  }
-
-  let entryHeadEl = $state<HTMLElement>();
-  /** Column header currently being dragged (pointer-based, like column resize). */
-  let colDrag = $state<{ id: string; fromIndex: number } | null>(null);
-  /** Insertion index in the visible column order while dragging (0..n). */
-  let colDropIndex = $state<number | null>(null);
-  /** One-shot flag consumed by the header sort button after a completed drag. */
-  let suppressColumnSort = $state(false);
-
-  /** Start a potential header drag; a click that stays under the threshold is
-   *  left untouched so the sort button still works (KeePass behavior). */
-  function startColDrag(e: PointerEvent, colId: string, fromIndex: number): void {
-    if (e.button !== 0) return;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let active = false;
-    const onMove = (ev: PointerEvent): void => {
-      if (!active && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
-        active = true;
-        colDrag = { id: colId, fromIndex };
-        colDropIndex = fromIndex;
-        document.body.classList.add("dragging-column");
-      }
-      if (active) {
-        colDropIndex = computeColumnDropIndex(ev.clientX);
-      }
-    };
-    const onUp = (): void => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      document.body.classList.remove("dragging-column");
-      if (active) {
-        applyColumnReorder(colId, colDropIndex ?? fromIndex);
-        suppressColumnSort = true;
-        setTimeout(() => (suppressColumnSort = false), 50);
-        saveLayout();
-        colDrag = null;
-        colDropIndex = null;
-      }
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
-
-  /** Drop index = the header cell whose horizontal midpoint the pointer has
-   *  crossed (insertion before that column; n = append at the end). */
-  function computeColumnDropIndex(clientX: number): number {
-    const cells = Array.from(entryHeadEl?.querySelectorAll<HTMLElement>(".head-cell") ?? []);
-    let idx = cells.length;
-    for (let i = 0; i < cells.length; i++) {
-      const r = cells[i].getBoundingClientRect();
-      if (clientX < r.left + r.width / 2) {
-        idx = i;
-        break;
-      }
-    }
-    return idx;
   }
 
   /** Move a column so it renders at the given insertion index of the visible
@@ -1787,202 +1699,35 @@
         ></span>
 
         <section class="entry-panel">
-          <div class="entry-table" style={`--entry-cols: ${entryGridCols}`}>
-            <div
-              class="entry-table-head"
-              role="row"
-              tabindex="-1"
-              oncontextmenu={openColumnMenu}
-              bind:this={entryHeadEl}
-            >
-              <span class="head-icon-col" aria-hidden="true"></span>
-              {#each visibleCols as col, i (col.id)}
-                <div
-                  class="head-cell"
-                  class:head-sortable={col.sortable}
-                  class:col-dragging={colDrag?.id === col.id}
-                  class:drop-before={colDrag && colDropIndex === i}
-                  class:drop-after={colDrag && colDropIndex === i + 1}
-                  role="presentation"
-                  onpointerdown={(e) => startColDrag(e, col.id, i)}
-                >
-                  <button
-                    class="head-button"
-                    type="button"
-                    onclick={() => {
-                      if (suppressColumnSort) return;
-                      if (col.sortable) cycleSort(col.id);
-                    }}
-                    title={col.sortable ? "点击排序,按住拖动调整顺序" : "按住拖动调整顺序"}
-                  >
-                    <span class="head-label">{col.label}</span>
-                    {#if sortCol === col.id}
-                      <span class="sort-arrow" aria-hidden="true"
-                        >{sortDir === "asc" ? "▲" : "▼"}</span
-                      >
-                    {/if}
-                  </button>
-                  <span
-                    class="resize-handle"
-                    role="separator"
-                    aria-orientation="vertical"
-                    title="调整列宽"
-                    onpointerdown={(e) => startColResize(e, col.id)}
-                  ></span>
-                </div>
-              {/each}
-              <div class="head-actions"></div>
-            </div>
-
-            <div
-              class="entry-list"
-              role="listbox"
-              aria-label="条目列表"
-              aria-multiselectable="true"
-              tabindex="-1"
-              oncontextmenu={openBlankMenu}
-              onkeydown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
-                  e.preventDefault();
-                  selectAllEntries();
-                }
-              }}
-            >
-              {#if filteredEntries.length === 0}
-                <div class="empty-state">
-                  <span class="empty-icon"><AppIcon name="key" size={20} /></span>
-                  <strong>{search ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
-                  <p>{search ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
-                </div>
-              {:else}
-                {#each sortedEntries as row (row.entry.uuid)}
-                  <div
-                    class="entry-row"
-                    class:selected={selectedUuids.has(row.entry.uuid)}
-                    class:expired-row={row.entry.expired}
-                    style:--row-color={row.entry.color ?? "transparent"}
-                    role="option"
-                    aria-selected={selectedUuids.has(row.entry.uuid)}
-                    tabindex="0"
-                    draggable="true"
-                    ondragstart={(e) => {
-                      const targets = selectedUuids.has(row.entry.uuid)
-                        ? Array.from(selectedUuids)
-                        : [row.entry.uuid];
-                      e.dataTransfer?.setData(
-                        "application/x-secpivot-entries",
-                        JSON.stringify(targets),
-                      );
-                      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-                    }}
-                    onclick={(e) => handleRowClick(e, row.entry)}
-                    oncontextmenu={(e) => openEntryMenu(e, row.entry)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter") setSingleSelection(row.entry);
-                    }}
-                  >
-                    {#if row.entry.color}
-                      <span class="entry-row-color-bar" aria-hidden="true"></span>
-                    {/if}
-                    <span class="entry-row-icon-cell">
-                      <span class="entry-row-icon"
-                        >{#if customIconUrl(row.entry)}
-                          <img
-                            class="entry-row-img"
-                            src={customIconUrl(row.entry)}
-                            alt=""
-                            draggable="false"
-                          />
-                        {:else}
-                          <AppIcon name={entryIconName(row.entry)} size={16} />
-                        {/if}</span
-                      >
-                    </span>
-                    <span class="mobile-entry-summary">
-                      <span class="entry-row-main">
-                        <span
-                          class="entry-row-title"
-                          title={row.entry.expired ? "已过期" : undefined}
-                          >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                            <span class="expired-flag">已过期</span>
-                          {/if}</span
-                        >
-                        {#if showDescriptions}
-                          <span class="entry-row-sub">{row.entry.username}</span>
-                        {/if}
-                      </span>
-                    </span>
-                    {#each visibleCols as col (col.id)}
-                      {#if col.id === "title"}
-                        <span class="entry-row-col col-title">
-                          <div class="entry-row-main">
-                            <span
-                              class="entry-row-title"
-                              title={row.entry.expired ? "已过期" : undefined}
-                              >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                                <span class="expired-flag">已过期</span>
-                              {/if}</span
-                            >
-                            {#if showDescriptions}
-                              <span class="entry-row-sub">{row.entry.username}</span>
-                            {/if}
-                          </div>
-                        </span>
-                      {:else if col.id === "totp"}
-                        <span class="entry-row-col col-totp">
-                          {#if row.entry.hasTotp}
-                            <EntryTotpBadge entryUuid={row.entry.uuid} />
-                          {/if}
-                        </span>
-                      {:else}
-                        {@const text = colText(row.entry, col.id)}
-                        <span
-                          class="entry-row-col"
-                          class:col-masked={col.id === "password"}
-                          title={text || undefined}
-                        >
-                          <span class="entry-row-col-text">{text}</span>
-                        </span>
-                      {/if}
-                    {/each}
-                    <div class="entry-row-actions">
-                      <button
-                        class="row-btn"
-                        class:star-active={row.entry.favorite}
-                        title={row.entry.favorite ? "取消收藏" : "收藏条目"}
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          void toggleFavorite(row.entry);
-                        }}
-                      >
-                        <AppIcon name="star" size={12} />
-                      </button>
-                      <button
-                        class="row-btn"
-                        title="复制用户名"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          if (row.entry.username) void copyEntryValue(row.entry.username, "用户名");
-                        }}
-                      >
-                        <AppIcon name="user" size={12} />
-                      </button>
-                      <button
-                        class="row-btn"
-                        title="复制密码"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          void copyEntryPassword(row.entry);
-                        }}
-                      >
-                        <AppIcon name="copy" size={12} />
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          </div>
+          <EntryTable
+            rows={sortedEntries}
+            {visibleCols}
+            {entryGridCols}
+            {sortCol}
+            {sortDir}
+            {selectedUuids}
+            {showDescriptions}
+            compact={compactMode}
+            searchActive={Boolean(search)}
+            {customIconUrl}
+            {entryIconName}
+            {colText}
+            oncyclesort={cycleSort}
+            oncolumnresize={resizeEntryColumn}
+            oncolumnreorder={applyColumnReorder}
+            onsavelayout={saveLayout}
+            onrowclick={handleRowClick}
+            onentrycontextmenu={openEntryMenu}
+            oncolumncontextmenu={openColumnMenu}
+            onblankcontextmenu={openBlankMenu}
+            onselectall={selectAllEntries}
+            onselectentry={setSingleSelection}
+            onfavorite={(entry) => void toggleFavorite(entry)}
+            oncopyusername={(entry) => {
+              if (entry.username) void copyEntryValue(entry.username, "用户名");
+            }}
+            oncopypassword={(entry) => void copyEntryPassword(entry)}
+          />
         </section>
 
         {#if detailVisible}
@@ -2515,327 +2260,6 @@
     min-width: 0;
   }
 
-  .entry-table {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
-  }
-
-  .entry-table-head {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: var(--entry-cols);
-    align-items: center;
-    gap: 0;
-    flex: 0 0 auto;
-    height: 28px;
-    padding: 0;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--surface-bg);
-  }
-
-  .head-icon-col {
-    height: 100%;
-    border-right: 1px solid var(--border-subtle);
-  }
-
-  .head-cell {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    height: 100%;
-    padding: 0 8px;
-    border-right: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
-    font-size: var(--font-size-tiny, 10px);
-    font-weight: 600;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .head-cell:not(.head-sortable) {
-    cursor: default;
-  }
-
-  .head-cell:hover {
-    color: var(--text-primary);
-  }
-
-  .head-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    height: 100%;
-    padding: 0;
-    border: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .head-button:hover {
-    color: var(--text-primary);
-  }
-
-  .head-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .sort-arrow {
-    flex: 0 0 auto;
-    color: var(--selection-color);
-    font-size: 9px;
-  }
-
-  .resize-handle {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: -5px;
-    z-index: 2;
-    width: 10px;
-    cursor: col-resize;
-    touch-action: none;
-  }
-
-  .head-cell.col-dragging {
-    opacity: 0.45;
-    cursor: grabbing;
-  }
-
-  .head-cell.drop-before::after,
-  .head-cell.drop-after::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    bottom: 3px;
-    width: 2px;
-    border-radius: 1px;
-    background: var(--selection-color);
-  }
-
-  .head-cell.drop-before::after {
-    left: -2px;
-  }
-
-  .head-cell.drop-after::after {
-    right: -2px;
-  }
-
-  .head-actions {
-    min-width: 0;
-    height: 100%;
-    padding: 0 10px;
-    border-left: 1px solid var(--border-subtle);
-  }
-
-  .entry-list {
-    flex: 1;
-    min-height: 0;
-    width: max-content;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 0 0 16px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
-  }
-
-  .entry-row {
-    position: relative;
-    display: grid;
-    grid-template-columns: var(--entry-cols);
-    align-items: center;
-    gap: 0;
-    height: 40px;
-    padding: 0;
-    cursor: pointer;
-  }
-
-  .entry-row-color-bar {
-    position: absolute;
-    left: 0;
-    top: 4px;
-    bottom: 4px;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: var(--row-color);
-  }
-
-  .app-shell.compact .entry-row {
-    height: 34px;
-  }
-
-  .entry-row:hover {
-    background: var(--hover-bg);
-  }
-
-  .entry-row.selected {
-    background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
-  }
-
-  .entry-row-icon-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    border-right: 1px solid var(--border-subtle);
-  }
-
-  .entry-row-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--warning-color);
-    background: var(--input-bg);
-  }
-
-  .entry-row-img {
-    width: 16px;
-    height: 16px;
-    display: block;
-    border-radius: 2px;
-    object-fit: contain;
-  }
-
-  .entry-row-main {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-width: 0;
-    height: 100%;
-    flex: 1;
-  }
-
-  .mobile-entry-summary {
-    display: none;
-  }
-
-  .entry-row-title {
-    overflow: hidden;
-    color: var(--text-primary);
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .entry-row.expired-row .entry-row-title {
-    color: color-mix(in srgb, var(--danger-color) 80%, var(--text-primary));
-  }
-
-  .expired-flag {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 5px;
-    border: 1px solid color-mix(in srgb, var(--danger-color) 40%, transparent);
-    border-radius: 4px;
-    color: var(--danger-color);
-    background: color-mix(in srgb, var(--danger-color) 10%, transparent);
-    font-size: 9px;
-    line-height: 1.4;
-    vertical-align: 1px;
-  }
-
-  .entry-row-sub {
-    overflow: hidden;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .entry-row-col {
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    min-width: 0;
-    height: 100%;
-    padding: 0 8px;
-    border-right: 1px solid var(--border-subtle);
-    font-size: 12px;
-  }
-
-  .entry-row-col-text {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .col-title {
-    color: var(--text-primary);
-  }
-
-  .col-masked {
-    color: var(--text-faint);
-  }
-
-  .col-totp {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .entry-row-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 2px;
-    min-width: 0;
-    height: 100%;
-    padding: 0 10px;
-    border-left: 1px solid var(--border-subtle);
-    opacity: 0;
-  }
-
-  .entry-row:hover .entry-row-actions,
-  .entry-row.selected .entry-row-actions,
-  .entry-row:focus-within .entry-row-actions {
-    opacity: 1;
-  }
-
-  .row-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-faint);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .row-btn:hover {
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
-  }
-
-  .row-btn.star-active {
-    color: var(--warning-color);
-  }
-
-  .row-btn.star-active:hover {
-    color: var(--warning-color);
-  }
-
   .detail-panel {
     position: absolute;
     top: 0;
@@ -2883,39 +2307,6 @@
   .detail-empty p {
     margin: 0;
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 40px 20px;
-    color: var(--text-faint);
-    text-align: center;
-  }
-
-  .empty-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    margin-bottom: 4px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-card-radius, 9px);
-    background: var(--card-bg);
-  }
-
-  .empty-state strong {
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 560;
-  }
-
-  .empty-state p {
-    margin: 0;
-    font-size: var(--font-size-tiny, 10px);
   }
 
   .status-bar {
@@ -3255,56 +2646,6 @@
       width: 100%;
     }
 
-    .entry-table {
-      overflow-x: hidden;
-    }
-
-    .entry-table-head {
-      display: none;
-    }
-
-    .entry-list {
-      width: 100%;
-      overflow-x: hidden;
-    }
-
-    .entry-row,
-    .app-shell.compact .entry-row {
-      grid-template-columns: 44px minmax(0, 1fr) 100px;
-      width: 100%;
-      min-width: 0;
-      height: 48px;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .entry-row-col {
-      display: none;
-    }
-
-    .entry-row-icon-cell,
-    .mobile-entry-summary,
-    .entry-row-actions {
-      border: 0;
-    }
-
-    .mobile-entry-summary {
-      display: flex;
-      min-width: 0;
-      height: 100%;
-      padding: 0 6px;
-    }
-
-    .entry-row-actions {
-      gap: 4px;
-      padding: 0 8px 0 2px;
-      opacity: 1;
-    }
-
-    .row-btn {
-      width: 28px;
-      height: 32px;
-    }
-
     .group-resize-handle,
     .detail-resize-handle {
       display: none;
@@ -3382,11 +2723,6 @@
 
   :global(body.resizing-column) {
     cursor: col-resize !important;
-    user-select: none;
-  }
-
-  :global(body.dragging-column) {
-    cursor: grabbing !important;
     user-select: none;
   }
 </style>
