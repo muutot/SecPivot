@@ -92,6 +92,24 @@ export class LatestOperationGuard {
   }
 }
 
+/** Run one UI task at a time and keep its activity flag set until the real
+ * promise settles. Callers supply the reactive getter/setter so frameworks can
+ * observe the state without coupling this utility to a component runtime. */
+export async function runExclusiveTask(
+  isRunning: () => boolean,
+  setRunning: (running: boolean) => void,
+  task: () => Promise<void> | void,
+): Promise<boolean> {
+  if (isRunning()) return false;
+  setRunning(true);
+  try {
+    await task();
+    return true;
+  } finally {
+    setRunning(false);
+  }
+}
+
 /** A secret read may affect reveal state only when it produced a value for the
  * still-visible session and entry. Empty strings are valid secret values;
  * `null` means missing, still loading, or invalidated. */

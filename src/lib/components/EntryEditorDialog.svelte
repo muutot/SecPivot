@@ -17,6 +17,7 @@
   import { toDateTimeInput } from "$lib/utils/date";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { shortestMatchable } from "$lib/utils/match-url";
+  import { runExclusiveTask } from "$lib/utils/session-state";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -50,13 +51,11 @@
    *  flight, and re-submits are ignored until the previous attempt settles. */
   let saving = $state(false);
   async function runSave(fire: () => Promise<void> | void): Promise<void> {
-    if (saving) return;
-    saving = true;
-    try {
-      await fire();
-    } finally {
-      saving = false;
-    }
+    await runExclusiveTask(
+      () => saving,
+      (running) => (saving = running),
+      fire,
+    );
   }
 
   /** Shared value of a field across batch targets, or `null` when the values
@@ -1303,7 +1302,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose}>取消</button>
+    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
     <button
       class="modal-button primary"
       onclick={submit}

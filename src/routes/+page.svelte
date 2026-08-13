@@ -1421,10 +1421,14 @@
     autotype: EntryAutoTypeConfig | null,
     flags?: EntryFlags | null,
   ): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const mode = editorMode;
+    const targetEntry = editEntry;
+    const targetEntries = [...editEntries];
     try {
-      if (editorMode === "create" && input) {
+      if (mode === "create" && input) {
         let state = await vault.callInSession(sessionId, () => vault.addEntry(input));
         const created = findNewestEntryInGroup(state, input.groupUuid);
         if (autotype && created) {
@@ -1437,19 +1441,19 @@
             vault.updateEntryFlags(created.uuid, flags),
           );
         }
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         setSingleSelection(findEntryByUuid(state, created?.uuid ?? null));
         editorOpen = false;
         flash("已创建条目");
-      } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
-        const uuids = editEntries.map((e) => e.uuid);
+      } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
+        const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         selectedEntry = findEntryByUuid(state, selectedEntry?.uuid ?? null);
         editorOpen = false;
         flash(`已更新 ${uuids.length} 个条目`);
-      } else if (editorMode === "edit" && input && editEntry) {
-        const uuid = editEntry.uuid;
+      } else if (mode === "edit" && input && targetEntry) {
+        const uuid = targetEntry.uuid;
         let state = await vault.callInSession(sessionId, () => vault.updateEntry(uuid, input));
         if (autotype) {
           state = await vault.callInSession(sessionId, () =>
@@ -1459,13 +1463,13 @@
         if (flags) {
           state = await vault.callInSession(sessionId, () => vault.updateEntryFlags(uuid, flags));
         }
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         setSingleSelection(findEntryByUuid(state, uuid));
         editorOpen = false;
         flash("已保存修改");
       }
     } catch (e) {
-      flash(`操作失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`操作失败：${e}`);
     }
   }
 
@@ -2261,8 +2265,7 @@
     entry={editEntry}
     entries={editEntries}
     onclose={() => (editorOpen = false)}
-    onsaved={(input, patch, autotype, flags) =>
-      void handleEditorSave(input, patch, autotype, flags)}
+    onsaved={(input, patch, autotype, flags) => handleEditorSave(input, patch, autotype, flags)}
   />
 {/if}
 

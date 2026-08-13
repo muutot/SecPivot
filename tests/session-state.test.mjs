@@ -7,6 +7,7 @@ import {
   KeyedViewGuard,
   LatestOperationGuard,
   resolveListedActiveId,
+  runExclusiveTask,
   SessionViewGuard,
   SessionStateCache,
   SessionSwitchQueue,
@@ -193,6 +194,38 @@ test("only the latest operation may clear a shared activity flag", () => {
   assert.equal(operations.isCurrent(newOperation), true);
   operations.invalidate();
   assert.equal(operations.isCurrent(newOperation), false);
+});
+
+test("an exclusive UI task stays active until the parent promise settles", async () => {
+  const gate = deferred();
+  let running = false;
+  let calls = 0;
+  const first = runExclusiveTask(
+    () => running,
+    (value) => (running = value),
+    async () => {
+      calls += 1;
+      await gate.promise;
+    },
+  );
+
+  assert.equal(running, true);
+  assert.equal(
+    await runExclusiveTask(
+      () => running,
+      (value) => (running = value),
+      () => {
+        calls += 1;
+      },
+    ),
+    false,
+  );
+  assert.equal(calls, 1);
+  assert.equal(running, true);
+
+  gate.resolve();
+  assert.equal(await first, true);
+  assert.equal(running, false);
 });
 
 test("secret reveal requires a loaded value for the current session and entry", () => {
