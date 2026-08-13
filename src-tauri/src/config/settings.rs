@@ -713,6 +713,37 @@ fn normalize_saved_searches(searches: Vec<SavedSearch>) -> Vec<SavedSearch> {
         .collect()
 }
 
+/// Keep generator-profile names non-empty and unique, and clamp lengths to
+/// the same 8..=128 boundary used by the frontend normalizer.
+fn normalize_generator_profiles(
+    profiles: Vec<PasswordGeneratorSettings>,
+) -> Vec<PasswordGeneratorSettings> {
+    let mut seen = HashSet::new();
+    profiles
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut profile)| {
+            let fallback = format!("配置 {}", index + 1);
+            let base = profile
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .unwrap_or(&fallback)
+                .to_owned();
+            let mut name = base.clone();
+            let mut suffix = 2;
+            while !seen.insert(name.clone()) {
+                name = format!("{base} {suffix}");
+                suffix += 1;
+            }
+            profile.name = Some(name);
+            profile.length = profile.length.clamp(8, 128);
+            profile
+        })
+        .collect()
+}
+
 /// Apply the same range/default rules as the frontend normalizer.
 pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.language =
@@ -784,9 +815,8 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         _ => "Gzip".into(),
     };
     config.database.generator.length = clamp_i32(config.database.generator.length, 8, 128, 20);
-    for profile in &mut config.database.generator_profiles {
-        profile.length = clamp_i32(profile.length, 8, 128, 20);
-    }
+    config.database.generator_profiles =
+        normalize_generator_profiles(config.database.generator_profiles);
     config.database.file_extension = normalize_file_extension(&config.database.file_extension);
 
     if config.remote_profiles.is_empty() {

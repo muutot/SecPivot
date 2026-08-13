@@ -41,6 +41,7 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Settings / style
 
+- **Frontend and backend config normalization must produce the same value.** In particular, named generator profiles trim/fill/deduplicate names and boundary-clamp lengths to 8–128 on both sides. A backend fallback-to-default rule that differs from the frontend clamp makes `set_config` visibly rewrite a just-entered setting and breaks round-trip idempotence.
 - **Never re-define shared primitives in a panel.** Before adding CSS, grep `settings-shared.css` and `SettingsDialog.svelte` for the same primitive.
 - **Do not use a parent scoped selector to style a child component.** Pass props/classes or move the rule into the shared stylesheet.
 - **Segmented controls (theme/KDF/charset)** follow one pattern: bordered chip, `--settings-control-radius`, active = selection tint. Do not introduce a second segmented style.

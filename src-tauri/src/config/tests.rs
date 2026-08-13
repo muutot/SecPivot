@@ -133,13 +133,13 @@ fn generator_custom_rules_survive_deserialize_write_reload() {
 }
 
 #[test]
-fn generator_profiles_survive_deserialize_write_reload_and_clamp() {
+fn generator_profiles_survive_deserialize_write_reload_and_normalize() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
     let pin = PasswordGeneratorSettings {
         name: Some("PIN".into()),
-        length: 200, // out of range → fallback default on normalize
+        length: 200,
         custom_charset: Some("0123456789".into()),
         ..Default::default()
     };
@@ -148,8 +148,8 @@ fn generator_profiles_survive_deserialize_write_reload_and_clamp() {
         .database
         .generator_profiles
         .push(PasswordGeneratorSettings {
-            name: Some("Letters".into()),
-            length: 4, // below the 8..=128 range → fallback default on normalize
+            name: Some("  PIN  ".into()),
+            length: 4,
             include_symbols: false,
             custom_charset: Some("abcdef".into()),
             ..Default::default()
@@ -169,13 +169,29 @@ fn generator_profiles_survive_deserialize_write_reload_and_clamp() {
             .as_deref(),
         Some("0123456789")
     );
-    assert_eq!(again.database.generator_profiles[0].length, 20);
+    assert_eq!(again.database.generator_profiles[0].length, 128);
     assert_eq!(
         again.database.generator_profiles[1].name.as_deref(),
-        Some("Letters")
+        Some("PIN 2")
     );
     assert!(!again.database.generator_profiles[1].include_symbols);
-    assert_eq!(again.database.generator_profiles[1].length, 20);
+    assert_eq!(again.database.generator_profiles[1].length, 8);
+
+    let blank = PasswordGeneratorSettings {
+        name: Some("   ".into()),
+        ..PasswordGeneratorSettings::default()
+    };
+    let normalized = normalize_config(AppConfig {
+        database: DatabaseDefaults {
+            generator_profiles: vec![blank],
+            ..DatabaseDefaults::default()
+        },
+        ..AppConfig::default()
+    });
+    assert_eq!(
+        normalized.database.generator_profiles[0].name.as_deref(),
+        Some("配置 1")
+    );
 }
 
 #[test]
