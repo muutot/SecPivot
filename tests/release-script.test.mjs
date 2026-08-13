@@ -24,3 +24,19 @@ test("semantic releases reject an unrelated working version", () => {
     /neither HEAD 1\.2\.0 nor expected target 1\.2\.1/,
   );
 });
+
+test("dry-run exits before every release write", () => {
+  const dryRunGuard = releaseScript.indexOf("if (isDryRun) {");
+  for (const write of [
+    "node scripts/version.mjs",
+    "cargo generate-lockfile",
+    'run("node scripts/changelog.mjs")',
+    "run(`git add",
+    "run(`git tag -a",
+    "run(`git push",
+  ]) {
+    assert.ok(releaseScript.indexOf(write) > dryRunGuard, `${write} must remain after the guard`);
+  }
+  assert.match(releaseScript, /changelog\.mjs --preview --version \$\{targetVersion\}/);
+  assert.match(releaseScript, /✓ Dry run complete\. Planned tag/);
+});

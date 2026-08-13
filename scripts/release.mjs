@@ -129,6 +129,25 @@ try {
 }
 let tagVersion = `v${targetVersion}`;
 
+if (isDryRun) {
+  console.log(`\n[Dry run] ${BRANCH}: ${currentVersion} → ${targetVersion}`);
+  console.log("\n[1/6] Version files (preview only)");
+  console.log(`  Would set package, Tauri, Cargo, and lockfile versions to ${targetVersion}.`);
+  console.log("\n[2/6] Changelog preview");
+  run(`node scripts/changelog.mjs --preview --version ${targetVersion}`);
+  console.log("\n[3/6] RELEASE.md check");
+  console.log(
+    checkReleaseMd(targetVersion)
+      ? `  ✓ RELEASE.md matches v${targetVersion}`
+      : `  RELEASE.md needs update for v${targetVersion}.`,
+  );
+  console.log("\n[4/6] Commit (skipped in dry-run mode)");
+  console.log("\n[5/6] Tag (skipped in dry-run mode)");
+  console.log("\n[6/6] Push (skipped in dry-run mode)");
+  console.log(`\n✓ Dry run complete. Planned tag: ${tagVersion}`);
+  exit(0);
+}
+
 // Step 1: Bump version
 console.log(`\n[1/6] Bumping version (${BRANCH})...`);
 if (currentVersion !== targetVersion) {
@@ -154,49 +173,37 @@ if (!checkReleaseMd(currentVersion)) {
 console.log(`  ✓ RELEASE.md matches v${currentVersion}`);
 
 // Step 4: Commit
-if (!isDryRun) {
-  console.log("\n[4/6] Committing...");
-  const changedFiles = execSync("git diff --name-only", { cwd: ROOT, encoding: "utf-8" }).trim();
-  if (changedFiles) {
-    run(`git add ${changedFiles.split("\n").join(" ")}`);
-    run(`git commit -m "\u{1F516} chore[release]: bump version to ${currentVersion}"`);
-    console.log("  ✓ Committed");
-  } else {
-    console.log("  No changes to commit.");
-  }
+console.log("\n[4/6] Committing...");
+const changedFiles = execSync("git diff --name-only", { cwd: ROOT, encoding: "utf-8" }).trim();
+if (changedFiles) {
+  run(`git add ${changedFiles.split("\n").join(" ")}`);
+  run(`git commit -m "\u{1F516} chore[release]: bump version to ${currentVersion}"`);
+  console.log("  ✓ Committed");
 } else {
-  console.log("\n[4/6] Commit (skipped in dry-run mode)");
+  console.log("  No changes to commit.");
 }
 
 // Step 5: Tag
-if (!isDryRun) {
-  console.log("\n[5/6] Tagging...");
-  const exists =
-    execSync(`git tag -l "${tagVersion}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVersion;
-  if (!exists) {
-    run(`git tag -a ${tagVersion} -m "Release ${tagVersion}"`);
-    console.log(`  ✓ ${tagVersion}`);
-  } else {
-    console.log(`  ✓ Tag ${tagVersion} already exists`);
-  }
+console.log("\n[5/6] Tagging...");
+const exists =
+  execSync(`git tag -l "${tagVersion}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVersion;
+if (!exists) {
+  run(`git tag -a ${tagVersion} -m "Release ${tagVersion}"`);
+  console.log(`  ✓ ${tagVersion}`);
 } else {
-  console.log("\n[5/6] Tag (skipped in dry-run mode)");
+  console.log(`  ✓ Tag ${tagVersion} already exists`);
 }
 
 // Step 6: Push
-if (!isDryRun) {
-  console.log("\n[6/6] Pushing...");
+console.log("\n[6/6] Pushing...");
 
-  // Only the explicit regenerate flow is authorized to rewrite published
-  // history. A normal branch being ahead/behind must never silently turn a
-  // release into a force push; let the regular push fail for manual recovery.
-  const branchFlag = forcePush ? "--force-with-lease" : "";
-  const tagFlag = forcePush ? "--force" : "";
-  run(`git push origin ${BRANCH} ${branchFlag}`.trim());
-  run(`git push origin ${tagVersion} ${tagFlag}`.trim());
-  console.log(`  ✓ Pushed ${BRANCH} and ${tagVersion}`);
-} else {
-  console.log("\n[6/6] Push (skipped in dry-run mode)");
-}
+// Only the explicit regenerate flow is authorized to rewrite published
+// history. A normal branch being ahead/behind must never silently turn a
+// release into a force push; let the regular push fail for manual recovery.
+const branchFlag = forcePush ? "--force-with-lease" : "";
+const tagFlag = forcePush ? "--force" : "";
+run(`git push origin ${BRANCH} ${branchFlag}`.trim());
+run(`git push origin ${tagVersion} ${tagFlag}`.trim());
+console.log(`  ✓ Pushed ${BRANCH} and ${tagVersion}`);
 
 console.log(`\n✓ Release ${currentVersion} complete! Tag: ${tagVersion}`);

@@ -109,7 +109,7 @@ Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for th
 node scripts/release.mjs --dry-run <version>
 ```
 
-Previews the process without committing, tagging, or pushing.
+Previews the resolved target version, generated changelog, and `RELEASE.md` status without modifying version files, `Cargo.lock`, `CHANGELOG.md`, commits, tags, or remotes.
 
 ## Standalone tools
 
@@ -124,6 +124,7 @@ node scripts/changelog.mjs                # generate changelog since last tag
 node scripts/changelog.mjs --all           # full history changelog
 node scripts/changelog.mjs --from v0.1.0   # from specific tag
 node scripts/changelog.mjs --preview       # preview without writing
+node scripts/changelog.mjs --preview --version 0.2.0  # preview for a target version
 ```
 
 ## Release body (`RELEASE.md`)

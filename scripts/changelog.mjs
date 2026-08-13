@@ -7,6 +7,7 @@
  *   node scripts/changelog.mjs --from v0.1.0       # from a specific tag
  *   node scripts/changelog.mjs --all               # full history (first release)
  *   node scripts/changelog.mjs --preview           # preview without writing
+ *   node scripts/changelog.mjs --version 0.2.0      # render another target version
  */
 
 import { execSync } from "node:child_process";
@@ -134,6 +135,7 @@ const args = process.argv.slice(2);
 const isPreview = args.includes("--preview");
 const isAll = args.includes("--all");
 const fromIdx = args.indexOf("--from");
+const versionIdx = args.indexOf("--version");
 const fromRef = fromIdx >= 0 ? args[fromIdx + 1] : getLatestTag();
 
 const lines = gitLog(isAll ? null : fromRef || null);
@@ -144,7 +146,11 @@ if (commits.length === 0) {
   process.exit(0);
 }
 
-const version = getLatestVersion();
+const version = versionIdx >= 0 ? args[versionIdx + 1] : getLatestVersion();
+if (!version) {
+  console.error("--version requires a version value.");
+  process.exit(1);
+}
 const today = new Date().toISOString().split("T")[0];
 const changelog = generateChangelog(version, today, commits);
 
