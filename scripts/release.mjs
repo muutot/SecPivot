@@ -25,6 +25,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
+import { resolveReleaseTarget } from "./versioning.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -49,6 +50,14 @@ function run(cmd, opts = {}) {
 
 function getVersion() {
   return JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf-8")).version;
+}
+
+function getCommittedVersion() {
+  const packageJson = execSync("git show HEAD:package.json", {
+    cwd: ROOT,
+    encoding: "utf-8",
+  });
+  return JSON.parse(packageJson).version;
 }
 
 function checkReleaseMd(ver) {
@@ -111,14 +120,20 @@ if (isRegenerate) {
 
 // --- Normal flow ---
 let currentVersion = getVersion();
-let tagVersion = `v${currentVersion}`;
+let targetVersion;
+try {
+  targetVersion = resolveReleaseTarget(currentVersion, getCommittedVersion(), versionArg);
+} catch (error) {
+  console.error(`Release version resolution failed: ${error.message}`);
+  exit(1);
+}
+let tagVersion = `v${targetVersion}`;
 
 // Step 1: Bump version
 console.log(`\n[1/6] Bumping version (${BRANCH})...`);
-if (currentVersion !== versionArg) {
-  run(`node scripts/version.mjs ${versionArg}`);
+if (currentVersion !== targetVersion) {
+  run(`node scripts/version.mjs ${targetVersion}`);
   currentVersion = getVersion();
-  tagVersion = `v${currentVersion}`;
   run("cargo generate-lockfile --manifest-path src-tauri/Cargo.toml", { silent: true });
   console.log(`  ✓ ${currentVersion}`);
 } else {

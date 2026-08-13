@@ -89,6 +89,8 @@ node scripts/release.mjs major    # 0.1.0 → 1.0.0
 
 Same two-pass flow applies.
 
+For a semantic bump, the target is calculated from the version committed at `HEAD`. On the second pass, the script recognizes that exact uncommitted target and reuses it instead of bumping again; any other working version is rejected as an inconsistent partial release.
+
 ### Regenerate mode
 
 Re-releases the current version by dropping the old release commit + tag from history first, then re-running the normal flow:

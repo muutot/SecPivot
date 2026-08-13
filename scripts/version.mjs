@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { bumpVersion } from "./versioning.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -50,42 +51,6 @@ function writeToml(filePath, content) {
 function getCurrentVersion() {
   const pkg = readJson(resolve(ROOT, "package.json"));
   return pkg.version;
-}
-
-function parseSemver(v) {
-  const match = v.match(/^(\d+)\.(\d+)\.(\d+)(-.+)?$/);
-  if (!match) throw new Error(`Invalid semver: ${v}`);
-  return {
-    major: parseInt(match[1]),
-    minor: parseInt(match[2]),
-    patch: parseInt(match[3]),
-    pre: match[4] || "",
-  };
-}
-
-function formatSemver({ major, minor, patch, pre }) {
-  return `${major}.${minor}.${patch}${pre}`;
-}
-
-function bumpVersion(current, target) {
-  const cur = parseSemver(current);
-  if (target === "major") {
-    cur.major += 1;
-    cur.minor = 0;
-    cur.patch = 0;
-    cur.pre = "";
-  } else if (target === "minor") {
-    cur.minor += 1;
-    cur.patch = 0;
-    cur.pre = "";
-  } else if (target === "patch") {
-    cur.patch += 1;
-    cur.pre = "";
-  } else {
-    // Assume it's a specific version string like "0.2.0" or "0.2.0-beta.1"
-    return target.replace(/^v/, "");
-  }
-  return formatSemver(cur);
 }
 
 function setVersion(newVersion) {
