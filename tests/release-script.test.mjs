@@ -8,8 +8,8 @@ const releaseScript = readFileSync(new URL("../scripts/release.mjs", import.meta
 
 test("normal releases never infer a force push from ahead/behind counts", () => {
   assert.doesNotMatch(releaseScript, /rev-list --count --left-right/);
-  assert.match(releaseScript, /const branchFlag = forcePush \? "--force-with-lease" : ""/);
-  assert.match(releaseScript, /const tagFlag = forcePush \? "--force" : ""/);
+  assert.match(releaseScript, /\["push", "--force-with-lease", "origin", BRANCH\]/);
+  assert.match(releaseScript, /\["push", "--force", "origin", tagVersion\]/);
 });
 
 test("semantic releases reuse the same uncommitted two-pass target", () => {
@@ -33,7 +33,7 @@ test("explicit versions use strict semver before release git operations", () => 
   }
   assert.ok(
     releaseScript.indexOf("targetVersion = resolveReleaseTarget") <
-      releaseScript.indexOf("execSync(`git tag -l"),
+      releaseScript.indexOf('execFileSync("git", ["tag", "-l", tagVersion]'),
   );
   assert.match(releaseScript, /--regenerate requires an explicit semantic version/);
 });
@@ -41,16 +41,19 @@ test("explicit versions use strict semver before release git operations", () => 
 test("dry-run exits before every release write", () => {
   const dryRunGuard = releaseScript.indexOf("if (isDryRun) {");
   for (const write of [
-    "node scripts/version.mjs",
-    "cargo generate-lockfile",
-    'run("node scripts/changelog.mjs")',
-    "run(`git add",
-    "run(`git tag -a",
-    "run(`git push",
+    'run(process.execPath, ["scripts/version.mjs"',
+    'run("cargo", ["generate-lockfile"',
+    'run(process.execPath, ["scripts/changelog.mjs"]',
+    'run("git", ["add"',
+    'run("git", ["tag", "-a"',
+    'run("git", branchPushArgs)',
   ]) {
     assert.ok(releaseScript.indexOf(write) > dryRunGuard, `${write} must remain after the guard`);
   }
-  assert.match(releaseScript, /changelog\.mjs --preview --version \$\{targetVersion\}/);
+  assert.match(
+    releaseScript,
+    /\["scripts\/changelog\.mjs", "--preview", "--version", targetVersion\]/,
+  );
   assert.match(releaseScript, /✓ Dry run complete\. Planned tag/);
 });
 
@@ -60,6 +63,11 @@ test("release commits whitelist only canonical release files", () => {
     findUnexpectedReleaseChanges(["package.json", "src/routes/+page.svelte"], ["TODO.md"]),
     ["TODO.md", "src/routes/+page.svelte"],
   );
-  assert.match(releaseScript, /git add -- \$\{RELEASE_FILES\.join\(" "\)\}/);
-  assert.doesNotMatch(releaseScript, /git add \$\{changedFiles/);
+  assert.match(releaseScript, /run\("git", \["add", "--", \.\.\.RELEASE_FILES\]\)/);
+});
+
+test("release subprocesses pass refs as literal arguments without a shell", () => {
+  assert.doesNotMatch(releaseScript, /execSync|shell:\s*true/);
+  assert.match(releaseScript, /execFileSync\(command, args/);
+  assert.match(releaseScript, /\["push", "origin", BRANCH\]/);
 });

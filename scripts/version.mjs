@@ -11,11 +11,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { bumpVersion } from "./versioning.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
+const PRETTIER_CLI = resolve(ROOT, "node_modules/prettier/bin/prettier.cjs");
 
 const VERSION_FILES = [
   { path: "package.json", key: "version", format: "json" },
@@ -30,7 +31,7 @@ function readJson(filePath) {
 function writeJson(filePath, data) {
   writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
   try {
-    execSync(`npx prettier --write "${filePath}"`, {
+    execFileSync(process.execPath, [PRETTIER_CLI, "--write", filePath], {
       cwd: ROOT,
       encoding: "utf-8",
       stdio: "pipe",

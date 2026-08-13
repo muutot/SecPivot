@@ -107,6 +107,8 @@ Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for th
 
 `--regenerate` requires a strict explicit semantic version and an existing tag that points to a release commit. All version arguments are validated before any tag/rebase command; malformed or shell-like input is rejected.
 
+All child processes receive argument arrays rather than interpolated shell strings. This is required even for branch names because Git permits shell metacharacters in refs; changelog revision arguments are separated from Git options with `--end-of-options`.
+
 ### Dry run
 
 ```

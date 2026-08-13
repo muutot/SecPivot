@@ -10,7 +10,7 @@
  *   node scripts/changelog.mjs --version 0.2.0      # render another target version
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const CHANGELOG_PATH = resolve(ROOT, "CHANGELOG.md");
+const PRETTIER_CLI = resolve(ROOT, "node_modules/prettier/bin/prettier.cjs");
 
 // Gitmoji → changelog section mapping
 const TYPE_SECTION = {
@@ -36,14 +37,17 @@ const TYPE_SECTION = {
 };
 
 function gitLog(fromRef) {
-  const range = fromRef ? `${fromRef}..HEAD` : "HEAD";
+  const revisionArgs = fromRef ? [`${fromRef}..HEAD`] : ["HEAD"];
   try {
-    const output = execSync(`git log ${range} --format="%H||%ai||%s" --no-merges`, {
-      cwd: ROOT,
-      encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024,
-      shell: true,
-    });
+    const output = execFileSync(
+      "git",
+      ["log", "--format=%H||%ai||%s", "--no-merges", "--end-of-options", ...revisionArgs],
+      {
+        cwd: ROOT,
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+      },
+    );
     return output.trim().split("\n").filter(Boolean);
   } catch {
     return [];
@@ -52,10 +56,9 @@ function gitLog(fromRef) {
 
 function getLatestTag() {
   try {
-    const tags = execSync("git tag --sort=-creatordate", {
+    const tags = execFileSync("git", ["tag", "--sort=-creatordate"], {
       cwd: ROOT,
       encoding: "utf-8",
-      shell: true,
     }).trim();
     return tags.split("\n").filter(Boolean)[0] || "";
   } catch {
@@ -177,7 +180,7 @@ if (isPreview) {
 
   // Re-format with prettier to keep lint clean
   try {
-    execSync(`npx prettier --write "${CHANGELOG_PATH}"`, {
+    execFileSync(process.execPath, [PRETTIER_CLI, "--write", CHANGELOG_PATH], {
       cwd: ROOT,
       encoding: "utf-8",
       stdio: "pipe",

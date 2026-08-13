@@ -20,7 +20,7 @@
  *   node scripts/release.mjs --dry-run <version>
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,16 +31,18 @@ import { RELEASE_FILES, findUnexpectedReleaseChanges } from "./release-files.mjs
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const RELEASE_PATH = resolve(ROOT, "RELEASE.md");
-const BRANCH = execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT, encoding: "utf-8" }).trim();
+const BRANCH = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+  cwd: ROOT,
+  encoding: "utf-8",
+}).trim();
 
-function run(cmd, opts = {}) {
-  console.log(`  > ${cmd}`);
+function run(command, args = [], opts = {}) {
+  console.log(`  > ${[command, ...args].join(" ")}`);
   try {
-    return execSync(cmd, {
+    return execFileSync(command, args, {
       cwd: ROOT,
       encoding: "utf-8",
       stdio: opts.silent ? "pipe" : "inherit",
-      shell: true,
       ...opts,
     });
   } catch (err) {
@@ -54,7 +56,7 @@ function getVersion() {
 }
 
 function getCommittedVersion() {
-  const packageJson = execSync("git show HEAD:package.json", {
+  const packageJson = execFileSync("git", ["show", "HEAD:package.json"], {
     cwd: ROOT,
     encoding: "utf-8",
   });
@@ -66,8 +68,8 @@ function checkReleaseMd(ver) {
   return readFileSync(RELEASE_PATH, "utf-8").includes(`v${ver}`);
 }
 
-function gitChangedFiles(args) {
-  const output = execSync(`git diff --name-only ${args}`.trim(), {
+function gitChangedFiles(args = []) {
+  const output = execFileSync("git", ["diff", "--name-only", ...args], {
     cwd: ROOT,
     encoding: "utf-8",
   }).trim();
@@ -75,7 +77,7 @@ function gitChangedFiles(args) {
 }
 
 function ensureOnlyReleaseFilesChanged() {
-  const unexpected = findUnexpectedReleaseChanges(gitChangedFiles("--cached"), gitChangedFiles(""));
+  const unexpected = findUnexpectedReleaseChanges(gitChangedFiles(["--cached"]), gitChangedFiles());
   if (unexpected.length > 0) {
     throw new Error(
       `Commit non-release tracked changes before releasing: ${unexpected.join(", ")}.`,
@@ -121,19 +123,20 @@ const tagVersion = `v${targetVersion}`;
 let forcePush = false;
 if (isRegenerate) {
   const tagExists =
-    execSync(`git tag -l "${tagVersion}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVersion;
+    execFileSync("git", ["tag", "-l", tagVersion], { cwd: ROOT, encoding: "utf-8" }).trim() ===
+    tagVersion;
 
   if (!tagExists) {
     console.error(`Regenerate failed: tag ${tagVersion} does not exist.`);
     exit(1);
   }
 
-  const tagCommit = execSync(`git rev-list -n 1 "${tagVersion}"`, {
+  const tagCommit = execFileSync("git", ["rev-list", "-n", "1", tagVersion], {
     cwd: ROOT,
     encoding: "utf-8",
   }).trim();
   const shortSha = tagCommit.slice(0, 7);
-  const commitMsg = execSync(`git log --format="%s" -1 "${tagCommit}"`, {
+  const commitMsg = execFileSync("git", ["log", "--format=%s", "-1", tagCommit], {
     cwd: ROOT,
     encoding: "utf-8",
   }).trim();
@@ -145,7 +148,7 @@ if (isRegenerate) {
 
   console.log(`\n[Regenerate] Found old release commit ${shortSha}: "${commitMsg}"`);
   if (!isDryRun) {
-    const parentSha = execSync(`git rev-list --parents -n 1 "${tagCommit}"`, {
+    const parentSha = execFileSync("git", ["rev-list", "--parents", "-n", "1", tagCommit], {
       cwd: ROOT,
       encoding: "utf-8",
     })
@@ -156,8 +159,8 @@ if (isRegenerate) {
       exit(1);
     }
     console.log(`  Dropping commit ${shortSha} via rebase (onto ${parentSha.slice(0, 7)})...`);
-    run(`git rebase --onto ${parentSha} ${tagCommit}`);
-    run(`git tag -d ${tagVersion}`);
+    run("git", ["rebase", "--onto", parentSha, tagCommit]);
+    run("git", ["tag", "-d", tagVersion]);
     forcePush = true;
     currentVersion = getVersion();
     console.log(`  ✓ Old release commit removed, tag ${tagVersion} deleted\n`);
@@ -172,7 +175,7 @@ if (isDryRun) {
   console.log("\n[1/6] Version files (preview only)");
   console.log(`  Would set package, Tauri, Cargo, and lockfile versions to ${targetVersion}.`);
   console.log("\n[2/6] Changelog preview");
-  run(`node scripts/changelog.mjs --preview --version ${targetVersion}`);
+  run(process.execPath, ["scripts/changelog.mjs", "--preview", "--version", targetVersion]);
   console.log("\n[3/6] RELEASE.md check");
   console.log(
     checkReleaseMd(targetVersion)
@@ -189,9 +192,11 @@ if (isDryRun) {
 // Step 1: Bump version
 console.log(`\n[1/6] Bumping version (${BRANCH})...`);
 if (currentVersion !== targetVersion) {
-  run(`node scripts/version.mjs ${targetVersion}`);
+  run(process.execPath, ["scripts/version.mjs", targetVersion]);
   currentVersion = getVersion();
-  run("cargo generate-lockfile --manifest-path src-tauri/Cargo.toml", { silent: true });
+  run("cargo", ["generate-lockfile", "--manifest-path", "src-tauri/Cargo.toml"], {
+    silent: true,
+  });
   console.log(`  ✓ ${currentVersion}`);
 } else {
   console.log(`  ✓ Already at ${currentVersion}`);
@@ -199,7 +204,7 @@ if (currentVersion !== targetVersion) {
 
 // Step 2: Generate changelog
 console.log("\n[2/6] Generating changelog...");
-run("node scripts/changelog.mjs");
+run(process.execPath, ["scripts/changelog.mjs"]);
 
 // Step 3: RELEASE.md check
 console.log("\n[3/6] Checking RELEASE.md...");
@@ -218,10 +223,10 @@ try {
   console.error(`Release commit blocked: ${error.message}`);
   exit(1);
 }
-run(`git add -- ${RELEASE_FILES.join(" ")}`);
-const stagedReleaseFiles = gitChangedFiles(`--cached -- ${RELEASE_FILES.join(" ")}`);
+run("git", ["add", "--", ...RELEASE_FILES]);
+const stagedReleaseFiles = gitChangedFiles(["--cached", "--", ...RELEASE_FILES]);
 if (stagedReleaseFiles.length > 0) {
-  run(`git commit -m "\u{1F516} chore[release]: bump version to ${currentVersion}"`);
+  run("git", ["commit", "-m", `\u{1F516} chore[release]: bump version to ${currentVersion}`]);
   console.log("  ✓ Committed");
 } else {
   console.log("  No changes to commit.");
@@ -230,9 +235,10 @@ if (stagedReleaseFiles.length > 0) {
 // Step 5: Tag
 console.log("\n[5/6] Tagging...");
 const exists =
-  execSync(`git tag -l "${tagVersion}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVersion;
+  execFileSync("git", ["tag", "-l", tagVersion], { cwd: ROOT, encoding: "utf-8" }).trim() ===
+  tagVersion;
 if (!exists) {
-  run(`git tag -a ${tagVersion} -m "Release ${tagVersion}"`);
+  run("git", ["tag", "-a", tagVersion, "-m", `Release ${tagVersion}`]);
   console.log(`  ✓ ${tagVersion}`);
 } else {
   console.log(`  ✓ Tag ${tagVersion} already exists`);
@@ -244,10 +250,14 @@ console.log("\n[6/6] Pushing...");
 // Only the explicit regenerate flow is authorized to rewrite published
 // history. A normal branch being ahead/behind must never silently turn a
 // release into a force push; let the regular push fail for manual recovery.
-const branchFlag = forcePush ? "--force-with-lease" : "";
-const tagFlag = forcePush ? "--force" : "";
-run(`git push origin ${BRANCH} ${branchFlag}`.trim());
-run(`git push origin ${tagVersion} ${tagFlag}`.trim());
+const branchPushArgs = forcePush
+  ? ["push", "--force-with-lease", "origin", BRANCH]
+  : ["push", "origin", BRANCH];
+const tagPushArgs = forcePush
+  ? ["push", "--force", "origin", tagVersion]
+  : ["push", "origin", tagVersion];
+run("git", branchPushArgs);
+run("git", tagPushArgs);
 console.log(`  ✓ Pushed ${BRANCH} and ${tagVersion}`);
 
 console.log(`\n✓ Release ${currentVersion} complete! Tag: ${tagVersion}`);
