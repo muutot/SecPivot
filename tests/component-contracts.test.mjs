@@ -35,6 +35,19 @@ test("browser write event stays aligned across backend and page listener", async
   assert.match(pageSource, new RegExp(`listen\\("${event[1]}"`));
 });
 
+test("global auto-type emits picker events after releasing the vault lock", async () => {
+  const source = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  const lockedPreparation = source.match(/let action = \{([\s\S]*?)\n    \};/);
+  const unlockedDispatch = source.match(/match action \{([\s\S]*?)\n    \}\n\}/);
+
+  assert.ok(lockedPreparation, "global hotkey locked preparation must exist");
+  assert.match(lockedPreparation[1], /session\.lock\(\)/);
+  assert.doesNotMatch(lockedPreparation[1], /app\.emit|get_webview_window/);
+  assert.ok(unlockedDispatch, "global hotkey unlocked dispatch must exist");
+  assert.match(unlockedDispatch[1], /app\.emit\("autotype-pick-request"/);
+  assert.match(unlockedDispatch[1], /get_webview_window\("main"\)/);
+});
+
 test("entry detail invalidates detached secret-copy consumers", async () => {
   const source = await readFile(
     new URL("../src/lib/components/EntryDetail.svelte", import.meta.url),

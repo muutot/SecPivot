@@ -73,6 +73,11 @@ pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
 /// Runs on a background thread; failures are logged only.
 #[cfg(desktop)]
 fn handle_global_hotkey(app: &tauri::AppHandle) {
+    enum Action {
+        Pick(Vec<vault::AutotypeCandidate>),
+        Run(String, platform::autotype::AutotypeContext),
+    }
+
     let Some(window_title) = platform::focus::foreground_window_title() else {
         return;
     };
@@ -82,7 +87,7 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
     let Some(vaults) = app.try_state::<VaultSessions>() else {
         return;
     };
-    let ctx = {
+    let action = {
         let mut session = match session.lock() {
             Ok(s) => s,
             Err(_) => return,
@@ -102,52 +107,60 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
         }
         if candidates.len() > 1 {
             session.set_pending_autotype_window(Some(window_title.clone()));
+            Action::Pick(candidates)
+        } else {
+            session.set_pending_autotype_window(None);
+            let uuid = candidates[0].uuid.clone();
+            // Honor window associations first, then the entry's / ancestor
+            // group's stored default sequence; `None` means auto-type is
+            // disabled for this entry.
+            let sequence = match session.resolve_autotype_sequence_for_window(&uuid, &window_title)
+            {
+                Ok(seq) => match seq {
+                    Some(seq) => seq,
+                    None => {
+                        eprintln!("global auto-type: entry auto-type disabled");
+                        return;
+                    }
+                },
+                Err(e) => {
+                    eprintln!("global auto-type: {e}");
+                    return;
+                }
+            };
+            let sequence = if sequence.trim().is_empty() {
+                GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
+            } else {
+                sequence
+            };
+            let ctx = match session.autotype_context(&uuid) {
+                Ok(ctx) => ctx,
+                Err(e) => {
+                    eprintln!("global auto-type: {e}");
+                    return;
+                }
+            };
+            Action::Run(sequence, ctx)
+        }
+    };
+
+    match action {
+        Action::Pick(candidates) => {
             let _ = app.emit("autotype-pick-request", &candidates);
-            #[cfg(desktop)]
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
             }
-            return;
         }
-        session.set_pending_autotype_window(None);
-        let uuid = candidates[0].uuid.clone();
-        // Honor window associations first, then the entry's / ancestor
-        // group's stored default sequence; `None` means auto-type is
-        // disabled for this entry.
-        let sequence = match session.resolve_autotype_sequence_for_window(&uuid, &window_title) {
-            Ok(seq) => match seq {
-                Some(seq) => seq,
-                None => {
-                    eprintln!("global auto-type: entry auto-type disabled");
-                    return;
+        Action::Run(sequence, ctx) => {
+            std::thread::spawn(move || {
+                if let Err(e) = platform::autotype::run_sequence(&sequence, &ctx) {
+                    eprintln!("global auto-type: {e}");
                 }
-            },
-            Err(e) => {
-                eprintln!("global auto-type: {e}");
-                return;
-            }
-        };
-        let sequence = if sequence.trim().is_empty() {
-            GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
-        } else {
-            sequence
-        };
-        let ctx = match session.autotype_context(&uuid) {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                eprintln!("global auto-type: {e}");
-                return;
-            }
-        };
-        (sequence, ctx)
-    };
-    std::thread::spawn(move || {
-        if let Err(e) = platform::autotype::run_sequence(&ctx.0, &ctx.1) {
-            eprintln!("global auto-type: {e}");
+            });
         }
-    });
+    }
 }
 
 // ---------------------------------------------------------------------------
