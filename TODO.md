@@ -126,6 +126,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] `EntryDetail` 密码/受保护字段/历史/存储请求绑定 session+UUID 视图代次；同库快速 u1→u2→u1 的第一轮晚到响应不再写入第二轮 u1 视图
   - [x] 条目列表/右键密码复制在读取后、写入剪贴板前再次校验原可见视图代次；A→B→A 的第一轮 A 晚到密码不会进入第二轮 A 的剪贴板，前端行为测试覆盖 stale/current consumer
   - [x] `EntryDetail` 密码/受保护字段复制让秘密读取与剪贴板 consumer 共用 session+UUID 视图代次，并在详情卸载时失效 guard；旧详情的晚到秘密不会由已分离组件写入剪贴板
+  - [x] `EntryDetail` 附件保存原生路径选择绑定发起 session+UUID 视图代次；切换条目、标签或卸载后返回的旧路径不会启动后端附件写出
   - [x] 附件预览弹窗在按钮关闭、Escape、父级标签切换卸载及重新外部打开时清理旧 token；导入失败保留 token 供重试，不丢失受控临时文件引用
   - [ ] 其余常驻详情/弹窗的异步 loading 状态在 session/UUID 变化时完整重置，并补相称行为验证
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）

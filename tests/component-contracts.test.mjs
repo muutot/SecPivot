@@ -30,3 +30,19 @@ test("entry detail invalidates detached secret-copy consumers", async () => {
   assert.match(source, /ensurePassword\(view\)/);
   assert.match(source, /ensureCustomField\(name, view\)/);
 });
+
+test("entry attachment save rejects stale native-picker results", async () => {
+  const source = await readFile(
+    new URL("../src/lib/components/EntryDetail.svelte", import.meta.url),
+    "utf8",
+  );
+  const saveBlock = source.match(
+    /async function saveAttachment\(name: string\): Promise<void> \{([\s\S]*?)\n  \}/,
+  );
+
+  assert.ok(saveBlock, "EntryDetail saveAttachment must exist");
+  assert.match(saveBlock[1], /awaitCurrentView\(detailView, view, \(\) =>\s*saveDialog/);
+  assert.match(saveBlock[1], /if \(!picked\.current \|\| !picked\.value\) return/);
+  assert.match(saveBlock[1], /const dest = picked\.value/);
+  assert.match(saveBlock[1], /vault\.saveAttachment\(uuid, name, dest\)/);
+});

@@ -9,6 +9,7 @@
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import {
+    awaitCurrentView,
     canToggleSecretReveal,
     consumeCurrentView,
     KeyedViewGuard,
@@ -346,14 +347,13 @@
     const view = detailView.capture();
     if (!sessionId || !view) return;
     try {
-      let dest: string | null = null;
-      if (isTauriRuntime()) {
-        dest = await saveDialog({ defaultPath: name });
-      } else {
-        throw new Error("browser");
-      }
-      if (!dest) return;
-      await vault.callInSession(sessionId, () => vault.saveAttachment(uuid, name, dest!));
+      if (!isTauriRuntime()) throw new Error("browser");
+      const picked = await awaitCurrentView(detailView, view, () =>
+        saveDialog({ defaultPath: name }),
+      );
+      if (!picked.current || !picked.value) return;
+      const dest = picked.value;
+      await vault.callInSession(sessionId, () => vault.saveAttachment(uuid, name, dest));
       if (!detailView.isCurrent(view)) return;
       flash("attachment");
     } catch {
