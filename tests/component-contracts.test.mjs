@@ -195,3 +195,33 @@ test("database settings reject detached load and save completions", async () => 
   assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) !== sessionId/);
   assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) === sessionId/);
 });
+
+test("attachment preview binds every async path to its resource view", async () => {
+  const dialog = await readFile(
+    new URL("../src/lib/components/AttachmentPreviewDialog.svelte", import.meta.url),
+    "utf8",
+  );
+  const saveBlock = dialog.match(/async function saveToDisk\(\): Promise<void> \{([\s\S]*?)\n  \}/);
+  const openBlock = dialog.match(
+    /async function openExternal\(\): Promise<void> \{([\s\S]*?)\n  \}/,
+  );
+  const importBlock = dialog.match(
+    /async function importChanges\(\): Promise<void> \{([\s\S]*?)\n  \}/,
+  );
+
+  assert.match(dialog, /sessionResourceKey\(sessionId, `\$\{uuid\}\\0\$\{name\}`\)/);
+  assert.match(dialog, /dialogView\.activate\(null\)/);
+  assert.match(dialog, /if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.match(dialog, /if \(dialogView\.isCurrent\(view\)\) loading = false/);
+  assert.match(dialog, /closeOnEscape=\{!importing\}/);
+  assert.ok(saveBlock, "AttachmentPreviewDialog saveToDisk must exist");
+  assert.match(saveBlock[1], /awaitCurrentView\(dialogView, view, \(\) => save/);
+  assert.match(saveBlock[1], /if \(!picked\.current \|\| !picked\.value\) return/);
+  assert.match(saveBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.ok(openBlock, "AttachmentPreviewDialog openExternal must exist");
+  assert.match(openBlock[1], /if \(!dialogView\.isCurrent\(view\)\)/);
+  assert.match(openBlock[1], /vault\.cleanupAttachmentTemp\(ref\.token\)/);
+  assert.ok(importBlock, "AttachmentPreviewDialog importChanges must exist");
+  assert.match(importBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) !== sessionId/);
+});

@@ -5,6 +5,7 @@
   import type { AttachmentInfo, AttachmentPreview, TempAttachmentRef } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
   import { replaceDisposable, settleDisposable } from "$lib/utils/disposable";
+  import { awaitCurrentView, KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatBytes } from "$lib/utils/format";
 
@@ -24,9 +25,12 @@
   let confirmExternal = $state(false);
   let opening = $state(false);
   let importing = $state(false);
+  let savingToDisk = $state(false);
   let externalError = $state("");
   const sessionId = vault.getActiveSessionId();
-  let disposed = false;
+  let activeSessionId = $state(sessionId);
+  const dialogView = new KeyedViewGuard();
+  let activeKey: string | null = null;
 
   function replaceTempRef(replacement: TempAttachmentRef | null): void {
     tempRef = replaceDisposable(
@@ -37,34 +41,69 @@
   }
 
   onDestroy(() => {
-    disposed = true;
+    dialogView.activate(null);
     replaceTempRef(null);
   });
 
+  $effect(() => vault.activeId.subscribe((value) => (activeSessionId = value)));
+
   $effect(() => {
-    if (!sessionId) return;
+    const uuid = entryUuid;
+    const name = attachment.name;
+    const key =
+      sessionId && activeSessionId === sessionId
+        ? sessionResourceKey(sessionId, `${uuid}\0${name}`)
+        : null;
+    if (key === activeKey) return;
+    activeKey = key;
+    dialogView.activate(key);
+    replaceTempRef(null);
+    preview = null;
+    loading = key !== null;
+    error = key === null ? "数据库会话已切换" : "";
+    confirmExternal = false;
+    opening = false;
+    importing = false;
+    savingToDisk = false;
+    externalError = "";
+    const view = dialogView.capture();
+    if (!sessionId || !view) return;
     void vault
-      .callInSession(sessionId, () => vault.previewAttachment(entryUuid, attachment.name))
+      .callInSession(sessionId, () => vault.previewAttachment(uuid, name))
       .then((value) => {
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!dialogView.isCurrent(view)) return;
         preview = value;
-        loading = false;
       })
       .catch((e) => {
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!dialogView.isCurrent(view)) return;
         error = String(e);
-        loading = false;
+      })
+      .finally(() => {
+        if (dialogView.isCurrent(view)) loading = false;
       });
   });
 
   async function saveToDisk(): Promise<void> {
-    const dest = await save({ defaultPath: attachment.name });
-    if (!dest || !sessionId) return;
-    await vault.callInSession(sessionId, () =>
-      vault.saveAttachment(entryUuid, attachment.name, dest),
-    );
-    if (vault.getActiveSessionId() !== sessionId) return;
-    await onsaved?.(attachment.name);
+    if (savingToDisk || !sessionId) return;
+    const view = dialogView.capture();
+    if (!view) return;
+    const uuid = entryUuid;
+    const name = attachment.name;
+    savingToDisk = true;
+    externalError = "";
+    try {
+      const picked = await awaitCurrentView(dialogView, view, () => save({ defaultPath: name }));
+      if (!picked.current || !picked.value) return;
+      await vault.callInSession(sessionId, () =>
+        vault.saveAttachment(uuid, name, String(picked.value)),
+      );
+      if (!dialogView.isCurrent(view)) return;
+      await onsaved?.(name);
+    } catch (e) {
+      if (dialogView.isCurrent(view)) externalError = String(e);
+    } finally {
+      if (dialogView.isCurrent(view)) savingToDisk = false;
+    }
   }
 
   async function openExternal(): Promise<void> {
@@ -78,25 +117,26 @@
     confirmExternal = false;
     opening = true;
     externalError = "";
+    const view = dialogView.capture();
+    if (!view) {
+      opening = false;
+      return;
+    }
+    const uuid = entryUuid;
+    const name = attachment.name;
     try {
       if (!sessionId) return;
-      const ref = await vault.callInSession(sessionId, () =>
-        vault.openAttachmentTemp(entryUuid, attachment.name),
-      );
-      if (vault.getActiveSessionId() !== sessionId) {
-        await vault.cleanupAttachmentTemp(ref.token);
-        return;
-      }
-      if (disposed) {
+      const ref = await vault.callInSession(sessionId, () => vault.openAttachmentTemp(uuid, name));
+      if (!dialogView.isCurrent(view)) {
         await vault.cleanupAttachmentTemp(ref.token);
         return;
       }
       replaceTempRef(ref);
       await openPath(ref.path);
     } catch (e) {
-      if (!disposed) externalError = String(e);
+      if (dialogView.isCurrent(view)) externalError = String(e);
     } finally {
-      if (!disposed) opening = false;
+      if (dialogView.isCurrent(view)) opening = false;
     }
   }
 
@@ -109,24 +149,27 @@
     const ownedRef = tempRef;
     const token = ownedRef.token;
     if (!sessionId) return;
+    const view = dialogView.capture();
+    if (!view) return;
+    const uuid = entryUuid;
+    const name = attachment.name;
     importing = true;
     externalError = "";
     try {
-      await vault.callInSession(sessionId, () =>
-        vault.importAttachmentFromTemp(entryUuid, attachment.name, token),
-      );
+      await vault.callInSession(sessionId, () => vault.importAttachmentFromTemp(uuid, name, token));
       tempRef = settleDisposable(tempRef, ownedRef, true);
-      if (vault.getActiveSessionId() !== sessionId || disposed) return;
-      await onsaved?.(attachment.name);
+      if (!dialogView.isCurrent(view)) return;
+      await onsaved?.(name);
     } catch (e) {
       tempRef = settleDisposable(tempRef, ownedRef, false);
-      if (!disposed && tempRef === ownedRef) externalError = String(e);
+      if (dialogView.isCurrent(view) && tempRef === ownedRef) externalError = String(e);
     } finally {
-      if (!disposed) importing = false;
+      if (dialogView.isCurrent(view)) importing = false;
     }
   }
 
   function close(): void {
+    dialogView.activate(null);
     replaceTempRef(null);
     onclose();
   }
@@ -137,7 +180,7 @@
   description={`${formatBytes(attachment.size)}${preview?.truncated ? " · 预览已截断" : ""}`}
   size="medium"
   scrollable
-  closeOnEscape
+  closeOnEscape={!importing}
   onclose={close}
 >
   {#snippet children()}
@@ -164,7 +207,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={close}>关闭</button>
+    <button class="modal-button" onclick={close} disabled={importing}>关闭</button>
     {#if tempRef}
       <button class="modal-button" onclick={() => void importChanges()} disabled={importing}>
         {importing ? "正在导入…" : "导入修改"}
@@ -179,7 +222,13 @@
     >
       {confirmExternal ? "再次点击确认在外部打开" : tempRef ? "重新打开" : "外部打开…"}
     </button>
-    <button class="modal-button primary" onclick={() => void saveToDisk()}>保存到…</button>
+    <button
+      class="modal-button primary"
+      onclick={() => void saveToDisk()}
+      disabled={opening || importing || savingToDisk}
+    >
+      {savingToDisk ? "保存中…" : "保存到…"}
+    </button>
   {/snippet}
 </ModalShell>
 

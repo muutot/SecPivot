@@ -134,6 +134,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] `EntryDetail` 密码/受保护字段复制让秘密读取与剪贴板 consumer 共用 session+UUID 视图代次，并在详情卸载时失效 guard；旧详情的晚到秘密不会由已分离组件写入剪贴板
   - [x] `EntryDetail` 附件保存原生路径选择绑定发起 session+UUID 视图代次；切换条目、标签或卸载后返回的旧路径不会启动后端附件写出
   - [x] 附件预览弹窗在按钮关闭、Escape、父级标签切换卸载及重新外部打开时清理旧 token；导入失败保留 token 供重试，不丢失受控临时文件引用
+  - [x] 附件预览弹窗的内存预览、原生“保存到”、受控外部打开与导入修改统一绑定 session+UUID+附件名视图代次；资源切换/卸载完整重置 loading/确认/操作状态并清理 token，旧 picker 结果不启动文件写出，旧预览/外部打开不发布或打开路径，旧导入完成不调用父级回调
   - [ ] 其余常驻详情/弹窗的异步 loading 状态在 session/UUID 变化时完整重置，并补相称行为验证
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）
 - [x] 多数据库标签页·锁定与可见性：`close_all_vaults` 锁定全部标签（工具栏锁/空闲锁/锁后操作），bridge/RPC 与全局热键仅服务 active 会话，`remembered` 随切换/关闭/锁定联动（锁屏 quick-reopen 保留）
