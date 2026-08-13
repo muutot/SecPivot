@@ -279,6 +279,7 @@
       {onrename}
       {onchangeicon}
       {onautotype}
+      {onmeta}
       {ondelete}
       {onrestore}
       {onemptybin}
