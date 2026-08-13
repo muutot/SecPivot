@@ -120,6 +120,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] 标签切换清理页面共享 `busy`、分组创建/图标保存状态；旧 session 的 finally 不会让新标签持续禁用工具栏或表单
   - [x] 详情密码/受保护自定义字段仅在对应秘密读取成功后切换 reveal；加载中重复点击或 session/UUID 失效不再显示空值
   - [x] `EntryDetail` 密码/受保护字段/历史/存储请求绑定 session+UUID 视图代次；同库快速 u1→u2→u1 的第一轮晚到响应不再写入第二轮 u1 视图
+  - [x] 附件预览弹窗在按钮关闭、Escape、父级标签切换卸载及重新外部打开时清理旧 token；导入失败保留 token 供重试，不丢失受控临时文件引用
   - [ ] 其余常驻详情/弹窗的异步 loading 状态在 session/UUID 变化时完整重置，并补相称行为验证
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）
 - [x] 多数据库标签页·锁定与可见性：`close_all_vaults` 锁定全部标签（工具栏锁/空闲锁/锁后操作），bridge/RPC 与全局热键仅服务 active 会话，`remembered` 随切换/关闭/锁定联动（锁屏 quick-reopen 保留）

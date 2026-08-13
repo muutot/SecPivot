@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { save } from "@tauri-apps/plugin-dialog";
   import { openPath } from "@tauri-apps/plugin-opener";
   import type { AttachmentInfo, AttachmentPreview, TempAttachmentRef } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
+  import { replaceDisposable, settleDisposable } from "$lib/utils/disposable";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatBytes } from "$lib/utils/format";
 
@@ -21,8 +23,23 @@
   let tempRef = $state<TempAttachmentRef | null>(null);
   let confirmExternal = $state(false);
   let opening = $state(false);
+  let importing = $state(false);
   let externalError = $state("");
   const sessionId = vault.getActiveSessionId();
+  let disposed = false;
+
+  function replaceTempRef(replacement: TempAttachmentRef | null): void {
+    tempRef = replaceDisposable(
+      tempRef,
+      replacement,
+      (ref) => void vault.cleanupAttachmentTemp(ref.token),
+    );
+  }
+
+  onDestroy(() => {
+    disposed = true;
+    replaceTempRef(null);
+  });
 
   $effect(() => {
     if (!sessionId) return;
@@ -51,6 +68,7 @@
   }
 
   async function openExternal(): Promise<void> {
+    if (opening || importing) return;
     // Explicit two-step confirmation before anything is written to disk and
     // handed to an external viewer.
     if (!confirmExternal) {
@@ -69,36 +87,47 @@
         await vault.cleanupAttachmentTemp(ref.token);
         return;
       }
-      tempRef = ref;
+      if (disposed) {
+        await vault.cleanupAttachmentTemp(ref.token);
+        return;
+      }
+      replaceTempRef(ref);
       await openPath(ref.path);
     } catch (e) {
-      externalError = String(e);
+      if (!disposed) externalError = String(e);
     } finally {
-      opening = false;
+      if (!disposed) opening = false;
     }
   }
 
-  async function discardTemp(): Promise<void> {
-    if (tempRef) {
-      await vault.cleanupAttachmentTemp(tempRef.token);
-      tempRef = null;
-    }
+  function discardTemp(): void {
+    replaceTempRef(null);
   }
 
   async function importChanges(): Promise<void> {
-    if (!tempRef) return;
-    const token = tempRef.token;
-    tempRef = null;
+    if (!tempRef || importing) return;
+    const ownedRef = tempRef;
+    const token = ownedRef.token;
     if (!sessionId) return;
-    await vault.callInSession(sessionId, () =>
-      vault.importAttachmentFromTemp(entryUuid, attachment.name, token),
-    );
-    if (vault.getActiveSessionId() !== sessionId) return;
-    await onsaved?.(attachment.name);
+    importing = true;
+    externalError = "";
+    try {
+      await vault.callInSession(sessionId, () =>
+        vault.importAttachmentFromTemp(entryUuid, attachment.name, token),
+      );
+      tempRef = settleDisposable(tempRef, ownedRef, true);
+      if (vault.getActiveSessionId() !== sessionId || disposed) return;
+      await onsaved?.(attachment.name);
+    } catch (e) {
+      tempRef = settleDisposable(tempRef, ownedRef, false);
+      if (!disposed && tempRef === ownedRef) externalError = String(e);
+    } finally {
+      if (!disposed) importing = false;
+    }
   }
 
   function close(): void {
-    if (tempRef) void vault.cleanupAttachmentTemp(tempRef.token);
+    replaceTempRef(null);
     onclose();
   }
 </script>
@@ -109,7 +138,7 @@
   size="medium"
   scrollable
   closeOnEscape
-  {onclose}
+  onclose={close}
 >
   {#snippet children()}
     {#if loading}
@@ -137,14 +166,16 @@
   {#snippet actions()}
     <button class="modal-button" onclick={close}>关闭</button>
     {#if tempRef}
-      <button class="modal-button" onclick={() => void importChanges()}>导入修改</button>
-      <button class="modal-button" onclick={() => void discardTemp()}>丢弃修改</button>
+      <button class="modal-button" onclick={() => void importChanges()} disabled={importing}>
+        {importing ? "正在导入…" : "导入修改"}
+      </button>
+      <button class="modal-button" onclick={discardTemp} disabled={importing}>丢弃修改</button>
     {/if}
     <button
       class="modal-button"
       class:primary={!tempRef}
       onclick={() => void openExternal()}
-      disabled={opening}
+      disabled={opening || importing}
     >
       {confirmExternal ? "再次点击确认在外部打开" : tempRef ? "重新打开" : "外部打开…"}
     </button>
