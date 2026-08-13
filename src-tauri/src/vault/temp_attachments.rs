@@ -6,6 +6,8 @@
 //! or close; nothing here logs or persists attachment content elsewhere.
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -21,6 +23,8 @@ pub struct AttachmentTempStore {
 }
 
 impl AttachmentTempStore {
+    const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
+
     /// Write `data` into a fresh random directory and register it. Returns
     /// `(token, absolute file path)`. The caller opens the file with the
     /// system viewer and eventually calls [`Self::discard`].
@@ -81,6 +85,25 @@ impl AttachmentTempStore {
             return Err("临时附件不属于当前数据库会话".to_owned());
         }
         Ok(temp.path.clone())
+    }
+
+    /// Resolve and read one registered file without holding the vault-session
+    /// lock. The token stays registered on failure so the user can retry.
+    pub fn read_for_session(&self, token: &str, session_id: &str) -> Result<Vec<u8>, String> {
+        let path = self.path_for_session(token, session_id)?;
+        let meta = std::fs::metadata(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
+        if meta.len() > Self::MAX_IMPORT_BYTES {
+            return Err(format!("附件过大（{} 字节，上限 64 MiB）", meta.len()));
+        }
+        let file = File::open(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
+        let mut data = Vec::with_capacity(meta.len() as usize);
+        file.take(Self::MAX_IMPORT_BYTES + 1)
+            .read_to_end(&mut data)
+            .map_err(|e| format!("读取临时附件失败: {e}"))?;
+        if data.len() as u64 > Self::MAX_IMPORT_BYTES {
+            return Err(format!("附件过大（{} 字节，上限 64 MiB）", data.len()));
+        }
+        Ok(data)
     }
 
     /// Discard every registered temp file (lock/close path).
@@ -170,6 +193,20 @@ mod tests {
             path.exists(),
             "a failed cross-session lookup must not discard the token"
         );
+        store.discard(&token).unwrap();
+    }
+
+    #[test]
+    fn read_for_session_returns_registered_bytes_and_preserves_retry_token() {
+        let store = AttachmentTempStore::default();
+        let (token, path) = store.create("s1", "note.txt", b"edited").unwrap();
+
+        assert_eq!(store.read_for_session(&token, "s1").unwrap(), b"edited");
+        assert_eq!(
+            store.read_for_session(&token, "s2").unwrap_err(),
+            "临时附件不属于当前数据库会话"
+        );
+        assert!(path.exists());
         store.discard(&token).unwrap();
     }
 }

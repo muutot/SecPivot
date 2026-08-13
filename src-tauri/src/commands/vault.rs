@@ -726,19 +726,14 @@ pub(crate) fn import_attachment_from_temp(
     token: String,
 ) -> Result<VaultState, String> {
     let resolved_session_id = vaults.resolve_id(session_id.as_deref())?;
+    // Validate the token and read up to 64 MiB before taking the vault lock.
+    // Failed reads keep the token registered so the user can retry.
+    let data = store.read_for_session(&token, &resolved_session_id)?;
     let result = with_vault_session(
         vaults.inner(),
         session.inner(),
         Some(&resolved_session_id),
-        |target| {
-            target.import_attachment_from_temp(
-                &uuid,
-                &name,
-                &token,
-                &resolved_session_id,
-                store.inner(),
-            )
-        },
+        |target| target.import_attachment_bytes(&uuid, &name, data),
     )?;
     let _ = store.discard(&token);
     Ok(result)

@@ -3982,8 +3982,9 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
 
     // The external viewer "edited" the registered temp file.
     let (token, _) = store.create("s1", "note.txt", b"edited content").unwrap();
+    let data = store.read_for_session(&token, "s1").unwrap();
     let updated = session
-        .import_attachment_from_temp(&uuid, "note.txt", &token, "s1", &store)
+        .import_attachment_bytes(&uuid, "note.txt", data)
         .unwrap();
     let entry = updated
         .root
@@ -4005,17 +4006,13 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
     assert_eq!(entry.attachments[0].size, b"edited content".len());
 
     // Unknown tokens are rejected; arbitrary paths are never accepted.
-    assert!(session
-        .import_attachment_from_temp(&uuid, "note.txt", "nope", "s1", &store)
-        .is_err());
+    assert!(store.read_for_session("nope", "s1").is_err());
 
     // A valid token cannot be replayed into another open vault session even
     // when that vault happens to contain the same entry UUID.
     let (foreign_token, _) = store.create("s2", "note.txt", b"foreign").unwrap();
     assert_eq!(
-        session
-            .import_attachment_from_temp(&uuid, "note.txt", &foreign_token, "s1", &store)
-            .unwrap_err(),
+        store.read_for_session(&foreign_token, "s1").unwrap_err(),
         "临时附件不属于当前数据库会话"
     );
     assert_eq!(

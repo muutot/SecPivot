@@ -713,24 +713,15 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
-    /// Replace an attachment's bytes with the content of a registered temp
-    /// file (the external viewer's saved changes). Only files created by
-    /// `open_attachment_temp` can be imported — never an arbitrary path.
-    pub fn import_attachment_from_temp(
+    /// Replace an attachment with bytes already read from a session-bound
+    /// registered temp file. The command layer performs filesystem I/O before
+    /// acquiring this vault-session lock.
+    pub fn import_attachment_bytes(
         &mut self,
         uuid: &str,
         name: &str,
-        token: &str,
-        session_id: &str,
-        store: &super::AttachmentTempStore,
+        data: Vec<u8>,
     ) -> Result<VaultState, String> {
-        const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
-        let path = store.path_for_session(token, session_id)?;
-        let meta = std::fs::metadata(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
-        if meta.len() > MAX_IMPORT_BYTES {
-            return Err(format!("附件过大（{} 字节，上限 64 MiB）", meta.len()));
-        }
-        let data = std::fs::read(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
         {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
