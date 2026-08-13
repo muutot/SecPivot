@@ -21,6 +21,7 @@ import type {
 } from "$lib/types/settings";
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
+import { LatestPersistQueue } from "$lib/utils/latest-persist-queue";
 
 export const PERSIST_DEBOUNCE_MS = 120;
 
@@ -701,13 +702,7 @@ const settings = writable<AppSettings>(DEFAULT_APP_SETTINGS);
 
 const STORAGE_KEY = "secpivot-settings";
 
-let dirty = false;
-let pending: AppSettings | null = null;
-/** In-flight single-flight persist chain; `null` when idle. Used to serialize
- * writes and to let `flush()` await the chain that keeps draining newer
- * changes (fixes a lost-update race where a change arriving mid-write was
- * never persisted). */
-let persistPromise: Promise<void> | null = null;
+const persistQueue = new LatestPersistQueue<AppSettings>();
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let initialized = false;
 
@@ -727,51 +722,33 @@ function withoutSecrets(value: AppSettings): AppSettings {
   };
 }
 
-/** Write every queued value in order. The `while` loop re-checks `pending`
- * after each write, so changes that land while an earlier write is in flight
- * are drained by the same chain instead of being dropped. */
-async function persist(): Promise<void> {
-  while (dirty && pending) {
-    const value = pending;
-    pending = null;
-    dirty = false;
-    if (isTauriRuntime()) {
-      try {
-        const saved = await invoke<AppSettings>("set_config", { config: value });
-        settings.set(normalizeSettings(saved, value));
-      } catch {
-        // Re-queue the failed value for a retry only when no newer change has
-        // superseded it (a mid-flight edit already replaced `pending`).
-        if (pending === null) {
-          pending = value;
-          dirty = true;
-        }
-        return;
-      }
-    } else {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(withoutSecrets(value)));
-      } catch {
-        // storage unavailable; keep running without persistence
-      }
-    }
+async function writeSettings(value: AppSettings): Promise<AppSettings> {
+  if (isTauriRuntime()) {
+    return invoke<AppSettings>("set_config", { config: value });
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(withoutSecrets(value)));
+  } catch {
+    // storage unavailable; keep running without persistence
+  }
+  return value;
+}
+
+function applyPersistedSettings(saved: AppSettings, submitted: AppSettings): void {
+  if (isTauriRuntime()) {
+    settings.set(normalizeSettings(saved, submitted));
   }
 }
 
-/** Single-flight runner: concurrent callers share one chain, and the chain
- * keeps draining `pending` until it is empty, so the debounce timer can never
- * abandon a queued value. */
+/** Single-flight runner. Older acknowledgements are ignored whenever a newer
+ * value arrived while they were in flight; failures continue directly to a
+ * superseding value instead of leaving it stranded after the debounce timer. */
 async function runPersist(): Promise<void> {
-  if (persistPromise) return persistPromise;
-  persistPromise = persist().finally(() => {
-    persistPromise = null;
-  });
-  return persistPromise;
+  await persistQueue.drain(writeSettings, applyPersistedSettings);
 }
 
 function schedulePersist(): void {
-  dirty = true;
-  pending = normalizeSettings(get(settings));
+  persistQueue.enqueue(normalizeSettings(get(settings)));
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
@@ -952,9 +929,7 @@ export const appSettings: AppSettingsStore = {
       clearTimeout(persistTimer);
       persistTimer = null;
     }
-    if (dirty && pending) {
-      await runPersist();
-    }
+    await runPersist();
   },
 
   destroy(): void {
