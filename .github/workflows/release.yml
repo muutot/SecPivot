@@ -250,32 +250,49 @@ jobs:
           fi
           "$apksigner" verify --verbose "$apk"
 
+      - name: Stage Android release asset
+        shell: bash
+        run: |
+          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "Android release APK not found at $apk." >&2
+            exit 1
+          fi
+          asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
+          mkdir -p "$(dirname "$asset")"
+          cp "$apk" "$asset"
+          echo "Staged $(basename "$asset")"
+
+      - name: Preserve Android release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release-apk
+          path: dist/android/*.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-android:
+    name: Publish (Android APK)
+    needs: [build, android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore Android release asset
+        uses: actions/download-artifact@v7
+        with:
+          name: android-release-apk
+          path: dist/android
+
       - name: Upload Android APK to release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: |
-          # The Windows build job creates the release via tauri-action; this job
-          # runs in parallel, so wait for the release to exist before uploading.
-          release_ready=false
-          for i in $(seq 1 90); do
-            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-              release_ready=true
-              break
-            fi
-            sleep 10
-          done
-          if [ "$release_ready" != true ]; then
-            echo "Release $RELEASE_TAG was not created within 15 minutes." >&2
+          asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
+          if [ ! -f "$asset" ]; then
+            echo "Android release asset not found at $asset." >&2
             exit 1
           fi
-          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
-          if [ ! -f "$apk" ]; then
-            echo "Android release APK not found at $apk." >&2
-            exit 1
-          fi
-          asset="$RUNNER_TEMP/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
-          cp "$apk" "$asset"
+          gh release view "$RELEASE_TAG" >/dev/null
           gh release upload "$RELEASE_TAG" "$asset" --clobber
           echo "Uploaded $(basename "$asset")"
