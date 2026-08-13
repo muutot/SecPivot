@@ -305,6 +305,49 @@ test("a current secret response reaches its external consumer once", async () =>
   assert.deepEqual(consumed, ["current-secret"]);
 });
 
+test("a destroyed keyed detail view cannot deliver a stale secret", async () => {
+  const view = new KeyedViewGuard();
+  view.activate("s1:u1");
+  const token = view.capture();
+  assert.ok(token);
+  const gate = deferred();
+  const consumed = [];
+  const copy = consumeCurrentView(
+    view,
+    token,
+    async () => {
+      await gate.promise;
+      return "detached-secret";
+    },
+    (value) => consumed.push(value),
+  );
+
+  view.activate(null);
+  gate.resolve();
+
+  assert.equal(await copy, false);
+  assert.deepEqual(consumed, []);
+});
+
+test("a current keyed detail view delivers its secret once", async () => {
+  const view = new KeyedViewGuard();
+  view.activate("s1:u1");
+  const token = view.capture();
+  assert.ok(token);
+  const consumed = [];
+
+  assert.equal(
+    await consumeCurrentView(
+      view,
+      token,
+      async () => "current-detail-secret",
+      (value) => consumed.push(value),
+    ),
+    true,
+  );
+  assert.deepEqual(consumed, ["current-detail-secret"]);
+});
+
 test("secret reveal requires a loaded value for the current session and entry", () => {
   assert.equal(canToggleSecretReveal("secret", "s1", "s1", "u1", "u1"), true);
   assert.equal(canToggleSecretReveal("", "s1", "s1", "u1", "u1"), true);

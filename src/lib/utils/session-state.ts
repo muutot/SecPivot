@@ -112,11 +112,15 @@ export async function runExclusiveTask(
 
 export type CurrentViewResult<T> = { current: true; value: T } | { current: false };
 
+export interface CurrentViewGuard<Token> {
+  isCurrent(token: Token): boolean;
+}
+
 /** Await a non-session async boundary (for example a native file picker) and
  * accept its result only when the exact visible-tab lifetime still exists. */
-export async function awaitCurrentView<T>(
-  guard: SessionViewGuard,
-  token: SessionViewToken,
+export async function awaitCurrentView<T, Token>(
+  guard: CurrentViewGuard<Token>,
+  token: Token,
   task: () => Promise<T>,
 ): Promise<CurrentViewResult<T>> {
   const value = await task();
@@ -126,9 +130,9 @@ export async function awaitCurrentView<T>(
 /** Deliver a resolved value to an external side effect (clipboard, native
  * shell, etc.) only while the exact visible-tab lifetime that requested it is
  * still current. */
-export async function consumeCurrentView<T>(
-  guard: SessionViewGuard,
-  token: SessionViewToken,
+export async function consumeCurrentView<T, Token>(
+  guard: CurrentViewGuard<Token>,
+  token: Token,
   task: () => Promise<T>,
   consume: (value: T) => Promise<void> | void,
 ): Promise<boolean> {

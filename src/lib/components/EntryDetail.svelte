@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
   import type { EntryStorage } from "$lib/types/vault";
@@ -7,7 +8,11 @@
   import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
-  import { canToggleSecretReveal, KeyedViewGuard } from "$lib/utils/session-state";
+  import {
+    canToggleSecretReveal,
+    consumeCurrentView,
+    KeyedViewGuard,
+  } from "$lib/utils/session-state";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -69,7 +74,7 @@
   let previewAttachmentName = $state<string | null>(null);
   const detailView = new KeyedViewGuard();
 
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   function detailSessionId(): string | null {
     return vault.getActiveSessionId();
@@ -78,6 +83,9 @@
   $effect(() => {
     const sessionId = detailSessionId();
     detailView.activate(sessionId ? `${sessionId}:${entry.uuid}` : null);
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = undefined;
+    copied = "";
     revealPassword = false;
     passwordLoaded = false;
     passwordLoading = false;
@@ -92,6 +100,12 @@
     viewingVersion = null;
     storage = null;
     storageLoading = false;
+  });
+
+  onDestroy(() => {
+    detailView.activate(null);
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = undefined;
   });
 
   async function loadStorage(): Promise<void> {
@@ -166,13 +180,13 @@
   }
 
   /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
-  async function ensurePassword(): Promise<string | null> {
+  async function ensurePassword(view = detailView.capture()): Promise<string | null> {
+    if (!view || !detailView.isCurrent(view)) return null;
     if (passwordLoaded) return fetchedPassword;
     if (passwordLoading) return null;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    const view = detailView.capture();
-    if (!sessionId || !view) return null;
+    if (!sessionId) return null;
     passwordLoading = true;
     try {
       const value = await vault.callInSession(sessionId, () => vault.getEntryPassword(uuid));
@@ -187,13 +201,16 @@
 
   /** Protected custom-field values are fetched on demand, never part of
    * `VaultEntry` from the backend (mirrors the password flow). */
-  async function ensureCustomField(name: string): Promise<string | null> {
+  async function ensureCustomField(
+    name: string,
+    view = detailView.capture(),
+  ): Promise<string | null> {
+    if (!view || !detailView.isCurrent(view)) return null;
     if (customFieldLoaded[name]) return customFieldValues[name] ?? null;
     if (customFieldLoading[name]) return null;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    const view = detailView.capture();
-    if (!sessionId || !view) return null;
+    if (!sessionId) return null;
     customFieldLoading = { ...customFieldLoading, [name]: true };
     try {
       const value = await vault.callInSession(sessionId, () =>
@@ -211,19 +228,23 @@
   }
 
   async function copyCustomField(name: string): Promise<void> {
-    const uuid = entry.uuid;
-    const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!view) return;
     try {
-      const value = await ensureCustomField(name);
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      const value = await ensureCustomField(name, view);
       if (value === null) {
-        flash("error");
+        if (detailView.isCurrent(view)) flash("error");
         return;
       }
-      await handleCopy(value, "custom", true);
+      const copied = await consumeCurrentView(
+        detailView,
+        view,
+        async () => value,
+        (currentValue) => copyValue(currentValue, true),
+      );
+      if (copied && detailView.isCurrent(view)) flash("custom");
     } catch {
-      flash("error");
+      if (detailView.isCurrent(view)) flash("error");
     }
   }
 
@@ -241,15 +262,20 @@
   }
 
   async function copyPassword(): Promise<void> {
-    const uuid = entry.uuid;
-    const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!view) return;
     try {
-      const password = await ensurePassword();
-      if (password === null || sessionId !== detailSessionId() || uuid !== entry.uuid) return;
-      await handleCopy(password, "password", true);
+      const password = await ensurePassword(view);
+      if (password === null) return;
+      const copied = await consumeCurrentView(
+        detailView,
+        view,
+        async () => password,
+        (currentPassword) => copyValue(currentPassword, true),
+      );
+      if (copied && detailView.isCurrent(view)) flash("password");
     } catch {
-      flash("error");
+      if (detailView.isCurrent(view)) flash("error");
     }
   }
 
