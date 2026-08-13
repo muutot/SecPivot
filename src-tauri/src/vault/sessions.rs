@@ -336,7 +336,8 @@ impl VaultSessions {
 mod tests {
     use super::*;
     use crate::vault::{
-        persist_remote_refresh, persist_save, EntryInput, RemoteMode, DEFAULT_BACKUP_TEMPLATE,
+        persist_remote_refresh, persist_save, persist_save_with_db, DatabaseSettingsPatch,
+        EntryInput, RemoteMode, WritableDatabaseCipher, DEFAULT_BACKUP_TEMPLATE,
     };
     use tempfile::TempDir;
 
@@ -737,6 +738,53 @@ mod tests {
                 .unwrap()
                 .file_name,
             "local.kdbx"
+        );
+    }
+
+    #[test]
+    fn database_settings_completion_stays_bound_to_originating_session() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        let patch = DatabaseSettingsPatch {
+            cipher: Some(WritableDatabaseCipher::ChaCha20),
+            ..Default::default()
+        };
+
+        let (originating_id, job) = registry
+            .with_resolved_session_mut(&mut active, Some(&first.session_id), |target| {
+                target.prepare_database_settings_update(&patch)
+            })
+            .unwrap();
+        let revision = job.revision;
+        let (db, new_hash) = persist_save_with_db(job).unwrap();
+        registry
+            .with_session_mut(&mut active, Some(&originating_id), |target| {
+                target.complete_database_settings_update(&patch, revision, db, new_hash)
+            })
+            .unwrap();
+
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(second.session_id.as_str())
+        );
+        assert_eq!(
+            registry
+                .with_session_mut(&mut active, Some(&first.session_id), |target| {
+                    Ok(target.database_settings()?.unwrap().cipher)
+                })
+                .unwrap(),
+            "ChaCha20"
+        );
+        assert_eq!(
+            active.database_settings().unwrap().unwrap().cipher,
+            "Aes256"
         );
     }
 

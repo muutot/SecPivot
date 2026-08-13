@@ -283,14 +283,23 @@ pub(crate) fn persist_snapshot(
 /// Full lock-free save: derive the session key (KDF), then serialize and
 /// persist. Secret clones are zeroized afterwards.
 pub(crate) fn persist_save(job: SaveJob) -> Result<[u8; 32], String> {
-    let key = build_database_key(&job.password, job.keyfile.as_deref())?;
-    let result = persist_snapshot(&job.db, &key, &job.target, job.force);
+    persist_save_with_db(job).map(|(_, hash)| hash)
+}
+
+/// Persist a save job and return its database snapshot for a later locked
+/// adoption step. Secret clones are wiped even when key construction fails.
+pub(crate) fn persist_save_with_db(job: SaveJob) -> Result<(Database, [u8; 32]), String> {
+    let result = (|| {
+        let key = build_database_key(&job.password, job.keyfile.as_deref())?;
+        let hash = persist_snapshot(&job.db, &key, &job.target, job.force)?;
+        Ok(hash)
+    })();
     let mut password = job.password;
     wipe_secret_string(&mut password);
     if let Some(mut keyfile) = job.keyfile {
         wipe_secret_bytes(&mut keyfile);
     }
-    result
+    result.map(|hash| (job.db, hash))
 }
 
 /// Lock-free persist with an externally supplied master key (used by

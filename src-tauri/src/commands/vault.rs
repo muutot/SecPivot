@@ -199,18 +199,49 @@ pub(crate) fn get_database_settings(
 
 /// Apply database-level settings changes (history cap, recycle-bin flag).
 #[tauri::command]
-pub(crate) fn update_database_settings(
+pub(crate) async fn update_database_settings(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
     patch: vault::DatabaseSettingsPatch,
 ) -> Result<VaultState, String> {
-    with_vault_session(
-        vaults.inner(),
-        session.inner(),
-        session_id.as_deref(),
-        |target| target.update_database_settings(&patch),
-    )
+    if !patch.changes_storage() {
+        return with_vault_session(
+            vaults.inner(),
+            session.inner(),
+            session_id.as_deref(),
+            |target| target.update_database_settings(&patch),
+        );
+    }
+
+    let (session_id, job) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_database_settings_update(&patch)
+        })?
+    };
+    let revision = job.revision;
+    let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_save_with_db(job))
+        .await
+        .map_err(|e| format!("数据库设置保存任务异常: {e}"))?;
+    let (db, new_hash) = match persisted {
+        Ok(result) => result,
+        Err(e) => {
+            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                if let Ok(mut active) = session.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
+            }
+            return Err(e);
+        }
+    };
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        target.complete_database_settings_update(&patch, revision, db, new_hash)
+    })
 }
 
 #[tauri::command]

@@ -5,9 +5,9 @@ use super::helpers::{
     apply_cipher, apply_compression, apply_kdf, wipe_secret_bytes, wipe_secret_string,
 };
 use super::persist::{
-    persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
-    prepare_remote_open, read_keyfile, RemoteMergeJob, RemoteMergeResult, RemoteRefreshJob,
-    RemoteRefreshResult, SaveJob, SaveTarget,
+    persist_change, persist_save, persist_save_with_db, prepare_local_create, prepare_local_open,
+    prepare_remote_create, prepare_remote_open, read_keyfile, RemoteMergeJob, RemoteMergeResult,
+    RemoteRefreshJob, RemoteRefreshResult, SaveJob, SaveTarget,
 };
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
@@ -37,6 +37,43 @@ fn apply_database_meta_patch(
     }
     if patch.entry_templates_group.is_some() {
         db.meta.entry_templates_group = entry_templates_group;
+    }
+}
+
+fn parse_templates_group(patch: &DatabaseSettingsPatch) -> Result<Option<Uuid>, String> {
+    match &patch.entry_templates_group {
+        Some(Some(uuid)) => {
+            Some(Uuid::parse_str(uuid).map_err(|_| "模板分组 UUID 无效".to_owned())).transpose()
+        }
+        Some(None) | None => Ok(None),
+    }
+}
+
+fn apply_persisted_database_settings(
+    current: &mut Database,
+    persisted: &Database,
+    patch: &DatabaseSettingsPatch,
+) {
+    if patch.kdf.is_some() {
+        current.config.kdf_config = persisted.config.kdf_config.clone();
+    }
+    if patch.cipher.is_some() {
+        current.config.outer_cipher_config = persisted.config.outer_cipher_config.clone();
+    }
+    if patch.compression.is_some() {
+        current.config.compression_config = persisted.config.compression_config.clone();
+    }
+    if patch.history_max_items.is_some() {
+        current.meta.history_max_items = persisted.meta.history_max_items;
+    }
+    if patch.history_max_size.is_some() {
+        current.meta.history_max_size = persisted.meta.history_max_size;
+    }
+    if patch.recycle_bin_enabled.is_some() {
+        current.meta.recyclebin_enabled = persisted.meta.recyclebin_enabled;
+    }
+    if patch.entry_templates_group.is_some() {
+        current.meta.entry_templates_group = persisted.meta.entry_templates_group;
     }
 }
 
@@ -255,40 +292,18 @@ impl VaultSession {
         if patch.is_empty() {
             return self.snapshot_without_icons();
         }
-        let templates_group = match &patch.entry_templates_group {
-            Some(Some(uuid)) => {
-                Some(Uuid::parse_str(uuid).map_err(|_| "模板分组 UUID 无效".to_owned())?)
-            }
-            Some(None) | None => None,
-        };
-        let storage_changed =
-            patch.kdf.is_some() || patch.cipher.is_some() || patch.compression.is_some();
-        if !storage_changed {
+        let templates_group = parse_templates_group(patch)?;
+        if !patch.changes_storage() {
             let db = self.require_db_mut()?;
             apply_database_meta_patch(db, patch, templates_group);
             self.mark_dirty();
             return self.snapshot_without_icons();
         }
 
-        // Clone the database, apply the new storage config, and re-encrypt it
-        // with the same master key before touching the live session (a failed
-        // write leaves the open session unchanged).
-        let (db, target, revision) = self.prepare_change()?;
-        let mut db = db;
-        apply_database_meta_patch(&mut db, patch, templates_group);
-        if let Some(kdf) = &patch.kdf {
-            apply_kdf(&mut db, kdf)?;
-        }
-        if let Some(cipher) = &patch.cipher {
-            apply_cipher(&mut db, cipher.as_str())?;
-        }
-        if let Some(compression) = &patch.compression {
-            apply_compression(&mut db, compression)?;
-        }
-        let password = self.require_password()?.to_owned();
-        let keyfile = self.keyfile.clone();
-        let new_hash = match persist_change(&db, &password, keyfile.as_deref(), &target) {
-            Ok(hash) => hash,
+        let job = self.prepare_database_settings_update(patch)?;
+        let revision = job.revision;
+        let (db, new_hash) = match persist_save_with_db(job) {
+            Ok(result) => result,
             Err(e) => {
                 if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
                     self.note_save_failure();
@@ -296,12 +311,7 @@ impl VaultSession {
                 return Err(e);
             }
         };
-
-        self.db = Some(db);
-        self.mark_dirty();
-        let committed_revision = self.revision;
-        debug_assert_eq!(committed_revision, revision + 1);
-        self.complete_save(committed_revision, new_hash)
+        self.complete_database_settings_update(patch, revision, db, new_hash)
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {
@@ -570,6 +580,63 @@ impl VaultSession {
             backup_template: remote.backup_template.clone(),
             revision: self.revision,
         })
+    }
+
+    /// Build the rewritten database and save job under the lock. Applying the
+    /// settings to a clone keeps validation failures atomic; KDF, serialization
+    /// and storage I/O run later without the session lock.
+    pub(crate) fn prepare_database_settings_update(
+        &self,
+        patch: &DatabaseSettingsPatch,
+    ) -> Result<SaveJob, String> {
+        let templates_group = parse_templates_group(patch)?;
+        let (mut db, target, revision) = self.prepare_change()?;
+        apply_database_meta_patch(&mut db, patch, templates_group);
+        if let Some(kdf) = &patch.kdf {
+            apply_kdf(&mut db, kdf)?;
+        }
+        if let Some(cipher) = &patch.cipher {
+            apply_cipher(&mut db, cipher.as_str())?;
+        }
+        if let Some(compression) = &patch.compression {
+            apply_compression(&mut db, compression)?;
+        }
+        Ok(SaveJob {
+            db,
+            password: self.require_password()?.to_owned(),
+            keyfile: self.keyfile.clone(),
+            target,
+            revision,
+            force: false,
+        })
+    }
+
+    /// Adopt a persisted storage-settings rewrite. If edits landed while the
+    /// save ran, copy only the requested settings onto the live database and
+    /// keep it dirty; the persisted snapshot remains the latest save base.
+    pub(crate) fn complete_database_settings_update(
+        &mut self,
+        patch: &DatabaseSettingsPatch,
+        revision: u64,
+        persisted_db: Database,
+        new_hash: [u8; 32],
+    ) -> Result<VaultState, String> {
+        self.note_save_success();
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = new_hash;
+        }
+        if self.revision == revision {
+            self.db = Some(persisted_db);
+            self.mark_dirty();
+            self.dirty = false;
+        } else {
+            let current = self.require_db_mut()?;
+            apply_persisted_database_settings(current, &persisted_db, patch);
+            self.mark_dirty();
+        }
+        self.modified_at = now_iso();
+        self.cached_snapshot = None;
+        self.snapshot()
     }
 
     /// Adopt a downloaded database only if the originating session did not

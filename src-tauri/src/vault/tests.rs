@@ -764,6 +764,80 @@ fn update_database_settings_reencrypts_storage_config() {
     assert_eq!(settings.compression, "Gzip");
 }
 
+#[test]
+fn database_settings_reencrypt_completion_preserves_concurrent_edits() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let patch = DatabaseSettingsPatch {
+        kdf: Some("Argon2".into()),
+        cipher: Some(WritableDatabaseCipher::ChaCha20),
+        compression: Some("Gzip".into()),
+        history_max_items: Some(Some(5)),
+        ..Default::default()
+    };
+
+    let job = session.prepare_database_settings_update(&patch).unwrap();
+    let revision = job.revision;
+    let (persisted_db, new_hash) = persist_save_with_db(job).unwrap();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "ConcurrentEdit".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+
+    let completed = session
+        .complete_database_settings_update(&patch, revision, persisted_db, new_hash)
+        .unwrap();
+    assert!(completed.dirty);
+    assert!(completed
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentEdit"));
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.kdf, "Argon2");
+    assert_eq!(settings.cipher, "ChaCha20");
+    assert_eq!(settings.compression, "Gzip");
+    assert_eq!(settings.history_max_items, Some(5));
+
+    // The persisted snapshot contains the settings rewrite but not the later
+    // edit; a normal save writes that retained edit with the new config.
+    let mut persisted = VaultSession::default();
+    persisted.open(&path, "master-password", None).unwrap();
+    assert!(!persisted
+        .state()
+        .unwrap()
+        .unwrap()
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentEdit"));
+    drop(persisted);
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    assert!(reopened
+        .state()
+        .unwrap()
+        .unwrap()
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentEdit"));
+}
+
 /// History-size cap and templates-group UUID persist through save/reopen,
 /// `null` clears them, and an invalid UUID is rejected.
 #[test]

@@ -363,6 +363,10 @@ impl DatabaseSettingsPatch {
             && self.recycle_bin_enabled.is_none()
             && self.entry_templates_group.is_none()
     }
+
+    pub(crate) const fn changes_storage(&self) -> bool {
+        self.kdf.is_some() || self.cipher.is_some() || self.compression.is_some()
+    }
 }
 
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
