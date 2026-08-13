@@ -7,7 +7,7 @@
   import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
-  import { canToggleSecretReveal } from "$lib/utils/session-state";
+  import { canToggleSecretReveal, KeyedViewGuard } from "$lib/utils/session-state";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -67,6 +67,7 @@
   let storage = $state<EntryStorage | null>(null);
   let storageLoading = $state(false);
   let previewAttachmentName = $state<string | null>(null);
+  const detailView = new KeyedViewGuard();
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -75,7 +76,8 @@
   }
 
   $effect(() => {
-    entry.uuid;
+    const sessionId = detailSessionId();
+    detailView.activate(sessionId ? `${sessionId}:${entry.uuid}` : null);
     revealPassword = false;
     passwordLoaded = false;
     passwordLoading = false;
@@ -96,13 +98,14 @@
     if (storageLoading || storage) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
     storageLoading = true;
     try {
       const result = await vault.callInSession(sessionId, () => vault.getEntryStorage(uuid));
-      if (sessionId === detailSessionId() && uuid === entry.uuid) storage = result;
+      if (detailView.isCurrent(view)) storage = result;
     } finally {
-      if (sessionId === detailSessionId() && uuid === entry.uuid) storageLoading = false;
+      if (detailView.isCurrent(view)) storageLoading = false;
     }
   }
 
@@ -110,16 +113,17 @@
     if (!force && historyLoadedUuid === entry.uuid) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
     historyLoading = true;
     try {
       const result = await vault.callInSession(sessionId, () => vault.getEntryHistory(uuid));
-      if (sessionId === detailSessionId() && uuid === entry.uuid) {
+      if (detailView.isCurrent(view)) {
         historyVersions = result;
         historyLoadedUuid = uuid;
       }
     } finally {
-      if (sessionId === detailSessionId() && uuid === entry.uuid) historyLoading = false;
+      if (detailView.isCurrent(view)) historyLoading = false;
     }
   }
 
@@ -128,15 +132,17 @@
     if (!window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
     try {
       await vault.callInSession(sessionId, () => vault.restoreEntryVersion(uuid, version.index));
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      if (!detailView.isCurrent(view)) return;
       historyLoadedUuid = null;
       await loadHistory(true);
+      if (!detailView.isCurrent(view)) return;
       flash("restored");
     } catch {
-      flash("error");
+      if (detailView.isCurrent(view)) flash("error");
     }
   }
 
@@ -145,15 +151,17 @@
     if (!window.confirm(`确定删除 ${when} 的历史版本吗？此操作无法撤销。`)) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
     try {
       await vault.callInSession(sessionId, () => vault.deleteEntryHistory(uuid, version.index));
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      if (!detailView.isCurrent(view)) return;
       historyLoadedUuid = null;
       await loadHistory(true);
+      if (!detailView.isCurrent(view)) return;
       flash("deleted");
     } catch {
-      flash("error");
+      if (detailView.isCurrent(view)) flash("error");
     }
   }
 
@@ -163,16 +171,17 @@
     if (passwordLoading) return null;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return null;
+    const view = detailView.capture();
+    if (!sessionId || !view) return null;
     passwordLoading = true;
     try {
       const value = await vault.callInSession(sessionId, () => vault.getEntryPassword(uuid));
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return null;
+      if (!detailView.isCurrent(view)) return null;
       fetchedPassword = value;
       passwordLoaded = true;
       return value;
     } finally {
-      if (sessionId === detailSessionId() && uuid === entry.uuid) passwordLoading = false;
+      if (detailView.isCurrent(view)) passwordLoading = false;
     }
   }
 
@@ -183,18 +192,19 @@
     if (customFieldLoading[name]) return null;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
-    if (!sessionId) return null;
+    const view = detailView.capture();
+    if (!sessionId || !view) return null;
     customFieldLoading = { ...customFieldLoading, [name]: true };
     try {
       const value = await vault.callInSession(sessionId, () =>
         vault.getCustomFieldValue(uuid, name),
       );
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return null;
+      if (!detailView.isCurrent(view)) return null;
       customFieldValues = { ...customFieldValues, [name]: value ?? "" };
       customFieldLoaded = { ...customFieldLoaded, [name]: true };
       return value;
     } finally {
-      if (sessionId === detailSessionId() && uuid === entry.uuid) {
+      if (detailView.isCurrent(view)) {
         customFieldLoading = { ...customFieldLoading, [name]: false };
       }
     }
@@ -307,7 +317,8 @@
   async function saveAttachment(name: string): Promise<void> {
     const sessionId = detailSessionId();
     const uuid = entry.uuid;
-    if (!sessionId) return;
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
     try {
       let dest: string | null = null;
       if (isTauriRuntime()) {
@@ -317,10 +328,10 @@
       }
       if (!dest) return;
       await vault.callInSession(sessionId, () => vault.saveAttachment(uuid, name, dest!));
-      if (vault.getActiveSessionId() !== sessionId || uuid !== entry.uuid) return;
+      if (!detailView.isCurrent(view)) return;
       flash("attachment");
     } catch {
-      flash("error");
+      if (detailView.isCurrent(view)) flash("error");
     }
   }
 </script>

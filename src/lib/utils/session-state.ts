@@ -52,6 +52,28 @@ export class SessionViewGuard {
   }
 }
 
+/** Same identity/epoch guard for a detail component that can be reused across
+ * entry prop changes. Revisiting the same UUID after viewing another entry is
+ * a new epoch, preventing the first request from writing into the second view. */
+export class KeyedViewGuard {
+  #key: string | null = null;
+  #epoch = 0;
+
+  activate(key: string | null): void {
+    if (key === this.#key) return;
+    this.#key = key;
+    this.#epoch += 1;
+  }
+
+  capture(): { key: string; epoch: number } | null {
+    return this.#key ? { key: this.#key, epoch: this.#epoch } : null;
+  }
+
+  isCurrent(token: { key: string; epoch: number }): boolean {
+    return token.key === this.#key && token.epoch === this.#epoch;
+  }
+}
+
 /** Only the latest operation may clear a shared activity flag. */
 export class LatestOperationGuard {
   #generation = 0;

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canToggleSecretReveal,
   commitNewestSessionState,
+  KeyedViewGuard,
   LatestOperationGuard,
   resolveListedActiveId,
   SessionViewGuard,
@@ -200,6 +201,19 @@ test("secret reveal requires a loaded value for the current session and entry", 
   assert.equal(canToggleSecretReveal(null, "s1", "s1", "u1", "u1"), false);
   assert.equal(canToggleSecretReveal("secret", "s1", "s2", "u1", "u1"), false);
   assert.equal(canToggleSecretReveal("secret", "s1", "s1", "u1", "u2"), false);
+});
+
+test("revisiting the same detail key rejects the first view's late response", () => {
+  const view = new KeyedViewGuard();
+  view.activate("s1:u1");
+  const firstU1 = view.capture();
+  assert.ok(firstU1);
+  view.activate("s1:u2");
+  view.activate("s1:u1");
+  const secondU1 = view.capture();
+  assert.ok(secondU1);
+  assert.equal(view.isCurrent(firstU1), false);
+  assert.equal(view.isCurrent(secondU1), true);
 });
 
 test("a wholesale session replacement rejects every response from the old epoch", () => {
