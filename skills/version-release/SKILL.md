@@ -107,6 +107,8 @@ Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for th
 
 `--regenerate` requires a strict explicit semantic version and an existing tag that points to a release commit. All version arguments are validated before any tag/rebase command; malformed or shell-like input is rejected.
 
+The tagged commit subject must exactly equal `🔖 chore[release]: bump version to <version>`, and that commit must be an ancestor of the current `HEAD`. Regeneration refuses tags on unrelated branches before invoking rebase, preventing an unrelated upstream from replaying and force-pushing the entire current branch.
+
 All child processes receive argument arrays rather than interpolated shell strings. This is required even for branch names because Git permits shell metacharacters in refs; changelog revision arguments are separated from Git options with `--end-of-options`.
 
 Changelog Git failures are fatal. An invalid `--from` revision or a failed tag query must exit non-zero rather than being reported as an empty commit range, which could otherwise leave stale release notes in a release commit.

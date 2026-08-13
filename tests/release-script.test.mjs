@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { bumpVersion, parseSemver, resolveReleaseTarget } from "../scripts/versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "../scripts/release-files.mjs";
 import { hasReleaseHeading } from "../scripts/release-document.mjs";
+import { isGitAncestor, isReleaseCommitSubject } from "../scripts/release-git.mjs";
 
 const releaseScript = readFileSync(new URL("../scripts/release.mjs", import.meta.url), "utf-8");
 
@@ -81,4 +85,36 @@ test("release notes require the exact target heading instead of a body mention",
     false,
   );
   assert.match(releaseScript, /hasReleaseHeading\(readFileSync\(RELEASE_PATH/);
+});
+
+test("regeneration accepts only the exact release subject", () => {
+  assert.equal(isReleaseCommitSubject("🔖 chore[release]: bump version to 1.2.0", "1.2.0"), true);
+  assert.equal(
+    isReleaseCommitSubject("fix: mention chore[release] and bump version to 1.2.0", "1.2.0"),
+    false,
+  );
+  assert.equal(isReleaseCommitSubject("🔖 chore[release]: bump version to 1.1.0", "1.2.0"), false);
+});
+
+test("regeneration rejects a release tag from an unrelated branch", () => {
+  const repo = mkdtempSync(join(tmpdir(), "secpivot-release-git-test-"));
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf-8", stdio: "pipe" }).trim();
+
+  try {
+    git("init");
+    git("config", "user.name", "SecPivot Test");
+    git("config", "user.email", "test@secpivot.invalid");
+    git("config", "commit.gpgsign", "false");
+    git("commit", "--allow-empty", "-m", "release");
+    const releaseCommit = git("rev-parse", "HEAD");
+    git("commit", "--allow-empty", "-m", "after release");
+    assert.equal(isGitAncestor(repo, releaseCommit), true);
+
+    git("switch", "--orphan", "unrelated");
+    git("commit", "--allow-empty", "-m", "unrelated history");
+    assert.equal(isGitAncestor(repo, releaseCommit), false);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });

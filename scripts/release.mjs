@@ -28,6 +28,7 @@ import { argv, exit } from "node:process";
 import { isBumpType, resolveReleaseTarget } from "./versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "./release-files.mjs";
 import { hasReleaseHeading } from "./release-document.mjs";
+import { isGitAncestor, isReleaseCommitSubject } from "./release-git.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -142,8 +143,15 @@ if (isRegenerate) {
     encoding: "utf-8",
   }).trim();
 
-  if (!commitMsg.includes("chore[release]") && !commitMsg.includes("bump version to")) {
-    console.error(`Regenerate failed: ${tagVersion} does not point to a release commit.`);
+  if (!isReleaseCommitSubject(commitMsg, targetVersion)) {
+    console.error(
+      `Regenerate failed: ${tagVersion} does not point to the canonical ${targetVersion} release commit.`,
+    );
+    exit(1);
+  }
+
+  if (!isGitAncestor(ROOT, tagCommit)) {
+    console.error(`Regenerate failed: ${tagVersion} is not an ancestor of the current HEAD.`);
     exit(1);
   }
 

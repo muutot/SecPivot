@@ -54,6 +54,7 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 - **Never interpolate release refs, versions, or branch names into a shell command.** Git permits branch names containing shell metacharacters such as `;`, `&`, and `$()`. Release/version/changelog scripts must use `execFileSync(command, args)` (plus `--end-of-options` before user-supplied revisions) so every ref remains one literal argument.
 - **A failed Git query is not an empty changelog.** Invalid revisions and repository errors must terminate changelog generation with a non-zero exit; swallowing `git log`/`git tag` failures can let a release continue with stale release notes.
 - **Release-note freshness must be proved by its canonical heading.** Searching all of `RELEASE.md` for `v<version>` accepts stale notes whenever the target version appears in prose or a link. Require the first heading to be exactly `# SecPivot Desktop v<version>` before committing or tagging.
+- **Never rebase a release tag that is outside the current branch history.** `git rebase --onto <parent> <tag-commit>` treats an unrelated upstream as an empty exclusion and can replay the entire current branch before a force push. Regeneration must require the exact canonical release subject and prove the tag commit is an ancestor of `HEAD` first.
 
 ## Remote (S3)
 
