@@ -14,7 +14,7 @@
   } from "$lib/components/ColumnConfigMenu.svelte";
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
-  import { armIdleLock, lockVault, copyValue, setTcatoOverlayOpen } from "$lib/services/security";
+  import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import type {
     EntryInput,
     EntryPatch,
@@ -91,6 +91,7 @@
   const busyOperations = new LatestOperationGuard();
   const groupCreateOperations = new LatestOperationGuard();
   const groupIconOperations = new LatestOperationGuard();
+  const tcatoOperations = new LatestOperationGuard();
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
   let advancedQuery = $state<AdvancedSearchQuery | null>(null);
@@ -230,6 +231,7 @@
       busyOperations.invalidate();
       groupCreateOperations.invalidate();
       groupIconOperations.invalidate();
+      tcatoOperations.invalidate();
       busy = false;
       groupCreating = false;
       groupIconSaving = false;
@@ -1975,14 +1977,19 @@
     // Mark the overlay active *synchronously*: focusing it blurs the main
     // window, which would otherwise trip the focus-loss lock before the
     // backend's open event is delivered.
-    setTcatoOverlayOpen(true);
+    const focusLockLease = beginTcatoOverlayOpen();
+    const view = sessionView.capture();
+    const operation = tcatoOperations.begin();
     try {
-      const sessionId = vault.getActiveSessionId();
-      if (!sessionId) throw new Error("数据库未打开");
-      await invoke("open_tcato_overlay", { sessionId, uuid: entry.uuid });
+      if (!view) throw new Error("数据库未打开");
+      await invoke("open_tcato_overlay", { sessionId: view.sessionId, uuid: entry.uuid });
+      focusLockLease.confirm();
     } catch (e) {
-      setTcatoOverlayOpen(false);
-      flash(`TCATO 覆盖层打开失败：${e}`);
+      if (view && sessionView.isCurrent(view) && tcatoOperations.isCurrent(operation)) {
+        flash(`TCATO 覆盖层打开失败：${e}`);
+      }
+    } finally {
+      focusLockLease.release();
     }
   }
 

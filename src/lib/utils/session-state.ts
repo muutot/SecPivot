@@ -92,6 +92,40 @@ export class LatestOperationGuard {
   }
 }
 
+/** Track an externally confirmed activity together with temporary leases held
+ * while attempts to start that activity are still pending. Releasing one
+ * attempt must never clear a confirmed activity or another pending attempt. */
+export class ActivityLeaseGuard {
+  #confirmed = false;
+  #leases = 0;
+  #eventVersion = 0;
+
+  setConfirmed(active: boolean): void {
+    this.#confirmed = active;
+    this.#eventVersion += 1;
+  }
+
+  acquire(): { confirm: () => void; release: () => void } {
+    this.#leases += 1;
+    const eventVersion = this.#eventVersion;
+    let active = true;
+    return {
+      confirm: () => {
+        if (this.#eventVersion === eventVersion) this.#confirmed = true;
+      },
+      release: () => {
+        if (!active) return;
+        active = false;
+        this.#leases -= 1;
+      },
+    };
+  }
+
+  isActive(): boolean {
+    return this.#confirmed || this.#leases > 0;
+  }
+}
+
 /** Run one UI task at a time and keep its activity flag set until the real
  * promise settles. Callers supply the reactive getter/setter so frameworks can
  * observe the state without coupling this utility to a component runtime. */

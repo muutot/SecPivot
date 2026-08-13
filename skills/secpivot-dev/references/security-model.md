@@ -25,7 +25,7 @@ Lock happens on:
 - explicit lock action (`close_vault`);
 - idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`/`mousemove`/`wheel`/`scroll`, re-armed at most once per 15 s to avoid churn, reset on vault open, skipped when 0 or no vault open);
 - `lockAfterAction` immediately after a password copy;
-- focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open).
+- focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open). TCATO suppresses this path while an open attempt is pending and while the backend-confirmed overlay exists; pending attempts hold independent leases, so one late failure cannot clear another attempt's confirmed overlay state and accidentally re-enable focus-loss locking.
 
 The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes every session by calling `vault.closeAll()` (which closes all open tabs and discards extracted temp attachments), and clears the clipboard first when `clearOnLock` is enabled. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes.
 

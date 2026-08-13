@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appSettings, isTauriRuntime } from "$lib/services/settings";
 import { vault } from "$lib/services/vault";
 import { clearClipboard, copyText } from "$lib/utils/clipboard";
+import { ActivityLeaseGuard } from "$lib/utils/session-state";
 
 /**
  * Single lock path shared by the manual lock button, idle auto-lock, and
@@ -113,10 +114,17 @@ export function installAutoLock(): () => void {
 /** True while the TCATO overlay owns focus. Set synchronously before the
  *  overlay is opened (the blur it causes would otherwise trip the focus-loss
  *  lock) and cleared by the backend's open/close events. */
-let tcatoOverlayOpen = false;
+const tcatoOverlayActivity = new ActivityLeaseGuard();
+
+/** Suppress focus-loss locking while one TCATO open attempt is pending.
+ * Releasing this lease never clears an overlay confirmed by another attempt
+ * or by the backend open event. */
+export function beginTcatoOverlayOpen(): { confirm: () => void; release: () => void } {
+  return tcatoOverlayActivity.acquire();
+}
 
 export function setTcatoOverlayOpen(open: boolean): void {
-  tcatoOverlayOpen = open;
+  tcatoOverlayActivity.setConfirmed(open);
 }
 
 /**
@@ -125,7 +133,7 @@ export function setTcatoOverlayOpen(open: boolean): void {
  */
 export function installFocusLock(): () => void {
   const onBlur = () => {
-    if (tcatoOverlayOpen) return;
+    if (tcatoOverlayActivity.isActive()) return;
     if (!get(appSettings).security.lockOnFocusLoss) return;
     if (!vault.get()) return;
     void lockVault();
@@ -135,12 +143,12 @@ export function installFocusLock(): () => void {
   let stopClose: UnlistenFn | undefined;
   if (isTauriRuntime()) {
     void listen("tcato-overlay-open", () => {
-      tcatoOverlayOpen = true;
+      setTcatoOverlayOpen(true);
     }).then((fn) => {
       stopOpen = fn;
     });
     void listen("tcato-overlay-close", () => {
-      tcatoOverlayOpen = false;
+      setTcatoOverlayOpen(false);
     }).then((fn) => {
       stopClose = fn;
     });

@@ -46,3 +46,22 @@ test("entry attachment save rejects stale native-picker results", async () => {
   assert.match(saveBlock[1], /const dest = picked\.value/);
   assert.match(saveBlock[1], /vault\.saveAttachment\(uuid, name, dest\)/);
 });
+
+test("TCATO open attempts release only their own focus-lock lease", async () => {
+  const source = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const openBlock = source.match(
+    /async function openTcatoOverlay\(entry: VaultEntry\): Promise<void> \{([\s\S]*?)\n  \}/,
+  );
+
+  assert.ok(openBlock, "openTcatoOverlay must exist");
+  assert.match(openBlock[1], /const focusLockLease = beginTcatoOverlayOpen\(\)/);
+  assert.match(openBlock[1], /const view = sessionView\.capture\(\)/);
+  assert.match(openBlock[1], /const operation = tcatoOperations\.begin\(\)/);
+  assert.match(openBlock[1], /focusLockLease\.confirm\(\)/);
+  assert.match(
+    openBlock[1],
+    /sessionView\.isCurrent\(view\) && tcatoOperations\.isCurrent\(operation\)/,
+  );
+  assert.match(openBlock[1], /finally \{\s*focusLockLease\.release\(\)/);
+  assert.doesNotMatch(openBlock[1], /setTcatoOverlayOpen\(/);
+});

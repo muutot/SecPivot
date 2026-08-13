@@ -115,6 +115,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] 异步结果按 session + revision/替换 epoch 拒绝旧回写；远程整库替换提升 revision，前端行为测试覆盖旧 revision/旧 epoch
   - [x] 标签切换把“未缓存快照验证 → backend active 交换 → frontend 发布”作为一个排队单元；快速 A→B→A 与快照失败不执行交换均有前端行为测试
   - [x] 长时 save/save-as/change-key/favicon、复合编辑链、TOTP、TCATO/全局候选与 owner 校验的附件导入保持发起 session 绑定
+  - [x] TCATO 打开尝试以独立 lease 抑制 focus-loss lock，并以视图代次 + latest-operation 门禁旧失败提示；旧请求失败不会清除新覆盖层的后端确认状态
   - [x] open/create/openRemote/createRemote/close/closeTab/closeAll 与标签切换共用一个拓扑队列，后端注册表变更及对应前端发布按调用顺序完整执行
   - [x] `refreshTabs` 清理已不存在的 active id；refresh/save/save-as/change-key/setActiveSession 返回 revision/epoch 门禁实际采纳的状态，而不是被拒绝的晚到结果
   - [x] 标签切换清理页面共享 `busy`、分组创建/图标保存状态；旧 session 的 finally 不会让新标签持续禁用工具栏或表单

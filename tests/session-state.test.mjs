@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ActivityLeaseGuard,
   awaitCurrentView,
   canToggleSecretReveal,
   commitNewestSessionState,
@@ -197,6 +198,57 @@ test("only the latest operation may clear a shared activity flag", () => {
   assert.equal(operations.isCurrent(newOperation), true);
   operations.invalidate();
   assert.equal(operations.isCurrent(newOperation), false);
+});
+
+test("an old activity attempt cannot clear a newer confirmed activity", () => {
+  const activity = new ActivityLeaseGuard();
+  const oldLease = activity.acquire();
+  const newLease = activity.acquire();
+  assert.equal(activity.isActive(), true);
+
+  activity.setConfirmed(true);
+  newLease.release();
+  oldLease.release();
+  oldLease.release();
+  assert.equal(activity.isActive(), true);
+
+  activity.setConfirmed(false);
+  assert.equal(activity.isActive(), false);
+});
+
+test("pending activity leases release independently", () => {
+  const activity = new ActivityLeaseGuard();
+  const firstLease = activity.acquire();
+  const secondLease = activity.acquire();
+
+  firstLease.release();
+  assert.equal(activity.isActive(), true);
+  secondLease.release();
+  assert.equal(activity.isActive(), false);
+});
+
+test("a late successful attempt cannot revive activity after a close event", () => {
+  const activity = new ActivityLeaseGuard();
+  const lease = activity.acquire();
+
+  activity.setConfirmed(true);
+  activity.setConfirmed(false);
+  lease.confirm();
+  lease.release();
+
+  assert.equal(activity.isActive(), false);
+});
+
+test("a successful attempt bridges confirmation until its open event arrives", () => {
+  const activity = new ActivityLeaseGuard();
+  const lease = activity.acquire();
+
+  lease.confirm();
+  lease.release();
+  assert.equal(activity.isActive(), true);
+
+  activity.setConfirmed(false);
+  assert.equal(activity.isActive(), false);
 });
 
 test("an exclusive UI task stays active until the parent promise settles", async () => {
