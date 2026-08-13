@@ -120,6 +120,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] 标签切换清理页面共享 `busy`、分组创建/图标保存状态；旧 session 的 finally 不会让新标签持续禁用工具栏或表单
   - [x] 条目编辑器等待父级复合保存 Promise 并在保存期阻止重复提交/取消；父级完成回调绑定视图代次，A→B→A 的旧保存不再关闭新 A 编辑器或改写其选择/提示
   - [x] CSV/XML/Bitwarden/1Password 文件选择与异步解析绑定发起视图代次；切换标签（含 A→B→A）后旧结果不启动导入，多级分组创建的每次写入均固定到原 session
+  - [x] “另存为”在打开原生保存对话框前捕获可见视图代次；A→B→A 后第一轮 A 的旧路径选择不会触发 `save_vault_as`，完成提示/错误也不写入新视图
   - [x] 详情密码/受保护自定义字段仅在对应秘密读取成功后切换 reveal；加载中重复点击或 session/UUID 失效不再显示空值
   - [x] `EntryDetail` 密码/受保护字段/历史/存储请求绑定 session+UUID 视图代次；同库快速 u1→u2→u1 的第一轮晚到响应不再写入第二轮 u1 视图
   - [x] 条目列表/右键密码复制在读取后、写入剪贴板前再次校验原可见视图代次；A→B→A 的第一轮 A 晚到密码不会进入第二轮 A 的剪贴板，前端行为测试覆盖 stale/current consumer

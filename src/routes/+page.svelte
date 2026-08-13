@@ -898,26 +898,29 @@
   /** Save As: pick a new local path, persist there and switch to it. */
   async function handleSaveAs(): Promise<void> {
     if (!currentVault) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    if (!isTauriRuntime()) {
+      flash("浏览器预览不支持另存为");
+      return;
+    }
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const fileName = currentVault.fileName;
     try {
-      if (isTauriRuntime()) {
-        const ext = get(appSettings).database.fileExtension;
-        const baseName = (currentVault.fileName.replace(/\.\w+$/i, "") || "secpivot") + "." + ext;
-        const selected = await save({
+      const ext = get(appSettings).database.fileExtension;
+      const baseName = (fileName.replace(/\.\w+$/i, "") || "secpivot") + "." + ext;
+      const picked = await awaitCurrentView(sessionView, view, () =>
+        save({
           defaultPath: baseName,
           filters: [{ name: "KeePass 数据库", extensions: [ext] }],
-        });
-        if (!selected) return;
-        await vault.callInSession(sessionId, () => vault.saveAs(String(selected)));
-        if (vault.getActiveSessionId() !== sessionId) return;
-      } else {
-        flash("浏览器预览不支持另存为");
-        return;
-      }
+        }),
+      );
+      if (!picked.current || !picked.value) return;
+      await vault.callInSession(sessionId, () => vault.saveAs(String(picked.value)));
+      if (!sessionView.isCurrent(view)) return;
       flash("已另存为数据库");
     } catch (e) {
-      flash(`另存为失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`另存为失败：${e}`);
     }
   }
 
