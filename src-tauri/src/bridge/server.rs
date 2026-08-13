@@ -274,7 +274,9 @@ pub(crate) fn request_approval_with(
         return false;
     }
     emit(&token, id);
-    matches!(rx.recv_timeout(timeout), Ok(decision) if decision)
+    let decision = rx.recv_timeout(timeout);
+    board.remove(&token);
+    matches!(decision, Ok(true))
 }
 
 /// Pending associate approvals keyed by token; one shot per token.
@@ -301,6 +303,12 @@ impl ApprovalBoard {
         match sender {
             Some(sender) => sender.send(allowed).is_ok(),
             None => false,
+        }
+    }
+
+    fn remove(&self, token: &str) {
+        if let Ok(mut map) = self.pending.lock() {
+            map.remove(token);
         }
     }
 }
@@ -562,14 +570,16 @@ mod tests {
     #[test]
     fn approval_flow_times_out_when_unanswered() {
         let board = ApprovalBoard::default();
+        let token = Mutex::new(String::new());
         let decided = request_approval_with(
             &board,
-            |_token, _| {},
+            |pending_token, _| {
+                *token.lock().unwrap() = pending_token.to_owned();
+            },
             "client-z",
             Duration::from_millis(50),
         );
         assert!(!decided);
-        // The stale pending entry is cleaned up only by `decide`.
-        assert!(!board.decide("stale", true));
+        assert!(!board.decide(&token.lock().unwrap(), true));
     }
 }
