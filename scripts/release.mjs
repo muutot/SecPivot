@@ -25,7 +25,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
-import { resolveReleaseTarget } from "./versioning.mjs";
+import { isBumpType, resolveReleaseTarget } from "./versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "./release-files.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -104,56 +104,69 @@ try {
   exit(1);
 }
 
-// --- Regenerate: drop old release commit + tag before normal flow ---
-let forcePush = false;
-if (isRegenerate) {
-  const tagVer = `v${versionArg}`;
-  const tagExists =
-    execSync(`git tag -l "${tagVer}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVer;
-
-  if (tagExists) {
-    const tagCommit = execSync(`git rev-list -n 1 "${tagVer}"`, {
-      cwd: ROOT,
-      encoding: "utf-8",
-    }).trim();
-    const shortSha = tagCommit.slice(0, 7);
-    const commitMsg = execSync(`git log --format="%s" -1 "${tagCommit}"`, {
-      cwd: ROOT,
-      encoding: "utf-8",
-    }).trim();
-
-    if (commitMsg.includes("chore[release]") || commitMsg.includes("bump version to")) {
-      console.log(`\n[Regenerate] Found old release commit ${shortSha}: "${commitMsg}"`);
-      if (!isDryRun) {
-        const parentSha = execSync(`git rev-list --parents -n 1 "${tagCommit}"`, {
-          cwd: ROOT,
-          encoding: "utf-8",
-        })
-          .trim()
-          .split(" ")[1];
-        console.log(`  Dropping commit ${shortSha} via rebase (onto ${parentSha.slice(0, 7)})...`);
-        run(`git rebase --onto ${parentSha} ${tagCommit}`);
-        run(`git tag -d ${tagVer}`);
-        forcePush = true;
-        console.log(`  ✓ Old release commit removed, tag ${tagVer} deleted\n`);
-      } else {
-        console.log(`  (would drop ${shortSha} and tag ${tagVer} in real run)\n`);
-      }
-    }
-  }
-}
-
-// --- Normal flow ---
 let currentVersion = getVersion();
 let targetVersion;
 try {
   targetVersion = resolveReleaseTarget(currentVersion, getCommittedVersion(), versionArg);
+  if (isRegenerate && isBumpType(versionArg)) {
+    throw new Error("--regenerate requires an explicit semantic version, not a bump type.");
+  }
 } catch (error) {
   console.error(`Release version resolution failed: ${error.message}`);
   exit(1);
 }
-let tagVersion = `v${targetVersion}`;
+const tagVersion = `v${targetVersion}`;
 
+// --- Regenerate: drop old release commit + tag before normal flow ---
+let forcePush = false;
+if (isRegenerate) {
+  const tagExists =
+    execSync(`git tag -l "${tagVersion}"`, { cwd: ROOT, encoding: "utf-8" }).trim() === tagVersion;
+
+  if (!tagExists) {
+    console.error(`Regenerate failed: tag ${tagVersion} does not exist.`);
+    exit(1);
+  }
+
+  const tagCommit = execSync(`git rev-list -n 1 "${tagVersion}"`, {
+    cwd: ROOT,
+    encoding: "utf-8",
+  }).trim();
+  const shortSha = tagCommit.slice(0, 7);
+  const commitMsg = execSync(`git log --format="%s" -1 "${tagCommit}"`, {
+    cwd: ROOT,
+    encoding: "utf-8",
+  }).trim();
+
+  if (!commitMsg.includes("chore[release]") && !commitMsg.includes("bump version to")) {
+    console.error(`Regenerate failed: ${tagVersion} does not point to a release commit.`);
+    exit(1);
+  }
+
+  console.log(`\n[Regenerate] Found old release commit ${shortSha}: "${commitMsg}"`);
+  if (!isDryRun) {
+    const parentSha = execSync(`git rev-list --parents -n 1 "${tagCommit}"`, {
+      cwd: ROOT,
+      encoding: "utf-8",
+    })
+      .trim()
+      .split(" ")[1];
+    if (!parentSha) {
+      console.error(`Regenerate failed: release commit ${shortSha} has no parent.`);
+      exit(1);
+    }
+    console.log(`  Dropping commit ${shortSha} via rebase (onto ${parentSha.slice(0, 7)})...`);
+    run(`git rebase --onto ${parentSha} ${tagCommit}`);
+    run(`git tag -d ${tagVersion}`);
+    forcePush = true;
+    currentVersion = getVersion();
+    console.log(`  ✓ Old release commit removed, tag ${tagVersion} deleted\n`);
+  } else {
+    console.log(`  (would drop ${shortSha} and tag ${tagVersion} in real run)\n`);
+  }
+}
+
+// --- Normal flow ---
 if (isDryRun) {
   console.log(`\n[Dry run] ${BRANCH}: ${currentVersion} → ${targetVersion}`);
   console.log("\n[1/6] Version files (preview only)");

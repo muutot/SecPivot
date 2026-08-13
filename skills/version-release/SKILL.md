@@ -105,6 +105,8 @@ Uses `git rebase --onto` to surgically remove the previous release commit (prese
 
 Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for the branch and `--force` for the replaced tag). Normal releases always use a regular push and stop if the remote has diverged; ahead/behind counts never authorize an implicit history rewrite.
 
+`--regenerate` requires a strict explicit semantic version and an existing tag that points to a release commit. All version arguments are validated before any tag/rebase command; malformed or shell-like input is rejected.
+
 ### Dry run
 
 ```

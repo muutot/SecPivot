@@ -8,9 +8,9 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseSemver } from "./versioning.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 function readCargoVersion() {
   const manifest = readFileSync(resolve(ROOT, "src-tauri/Cargo.toml"), "utf-8");
@@ -47,7 +47,11 @@ export function validateReleaseIdentity(releaseTag = process.env.RELEASE_TAG) {
   }
 
   const version = versions["package.json"];
-  if (!SEMVER.test(version)) throw new Error(`Repository version is not valid semver: ${version}.`);
+  try {
+    parseSemver(version);
+  } catch {
+    throw new Error(`Repository version is not valid semver: ${version}.`);
+  }
 
   const expectedTag = `v${version}`;
   if (releaseTag !== expectedTag) {

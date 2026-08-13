@@ -1,13 +1,21 @@
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 
 export function parseSemver(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(-.+)?$/);
+  const match = version.match(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/,
+  );
   if (!match) throw new Error(`Invalid semver: ${version}`);
+  const prerelease = match[4] || "";
+  if (
+    prerelease.split(".").some((identifier) => /^\d+$/.test(identifier) && /^0\d/.test(identifier))
+  ) {
+    throw new Error(`Invalid semver: ${version}`);
+  }
   return {
     major: Number.parseInt(match[1], 10),
     minor: Number.parseInt(match[2], 10),
     patch: Number.parseInt(match[3], 10),
-    pre: match[4] || "",
+    pre: prerelease ? `-${prerelease}` : "",
   };
 }
 
@@ -30,9 +38,14 @@ export function bumpVersion(current, target) {
     version.patch += 1;
     version.pre = "";
   } else {
-    return target.replace(/^v/, "");
+    const explicitVersion = target.replace(/^v/, "");
+    return formatSemver(parseSemver(explicitVersion));
   }
   return formatSemver(version);
+}
+
+export function isBumpType(value) {
+  return BUMP_TYPES.has(value);
 }
 
 export function resolveReleaseTarget(currentVersion, committedVersion, requestedVersion) {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolveReleaseTarget } from "../scripts/versioning.mjs";
+import { bumpVersion, parseSemver, resolveReleaseTarget } from "../scripts/versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "../scripts/release-files.mjs";
 
 const releaseScript = readFileSync(new URL("../scripts/release.mjs", import.meta.url), "utf-8");
@@ -24,6 +24,18 @@ test("semantic releases reject an unrelated working version", () => {
     () => resolveReleaseTarget("1.2.2", "1.2.0", "patch"),
     /neither HEAD 1\.2\.0 nor expected target 1\.2\.1/,
   );
+});
+
+test("explicit versions use strict semver before release git operations", () => {
+  assert.equal(bumpVersion("1.2.0", "v2.0.0-beta.1"), "2.0.0-beta.1");
+  for (const invalid of ["1.2", "01.2.3", "1.2.3-01", "1.2.3;echo-pwn", "1.2.3-?"]) {
+    assert.throws(() => parseSemver(invalid), /Invalid semver/);
+  }
+  assert.ok(
+    releaseScript.indexOf("targetVersion = resolveReleaseTarget") <
+      releaseScript.indexOf("execSync(`git tag -l"),
+  );
+  assert.match(releaseScript, /--regenerate requires an explicit semantic version/);
 });
 
 test("dry-run exits before every release write", () => {
