@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { vault } from "$lib/services/vault";
+  import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
@@ -20,19 +22,25 @@
   let saving = $state(false);
   let error = $state("");
   const sessionId = vault.getActiveSessionId();
+  const dialogView = new KeyedViewGuard();
+  dialogView.activate(sessionId ? sessionResourceKey(sessionId, "database-meta") : null);
+
+  onDestroy(() => dialogView.activate(null));
 
   async function save(): Promise<void> {
     if (saving || !sessionId) return;
+    const view = dialogView.capture();
+    if (!view) return;
     saving = true;
     error = "";
     try {
       await vault.callInSession(sessionId, () => vault.updateDbMeta(dbName, dbDescription));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!dialogView.isCurrent(view)) return;
       onclose();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      if (dialogView.isCurrent(view)) error = e instanceof Error ? e.message : String(e);
     } finally {
-      saving = false;
+      if (dialogView.isCurrent(view)) saving = false;
     }
   }
 
@@ -47,8 +55,8 @@
   title="数据库属性"
   description="库名称与描述写入 KDBX 元数据"
   size="small"
-  showClose
-  closeOnEscape
+  showClose={!saving}
+  closeOnEscape={!saving}
   {onclose}
 >
   {#snippet icon()}<AppIcon name="database" size={18} />{/snippet}
