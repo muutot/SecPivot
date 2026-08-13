@@ -138,8 +138,9 @@ After a successful release, report:
 
 ## CI/CD
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml` which (desktop is Windows-first and bundles only the NSIS installer; the Android APK is a secondary artifact built on Linux):
+Pushing a semantic-version tag (`v<major>.<minor>.<patch>`, with an optional prerelease suffix) triggers `.github/workflows/release.yml` which (desktop is Windows-first and bundles only the NSIS installer; the Android APK is a secondary artifact built on Linux):
 
+- Fails before verification/build if the release tag does not exactly match the identical versions in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; manual dispatch therefore cannot publish an arbitrary version from unrelated source
 - Runs `npm run verify` on `windows-latest`, plus an **extreme-release build** validation that verifies the exact GitHub-release configuration (fat LTO, opt-level 3, codegen-units 1, `target-cpu=x86-64-v3`) compiles and links
 - Builds the Windows x64 bundle with extent runtime optimization via `CARGO_PROFILE_RELEASE_*` + `RUSTFLAGS` (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
 - Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`; a missing exe/ZIP or failed upload fails the job
@@ -148,7 +149,7 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml` which (desktop is Wi
 
 Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
 
-The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name, so manual re-releases name the release and portable ZIP consistently even when no tag is pushed yet.
+The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name. The input must equal the checked-out repository version; use the ref selector in GitHub Actions to dispatch the matching release commit.
 
 ## Version source files
 
