@@ -172,23 +172,11 @@ if (!isDryRun) {
 if (!isDryRun) {
   console.log("\n[6/6] Pushing...");
 
-  // Auto-detect if force push is needed (regenerate rewrites history)
-  let needsForce = forcePush;
-  if (!needsForce) {
-    try {
-      const aheadBehind = execSync(`git rev-list --count --left-right origin/${BRANCH}...HEAD`, {
-        cwd: ROOT,
-        encoding: "utf-8",
-      }).trim();
-      const parts = aheadBehind.split(/\s+/).filter(Boolean);
-      if (parts.length > 1) needsForce = true;
-    } catch {
-      // remote branch doesn't exist — first push, no force needed
-    }
-  }
-
-  const branchFlag = needsForce ? "--force-with-lease" : "";
-  const tagFlag = needsForce ? "--force" : "";
+  // Only the explicit regenerate flow is authorized to rewrite published
+  // history. A normal branch being ahead/behind must never silently turn a
+  // release into a force push; let the regular push fail for manual recovery.
+  const branchFlag = forcePush ? "--force-with-lease" : "";
+  const tagFlag = forcePush ? "--force" : "";
   run(`git push origin ${BRANCH} ${branchFlag}`.trim());
   run(`git push origin ${tagVersion} ${tagFlag}`.trim());
   console.log(`  ✓ Pushed ${BRANCH} and ${tagVersion}`);

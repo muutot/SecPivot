@@ -99,6 +99,8 @@ node scripts/release.mjs --regenerate <version>
 
 Uses `git rebase --onto` to surgically remove the previous release commit (preserving other commits' content and timestamps) and deletes the old tag. The normal flow then creates a fresh changelog, commit, and tag.
 
+Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for the branch and `--force` for the replaced tag). Normal releases always use a regular push and stop if the remote has diverged; ahead/behind counts never authorize an implicit history rewrite.
+
 ### Dry run
 
 ```
