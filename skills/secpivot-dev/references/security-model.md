@@ -35,7 +35,7 @@ With `minimizeToTray` on (default), closing the main window does **not** lock â€
 
 ## KeePass strengths
 
-The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/ChaCha20), and compression. Defaults favor Argon2id + AES-256 + Gzip for newly created databases. The database-settings dialog can also change an open vault's KDF, cipher, or compression; the next save re-encrypts the whole database with the existing master key, and the backend persistence test verifies the settings survive reopen.
+The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofish/ChaCha20), and compression. Defaults favor Argon2id + AES-256 + Gzip for newly created databases. Twofish is retained for read/write compatibility with an already-Twofish database, but SecPivot does not offer it as a new creation or storage-migration target: the database-settings write contract accepts only AES-256 or ChaCha20 and rejects a forged Twofish patch at deserialization. A KDF/cipher/compression change applies the complete settings patch to a clone and re-encrypts it with the existing master key before adoption, so failed validation or persistence cannot partially alter live metadata; persistence tests verify supported changes survive reopen.
 
 ## Password generation
 

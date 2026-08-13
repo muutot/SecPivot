@@ -2,6 +2,7 @@ use super::helpers::{save_database, wipe_secret_bytes, wipe_secret_string};
 use crate::crypto::otp;
 use crate::util::url_host;
 use crate::vault::helpers::otp_kind_name;
+use keepass::config::OuterCipherConfig;
 use keepass::db::Icon;
 use keepass::DatabaseKey;
 
@@ -654,6 +655,10 @@ fn database_settings_reports_current_config() {
     assert_eq!(settings.history_max_items, Some(3));
     assert!(!settings.recycle_bin_enabled);
 
+    session.require_db_mut().unwrap().config.outer_cipher_config = OuterCipherConfig::Twofish;
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.cipher, "Twofish");
+
     let path = dir.path().join("argon.kdbx");
     let mut session = VaultSession::default();
     session
@@ -663,6 +668,32 @@ fn database_settings_reports_current_config() {
     assert_eq!(settings.kdf, "Argon2");
     assert_eq!(settings.cipher, "ChaCha20");
     assert_eq!(settings.compression, "Gzip");
+}
+
+/// Existing Twofish databases remain writable when a settings patch omits
+/// the cipher, so compatibility does not force an implicit migration.
+#[test]
+fn existing_twofish_database_survives_meta_update_and_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session.require_db_mut().unwrap().config.outer_cipher_config = OuterCipherConfig::Twofish;
+    session.mark_dirty();
+    session.save().unwrap();
+
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_items: Some(Some(4)),
+            ..Default::default()
+        })
+        .unwrap();
+    session.save().unwrap();
+    drop(session);
+
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    let settings = reopened.database_settings().unwrap().unwrap();
+    assert_eq!(settings.cipher, "Twofish");
+    assert_eq!(settings.history_max_items, Some(4));
 }
 
 /// Database-setting writes persist through save/reopen and explicit `null`
@@ -708,14 +739,17 @@ fn update_database_settings_persists_history_and_recycle_flag() {
 fn update_database_settings_reencrypts_storage_config() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);
-    session
+    let before = session.snapshot_without_icons().unwrap();
+    let updated = session
         .update_database_settings(&DatabaseSettingsPatch {
             kdf: Some("Argon2".into()),
-            cipher: Some("ChaCha20".into()),
+            cipher: Some(WritableDatabaseCipher::ChaCha20),
             compression: Some("Gzip".into()),
             ..Default::default()
         })
         .unwrap();
+    assert!(updated.revision > before.revision);
+    assert!(!updated.dirty);
     let settings = session.database_settings().unwrap().unwrap();
     assert_eq!(settings.kdf, "Argon2");
     assert_eq!(settings.cipher, "ChaCha20");
@@ -3914,6 +3948,63 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
         session.attachment_data(&uuid, "note.txt").unwrap(),
         b"edited content"
     );
+}
+
+/// Twofish remains readable for compatibility, but the settings write DTO
+/// only accepts ciphers SecPivot intentionally offers for a rewrite.
+#[test]
+fn database_settings_patch_rejects_twofish_write_cipher() {
+    let error = serde_json::from_value::<DatabaseSettingsPatch>(serde_json::json!({
+        "cipher": "Twofish"
+    }))
+    .unwrap_err();
+    assert!(error.to_string().contains("unknown variant `Twofish`"));
+
+    let patch = serde_json::from_value::<DatabaseSettingsPatch>(serde_json::json!({
+        "cipher": "ChaCha20"
+    }))
+    .unwrap();
+    assert_eq!(patch.cipher, Some(WritableDatabaseCipher::ChaCha20));
+}
+
+/// Invalid storage settings must not leave the live database with meta
+/// changes from the same rejected patch.
+#[test]
+fn rejected_database_storage_patch_is_atomic() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let before = session.snapshot_without_icons().unwrap();
+
+    let error = session
+        .update_database_settings(&DatabaseSettingsPatch {
+            kdf: Some("Unsupported".into()),
+            history_max_items: Some(Some(7)),
+            recycle_bin_enabled: Some(Some(false)),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(error.contains("kdf 取值"));
+
+    let settings = session.database_settings().unwrap().unwrap();
+    assert_eq!(settings.history_max_items, None);
+    assert!(settings.recycle_bin_enabled);
+    let after = session.snapshot_without_icons().unwrap();
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.dirty, before.dirty);
+}
+
+/// An empty partial patch keeps the session unchanged instead of creating a
+/// phantom unsaved edit.
+#[test]
+fn empty_database_settings_patch_is_a_noop() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let before = session.snapshot_without_icons().unwrap();
+    let after = session
+        .update_database_settings(&DatabaseSettingsPatch::default())
+        .unwrap();
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.dirty, before.dirty);
 }
 
 #[test]

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import type { DatabaseSettings, DatabaseSettingsPatch } from "$lib/types/vault";
+  import type {
+    DatabaseSettings,
+    DatabaseSettingsPatch,
+    WritableDatabaseCipher,
+  } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -17,7 +21,7 @@
   let saving = $state(false);
 
   let kdf = $state<"Aes" | "Argon2" | "Argon2id">("Aes");
-  let cipher = $state<"Aes256" | "Twofish" | "ChaCha20">("Aes256");
+  let cipher = $state<WritableDatabaseCipher | null>(null);
   let compression = $state<"None" | "Gzip">("Gzip");
   let historyInput = $state("");
   let historySizeInput = $state("");
@@ -47,7 +51,7 @@
         }
         settings = value;
         kdf = value.kdf;
-        cipher = value.cipher;
+        cipher = value.cipher === "Twofish" ? null : value.cipher;
         compression = value.compression;
         historyInput = value.historyMaxItems === null ? "" : String(value.historyMaxItems);
         historySizeInput = value.historyMaxSize === null ? "" : String(value.historyMaxSize);
@@ -66,7 +70,7 @@
   const dirty = $derived(
     settings !== null &&
       (kdf !== settings.kdf ||
-        cipher !== settings.cipher ||
+        (settings.cipher === "Twofish" ? cipher !== null : cipher !== settings.cipher) ||
         compression !== settings.compression ||
         (historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems ||
         (historySizeInput === "" ? null : Number(historySizeInput)) !== settings.historyMaxSize ||
@@ -83,7 +87,7 @@
     try {
       const patch: DatabaseSettingsPatch = {};
       if (kdf !== settings.kdf) patch.kdf = kdf;
-      if (cipher !== settings.cipher) patch.cipher = cipher;
+      if (cipher !== null && cipher !== settings.cipher) patch.cipher = cipher;
       if (compression !== settings.compression) patch.compression = compression;
       if ((historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems) {
         patch.historyMaxItems = historyInput === "" ? null : Number(historyInput);
@@ -138,8 +142,23 @@
       </div>
       <div class="setting-block">
         <span class="setting-label">加密算法</span>
+        {#if settings.cipher === "Twofish"}
+          <span class="setting-label">
+            Twofish 仅兼容已有数据库；选择 AES-256 或 ChaCha20 会迁移存储算法。
+          </span>
+        {/if}
         <div class="choice-row" role="radiogroup" aria-label="加密算法">
-          {#each ["Aes256", "Twofish", "ChaCha20"] as const as value (value)}
+          {#if settings.cipher === "Twofish"}
+            <button
+              type="button"
+              class="choice-option"
+              class:active={cipher === null}
+              onclick={() => (cipher = null)}
+            >
+              保留 Twofish
+            </button>
+          {/if}
+          {#each ["Aes256", "ChaCha20"] as const as value (value)}
             <button
               type="button"
               class="choice-option"

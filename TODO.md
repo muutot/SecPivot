@@ -97,8 +97,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Auto-Type 全局热键多命中选择：多条目命中时 `autotype-pick-request` 事件 + 候选列表 + `autotype_pick` 命令 + 前端选择对话框，回收站条目排除
 - [x] 当前数据库设置（读取）：`get_database_settings` 返回 KDF/cipher/compression/historyMaxItems/recycleBinEnabled，覆盖 Aes/Argon2/Argon2id 与 Aes256/Twofish/ChaCha20/None/Gzip 映射及关闭会话 `None`
 - [x] 当前数据库设置（修改·部分）：`update_database_settings` 支持 `historyMaxItems`/`recycleBinEnabled` 部分写入与 `null` 重置，保存/重开 round-trip 测试通过
-- [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 对克隆库应用新存储配置并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过
-- [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`
+- [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 在克隆库上原子应用整份 patch 并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过；Twofish 仅保留既有库兼容，写 DTO 拒绝将其作为迁移目标
+- [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`；既有 Twofish 显示为只读当前值，仅可显式迁移到 AES-256/ChaCha20
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入
 - [ ] 当前数据库设置（KDF benchmark）：尚未实现目标耗时基准测试、参数建议/应用流程及对应验证；不得以固定 Argon2/AES-KDF 参数代替 benchmark 完成证据
 - [x] 高级搜索过滤引擎：`matchesAdvancedSearch` 支持字段范围（含自定义字段）、正则、排除取反、过期/收藏/标签/质量条件；`tests/entry-search.test.mjs` 覆盖字段隔离、大小写、非法正则与组合条件

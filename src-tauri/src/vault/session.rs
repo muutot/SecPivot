@@ -23,6 +23,25 @@ use uuid::Uuid;
 /// Consecutive failed saves before the vault degrades to read-only.
 const SAVE_FAILURE_READ_ONLY_LIMIT: u32 = 3;
 
+fn apply_database_meta_patch(
+    db: &mut Database,
+    patch: &DatabaseSettingsPatch,
+    entry_templates_group: Option<Uuid>,
+) {
+    if let Some(history_max_items) = patch.history_max_items {
+        db.meta.history_max_items = history_max_items.map(|value| value as isize);
+    }
+    if let Some(recycle_bin_enabled) = patch.recycle_bin_enabled {
+        db.meta.recyclebin_enabled = recycle_bin_enabled;
+    }
+    if let Some(history_max_size) = patch.history_max_size {
+        db.meta.history_max_size = history_max_size.map(|value| value as isize);
+    }
+    if patch.entry_templates_group.is_some() {
+        db.meta.entry_templates_group = entry_templates_group;
+    }
+}
+
 impl VaultSession {
     pub fn is_open(&self) -> bool {
         self.db.is_some()
@@ -235,30 +254,20 @@ impl VaultSession {
         &mut self,
         patch: &DatabaseSettingsPatch,
     ) -> Result<VaultState, String> {
-        // Meta flags first so the re-encrypt clone below carries them.
-        {
-            let db = self.require_db_mut()?;
-            if let Some(history_max_items) = patch.history_max_items {
-                db.meta.history_max_items = history_max_items.map(|value| value as isize);
-            }
-            if let Some(recycle_bin_enabled) = patch.recycle_bin_enabled {
-                db.meta.recyclebin_enabled = recycle_bin_enabled;
-            }
-            if let Some(history_max_size) = patch.history_max_size {
-                db.meta.history_max_size = history_max_size.map(|value| value as isize);
-            }
-            if let Some(entry_templates_group) = &patch.entry_templates_group {
-                db.meta.entry_templates_group = match entry_templates_group {
-                    Some(uuid) => {
-                        Some(Uuid::parse_str(uuid).map_err(|_| "模板分组 UUID 无效".to_owned())?)
-                    }
-                    None => None,
-                };
-            }
+        if patch.is_empty() {
+            return self.snapshot_without_icons();
         }
+        let templates_group = match &patch.entry_templates_group {
+            Some(Some(uuid)) => {
+                Some(Uuid::parse_str(uuid).map_err(|_| "模板分组 UUID 无效".to_owned())?)
+            }
+            Some(None) | None => None,
+        };
         let storage_changed =
             patch.kdf.is_some() || patch.cipher.is_some() || patch.compression.is_some();
         if !storage_changed {
+            let db = self.require_db_mut()?;
+            apply_database_meta_patch(db, patch, templates_group);
             self.mark_dirty();
             return self.snapshot_without_icons();
         }
@@ -268,11 +277,12 @@ impl VaultSession {
         // write leaves the open session unchanged).
         let (db, target, revision) = self.prepare_change()?;
         let mut db = db;
+        apply_database_meta_patch(&mut db, patch, templates_group);
         if let Some(kdf) = &patch.kdf {
             apply_kdf(&mut db, kdf)?;
         }
         if let Some(cipher) = &patch.cipher {
-            apply_cipher(&mut db, cipher)?;
+            apply_cipher(&mut db, cipher.as_str())?;
         }
         if let Some(compression) = &patch.compression {
             apply_compression(&mut db, compression)?;
@@ -289,19 +299,11 @@ impl VaultSession {
             }
         };
 
-        {
-            let live = self.require_db_mut()?;
-            if let Some(kdf) = &patch.kdf {
-                apply_kdf(live, kdf)?;
-            }
-            if let Some(cipher) = &patch.cipher {
-                apply_cipher(live, cipher)?;
-            }
-            if let Some(compression) = &patch.compression {
-                apply_compression(live, compression)?;
-            }
-        }
-        self.complete_save(revision, new_hash)
+        self.db = Some(db);
+        self.mark_dirty();
+        let committed_revision = self.revision;
+        debug_assert_eq!(committed_revision, revision + 1);
+        self.complete_save(committed_revision, new_hash)
     }
 
     pub fn save(&mut self) -> Result<VaultState, String> {

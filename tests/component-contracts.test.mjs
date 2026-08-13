@@ -187,6 +187,16 @@ test("database settings reject detached load and save completions", async () => 
   assert.match(dialog, /\.then\(\(value\) => \{\s*if \(!dialogView\.isCurrent\(view\)\) return/);
   assert.match(dialog, /if \(dialogView\.isCurrent\(view\)\) loading = false/);
   assert.match(dialog, /closeOnEscape=\{!saving\}/);
+  assert.match(dialog, /let cipher = \$state<WritableDatabaseCipher \| null>\(null\)/);
+  assert.match(dialog, /value\.cipher === "Twofish" \? null : value\.cipher/);
+  assert.match(dialog, /class:active=\{cipher === null\}/);
+  assert.match(dialog, /onclick=\{\(\) => \(cipher = null\)\}/);
+  assert.match(dialog, /\["Aes256", "ChaCha20"\] as const/);
+  assert.match(
+    dialog,
+    /if \(cipher !== null && cipher !== settings\.cipher\) patch\.cipher = cipher/,
+  );
+  assert.doesNotMatch(dialog, /\["Aes256", "Twofish", "ChaCha20"\] as const/);
   assert.ok(saveBlock, "DatabaseSettingsDialog save must exist");
   assert.match(saveBlock[1], /const view = dialogView\.capture\(\)/);
   assert.match(saveBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);

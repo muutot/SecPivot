@@ -103,7 +103,7 @@ pub use self::dto::{
     FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput,
     GroupInput, HistoryCleanResult, HistoryVersion, MutationDelta, SecurityReport, SessionInfo,
     SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup,
-    VaultOpenResult, VaultState, WeakEntry,
+    VaultOpenResult, VaultState, WeakEntry, WritableDatabaseCipher,
 };
 
 pub use self::breach::BreachFinding;

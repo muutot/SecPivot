@@ -191,10 +191,16 @@ export interface AutotypeCandidate {
   username: string;
 }
 
+/** Cipher value reported for an open database. */
+export type DatabaseCipher = "Aes256" | "Twofish" | "ChaCha20";
+
+/** Ciphers SecPivot offers when rewriting a database. */
+export type WritableDatabaseCipher = Exclude<DatabaseCipher, "Twofish">;
+
 /** Read-only storage settings of the open database. */
 export interface DatabaseSettings {
   kdf: "Aes" | "Argon2" | "Argon2id";
-  cipher: "Aes256" | "Twofish" | "ChaCha20";
+  cipher: DatabaseCipher;
   compression: "None" | "Gzip";
   historyMaxItems: number | null;
   historyMaxSize: number | null;
@@ -205,7 +211,7 @@ export interface DatabaseSettings {
 /** Partial database-settings write; omitted fields are kept, `null` resets. */
 export interface DatabaseSettingsPatch {
   kdf?: "Aes" | "Argon2" | "Argon2id";
-  cipher?: "Aes256" | "Twofish" | "ChaCha20";
+  cipher?: WritableDatabaseCipher;
   compression?: "None" | "Gzip";
   historyMaxItems?: number | null;
   historyMaxSize?: number | null;

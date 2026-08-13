@@ -5,6 +5,22 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
+/// Ciphers accepted when a database-settings patch rewrites storage.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub enum WritableDatabaseCipher {
+    Aes256,
+    ChaCha20,
+}
+
+impl WritableDatabaseCipher {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Aes256 => "Aes256",
+            Self::ChaCha20 => "ChaCha20",
+        }
+    }
+}
+
 /// One Auto-Type window association (KeePass `Association`): when the focused
 /// window matches `window` (with `*` wildcards), `sequence` is used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,9 +336,9 @@ pub struct DatabaseSettingsPatch {
     /// `"Aes"` / `"Argon2"` / `"Argon2id"`; present value re-encrypts.
     #[serde(default)]
     pub kdf: Option<String>,
-    /// `"Aes256"` / `"Twofish"` / `"ChaCha20"`; present value re-encrypts.
+    /// `"Aes256"` / `"ChaCha20"`; present value re-encrypts.
     #[serde(default)]
-    pub cipher: Option<String>,
+    pub cipher: Option<WritableDatabaseCipher>,
     /// `"None"` / `"Gzip"`; present value re-encrypts.
     #[serde(default)]
     pub compression: Option<String>,
@@ -335,6 +351,18 @@ pub struct DatabaseSettingsPatch {
     /// Present string sets the templates-group UUID; `null` clears it.
     #[serde(default)]
     pub entry_templates_group: Option<Option<String>>,
+}
+
+impl DatabaseSettingsPatch {
+    pub(crate) const fn is_empty(&self) -> bool {
+        self.kdf.is_none()
+            && self.cipher.is_none()
+            && self.compression.is_none()
+            && self.history_max_items.is_none()
+            && self.history_max_size.is_none()
+            && self.recycle_bin_enabled.is_none()
+            && self.entry_templates_group.is_none()
+    }
 }
 
 /// Deserialize `EntryInput.icon` tri-state: a number sets the built-in
