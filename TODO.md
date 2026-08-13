@@ -120,6 +120,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] 分组属性弹窗等待父级真实保存 Promise，保存期间阻止取消/Escape；仅原视图仍拥有相同分组弹窗时才关闭，旧 A 保存不会关闭新 A 弹窗
   - [x] 分组自动填充弹窗以 session+UUID 视图代次约束保存 completion，卸载/替换时失效；保存期间阻止取消/Escape，旧 A 保存不会关闭新 A 弹窗
   - [x] 数据库元数据弹窗以 session+实例视图代次约束保存 completion，卸载时失效；保存期间阻止取消/Escape/右上角关闭，旧 A 保存不会关闭新 A 弹窗
+  - [x] 当前数据库设置弹窗的读取/保存 completion 绑定 session+实例视图代次，卸载时失效；保存期间阻止取消/Escape，旧 A 读取不会填充新 A，旧 A 保存不会关闭新 A 弹窗
   - [x] open/create/openRemote/createRemote/close/closeTab/closeAll 与标签切换共用一个拓扑队列，后端注册表变更及对应前端发布按调用顺序完整执行
   - [x] `refreshTabs` 清理已不存在的 active id；refresh/save/save-as/change-key/setActiveSession 返回 revision/epoch 门禁实际采纳的状态，而不是被拒绝的晚到结果
   - [x] 标签切换清理页面共享 `busy`、分组创建/图标保存状态；旧 session 的 finally 不会让新标签持续禁用工具栏或表单

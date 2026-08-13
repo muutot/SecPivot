@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import type { DatabaseSettings, DatabaseSettingsPatch } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
+  import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface Props {
@@ -23,6 +24,10 @@
   let templateGroupInput = $state("");
   let recycleEnabled = $state(true);
   const sessionId = vault.getActiveSessionId();
+  const dialogView = new KeyedViewGuard();
+  dialogView.activate(sessionId ? sessionResourceKey(sessionId, "database-settings") : null);
+
+  onDestroy(() => dialogView.activate(null));
 
   onMount(() => {
     if (!sessionId) {
@@ -30,10 +35,12 @@
       loading = false;
       return;
     }
+    const view = dialogView.capture();
+    if (!view) return;
     void vault
       .callInSession(sessionId, () => vault.getDatabaseSettings())
       .then((value) => {
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!dialogView.isCurrent(view)) return;
         if (!value) {
           error = "浏览器预览不支持数据库设置";
           return;
@@ -48,11 +55,11 @@
         recycleEnabled = value.recycleBinEnabled;
       })
       .catch((e) => {
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!dialogView.isCurrent(view)) return;
         error = String(e);
       })
       .finally(() => {
-        if (vault.getActiveSessionId() === sessionId) loading = false;
+        if (dialogView.isCurrent(view)) loading = false;
       });
   });
 
@@ -69,6 +76,8 @@
 
   async function save(): Promise<void> {
     if (saving || !settings) return;
+    const view = dialogView.capture();
+    if (!view) return;
     saving = true;
     error = "";
     try {
@@ -90,12 +99,12 @@
       }
       if (!sessionId) return;
       await vault.callInSession(sessionId, () => vault.updateDatabaseSettings(patch));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!dialogView.isCurrent(view)) return;
       onclose();
     } catch (e) {
-      error = String(e);
+      if (dialogView.isCurrent(view)) error = String(e);
     } finally {
-      saving = false;
+      if (dialogView.isCurrent(view)) saving = false;
     }
   }
 </script>
@@ -105,7 +114,7 @@
   description="存储算法与历史策略修改会重写数据库文件"
   size="medium"
   scrollable
-  closeOnEscape
+  closeOnEscape={!saving}
   {onclose}
 >
   {#snippet children()}

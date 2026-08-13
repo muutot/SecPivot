@@ -173,3 +173,25 @@ test("database metadata rejects detached dialog completions", async () => {
   assert.match(saveBlock[1], /if \(dialogView\.isCurrent\(view\)\) saving = false/);
   assert.doesNotMatch(saveBlock[1], /vault\.getActiveSessionId\(\)/);
 });
+
+test("database settings reject detached load and save completions", async () => {
+  const dialog = await readFile(
+    new URL("../src/lib/components/DatabaseSettingsDialog.svelte", import.meta.url),
+    "utf8",
+  );
+  const saveBlock = dialog.match(/async function save\(\): Promise<void> \{([\s\S]*?)\n  \}/);
+
+  assert.match(dialog, /sessionResourceKey\(sessionId, "database-settings"\)/);
+  assert.match(dialog, /onDestroy\(\(\) => dialogView\.activate\(null\)\)/);
+  assert.match(dialog, /const view = dialogView\.capture\(\)/);
+  assert.match(dialog, /\.then\(\(value\) => \{\s*if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.match(dialog, /if \(dialogView\.isCurrent\(view\)\) loading = false/);
+  assert.match(dialog, /closeOnEscape=\{!saving\}/);
+  assert.ok(saveBlock, "DatabaseSettingsDialog save must exist");
+  assert.match(saveBlock[1], /const view = dialogView\.capture\(\)/);
+  assert.match(saveBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.match(saveBlock[1], /if \(dialogView\.isCurrent\(view\)\) error =/);
+  assert.match(saveBlock[1], /if \(dialogView\.isCurrent\(view\)\) saving = false/);
+  assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) !== sessionId/);
+  assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) === sessionId/);
+});
