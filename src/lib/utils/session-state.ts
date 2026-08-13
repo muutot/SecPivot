@@ -19,10 +19,10 @@ export function commitNewestSessionState<T extends { revision: number }>(
  * Enqueue is synchronous, so snapshot validation for an uncached tab and its
  * subsequent backend swap cannot be overtaken by a later click.
  */
-export class SessionSwitchQueue<T> {
+export class SessionSwitchQueue {
   #tail: Promise<void> = Promise.resolve();
 
-  enqueue(operation: () => Promise<T>): Promise<T> {
+  enqueue<T>(operation: () => Promise<T>): Promise<T> {
     let result: T;
     const run = async (): Promise<void> => {
       result = await operation();
@@ -44,12 +44,12 @@ export class SessionSwitchQueue<T> {
  * failure and rapid-click ordering contract directly testable.
  */
 export async function switchSession<T>(options: {
-  queue: SessionSwitchQueue<T>;
+  queue: SessionSwitchQueue;
   cached: T | undefined;
   load: () => Promise<T | null>;
   activate: () => Promise<T>;
   commit: (incoming: T) => T;
-  publish: (committed: T) => void;
+  publish: (committed: T) => void | Promise<void>;
 }): Promise<T> {
   return options.queue.enqueue(async () => {
     let resolved = options.cached;
@@ -59,7 +59,7 @@ export async function switchSession<T>(options: {
       resolved = options.commit(snapshot);
     }
     resolved = options.commit(await options.activate());
-    options.publish(resolved);
+    await options.publish(resolved);
     return resolved;
   });
 }

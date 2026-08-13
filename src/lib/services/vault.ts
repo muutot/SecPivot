@@ -175,9 +175,10 @@ let tempAttachmentTokens = new Map<string, string>();
 /** Database custom icons cached per session, kept across mutation snapshots
  * that omit the image payload. */
 const iconCaches = new Map<string, Record<string, string>>();
-/** Backend active switches must complete in click order. Renderer commands do
- * not wait for this queue because they address their captured session id. */
-const switchQueue = new SessionSwitchQueue<VaultState>();
+/** Every backend registry/topology change (open/create/close/switch) and its
+ * matching frontend publish completes in invocation order. Ordinary renderer
+ * commands do not wait because they address their captured session id. */
+const topologyQueue = new SessionSwitchQueue();
 /** Temporary override used only while one async service method executes its
  * synchronous pre-await capture. Composite actions must wrap each nested
  * service call separately; a global async context would be unsafe when two
@@ -539,18 +540,20 @@ export const vault: VaultStore = {
 
   async open(path, password, keyfile): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultOpenResult>("open_vault", {
-        path,
-        password,
-        keyfile: keyfile || null,
+      return topologyQueue.enqueue(async () => {
+        const result = await backendInvoke<VaultOpenResult>("open_vault", {
+          path,
+          password,
+          keyfile: keyfile || null,
+        });
+        activeSessionId = result.sessionId;
+        sessionEpochs.set(result.sessionId, 0);
+        commitSessionState(result.sessionId, result.state);
+        remembered.set({ path: result.state.path, fileName: result.state.fileName });
+        rememberRecent(result.state.path);
+        await refreshTabs();
+        return result.state;
       });
-      activeSessionId = result.sessionId;
-      sessionEpochs.set(result.sessionId, 0);
-      commitSessionState(result.sessionId, result.state);
-      remembered.set({ path: result.state.path, fileName: result.state.fileName });
-      rememberRecent(result.state.path);
-      await refreshTabs();
-      return result.state;
     }
     browserState = (await browserLoad()) ?? buildDemoVaultState();
     browserState.path = path;
@@ -565,17 +568,19 @@ export const vault: VaultStore = {
 
   async create(request: CreateVaultRequest): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultOpenResult>("create_vault", {
-        ...request,
-        keyfile: request.keyfile || null,
+      return topologyQueue.enqueue(async () => {
+        const result = await backendInvoke<VaultOpenResult>("create_vault", {
+          ...request,
+          keyfile: request.keyfile || null,
+        });
+        activeSessionId = result.sessionId;
+        sessionEpochs.set(result.sessionId, 0);
+        commitSessionState(result.sessionId, result.state);
+        remembered.set({ path: result.state.path, fileName: result.state.fileName });
+        rememberRecent(result.state.path);
+        await refreshTabs();
+        return result.state;
       });
-      activeSessionId = result.sessionId;
-      sessionEpochs.set(result.sessionId, 0);
-      commitSessionState(result.sessionId, result.state);
-      remembered.set({ path: result.state.path, fileName: result.state.fileName });
-      rememberRecent(result.state.path);
-      await refreshTabs();
-      return result.state;
     }
     const fresh = buildDemoVaultState();
     fresh.path = request.path;
@@ -595,33 +600,31 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       const path = get(state)?.path;
       const closingId = captureSessionId();
-      // Topology changes run after all earlier tab switches, so closing the
-      // displayed tab cannot be followed by a stale switch request.
-      await switchQueue.idle();
-      await backendInvoke("close_vault", { sessionId: closingId });
-      sessionStates.delete(closingId);
-      iconCaches.delete(closingId);
-      sessionEpochs.delete(closingId);
-      if (path && !get(appSettings).security.rememberPassword) {
-        void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
-      }
-      const list = await backendInvoke<SessionInfo[]>("list_sessions");
-      activeSessionId = list[0]?.sessionId ?? null;
-      tabs.set(list);
-      activeId.set(activeSessionId);
-      const remaining = activeSessionId ? await refreshInternal(activeSessionId) : null;
-      if (!remaining) {
-        state.set(null);
-        sessionStates.clear();
-        iconCaches.clear();
-        sessionEpochs.clear();
-      } else if (remaining.path.startsWith("s3://")) {
-        remembered.set(null);
-      } else {
-        remembered.set({ path: remaining.path, fileName: remaining.fileName });
-      }
-      await discardTempAttachmentsForSession(closingId);
-      return;
+      return topologyQueue.enqueue(async () => {
+        await backendInvoke("close_vault", { sessionId: closingId });
+        sessionStates.delete(closingId);
+        iconCaches.delete(closingId);
+        sessionEpochs.delete(closingId);
+        if (path && !get(appSettings).security.rememberPassword) {
+          void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
+        }
+        const list = await backendInvoke<SessionInfo[]>("list_sessions");
+        activeSessionId = list[0]?.sessionId ?? null;
+        tabs.set(list);
+        activeId.set(activeSessionId);
+        const remaining = activeSessionId ? await refreshInternal(activeSessionId) : null;
+        if (!remaining) {
+          state.set(null);
+          sessionStates.clear();
+          iconCaches.clear();
+          sessionEpochs.clear();
+        } else if (remaining.path.startsWith("s3://")) {
+          remembered.set(null);
+        } else {
+          remembered.set({ path: remaining.path, fileName: remaining.fileName });
+        }
+        await discardTempAttachmentsForSession(closingId);
+      });
     }
     browserState = null;
     sessionStates.clear();
@@ -633,8 +636,18 @@ export const vault: VaultStore = {
 
   async closeAll(): Promise<void> {
     if (isTauriRuntime()) {
-      await backendInvoke("close_all_vaults");
-      activeSessionId = null;
+      return topologyQueue.enqueue(async () => {
+        await backendInvoke("close_all_vaults");
+        activeSessionId = null;
+        await discardTempAttachments();
+        browserState = null;
+        sessionStates.clear();
+        iconCaches.clear();
+        sessionEpochs.clear();
+        state.set(null);
+        tabs.set([]);
+        activeId.set(null);
+      });
     }
     await discardTempAttachments();
     browserState = null;
@@ -656,47 +669,51 @@ export const vault: VaultStore = {
 
   async openRemote(key, password, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
-    await appSettings.flush();
-    const result = await backendInvoke<VaultOpenResult>("open_remote_vault", {
-      profile: get(appSettings).activeRemote,
-      key,
-      password,
-      keyfile: keyfile || null,
-      mode,
+    return topologyQueue.enqueue(async () => {
+      await appSettings.flush();
+      const result = await backendInvoke<VaultOpenResult>("open_remote_vault", {
+        profile: get(appSettings).activeRemote,
+        key,
+        password,
+        keyfile: keyfile || null,
+        mode,
+      });
+      activeSessionId = result.sessionId;
+      sessionEpochs.set(result.sessionId, 0);
+      commitSessionState(result.sessionId, result.state);
+      // A remote session cannot be reopened from the lock screen; clear the
+      // remembered local path so unlocking never silently targets the old vault.
+      remembered.set(null);
+      rememberRecent(result.state.path);
+      await refreshTabs();
+      return result.state;
     });
-    activeSessionId = result.sessionId;
-    sessionEpochs.set(result.sessionId, 0);
-    commitSessionState(result.sessionId, result.state);
-    // A remote session cannot be reopened from the lock screen; clear the
-    // remembered local path so unlocking never silently targets the old vault.
-    remembered.set(null);
-    rememberRecent(result.state.path);
-    await refreshTabs();
-    return result.state;
   },
 
   async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
-    await appSettings.flush();
-    const result = await backendInvoke<VaultOpenResult>("create_remote_vault", {
-      profile: get(appSettings).activeRemote,
-      key,
-      password,
-      kdf,
-      cipher,
-      compression,
-      keyfile: keyfile || null,
-      mode,
+    return topologyQueue.enqueue(async () => {
+      await appSettings.flush();
+      const result = await backendInvoke<VaultOpenResult>("create_remote_vault", {
+        profile: get(appSettings).activeRemote,
+        key,
+        password,
+        kdf,
+        cipher,
+        compression,
+        keyfile: keyfile || null,
+        mode,
+      });
+      activeSessionId = result.sessionId;
+      sessionEpochs.set(result.sessionId, 0);
+      commitSessionState(result.sessionId, result.state);
+      // See `openRemote`: a remote session is never the lock-screen quick-reopen
+      // target, so drop any stale remembered local path.
+      remembered.set(null);
+      rememberRecent(result.state.path);
+      await refreshTabs();
+      return result.state;
     });
-    activeSessionId = result.sessionId;
-    sessionEpochs.set(result.sessionId, 0);
-    commitSessionState(result.sessionId, result.state);
-    // See `openRemote`: a remote session is never the lock-screen quick-reopen
-    // target, so drop any stale remembered local path.
-    remembered.set(null);
-    rememberRecent(result.state.path);
-    await refreshTabs();
-    return result.state;
   },
 
   async save(force = false): Promise<VaultState> {
@@ -1406,7 +1423,7 @@ export const vault: VaultStore = {
     // leave the renderer restored to A while the queued backend later moves to
     // B. Later clicks still run strictly after this complete attempt.
     const resolved = await switchSession({
-      queue: switchQueue,
+      queue: topologyQueue,
       cached: sessionStates.get(sessionId),
       load: async () =>
         backendInvoke<VaultState | null>("get_vault_state", {
@@ -1414,44 +1431,52 @@ export const vault: VaultStore = {
         }),
       activate: async () => backendInvoke<VaultState>("set_active_session", { sessionId }),
       commit: (incoming) => commitSessionStateAtEpoch(sessionId, epoch, incoming),
-      publish: (committed) => {
+      publish: async (committed) => {
         activeSessionId = sessionId;
         activeId.set(sessionId);
         state.set(committed);
+        // The lock-screen quick-reopen follows the newly active tab; remote
+        // sessions never become a quick-reopen target.
+        if (committed.path.startsWith("s3://")) {
+          remembered.set(null);
+        } else {
+          remembered.set({ path: committed.path, fileName: committed.fileName });
+        }
+        await refreshTabs();
       },
     });
-    // The lock-screen quick-reopen follows the newly active tab; remote
-    // sessions never become a quick-reopen target.
-    if (resolved.path.startsWith("s3://")) {
-      remembered.set(null);
-    } else {
-      remembered.set({ path: resolved.path, fileName: resolved.fileName });
-    }
-    await refreshTabs();
     return resolved;
   },
 
   async closeTab(sessionId: string): Promise<void> {
-    if (sessionId === activeSessionId) {
-      await vault.close();
-      return;
-    }
     if (!isTauriRuntime()) return;
-    await switchQueue.idle();
     const tab = get(tabs).find((t) => t.sessionId === sessionId);
-    await backendInvoke("close_vault", { sessionId });
-    sessionStates.delete(sessionId);
-    iconCaches.delete(sessionId);
-    sessionEpochs.delete(sessionId);
-    for (const [token, owner] of tempAttachmentTokens) {
-      if (owner !== sessionId) continue;
-      tempAttachmentTokens.delete(token);
-      void backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
-    }
-    if (tab?.path && !get(appSettings).security.rememberPassword) {
-      void backendInvoke("clear_saved_credential", { path: tab.path }).catch(() => undefined);
-    }
-    await refreshTabs();
+    return topologyQueue.enqueue(async () => {
+      await backendInvoke("close_vault", { sessionId });
+      sessionStates.delete(sessionId);
+      iconCaches.delete(sessionId);
+      sessionEpochs.delete(sessionId);
+      for (const [token, owner] of tempAttachmentTokens) {
+        if (owner !== sessionId) continue;
+        tempAttachmentTokens.delete(token);
+        void backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
+      }
+      if (tab?.path && !get(appSettings).security.rememberPassword) {
+        void backendInvoke("clear_saved_credential", { path: tab.path }).catch(() => undefined);
+      }
+      const list = await backendInvoke<SessionInfo[]>("list_sessions");
+      activeSessionId = list[0]?.sessionId ?? null;
+      tabs.set(list);
+      activeId.set(activeSessionId);
+      const remaining = activeSessionId ? await refreshInternal(activeSessionId) : null;
+      if (!remaining) {
+        state.set(null);
+      } else if (remaining.path.startsWith("s3://")) {
+        remembered.set(null);
+      } else {
+        remembered.set({ path: remaining.path, fileName: remaining.fileName });
+      }
+    });
   },
 };
 

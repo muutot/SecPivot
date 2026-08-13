@@ -115,7 +115,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
   - [x] 异步结果按 session + revision/替换 epoch 拒绝旧回写；远程整库替换提升 revision，前端行为测试覆盖旧 revision/旧 epoch
   - [x] 标签切换把“未缓存快照验证 → backend active 交换 → frontend 发布”作为一个排队单元；快速 A→B→A 与快照失败不执行交换均有前端行为测试
   - [x] 长时 save/save-as/change-key/favicon、复合编辑链、TOTP、TCATO/全局候选与 owner 校验的附件导入保持发起 session 绑定
-  - [ ] open/create/openRemote/createRemote/closeAll 等会话拓扑操作等待切换队列，避免与待处理 backend active 交换交错
+  - [x] open/create/openRemote/createRemote/close/closeTab/closeAll 与标签切换共用一个拓扑队列，后端注册表变更及对应前端发布按调用顺序完整执行
   - [ ] `refreshTabs` 清理已不存在的 active id，save/save-as/change-key/setActiveSession 返回实际采纳的状态而非被拒绝的晚到结果
   - [ ] 标签切换清理全局 busy 与所有页面/详情异步 loading/reveal 状态，并补相称行为验证
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）

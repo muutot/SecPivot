@@ -100,6 +100,49 @@ test("a failed uncached snapshot never performs its backend switch", async () =>
   assert.deepEqual(order, ["B:snapshot", "A:switch", "A:publish"]);
 });
 
+test("topology changes and tab switches complete in invocation order", async () => {
+  const queue = new SessionSwitchQueue();
+  const publishGate = deferred();
+  const order = [];
+
+  const switching = switchSession({
+    queue,
+    cached: { revision: 1, value: "A cached" },
+    load: async () => null,
+    activate: async () => {
+      order.push("switch:backend");
+      return { revision: 1, value: "A active" };
+    },
+    commit: (state) => state,
+    publish: async () => {
+      order.push("switch:publish:start");
+      await publishGate.promise;
+      order.push("switch:publish:end");
+    },
+  });
+  const openAfterSwitch = queue.enqueue(async () => {
+    order.push("open:backend");
+    order.push("open:publish");
+    return "opened";
+  });
+
+  await Promise.resolve();
+  assert.deepEqual(order, ["switch:backend"]);
+  await Promise.resolve();
+  assert.deepEqual(order, ["switch:backend", "switch:publish:start"]);
+  publishGate.resolve();
+
+  assert.equal((await switching).value, "A active");
+  assert.equal(await openAfterSwitch, "opened");
+  assert.deepEqual(order, [
+    "switch:backend",
+    "switch:publish:start",
+    "switch:publish:end",
+    "open:backend",
+    "open:publish",
+  ]);
+});
+
 test("late snapshots cannot replace a newer revision in the same session", () => {
   const states = new Map();
   const newer = { revision: 8, value: "new" };
