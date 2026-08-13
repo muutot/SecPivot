@@ -120,9 +120,8 @@ pub(crate) fn close_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<(), String> {
-    let keep_rpc = keep_rpc_session(&app);
     let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    vaults.close(&mut active, session_id.as_deref(), keep_rpc)?;
+    vaults.close(&mut active, session_id.as_deref())?;
     // The capture guard stays on while any other session is still open.
     if !vaults.any_open(&active) {
         shield::set_capture_guard(&app, false);

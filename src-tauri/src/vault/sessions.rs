@@ -148,6 +148,13 @@ impl VaultSessions {
         let state = adopt(&mut fresh)?;
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         fresh.match_registrable_domain = inner.match_registrable_domain;
+        // `close_all(..., keep_rpc = true)` leaves the active slot as a
+        // locked RPC-key carrier. Move those keys only after the next vault
+        // has opened successfully; a failed unlock must keep them available
+        // for retry, while bridge keys and vault secrets were already wiped.
+        if inner.active_id.is_none() && !active.is_open() {
+            fresh.rpc_keys = std::mem::take(&mut active.rpc_keys);
+        }
         // Park the current active session under its existing id so ids stay
         // stable for the frontend across tab switches.
         if let Some(current_id) = inner.active_id.take() {
@@ -168,12 +175,7 @@ impl VaultSessions {
     /// Close the addressed session (default: active). Closing the active
     /// session promotes the most recently parked one, so at least one vault
     /// stays open when others remain.
-    pub fn close(
-        &self,
-        active: &mut VaultSession,
-        session_id: Option<&str>,
-        keep_rpc: bool,
-    ) -> Result<(), String> {
+    pub fn close(&self, active: &mut VaultSession, session_id: Option<&str>) -> Result<(), String> {
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         let target = match session_id {
             Some(id) => id.to_owned(),
@@ -183,11 +185,9 @@ impl VaultSessions {
                 .ok_or_else(|| "没有打开的数据库".to_owned())?,
         };
         if inner.active_id.as_deref() == Some(target.as_str()) {
-            if keep_rpc {
-                active.close_keeping_rpc_session();
-            } else {
-                active.close();
-            }
+            // Closing a tab discards that session permanently. The
+            // keep-after-lock setting applies only to the lock lifecycle.
+            active.close();
             inner.active_id = None;
             if let Some(promoted) = inner.order.pop() {
                 if let Some(session) = inner.parked.remove(&promoted) {
@@ -202,11 +202,7 @@ impl VaultSessions {
                 .remove(&target)
                 .ok_or_else(|| "找不到数据库会话".to_owned())?;
             inner.order.retain(|id| id != &target);
-            if keep_rpc {
-                removed.close_keeping_rpc_session();
-            } else {
-                removed.close();
-            }
+            removed.close();
             Ok(())
         }
     }
@@ -221,11 +217,9 @@ impl VaultSessions {
             active.close();
         }
         for (_, mut session) in inner.parked.drain() {
-            if keep_rpc {
-                session.close_keeping_rpc_session();
-            } else {
-                session.close();
-            }
+            // RPC intentionally serves only the active tab. Parked keys
+            // cannot be reused after lock and must be explicitly wiped.
+            session.close();
         }
         inner.order.clear();
         inner.active_id = None;
@@ -379,13 +373,13 @@ mod tests {
         assert_eq!(parked.file_name, "a.kdbx");
         // Closing the active session promotes the parked one.
         registry
-            .close(&mut active, Some(&second.session_id), true)
+            .close(&mut active, Some(&second.session_id))
             .unwrap();
         let promoted = registry.state(&mut active, None).unwrap().unwrap();
         assert_eq!(promoted.file_name, "a.kdbx");
         assert!(registry.any_open(&active));
 
-        registry.close(&mut active, None, true).unwrap();
+        registry.close(&mut active, None).unwrap();
         assert!(registry.state(&mut active, None).unwrap().is_none());
         assert!(!registry.any_open(&active));
     }
@@ -438,12 +432,12 @@ mod tests {
             .unwrap();
         // Closing the parked first session leaves the active second intact.
         registry
-            .close(&mut active, Some(&first.session_id), false)
+            .close(&mut active, Some(&first.session_id))
             .unwrap();
         let current = registry.state(&mut active, None).unwrap().unwrap();
         assert_eq!(current.file_name, "b.kdbx");
 
-        assert!(registry.close(&mut active, Some("s999"), false).is_err());
+        assert!(registry.close(&mut active, Some("s999")).is_err());
         assert!(registry.state(&mut active, Some("s999")).is_err());
         // Ids stay stable when a session is parked and promoted.
         assert_eq!(first.session_id, "s1");
@@ -767,6 +761,58 @@ mod tests {
             .open(&mut active, create_vault(&dir, "c.kdbx"))
             .unwrap();
         assert_eq!(again.session_id, "s3");
+    }
+
+    #[test]
+    fn closing_a_tab_always_wipes_its_rpc_keys() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let opened = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        active.rpc_keys.insert("kee".into(), vec![7; 32]);
+
+        registry
+            .close(&mut active, Some(&opened.session_id))
+            .unwrap();
+
+        assert!(!active.is_open());
+        assert!(active.rpc_keys.is_empty());
+    }
+
+    #[test]
+    fn lock_keeps_only_active_rpc_keys_and_transfers_them_after_unlock() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+
+        registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        active.rpc_keys.insert("parked-client".into(), vec![1; 32]);
+        registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        active.rpc_keys.insert("active-client".into(), vec![2; 32]);
+
+        registry.close_all(&mut active, true).unwrap();
+        assert!(!active.is_open());
+        assert_eq!(active.rpc_keys.get("active-client"), Some(&vec![2; 32]));
+        assert!(!active.rpc_keys.contains_key("parked-client"));
+
+        // A failed unlock leaves the retained key available for retry.
+        assert!(registry
+            .open(&mut active, |_fresh| Err("wrong password".to_owned()))
+            .is_err());
+        assert!(active.rpc_keys.contains_key("active-client"));
+
+        registry
+            .open(&mut active, create_vault(&dir, "reopened.kdbx"))
+            .unwrap();
+        assert!(active.is_open());
+        assert_eq!(active.rpc_keys.get("active-client"), Some(&vec![2; 32]));
+        assert!(!active.rpc_keys.contains_key("parked-client"));
     }
 
     #[test]
