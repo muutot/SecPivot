@@ -135,3 +135,22 @@ test("group metadata waits for the parent save before closing", async () => {
   assert.match(saveBlock, /groupMetaUuid !== uuid/);
   assert.match(page, /onsaved=\{saveGroupMeta\}/);
 });
+
+test("group auto-type rejects detached or replaced dialog completions", async () => {
+  const dialog = await readFile(
+    new URL("../src/lib/components/GroupAutoTypeDialog.svelte", import.meta.url),
+    "utf8",
+  );
+  const saveBlock = dialog.match(/async function save\(\): Promise<void> \{([\s\S]*?)\n  \}/);
+
+  assert.match(dialog, /const dialogView = new KeyedViewGuard\(\)/);
+  assert.match(dialog, /sessionResourceKey\(sessionId, group\.uuid\)/);
+  assert.match(dialog, /onDestroy\(\(\) => dialogView\.activate\(null\)\)/);
+  assert.match(dialog, /closeOnEscape=\{!saving\}/);
+  assert.ok(saveBlock, "GroupAutoTypeDialog save must exist");
+  assert.match(saveBlock[1], /const view = dialogView\.capture\(\)/);
+  assert.match(saveBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
+  assert.match(saveBlock[1], /if \(dialogView\.isCurrent\(view\)\) error =/);
+  assert.match(saveBlock[1], /if \(dialogView\.isCurrent\(view\)\) saving = false/);
+  assert.doesNotMatch(saveBlock[1], /vault\.getActiveSessionId\(\)/);
+});

@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import type { VaultGroup, GroupAutoTypeConfig } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
+  import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface Props {
@@ -21,9 +23,27 @@
   let saving = $state(false);
   let error = $state("");
   const sessionId = vault.getActiveSessionId();
+  const dialogView = new KeyedViewGuard();
+  let activeKey: string | null = null;
+
+  $effect(() => {
+    const key = sessionId ? sessionResourceKey(sessionId, group.uuid) : null;
+    if (key === activeKey) return;
+    activeKey = key;
+    dialogView.activate(key);
+    enableChoice =
+      group.autoType?.enabled === undefined ? "inherit" : group.autoType.enabled ? "on" : "off";
+    defaultSeq = group.autoType?.defaultSequence ?? "";
+    saving = false;
+    error = "";
+  });
+
+  onDestroy(() => dialogView.activate(null));
 
   async function save(): Promise<void> {
     if (saving || !sessionId) return;
+    const view = dialogView.capture();
+    if (!view) return;
     saving = true;
     error = "";
     try {
@@ -31,17 +51,23 @@
       if (enableChoice !== "inherit") input.enabled = enableChoice === "on";
       input.defaultSequence = defaultSeq.trim();
       await vault.callInSession(sessionId, () => vault.updateGroupAutoType(group.uuid, input));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!dialogView.isCurrent(view)) return;
       onclose();
     } catch (e) {
-      error = String(e);
+      if (dialogView.isCurrent(view)) error = String(e);
     } finally {
-      saving = false;
+      if (dialogView.isCurrent(view)) saving = false;
     }
   }
 </script>
 
-<ModalShell title="自动填充设置" description={group.name} size="small" closeOnEscape {onclose}>
+<ModalShell
+  title="自动填充设置"
+  description={group.name}
+  size="small"
+  closeOnEscape={!saving}
+  {onclose}
+>
   {#snippet children()}
     <div class="choice-row" role="radiogroup" aria-label="自动填充启用状态">
       <button
