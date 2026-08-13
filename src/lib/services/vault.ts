@@ -45,6 +45,7 @@ import {
 } from "$lib/utils/tree";
 import {
   commitNewestSessionState,
+  resolveListedActiveId,
   SessionSwitchQueue,
   switchSession,
 } from "$lib/utils/session-state";
@@ -428,7 +429,7 @@ async function refreshInternal(sessionId = activeSessionId): Promise<VaultState 
     const value = await backendInvoke<VaultState | null>("get_vault_state", {
       sessionId,
     });
-    if (value && sessionId) commitSessionStateAtEpoch(sessionId, epoch, value);
+    if (value && sessionId) return commitSessionStateAtEpoch(sessionId, epoch, value);
     return value;
   }
   const value = browserState ? deepClone(browserState) : null;
@@ -440,7 +441,7 @@ async function refreshInternal(sessionId = activeSessionId): Promise<VaultState 
 async function refreshTabs(): Promise<void> {
   if (isTauriRuntime()) {
     const list = await backendInvoke<SessionInfo[]>("list_sessions");
-    if (!activeSessionId) activeSessionId = list[0]?.sessionId ?? null;
+    activeSessionId = resolveListedActiveId(activeSessionId, list);
     tabs.set(list);
     activeId.set(activeSessionId);
     return;
@@ -721,9 +722,9 @@ export const vault: VaultStore = {
       const sessionId = captureSessionId();
       const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault", { sessionId, force });
-      commitSessionStateAtEpoch(sessionId, epoch, result);
+      const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
-      return result;
+      return committed;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     const saved = deepClone(current);
@@ -738,9 +739,9 @@ export const vault: VaultStore = {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
     const sessionId = captureSessionId();
     const result = await invokeSession<VaultState>("refresh_remote_vault", {}, sessionId);
-    replaceSessionState(sessionId, result);
+    const replaced = replaceSessionState(sessionId, result);
     await refreshTabs();
-    return result;
+    return replaced;
   },
 
   /** Merge the remote vault's latest bytes into the session by entry/group
@@ -758,9 +759,9 @@ export const vault: VaultStore = {
       const sessionId = captureSessionId();
       const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault_as", { sessionId, path });
-      commitSessionStateAtEpoch(sessionId, epoch, result);
+      const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
-      return result;
+      return committed;
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     const saved = deepClone(current);
@@ -784,9 +785,9 @@ export const vault: VaultStore = {
         password,
         keyfile,
       });
-      commitSessionStateAtEpoch(sessionId, epoch, result);
+      const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
-      return result;
+      return committed;
     }
     return vault.save();
   },

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   commitNewestSessionState,
+  resolveListedActiveId,
   SessionStateCache,
   SessionSwitchQueue,
   switchSession,
@@ -155,6 +156,14 @@ test("late snapshots cannot replace a newer revision in the same session", () =>
   const equalRevision = { revision: 8, value: "authoritative refresh" };
   assert.equal(commitNewestSessionState(states, "s1", equalRevision), equalRevision);
   assert.equal(states.get("s1"), equalRevision);
+});
+
+test("tab refresh keeps only an active id that still exists", () => {
+  const sessions = [{ sessionId: "s2" }, { sessionId: "s3" }];
+  assert.equal(resolveListedActiveId("s2", sessions), "s2");
+  assert.equal(resolveListedActiveId("s1", sessions), "s2");
+  assert.equal(resolveListedActiveId(null, sessions), "s2");
+  assert.equal(resolveListedActiveId("s1", []), null);
 });
 
 test("a wholesale session replacement rejects every response from the old epoch", () => {

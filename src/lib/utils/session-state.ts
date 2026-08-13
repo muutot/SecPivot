@@ -14,6 +14,17 @@ export function commitNewestSessionState<T extends { revision: number }>(
   return incoming;
 }
 
+/** Keep the current renderer id only while it still exists in the backend
+ * session list; otherwise follow the backend-active first item. */
+export function resolveListedActiveId<T extends { sessionId: string }>(
+  currentId: string | null,
+  sessions: T[],
+): string | null {
+  return currentId && sessions.some((session) => session.sessionId === currentId)
+    ? currentId
+    : (sessions[0]?.sessionId ?? null);
+}
+
 /**
  * Serialize complete backend-active tab switch attempts in request order.
  * Enqueue is synchronous, so snapshot validation for an uncached tab and its
