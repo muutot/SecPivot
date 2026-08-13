@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canToggleSecretReveal,
   commitNewestSessionState,
   LatestOperationGuard,
   resolveListedActiveId,
@@ -191,6 +192,14 @@ test("only the latest operation may clear a shared activity flag", () => {
   assert.equal(operations.isCurrent(newOperation), true);
   operations.invalidate();
   assert.equal(operations.isCurrent(newOperation), false);
+});
+
+test("secret reveal requires a loaded value for the current session and entry", () => {
+  assert.equal(canToggleSecretReveal("secret", "s1", "s1", "u1", "u1"), true);
+  assert.equal(canToggleSecretReveal("", "s1", "s1", "u1", "u1"), true);
+  assert.equal(canToggleSecretReveal(null, "s1", "s1", "u1", "u1"), false);
+  assert.equal(canToggleSecretReveal("secret", "s1", "s2", "u1", "u1"), false);
+  assert.equal(canToggleSecretReveal("secret", "s1", "s1", "u1", "u2"), false);
 });
 
 test("a wholesale session replacement rejects every response from the old epoch", () => {

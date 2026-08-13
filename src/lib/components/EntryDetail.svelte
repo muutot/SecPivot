@@ -7,6 +7,7 @@
   import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
+  import { canToggleSecretReveal } from "$lib/utils/session-state";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -221,8 +222,8 @@
     const sessionId = detailSessionId();
     if (!sessionId) return;
     try {
-      await ensureCustomField(name);
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      const value = await ensureCustomField(name);
+      if (!canToggleSecretReveal(value, sessionId, detailSessionId(), uuid, entry.uuid)) return;
       customFieldRevealed = { ...customFieldRevealed, [name]: !customFieldRevealed[name] };
     } catch {
       flash("error");
@@ -247,8 +248,8 @@
     const sessionId = detailSessionId();
     if (!sessionId) return;
     try {
-      await ensurePassword();
-      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      const password = await ensurePassword();
+      if (!canToggleSecretReveal(password, sessionId, detailSessionId(), uuid, entry.uuid)) return;
       revealPassword = !revealPassword;
     } catch {
       flash("error");

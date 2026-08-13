@@ -70,6 +70,19 @@ export class LatestOperationGuard {
   }
 }
 
+/** A secret read may affect reveal state only when it produced a value for the
+ * still-visible session and entry. Empty strings are valid secret values;
+ * `null` means missing, still loading, or invalidated. */
+export function canToggleSecretReveal(
+  value: string | null,
+  requestedSessionId: string,
+  currentSessionId: string | null,
+  requestedUuid: string,
+  currentUuid: string,
+): value is string {
+  return value !== null && requestedSessionId === currentSessionId && requestedUuid === currentUuid;
+}
+
 /**
  * Serialize complete backend-active tab switch attempts in request order.
  * Enqueue is synchronous, so snapshot validation for an uncached tab and its
