@@ -23,6 +23,11 @@ struct SessionsInner {
     order: Vec<String>,
     /// Id of the session currently held by the active `VaultSession`.
     active_id: Option<String>,
+    /// Runtime URL-match mode shared by every current and future session.
+    /// This mirrors `rpc.matchByRegistrableDomain`; keeping it on the
+    /// registry prevents parked or newly opened tabs from reverting to the
+    /// `VaultSession` default.
+    match_registrable_domain: bool,
     next_id: u64,
 }
 
@@ -42,6 +47,23 @@ pub struct VaultSessions {
 }
 
 impl VaultSessions {
+    /// Apply the configured URL-match mode to the active slot, every parked
+    /// session and all sessions opened later. The caller holds the active
+    /// mutex first, preserving the registry's global lock order.
+    pub(crate) fn set_match_registrable_domain(
+        &self,
+        active: &mut VaultSession,
+        enabled: bool,
+    ) -> Result<(), String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        active.match_registrable_domain = enabled;
+        for session in inner.parked.values_mut() {
+            session.match_registrable_domain = enabled;
+        }
+        inner.match_registrable_domain = enabled;
+        Ok(())
+    }
+
     /// Id of the backend-active session. Browser integration, RPC and the
     /// global hotkey intentionally use only this session; renderer commands
     /// should instead pass their captured tab id to `with_session_mut`.
@@ -125,6 +147,7 @@ impl VaultSessions {
         let mut fresh = VaultSession::default();
         let state = adopt(&mut fresh)?;
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        fresh.match_registrable_domain = inner.match_registrable_domain;
         // Park the current active session under its existing id so ids stay
         // stable for the frontend across tab switches.
         if let Some(current_id) = inner.active_id.take() {
@@ -744,5 +767,75 @@ mod tests {
             .open(&mut active, create_vault(&dir, "c.kdbx"))
             .unwrap();
         assert_eq!(again.session_id, "s3");
+    }
+
+    #[test]
+    fn url_match_mode_updates_active_parked_switched_and_future_sessions() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+
+        // Startup/config synchronization happens before the first vault is
+        // opened, so a future fresh session must inherit the configured mode.
+        registry
+            .set_match_registrable_domain(&mut active, true)
+            .unwrap();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        assert!(active.match_registrable_domain);
+
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        assert!(active.match_registrable_domain);
+        assert!(registry
+            .with_session_mut(&mut active, Some(&first.session_id), |session| {
+                Ok(session.match_registrable_domain)
+            })
+            .unwrap());
+
+        // A later settings change reaches both the active and parked slots,
+        // and switching cannot resurrect the old value.
+        registry
+            .set_match_registrable_domain(&mut active, false)
+            .unwrap();
+        assert!(!active.match_registrable_domain);
+        assert!(!registry
+            .with_session_mut(&mut active, Some(&first.session_id), |session| {
+                Ok(session.match_registrable_domain)
+            })
+            .unwrap());
+        registry
+            .switch_active(&mut active, &first.session_id)
+            .unwrap();
+        assert!(!active.match_registrable_domain);
+        assert!(!registry
+            .with_session_mut(&mut active, Some(&second.session_id), |session| {
+                Ok(session.match_registrable_domain)
+            })
+            .unwrap());
+
+        registry
+            .set_match_registrable_domain(&mut active, true)
+            .unwrap();
+        let third = registry
+            .open(&mut active, create_vault(&dir, "c.kdbx"))
+            .unwrap();
+        assert!(active.match_registrable_domain);
+        assert!(registry
+            .with_session_mut(&mut active, Some(&first.session_id), |session| {
+                Ok(session.match_registrable_domain)
+            })
+            .unwrap());
+        assert!(registry
+            .with_session_mut(&mut active, Some(&second.session_id), |session| {
+                Ok(session.match_registrable_domain)
+            })
+            .unwrap());
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(third.session_id.as_str())
+        );
     }
 }

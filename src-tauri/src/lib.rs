@@ -257,6 +257,7 @@ pub fn run() {
             app.manage(crate::bridge::server::BridgeState::default());
             app.manage(crate::bridge::server::ApprovalBoard::default());
             app.manage(crate::rpc::server::RpcState::default());
+            commands::sync_vault_matching(app.handle(), &config);
             commands::sync_bridge(app.handle(), &config);
             commands::sync_rpc(app.handle(), &config);
             Ok(())

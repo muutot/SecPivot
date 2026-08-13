@@ -37,16 +37,28 @@ pub(crate) fn set_config(
     let saved = store.set(config)?;
     #[cfg(desktop)]
     register_global_hotkey(&app, &saved.keyboard.auto_type_global);
+    sync_vault_matching(&app, &saved);
     sync_bridge(&app, &saved);
     sync_rpc(&app, &saved);
-    // Keep the session's URL-match mode in sync with the config so bridge and
-    // RPC matching observe the latest `rpc.matchByRegistrableDomain`.
-    if let Some(session) = app.try_state::<std::sync::Mutex<crate::vault::VaultSession>>() {
-        if let Ok(mut session) = session.lock() {
-            session.match_registrable_domain = saved.rpc.match_by_registrable_domain;
-        }
-    }
     Ok(saved)
+}
+
+/// Keep URL matching consistent across the active slot, parked tabs and
+/// sessions opened after the setting changes. Startup calls this after both
+/// managed states are registered so persisted configuration applies before
+/// either loopback server begins serving requests.
+pub(crate) fn sync_vault_matching(app: &tauri::AppHandle, config: &config::AppConfig) {
+    let Some(session) = app.try_state::<std::sync::Mutex<crate::vault::VaultSession>>() else {
+        return;
+    };
+    let Some(vaults) = app.try_state::<crate::vault::VaultSessions>() else {
+        return;
+    };
+    let Ok(mut active) = session.lock() else {
+        return;
+    };
+    let _ =
+        vaults.set_match_registrable_domain(&mut active, config.rpc.match_by_registrable_domain);
 }
 
 /// Start or stop the loopback bridge to match `bridge.enabled`; failures are
