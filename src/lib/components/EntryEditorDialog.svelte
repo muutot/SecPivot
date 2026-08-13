@@ -187,6 +187,7 @@
   $effect(() => {
     if (multi) return;
     const targetUuid = entry?.uuid;
+    const sessionId = vault.getActiveSessionId();
     password = "";
     // Create mode (no entry yet): nothing to preserve, so the field is ready.
     if (!targetUuid) {
@@ -195,14 +196,17 @@
     }
     passwordLoading = true;
     passwordReady = false;
+    if (!sessionId) return;
     void vault
-      .getEntryPassword(targetUuid)
+      .callInSession(sessionId, () => vault.getEntryPassword(targetUuid))
       .then((value) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         password = value;
         passwordLoading = false;
         passwordReady = true;
       })
       .catch(() => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         passwordLoading = false;
         // The value is unknown, so saving must not overwrite it with an empty
         // one; keep the field gated (the save button stays disabled).
@@ -215,6 +219,7 @@
   $effect(() => {
     if (multi) return;
     const targetUuid = entry?.uuid;
+    const sessionId = vault.getActiveSessionId();
     totp = "";
     // Create mode: no existing seed to preserve; the empty field is the user's
     // intent (no seed). Entry without a seed: nothing to preserve either.
@@ -224,14 +229,17 @@
     }
     totpLoading = true;
     totpReady = false;
+    if (!sessionId) return;
     void vault
-      .getEntryTotp(targetUuid)
+      .callInSession(sessionId, () => vault.getEntryTotp(targetUuid))
       .then((value) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         totp = value ?? "";
         totpLoading = false;
         totpReady = true;
       })
       .catch(() => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         totpLoading = false;
         // Unknown seed: keep the save gated so it is not wiped.
         totpReady = false;
@@ -261,15 +269,20 @@
       return;
     }
     if (protectedFieldsLoadedFor === targetUuid) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     protectedFieldsLoading = true;
     protectedFieldsReady = false;
     void Promise.all(
       initialProtectedNames.map(async (name) => {
-        const value = await vault.getCustomFieldValue(targetUuid, name);
+        const value = await vault.callInSession(sessionId, () =>
+          vault.getCustomFieldValue(targetUuid, name),
+        );
         return { name, value };
       }),
     )
       .then((resolved) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         const values = new Map(resolved.map((r) => [r.name, r.value]));
         customFields = customFields.map((f) => {
           if (!f.protected) return f;
@@ -281,6 +294,7 @@
         protectedFieldsLoadedFor = targetUuid;
       })
       .catch(() => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         protectedFieldsLoading = false;
         // Unknown values: keep the save gated so protected fields are not wiped.
         protectedFieldsReady = false;

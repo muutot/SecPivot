@@ -69,6 +69,10 @@
 
   let copiedTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
+  function detailSessionId(): string | null {
+    return vault.getActiveSessionId();
+  }
+
   $effect(() => {
     entry.uuid;
     revealPassword = false;
@@ -90,35 +94,43 @@
   async function loadStorage(): Promise<void> {
     if (storageLoading || storage) return;
     const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     storageLoading = true;
     try {
-      const result = await vault.getEntryStorage(uuid);
-      if (uuid === entry.uuid) storage = result;
+      const result = await vault.callInSession(sessionId, () => vault.getEntryStorage(uuid));
+      if (sessionId === detailSessionId() && uuid === entry.uuid) storage = result;
     } finally {
-      if (uuid === entry.uuid) storageLoading = false;
+      if (sessionId === detailSessionId() && uuid === entry.uuid) storageLoading = false;
     }
   }
 
   async function loadHistory(force = false): Promise<void> {
     if (!force && historyLoadedUuid === entry.uuid) return;
     const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     historyLoading = true;
     try {
-      const result = await vault.getEntryHistory(uuid);
-      if (uuid === entry.uuid) {
+      const result = await vault.callInSession(sessionId, () => vault.getEntryHistory(uuid));
+      if (sessionId === detailSessionId() && uuid === entry.uuid) {
         historyVersions = result;
         historyLoadedUuid = uuid;
       }
     } finally {
-      if (uuid === entry.uuid) historyLoading = false;
+      if (sessionId === detailSessionId() && uuid === entry.uuid) historyLoading = false;
     }
   }
 
   async function restoreVersion(version: HistoryVersion): Promise<void> {
     const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
     if (!window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)) return;
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
-      await vault.restoreEntryVersion(entry.uuid, version.index);
+      await vault.callInSession(sessionId, () => vault.restoreEntryVersion(uuid, version.index));
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
       historyLoadedUuid = null;
       await loadHistory(true);
       flash("restored");
@@ -130,8 +142,12 @@
   async function deleteVersion(version: HistoryVersion): Promise<void> {
     const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
     if (!window.confirm(`确定删除 ${when} 的历史版本吗？此操作无法撤销。`)) return;
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
-      await vault.deleteEntryHistory(entry.uuid, version.index);
+      await vault.callInSession(sessionId, () => vault.deleteEntryHistory(uuid, version.index));
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
       historyLoadedUuid = null;
       await loadHistory(true);
       flash("deleted");
@@ -141,17 +157,21 @@
   }
 
   /** Passwords are fetched on demand; never included in `VaultEntry` from the backend. */
-  async function ensurePassword(): Promise<void> {
-    if (passwordLoaded || passwordLoading) return;
+  async function ensurePassword(): Promise<string | null> {
+    if (passwordLoaded) return fetchedPassword;
+    if (passwordLoading) return null;
     const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return null;
     passwordLoading = true;
     try {
-      const value = await vault.getEntryPassword(uuid);
-      if (uuid !== entry.uuid) return;
+      const value = await vault.callInSession(sessionId, () => vault.getEntryPassword(uuid));
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return null;
       fetchedPassword = value;
       passwordLoaded = true;
+      return value;
     } finally {
-      if (uuid === entry.uuid) passwordLoading = false;
+      if (sessionId === detailSessionId() && uuid === entry.uuid) passwordLoading = false;
     }
   }
 
@@ -161,23 +181,31 @@
     if (customFieldLoaded[name]) return customFieldValues[name] ?? null;
     if (customFieldLoading[name]) return null;
     const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return null;
     customFieldLoading = { ...customFieldLoading, [name]: true };
     try {
-      const value = await vault.getCustomFieldValue(uuid, name);
-      if (uuid !== entry.uuid) return null;
+      const value = await vault.callInSession(sessionId, () =>
+        vault.getCustomFieldValue(uuid, name),
+      );
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return null;
       customFieldValues = { ...customFieldValues, [name]: value ?? "" };
       customFieldLoaded = { ...customFieldLoaded, [name]: true };
       return value;
     } finally {
-      if (uuid === entry.uuid) {
+      if (sessionId === detailSessionId() && uuid === entry.uuid) {
         customFieldLoading = { ...customFieldLoading, [name]: false };
       }
     }
   }
 
   async function copyCustomField(name: string): Promise<void> {
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
       const value = await ensureCustomField(name);
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
       if (value === null) {
         flash("error");
         return;
@@ -189,8 +217,12 @@
   }
 
   async function toggleCustomFieldReveal(name: string): Promise<void> {
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
       await ensureCustomField(name);
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
       customFieldRevealed = { ...customFieldRevealed, [name]: !customFieldRevealed[name] };
     } catch {
       flash("error");
@@ -198,17 +230,25 @@
   }
 
   async function copyPassword(): Promise<void> {
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
-      await ensurePassword();
-      await handleCopy(fetchedPassword, "password", true);
+      const password = await ensurePassword();
+      if (password === null || sessionId !== detailSessionId() || uuid !== entry.uuid) return;
+      await handleCopy(password, "password", true);
     } catch {
       flash("error");
     }
   }
 
   async function toggleReveal(): Promise<void> {
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!sessionId) return;
     try {
       await ensurePassword();
+      if (sessionId !== detailSessionId() || uuid !== entry.uuid) return;
       revealPassword = !revealPassword;
     } catch {
       flash("error");
@@ -264,6 +304,9 @@
   }
 
   async function saveAttachment(name: string): Promise<void> {
+    const sessionId = detailSessionId();
+    const uuid = entry.uuid;
+    if (!sessionId) return;
     try {
       let dest: string | null = null;
       if (isTauriRuntime()) {
@@ -272,7 +315,8 @@
         throw new Error("browser");
       }
       if (!dest) return;
-      await vault.saveAttachment(entry.uuid, name, dest);
+      await vault.callInSession(sessionId, () => vault.saveAttachment(uuid, name, dest!));
+      if (vault.getActiveSessionId() !== sessionId || uuid !== entry.uuid) return;
       flash("attachment");
     } catch {
       flash("error");
@@ -668,7 +712,6 @@
         entryUuid={entry.uuid}
         {attachment}
         onclose={() => (previewAttachmentName = null)}
-        onsaved={() => void vault.refresh()}
       />
     {/if}
   {/if}

@@ -110,7 +110,14 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 密码生成器规则引擎（Rust）：`generate_password_with(&PasswordGeneratorSettings)` 镜像 TS 规则（类别开关/符号保证、自定义字符集/排除/必含/pattern），两端均以拒绝采样从 OS RNG 取得无偏索引；空池、容量不足和不兼容 pattern 均显式失败，Rust 行为测试覆盖
 - [x] 密码生成器配置接线：`BridgeState`/`RpcState` 在配置同步时保存生成器设置，KeePassHttp/RPC `GeneratePassword` 经 `handle_request_with_generator`/`handle_jsonrpc_with_generator` 使用用户规则；无效配置返回协议错误而不静默回退默认策略，Bridge/RPC 测试覆盖成功与失败路径
 - [x] 多数据库标签页·会话注册表：`VaultSessions` 托管状态停放非活动会话；`open_vault`/`create_vault`/远端 open/create 返回 `sessionId` 并切换 active；`close_vault`/`get_vault_state` 支持按 sessionId（缺省 active，关闭 active 后自动提升最后停放会话）；round-trip 测试覆盖两库并存
-- [x] 多数据库标签页·会话切换：`set_active_session` 命令在 active 与停放会话间交换（parked ↔ active）；即时命令作用于切换后的 active，长时 save/save-as/change-key/favicon 以稳定 `sessionId` 绑定发起会话并在完成阶段按 id 回写，避免切换期间串库；前端 vault.ts 增加 `setActiveSession(id)` 并同步 remembered
+- [~] 多数据库标签页·会话切换：核心隔离已实现并有直接测试，但本轮审查发现拓扑操作与待处理切换仍可能交错，且若干前端已提交状态/切换清理路径尚需修正；以下子项全部完成后再恢复 `[x]`
+  - [x] renderer 会话内命令捕获并传递稳定 `sessionId`，后端统一按 id 路由；相同 KDBX 副本（相同 UUID）回归证明 mutation 只影响指定会话
+  - [x] 异步结果按 session + revision/替换 epoch 拒绝旧回写；远程整库替换提升 revision，前端行为测试覆盖旧 revision/旧 epoch
+  - [x] 标签切换把“未缓存快照验证 → backend active 交换 → frontend 发布”作为一个排队单元；快速 A→B→A 与快照失败不执行交换均有前端行为测试
+  - [x] 长时 save/save-as/change-key/favicon、复合编辑链、TOTP、TCATO/全局候选与 owner 校验的附件导入保持发起 session 绑定
+  - [ ] open/create/openRemote/createRemote/closeAll 等会话拓扑操作等待切换队列，避免与待处理 backend active 交换交错
+  - [ ] `refreshTabs` 清理已不存在的 active id，save/save-as/change-key/setActiveSession 返回实际采纳的状态而非被拒绝的晚到结果
+  - [ ] 标签切换清理全局 busy 与所有页面/详情异步 loading/reveal 状态，并补相称行为验证
 - [x] 多数据库标签页·前端标签状态：vault.ts 增加 `tabs`/`activeId` store 与 `setActiveSession`/`closeTab`，后端 `list_sessions` 返回标签列表（含 dirty），`VaultTabs` 标签栏（文件名/dirty 标记/关闭/切换，多于一个标签时显示）
 - [x] 多数据库标签页·锁定与可见性：`close_all_vaults` 锁定全部标签（工具栏锁/空闲锁/锁后操作），bridge/RPC 与全局热键仅服务 active 会话，`remembered` 随切换/关闭/锁定联动（锁屏 quick-reopen 保留）
 

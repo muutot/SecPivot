@@ -2,8 +2,9 @@
 //! security report, CSV export, CSV/XML import file reader (extracted from
 //! commands.rs).
 
+use super::with_vault_session;
 use crate::vault;
-use crate::vault::{EntryStorage, SecurityReport, VaultSession};
+use crate::vault::{EntryStorage, SecurityReport, VaultSession, VaultSessions};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -15,86 +16,114 @@ const MAX_TEXT_IMPORT_BYTES: u64 = 8 * 1024 * 1024;
 /// Fetch one entry's password on demand; passwords are never part of `VaultState`.
 #[tauri::command]
 pub(crate) fn get_entry_password(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<String, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .get_entry_password(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.get_entry_password(&uuid),
+    )
 }
 
 /// Fetch one entry's TOTP seed on demand; seeds are never part of `VaultState`.
 #[tauri::command]
 pub(crate) fn get_entry_totp(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<Option<String>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .get_entry_totp(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.get_entry_totp(&uuid),
+    )
 }
 
 /// Fetch one custom field's value on demand; protected custom fields are never
 /// part of `VaultState`/`VaultEntry`.
 #[tauri::command]
 pub(crate) fn get_custom_field_value(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     name: String,
 ) -> Result<Option<String>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .get_custom_field_value(&uuid, &name)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.get_custom_field_value(&uuid, &name),
+    )
 }
 
 /// Server-side security analysis; no passwords leave the session.
 #[tauri::command]
 pub(crate) fn security_report(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<SecurityReport, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .security_report()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.security_report(),
+    )
 }
 
 /// Group entries whose passwords are similar (server-side analysis; passwords
 /// never cross IPC).
 #[tauri::command]
 pub(crate) fn similar_passwords(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<Vec<crate::vault::SimilarPasswordGroup>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .similar_passwords()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.similar_passwords(),
+    )
 }
 
 /// Clear the stored history of every entry; returns how many entries had
 /// history removed plus the refreshed state.
 #[tauri::command]
 pub(crate) fn clear_all_history(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<crate::vault::HistoryCleanResult, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .clear_all_history()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.clear_all_history(),
+    )
 }
 
 /// List entries whose expiry has passed (maintenance view; recycle bin
 /// excluded, no secrets).
 #[tauri::command]
 pub(crate) fn expired_entries(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<Vec<crate::vault::ExpiredEntry>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .expired_entries()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.expired_entries(),
+    )
 }
 
 /// Check the selected (or every) entry's passwords against HIBP using
@@ -102,13 +131,17 @@ pub(crate) fn expired_entries(
 /// Strictly opt-in; network I/O runs off the async runtime.
 #[tauri::command]
 pub(crate) async fn check_hibp(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuids: Option<Vec<String>>,
 ) -> Result<Vec<crate::vault::BreachFinding>, String> {
-    let entries = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .hibp_entries(uuids.as_deref())?;
+    let entries = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.hibp_entries(uuids.as_deref()),
+    )?;
     tauri::async_runtime::spawn_blocking(move || {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
@@ -124,26 +157,34 @@ pub(crate) async fn check_hibp(
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).
 #[tauri::command]
 pub(crate) fn get_entry_storage(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<EntryStorage, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .get_entry_storage(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.get_entry_storage(&uuid),
+    )
 }
 
 /// Export all entries as CSV to a user-picked path (passwords resolved server-side).
 #[tauri::command]
 pub(crate) fn export_csv(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     path: String,
 ) -> Result<(), String> {
     // Build the payload under the lock, write the file outside it.
-    let content = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .export_csv_content()?;
+    let content = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.export_csv_content(),
+    )?;
     vault::write_csv_file(&path, &content)
 }
 
@@ -152,15 +193,19 @@ pub(crate) fn export_csv(
 /// (the UI shows a warning).
 #[tauri::command]
 pub(crate) fn export_emergency_sheet(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     path: String,
     include_passwords: bool,
 ) -> Result<(), String> {
     // Build the payload under the lock, write the file outside it.
-    let content = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .emergency_sheet_content(include_passwords)?;
+    let content = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.emergency_sheet_content(include_passwords),
+    )?;
     vault::write_csv_file(&path, &content)
 }
 

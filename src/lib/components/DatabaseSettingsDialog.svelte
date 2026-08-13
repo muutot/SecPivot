@@ -22,11 +22,18 @@
   let historySizeInput = $state("");
   let templateGroupInput = $state("");
   let recycleEnabled = $state(true);
+  const sessionId = vault.getActiveSessionId();
 
   onMount(() => {
+    if (!sessionId) {
+      error = "数据库未打开";
+      loading = false;
+      return;
+    }
     void vault
-      .getDatabaseSettings()
+      .callInSession(sessionId, () => vault.getDatabaseSettings())
       .then((value) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         if (!value) {
           error = "浏览器预览不支持数据库设置";
           return;
@@ -41,10 +48,11 @@
         recycleEnabled = value.recycleBinEnabled;
       })
       .catch((e) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         error = String(e);
       })
       .finally(() => {
-        loading = false;
+        if (vault.getActiveSessionId() === sessionId) loading = false;
       });
   });
 
@@ -80,7 +88,9 @@
       if (recycleEnabled !== settings.recycleBinEnabled) {
         patch.recycleBinEnabled = recycleEnabled;
       }
-      await vault.updateDatabaseSettings(patch);
+      if (!sessionId) return;
+      await vault.callInSession(sessionId, () => vault.updateDatabaseSettings(patch));
+      if (vault.getActiveSessionId() !== sessionId) return;
       onclose();
     } catch (e) {
       error = String(e);

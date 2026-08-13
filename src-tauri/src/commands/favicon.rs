@@ -249,7 +249,14 @@ pub(crate) async fn download_favicons(
             fetched.push(vault::FaviconFetch { host, bytes });
         }
         done += 1;
-        let _ = app.emit("favicon-progress", vault::FaviconProgress { done, total });
+        let _ = app.emit(
+            "favicon-progress",
+            vault::FaviconProgress {
+                session_id: session_id.clone(),
+                done,
+                total,
+            },
+        );
     }
     let downloaded = fetched.len();
     let attempted = jobs.len();

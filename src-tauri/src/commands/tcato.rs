@@ -1,8 +1,9 @@
 //! TCATO (two-channel auto-type overlay) commands + managed target state
 //! (extracted from commands.rs).
 
+use super::with_vault_session;
 use crate::platform::focus;
-use crate::vault::VaultSession;
+use crate::vault::{VaultSession, VaultSessions};
 use std::sync::Mutex;
 use tauri::Emitter;
 use tauri::Manager;
@@ -10,8 +11,8 @@ use tauri::Manager;
 // TCATO (two-channel auto-type overlay)
 // ---------------------------------------------------------------------------
 
-/// UUID of the entry the TCATO overlay currently targets; never the password.
-pub(crate) struct TcatoTarget(pub(crate) Mutex<Option<String>>);
+/// Stable session + entry target of the TCATO overlay; never the password.
+pub(crate) struct TcatoTarget(pub(crate) Mutex<Option<(String, String)>>);
 
 /// Lightweight info shown in the TCATO overlay; secrets never leave the
 /// backend, so the password itself is only reported as a boolean.
@@ -38,16 +39,20 @@ pub(crate) const TCATO_OPEN_EVENT: &str = "tcato-overlay-open";
 #[tauri::command]
 pub(crate) fn open_tcato_overlay(
     app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     target: tauri::State<'_, TcatoTarget>,
+    session_id: String,
     uuid: String,
 ) -> Result<(), String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .autotype_context(&uuid)?;
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| target.autotype_context(&uuid).map(|_| ()),
+    )?;
     let mut slot = target.0.lock().map_err(|_| "覆盖层状态已损坏".to_owned())?;
-    *slot = Some(uuid);
+    *slot = Some((session_id, uuid));
     drop(slot);
     #[cfg(desktop)]
     {
@@ -84,19 +89,24 @@ pub(crate) fn open_tcato_overlay(
 /// Info for the overlay UI: entry title and which channels are available.
 #[tauri::command]
 pub(crate) fn tcato_state(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     target: tauri::State<'_, TcatoTarget>,
 ) -> Result<Option<TcatoInfo>, String> {
-    let uuid = target
+    let target_ref = target
         .0
         .lock()
         .map_err(|_| "覆盖层状态已损坏".to_owned())?
         .clone();
-    let Some(uuid) = uuid else { return Ok(None) };
-    let ctx = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .autotype_context(&uuid)?;
+    let Some((session_id, uuid)) = target_ref else {
+        return Ok(None);
+    };
+    let ctx = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| target.autotype_context(&uuid),
+    )?;
     Ok(Some(TcatoInfo {
         title: ctx.title,
         username: ctx.username,
@@ -107,20 +117,23 @@ pub(crate) fn tcato_state(
 /// Send one channel (`username` or `password`) to the window in focus.
 #[tauri::command]
 pub(crate) fn tcato_send(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     target: tauri::State<'_, TcatoTarget>,
     channel: String,
 ) -> Result<(), String> {
-    let uuid = target
+    let (session_id, uuid) = target
         .0
         .lock()
         .map_err(|_| "覆盖层状态已损坏".to_owned())?
         .clone()
         .ok_or_else(|| "TCATO 覆盖层尚未指定条目".to_owned())?;
-    let ctx = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .autotype_context(&uuid)?;
+    let ctx = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| target.autotype_context(&uuid),
+    )?;
     let text = match channel.as_str() {
         "username" => ctx.username,
         "password" => ctx.password,

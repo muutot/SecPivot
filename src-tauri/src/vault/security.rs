@@ -429,6 +429,7 @@ impl VaultSession {
                 continue;
             };
             candidates.push(AutotypeCandidate {
+                session_id: String::new(),
                 title: entry.get_title().unwrap_or_default().to_owned(),
                 username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
                 uuid,

@@ -1,6 +1,7 @@
 //! Vault lifecycle + entry/group CRUD IPC commands. Thin wrappers; passwords
 //! and keys never cross IPC (extracted from commands.rs).
 
+use super::{with_resolved_vault_session, with_vault_session};
 use crate::config::ConfigStore;
 use crate::platform::autotype;
 use crate::platform::shield;
@@ -185,24 +186,32 @@ pub(crate) fn list_sessions(
 /// Read the open database's storage settings (KDF/cipher/compression/etc).
 #[tauri::command]
 pub(crate) fn get_database_settings(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<Option<vault::DatabaseSettings>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .database_settings()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.database_settings(),
+    )
 }
 
 /// Apply database-level settings changes (history cap, recycle-bin flag).
 #[tauri::command]
 pub(crate) fn update_database_settings(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     patch: vault::DatabaseSettingsPatch,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_database_settings(&patch)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_database_settings(&patch),
+    )
 }
 
 #[tauri::command]
@@ -246,12 +255,16 @@ pub(crate) fn save_vault(
 /// session (discards local unsaved edits). Only for remote sessions.
 #[tauri::command]
 pub(crate) fn refresh_remote_vault(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .refresh_remote()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.refresh_remote(),
+    )
 }
 
 /// Merge the remote vault's latest bytes into the session by entry/group
@@ -259,12 +272,16 @@ pub(crate) fn refresh_remote_vault(
 /// the merged database back and adopt it. Only for remote sessions.
 #[tauri::command]
 pub(crate) fn merge_remote_vault(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .merge_remote()
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.merge_remote(),
+    )
 }
 
 #[tauri::command]
@@ -366,37 +383,49 @@ pub(crate) fn change_master_key(
 
 #[tauri::command]
 pub(crate) fn add_entry(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     input: EntryInput,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .add_entry(&input)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.add_entry(&input),
+    )
 }
 
 /// Bulk-import many entries in a single IPC call (used by the CSV/XML importer).
 #[tauri::command]
 pub(crate) fn import_entries(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     inputs: Vec<EntryInput>,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .add_entries(&inputs)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.add_entries(&inputs),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn update_entry(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     input: EntryInput,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_entry(&uuid, &input)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_entry(&uuid, &input),
+    )
 }
 
 /// Update matching/quality flags without rewriting stored fields:
@@ -404,122 +433,162 @@ pub(crate) fn update_entry(
 /// `qualityCheck` absent = keep, present = set.
 #[tauri::command]
 pub(crate) fn update_entry_flags(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     override_url: Option<String>,
     quality_check: Option<bool>,
     foreground_color: Option<String>,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_entry_flags(&uuid, override_url, quality_check, foreground_color)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_entry_flags(&uuid, override_url, quality_check, foreground_color),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn update_entries(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuids: Vec<String>,
     patch: EntryPatch,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_entries(&uuids, &patch)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_entries(&uuids, &patch),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn delete_entry(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .delete_entry(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.delete_entry(&uuid),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn move_entry(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     group_uuid: String,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .move_entry(&uuid, &group_uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.move_entry(&uuid, &group_uuid),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn delete_entries(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuids: Vec<String>,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .delete_entries(&uuids)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.delete_entries(&uuids),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn get_entry_history(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<Vec<HistoryVersion>, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .get_entry_history(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.get_entry_history(&uuid),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn restore_entry_version(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     index: usize,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .restore_entry_version(&uuid, index)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.restore_entry_version(&uuid, index),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn delete_entry_history(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     index: usize,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .delete_entry_history(&uuid, index)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.delete_entry_history(&uuid, index),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn restore_entry(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .restore_entry(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.restore_entry(&uuid),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn save_attachment(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     name: String,
     dest: String,
 ) -> Result<(), String> {
     // Extract under the lock, write the file outside it.
-    let data = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .attachment_data(&uuid, &name)?;
+    let data = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.attachment_data(&uuid, &name),
+    )?;
     vault::write_attachment_file(&data, &dest)
 }
 
@@ -527,34 +596,43 @@ pub(crate) fn save_attachment(
 /// writes the attachment to disk.
 #[tauri::command]
 pub(crate) fn preview_attachment(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     name: String,
 ) -> Result<vault::AttachmentPreview, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .attachment_preview(&uuid, &name)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.attachment_preview(&uuid, &name),
+    )
 }
 
 /// Extract an attachment into the controlled temp directory for external
 /// viewing. The returned token removes the file via `cleanup_attachment_temp`.
 #[tauri::command]
 pub(crate) fn open_attachment_temp(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     store: tauri::State<'_, vault::AttachmentTempStore>,
+    session_id: Option<String>,
     uuid: String,
     name: String,
 ) -> Result<vault::TempAttachmentRef, String> {
-    let data = session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .attachment_data(&uuid, &name)?;
-    let (token, path) = store.create(&name, &data)?;
+    let (session_id, data) = with_resolved_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.attachment_data(&uuid, &name),
+    )?;
+    let (token, path) = store.create(&session_id, &name, &data)?;
     Ok(vault::TempAttachmentRef {
         token,
         path: path.to_string_lossy().into_owned(),
         name,
+        session_id,
     })
 }
 
@@ -572,53 +650,78 @@ pub(crate) fn cleanup_attachment_temp(
 /// discards the temp file. Arbitrary paths are never accepted.
 #[tauri::command]
 pub(crate) fn import_attachment_from_temp(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     store: tauri::State<'_, vault::AttachmentTempStore>,
+    session_id: Option<String>,
     uuid: String,
     name: String,
     token: String,
 ) -> Result<VaultState, String> {
-    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    let result = active.import_attachment_from_temp(&uuid, &name, &token, store.inner());
-    if result.is_ok() {
-        let _ = store.discard(&token);
-    }
-    result
+    let resolved_session_id = vaults.resolve_id(session_id.as_deref())?;
+    let result = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&resolved_session_id),
+        |target| {
+            target.import_attachment_from_temp(
+                &uuid,
+                &name,
+                &token,
+                &resolved_session_id,
+                store.inner(),
+            )
+        },
+    )?;
+    let _ = store.discard(&token);
+    Ok(result)
 }
 
 #[tauri::command]
 pub(crate) fn totp_code(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<TotpCode, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .totp_code(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.totp_code(&uuid),
+    )
 }
 
 #[tauri::command]
 pub(crate) fn toggle_favorite(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
 ) -> Result<vault::MutationDelta, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .toggle_favorite_delta(&uuid)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.toggle_favorite_delta(&uuid),
+    )
 }
 
 /// Replace an entry's Auto-Type configuration.
 #[tauri::command]
 pub(crate) fn update_entry_autotype(
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     input: EntryAutoTypeInput,
 ) -> Result<VaultState, String> {
-    session
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_owned())?
-        .update_entry_autotype(&uuid, &input)
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_entry_autotype(&uuid, &input),
+    )
 }
 
 /// Resolve and replay a KeePass-style auto-type sequence for an entry.
@@ -630,16 +733,22 @@ pub(crate) fn update_entry_autotype(
 #[cfg_attr(not(desktop), allow(unused_variables))]
 pub(crate) fn auto_type(
     app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
     uuid: String,
     sequence: String,
 ) -> Result<(), String> {
-    let (ctx, expanded) = {
-        let session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        let ctx = session.autotype_context(&uuid)?;
-        let expanded = session.expand_autotype_sequence(&sequence)?;
-        (ctx, expanded)
-    };
+    let (ctx, expanded) = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| {
+            let ctx = target.autotype_context(&uuid)?;
+            let expanded = target.expand_autotype_sequence(&sequence)?;
+            Ok((ctx, expanded))
+        },
+    )?;
     #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();
@@ -653,27 +762,34 @@ pub(crate) fn auto_type(
 #[tauri::command]
 pub(crate) fn autotype_pick(
     app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
     uuid: String,
 ) -> Result<(), String> {
-    let (expanded, ctx) = {
-        let mut session = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        let window_title = session
-            .take_pending_autotype_window()
-            .ok_or_else(|| "没有待处理的自动填充请求".to_owned())?;
-        let sequence = match session.resolve_autotype_sequence_for_window(&uuid, &window_title)? {
-            Some(sequence) => sequence,
-            None => return Err("条目自动填充已禁用".to_owned()),
-        };
-        let sequence = if sequence.trim().is_empty() {
-            GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
-        } else {
-            sequence
-        };
-        let ctx = session.autotype_context(&uuid)?;
-        let expanded = session.expand_autotype_sequence(&sequence)?;
-        (expanded, ctx)
-    };
+    let (expanded, ctx) = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| {
+            let window_title = target
+                .take_pending_autotype_window()
+                .ok_or_else(|| "没有待处理的自动填充请求".to_owned())?;
+            let sequence =
+                match target.resolve_autotype_sequence_for_window(&uuid, &window_title)? {
+                    Some(sequence) => sequence,
+                    None => return Err("条目自动填充已禁用".to_owned()),
+                };
+            let sequence = if sequence.trim().is_empty() {
+                GLOBAL_AUTOTYPE_SEQUENCE.to_owned()
+            } else {
+                sequence
+            };
+            let ctx = target.autotype_context(&uuid)?;
+            let expanded = target.expand_autotype_sequence(&sequence)?;
+            Ok((expanded, ctx))
+        },
+    )?;
     #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();

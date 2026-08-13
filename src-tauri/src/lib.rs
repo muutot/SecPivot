@@ -79,18 +79,27 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
     let Some(session) = app.try_state::<Mutex<VaultSession>>() else {
         return;
     };
+    let Some(vaults) = app.try_state::<VaultSessions>() else {
+        return;
+    };
     let ctx = {
         let mut session = match session.lock() {
             Ok(s) => s,
             Err(_) => return,
         };
-        let candidates = match session.autotype_match_candidates(&window_title) {
+        let Some(session_id) = vaults.active_id() else {
+            return;
+        };
+        let mut candidates = match session.autotype_match_candidates(&window_title) {
             Ok(candidates) => candidates,
             Err(e) => {
                 eprintln!("global auto-type: {e}");
                 return;
             }
         };
+        for candidate in &mut candidates {
+            candidate.session_id.clone_from(&session_id);
+        }
         if candidates.len() > 1 {
             session.set_pending_autotype_window(Some(window_title.clone()));
             let _ = app.emit("autotype-pick-request", &candidates);

@@ -13,15 +13,19 @@
   let groups = $state<SimilarPasswordGroup[]>([]);
   let loading = $state(true);
   let error = $state("");
+  const sessionId = vault.getActiveSessionId();
 
   $effect(() => {
+    if (!sessionId) return;
     void vault
-      .similarPasswords()
+      .callInSession(sessionId, () => vault.similarPasswords())
       .then((value) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         groups = value;
         loading = false;
       })
       .catch((e) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         error = String(e);
         loading = false;
       });

@@ -4,7 +4,7 @@ import { copyText } from "$lib/utils/clipboard";
 /** Reactive one-time-password state shared by every OTP skin (detail widget,
  *  list badge). Centralizes the per-period fetch loop, HOTP static-code
  *  handling, countdown and copy+flash behavior so one change fixes every
- *  surface. All instances for the same entry uuid share one fetch loop and
+ *  surface. All instances for the same session + entry uuid share one fetch loop and
  *  one countdown clock, so rendering N badges never means N IPC round-trips
  *  per period (a shared single ticker drives every entry). */
 export interface TotpCodeState {
@@ -23,7 +23,7 @@ export interface TotpCodeState {
   refresh: () => Promise<boolean>;
 }
 
-/** Per-entry shared state, keyed by entry uuid. Lives outside Svelte's
+/** Per-entry shared state, keyed by stable session id + entry uuid. Lives outside Svelte's
  *  reactivity (module scope); each `useTotpCode` instance copies the values
  *  it needs into its own `$state` via a listener. */
 interface SharedTotp {
@@ -58,8 +58,12 @@ function newShared(): SharedTotp {
   };
 }
 
-function notify(uuid: string): void {
-  const entry = cache.get(uuid);
+function cacheKey(sessionId: string, uuid: string): string {
+  return `${sessionId}\u0000${uuid}`;
+}
+
+function notify(key: string): void {
+  const entry = cache.get(key);
   if (!entry) return;
   for (const listener of entry.listeners) listener();
 }
@@ -73,11 +77,12 @@ function remainingOf(entry: SharedTotp): number {
 /** Fetch (and cache) the current code for `uuid`. Transient failures never
  *  kill the loop: the next period boundary retries, so a one-off IPC hiccup
  *  does not freeze the badge on a stale code. */
-async function fetchEntry(uuid: string, entry: SharedTotp): Promise<void> {
+async function fetchEntry(key: string, uuid: string, entry: SharedTotp): Promise<void> {
   if (entry.fetching) return;
   entry.fetching = true;
   try {
-    const result = await vault.totpCode(uuid);
+    const sessionId = key.slice(0, key.indexOf("\u0000"));
+    const result = await vault.callInSession(sessionId, () => vault.totpCode(uuid));
     entry.code = result.code;
     entry.period = result.period;
     entry.kind = result.kind;
@@ -92,7 +97,7 @@ async function fetchEntry(uuid: string, entry: SharedTotp): Promise<void> {
     entry.validUntil = Date.now() + Math.max(entry.period, 1) * 1000;
   } finally {
     entry.fetching = false;
-    notify(uuid);
+    notify(key);
   }
 }
 
@@ -105,12 +110,13 @@ function tick(): void {
   const elapsed = Math.floor((now - lastTick) / 1000);
   lastTick = now;
   if (elapsed < 1) return;
-  for (const [uuid, entry] of cache) {
+  for (const [key, entry] of cache) {
     if (entry.kind === "hotp") continue;
     if (entry.validUntil > 0 && now >= entry.validUntil) {
-      void fetchEntry(uuid, entry);
+      const uuid = key.slice(key.indexOf("\u0000") + 1);
+      void fetchEntry(key, uuid, entry);
     }
-    notify(uuid);
+    notify(key);
   }
 }
 
@@ -138,6 +144,7 @@ function stopTickerIfIdle(): void {
 }
 
 export function useTotpCode(getUuid: () => string): TotpCodeState {
+  let sessionId = $state(vault.getActiveSessionId() ?? "browser");
   let code = $state("");
   let remaining = $state(0);
   let period = $state(30);
@@ -147,15 +154,22 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
+  $effect(() =>
+    vault.activeId.subscribe((value) => {
+      sessionId = value ?? "browser";
+    }),
+  );
+
   /** Subscribe to the shared per-entry state; one fetch loop and one countdown
    *  drive every badge for the same entry. Re-runs if `getUuid()` changes. */
   $effect(() => {
     const uuid = getUuid();
-    let entry = cache.get(uuid);
+    const key = cacheKey(sessionId, uuid);
+    let entry = cache.get(key);
     if (!entry) {
       entry = newShared();
-      cache.set(uuid, entry);
-      void fetchEntry(uuid, entry);
+      cache.set(key, entry);
+      void fetchEntry(key, uuid, entry);
     }
     entry.refcount += 1;
     const sync = (): void => {
@@ -175,7 +189,7 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
       entry.listeners.delete(sync);
       entry.refcount -= 1;
       if (entry.refcount === 0) {
-        cache.delete(uuid);
+        cache.delete(key);
         stopTickerIfIdle();
       }
     };
@@ -185,7 +199,8 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
 
   async function copy(): Promise<void> {
-    const entry = cache.get(getUuid());
+    const key = cacheKey(sessionId, getUuid());
+    const entry = cache.get(key);
     if (!entry || !entry.code) return;
     try {
       await copyText(entry.code);
@@ -201,9 +216,11 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   }
 
   async function refresh(): Promise<boolean> {
-    const entry = cache.get(getUuid());
+    const uuid = getUuid();
+    const key = cacheKey(sessionId, uuid);
+    const entry = cache.get(key);
     if (!entry) return false;
-    await fetchEntry(getUuid(), entry);
+    await fetchEntry(key, uuid, entry);
     return entry.error === "";
   }
 

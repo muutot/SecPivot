@@ -58,8 +58,17 @@
       return;
     }
     busy = true;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) {
+      busy = false;
+      feedback = { ok: false, message: "数据库未打开" };
+      return;
+    }
     try {
-      const state = await vault.changeMasterKey(newPassword, newKeyfile);
+      const state = await vault.callInSession(sessionId, () =>
+        vault.changeMasterKey(newPassword, newKeyfile),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
       if (state.path && newPassword.length > 0) {
         await rememberCredential(state.path, newPassword);
       }
@@ -68,6 +77,7 @@
       newKeyfile = null;
       feedback = { ok: true, message: "主密钥已更改并保存,新密钥立即生效" };
     } catch (err) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       feedback = { ok: false, message: String(err) };
     } finally {
       busy = false;

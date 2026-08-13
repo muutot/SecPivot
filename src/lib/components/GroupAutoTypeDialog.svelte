@@ -20,16 +20,18 @@
   let defaultSeq = $state(group.autoType?.defaultSequence ?? "");
   let saving = $state(false);
   let error = $state("");
+  const sessionId = vault.getActiveSessionId();
 
   async function save(): Promise<void> {
-    if (saving) return;
+    if (saving || !sessionId) return;
     saving = true;
     error = "";
     try {
       const input: GroupAutoTypeConfig = {};
       if (enableChoice !== "inherit") input.enabled = enableChoice === "on";
       input.defaultSequence = defaultSeq.trim();
-      await vault.updateGroupAutoType(group.uuid, input);
+      await vault.callInSession(sessionId, () => vault.updateGroupAutoType(group.uuid, input));
+      if (vault.getActiveSessionId() !== sessionId) return;
       onclose();
     } catch (e) {
       error = String(e);

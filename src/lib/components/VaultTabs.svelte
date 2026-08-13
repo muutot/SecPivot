@@ -22,8 +22,14 @@
     };
   });
 
-  function switchTo(sessionId: string): void {
-    if (sessionId !== activeIdValue) void vault.setActiveSession(sessionId);
+  async function switchTo(sessionId: string): Promise<void> {
+    if (sessionId === activeIdValue) return;
+    try {
+      await vault.setActiveSession(sessionId);
+    } catch {
+      // `vault.setActiveSession` restores the previous visible session on a
+      // failed switch; the tab bar follows the restored active-id store.
+    }
   }
 </script>
 
@@ -38,7 +44,7 @@
         <button
           type="button"
           class="tab-main"
-          onclick={() => switchTo(session.sessionId)}
+          onclick={() => void switchTo(session.sessionId)}
           aria-label={`切换到 ${session.fileName}`}
         >
           <span class="tab-name">{session.fileName}</span>

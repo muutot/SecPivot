@@ -721,10 +721,11 @@ impl VaultSession {
         uuid: &str,
         name: &str,
         token: &str,
+        session_id: &str,
         store: &super::AttachmentTempStore,
     ) -> Result<VaultState, String> {
         const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
-        let path = store.path(token)?;
+        let path = store.path_for_session(token, session_id)?;
         let meta = std::fs::metadata(&path).map_err(|e| format!("读取临时附件失败: {e}"))?;
         if meta.len() > MAX_IMPORT_BYTES {
             return Err(format!("附件过大（{} 字节，上限 64 MiB）", meta.len()));

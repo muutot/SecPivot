@@ -1,14 +1,14 @@
 //! Multi-database session registry (tabs backend).
 //!
-//! The app keeps exactly one `VaultSession` in managed state — the *active*
-//! session that every mutation command addresses. Opening another vault parks
-//! the previous active session here under a generated `sessionId`, so several
-//! databases stay decrypted in memory at once. Lifecycle commands
-//! (`open`/`create`/`close`/`get_vault_state`) resolve a session by id
-//! (default: active); closing the active session promotes the most recently
-//! parked one. Immediate mutation commands target the active session, while
-//! long prepare/persist/complete commands retain the originating session id
-//! so a tab switch cannot redirect their completion phase.
+//! The app keeps exactly one `VaultSession` in managed state — the *backend
+//! active* session used by browser integration and the global hotkey. Opening
+//! another vault parks the previous active session here under a generated
+//! `sessionId`, so several databases stay decrypted in memory at once. Every
+//! renderer-originated vault command resolves its captured `sessionId`
+//! (omission remains a compatibility fallback to backend active); closing the
+//! active session promotes the most recently parked one. Long
+//! prepare/persist/complete commands retain the originating id through every
+//! phase so a tab switch cannot redirect completion.
 
 use super::{SessionInfo, VaultOpenResult, VaultSession, VaultState};
 use std::collections::HashMap;
@@ -42,6 +42,16 @@ pub struct VaultSessions {
 }
 
 impl VaultSessions {
+    /// Id of the backend-active session. Browser integration, RPC and the
+    /// global hotkey intentionally use only this session; renderer commands
+    /// should instead pass their captured tab id to `with_session_mut`.
+    pub(crate) fn active_id(&self) -> Option<String> {
+        self.inner
+            .lock()
+            .ok()
+            .and_then(|inner| inner.active_id.clone())
+    }
+
     /// Run one operation against a stable session id. Long-running commands
     /// use this for both their prepare and completion phases so switching tabs
     /// while persistence is in flight cannot complete against a different
@@ -84,6 +94,23 @@ impl VaultSessions {
             operation(session)?
         };
         Ok((target, result))
+    }
+
+    /// Resolve an optional renderer id to a stable session id without running
+    /// an operation. Deferred capabilities use this to validate ownership
+    /// before acquiring the addressed session for their mutation.
+    pub(crate) fn resolve_id(&self, session_id: Option<&str>) -> Result<String, String> {
+        let inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        match session_id {
+            Some(id) if inner.active_id.as_deref() == Some(id) || inner.parked.contains_key(id) => {
+                Ok(id.to_owned())
+            }
+            Some(_) => Err("找不到数据库会话".to_owned()),
+            None => inner
+                .active_id
+                .clone()
+                .ok_or_else(|| "没有打开的数据库".to_owned()),
+        }
     }
 
     /// Adopt a freshly opened database as the active session. The previously
@@ -217,6 +244,12 @@ impl VaultSessions {
         session_id: &str,
     ) -> Result<VaultState, String> {
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        // Switching is idempotent. Frontend requests are serialized, but an
+        // already-completed topology change (open/close or a retried invoke)
+        // may make the requested id active before this call reaches us.
+        if inner.active_id.as_deref() == Some(session_id) {
+            return active.state()?.ok_or_else(|| "数据库会话未打开".to_owned());
+        }
         let target = inner
             .parked
             .get_mut(session_id)
@@ -456,7 +489,8 @@ mod tests {
             .switch_active(&mut active, &second.session_id)
             .is_ok());
 
-        // Unknown ids and the already-active id are rejected without mutation.
+        // Unknown ids are rejected without mutation; the already-active id is
+        // an idempotent success so retries cannot disturb the registry.
         assert!(registry.switch_active(&mut active, "s999").is_err());
         assert_eq!(
             registry
@@ -466,9 +500,13 @@ mod tests {
                 .file_name,
             "b.kdbx"
         );
-        assert!(registry
-            .switch_active(&mut active, &second.session_id)
-            .is_err());
+        assert_eq!(
+            registry
+                .switch_active(&mut active, &second.session_id)
+                .unwrap()
+                .file_name,
+            "b.kdbx"
+        );
         assert_eq!(
             registry
                 .state(&mut active, None)
@@ -610,6 +648,71 @@ mod tests {
             !saved.dirty,
             "the originating parked vault must be marked saved"
         );
+    }
+
+    #[test]
+    fn addressed_mutation_isolates_identical_vault_copies() {
+        let dir = TempDir::new().unwrap();
+        let source = dir.path().join("source.kdbx");
+        let copy = dir.path().join("copy.kdbx");
+
+        // Create one database with an entry, save it, then duplicate the file.
+        // Both sessions therefore contain the exact same entry/group UUIDs —
+        // the case where an incorrectly routed command can silently succeed.
+        let mut seed = VaultSession::default();
+        seed.create(&source, "master", "Aes", "Aes256", "None", None)
+            .unwrap();
+        let seeded = seed
+            .add_entry(&EntryInput {
+                group_uuid: crate::vault::ROOT_GROUP_UUID.to_owned(),
+                title: "same-entry".into(),
+                username: "u".into(),
+                password: "p".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: Vec::new(),
+                attachments: Vec::new(),
+            })
+            .unwrap();
+        let uuid = seeded.root.entries[0].uuid.clone();
+        seed.save().unwrap();
+        std::fs::copy(&source, &copy).unwrap();
+        seed.close();
+
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, |fresh| fresh.open(&source, "master", None))
+            .unwrap();
+        let second = registry
+            .open(&mut active, |fresh| fresh.open(&copy, "master", None))
+            .unwrap();
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(second.session_id.as_str())
+        );
+
+        registry
+            .with_session_mut(&mut active, Some(&first.session_id), |target| {
+                target.toggle_favorite_delta(&uuid).map(|_| ())
+            })
+            .unwrap();
+
+        let first_state = registry
+            .state(&mut active, Some(&first.session_id))
+            .unwrap()
+            .unwrap();
+        let second_state = registry
+            .state(&mut active, Some(&second.session_id))
+            .unwrap()
+            .unwrap();
+        assert!(first_state.root.entries[0].favorite);
+        assert!(!second_state.root.entries[0].favorite);
     }
 
     #[test]

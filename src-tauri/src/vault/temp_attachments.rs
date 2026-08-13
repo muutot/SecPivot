@@ -9,16 +9,27 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+#[derive(Clone)]
+struct TempAttachment {
+    path: PathBuf,
+    session_id: String,
+}
+
 #[derive(Default)]
 pub struct AttachmentTempStore {
-    inner: Mutex<HashMap<String, PathBuf>>,
+    inner: Mutex<HashMap<String, TempAttachment>>,
 }
 
 impl AttachmentTempStore {
     /// Write `data` into a fresh random directory and register it. Returns
     /// `(token, absolute file path)`. The caller opens the file with the
     /// system viewer and eventually calls [`Self::discard`].
-    pub fn create(&self, name: &str, data: &[u8]) -> Result<(String, PathBuf), String> {
+    pub fn create(
+        &self,
+        session_id: &str,
+        name: &str,
+        data: &[u8],
+    ) -> Result<(String, PathBuf), String> {
         let base = std::env::temp_dir().join("secpivot-attachments");
         let token = uuid::Uuid::new_v4().to_string();
         let dir = base.join(&token);
@@ -29,7 +40,13 @@ impl AttachmentTempStore {
             .inner
             .lock()
             .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
-        inner.insert(token.clone(), path.clone());
+        inner.insert(
+            token.clone(),
+            TempAttachment {
+                path: path.clone(),
+                session_id: session_id.to_owned(),
+            },
+        );
         Ok((token, path))
     }
 
@@ -40,10 +57,10 @@ impl AttachmentTempStore {
             .inner
             .lock()
             .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
-        let Some(dir) = inner.remove(token) else {
+        let Some(temp) = inner.remove(token) else {
             return Ok(());
         };
-        if let Some(parent) = dir.parent() {
+        if let Some(parent) = temp.path.parent() {
             let _ = std::fs::remove_dir_all(parent);
         }
         Ok(())
@@ -52,22 +69,25 @@ impl AttachmentTempStore {
     /// Resolve a token to its registered temp file path (the caller reads the
     /// file). Unknown tokens are rejected so only files we extracted can be
     /// imported back.
-    pub fn path(&self, token: &str) -> Result<PathBuf, String> {
+    pub fn path_for_session(&self, token: &str, session_id: &str) -> Result<PathBuf, String> {
         let inner = self
             .inner
             .lock()
             .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
-        inner
+        let temp = inner
             .get(token)
-            .cloned()
-            .ok_or_else(|| "临时附件已清理或不存在".to_owned())
+            .ok_or_else(|| "临时附件已清理或不存在".to_owned())?;
+        if temp.session_id != session_id {
+            return Err("临时附件不属于当前数据库会话".to_owned());
+        }
+        Ok(temp.path.clone())
     }
 
     /// Discard every registered temp file (lock/close path).
     pub fn discard_all(&self) {
         if let Ok(mut inner) = self.inner.lock() {
-            for (_, dir) in inner.drain() {
-                if let Some(parent) = dir.parent() {
+            for (_, temp) in inner.drain() {
+                if let Some(parent) = temp.path.parent() {
                     let _ = std::fs::remove_dir_all(parent);
                 }
             }
@@ -104,7 +124,7 @@ mod tests {
     #[test]
     fn create_writes_registered_file_and_discard_removes_it() {
         let store = AttachmentTempStore::default();
-        let (token, path) = store.create("note.txt", b"hello").unwrap();
+        let (token, path) = store.create("s1", "note.txt", b"hello").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"hello");
         assert!(path.starts_with(std::env::temp_dir().join("secpivot-attachments")));
 
@@ -117,8 +137,8 @@ mod tests {
     #[test]
     fn discard_all_clears_every_registered_file() {
         let store = AttachmentTempStore::default();
-        let (_, path_a) = store.create("a.txt", b"a").unwrap();
-        let (_, path_b) = store.create("b.txt", b"b").unwrap();
+        let (_, path_a) = store.create("s1", "a.txt", b"a").unwrap();
+        let (_, path_b) = store.create("s2", "b.txt", b"b").unwrap();
         store.discard_all();
         assert!(!path_a.exists());
         assert!(!path_b.exists());
@@ -127,7 +147,7 @@ mod tests {
     #[test]
     fn sanitize_keeps_safe_names_and_blocks_path_escape() {
         let store = AttachmentTempStore::default();
-        let (_, path) = store.create("..\\..\\evil.txt", b"x").unwrap();
+        let (_, path) = store.create("s1", "..\\..\\evil.txt", b"x").unwrap();
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
         // Only the last segment survives; it stays inside the random token dir.
         assert_eq!(file_name, "evil.txt");
@@ -135,5 +155,21 @@ mod tests {
             .parent()
             .unwrap()
             .starts_with(std::env::temp_dir().join("secpivot-attachments")));
+    }
+
+    #[test]
+    fn token_is_bound_to_its_originating_session() {
+        let store = AttachmentTempStore::default();
+        let (token, path) = store.create("s1", "note.txt", b"secret").unwrap();
+        assert_eq!(store.path_for_session(&token, "s1").unwrap(), path);
+        assert_eq!(
+            store.path_for_session(&token, "s2").unwrap_err(),
+            "临时附件不属于当前数据库会话"
+        );
+        assert!(
+            path.exists(),
+            "a failed cross-session lookup must not discard the token"
+        );
+        store.discard(&token).unwrap();
     }
 }

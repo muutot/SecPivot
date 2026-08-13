@@ -250,13 +250,15 @@ pub struct AttachmentPreview {
 }
 
 /// Reference to an attachment extracted into the controlled temp directory
-/// for external viewing; `token` removes the file on discard/close.
+/// for external viewing; `session_id` binds a later import to the same vault
+/// even if the user switches tabs, and `token` removes the file on discard.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TempAttachmentRef {
     pub token: String,
     pub path: String,
     pub name: String,
+    pub session_id: String,
 }
 
 /// Lightweight mutation result for small state changes that do not need a
@@ -282,6 +284,7 @@ pub enum MutationDelta {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutotypeCandidate {
+    pub session_id: String,
     pub uuid: String,
     pub title: String,
     pub username: String,
@@ -629,6 +632,8 @@ pub struct FaviconReport {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FaviconProgress {
+    /// Stable id of the vault whose download emitted this event.
+    pub session_id: String,
     /// Hosts finished so far.
     pub done: usize,
     /// Distinct hosts to process.

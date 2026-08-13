@@ -15,12 +15,17 @@
   let loading = $state(true);
   let error = $state("");
   let busyAction = $state(false);
+  const sessionId = vault.getActiveSessionId();
 
   async function refresh(): Promise<void> {
     try {
-      entries = await vault.expiredEntries();
+      if (!sessionId) return;
+      const value = await vault.callInSession(sessionId, () => vault.expiredEntries());
+      if (vault.getActiveSessionId() !== sessionId) return;
+      entries = value;
       loading = false;
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       error = String(e);
       loading = false;
     }
@@ -39,7 +44,11 @@
     busyAction = true;
     error = "";
     try {
-      await vault.updateEntries(uuids, { expires: extendIso() });
+      if (!sessionId) return;
+      await vault.callInSession(sessionId, () =>
+        vault.updateEntries(uuids, { expires: extendIso() }),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
       await refresh();
     } catch (e) {
       error = String(e);
@@ -54,7 +63,9 @@
     busyAction = true;
     error = "";
     try {
-      await vault.deleteEntries(uuids);
+      if (!sessionId) return;
+      await vault.callInSession(sessionId, () => vault.deleteEntries(uuids));
+      if (vault.getActiveSessionId() !== sessionId) return;
       await refresh();
     } catch (e) {
       error = String(e);

@@ -22,15 +22,19 @@
   let confirmExternal = $state(false);
   let opening = $state(false);
   let externalError = $state("");
+  const sessionId = vault.getActiveSessionId();
 
   $effect(() => {
+    if (!sessionId) return;
     void vault
-      .previewAttachment(entryUuid, attachment.name)
+      .callInSession(sessionId, () => vault.previewAttachment(entryUuid, attachment.name))
       .then((value) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         preview = value;
         loading = false;
       })
       .catch((e) => {
+        if (vault.getActiveSessionId() !== sessionId) return;
         error = String(e);
         loading = false;
       });
@@ -38,8 +42,11 @@
 
   async function saveToDisk(): Promise<void> {
     const dest = await save({ defaultPath: attachment.name });
-    if (!dest) return;
-    await vault.saveAttachment(entryUuid, attachment.name, dest);
+    if (!dest || !sessionId) return;
+    await vault.callInSession(sessionId, () =>
+      vault.saveAttachment(entryUuid, attachment.name, dest),
+    );
+    if (vault.getActiveSessionId() !== sessionId) return;
     await onsaved?.(attachment.name);
   }
 
@@ -54,8 +61,16 @@
     opening = true;
     externalError = "";
     try {
-      tempRef = await vault.openAttachmentTemp(entryUuid, attachment.name);
-      await openPath(tempRef.path);
+      if (!sessionId) return;
+      const ref = await vault.callInSession(sessionId, () =>
+        vault.openAttachmentTemp(entryUuid, attachment.name),
+      );
+      if (vault.getActiveSessionId() !== sessionId) {
+        await vault.cleanupAttachmentTemp(ref.token);
+        return;
+      }
+      tempRef = ref;
+      await openPath(ref.path);
     } catch (e) {
       externalError = String(e);
     } finally {
@@ -74,7 +89,11 @@
     if (!tempRef) return;
     const token = tempRef.token;
     tempRef = null;
-    await vault.importAttachmentFromTemp(entryUuid, attachment.name, token);
+    if (!sessionId) return;
+    await vault.callInSession(sessionId, () =>
+      vault.importAttachmentFromTemp(entryUuid, attachment.name, token),
+    );
+    if (vault.getActiveSessionId() !== sessionId) return;
     await onsaved?.(attachment.name);
   }
 

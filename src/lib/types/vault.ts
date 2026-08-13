@@ -75,11 +75,13 @@ export interface AttachmentPreview {
 }
 
 /** Reference to an attachment extracted into the controlled temp directory
- *  for external viewing; `token` removes the file on discard/close. */
+ *  for external viewing; `sessionId` binds import-back to the originating
+ *  vault, and `token` removes the file on discard/close. */
 export interface TempAttachmentRef {
   token: string;
   path: string;
   name: string;
+  sessionId: string;
 }
 
 /** One Auto-Type window association (`*` wildcards allowed). */
@@ -159,8 +161,8 @@ export interface VaultState {
 
 /** Result of an open/create command: the registry id of the newly active
  *  session plus its authoritative state. The renderer keeps `sessionId` so
- *  later commands can address this session (tabs); commands that omit it
- *  default to the active session. */
+ *  later commands can address this session (tabs). Renderer commands capture
+ *  and pass it; omission is only a compatibility fallback to backend active. */
 export interface VaultOpenResult {
   sessionId: string;
   state: VaultState;
@@ -183,6 +185,7 @@ export type MutationDelta =
 
 /** One entry offered by the global-hotkey auto-type picker. */
 export interface AutotypeCandidate {
+  sessionId: string;
   uuid: string;
   title: string;
   username: string;
@@ -271,6 +274,8 @@ export interface FaviconReport {
 
 /** `favicon-progress` event payload emitted during a favicon download run. */
 export interface FaviconProgress {
+  /** Stable id of the vault whose download emitted this event. */
+  sessionId: string;
   done: number;
   total: number;
 }

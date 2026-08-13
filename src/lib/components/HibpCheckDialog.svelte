@@ -17,15 +17,21 @@
   let running = $state(false);
   let findings = $state<BreachFinding[]>([]);
   let error = $state("");
+  const sessionId = vault.getActiveSessionId();
 
   async function start(): Promise<void> {
-    if (running) return;
+    if (running || !sessionId) return;
     running = true;
     error = "";
     started = true;
     try {
-      findings = await vault.checkHibp(uuids.length > 0 ? uuids : undefined);
+      const value = await vault.callInSession(sessionId, () =>
+        vault.checkHibp(uuids.length > 0 ? uuids : undefined),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
+      findings = value;
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       error = String(e);
     } finally {
       running = false;

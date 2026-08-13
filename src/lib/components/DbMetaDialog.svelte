@@ -19,13 +19,15 @@
   let dbDescription = $state(description);
   let saving = $state(false);
   let error = $state("");
+  const sessionId = vault.getActiveSessionId();
 
   async function save(): Promise<void> {
-    if (saving) return;
+    if (saving || !sessionId) return;
     saving = true;
     error = "";
     try {
-      await vault.updateDbMeta(dbName, dbDescription);
+      await vault.callInSession(sessionId, () => vault.updateDbMeta(dbName, dbDescription));
+      if (vault.getActiveSessionId() !== sessionId) return;
       onclose();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);

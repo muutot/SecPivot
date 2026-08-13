@@ -3873,9 +3873,9 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
     let uuid = state.root.entries[0].uuid.clone();
 
     // The external viewer "edited" the registered temp file.
-    let (token, _) = store.create("note.txt", b"edited content").unwrap();
+    let (token, _) = store.create("s1", "note.txt", b"edited content").unwrap();
     let updated = session
-        .import_attachment_from_temp(&uuid, "note.txt", &token, &store)
+        .import_attachment_from_temp(&uuid, "note.txt", &token, "s1", &store)
         .unwrap();
     let entry = updated
         .root
@@ -3898,8 +3898,22 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
 
     // Unknown tokens are rejected; arbitrary paths are never accepted.
     assert!(session
-        .import_attachment_from_temp(&uuid, "note.txt", "nope", &store)
+        .import_attachment_from_temp(&uuid, "note.txt", "nope", "s1", &store)
         .is_err());
+
+    // A valid token cannot be replayed into another open vault session even
+    // when that vault happens to contain the same entry UUID.
+    let (foreign_token, _) = store.create("s2", "note.txt", b"foreign").unwrap();
+    assert_eq!(
+        session
+            .import_attachment_from_temp(&uuid, "note.txt", &foreign_token, "s1", &store)
+            .unwrap_err(),
+        "临时附件不属于当前数据库会话"
+    );
+    assert_eq!(
+        session.attachment_data(&uuid, "note.txt").unwrap(),
+        b"edited content"
+    );
 }
 
 #[test]
@@ -5205,6 +5219,7 @@ fn remote_conflict_resolution_force_save_and_refresh() {
             DEFAULT_BACKUP_TEMPLATE,
         )
         .unwrap();
+    let revision_before_local_edit = session.state().unwrap().unwrap().revision;
     session
         .add_entry(&EntryInput {
             group_uuid: ROOT_GROUP_UUID.to_owned(),
@@ -5240,6 +5255,7 @@ fn remote_conflict_resolution_force_save_and_refresh() {
     // advances the base hash so the next save succeeds.
     storage.put("vaults/seed.kdbx", &original).unwrap();
     let refreshed = session.refresh_remote().unwrap();
+    assert!(refreshed.revision > revision_before_local_edit);
     assert!(!refreshed.dirty);
     assert!(
         !refreshed.root.entries.iter().any(|e| e.title == "Local"),

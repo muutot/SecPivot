@@ -1,0 +1,105 @@
+/**
+ * Store a vault snapshot only when it is at least as new as the cached
+ * revision. Late IPC responses from the same session must never roll the
+ * renderer back after a newer mutation has already completed.
+ */
+export function commitNewestSessionState<T extends { revision: number }>(
+  states: Map<string, T>,
+  sessionId: string,
+  incoming: T,
+): T {
+  const current = states.get(sessionId);
+  if (current && incoming.revision < current.revision) return current;
+  states.set(sessionId, incoming);
+  return incoming;
+}
+
+/**
+ * Serialize complete backend-active tab switch attempts in request order.
+ * Enqueue is synchronous, so snapshot validation for an uncached tab and its
+ * subsequent backend swap cannot be overtaken by a later click.
+ */
+export class SessionSwitchQueue<T> {
+  #tail: Promise<void> = Promise.resolve();
+
+  enqueue(operation: () => Promise<T>): Promise<T> {
+    let result: T;
+    const run = async (): Promise<void> => {
+      result = await operation();
+    };
+    const queued = this.#tail.then(run, run);
+    this.#tail = queued.catch(() => undefined);
+    return queued.then(() => result!);
+  }
+
+  async idle(): Promise<void> {
+    await this.#tail;
+  }
+}
+
+/**
+ * Run one complete tab-switch attempt. An uncached target is validated before
+ * the backend-active swap, and the renderer publishes the tab only after that
+ * swap succeeds. Keeping this orchestration independent from Tauri makes the
+ * failure and rapid-click ordering contract directly testable.
+ */
+export async function switchSession<T>(options: {
+  queue: SessionSwitchQueue<T>;
+  cached: T | undefined;
+  load: () => Promise<T | null>;
+  activate: () => Promise<T>;
+  commit: (incoming: T) => T;
+  publish: (committed: T) => void;
+}): Promise<T> {
+  return options.queue.enqueue(async () => {
+    let resolved = options.cached;
+    if (!resolved) {
+      const snapshot = await options.load();
+      if (!snapshot) throw new Error("数据库会话未打开");
+      resolved = options.commit(snapshot);
+    }
+    resolved = options.commit(await options.activate());
+    options.publish(resolved);
+    return resolved;
+  });
+}
+
+/**
+ * Epoch-aware cache used when a session can be wholesale-replaced (for
+ * example by downloading a remote database). Revision ordering handles
+ * ordinary mutations; epochs reject every response that started before the
+ * replacement, even if that old branch had a larger numeric revision.
+ */
+export class SessionStateCache<T extends { revision: number }> {
+  #states = new Map<string, T>();
+  #epochs = new Map<string, number>();
+
+  get(sessionId: string): T | undefined {
+    return this.#states.get(sessionId);
+  }
+
+  capture(sessionId: string): number {
+    return this.#epochs.get(sessionId) ?? 0;
+  }
+
+  commit(sessionId: string, epoch: number, incoming: T): T {
+    if (this.capture(sessionId) !== epoch) return this.#states.get(sessionId) ?? incoming;
+    return commitNewestSessionState(this.#states, sessionId, incoming);
+  }
+
+  replace(sessionId: string, incoming: T): T {
+    this.#epochs.set(sessionId, this.capture(sessionId) + 1);
+    this.#states.set(sessionId, incoming);
+    return incoming;
+  }
+
+  delete(sessionId: string): void {
+    this.#states.delete(sessionId);
+    this.#epochs.delete(sessionId);
+  }
+
+  clear(): void {
+    this.#states.clear();
+    this.#epochs.clear();
+  }
+}

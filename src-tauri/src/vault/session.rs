@@ -367,6 +367,10 @@ impl VaultSession {
         let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
         self.db = Some(db);
         self.dirty = false;
+        // Replacing the in-memory database is a state mutation just like an
+        // edit. Advance the revision so a late pre-refresh snapshot cannot
+        // overwrite the downloaded remote state in the renderer cache.
+        self.revision += 1;
         self.modified_at = now_iso();
         self.cached_snapshot = None;
         if let Some(remote) = self.remote.as_mut() {

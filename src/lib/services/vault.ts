@@ -43,12 +43,19 @@ import {
   findGroup,
   setGroupsExpandedInTree,
 } from "$lib/utils/tree";
+import {
+  commitNewestSessionState,
+  SessionSwitchQueue,
+  switchSession,
+} from "$lib/utils/session-state";
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
   tabs: typeof tabs;
   activeId: typeof activeId;
   get: () => VaultState | null;
+  getActiveSessionId: () => string | null;
+  callInSession: <T>(sessionId: string, operation: () => Promise<T>) => Promise<T>;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
   updateDatabaseSettings: (patch: DatabaseSettingsPatch) => Promise<VaultState>;
   open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
@@ -153,23 +160,81 @@ let initialized = false;
 /** Registry id of the active backend session (multi-database tabs). `null`
  *  in the browser demo, which has no backend sessions. */
 let activeSessionId: string | null = null;
-/** Tokens of attachments extracted to the temp dir; discarded on lock/close. */
-let tempAttachmentTokens = new Set<string>();
+/** Authoritative state cached per open backend session. Every renderer invoke
+ * captures one id and updates only that session's cache; a late response can
+ * never overwrite the currently visible tab. */
+const sessionStates = new Map<string, VaultState>();
+/** Epoch changes when a session is intentionally replaced from an external
+ * source (remote download). A pre-replacement response must be rejected even
+ * if its edit revision happens to be numerically higher. */
+const sessionEpochs = new Map<string, number>();
+/** Tokens of attachments extracted to the temp dir, bound to the session they
+ * originated from; discarded on lock/close. */
+let tempAttachmentTokens = new Map<string, string>();
 
-/** Cache of database custom icons, kept across mutation snapshots that omit
- *  the image payload; replaced whenever an authoritative snapshot arrives. */
-let iconCache: Record<string, string> = {};
+/** Database custom icons cached per session, kept across mutation snapshots
+ * that omit the image payload. */
+const iconCaches = new Map<string, Record<string, string>>();
+/** Backend active switches must complete in click order. Renderer commands do
+ * not wait for this queue because they address their captured session id. */
+const switchQueue = new SessionSwitchQueue<VaultState>();
+/** Temporary override used only while one async service method executes its
+ * synchronous pre-await capture. Composite actions must wrap each nested
+ * service call separately; a global async context would be unsafe when two
+ * sessions run concurrently. */
+let invocationSessionId: string | null = null;
 
-function applyBackendState(result: VaultState): VaultState {
-  if (result.customIcons !== undefined) iconCache = result.customIcons;
-  result.customIcons = { ...iconCache };
+function applyBackendState(result: VaultState, sessionId?: string | null): VaultState {
+  if (!sessionId) return result;
+  if (result.customIcons !== undefined) iconCaches.set(sessionId, result.customIcons);
+  result.customIcons = { ...(iconCaches.get(sessionId) ?? {}) };
   return result;
+}
+
+function captureSessionId(): string {
+  const sessionId = invocationSessionId ?? activeSessionId;
+  if (!sessionId) throw new Error("数据库未打开");
+  return sessionId;
+}
+
+/** Cache one session result and publish it only if that tab is still visible. */
+function commitSessionState(sessionId: string, result: VaultState): VaultState {
+  const current = sessionStates.get(sessionId);
+  if (current && result.revision < current.revision) return current;
+  const normalized = applyBackendState(result, sessionId);
+  const committed = commitNewestSessionState(sessionStates, sessionId, normalized);
+  if (activeSessionId === sessionId) state.set(committed);
+  return committed;
+}
+
+function captureSessionEpoch(sessionId: string): number {
+  return sessionEpochs.get(sessionId) ?? 0;
+}
+
+function commitSessionStateAtEpoch(
+  sessionId: string,
+  epoch: number,
+  result: VaultState,
+): VaultState {
+  if (captureSessionEpoch(sessionId) !== epoch) {
+    return sessionStates.get(sessionId) ?? applyBackendState(result, sessionId);
+  }
+  return commitSessionState(sessionId, result);
+}
+
+function replaceSessionState(sessionId: string, result: VaultState): VaultState {
+  sessionEpochs.set(sessionId, captureSessionEpoch(sessionId) + 1);
+  const normalized = applyBackendState(result, sessionId);
+  sessionStates.set(sessionId, normalized);
+  if (activeSessionId === sessionId) state.set(normalized);
+  return normalized;
 }
 
 /** Apply a lightweight backend mutation delta to the current store state and
  *  return the merged `VaultState` (or null when no session is open). */
-function applyBackendDelta(delta: MutationDelta): VaultState | null {
-  const current = get(state);
+function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState | null {
+  const current =
+    sessionStates.get(sessionId) ?? (activeSessionId === sessionId ? get(state) : null);
   if (!current) return null;
   const next = deepClone(current);
   next.revision = delta.revision;
@@ -182,9 +247,7 @@ function applyBackendDelta(delta: MutationDelta): VaultState | null {
       if (group) group.isExpanded = expanded;
     }
   }
-  const result = applyBackendState(next);
-  state.set(result);
-  return result;
+  return commitSessionState(sessionId, next);
 }
 
 function deepClone<T>(value: T): T {
@@ -323,12 +386,48 @@ async function backendInvoke<T>(command: string, args: Record<string, unknown> =
   return invoke<T>(command, args);
 }
 
-async function refreshInternal(): Promise<VaultState | null> {
+async function invokeSession<T>(
+  command: string,
+  args: Record<string, unknown> = {},
+  sessionId = captureSessionId(),
+): Promise<T> {
+  return backendInvoke<T>(command, { ...args, sessionId });
+}
+
+async function invokeSessionState(
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<VaultState> {
+  const sessionId = captureSessionId();
+  const epoch = captureSessionEpoch(sessionId);
+  const result = await invokeSession<VaultState>(command, args, sessionId);
+  return commitSessionStateAtEpoch(sessionId, epoch, result);
+}
+
+async function invokeSessionDelta(
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<VaultState> {
+  const sessionId = captureSessionId();
+  const epoch = captureSessionEpoch(sessionId);
+  const delta = await invokeSession<MutationDelta>(command, args, sessionId);
+  if (captureSessionEpoch(sessionId) !== epoch) {
+    const current = sessionStates.get(sessionId);
+    if (!current) throw new Error("数据库未打开");
+    return current;
+  }
+  const result = applyBackendDelta(sessionId, delta);
+  if (!result) throw new Error("数据库未打开");
+  return result;
+}
+
+async function refreshInternal(sessionId = activeSessionId): Promise<VaultState | null> {
   if (isTauriRuntime()) {
+    const epoch = sessionId ? captureSessionEpoch(sessionId) : 0;
     const value = await backendInvoke<VaultState | null>("get_vault_state", {
-      sessionId: activeSessionId,
+      sessionId,
     });
-    if (value) state.set(applyBackendState(value));
+    if (value && sessionId) commitSessionStateAtEpoch(sessionId, epoch, value);
     return value;
   }
   const value = browserState ? deepClone(browserState) : null;
@@ -340,7 +439,7 @@ async function refreshInternal(): Promise<VaultState | null> {
 async function refreshTabs(): Promise<void> {
   if (isTauriRuntime()) {
     const list = await backendInvoke<SessionInfo[]>("list_sessions");
-    activeSessionId = list[0]?.sessionId ?? null;
+    if (!activeSessionId) activeSessionId = list[0]?.sessionId ?? null;
     tabs.set(list);
     activeId.set(activeSessionId);
     return;
@@ -363,8 +462,15 @@ async function refreshTabs(): Promise<void> {
 
 /** Best-effort cleanup of every extracted temp attachment (lock/close path). */
 async function discardTempAttachments(): Promise<void> {
-  const tokens = [...tempAttachmentTokens];
-  tempAttachmentTokens.clear();
+  await discardTempAttachmentsForSession();
+}
+
+/** Discard only one tab's extracted attachments when closing that tab. */
+async function discardTempAttachmentsForSession(sessionId?: string): Promise<void> {
+  const tokens = [...tempAttachmentTokens.entries()]
+    .filter(([, owner]) => sessionId === undefined || owner === sessionId)
+    .map(([token]) => token);
+  for (const token of tokens) tempAttachmentTokens.delete(token);
   if (!isTauriRuntime()) return;
   await Promise.all(
     tokens.map((token) =>
@@ -388,16 +494,37 @@ export const vault: VaultStore = {
     return get(state);
   },
 
+  getActiveSessionId(): string | null {
+    return activeSessionId;
+  },
+
+  callInSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = invocationSessionId;
+    invocationSessionId = sessionId;
+    try {
+      // Async functions execute synchronously until their first await; every
+      // session-scoped vault method captures the override in that segment.
+      return operation();
+    } finally {
+      invocationSessionId = previous;
+    }
+  },
+
   async getDatabaseSettings(): Promise<DatabaseSettings | null> {
     if (!isTauriRuntime()) return null;
-    return backendInvoke<DatabaseSettings | null>("get_database_settings");
+    const sessionId = captureSessionId();
+    return backendInvoke<DatabaseSettings | null>("get_database_settings", { sessionId });
   },
 
   async updateDatabaseSettings(patch: DatabaseSettingsPatch): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_database_settings", { patch });
-      state.set(applyBackendState(result));
-      return result;
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
+      const result = await backendInvoke<VaultState>("update_database_settings", {
+        sessionId,
+        patch,
+      });
+      return commitSessionStateAtEpoch(sessionId, epoch, result);
     }
     throw new Error("浏览器预览不支持数据库设置修改");
   },
@@ -418,7 +545,8 @@ export const vault: VaultStore = {
         keyfile: keyfile || null,
       });
       activeSessionId = result.sessionId;
-      state.set(applyBackendState(result.state));
+      sessionEpochs.set(result.sessionId, 0);
+      commitSessionState(result.sessionId, result.state);
       remembered.set({ path: result.state.path, fileName: result.state.fileName });
       rememberRecent(result.state.path);
       await refreshTabs();
@@ -442,7 +570,8 @@ export const vault: VaultStore = {
         keyfile: request.keyfile || null,
       });
       activeSessionId = result.sessionId;
-      state.set(applyBackendState(result.state));
+      sessionEpochs.set(result.sessionId, 0);
+      commitSessionState(result.sessionId, result.state);
       remembered.set({ path: result.state.path, fileName: result.state.fileName });
       rememberRecent(result.state.path);
       await refreshTabs();
@@ -465,26 +594,39 @@ export const vault: VaultStore = {
   async close(): Promise<void> {
     if (isTauriRuntime()) {
       const path = get(state)?.path;
-      await backendInvoke("close_vault", { sessionId: activeSessionId });
-      activeSessionId = null;
+      const closingId = captureSessionId();
+      // Topology changes run after all earlier tab switches, so closing the
+      // displayed tab cannot be followed by a stale switch request.
+      await switchQueue.idle();
+      await backendInvoke("close_vault", { sessionId: closingId });
+      sessionStates.delete(closingId);
+      iconCaches.delete(closingId);
+      sessionEpochs.delete(closingId);
       if (path && !get(appSettings).security.rememberPassword) {
         void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
       }
-      const remaining = await refreshInternal();
+      const list = await backendInvoke<SessionInfo[]>("list_sessions");
+      activeSessionId = list[0]?.sessionId ?? null;
+      tabs.set(list);
+      activeId.set(activeSessionId);
+      const remaining = activeSessionId ? await refreshInternal(activeSessionId) : null;
       if (!remaining) {
         state.set(null);
-        iconCache = {};
+        sessionStates.clear();
+        iconCaches.clear();
+        sessionEpochs.clear();
       } else if (remaining.path.startsWith("s3://")) {
         remembered.set(null);
       } else {
         remembered.set({ path: remaining.path, fileName: remaining.fileName });
       }
-      await refreshTabs();
-      await discardTempAttachments();
+      await discardTempAttachmentsForSession(closingId);
       return;
     }
     browserState = null;
-    iconCache = {};
+    sessionStates.clear();
+    iconCaches.clear();
+    sessionEpochs.clear();
     state.set(null);
     tabs.set([]);
   },
@@ -496,7 +638,9 @@ export const vault: VaultStore = {
     }
     await discardTempAttachments();
     browserState = null;
-    iconCache = {};
+    sessionStates.clear();
+    iconCaches.clear();
+    sessionEpochs.clear();
     state.set(null);
     tabs.set([]);
     activeId.set(null);
@@ -521,7 +665,8 @@ export const vault: VaultStore = {
       mode,
     });
     activeSessionId = result.sessionId;
-    state.set(applyBackendState(result.state));
+    sessionEpochs.set(result.sessionId, 0);
+    commitSessionState(result.sessionId, result.state);
     // A remote session cannot be reopened from the lock screen; clear the
     // remembered local path so unlocking never silently targets the old vault.
     remembered.set(null);
@@ -544,7 +689,8 @@ export const vault: VaultStore = {
       mode,
     });
     activeSessionId = result.sessionId;
-    state.set(applyBackendState(result.state));
+    sessionEpochs.set(result.sessionId, 0);
+    commitSessionState(result.sessionId, result.state);
     // See `openRemote`: a remote session is never the lock-screen quick-reopen
     // target, so drop any stale remembered local path.
     remembered.set(null);
@@ -555,9 +701,10 @@ export const vault: VaultStore = {
 
   async save(force = false): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const sessionId = activeSessionId;
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault", { sessionId, force });
-      if (activeSessionId === sessionId) state.set(applyBackendState(result));
+      commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
       return result;
     }
@@ -572,8 +719,9 @@ export const vault: VaultStore = {
 
   async refreshRemote(): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
-    const result = await backendInvoke<VaultState>("refresh_remote_vault");
-    state.set(applyBackendState(result));
+    const sessionId = captureSessionId();
+    const result = await invokeSession<VaultState>("refresh_remote_vault", {}, sessionId);
+    replaceSessionState(sessionId, result);
     await refreshTabs();
     return result;
   },
@@ -582,8 +730,7 @@ export const vault: VaultStore = {
    *  UUID + last-modified, persisting the merged result back. Remote only. */
   async mergeRemote(): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程合并");
-    const result = await backendInvoke<VaultState>("merge_remote_vault");
-    state.set(applyBackendState(result));
+    const result = await invokeSessionState("merge_remote_vault");
     await refreshTabs();
     return result;
   },
@@ -591,9 +738,10 @@ export const vault: VaultStore = {
   /** Save As: persist to a new local path and switch the session target. */
   async saveAs(path: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const sessionId = activeSessionId;
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault_as", { sessionId, path });
-      if (activeSessionId === sessionId) state.set(applyBackendState(result));
+      commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
       return result;
     }
@@ -612,13 +760,14 @@ export const vault: VaultStore = {
 
   async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const sessionId = activeSessionId;
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("change_master_key", {
         sessionId,
         password,
         keyfile,
       });
-      if (activeSessionId === sessionId) state.set(applyBackendState(result));
+      commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();
       return result;
     }
@@ -627,9 +776,7 @@ export const vault: VaultStore = {
 
   async addEntry(input: EntryInput): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("add_entry", { input });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("add_entry", { input });
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, input.groupUuid);
@@ -657,9 +804,7 @@ export const vault: VaultStore = {
 
   async addEntries(inputs: EntryInput[]): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("import_entries", { inputs });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("import_entries", { inputs });
     }
     const result = applyEdit((draft) => {
       for (const input of inputs) {
@@ -689,9 +834,7 @@ export const vault: VaultStore = {
 
   async updateEntry(uuid: string, input: EntryInput): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_entry", { uuid, input });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("update_entry", { uuid, input });
     }
     const result = applyEdit((draft) => {
       const groups = collectAllGroups(draft.root);
@@ -721,14 +864,12 @@ export const vault: VaultStore = {
 
   async updateEntryFlags(uuid: string, flags: EntryFlags): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_entry_flags", {
+      return invokeSessionState("update_entry_flags", {
         uuid,
         overrideUrl: flags.overrideUrl ?? null,
         qualityCheck: flags.qualityCheck ?? null,
         foregroundColor: flags.foregroundColor ?? null,
       });
-      state.set(applyBackendState(result));
-      return result;
     }
     const result = applyEdit((draft) => {
       const groups = collectAllGroups(draft.root);
@@ -757,9 +898,7 @@ export const vault: VaultStore = {
 
   async updateEntries(uuids: string[], patch: EntryPatch): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_entries", { uuids, patch });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("update_entries", { uuids, patch });
     }
     const result = applyEdit((draft) => {
       const groups = collectAllGroups(draft.root);
@@ -792,7 +931,7 @@ export const vault: VaultStore = {
 
   async totpCode(uuid: string): Promise<TotpCode> {
     if (isTauriRuntime()) {
-      return backendInvoke<TotpCode>("totp_code", { uuid });
+      return invokeSession<TotpCode>("totp_code", { uuid });
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     const entry = findEntry(current.root, uuid);
@@ -803,7 +942,7 @@ export const vault: VaultStore = {
 
   async getEntryPassword(uuid: string): Promise<string> {
     if (isTauriRuntime()) {
-      return backendInvoke<string>("get_entry_password", { uuid });
+      return invokeSession<string>("get_entry_password", { uuid });
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.password ?? "";
@@ -811,7 +950,7 @@ export const vault: VaultStore = {
 
   async getEntryTotp(uuid: string): Promise<string | null> {
     if (isTauriRuntime()) {
-      return backendInvoke<string | null>("get_entry_totp", { uuid });
+      return invokeSession<string | null>("get_entry_totp", { uuid });
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.totp ?? null;
@@ -819,7 +958,7 @@ export const vault: VaultStore = {
 
   async getCustomFieldValue(uuid: string, name: string): Promise<string | null> {
     if (isTauriRuntime()) {
-      return backendInvoke<string | null>("get_custom_field_value", { uuid, name });
+      return invokeSession<string | null>("get_custom_field_value", { uuid, name });
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.customFields?.find((f) => f.name === name)?.value ?? null;
@@ -827,7 +966,7 @@ export const vault: VaultStore = {
 
   async securityReport(): Promise<SecurityReport> {
     if (isTauriRuntime()) {
-      return backendInvoke<SecurityReport>("security_report");
+      return invokeSession<SecurityReport>("security_report");
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return computeSecurityReport(current.root);
@@ -835,46 +974,46 @@ export const vault: VaultStore = {
 
   async similarPasswords(): Promise<SimilarPasswordGroup[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持相似密码检查");
-    return backendInvoke<SimilarPasswordGroup[]>("similar_passwords");
+    return invokeSession<SimilarPasswordGroup[]>("similar_passwords");
   },
 
   async clearAllHistory(): Promise<number> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持历史清理");
-    const result = await backendInvoke<HistoryCleanResult>("clear_all_history");
-    state.set(applyBackendState(result.state));
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<HistoryCleanResult>("clear_all_history", {}, sessionId);
+    commitSessionStateAtEpoch(sessionId, epoch, result.state);
     return result.cleared;
   },
 
   async expiredEntries(): Promise<ExpiredEntry[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持过期维护");
-    return backendInvoke<ExpiredEntry[]>("expired_entries");
+    return invokeSession<ExpiredEntry[]>("expired_entries");
   },
 
   async checkHibp(uuids?: string[]): Promise<BreachFinding[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持 HIBP 检查");
-    return backendInvoke<BreachFinding[]>("check_hibp", {
+    return invokeSession<BreachFinding[]>("check_hibp", {
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
   },
 
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
-    const sessionId = activeSessionId;
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
     const report = await backendInvoke<FaviconReport>("download_favicons", {
       sessionId,
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
-    if (activeSessionId === sessionId) await refreshInternal();
+    if (captureSessionEpoch(sessionId) === epoch) await refreshInternal(sessionId);
     await refreshTabs();
     return report;
   },
 
   async toggleFavorite(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const delta = await backendInvoke<MutationDelta>("toggle_favorite", { uuid });
-      const result = applyBackendDelta(delta);
-      if (!result) throw new Error("数据库未打开");
-      return result;
+      return invokeSessionDelta("toggle_favorite", { uuid });
     }
     const result = applyEdit((draft) => {
       const entry = findEntry(draft.root, uuid);
@@ -887,22 +1026,22 @@ export const vault: VaultStore = {
 
   async autoType(uuid: string, sequence: string): Promise<void> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持自动填充");
-    await backendInvoke<void>("auto_type", { uuid, sequence });
+    await invokeSession<void>("auto_type", { uuid, sequence });
   },
 
   async saveAttachment(uuid: string, name: string, dest: string): Promise<void> {
-    await backendInvoke<void>("save_attachment", { uuid, name, dest });
+    await invokeSession<void>("save_attachment", { uuid, name, dest });
   },
 
   async previewAttachment(uuid: string, name: string): Promise<AttachmentPreview> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件预览");
-    return backendInvoke<AttachmentPreview>("preview_attachment", { uuid, name });
+    return invokeSession<AttachmentPreview>("preview_attachment", { uuid, name });
   },
 
   async openAttachmentTemp(uuid: string, name: string): Promise<TempAttachmentRef> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持外部打开附件");
-    const ref = await backendInvoke<TempAttachmentRef>("open_attachment_temp", { uuid, name });
-    tempAttachmentTokens.add(ref.token);
+    const ref = await invokeSession<TempAttachmentRef>("open_attachment_temp", { uuid, name });
+    tempAttachmentTokens.set(ref.token, ref.sessionId);
     return ref;
   },
 
@@ -915,21 +1054,25 @@ export const vault: VaultStore = {
 
   async importAttachmentFromTemp(uuid: string, name: string, token: string): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件导入");
-    const result = await backendInvoke<VaultState>("import_attachment_from_temp", {
-      uuid,
-      name,
-      token,
-    });
+    const sessionId = tempAttachmentTokens.get(token);
+    if (!sessionId) throw new Error("临时附件已清理或不存在");
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<VaultState>(
+      "import_attachment_from_temp",
+      {
+        uuid,
+        name,
+        token,
+      },
+      sessionId,
+    );
     tempAttachmentTokens.delete(token);
-    state.set(applyBackendState(result));
-    return result;
+    return commitSessionStateAtEpoch(sessionId, epoch, result);
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("add_group", { input });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("add_group", { input });
     }
     const result = applyEdit((draft) => {
       const parent = input.parentUuid ? findGroup(draft.root, input.parentUuid) : draft.root;
@@ -951,9 +1094,7 @@ export const vault: VaultStore = {
 
   async renameGroup(uuid: string, name: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("rename_group", { uuid, name });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("rename_group", { uuid, name });
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, uuid);
@@ -966,9 +1107,7 @@ export const vault: VaultStore = {
 
   async setGroupIcon(uuid: string, icon: number | null): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("set_group_icon", { uuid, icon });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("set_group_icon", { uuid, icon });
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, uuid);
@@ -982,14 +1121,12 @@ export const vault: VaultStore = {
 
   async updateGroupMeta(uuid: string, meta: GroupMeta): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_group_meta", {
+      return invokeSessionState("update_group_meta", {
         uuid,
         notes: meta.notes ?? null,
         tags: meta.tags ?? null,
         enableSearching: meta.enableSearching ?? null,
       });
-      state.set(applyBackendState(result));
-      return result;
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, uuid);
@@ -1004,13 +1141,10 @@ export const vault: VaultStore = {
 
   async setGroupExpanded(uuid: string, expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const delta = await backendInvoke<MutationDelta>("set_group_expanded", {
+      return invokeSessionDelta("set_group_expanded", {
         uuid,
         expanded,
       });
-      const result = applyBackendDelta(delta);
-      if (!result) throw new Error("数据库未打开");
-      return result;
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, uuid);
@@ -1023,13 +1157,10 @@ export const vault: VaultStore = {
 
   async setGroupsExpanded(uuids: string[], expanded: boolean): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const delta = await backendInvoke<MutationDelta>("set_groups_expanded", {
+      return invokeSessionDelta("set_groups_expanded", {
         uuids,
         expanded,
       });
-      const result = applyBackendDelta(delta);
-      if (!result) throw new Error("数据库未打开");
-      return result;
     }
     if (uuids.length === 0) {
       const result = deepClone(browserState ?? buildDemoVaultState());
@@ -1045,9 +1176,7 @@ export const vault: VaultStore = {
 
   async updateEntryAutoType(uuid: string, input: EntryAutoTypeConfig): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_entry_autotype", { uuid, input });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("update_entry_autotype", { uuid, input });
     }
     const result = applyEdit((draft) => {
       const entry = findEntry(draft.root, uuid);
@@ -1064,9 +1193,7 @@ export const vault: VaultStore = {
 
   async updateGroupAutoType(uuid: string, input: GroupAutoTypeConfig): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("update_group_autotype", { uuid, input });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("update_group_autotype", { uuid, input });
     }
     const result = applyEdit((draft) => {
       const group = findGroup(draft.root, uuid);
@@ -1085,9 +1212,7 @@ export const vault: VaultStore = {
       const args: Record<string, string> = {};
       if (name !== undefined) args.name = name;
       if (description !== undefined) args.description = description;
-      const result = await backendInvoke<VaultState>("update_db_meta", args);
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("update_db_meta", args);
     }
     const result = applyEdit((draft) => {
       if (name !== undefined) draft.databaseName = name ? name : undefined;
@@ -1100,9 +1225,7 @@ export const vault: VaultStore = {
 
   async deleteEntry(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("delete_entry", { uuid });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("delete_entry", { uuid });
     }
     const result = applyEdit((draft) => {
       const entry = findEntry(draft.root, uuid);
@@ -1118,9 +1241,7 @@ export const vault: VaultStore = {
 
   async deleteEntries(uuids: string[]): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("delete_entries", { uuids });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("delete_entries", { uuids });
     }
     const result = applyEdit((draft) => {
       const bin = ensureBinGroup(draft.root);
@@ -1138,9 +1259,7 @@ export const vault: VaultStore = {
 
   async moveEntry(uuid: string, groupUuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("move_entry", { uuid, groupUuid });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("move_entry", { uuid, groupUuid });
     }
     const result = applyEdit((draft) => {
       const entry = findEntry(draft.root, uuid);
@@ -1159,9 +1278,7 @@ export const vault: VaultStore = {
 
   async restoreEntry(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("restore_entry", { uuid });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("restore_entry", { uuid });
     }
     const result = applyEdit((draft) => {
       const bin = findBinGroup(draft.root);
@@ -1178,41 +1295,35 @@ export const vault: VaultStore = {
 
   async getEntryHistory(uuid: string): Promise<HistoryVersion[]> {
     if (isTauriRuntime()) {
-      return backendInvoke<HistoryVersion[]>("get_entry_history", { uuid });
+      return invokeSession<HistoryVersion[]>("get_entry_history", { uuid });
     }
     return [];
   },
 
   async deleteEntryHistory(uuid: string, index: number): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("delete_entry_history", { uuid, index });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("delete_entry_history", { uuid, index });
     }
     throw new Error("浏览器模式不支持删除历史版本");
   },
 
   async getEntryStorage(uuid: string): Promise<EntryStorage> {
     if (isTauriRuntime()) {
-      return backendInvoke<EntryStorage>("get_entry_storage", { uuid });
+      return invokeSession<EntryStorage>("get_entry_storage", { uuid });
     }
     return { fields: 0, attachments: 0, history: 0, total: 0 };
   },
 
   async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("restore_entry_version", { uuid, index });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("restore_entry_version", { uuid, index });
     }
     throw new Error("浏览器模式不支持历史版本恢复");
   },
 
   async deleteGroup(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("delete_group", { uuid });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("delete_group", { uuid });
     }
     if (uuid === "root") throw new Error("cannot delete root");
     const result = applyEdit((draft) => {
@@ -1241,9 +1352,7 @@ export const vault: VaultStore = {
 
   async restoreGroup(uuid: string): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("restore_group", { uuid });
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("restore_group", { uuid });
     }
     const result = applyEdit((draft) => {
       const bin = findBinGroup(draft.root);
@@ -1260,9 +1369,7 @@ export const vault: VaultStore = {
 
   async emptyRecycleBin(): Promise<VaultState> {
     if (isTauriRuntime()) {
-      const result = await backendInvoke<VaultState>("empty_recycle_bin");
-      state.set(applyBackendState(result));
-      return result;
+      return invokeSessionState("empty_recycle_bin");
     }
     const result = applyEdit((draft) => {
       const bin = findBinGroup(draft.root);
@@ -1282,24 +1389,46 @@ export const vault: VaultStore = {
         browserState = await browserLoad();
       }
     }
-    await refreshInternal();
+    if (isTauriRuntime() && !activeSessionId) await refreshTabs();
+    await refreshInternal(activeSessionId);
     await refreshTabs();
   },
 
   async setActiveSession(sessionId: string): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持多库标签");
-    const result = await backendInvoke<VaultState>("set_active_session", { sessionId });
-    activeSessionId = sessionId;
-    state.set(applyBackendState(result));
+    if (sessionId === activeSessionId) {
+      const current = sessionStates.get(sessionId);
+      if (current) return current;
+    }
+    const epoch = captureSessionEpoch(sessionId);
+    // The whole validation + backend-active swap is serialized. An uncached
+    // tab is validated before the backend switch, so a failed snapshot cannot
+    // leave the renderer restored to A while the queued backend later moves to
+    // B. Later clicks still run strictly after this complete attempt.
+    const resolved = await switchSession({
+      queue: switchQueue,
+      cached: sessionStates.get(sessionId),
+      load: async () =>
+        backendInvoke<VaultState | null>("get_vault_state", {
+          sessionId,
+        }),
+      activate: async () => backendInvoke<VaultState>("set_active_session", { sessionId }),
+      commit: (incoming) => commitSessionStateAtEpoch(sessionId, epoch, incoming),
+      publish: (committed) => {
+        activeSessionId = sessionId;
+        activeId.set(sessionId);
+        state.set(committed);
+      },
+    });
     // The lock-screen quick-reopen follows the newly active tab; remote
     // sessions never become a quick-reopen target.
-    if (result.path.startsWith("s3://")) {
+    if (resolved.path.startsWith("s3://")) {
       remembered.set(null);
     } else {
-      remembered.set({ path: result.path, fileName: result.fileName });
+      remembered.set({ path: resolved.path, fileName: resolved.fileName });
     }
     await refreshTabs();
-    return result;
+    return resolved;
   },
 
   async closeTab(sessionId: string): Promise<void> {
@@ -1308,8 +1437,17 @@ export const vault: VaultStore = {
       return;
     }
     if (!isTauriRuntime()) return;
+    await switchQueue.idle();
     const tab = get(tabs).find((t) => t.sessionId === sessionId);
     await backendInvoke("close_vault", { sessionId });
+    sessionStates.delete(sessionId);
+    iconCaches.delete(sessionId);
+    sessionEpochs.delete(sessionId);
+    for (const [token, owner] of tempAttachmentTokens) {
+      if (owner !== sessionId) continue;
+      tempAttachmentTokens.delete(token);
+      void backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
+    }
     if (tab?.path && !get(appSettings).security.rememberPassword) {
       void backendInvoke("clear_saved_credential", { path: tab.path }).catch(() => undefined);
     }

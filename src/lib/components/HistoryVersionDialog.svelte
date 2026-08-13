@@ -205,7 +205,12 @@
       return;
     }
     if (row.fetchable) {
-      const value = await vault.getCustomFieldValue(entry.uuid, row.name);
+      const sessionId = vault.getActiveSessionId();
+      if (!sessionId) return;
+      const value = await vault.callInSession(sessionId, () =>
+        vault.getCustomFieldValue(entry.uuid, row.name),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
       if (value !== null) fetchedValues[row.name] = value;
     }
     revealedFields[row.name] = true;

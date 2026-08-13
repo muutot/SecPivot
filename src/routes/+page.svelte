@@ -76,6 +76,7 @@
   const showWindowControls = isTauriRuntime() && !isMobile();
 
   let currentVault = $state<VaultState | null>(null);
+  let activeSessionId = $state<string | null>(null);
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
   let advancedQuery = $state<AdvancedSearchQuery | null>(null);
@@ -174,6 +175,36 @@
     const unsubRemembered = vault.remembered((value) => {
       rememberedPath = value;
     });
+    const unsubActive = vault.activeId.subscribe((value) => {
+      if (value === activeSessionId) return;
+      activeSessionId = value;
+      selectedGroup = null;
+      revealGroupUuid = null;
+      selectedEntry = null;
+      selectedUuids = new Set();
+      selectionAnchor = null;
+      securityReport = null;
+      // Session-scoped overlays/forms must never survive a tab switch: their
+      // captured uuids may also exist in an identical copy of another vault.
+      editorOpen = false;
+      editEntry = null;
+      editEntries = [];
+      groupModalOpen = false;
+      groupIconDialogUuid = null;
+      groupAutoTypeUuid = null;
+      groupMetaUuid = null;
+      reportOpen = false;
+      similarOpen = false;
+      expiredOpen = false;
+      hibpOpen = false;
+      emergencyExportOpen = false;
+      dbMetaOpen = false;
+      dbSettingsOpen = false;
+      confirmState = null;
+      autotypePick = null;
+      faviconDialog = null;
+      remoteConflict = null;
+    });
     // A browser extension write (AddLogin/UpdateLogin) lands straight into the
     // vault in memory; refresh so the entry list shows it without a reopen.
     let unlistenVaultChanged: UnlistenFn | undefined;
@@ -183,7 +214,14 @@
         (stop) => (unlistenVaultChanged = stop),
       );
       void listen<AutotypeCandidate[]>("autotype-pick-request", (event) => {
-        autotypePick = event.payload;
+        const candidates = event.payload;
+        if (
+          candidates.length === 0 ||
+          candidates.some((candidate) => candidate.sessionId !== vault.getActiveSessionId())
+        ) {
+          return;
+        }
+        autotypePick = candidates;
       }).then((stop) => (unlistenAutotypePick = stop));
     }
     void vault.refresh();
@@ -199,6 +237,7 @@
     return () => {
       unsubscribe();
       unsubRemembered();
+      unsubActive();
       void unlistenVaultChanged?.();
       void unlistenAutotypePick?.();
       window.removeEventListener("resize", rememberWindowSize);
@@ -701,8 +740,11 @@
   }
 
   async function toggleFavorite(entry: VaultEntry): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      const saved = await vault.toggleFavorite(entry.uuid);
+      const saved = await vault.callInSession(sessionId, () => vault.toggleFavorite(entry.uuid));
+      if (vault.getActiveSessionId() !== sessionId) return;
       if (selectedEntry?.uuid === entry.uuid) {
         selectedEntry = findEntryByUuid(saved, entry.uuid);
       }
@@ -720,12 +762,16 @@
       flash("数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续");
       return;
     }
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     busy = true;
     try {
-      const saved = await vault.save();
+      const saved = await vault.callInSession(sessionId, () => vault.save());
+      if (vault.getActiveSessionId() !== sessionId) return;
       selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
       flash("已保存到数据库");
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       const message = String(e);
       if (message.startsWith("REMOTE_CHANGED")) {
         remoteConflict = message.replace("REMOTE_CHANGED\n", "");
@@ -733,7 +779,7 @@
         flash(`保存失败：${message}`);
       }
     } finally {
-      busy = false;
+      if (vault.getActiveSessionId() === sessionId) busy = false;
     }
   }
 
@@ -741,38 +787,46 @@
     const message = remoteConflict;
     remoteConflict = null;
     if (!currentVault) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     if (
       action === "download" &&
       !window.confirm("下载远程版本将丢弃当前未保存的本地修改，继续？")
     ) {
-      remoteConflict = message;
+      if (vault.getActiveSessionId() === sessionId) remoteConflict = message;
       return;
     }
     busy = true;
     try {
       if (action === "merge") {
-        const merged = await vault.mergeRemote();
+        const merged = await vault.callInSession(sessionId, () => vault.mergeRemote());
+        if (vault.getActiveSessionId() !== sessionId) return;
         selectedEntry = findEntryByUuid(merged, selectedEntry?.uuid ?? null);
         flash("已合并本地与远程版本");
       } else if (action === "overwrite") {
-        const saved = await vault.save(true);
+        const saved = await vault.callInSession(sessionId, () => vault.save(true));
+        if (vault.getActiveSessionId() !== sessionId) return;
         selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
         flash("已覆盖远程版本");
       } else {
-        const refreshed = await vault.refreshRemote();
+        const refreshed = await vault.callInSession(sessionId, () => vault.refreshRemote());
+        if (vault.getActiveSessionId() !== sessionId) return;
         selectedEntry = findEntryByUuid(refreshed, selectedEntry?.uuid ?? null);
         flash("已下载远程版本");
       }
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`操作失败：${e}`);
     } finally {
-      busy = false;
+      if (vault.getActiveSessionId() === sessionId) busy = false;
     }
   }
 
   /** Save As: pick a new local path, persist there and switch to it. */
   async function handleSaveAs(): Promise<void> {
     if (!currentVault) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
       if (isTauriRuntime()) {
         const ext = get(appSettings).database.fileExtension;
@@ -782,7 +836,8 @@
           filters: [{ name: "KeePass 数据库", extensions: [ext] }],
         });
         if (!selected) return;
-        await vault.saveAs(String(selected));
+        await vault.callInSession(sessionId, () => vault.saveAs(String(selected)));
+        if (vault.getActiveSessionId() !== sessionId) return;
       } else {
         flash("浏览器预览不支持另存为");
         return;
@@ -795,6 +850,8 @@
 
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
+    const sessionId = vault.getActiveSessionId();
+    if (isTauriRuntime() && !sessionId) return;
     if (!window.confirm("导出的 CSV 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
     try {
       if (isTauriRuntime()) {
@@ -803,7 +860,10 @@
           filters: [{ name: "CSV 文件", extensions: ["csv"] }],
         });
         if (!selected) return;
-        await invoke("export_csv", { path: String(selected) });
+        await invoke("export_csv", {
+          sessionId,
+          path: String(selected),
+        });
       } else {
         const rows = reportEntries.map(({ entry, path }) => ({
           group: path,
@@ -832,6 +892,8 @@
 
   async function confirmExportEmergency(): Promise<void> {
     if (!currentVault) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
       const selected = await save({
         defaultPath: `SecPivot-应急表-${new Date().toISOString().slice(0, 10)}.html`,
@@ -839,6 +901,7 @@
       });
       if (!selected) return;
       await invoke("export_emergency_sheet", {
+        sessionId,
         path: String(selected),
         includePasswords: emergencyIncludePasswords,
       });
@@ -852,8 +915,11 @@
   async function handleClearHistory(): Promise<void> {
     if (!currentVault) return;
     if (!window.confirm("将删除所有条目的历史版本快照（当前条目内容不受影响）。继续？")) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      const cleared = await vault.clearAllHistory();
+      const cleared = await vault.callInSession(sessionId, () => vault.clearAllHistory());
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`已清理 ${cleared} 个条目的历史`);
     } catch (e) {
       flash(`清理历史失败：${e}`);
@@ -862,14 +928,19 @@
 
   async function handleOpenReport(): Promise<void> {
     if (reportOpen || busy || !currentVault) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     busy = true;
     try {
-      securityReport = await vault.securityReport();
+      const report = await vault.callInSession(sessionId, () => vault.securityReport());
+      if (vault.getActiveSessionId() !== sessionId) return;
+      securityReport = report;
       reportOpen = true;
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`安全分析失败：${e}`);
     } finally {
-      busy = false;
+      if (vault.getActiveSessionId() === sessionId) busy = false;
     }
   }
 
@@ -892,15 +963,18 @@
       flash("浏览器预览不支持下载图标");
       return;
     }
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     busy = true;
     faviconDialog = {
       phase: "working",
-      progress: { done: 0, total: 0 },
+      progress: { sessionId, done: 0, total: 0 },
       result: "正在连接站点…",
       error: false,
     };
     try {
       const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
+        if (e.payload.sessionId !== sessionId || vault.getActiveSessionId() !== sessionId) return;
         faviconDialog = {
           phase: "working",
           progress: e.payload,
@@ -909,10 +983,11 @@
         };
       });
       try {
-        const report = await vault.downloadFavicons(uuids);
+        const report = await vault.callInSession(sessionId, () => vault.downloadFavicons(uuids));
+        if (vault.getActiveSessionId() !== sessionId) return;
         faviconDialog = {
           phase: "done",
-          progress: { done: report.attempted, total: report.attempted },
+          progress: { sessionId, done: report.attempted, total: report.attempted },
           result:
             report.attempted === 0
               ? noneMessage
@@ -923,14 +998,15 @@
         unlisten();
       }
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       faviconDialog = {
         phase: "done",
-        progress: { done: 0, total: 0 },
+        progress: { sessionId, done: 0, total: 0 },
         result: `图标下载失败：${e}`,
         error: true,
       };
     } finally {
-      busy = false;
+      if (vault.getActiveSessionId() === sessionId) busy = false;
     }
   }
 
@@ -941,8 +1017,13 @@
   );
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      const password = await vault.getEntryPassword(entry.uuid);
+      const password = await vault.callInSession(sessionId, () =>
+        vault.getEntryPassword(entry.uuid),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
       await copyEntryValue(password, "密码", true);
     } catch {
       flash("复制失败");
@@ -1039,6 +1120,8 @@
   async function importEntries(entries: ImportEntry[]): Promise<void> {
     const startState = currentVault;
     if (!startState) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     busy = true;
     try {
       // Resolve every unique group path once (creating missing groups), then
@@ -1052,7 +1135,9 @@
       };
       for (const entry of entries) {
         if (!groupCache.has(entry.group)) {
-          const groupUuid = await resolveImportGroup(entry.group, resolver);
+          const groupUuid = await vault.callInSession(sessionId, () =>
+            resolveImportGroup(entry.group, resolver),
+          );
           groupCache.set(entry.group, groupUuid);
         }
       }
@@ -1067,12 +1152,14 @@
         customFields: entry.customFields,
         attachments: [],
       }));
-      await vault.addEntries(inputs);
+      await vault.callInSession(sessionId, () => vault.addEntries(inputs));
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`已导入 ${entries.length} 个条目`);
     } catch (e) {
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`导入失败：${e}`);
     } finally {
-      busy = false;
+      if (vault.getActiveSessionId() === sessionId) busy = false;
     }
   }
 
@@ -1309,34 +1396,46 @@
     autotype: EntryAutoTypeConfig | null,
     flags?: EntryFlags | null,
   ): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
       if (editorMode === "create" && input) {
-        let state = await vault.addEntry(input);
+        let state = await vault.callInSession(sessionId, () => vault.addEntry(input));
         const created = findNewestEntryInGroup(state, input.groupUuid);
         if (autotype && created) {
-          state = await vault.updateEntryAutoType(created.uuid, autotype);
+          state = await vault.callInSession(sessionId, () =>
+            vault.updateEntryAutoType(created.uuid, autotype),
+          );
         }
         if (flags && created) {
-          state = await vault.updateEntryFlags(created.uuid, flags);
+          state = await vault.callInSession(sessionId, () =>
+            vault.updateEntryFlags(created.uuid, flags),
+          );
         }
+        if (vault.getActiveSessionId() !== sessionId) return;
         setSingleSelection(findEntryByUuid(state, created?.uuid ?? null));
         editorOpen = false;
         flash("已创建条目");
       } else if (editorMode === "edit-multi" && patch && editEntries.length > 0) {
         const uuids = editEntries.map((e) => e.uuid);
-        const state = await vault.updateEntries(uuids, patch);
+        const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
+        if (vault.getActiveSessionId() !== sessionId) return;
         selectedEntry = findEntryByUuid(state, selectedEntry?.uuid ?? null);
         editorOpen = false;
         flash(`已更新 ${uuids.length} 个条目`);
       } else if (editorMode === "edit" && input && editEntry) {
-        let state = await vault.updateEntry(editEntry.uuid, input);
+        const uuid = editEntry.uuid;
+        let state = await vault.callInSession(sessionId, () => vault.updateEntry(uuid, input));
         if (autotype) {
-          state = await vault.updateEntryAutoType(editEntry.uuid, autotype);
+          state = await vault.callInSession(sessionId, () =>
+            vault.updateEntryAutoType(uuid, autotype),
+          );
         }
         if (flags) {
-          state = await vault.updateEntryFlags(editEntry.uuid, flags);
+          state = await vault.callInSession(sessionId, () => vault.updateEntryFlags(uuid, flags));
         }
-        setSingleSelection(findEntryByUuid(state, editEntry.uuid));
+        if (vault.getActiveSessionId() !== sessionId) return;
+        setSingleSelection(findEntryByUuid(state, uuid));
         editorOpen = false;
         flash("已保存修改");
       }
@@ -1355,13 +1454,19 @@
   async function confirmCreateGroup(): Promise<void> {
     const name = newGroupName.trim();
     if (!name || groupCreating) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
+    const parentUuid = groupModalParent;
     groupCreating = true;
     try {
-      await vault.addGroup({
-        parentUuid: groupModalParent,
-        name,
-        icon: groupIconIndex ?? undefined,
-      });
+      await vault.callInSession(sessionId, () =>
+        vault.addGroup({
+          parentUuid,
+          name,
+          icon: groupIconIndex ?? undefined,
+        }),
+      );
+      if (vault.getActiveSessionId() !== sessionId) return;
       groupModalOpen = false;
       flash("已创建分组");
     } catch (e) {
@@ -1372,8 +1477,11 @@
   }
 
   async function renameGroup(uuid: string, name: string): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      await vault.renameGroup(uuid, name);
+      await vault.callInSession(sessionId, () => vault.renameGroup(uuid, name));
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash("已重命名分组");
     } catch (e) {
       flash(`重命名失败：${e}`);
@@ -1386,8 +1494,12 @@
     enableSearching?: boolean;
   }): Promise<void> {
     if (!groupMetaUuid) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
+    const uuid = groupMetaUuid;
     try {
-      await vault.updateGroupMeta(groupMetaUuid, meta);
+      await vault.callInSession(sessionId, () => vault.updateGroupMeta(uuid, meta));
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash("已保存分组属性");
     } catch (e) {
       flash(`保存分组属性失败：${e}`);
@@ -1406,9 +1518,12 @@
   async function confirmChangeGroupIcon(): Promise<void> {
     const uuid = groupIconDialogUuid;
     if (!uuid || groupIconSaving) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     groupIconSaving = true;
     try {
-      await vault.setGroupIcon(uuid, groupIconPick);
+      await vault.callInSession(sessionId, () => vault.setGroupIcon(uuid, groupIconPick));
+      if (vault.getActiveSessionId() !== sessionId) return;
       groupIconDialogUuid = null;
       flash("已更新分组图标");
     } catch (e) {
@@ -1420,13 +1535,16 @@
 
   function askDeleteGroup(uuid: string): void {
     const inBin = selectedGroupInBin(uuid);
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     confirmState = {
       message: inBin
         ? "永久删除该分组及其全部内容？此操作无法撤销。"
         : "删除该分组？其下条目将移动到回收站。",
       onconfirm: async () => {
         try {
-          await vault.deleteGroup(uuid);
+          await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
+          if (vault.getActiveSessionId() !== sessionId) return;
           if (selectedGroup === uuid) selectedGroup = null;
           flash(inBin ? "已永久删除分组" : "已移入回收站");
         } catch (e) {
@@ -1437,11 +1555,14 @@
   }
 
   function askEmptyRecycleBin(): void {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     confirmState = {
       message: "清空回收站？其中的条目和分组将被永久删除，此操作无法撤销。",
       onconfirm: async () => {
         try {
-          await vault.emptyRecycleBin();
+          await vault.callInSession(sessionId, () => vault.emptyRecycleBin());
+          if (vault.getActiveSessionId() !== sessionId) return;
           flash("已清空回收站");
         } catch (e) {
           flash(`清空失败：${e}`);
@@ -1451,8 +1572,11 @@
   }
 
   async function restoreGroup(uuid: string): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      await vault.restoreGroup(uuid);
+      await vault.callInSession(sessionId, () => vault.restoreGroup(uuid));
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash("已恢复分组");
     } catch (e) {
       flash(`恢复失败：${e}`);
@@ -1460,8 +1584,11 @@
   }
 
   async function restoreEntry(entry: VaultEntry): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      await vault.restoreEntry(entry.uuid);
+      await vault.callInSession(sessionId, () => vault.restoreEntry(entry.uuid));
+      if (vault.getActiveSessionId() !== sessionId) return;
       if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
       flash("已恢复条目");
     } catch (e) {
@@ -1471,13 +1598,16 @@
 
   function askDeleteEntry(entry: VaultEntry): void {
     const inBin = entryInBin(entry.uuid);
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     confirmState = {
       message: inBin
         ? `永久删除条目「${entry.title || "未命名"}」？此操作无法撤销。`
         : `删除条目「${entry.title || "未命名"}」？可从回收站恢复。`,
       onconfirm: async () => {
         try {
-          await vault.deleteEntry(entry.uuid);
+          await vault.callInSession(sessionId, () => vault.deleteEntry(entry.uuid));
+          if (vault.getActiveSessionId() !== sessionId) return;
           if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
           if (selectedUuids.has(entry.uuid)) {
             const next = new Set(selectedUuids);
@@ -1496,13 +1626,16 @@
     const uuids = Array.from(selectedUuids);
     if (uuids.length === 0) return;
     const allInBin = uuids.every((uuid) => entryInBin(uuid));
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     confirmState = {
       message: allInBin
         ? `永久删除所选 ${uuids.length} 个条目？此操作无法撤销。`
         : `删除所选 ${uuids.length} 个条目？可从回收站恢复。`,
       onconfirm: async () => {
         try {
-          await vault.deleteEntries(uuids);
+          await vault.callInSession(sessionId, () => vault.deleteEntries(uuids));
+          if (vault.getActiveSessionId() !== sessionId) return;
           selectedUuids = new Set();
           selectedEntry = null;
           flash(allInBin ? "已永久删除所选条目" : "所选条目已移入回收站");
@@ -1515,13 +1648,36 @@
 
   async function moveEntriesTo(groupUuid: string, uuids: string[]): Promise<void> {
     if (!currentVault || uuids.length === 0) return;
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
       for (const uuid of uuids) {
-        await vault.moveEntry(uuid, groupUuid);
+        await vault.callInSession(sessionId, () => vault.moveEntry(uuid, groupUuid));
       }
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash(`已移动 ${uuids.length} 个条目`);
     } catch (e) {
       flash(`移动失败：${e}`);
+    }
+  }
+
+  async function toggleGroupExpanded(uuid: string, expanded: boolean): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
+    try {
+      await vault.callInSession(sessionId, () => vault.setGroupExpanded(uuid, expanded));
+    } catch (error) {
+      if (vault.getActiveSessionId() === sessionId) flash(`展开分组失败：${error}`);
+    }
+  }
+
+  async function toggleGroupsExpanded(uuids: string[], expanded: boolean): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
+    try {
+      await vault.callInSession(sessionId, () => vault.setGroupsExpanded(uuids, expanded));
+    } catch (error) {
+      if (vault.getActiveSessionId() === sessionId) flash(`展开分组失败：${error}`);
     }
   }
 
@@ -1692,8 +1848,11 @@
   const AUTOTYPE_PASSWORD_SEQUENCE = "{PASSWORD}";
 
   async function runAutoType(entry: VaultEntry, sequence = AUTOTYPE_SEQUENCE): Promise<void> {
+    const sessionId = vault.getActiveSessionId();
+    if (!sessionId) return;
     try {
-      await vault.autoType(entry.uuid, sequence);
+      await vault.callInSession(sessionId, () => vault.autoType(entry.uuid, sequence));
+      if (vault.getActiveSessionId() !== sessionId) return;
       flash("已最小化，请在 1.5 秒内切换到目标窗口");
     } catch (e) {
       flash(`自动填充失败：${e}`);
@@ -1707,7 +1866,9 @@
     // backend's open event is delivered.
     setTcatoOverlayOpen(true);
     try {
-      await invoke("open_tcato_overlay", { uuid: entry.uuid });
+      const sessionId = vault.getActiveSessionId();
+      if (!sessionId) throw new Error("数据库未打开");
+      await invoke("open_tcato_overlay", { sessionId, uuid: entry.uuid });
     } catch (e) {
       setTcatoOverlayOpen(false);
       flash(`TCATO 覆盖层打开失败：${e}`);
@@ -1930,10 +2091,9 @@
             ondelete={askDeleteGroup}
             onrestore={(uuid: string) => void restoreGroup(uuid)}
             onemptybin={askEmptyRecycleBin}
-            ontoggle={(uuid: string, expanded: boolean) =>
-              void vault.setGroupExpanded(uuid, expanded)}
+            ontoggle={(uuid: string, expanded: boolean) => void toggleGroupExpanded(uuid, expanded)}
             onsetexpanded={(uuids: string[], expanded: boolean) =>
-              void vault.setGroupsExpanded(uuids, expanded)}
+              void toggleGroupsExpanded(uuids, expanded)}
             ondropentry={(groupUuid: string, uuids: string[]) =>
               void moveEntriesTo(groupUuid, uuids)}
           />
@@ -2399,7 +2559,10 @@
             role="option"
             aria-selected="false"
             onclick={() => {
-              void invoke("autotype_pick", { uuid: candidate.uuid });
+              void invoke("autotype_pick", {
+                sessionId: candidate.sessionId,
+                uuid: candidate.uuid,
+              });
               autotypePick = null;
             }}
           >
