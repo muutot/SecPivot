@@ -5,7 +5,11 @@
   interface Props {
     group: VaultGroup;
     onclose: () => void;
-    onsaved: (meta: { notes?: string; tags?: string; enableSearching?: boolean }) => void;
+    onsaved: (meta: {
+      notes?: string;
+      tags?: string;
+      enableSearching?: boolean;
+    }) => Promise<boolean>;
   }
 
   let { group, onclose, onsaved }: Props = $props();
@@ -19,19 +23,25 @@
   let enableSearching = $state(group.enableSearching);
   let saving = $state(false);
 
-  function submit(): void {
+  async function submit(): Promise<void> {
     if (saving) return;
     saving = true;
     try {
-      onsaved({ notes, tags, enableSearching });
-      onclose();
+      const current = await onsaved({ notes, tags, enableSearching });
+      if (current) onclose();
     } finally {
       saving = false;
     }
   }
 </script>
 
-<ModalShell title="分组属性" description={group.name} size="small" closeOnEscape {onclose}>
+<ModalShell
+  title="分组属性"
+  description={group.name}
+  size="small"
+  closeOnEscape={!saving}
+  {onclose}
+>
   {#snippet children()}
     <div class="block">
       <span class="label">备注</span>
@@ -56,8 +66,10 @@
     </div>
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose}>取消</button>
-    <button class="modal-button primary" onclick={submit}>保存</button>
+    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
+    <button class="modal-button primary" onclick={() => void submit()} disabled={saving}>
+      {saving ? "保存中…" : "保存"}
+    </button>
   {/snippet}
 </ModalShell>
 

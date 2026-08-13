@@ -1604,18 +1604,20 @@
     notes?: string;
     tags?: string;
     enableSearching?: boolean;
-  }): Promise<void> {
-    if (!groupMetaUuid) return;
+  }): Promise<boolean> {
+    if (!groupMetaUuid) return false;
     const view = sessionView.capture();
-    if (!view) return;
+    if (!view) return false;
     const { sessionId } = view;
     const uuid = groupMetaUuid;
     try {
       await vault.callInSession(sessionId, () => vault.updateGroupMeta(uuid, meta));
-      if (!sessionView.isCurrent(view)) return;
+      if (!sessionView.isCurrent(view) || groupMetaUuid !== uuid) return false;
       flash("已保存分组属性");
+      return true;
     } catch (e) {
       if (sessionView.isCurrent(view)) flash(`保存分组属性失败：${e}`);
+      return false;
     }
   }
 
@@ -2550,11 +2552,7 @@
 {#if groupMetaUuid && currentVault}
   {@const group = findGroupIn(currentVault.root, groupMetaUuid)}
   {#if group}
-    <GroupMetaDialog
-      {group}
-      onclose={() => (groupMetaUuid = null)}
-      onsaved={(meta) => void saveGroupMeta(meta)}
-    />
+    <GroupMetaDialog {group} onclose={() => (groupMetaUuid = null)} onsaved={saveGroupMeta} />
   {/if}
 {/if}
 

@@ -116,3 +116,22 @@ test("page mutations gate completion UI by the originating view epoch", async ()
     assert.doesNotMatch(block, /vault\.getActiveSessionId\(\)/);
   }
 });
+
+test("group metadata waits for the parent save before closing", async () => {
+  const dialog = await readFile(
+    new URL("../src/lib/components/GroupMetaDialog.svelte", import.meta.url),
+    "utf8",
+  );
+  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const saveBlock = topLevelFunction(page, "saveGroupMeta");
+
+  assert.match(dialog, /onsaved: \([^]*?\) => Promise<boolean>/);
+  assert.match(dialog, /const current = await onsaved\(/);
+  assert.match(dialog, /if \(current\) onclose\(\)/);
+  assert.match(dialog, /closeOnEscape=\{!saving\}/);
+  assert.match(dialog, /onclick=\{onclose\} disabled=\{saving\}/);
+  assert.ok(saveBlock, "saveGroupMeta must exist");
+  assert.match(saveBlock, /Promise<boolean>/);
+  assert.match(saveBlock, /groupMetaUuid !== uuid/);
+  assert.match(page, /onsaved=\{saveGroupMeta\}/);
+});
