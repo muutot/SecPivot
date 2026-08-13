@@ -247,6 +247,30 @@ test("attachment preview binds every async path to its resource view", async () 
   assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) !== sessionId/);
 });
 
+test("attachment temp cleanup forgets tokens only after backend success", async () => {
+  const source = await readFile(new URL("../src/lib/services/vault.ts", import.meta.url), "utf8");
+  const cleanupMethod = source.match(
+    /async cleanupAttachmentTemp\(token: string\): Promise<void> \{([\s\S]*?)\n  \},/,
+  );
+  const cleanupSession = source.match(
+    /async function discardTempAttachmentsForSession\([\s\S]*?\n\}/,
+  );
+  const closeTab = source.match(
+    /async closeTab\(sessionId: string\): Promise<void> \{([\s\S]*?)\n  \},/,
+  );
+
+  assert.ok(cleanupMethod, "cleanupAttachmentTemp must exist");
+  assert.match(
+    cleanupMethod[1],
+    /await backendInvoke\("cleanup_attachment_temp", \{ token \}\);\s*tempAttachmentTokens\.delete\(token\)/,
+  );
+  assert.doesNotMatch(cleanupMethod[1], /^\s*tempAttachmentTokens\.delete\(token\)/);
+  assert.ok(cleanupSession, "session cleanup helper must exist");
+  assert.match(cleanupSession[0], /catch \{\s*\/\/ Keep the token/);
+  assert.ok(closeTab, "closeTab must exist");
+  assert.match(closeTab[1], /await discardTempAttachmentsForSession\(sessionId\)/);
+});
+
 test("remaining async dialogs reset or unmount with their owning view", async () => {
   const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
   const detail = await readFile(

@@ -39,11 +39,13 @@ impl AttachmentTempStore {
         let dir = base.join(&token);
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
         let path = dir.join(sanitize_file_name(name));
-        std::fs::write(&path, data).map_err(|e| format!("写入临时附件失败: {e}"))?;
-        let mut inner = self
-            .inner
-            .lock()
-            .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
+        let mut inner = match self.inner.lock() {
+            Ok(inner) => inner,
+            Err(_) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return Err("附件临时存储锁已损坏".to_owned());
+            }
+        };
         inner.insert(
             token.clone(),
             TempAttachment {
@@ -51,22 +53,41 @@ impl AttachmentTempStore {
                 session_id: session_id.to_owned(),
             },
         );
+        drop(inner);
+        if let Err(error) = std::fs::write(&path, data) {
+            // The token was registered before writing, so even a failed
+            // immediate removal remains reachable by a later lock cleanup.
+            let _ = self.discard(&token);
+            return Err(format!("写入临时附件失败: {error}"));
+        }
         Ok((token, path))
     }
 
     /// Remove the registered temp file and its random directory. Unknown
     /// tokens (already discarded) are a no-op.
     pub fn discard(&self, token: &str) -> Result<(), String> {
+        let temp = {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
+            inner.get(token).cloned()
+        };
+        let Some(temp) = temp else {
+            return Ok(());
+        };
+        if let Some(parent) = temp.path.parent() {
+            match std::fs::remove_dir_all(parent) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("清理临时附件失败: {error}")),
+            }
+        }
         let mut inner = self
             .inner
             .lock()
             .map_err(|_| "附件临时存储锁已损坏".to_owned())?;
-        let Some(temp) = inner.remove(token) else {
-            return Ok(());
-        };
-        if let Some(parent) = temp.path.parent() {
-            let _ = std::fs::remove_dir_all(parent);
-        }
+        inner.remove(token);
         Ok(())
     }
 
@@ -106,14 +127,31 @@ impl AttachmentTempStore {
         Ok(data)
     }
 
-    /// Discard every registered temp file (lock/close path).
+    /// Discard every file owned by one closing session. Failed removals stay
+    /// registered so a later lock/cleanup can retry them.
+    pub fn discard_session(&self, session_id: &str) {
+        let tokens = match self.inner.lock() {
+            Ok(inner) => inner
+                .iter()
+                .filter(|(_, temp)| temp.session_id == session_id)
+                .map(|(token, _)| token.clone())
+                .collect::<Vec<_>>(),
+            Err(_) => return,
+        };
+        for token in tokens {
+            let _ = self.discard(&token);
+        }
+    }
+
+    /// Discard every registered temp file (lock/close path). Failed removals
+    /// stay registered so later cleanup attempts can retry them.
     pub fn discard_all(&self) {
-        if let Ok(mut inner) = self.inner.lock() {
-            for (_, temp) in inner.drain() {
-                if let Some(parent) = temp.path.parent() {
-                    let _ = std::fs::remove_dir_all(parent);
-                }
-            }
+        let tokens = match self.inner.lock() {
+            Ok(inner) => inner.keys().cloned().collect::<Vec<_>>(),
+            Err(_) => return,
+        };
+        for token in tokens {
+            let _ = self.discard(&token);
         }
     }
 }
@@ -165,6 +203,42 @@ mod tests {
         store.discard_all();
         assert!(!path_a.exists());
         assert!(!path_b.exists());
+    }
+
+    #[test]
+    fn discard_session_only_cleans_the_closed_session() {
+        let store = AttachmentTempStore::default();
+        let (token_a, path_a) = store.create("s1", "a.txt", b"a").unwrap();
+        let (token_b, path_b) = store.create("s2", "b.txt", b"b").unwrap();
+
+        store.discard_session("s1");
+
+        assert!(!path_a.exists());
+        assert!(path_b.exists());
+        assert!(store.path_for_session(&token_a, "s1").is_err());
+        assert_eq!(store.path_for_session(&token_b, "s2").unwrap(), path_b);
+        store.discard(&token_b).unwrap();
+    }
+
+    #[test]
+    fn failed_discard_keeps_the_token_for_retry() {
+        let store = AttachmentTempStore::default();
+        let (token, path) = store.create("s1", "note.txt", b"secret").unwrap();
+        let dir = path.parent().unwrap().to_path_buf();
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::write(&dir, b"not a directory").unwrap();
+        assert!(store
+            .discard(&token)
+            .unwrap_err()
+            .starts_with("清理临时附件失败:"));
+        assert_eq!(store.path_for_session(&token, "s1").unwrap(), path);
+
+        std::fs::remove_file(&dir).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, b"secret").unwrap();
+        store.discard(&token).unwrap();
+        assert!(store.path_for_session(&token, "s1").is_err());
     }
 
     #[test]

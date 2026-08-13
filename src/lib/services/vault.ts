@@ -472,12 +472,19 @@ async function discardTempAttachmentsForSession(sessionId?: string): Promise<voi
   const tokens = [...tempAttachmentTokens.entries()]
     .filter(([, owner]) => sessionId === undefined || owner === sessionId)
     .map(([token]) => token);
-  for (const token of tokens) tempAttachmentTokens.delete(token);
-  if (!isTauriRuntime()) return;
+  if (!isTauriRuntime()) {
+    for (const token of tokens) tempAttachmentTokens.delete(token);
+    return;
+  }
   await Promise.all(
-    tokens.map((token) =>
-      backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined),
-    ),
+    tokens.map(async (token) => {
+      try {
+        await backendInvoke("cleanup_attachment_temp", { token });
+        tempAttachmentTokens.delete(token);
+      } catch {
+        // Keep the token so a later close/lock cleanup can retry it.
+      }
+    }),
   );
 }
 
@@ -1064,9 +1071,15 @@ export const vault: VaultStore = {
   },
 
   async cleanupAttachmentTemp(token: string): Promise<void> {
-    tempAttachmentTokens.delete(token);
-    if (isTauriRuntime()) {
-      await backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
+    if (!isTauriRuntime()) {
+      tempAttachmentTokens.delete(token);
+      return;
+    }
+    try {
+      await backendInvoke("cleanup_attachment_temp", { token });
+      tempAttachmentTokens.delete(token);
+    } catch {
+      // Keep the token so the session close/lock path can retry it.
     }
   },
 
@@ -1084,7 +1097,12 @@ export const vault: VaultStore = {
       },
       sessionId,
     );
-    tempAttachmentTokens.delete(token);
+    try {
+      await backendInvoke("cleanup_attachment_temp", { token });
+      tempAttachmentTokens.delete(token);
+    } catch {
+      // Keep the token so the session close/lock path can retry it.
+    }
     return commitSessionStateAtEpoch(sessionId, epoch, result);
   },
 
@@ -1457,11 +1475,7 @@ export const vault: VaultStore = {
       sessionStates.delete(sessionId);
       iconCaches.delete(sessionId);
       sessionEpochs.delete(sessionId);
-      for (const [token, owner] of tempAttachmentTokens) {
-        if (owner !== sessionId) continue;
-        tempAttachmentTokens.delete(token);
-        void backendInvoke("cleanup_attachment_temp", { token }).catch(() => undefined);
-      }
+      await discardTempAttachmentsForSession(sessionId);
       if (tab?.path && !get(appSettings).security.rememberPassword) {
         void backendInvoke("clear_saved_credential", { path: tab.path }).catch(() => undefined);
       }

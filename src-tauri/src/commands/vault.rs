@@ -119,14 +119,20 @@ pub(crate) fn close_vault(
     app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    store: tauri::State<'_, vault::AttachmentTempStore>,
     session_id: Option<String>,
 ) -> Result<(), String> {
-    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    vaults.close(&mut active, session_id.as_deref())?;
+    let (closed_session_id, any_open) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let closed_session_id = vaults.close(&mut active, session_id.as_deref())?;
+        (closed_session_id, vaults.any_open(&active))
+    };
     // The capture guard stays on while any other session is still open.
-    if !vaults.any_open(&active) {
+    if !any_open {
         shield::set_capture_guard(&app, false);
     }
+    // Filesystem cleanup must not run while the vault-session mutex is held.
+    store.discard_session(&closed_session_id);
     Ok(())
 }
 
@@ -138,16 +144,17 @@ pub(crate) fn close_all_vaults(
     app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    store: tauri::State<'_, vault::AttachmentTempStore>,
 ) -> Result<(), String> {
     let keep_rpc = keep_rpc_session(&app);
-    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    vaults.close_all(&mut active, keep_rpc)?;
+    {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.close_all(&mut active, keep_rpc)?;
+    }
     shield::set_capture_guard(&app, false);
     // Locking wipes extracted temp attachments (external viewers may still
-    // hold the files open; their content is gone from disk).
-    if let Some(store) = app.try_state::<vault::AttachmentTempStore>() {
-        store.discard_all();
-    }
+    // hold the files open; failed removals stay registered for later retry).
+    store.discard_all();
     Ok(())
 }
 
@@ -695,6 +702,10 @@ pub(crate) fn open_attachment_temp(
         |target| target.attachment_data(&uuid, &name),
     )?;
     let (token, path) = store.create(&session_id, &name, &data)?;
+    if let Err(error) = vaults.resolve_id(Some(&session_id)) {
+        let _ = store.discard(&token);
+        return Err(error);
+    }
     Ok(vault::TempAttachmentRef {
         token,
         path: path.to_string_lossy().into_owned(),

@@ -257,7 +257,11 @@ impl VaultSessions {
     /// Close the addressed session (default: active). Closing the active
     /// session promotes the most recently parked one, so at least one vault
     /// stays open when others remain.
-    pub fn close(&self, active: &mut VaultSession, session_id: Option<&str>) -> Result<(), String> {
+    pub fn close(
+        &self,
+        active: &mut VaultSession,
+        session_id: Option<&str>,
+    ) -> Result<String, String> {
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         let target = match session_id {
             Some(id) => id.to_owned(),
@@ -277,7 +281,7 @@ impl VaultSessions {
                     inner.active_id = Some(promoted);
                 }
             }
-            Ok(())
+            Ok(target)
         } else {
             let mut removed = inner
                 .parked
@@ -285,7 +289,7 @@ impl VaultSessions {
                 .ok_or_else(|| "找不到数据库会话".to_owned())?;
             inner.order.retain(|id| id != &target);
             removed.close();
-            Ok(())
+            Ok(target)
         }
     }
 
