@@ -62,6 +62,7 @@
   import {
     awaitCurrentView,
     LatestOperationGuard,
+    sessionResourceKey,
     SessionViewGuard,
     type SessionViewToken,
   } from "$lib/utils/session-state";
@@ -83,6 +84,7 @@
   const showWindowControls = isTauriRuntime() && !isMobile();
 
   let currentVault = $state<VaultState | null>(null);
+  let currentVaultSessionId = $state<string | null>(null);
   let activeSessionId = $state<string | null>(null);
   const sessionView = new SessionViewGuard();
   const busyOperations = new LatestOperationGuard();
@@ -133,10 +135,34 @@
   } | null>(null);
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
-  let expiredNotifiedPath = $state<string | null>(null);
+  const expiredNotifiedViews = new Set<string>();
 
   function countExpiredEntries(group: VaultGroup): number {
     return collectEntries(group).filter((e) => e.expired).length;
+  }
+
+  async function notifyExpiredEntries(view: SessionViewToken): Promise<void> {
+    if (currentVaultSessionId !== view.sessionId || !currentVault) return;
+    const requestedPath = currentVault.path;
+    const delayed = await awaitCurrentView(
+      sessionView,
+      view,
+      () => new Promise<void>((resolve) => setTimeout(resolve, 300)),
+    );
+    if (
+      !delayed.current ||
+      currentVaultSessionId !== view.sessionId ||
+      currentVault?.path !== requestedPath
+    ) {
+      return;
+    }
+
+    const notificationKey = sessionResourceKey(view.sessionId, requestedPath);
+    if (expiredNotifiedViews.has(notificationKey)) return;
+    expiredNotifiedViews.add(notificationKey);
+
+    const expired = countExpiredEntries(currentVault.root);
+    if (expired > 0) flash(`有 ${expired} 个条目已过期,请及时更新密码`);
   }
 
   function entryIconName(entry: VaultEntry): IconName {
@@ -161,13 +187,18 @@
     const unsubscribe = vault.subscribe((value) => {
       const opened = Boolean(value) && !currentVault;
       const closed = !value;
+      const previousOwner = currentVaultSessionId;
+      const previousPath = currentVault?.path ?? null;
       currentVault = value;
-      if (value && value.path !== expiredNotifiedPath) {
-        expiredNotifiedPath = value.path;
-        const expired = countExpiredEntries(value.root);
-        if (expired > 0) {
-          setTimeout(() => flash(`有 ${expired} 个条目已过期,请及时更新密码`), 300);
-        }
+      currentVaultSessionId = value
+        ? (vault.getActiveSessionId() ?? (!isTauriRuntime() ? "browser" : null))
+        : null;
+      if (
+        currentVaultSessionId &&
+        (currentVaultSessionId !== previousOwner || value?.path !== previousPath)
+      ) {
+        const view = sessionView.capture();
+        if (view?.sessionId === currentVaultSessionId) void notifyExpiredEntries(view);
       }
       if (!value) {
         selectedEntry = null;
@@ -190,6 +221,8 @@
       if (value === activeSessionId) return;
       activeSessionId = value;
       sessionView.activate(value);
+      const view = sessionView.capture();
+      if (view) void notifyExpiredEntries(view);
       // A long operation that started in the previous tab intentionally skips
       // its `finally` write after switching. Reset shared activity flags here
       // so the newly visible tab cannot inherit a disabled toolbar/dialog.
@@ -225,6 +258,18 @@
       autotypePick = null;
       faviconDialog = null;
       remoteConflict = null;
+      entryMenu = null;
+      blankMenu = null;
+      toolbarMenu = null;
+      columnMenu = null;
+      advancedSearchOpen = false;
+      mobileNavOpen = false;
+      emergencyIncludePasswords = false;
+      statusMsg = "";
+      if (statusTimer) {
+        clearTimeout(statusTimer);
+        statusTimer = undefined;
+      }
     });
     // A browser extension write (AddLogin/UpdateLogin) lands straight into the
     // vault in memory; refresh so the entry list shows it without a reopen.
@@ -263,6 +308,8 @@
       void unlistenAutotypePick?.();
       window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
+      if (statusTimer) clearTimeout(statusTimer);
+      sessionView.activate(null);
     };
   });
 
@@ -2116,34 +2163,37 @@
           ></button>
         {/if}
         <section class="group-panel">
-          <GroupTree
-            root={currentVault.root}
-            selected={selectedGroup}
-            reveal={revealGroupUuid}
-            customIcons={currentVault.customIcons}
-            showIcon={compactMode ? groupDensity.showGroupIcon : true}
-            showChevron={compactMode ? groupDensity.showGroupChevron : true}
-            onselect={(uuid: string | null) => {
-              selectedGroup = uuid;
-              selectedEntry = null;
-              selectedUuids = new Set();
-              selectionAnchor = null;
-              mobileNavOpen = false;
-            }}
-            onaddsubgroup={openGroupModal}
-            onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
-            onchangeicon={openGroupIconDialog}
-            onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
-            onmeta={(uuid: string) => (groupMetaUuid = uuid)}
-            ondelete={askDeleteGroup}
-            onrestore={(uuid: string) => void restoreGroup(uuid)}
-            onemptybin={askEmptyRecycleBin}
-            ontoggle={(uuid: string, expanded: boolean) => void toggleGroupExpanded(uuid, expanded)}
-            onsetexpanded={(uuids: string[], expanded: boolean) =>
-              void toggleGroupsExpanded(uuids, expanded)}
-            ondropentry={(groupUuid: string, uuids: string[]) =>
-              void moveEntriesTo(groupUuid, uuids)}
-          />
+          {#key currentVaultSessionId}
+            <GroupTree
+              root={currentVault.root}
+              selected={selectedGroup}
+              reveal={revealGroupUuid}
+              customIcons={currentVault.customIcons}
+              showIcon={compactMode ? groupDensity.showGroupIcon : true}
+              showChevron={compactMode ? groupDensity.showGroupChevron : true}
+              onselect={(uuid: string | null) => {
+                selectedGroup = uuid;
+                selectedEntry = null;
+                selectedUuids = new Set();
+                selectionAnchor = null;
+                mobileNavOpen = false;
+              }}
+              onaddsubgroup={openGroupModal}
+              onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
+              onchangeicon={openGroupIconDialog}
+              onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
+              onmeta={(uuid: string) => (groupMetaUuid = uuid)}
+              ondelete={askDeleteGroup}
+              onrestore={(uuid: string) => void restoreGroup(uuid)}
+              onemptybin={askEmptyRecycleBin}
+              ontoggle={(uuid: string, expanded: boolean) =>
+                void toggleGroupExpanded(uuid, expanded)}
+              onsetexpanded={(uuids: string[], expanded: boolean) =>
+                void toggleGroupsExpanded(uuids, expanded)}
+              ondropentry={(groupUuid: string, uuids: string[]) =>
+                void moveEntriesTo(groupUuid, uuids)}
+            />
+          {/key}
         </section>
 
         <span

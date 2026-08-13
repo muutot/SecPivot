@@ -9,6 +9,7 @@ import {
   LatestOperationGuard,
   resolveListedActiveId,
   runExclusiveTask,
+  sessionResourceKey,
   SessionViewGuard,
   SessionStateCache,
   SessionSwitchQueue,
@@ -245,6 +246,18 @@ test("a native-dialog result is discarded after A to B to A", async () => {
   gate.resolve();
 
   assert.deepEqual(await picked, { current: false });
+});
+
+test("session resource keys distinguish copied sessions and browser paths", () => {
+  assert.notEqual(
+    sessionResourceKey("s1", "C:/vault.kdbx"),
+    sessionResourceKey("s2", "C:/vault.kdbx"),
+  );
+  assert.notEqual(
+    sessionResourceKey("browser", "demo://first.kdbx"),
+    sessionResourceKey("browser", "demo://second.kdbx"),
+  );
+  assert.notEqual(sessionResourceKey("a", "bc"), sessionResourceKey("ab", "c"));
 });
 
 test("secret reveal requires a loaded value for the current session and entry", () => {

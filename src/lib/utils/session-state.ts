@@ -123,6 +123,13 @@ export async function awaitCurrentView<T>(
   return guard.isCurrent(token) ? { current: true, value } : { current: false };
 }
 
+/** Build a stable once-per-session-and-resource key. Session ids alone are
+ * insufficient for the browser demo, which always uses `browser` while the
+ * user may open another path in the same page lifetime. */
+export function sessionResourceKey(sessionId: string, resource: string): string {
+  return `${sessionId.length}:${sessionId}${resource}`;
+}
+
 /** A secret read may affect reveal state only when it produced a value for the
  * still-visible session and entry. Empty strings are valid secret values;
  * `null` means missing, still loading, or invalidated. */
