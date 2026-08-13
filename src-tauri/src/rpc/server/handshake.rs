@@ -11,6 +11,12 @@ use crate::rpc::{
     random_hex, secret_bytes, Envelope, ErrorMessage, KeyMessage, RpcError, SrpMessage, SrpServer,
     FEATURES, SECURITY_LEVEL,
 };
+
+pub(crate) struct DecodedJsonRpc {
+    pub(crate) method: String,
+    pub(crate) id: Value,
+    pub(crate) params: Option<Value>,
+}
 /// Pure setup-protocol state machine; returns the envelope to send (or an
 /// error envelope). Tested directly with a stub host.
 pub(crate) fn dispatch_setup(
@@ -59,10 +65,9 @@ pub(crate) fn dispatch_setup(
                 let expiry = conn.srp_expiry.take()?;
                 let a = conn.srp_a.take()?;
                 eprintln!(
-                    "[rpc] proofToServer received (a_len={}, m_len={}, a[..6]={})",
+                    "[rpc] proofToServer received (a_len={}, m_len={})",
                     a.len(),
-                    m.len(),
-                    &a[..6.min(a.len())]
+                    m.len()
                 );
                 if Instant::now() > expiry {
                     eprintln!("[rpc] proof expired");
@@ -143,12 +148,18 @@ pub(crate) fn dispatch_setup(
 /// Pure JSON-RPC dispatch: decrypt → `handle_jsonrpc` → encrypt. Returns the
 /// encrypted response envelope plus the method name (or `None` to close on
 /// frame/auth failures).
+#[cfg(test)]
 pub(crate) fn dispatch_jsonrpc(
     conn: &mut Conn,
     env: &Envelope,
     host: &mut dyn crate::rpc::RpcHost,
     generator: &PasswordGeneratorSettings,
 ) -> Option<(Envelope, String)> {
+    let request = decode_jsonrpc(conn, env)?;
+    dispatch_decoded_jsonrpc(conn, request, host, generator)
+}
+
+pub(crate) fn decode_jsonrpc(conn: &Conn, env: &Envelope) -> Option<DecodedJsonRpc> {
     let frame = env.jsonrpc.as_ref()?;
     let secret = conn.session_key.as_ref()?;
     let plaintext = match decrypt_frame(secret, frame) {
@@ -158,34 +169,47 @@ pub(crate) fn dispatch_jsonrpc(
     let request: Value = serde_json::from_str(&plaintext).ok()?;
     let method = request.get("method").and_then(|m| m.as_str())?.to_owned();
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let params = request.get("params");
-    if method == "FindLogins" {
-        let urls: Vec<&str> = params
-            .and_then(|p| p.get(0))
-            .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
-            .unwrap_or_default();
-        eprintln!("[rpc] FindLogins urls={urls:?}");
-    }
-    let response = match handle_jsonrpc_with_generator(host, &method, params, generator) {
+    let params = request.get("params").cloned();
+    Some(DecodedJsonRpc { method, id, params })
+}
+
+pub(crate) fn dispatch_decoded_jsonrpc(
+    conn: &Conn,
+    request: DecodedJsonRpc,
+    host: &mut dyn crate::rpc::RpcHost,
+    generator: &PasswordGeneratorSettings,
+) -> Option<(Envelope, String)> {
+    let method = request.method.clone();
+    let result =
+        handle_jsonrpc_with_generator(host, &request.method, request.params.as_ref(), generator);
+    encode_jsonrpc_result(conn, &request.id, result).map(|reply| (reply, method))
+}
+
+pub(crate) fn encode_jsonrpc_result(
+    conn: &Conn,
+    id: &Value,
+    result: Result<Value, RpcError>,
+) -> Option<Envelope> {
+    let secret = conn.session_key.as_ref()?;
+    let response = match result {
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-        Err(RpcError::Locked) => jsonrpc_error(&id, -32000, "Vault is locked"),
+        Err(RpcError::Locked) => jsonrpc_error(id, -32000, "Vault is locked"),
         Err(RpcError::Unsupported(m)) => {
-            jsonrpc_error(&id, -32601, &format!("Unsupported method: {m}"))
+            jsonrpc_error(id, -32601, &format!("Unsupported method: {m}"))
         }
-        Err(RpcError::InvalidMessage(m)) => jsonrpc_error(&id, -32600, &m),
-        Err(RpcError::AuthFailed) => jsonrpc_error(&id, -32603, "Frame authentication failed"),
+        Err(RpcError::InvalidMessage(m)) => jsonrpc_error(id, -32600, &m),
+        Err(RpcError::AuthFailed) => jsonrpc_error(id, -32603, "Frame authentication failed"),
         Err(RpcError::EntryNotFound) => jsonrpc_error(
-            &id,
+            id,
             -32001,
             "oldLoginUUID could not be resolved to an existing entry.",
         ),
-        Err(RpcError::InRecycleBin) => jsonrpc_error(&id, -32002, "Entry is in the Recycle Bin."),
+        Err(RpcError::InRecycleBin) => jsonrpc_error(id, -32002, "Entry is in the Recycle Bin."),
     };
-    Some((
-        Envelope::jsonrpc(encrypt_frame(secret, &response.to_string())),
-        method,
-    ))
+    Some(Envelope::jsonrpc(encrypt_frame(
+        secret,
+        &response.to_string(),
+    )))
 }
 // ---------------------------------------------------------------------------
 // Small helpers

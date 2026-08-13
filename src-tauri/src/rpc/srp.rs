@@ -88,11 +88,7 @@ impl SrpServer {
                 );
                 format!("-{neg_hex}")
             } else {
-                eprintln!(
-                    "[rpc] verify_proof: M mismatch (client m[..12]={}.. expected[..12]={}..)",
-                    &m.to_lowercase()[..12.min(m.len())],
-                    &m_expected[..12]
-                );
+                eprintln!("[rpc] verify_proof: M mismatch");
                 return Err(RpcError::AuthFailed);
             }
         };

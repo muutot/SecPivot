@@ -12,7 +12,47 @@
 
 use super::{SessionInfo, VaultOpenResult, VaultSession, VaultState};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, Mutex};
+
+#[derive(Default)]
+struct PersistenceGate {
+    busy: Mutex<bool>,
+    ready: Condvar,
+}
+
+impl PersistenceGate {
+    fn acquire(self: &Arc<Self>) -> PersistencePermit {
+        let mut busy = self.busy.lock().unwrap_or_else(|error| error.into_inner());
+        while *busy {
+            busy = self
+                .ready
+                .wait(busy)
+                .unwrap_or_else(|error| error.into_inner());
+        }
+        *busy = true;
+        PersistencePermit { gate: self.clone() }
+    }
+}
+
+/// Owned process-local permit covering one vault prepare/persist/complete
+/// transaction. It is deliberately independent of the session mutex so slow
+/// KDF/network work stays lock-free while stale snapshots cannot overtake one
+/// another and overwrite a newer successful persist.
+pub(crate) struct PersistencePermit {
+    gate: Arc<PersistenceGate>,
+}
+
+impl Drop for PersistencePermit {
+    fn drop(&mut self) {
+        let mut busy = self
+            .gate
+            .busy
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        *busy = false;
+        self.gate.ready.notify_one();
+    }
+}
 
 #[derive(Default)]
 struct SessionsInner {
@@ -44,9 +84,26 @@ impl SessionsInner {
 #[derive(Default)]
 pub struct VaultSessions {
     inner: Mutex<SessionsInner>,
+    persistence: Arc<PersistenceGate>,
 }
 
 impl VaultSessions {
+    /// Serialize prepare/persist/complete transactions across every runtime
+    /// writer. The permit does not hold either session lock, so UI reads and
+    /// in-memory edits remain responsive while storage work runs.
+    pub(crate) fn acquire_persistence(&self) -> PersistencePermit {
+        self.persistence.acquire()
+    }
+
+    /// Async acquisition uses the blocking pool while waiting on the process-
+    /// local condition variable; the owned permit can then span `.await`.
+    pub(crate) async fn acquire_persistence_async(&self) -> Result<PersistencePermit, String> {
+        let gate = self.persistence.clone();
+        tokio::task::spawn_blocking(move || gate.acquire())
+            .await
+            .map_err(|error| format!("数据库持久化门禁任务异常: {error}"))
+    }
+
     /// Apply the configured URL-match mode to the active slot, every parked
     /// session and all sessions opened later. The caller holds the active
     /// mutex first, preserving the registry's global lock order.
@@ -86,6 +143,31 @@ impl VaultSessions {
     ) -> Result<T, String> {
         self.with_resolved_session_mut(active, session_id, operation)
             .map(|(_, result)| result)
+    }
+
+    /// Variant of `with_session_mut` for subsystems with their own structured
+    /// error type (for example KeePassRPC JSON-RPC errors). Registry lookup
+    /// failures are mapped by the caller without flattening operation errors.
+    pub(crate) fn with_session_mut_result<T, E>(
+        &self,
+        active: &mut VaultSession,
+        session_id: &str,
+        map_registry_error: impl Fn(String) -> E,
+        operation: impl FnOnce(&mut VaultSession) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| map_registry_error("数据库锁已损坏".to_owned()))?;
+        if inner.active_id.as_deref() == Some(session_id) {
+            operation(active)
+        } else {
+            let session = inner
+                .parked
+                .get_mut(session_id)
+                .ok_or_else(|| map_registry_error("找不到数据库会话".to_owned()))?;
+            operation(session)
+        }
     }
 
     /// Resolve the default active session exactly once and return its stable
@@ -340,6 +422,30 @@ mod tests {
         EntryInput, RemoteMode, WritableDatabaseCipher, DEFAULT_BACKUP_TEMPLATE,
     };
     use tempfile::TempDir;
+
+    #[test]
+    fn persistence_gate_serializes_runtime_writers() {
+        let registry = Arc::new(VaultSessions::default());
+        let first = registry.acquire_persistence();
+        let (attempting_tx, attempting_rx) = std::sync::mpsc::channel();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let registry_worker = registry.clone();
+        let worker = std::thread::spawn(move || {
+            attempting_tx.send(()).unwrap();
+            let _second = registry_worker.acquire_persistence();
+            entered_tx.send(()).unwrap();
+        });
+
+        attempting_rx.recv().unwrap();
+        assert!(entered_rx
+            .recv_timeout(std::time::Duration::from_millis(25))
+            .is_err());
+        drop(first);
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        worker.join().unwrap();
+    }
 
     fn create_vault<'a>(
         dir: &'a TempDir,
@@ -786,6 +892,101 @@ mod tests {
             active.database_settings().unwrap().unwrap().cipher,
             "Aes256"
         );
+    }
+
+    #[test]
+    fn rpc_write_completion_stays_bound_to_originating_session() {
+        use crate::rpc::{RpcFieldWrite, RpcLoginWrite, RpcWriteRequest};
+        use crate::vault::persist_rpc_write;
+
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let first = registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        let second = registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        registry
+            .switch_active(&mut active, &first.session_id)
+            .unwrap();
+
+        let login = RpcLoginWrite {
+            title: "RPC-A".to_owned(),
+            urls: vec!["https://rpc-a.example".to_owned()],
+            http_realm: String::new(),
+            icon_image_data: String::new(),
+            form_field_list: vec![
+                RpcFieldWrite {
+                    id: "u".to_owned(),
+                    name: "user".to_owned(),
+                    display_name: "User".to_owned(),
+                    field_type: "FFTusername".to_owned(),
+                    value: "alice".to_owned(),
+                    page: 0,
+                },
+                RpcFieldWrite {
+                    id: "p".to_owned(),
+                    name: "password".to_owned(),
+                    display_name: "Password".to_owned(),
+                    field_type: "FFTpassword".to_owned(),
+                    value: "rpc-secret".to_owned(),
+                    page: 0,
+                },
+            ],
+        };
+        let job = registry
+            .with_session_mut_result(
+                &mut active,
+                &first.session_id,
+                |error| error,
+                |target| {
+                    target
+                        .prepare_rpc_write(RpcWriteRequest::Add {
+                            login,
+                            parent_uuid: String::new(),
+                        })
+                        .map_err(|error| format!("{error:?}"))
+                },
+            )
+            .unwrap();
+
+        registry
+            .switch_active(&mut active, &second.session_id)
+            .unwrap();
+        let persisted = persist_rpc_write(job).unwrap();
+        registry
+            .with_session_mut_result(
+                &mut active,
+                &first.session_id,
+                |error| error,
+                |target| {
+                    target
+                        .complete_rpc_write(persisted)
+                        .map_err(|error| format!("{error:?}"))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(second.session_id.as_str())
+        );
+        let first_state = registry
+            .state(&mut active, Some(&first.session_id))
+            .unwrap()
+            .unwrap();
+        assert!(first_state
+            .root
+            .entries
+            .iter()
+            .any(|entry| entry.title == "RPC-A"));
+        let second_state = registry
+            .state(&mut active, Some(&second.session_id))
+            .unwrap()
+            .unwrap();
+        assert!(second_state.root.entries.is_empty());
     }
 
     #[test]

@@ -62,7 +62,7 @@ fn database_summary_dto(db: &RpcDatabase) -> Value {
     })
 }
 
-fn entry_dto(e: &RpcLogin, db: &RpcDatabase) -> Value {
+pub(crate) fn entry_dto(e: &RpcLogin, db: &RpcDatabase) -> Value {
     json!({
         "uRLs": e.urls,
         "neverAutoFill": false,
@@ -81,6 +81,77 @@ fn entry_dto(e: &RpcLogin, db: &RpcDatabase) -> Value {
         ],
         "db": database_summary_dto(db),
     })
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RpcWriteRequest {
+    Add {
+        login: RpcLoginWrite,
+        parent_uuid: String,
+    },
+    Update {
+        login: RpcLoginWrite,
+        old_uuid: String,
+        url_merge_mode: u8,
+    },
+}
+
+/// Parse the two mutating v1 methods with the exact same validation used by
+/// the generic dispatcher. The socket server uses this to persist writes
+/// outside the vault-session lock without creating a second wire contract.
+pub(crate) fn parse_write_request(
+    method: &str,
+    params: Option<&Value>,
+) -> Result<Option<RpcWriteRequest>, RpcError> {
+    match method {
+        "AddLogin" => {
+            let params =
+                params.ok_or_else(|| RpcError::InvalidMessage("AddLogin 缺少参数".to_owned()))?;
+            let login: RpcLoginWrite =
+                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
+                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
+            let parent_uuid = params
+                .get(1)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            Ok(Some(RpcWriteRequest::Add { login, parent_uuid }))
+        }
+        "UpdateLogin" => {
+            let params = params
+                .ok_or_else(|| RpcError::InvalidMessage("UpdateLogin 缺少参数".to_owned()))?;
+            let login: RpcLoginWrite =
+                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
+                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
+            let old_uuid = params
+                .get(1)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            if old_uuid.is_empty() {
+                return Err(RpcError::InvalidMessage(
+                    "oldLoginUUID was not passed to the updateLogin function".to_owned(),
+                ));
+            }
+            if params
+                .get(3)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .is_empty()
+            {
+                return Err(RpcError::InvalidMessage(
+                    "dbFileName was not passed to the updateLogin function".to_owned(),
+                ));
+            }
+            let url_merge_mode = params.get(2).and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+            Ok(Some(RpcWriteRequest::Update {
+                login,
+                old_uuid,
+                url_merge_mode,
+            }))
+        }
+        _ => Ok(None),
+    }
 }
 // ---------------------------------------------------------------------------
 // JSON-RPC dispatch (v1 method names used by Kee 4.0.7)
@@ -149,40 +220,25 @@ pub fn handle_jsonrpc_with_generator(
             .map_err(RpcError::InvalidMessage),
         "AddLogin" => {
             let db = host.database().ok_or(RpcError::Locked)?;
-            let params =
-                params.ok_or_else(|| RpcError::InvalidMessage("AddLogin 缺少参数".to_owned()))?;
-            let login: RpcLoginWrite =
-                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
-                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
-            let parent_uuid = params.get(1).and_then(|v| v.as_str()).unwrap_or_default();
-            let entry = host.add_login(&login, parent_uuid)?;
+            let Some(RpcWriteRequest::Add { login, parent_uuid }) =
+                parse_write_request(method, params)?
+            else {
+                unreachable!("AddLogin parser returned a different request")
+            };
+            let entry = host.add_login(&login, &parent_uuid)?;
             Ok(entry_dto(&entry, &db))
         }
         "UpdateLogin" => {
             let db = host.database().ok_or(RpcError::Locked)?;
-            let params = params
-                .ok_or_else(|| RpcError::InvalidMessage("UpdateLogin 缺少参数".to_owned()))?;
-            let login: RpcLoginWrite =
-                serde_json::from_value(params.get(0).cloned().unwrap_or(Value::Null))
-                    .map_err(|e| RpcError::InvalidMessage(format!("login 参数无效: {e}")))?;
-            let old_uuid = params.get(1).and_then(|v| v.as_str()).unwrap_or_default();
-            if old_uuid.is_empty() {
-                return Err(RpcError::InvalidMessage(
-                    "oldLoginUUID was not passed to the updateLogin function".to_owned(),
-                ));
-            }
-            if params
-                .get(3)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .is_empty()
-            {
-                return Err(RpcError::InvalidMessage(
-                    "dbFileName was not passed to the updateLogin function".to_owned(),
-                ));
-            }
-            let url_merge_mode = params.get(2).and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-            let entry = host.update_login(&login, old_uuid, url_merge_mode)?;
+            let Some(RpcWriteRequest::Update {
+                login,
+                old_uuid,
+                url_merge_mode,
+            }) = parse_write_request(method, params)?
+            else {
+                unreachable!("UpdateLogin parser returned a different request")
+            };
+            let entry = host.update_login(&login, &old_uuid, url_merge_mode)?;
             Ok(entry_dto(&entry, &db))
         }
         other => Err(RpcError::Unsupported(other.to_owned())),

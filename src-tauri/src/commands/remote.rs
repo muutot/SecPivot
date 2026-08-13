@@ -39,7 +39,7 @@ pub(crate) async fn open_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     profile: String,
     key: String,
-    password: String,
+    mut password: String,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultOpenResult, String> {
@@ -53,6 +53,13 @@ pub(crate) async fn open_remote_vault(
     let local_dir_for_network = local_dir.clone();
     let storage_for_network = storage.clone();
     let backup_template_for_network = backup_template.clone();
+    let _persistence = match vaults.acquire_persistence_async().await {
+        Ok(permit) => permit,
+        Err(error) => {
+            password.zeroize();
+            return Err(error);
+        }
+    };
     // Network download, KDF and parse run without the session lock, off the
     // async worker thread: the remote transport blocks on its own runtime, which
     // panics on a runtime worker (the command future would abort and the
@@ -109,7 +116,7 @@ pub(crate) async fn create_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     profile: String,
     key: String,
-    password: String,
+    mut password: String,
     kdf: String,
     cipher: String,
     compression: String,
@@ -126,6 +133,13 @@ pub(crate) async fn create_remote_vault(
     let local_dir_for_network = local_dir.clone();
     let storage_for_network = storage.clone();
     let backup_template_for_network = backup_template.clone();
+    let _persistence = match vaults.acquire_persistence_async().await {
+        Ok(permit) => permit,
+        Err(error) => {
+            password.zeroize();
+            return Err(error);
+        }
+    };
     // KDF, serialization, upload and local mirror run without the lock, off
     // the async worker thread (the remote transport must not block a runtime
     // worker — see the comment in `open_remote_vault`).

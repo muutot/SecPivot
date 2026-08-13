@@ -18,8 +18,8 @@
 //! state, which is zeroized on drop; long-lived keys live in the session.
 
 use crate::config::PasswordGeneratorSettings;
-use crate::rpc::{Envelope, SrpServer, RPC_PORT};
-use crate::vault::VaultSession;
+use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
+use crate::vault::{persist_rpc_write, VaultSession, VaultSessions, REMOTE_CHANGED_MARKER};
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -34,7 +34,12 @@ mod handshake;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use self::handshake::{dispatch_jsonrpc, dispatch_setup};
+#[cfg(test)]
+pub(crate) use self::handshake::dispatch_jsonrpc;
+pub(crate) use self::handshake::dispatch_setup;
+use self::handshake::{
+    decode_jsonrpc, dispatch_decoded_jsonrpc, encode_jsonrpc_result, DecodedJsonRpc,
+};
 
 /// How long a connection may stall in a handshake step before it is dropped.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -308,10 +313,6 @@ fn step(ws: &mut WebSocket<TcpStream>, conn: &mut Conn, text: &str, app: &AppHan
         }
     };
     eprintln!("[rpc] envelope protocol={}", env.protocol);
-    eprintln!(
-        "[rpc]   raw: {}",
-        text.chars().take(400).collect::<String>()
-    );
     match env.protocol.as_str() {
         "setup" => reply_setup(ws, conn, env, app),
         "jsonrpc" => reply_jsonrpc(ws, conn, env, app),
@@ -365,8 +366,8 @@ fn reply_setup(
                 .as_ref()
                 .map(|s| s.stage.clone().unwrap_or_default()),
             env.key.as_ref().map(|k| format!(
-                "username={:?} sc={} cc={} cr={} sr={}",
-                k.username,
+                "username_present={} sc={} cc={} cr={} sr={}",
+                k.username.is_some(),
                 k.sc.is_some(),
                 k.cc.is_some(),
                 k.cr.is_some(),
@@ -392,6 +393,12 @@ fn reply_jsonrpc(
     env: Envelope,
     app: &AppHandle,
 ) -> bool {
+    let Some(request) = decode_jsonrpc(conn, &env) else {
+        return false;
+    };
+    if matches!(request.method.as_str(), "AddLogin" | "UpdateLogin") {
+        return reply_jsonrpc_write(ws, conn, request, app);
+    }
     let Some(session_state) = app.try_state::<Mutex<VaultSession>>() else {
         return false;
     };
@@ -406,7 +413,7 @@ fn reply_jsonrpc(
         .map(|guard| guard.clone())
         .unwrap_or_default();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        dispatch_jsonrpc(conn, &env, &mut *session, &generator)
+        dispatch_decoded_jsonrpc(conn, request, &mut *session, &generator)
     }));
     match outcome {
         Ok(Some((reply, method))) => {
@@ -423,6 +430,114 @@ fn reply_jsonrpc(
             false
         }
     }
+}
+
+fn reply_jsonrpc_write(
+    ws: &mut WebSocket<TcpStream>,
+    conn: &Conn,
+    request: DecodedJsonRpc,
+    app: &AppHandle,
+) -> bool {
+    let Some(session_state) = app.try_state::<Mutex<VaultSession>>() else {
+        return false;
+    };
+    let Some(vaults) = app.try_state::<VaultSessions>() else {
+        return false;
+    };
+    let Some(session_id) = vaults.active_id() else {
+        return encode_jsonrpc_result(conn, &request.id, Err(RpcError::Locked))
+            .is_some_and(|reply| send_envelope(ws, &reply));
+    };
+    let _persistence = vaults.acquire_persistence();
+    let job = {
+        let Ok(mut active) = session_state.lock() else {
+            return false;
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            vaults.with_session_mut_result(
+                &mut active,
+                &session_id,
+                RpcError::InvalidMessage,
+                |target| {
+                    if !target.is_open() {
+                        return Err(RpcError::Locked);
+                    }
+                    let parsed = parse_write_request(&request.method, request.params.as_ref())?
+                        .ok_or_else(|| RpcError::Unsupported(request.method.clone()))?;
+                    target.prepare_rpc_write(parsed)
+                },
+            )
+        }));
+        match outcome {
+            Err(_) => {
+                eprintln!("[rpc] prepare write panicked");
+                return false;
+            }
+            Ok(Ok(job)) => job,
+            Ok(Err(error)) => {
+                return encode_jsonrpc_result(conn, &request.id, Err(error))
+                    .is_some_and(|reply| send_envelope(ws, &reply));
+            }
+        }
+    };
+    let persisted =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| persist_rpc_write(job))) {
+            Ok(result) => result,
+            Err(_) => {
+                eprintln!("[rpc] persist write panicked");
+                return false;
+            }
+        };
+    let result = match persisted {
+        Ok(persisted) => {
+            let (login, database) = persisted.persisted_response();
+            let response = entry_dto(login, database);
+            let Ok(mut active) = session_state.lock() else {
+                return encode_jsonrpc_result(conn, &request.id, Ok(response))
+                    .is_some_and(|reply| send_envelope(ws, &reply));
+            };
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                vaults.with_session_mut_result(
+                    &mut active,
+                    &session_id,
+                    RpcError::InvalidMessage,
+                    |target| target.complete_rpc_write(persisted),
+                )
+            }));
+            match outcome {
+                Ok(Ok(_)) => Ok(response),
+                Ok(Err(_)) => {
+                    // Persistence is already durable. The originating tab may
+                    // have closed while KDF/storage work ran; report success
+                    // to Kee even when there is no live session left to adopt.
+                    Ok(response)
+                }
+                Err(_) => {
+                    eprintln!("[rpc] complete write panicked after persistence");
+                    Ok(response)
+                }
+            }
+        }
+        Err(error) => {
+            if !error.starts_with(REMOTE_CHANGED_MARKER) {
+                if let Ok(mut active) = session_state.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
+            }
+            Err(RpcError::InvalidMessage(format!("保存失败: {error}")))
+        }
+    };
+    let success = result.is_ok();
+    drop(_persistence);
+    let sent = encode_jsonrpc_result(conn, &request.id, result)
+        .is_some_and(|reply| send_envelope(ws, &reply));
+    if success {
+        let _ = app.emit(VAULT_CHANGED_EVENT, ());
+    }
+    sent
 }
 fn send_envelope(ws: &mut WebSocket<TcpStream>, env: &Envelope) -> bool {
     match serde_json::to_string(env) {

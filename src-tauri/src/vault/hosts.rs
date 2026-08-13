@@ -6,7 +6,7 @@
 use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::rpc::{
     merge_urls, write_custom_fields, write_password, write_username, RpcDatabase, RpcError,
-    RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite,
+    RpcGroup, RpcGroupRef, RpcHost, RpcLogin, RpcLoginWrite, RpcWriteRequest,
 };
 use crate::util::url_host;
 use crate::vault::{
@@ -16,6 +16,63 @@ use crate::vault::{
 use keepass::db::{EntryId, EntryMut, GroupId, GroupRef, Value};
 use keepass::Database;
 use uuid::Uuid;
+
+use super::persist::{persist_save_with_db, SaveJob};
+
+#[derive(Clone)]
+enum RpcWriteOperation {
+    Add {
+        login: RpcLoginWrite,
+        parent_uuid: String,
+        entry_id: EntryId,
+    },
+    Update {
+        login: RpcLoginWrite,
+        old_uuid: String,
+        url_merge_mode: u8,
+    },
+}
+
+pub(crate) struct RpcWriteJob {
+    save: SaveJob,
+    operation: RpcWriteOperation,
+    persisted_login: RpcLogin,
+    persisted_database: RpcDatabase,
+}
+
+pub(crate) struct RpcWriteResult {
+    db: Database,
+    operation: RpcWriteOperation,
+    persisted_login: RpcLogin,
+    persisted_database: RpcDatabase,
+    revision: u64,
+    new_hash: [u8; 32],
+}
+
+impl RpcWriteResult {
+    pub(crate) fn persisted_response(&self) -> (&RpcLogin, &RpcDatabase) {
+        (&self.persisted_login, &self.persisted_database)
+    }
+}
+
+pub(crate) fn persist_rpc_write(job: RpcWriteJob) -> Result<RpcWriteResult, String> {
+    let RpcWriteJob {
+        save,
+        operation,
+        persisted_login,
+        persisted_database,
+    } = job;
+    let revision = save.revision;
+    let (db, new_hash) = persist_save_with_db(save)?;
+    Ok(RpcWriteResult {
+        db,
+        operation,
+        persisted_login,
+        persisted_database,
+        revision,
+        new_hash,
+    })
+}
 
 // ---------------------------------------------------------------------------
 // Browser bridge (KeePassHttp) host
@@ -124,24 +181,10 @@ impl RpcHost for VaultSession {
 
     fn database(&self) -> Option<RpcDatabase> {
         let db = self.require_db().ok()?;
-        let bin_id = recycle_bin_id(db);
-        let file_name = self
-            .path
-            .as_deref()
-            .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p))
-            .unwrap_or_default()
-            .to_owned();
-        Some(RpcDatabase {
-            name: db
-                .meta
-                .database_name
-                .clone()
-                .unwrap_or_else(|| file_name.clone()),
-            file_name,
-            icon_image_data: String::new(),
-            root: build_rpc_group(db.root(), bin_id, ROOT_GROUP_NAME, ""),
-            active: true,
-        })
+        Some(rpc_database_from_db(
+            db,
+            self.path.as_deref().unwrap_or_default(),
+        ))
     }
 
     fn find_logins(
@@ -179,42 +222,20 @@ impl RpcHost for VaultSession {
         login: &RpcLoginWrite,
         parent_uuid: &str,
     ) -> Result<RpcLogin, RpcError> {
-        if !self.is_open() {
-            return Err(RpcError::Locked);
-        }
-        // Resolve the parent group up front (immutable pass): unknown or
-        // invalid uuids fall back to the root group, mirroring the plugin's
-        // `AddLogin`; a parent inside the recycle bin is rejected like the
-        // plugin's `GetRootPwGroup`.
-        let parent_id = {
-            let db = self.require_db().map_err(rpc_write_error)?;
-            let bin_id = recycle_bin_id(db);
-            Uuid::parse_str(parent_uuid)
-                .ok()
-                .map(GroupId::from_uuid)
-                .filter(|id| find_rpc_group_id(db.root(), *id, bin_id))
+        let job = self.prepare_rpc_write(RpcWriteRequest::Add {
+            login: login.clone(),
+            parent_uuid: parent_uuid.to_owned(),
+        })?;
+        let result = match persist_rpc_write(job) {
+            Ok(result) => result,
+            Err(error) => {
+                if !error.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(RpcError::InvalidMessage(format!("保存失败: {error}")));
+            }
         };
-        let created_uuid = {
-            let db = self.require_db_mut().map_err(rpc_write_error)?;
-            let mut parent_group = match parent_id {
-                Some(id) => match db.group_mut(id) {
-                    Some(group) => group,
-                    None => db.root_mut(),
-                },
-                None => db.root_mut(),
-            };
-            let mut entry = parent_group.add_entry();
-            apply_login_write(&mut entry, login, &login.urls.join(" "));
-            entry.set_icon_none();
-            entry.id().uuid().to_string()
-        };
-        self.mark_dirty();
-        // The extension assumes a successful AddLogin/UpdateLogin is durable
-        // (KeePassRPC persists after every write); nothing in the desktop UI
-        // saves on its behalf, so flush here.
-        persist_after_rpc_write(self)?;
-        rpc_login_by_uuid(self, &created_uuid)
-            .ok_or(RpcError::InvalidMessage("新建条目读取失败".to_owned()))
+        self.complete_rpc_write(result).map(|(login, _)| login)
     }
 
     fn update_login(
@@ -223,50 +244,165 @@ impl RpcHost for VaultSession {
         old_uuid: &str,
         url_merge_mode: u8,
     ) -> Result<RpcLogin, RpcError> {
+        let job = self.prepare_rpc_write(RpcWriteRequest::Update {
+            login: login.clone(),
+            old_uuid: old_uuid.to_owned(),
+            url_merge_mode,
+        })?;
+        let result = match persist_rpc_write(job) {
+            Ok(result) => result,
+            Err(error) => {
+                if !error.starts_with(super::REMOTE_CHANGED_MARKER) {
+                    self.note_save_failure();
+                }
+                return Err(RpcError::InvalidMessage(format!("保存失败: {error}")));
+            }
+        };
+        self.complete_rpc_write(result).map(|(login, _)| login)
+    }
+}
+
+impl VaultSession {
+    pub(crate) fn prepare_rpc_write(
+        &self,
+        request: RpcWriteRequest,
+    ) -> Result<RpcWriteJob, RpcError> {
         if !self.is_open() {
             return Err(RpcError::Locked);
         }
-        let id = parse_entry_id(old_uuid).map_err(|_| RpcError::EntryNotFound)?;
-        // Resolve + merge URLs on the immutable snapshot first.
-        let merged_urls = {
-            let db = self.require_db().map_err(rpc_write_error)?;
+        let mut save = self.prepare_save(false).map_err(rpc_write_error)?;
+        let operation = match request {
+            RpcWriteRequest::Add { login, parent_uuid } => RpcWriteOperation::Add {
+                login,
+                parent_uuid,
+                entry_id: EntryId::from_uuid(Uuid::new_v4()),
+            },
+            RpcWriteRequest::Update {
+                login,
+                old_uuid,
+                url_merge_mode,
+            } => RpcWriteOperation::Update {
+                login,
+                old_uuid,
+                url_merge_mode,
+            },
+        };
+        let uuid = apply_rpc_write(&mut save.db, &operation)?;
+        let persisted_login = rpc_login_from_db(&save.db, &uuid, self.match_registrable_domain)
+            .ok_or_else(|| RpcError::InvalidMessage("写入条目读取失败".to_owned()))?;
+        let persisted_database =
+            rpc_database_from_db(&save.db, self.path.as_deref().unwrap_or_default());
+        Ok(RpcWriteJob {
+            save,
+            operation,
+            persisted_login,
+            persisted_database,
+        })
+    }
+
+    pub(crate) fn complete_rpc_write(
+        &mut self,
+        result: RpcWriteResult,
+    ) -> Result<(RpcLogin, RpcDatabase), RpcError> {
+        let RpcWriteResult {
+            db,
+            operation,
+            persisted_login,
+            persisted_database,
+            revision,
+            new_hash,
+        } = result;
+        let concurrent = self.revision != revision;
+        self.note_save_success();
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = new_hash;
+        }
+        if !concurrent {
+            self.db = Some(db);
+        } else if apply_rpc_write(self.require_db_mut().map_err(rpc_write_error)?, &operation)
+            .is_err()
+        {
+            // Persistence already succeeded. A concurrent delete/move may
+            // make replay impossible, but that must not turn a durable write
+            // into a protocol error. The newer live state remains dirty so an
+            // explicit later save can intentionally supersede the persisted
+            // RPC result.
+        }
+        self.mark_dirty();
+        self.dirty = concurrent;
+        self.cached_snapshot = None;
+        Ok((persisted_login, persisted_database))
+    }
+}
+
+fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<String, RpcError> {
+    match operation {
+        RpcWriteOperation::Add {
+            login,
+            parent_uuid,
+            entry_id,
+        } => {
+            let bin_id = recycle_bin_id(db);
+            let parent_id = Uuid::parse_str(parent_uuid)
+                .ok()
+                .map(GroupId::from_uuid)
+                .filter(|id| find_rpc_group_id(db.root(), *id, bin_id));
+            let mut parent_group = match parent_id {
+                Some(id) => match db.group_mut(id) {
+                    Some(group) => group,
+                    None => db.root_mut(),
+                },
+                None => db.root_mut(),
+            };
+            let mut entry = parent_group
+                .add_entry_with_id(*entry_id)
+                .map_err(|_| RpcError::InvalidMessage("新建条目 UUID 已存在，请重试".to_owned()))?;
+            apply_login_write(&mut entry, login, &login.urls.join(" "));
+            entry.set_icon_none();
+            Ok(entry_id.uuid().to_string())
+        }
+        RpcWriteOperation::Update {
+            login,
+            old_uuid,
+            url_merge_mode,
+        } => {
+            let id = parse_entry_id(old_uuid).map_err(|_| RpcError::EntryNotFound)?;
             let bin_id = recycle_bin_id(db);
             let current = match find_rpc_entry_urls(db.root(), id, bin_id, false) {
                 FindEntryOutcome::NotFound => return Err(RpcError::EntryNotFound),
                 FindEntryOutcome::InRecycleBin => return Err(RpcError::InRecycleBin),
                 FindEntryOutcome::Found(urls) => urls,
             };
-            merge_urls(&current, &login.urls, url_merge_mode)
-        };
-        {
-            let db = self.require_db_mut().map_err(rpc_write_error)?;
+            let merged_urls = merge_urls(&current, &login.urls, *url_merge_mode);
             let mut entry = db.entry_mut(id).ok_or(RpcError::EntryNotFound)?;
-            // `edit_tracking` snapshots the pre-edit entry into its history on
-            // drop — the KDBX equivalent of the plugin's `CreateBackup`.
             entry.edit_tracking(|tracked| {
                 let mut this = tracked.as_mut();
                 apply_login_write(&mut this, login, &merged_urls.join(" "));
             });
+            Ok(old_uuid.to_owned())
         }
-        self.mark_dirty();
-        persist_after_rpc_write(self)?;
-        rpc_login_by_uuid(self, old_uuid).ok_or(RpcError::EntryNotFound)
     }
 }
 
-/// Persist the vault right after a browser-originated write (Add/UpdateLogin)
-/// so the change survives a restart even when the desktop UI never saves.
-fn persist_after_rpc_write(session: &mut VaultSession) -> Result<(), RpcError> {
-    session
-        .save()
-        .map_err(|e| RpcError::InvalidMessage(format!("保存失败: {e}")))?;
-    Ok(())
+fn rpc_database_from_db(db: &Database, path: &str) -> RpcDatabase {
+    let bin_id = recycle_bin_id(db);
+    let file_name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_owned();
+    RpcDatabase {
+        name: db
+            .meta
+            .database_name
+            .clone()
+            .unwrap_or_else(|| file_name.clone()),
+        file_name,
+        icon_image_data: String::new(),
+        root: build_rpc_group(db.root(), bin_id, ROOT_GROUP_NAME, ""),
+        active: true,
+    }
 }
 
 /// Read one entry by uuid as an `RpcLogin` (recycle bin skipped, like the
 /// read paths); the plugin returns the updated entry the same way.
-fn rpc_login_by_uuid(session: &VaultSession, uuid: &str) -> Option<RpcLogin> {
-    let db = session.require_db().ok()?;
+fn rpc_login_from_db(db: &Database, uuid: &str, registrable: bool) -> Option<RpcLogin> {
     let bin_id = recycle_bin_id(db);
     let filter = RpcLoginFilter {
         urls: &[],
@@ -281,7 +417,7 @@ fn rpc_login_by_uuid(session: &VaultSession, uuid: &str) -> Option<RpcLogin> {
         &filter,
         ROOT_GROUP_NAME,
         "",
-        session.match_registrable_domain,
+        registrable,
         &mut out,
     );
     out.into_iter().next()

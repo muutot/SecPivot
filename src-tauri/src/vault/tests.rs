@@ -7662,6 +7662,221 @@ fn rpc_update_login_rejects_unknown_uuid_recycle_bin_and_locked() {
     );
 }
 
+#[test]
+fn rpc_write_prepare_does_not_mutate_live_session_before_persist() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let before = session.require_db().unwrap().root().entries().count();
+    let login = rpc_login_write("Atomic", "u", "p", &["https://atomic.example"]);
+
+    let _job = session
+        .prepare_rpc_write(crate::rpc::RpcWriteRequest::Add {
+            login,
+            parent_uuid: String::new(),
+        })
+        .unwrap();
+
+    assert_eq!(
+        session.require_db().unwrap().root().entries().count(),
+        before
+    );
+    assert!(!session.state().unwrap().unwrap().dirty);
+}
+
+#[test]
+fn rpc_write_persist_failure_leaves_live_session_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let before = session.state().unwrap().unwrap();
+    let login = rpc_login_write("Atomic", "u", "p", &["https://atomic.example"]);
+    let job = session
+        .prepare_rpc_write(crate::rpc::RpcWriteRequest::Add {
+            login,
+            parent_uuid: String::new(),
+        })
+        .unwrap();
+
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir_all(dir.path()).unwrap();
+    let error = match persist_rpc_write(job) {
+        Ok(_) => panic!("persist unexpectedly succeeded"),
+        Err(error) => error,
+    };
+    assert!(error.contains("写入数据库失败"), "{error}");
+
+    let after = session.state().unwrap().unwrap();
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.dirty, before.dirty);
+    assert_eq!(after.root.entries.len(), before.root.entries.len());
+}
+
+#[test]
+fn rpc_write_completion_replays_on_concurrent_edit_without_overwriting_it() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let login = rpc_login_write("RPC", "rpc-user", "rpc-pass", &["https://rpc.example"]);
+    let job = session
+        .prepare_rpc_write(crate::rpc::RpcWriteRequest::Add {
+            login,
+            parent_uuid: String::new(),
+        })
+        .unwrap();
+    let persisted = persist_rpc_write(job).unwrap();
+
+    session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "ConcurrentUI",
+            "ui-user",
+            "ui-pass",
+            "https://ui.example",
+        ))
+        .unwrap();
+    let (created, _) = session.complete_rpc_write(persisted).unwrap();
+    let state = session.state().unwrap().unwrap();
+    assert!(state.dirty);
+    assert!(state.root.entries.iter().any(|entry| entry.title == "RPC"));
+    assert!(state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentUI"));
+    assert_eq!(created.username, "rpc-user");
+
+    // The first persisted snapshot is durable without the concurrent UI edit;
+    // the retained dirty state writes both on the next normal save.
+    let mut first = VaultSession::default();
+    first.open(&path, "master-password", None).unwrap();
+    let first_state = first.state().unwrap().unwrap();
+    assert!(first_state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "RPC"));
+    assert!(!first_state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentUI"));
+    drop(first);
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    let final_state = reopened.state().unwrap().unwrap();
+    assert!(final_state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "RPC"));
+    assert!(final_state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "ConcurrentUI"));
+}
+
+#[test]
+fn rpc_update_completion_wins_same_entry_fields_and_preserves_ui_history() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let created = session
+        .add_login(
+            &rpc_login_write(
+                "Initial",
+                "initial-user",
+                "initial-pass",
+                &["https://initial"],
+            ),
+            "",
+        )
+        .unwrap();
+    let job = session
+        .prepare_rpc_write(crate::rpc::RpcWriteRequest::Update {
+            login: rpc_login_write("RPC-final", "rpc-user", "rpc-pass", &["https://rpc-final"]),
+            old_uuid: created.uuid.clone(),
+            url_merge_mode: 5,
+        })
+        .unwrap();
+    let persisted = persist_rpc_write(job).unwrap();
+
+    session
+        .update_entry(
+            &created.uuid,
+            &entry_input(
+                ROOT_GROUP_UUID,
+                "UI-intermediate",
+                "ui-user",
+                "ui-pass",
+                "https://ui-intermediate",
+            ),
+        )
+        .unwrap();
+    let (completed, _) = session.complete_rpc_write(persisted).unwrap();
+
+    assert_eq!(completed.title, "RPC-final");
+    assert_eq!(completed.username, "rpc-user");
+    assert_eq!(completed.password, "rpc-pass");
+    assert_eq!(completed.urls, vec!["https://rpc-final".to_owned()]);
+    assert!(session.state().unwrap().unwrap().dirty);
+
+    let id = parse_entry_id(&created.uuid).unwrap();
+    let entry = session.require_db().unwrap().entry(id).unwrap();
+    let history = entry.history.as_ref().unwrap();
+    assert!(history.get_entries().iter().any(|item| {
+        item.get_title() == Some("UI-intermediate")
+            && item.get_username() == Some("ui-user")
+            && item.get_password() == Some("ui-pass")
+    }));
+}
+
+#[test]
+fn rpc_update_completion_reports_persisted_success_after_concurrent_delete() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let created = session
+        .add_login(
+            &rpc_login_write(
+                "Initial",
+                "initial-user",
+                "initial-pass",
+                &["https://initial"],
+            ),
+            "",
+        )
+        .unwrap();
+    let job = session
+        .prepare_rpc_write(crate::rpc::RpcWriteRequest::Update {
+            login: rpc_login_write("RPC-final", "rpc-user", "rpc-pass", &["https://rpc-final"]),
+            old_uuid: created.uuid.clone(),
+            url_merge_mode: 5,
+        })
+        .unwrap();
+    let persisted = persist_rpc_write(job).unwrap();
+
+    session.delete_entry(&created.uuid).unwrap();
+    let (completed, _) = session.complete_rpc_write(persisted).unwrap();
+    assert_eq!(completed.title, "RPC-final");
+    assert_eq!(completed.password, "rpc-pass");
+    assert!(session.state().unwrap().unwrap().dirty);
+    assert!(session
+        .state()
+        .unwrap()
+        .unwrap()
+        .root
+        .entries
+        .iter()
+        .all(|entry| entry.uuid != created.uuid));
+
+    let mut durable = VaultSession::default();
+    durable.open(&path, "master-password", None).unwrap();
+    let persisted_login = durable
+        .find_logins(&[], Some(&created.uuid), None, None)
+        .pop()
+        .unwrap();
+    assert_eq!(persisted_login.title, "RPC-final");
+    assert_eq!(persisted_login.password, "rpc-pass");
+}
+
 // -----------------------------------------------------------------------
 // 官方同步·条目级合并: merge_databases (pure) + VaultSession::merge_remote
 // -----------------------------------------------------------------------

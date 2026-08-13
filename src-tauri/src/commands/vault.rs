@@ -89,6 +89,7 @@ pub(crate) fn create_vault(
 ) -> Result<VaultOpenResult, String> {
     // Slow work (KDF, serialization, file write) runs outside the session
     // lock; only the state adoption is locked.
+    let _persistence = vaults.acquire_persistence();
     let prepared = vault::prepare_local_create(
         Path::new(&path),
         &password,
@@ -214,6 +215,7 @@ pub(crate) async fn update_database_settings(
         );
     }
 
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -253,6 +255,7 @@ pub(crate) fn save_vault(
 ) -> Result<VaultState, String> {
     // Capture a cheap job under the lock, then run KDF + serialization +
     // transport outside it, then mark clean under the lock again.
+    let _persistence = vaults.acquire_persistence();
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -289,6 +292,7 @@ pub(crate) async fn refresh_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<VaultState, String> {
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -314,6 +318,7 @@ pub(crate) async fn merge_remote_vault(
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<VaultState, String> {
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -354,6 +359,7 @@ pub(crate) fn save_vault_as(
     // Capture a cheap job (db clone + new path) under the lock, run the
     // re-encrypt (KDF) + serialization + disk write outside it, then switch
     // the session target under the lock again.
+    let _persistence = vaults.acquire_persistence();
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -387,6 +393,7 @@ pub(crate) fn change_master_key(
 ) -> Result<VaultState, String> {
     // Keyfile read, KDF and persistence all happen without the session lock.
     let mut keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
+    let _persistence = vaults.acquire_persistence();
     let (session_id, (db, target, revision)) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {

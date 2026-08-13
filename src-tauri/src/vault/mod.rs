@@ -28,6 +28,7 @@ use crate::remote::RemoteStorage;
 pub(crate) use self::helpers::{
     entry_has_otp, entry_match_urls, kprpc_matches_url, parse_entry_id, recycle_bin_id,
 };
+pub(crate) use self::hosts::persist_rpc_write;
 pub(crate) use self::persist::{
     persist_change, persist_remote_merge, persist_remote_refresh, persist_save,
     persist_save_with_db, prepare_local_create, prepare_local_open, prepare_remote_create,

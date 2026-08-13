@@ -273,6 +273,7 @@ pub(crate) async fn download_favicons(
         // that panic would unwind through the MutexGuard and poison the
         // session mutex, bricking every later command with "数据库锁已损坏"
         // (see the note in `list_objects_async`).
+        let _persistence = vaults.acquire_persistence_async().await?;
         let job = {
             let mut active = session.lock().map_err(|_| {
                 eprintln!("[favicon] 数据库锁已损坏");
