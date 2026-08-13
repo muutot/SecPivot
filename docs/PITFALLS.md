@@ -52,6 +52,7 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 - **Release jobs must fail closed on missing signing inputs or artifacts.** Missing Android secrets, keystore, signed APK, Windows exe, portable ZIP, draft release, or upload failure is a failed release. Logging "skipping" or "nothing to upload" turns a broken release into a green job and invalidates TODO evidence.
 - **Parallel release builders must synchronize through job dependencies, not a bounded release poll.** The Windows extreme-LTO build may legitimately outlast the Android build. Preserve the verified APK as an Actions artifact, then let a job that `needs` both builders upload it after the Windows job has created and validated the draft release; a fixed 15-minute poll creates false failures on slow runners.
 - **Never interpolate release refs, versions, or branch names into a shell command.** Git permits branch names containing shell metacharacters such as `;`, `&`, and `$()`. Release/version/changelog scripts must use `execFileSync(command, args)` (plus `--end-of-options` before user-supplied revisions) so every ref remains one literal argument.
+- **A failed Git query is not an empty changelog.** Invalid revisions and repository errors must terminate changelog generation with a non-zero exit; swallowing `git log`/`git tag` failures can let a release continue with stale release notes.
 
 ## Remote (S3)
 

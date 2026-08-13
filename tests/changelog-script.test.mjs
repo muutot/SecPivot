@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -23,12 +23,25 @@ test("a shell-like changelog revision remains one literal git argument", () => {
   const payload = `HEAD && "${process.execPath}" -e "require('node:fs').writeFileSync('.changelog-shell-injection-marker','injected')" && echo `;
 
   try {
-    execFileSync(process.execPath, [changelogPath, "--preview", "--from", payload], {
+    const result = spawnSync(process.execPath, [changelogPath, "--preview", "--from", payload], {
       encoding: "utf-8",
-      stdio: "pipe",
     });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Failed to read changelog history/);
     assert.equal(existsSync(injectionMarker), false);
   } finally {
     if (existsSync(injectionMarker)) unlinkSync(injectionMarker);
   }
+});
+
+test("an invalid changelog revision fails closed instead of reporting no commits", () => {
+  const result = spawnSync(
+    process.execPath,
+    [changelogPath, "--preview", "--from", "definitely-not-a-ref"],
+    { encoding: "utf-8" },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Failed to read changelog history/);
+  assert.doesNotMatch(result.stdout, /No commits found/);
 });

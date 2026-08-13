@@ -109,6 +109,8 @@ Only this explicit `--regenerate` path force-pushes (`--force-with-lease` for th
 
 All child processes receive argument arrays rather than interpolated shell strings. This is required even for branch names because Git permits shell metacharacters in refs; changelog revision arguments are separated from Git options with `--end-of-options`.
 
+Changelog Git failures are fatal. An invalid `--from` revision or a failed tag query must exit non-zero rather than being reported as an empty commit range, which could otherwise leave stale release notes in a release commit.
+
 ### Dry run
 
 ```

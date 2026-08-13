@@ -49,8 +49,10 @@ function gitLog(fromRef) {
       },
     );
     return output.trim().split("\n").filter(Boolean);
-  } catch {
-    return [];
+  } catch (error) {
+    const detail = typeof error.stderr === "string" ? error.stderr.trim() : error.message;
+    console.error(`Failed to read changelog history: ${detail}`);
+    process.exit(1);
   }
 }
 
@@ -61,8 +63,10 @@ function getLatestTag() {
       encoding: "utf-8",
     }).trim();
     return tags.split("\n").filter(Boolean)[0] || "";
-  } catch {
-    return "";
+  } catch (error) {
+    const detail = typeof error.stderr === "string" ? error.stderr.trim() : error.message;
+    console.error(`Failed to list release tags: ${detail}`);
+    process.exit(1);
   }
 }
 
