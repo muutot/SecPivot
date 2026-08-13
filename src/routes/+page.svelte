@@ -811,16 +811,17 @@
   }
 
   async function toggleFavorite(entry: VaultEntry): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       const saved = await vault.callInSession(sessionId, () => vault.toggleFavorite(entry.uuid));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       if (selectedEntry?.uuid === entry.uuid) {
         selectedEntry = findEntryByUuid(saved, entry.uuid);
       }
     } catch (e) {
-      flash(`收藏失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`收藏失败：${e}`);
     }
   }
 
@@ -1003,14 +1004,15 @@
   async function handleClearHistory(): Promise<void> {
     if (!currentVault) return;
     if (!window.confirm("将删除所有条目的历史版本快照（当前条目内容不受影响）。继续？")) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       const cleared = await vault.callInSession(sessionId, () => vault.clearAllHistory());
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`已清理 ${cleared} 个条目的历史`);
     } catch (e) {
-      flash(`清理历史失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`清理历史失败：${e}`);
     }
   }
 
@@ -1586,14 +1588,15 @@
   }
 
   async function renameGroup(uuid: string, name: string): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.renameGroup(uuid, name));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash("已重命名分组");
     } catch (e) {
-      flash(`重命名失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`重命名失败：${e}`);
     }
   }
 
@@ -1603,15 +1606,16 @@
     enableSearching?: boolean;
   }): Promise<void> {
     if (!groupMetaUuid) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     const uuid = groupMetaUuid;
     try {
       await vault.callInSession(sessionId, () => vault.updateGroupMeta(uuid, meta));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash("已保存分组属性");
     } catch (e) {
-      flash(`保存分组属性失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`保存分组属性失败：${e}`);
     }
   }
 
@@ -1648,79 +1652,87 @@
 
   function askDeleteGroup(uuid: string): void {
     const inBin = selectedGroupInBin(uuid);
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     confirmState = {
       message: inBin
         ? "永久删除该分组及其全部内容？此操作无法撤销。"
         : "删除该分组？其下条目将移动到回收站。",
       onconfirm: async () => {
+        if (!sessionView.isCurrent(view)) return;
         try {
           await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
-          if (vault.getActiveSessionId() !== sessionId) return;
+          if (!sessionView.isCurrent(view)) return;
           if (selectedGroup === uuid) selectedGroup = null;
           flash(inBin ? "已永久删除分组" : "已移入回收站");
         } catch (e) {
-          flash(`删除失败：${e}`);
+          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
         }
       },
     };
   }
 
   function askEmptyRecycleBin(): void {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     confirmState = {
       message: "清空回收站？其中的条目和分组将被永久删除，此操作无法撤销。",
       onconfirm: async () => {
+        if (!sessionView.isCurrent(view)) return;
         try {
           await vault.callInSession(sessionId, () => vault.emptyRecycleBin());
-          if (vault.getActiveSessionId() !== sessionId) return;
+          if (!sessionView.isCurrent(view)) return;
           flash("已清空回收站");
         } catch (e) {
-          flash(`清空失败：${e}`);
+          if (sessionView.isCurrent(view)) flash(`清空失败：${e}`);
         }
       },
     };
   }
 
   async function restoreGroup(uuid: string): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.restoreGroup(uuid));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash("已恢复分组");
     } catch (e) {
-      flash(`恢复失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`恢复失败：${e}`);
     }
   }
 
   async function restoreEntry(entry: VaultEntry): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.restoreEntry(entry.uuid));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
       flash("已恢复条目");
     } catch (e) {
-      flash(`恢复失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`恢复失败：${e}`);
     }
   }
 
   function askDeleteEntry(entry: VaultEntry): void {
     const inBin = entryInBin(entry.uuid);
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     confirmState = {
       message: inBin
         ? `永久删除条目「${entry.title || "未命名"}」？此操作无法撤销。`
         : `删除条目「${entry.title || "未命名"}」？可从回收站恢复。`,
       onconfirm: async () => {
+        if (!sessionView.isCurrent(view)) return;
         try {
           await vault.callInSession(sessionId, () => vault.deleteEntry(entry.uuid));
-          if (vault.getActiveSessionId() !== sessionId) return;
+          if (!sessionView.isCurrent(view)) return;
           if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
           if (selectedUuids.has(entry.uuid)) {
             const next = new Set(selectedUuids);
@@ -1729,7 +1741,7 @@
           }
           flash(inBin ? "已永久删除条目" : "已移入回收站");
         } catch (e) {
-          flash(`删除失败：${e}`);
+          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
         }
       },
     };
@@ -1739,21 +1751,23 @@
     const uuids = Array.from(selectedUuids);
     if (uuids.length === 0) return;
     const allInBin = uuids.every((uuid) => entryInBin(uuid));
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     confirmState = {
       message: allInBin
         ? `永久删除所选 ${uuids.length} 个条目？此操作无法撤销。`
         : `删除所选 ${uuids.length} 个条目？可从回收站恢复。`,
       onconfirm: async () => {
+        if (!sessionView.isCurrent(view)) return;
         try {
           await vault.callInSession(sessionId, () => vault.deleteEntries(uuids));
-          if (vault.getActiveSessionId() !== sessionId) return;
+          if (!sessionView.isCurrent(view)) return;
           selectedUuids = new Set();
           selectedEntry = null;
           flash(allInBin ? "已永久删除所选条目" : "所选条目已移入回收站");
         } catch (e) {
-          flash(`删除失败：${e}`);
+          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
         }
       },
     };
@@ -1761,45 +1775,50 @@
 
   async function moveEntriesTo(groupUuid: string, uuids: string[]): Promise<void> {
     if (!currentVault || uuids.length === 0) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       for (const uuid of uuids) {
         await vault.callInSession(sessionId, () => vault.moveEntry(uuid, groupUuid));
       }
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`已移动 ${uuids.length} 个条目`);
     } catch (e) {
-      flash(`移动失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`移动失败：${e}`);
     }
   }
 
   async function toggleGroupExpanded(uuid: string, expanded: boolean): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.setGroupExpanded(uuid, expanded));
     } catch (error) {
-      if (vault.getActiveSessionId() === sessionId) flash(`展开分组失败：${error}`);
+      if (sessionView.isCurrent(view)) flash(`展开分组失败：${error}`);
     }
   }
 
   async function toggleGroupsExpanded(uuids: string[], expanded: boolean): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.setGroupsExpanded(uuids, expanded));
     } catch (error) {
-      if (vault.getActiveSessionId() === sessionId) flash(`展开分组失败：${error}`);
+      if (sessionView.isCurrent(view)) flash(`展开分组失败：${error}`);
     }
   }
 
   async function copyEntryValue(value: string, label: string, sensitive = false): Promise<void> {
+    const view = sessionView.capture();
+    if (!view) return;
     try {
       await copyValue(value, sensitive);
-      flash(`已复制${label}`);
+      if (sessionView.isCurrent(view)) flash(`已复制${label}`);
     } catch {
-      flash("复制失败");
+      if (sessionView.isCurrent(view)) flash("复制失败");
     }
   }
 
@@ -1961,14 +1980,15 @@
   const AUTOTYPE_PASSWORD_SEQUENCE = "{PASSWORD}";
 
   async function runAutoType(entry: VaultEntry, sequence = AUTOTYPE_SEQUENCE): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
       await vault.callInSession(sessionId, () => vault.autoType(entry.uuid, sequence));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash("已最小化，请在 1.5 秒内切换到目标窗口");
     } catch (e) {
-      flash(`自动填充失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`自动填充失败：${e}`);
     }
   }
 

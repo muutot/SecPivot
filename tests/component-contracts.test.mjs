@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+function topLevelFunction(source, name) {
+  const startPattern = new RegExp(`^  (?:async )?function ${name}\\(`, "m");
+  const start = source.search(startPattern);
+  if (start === -1) return null;
+  const tail = source.slice(start);
+  const next = tail.slice(1).search(/^  (?:async )?function \w+\(/m);
+  return next === -1 ? tail : tail.slice(0, next + 1);
+}
+
 test("nested group nodes forward every metadata action", async () => {
   const source = await readFile(
     new URL("../src/lib/components/GroupNode.svelte", import.meta.url),
@@ -64,4 +73,46 @@ test("TCATO open attempts release only their own focus-lock lease", async () => 
   );
   assert.match(openBlock[1], /finally \{\s*focusLockLease\.release\(\)/);
   assert.doesNotMatch(openBlock[1], /setTcatoOverlayOpen\(/);
+});
+
+test("page mutations gate completion UI by the originating view epoch", async () => {
+  const source = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const asyncActions = [
+    "toggleFavorite",
+    "handleClearHistory",
+    "renameGroup",
+    "saveGroupMeta",
+    "restoreGroup",
+    "restoreEntry",
+    "moveEntriesTo",
+    "toggleGroupExpanded",
+    "toggleGroupsExpanded",
+    "copyEntryValue",
+    "runAutoType",
+  ];
+  const confirmedActions = [
+    "askDeleteGroup",
+    "askEmptyRecycleBin",
+    "askDeleteEntry",
+    "askDeleteEntries",
+  ];
+
+  for (const name of asyncActions) {
+    const block = topLevelFunction(source, name);
+    assert.ok(block, `${name} must exist`);
+    assert.match(block, /const view = sessionView\.capture\(\)/, `${name} must capture a view`);
+    assert.match(block, /sessionView\.isCurrent\(view\)/, `${name} must gate completion`);
+    assert.doesNotMatch(block, /vault\.getActiveSessionId\(\)/);
+  }
+
+  for (const name of confirmedActions) {
+    const block = topLevelFunction(source, name);
+    assert.ok(block, `${name} must exist`);
+    assert.match(block, /const view = sessionView\.capture\(\)/, `${name} must capture a view`);
+    assert.match(
+      block,
+      /onconfirm: async \(\) => \{\s*if \(!sessionView\.isCurrent\(view\)\) return/,
+    );
+    assert.doesNotMatch(block, /vault\.getActiveSessionId\(\)/);
+  }
 });
