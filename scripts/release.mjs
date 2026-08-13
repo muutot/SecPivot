@@ -26,6 +26,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
 import { resolveReleaseTarget } from "./versioning.mjs";
+import { RELEASE_FILES, findUnexpectedReleaseChanges } from "./release-files.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -65,6 +66,23 @@ function checkReleaseMd(ver) {
   return readFileSync(RELEASE_PATH, "utf-8").includes(`v${ver}`);
 }
 
+function gitChangedFiles(args) {
+  const output = execSync(`git diff --name-only ${args}`.trim(), {
+    cwd: ROOT,
+    encoding: "utf-8",
+  }).trim();
+  return output ? output.split(/\r?\n/).filter(Boolean) : [];
+}
+
+function ensureOnlyReleaseFilesChanged() {
+  const unexpected = findUnexpectedReleaseChanges(gitChangedFiles("--cached"), gitChangedFiles(""));
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Commit non-release tracked changes before releasing: ${unexpected.join(", ")}.`,
+    );
+  }
+}
+
 // --- Parse args ---
 const args = argv.slice(2);
 const isRegenerate = args.includes("--regenerate");
@@ -76,6 +94,13 @@ if (!versionArg) {
     `Usage: node scripts/release.mjs [--regenerate] [--dry-run] <version|patch|minor|major>`,
   );
   console.log(`Current version: ${getVersion()}`);
+  exit(1);
+}
+
+try {
+  ensureOnlyReleaseFilesChanged();
+} catch (error) {
+  console.error(`Release preflight failed: ${error.message}`);
   exit(1);
 }
 
@@ -174,9 +199,15 @@ console.log(`  ✓ RELEASE.md matches v${currentVersion}`);
 
 // Step 4: Commit
 console.log("\n[4/6] Committing...");
-const changedFiles = execSync("git diff --name-only", { cwd: ROOT, encoding: "utf-8" }).trim();
-if (changedFiles) {
-  run(`git add ${changedFiles.split("\n").join(" ")}`);
+try {
+  ensureOnlyReleaseFilesChanged();
+} catch (error) {
+  console.error(`Release commit blocked: ${error.message}`);
+  exit(1);
+}
+run(`git add -- ${RELEASE_FILES.join(" ")}`);
+const stagedReleaseFiles = gitChangedFiles(`--cached -- ${RELEASE_FILES.join(" ")}`);
+if (stagedReleaseFiles.length > 0) {
   run(`git commit -m "\u{1F516} chore[release]: bump version to ${currentVersion}"`);
   console.log("  ✓ Committed");
 } else {

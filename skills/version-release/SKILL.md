@@ -29,6 +29,8 @@ The release commit (`🔖 chore[release]: bump version to x.x.x`) **must only co
 
 Any change to scripts, skills, references, tests, or other source files **must be committed before** the release. The release script's `git diff --name-only` may pick up unrelated dirty files — verify the staged diff before allowing the commit.
 
+The script enforces this prerequisite before changing versions and again before committing: unrelated tracked or staged files abort the release, and the commit stages only the six files above. Untracked local tooling directories are not staged and do not broaden the release commit.
+
 Run:
 
 ```
