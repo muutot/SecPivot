@@ -225,3 +225,32 @@ test("attachment preview binds every async path to its resource view", async () 
   assert.match(importBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
   assert.doesNotMatch(dialog, /vault\.getActiveSessionId\(\) !== sessionId/);
 });
+
+test("remaining async dialogs reset or unmount with their owning view", async () => {
+  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const detail = await readFile(
+    new URL("../src/lib/components/EntryDetail.svelte", import.meta.url),
+    "utf8",
+  );
+  const sessionSwitch = page.match(
+    /const unsubActive = vault\.activeId\.subscribe\(\(value\) => \{([\s\S]*?)\n    \}\);/,
+  );
+  const detailReset = detail.match(/\$effect\(\(\) => \{([\s\S]*?)\n  \}\);/);
+
+  assert.ok(sessionSwitch, "page active-session reset must exist");
+  for (const state of ["similarOpen", "expiredOpen", "hibpOpen"]) {
+    assert.match(sessionSwitch[1], new RegExp(`${state} = false`));
+  }
+
+  assert.ok(detailReset, "EntryDetail resource reset effect must exist");
+  for (const state of [
+    "passwordLoading",
+    "customFieldLoading",
+    "historyLoading",
+    "storageLoading",
+    "viewingVersion",
+    "previewAttachmentName",
+  ]) {
+    assert.match(detailReset[1], new RegExp(`${state} = (?:false|\\{\\}|null)`));
+  }
+});

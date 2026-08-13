@@ -101,6 +101,7 @@
     viewingVersion = null;
     storage = null;
     storageLoading = false;
+    previewAttachmentName = null;
   });
 
   onDestroy(() => {
