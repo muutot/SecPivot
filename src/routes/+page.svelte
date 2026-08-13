@@ -58,7 +58,13 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
-  import { LatestOperationGuard, SessionViewGuard } from "$lib/utils/session-state";
+  import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
+  import {
+    awaitCurrentView,
+    LatestOperationGuard,
+    SessionViewGuard,
+    type SessionViewToken,
+  } from "$lib/utils/session-state";
   import { matchesAdvancedSearch, type AdvancedSearchQuery } from "$lib/utils/entry-search";
   import {
     buildGroupPathIndex,
@@ -1073,43 +1079,6 @@
     });
   }
 
-  type ImportGroupResolver = {
-    state: VaultState;
-    baseUuid: string;
-    groups: ReturnType<typeof buildGroupPathIndex>;
-  };
-
-  /** Walk a "A / B" group path through an indexed child lookup, creating
-   *  missing subgroups and updating the index as each one is added. */
-  async function resolveImportGroup(path: string, resolver: ImportGroupResolver): Promise<string> {
-    const parts = path
-      .split("/")
-      .map((p) => p.trim())
-      .filter(Boolean);
-    let parentUuid = resolver.baseUuid;
-    for (const name of parts) {
-      const existingUuid = resolver.groups.get(parentUuid)?.get(name);
-      if (existingUuid) {
-        parentUuid = existingUuid;
-        continue;
-      }
-
-      resolver.state = await vault.addGroup({ parentUuid, name });
-      const parent = findGroupIn(resolver.state.root, parentUuid);
-      const created = parent?.children.find((group) => group.name === name);
-      if (!created) throw new Error("创建分组失败");
-
-      let children = resolver.groups.get(parentUuid);
-      if (!children) {
-        children = new Map();
-        resolver.groups.set(parentUuid, children);
-      }
-      children.set(name, created.uuid);
-      parentUuid = created.uuid;
-    }
-    return parentUuid;
-  }
-
   /** Normalized import row shared by the CSV and KeePass-XML importers. */
   type ImportEntry = {
     group: string;
@@ -1125,26 +1094,35 @@
   /** Pick an import file via the Tauri dialog (desktop) or a hidden file input,
    *  returning its text, or `null` when cancelled / unreadable. */
   async function pickImportFile(
+    view: SessionViewToken,
     filters: { name: string; extensions: string[] }[],
   ): Promise<string | null> {
     try {
-      if (isTauriRuntime()) {
-        const selected = await open({ multiple: false, filters });
-        return selected ? await invoke<string>("read_text_file", { path: String(selected) }) : null;
-      }
-      return await readPickedFile();
+      const result = await awaitCurrentView(sessionView, view, async () => {
+        if (isTauriRuntime()) {
+          const selected = await open({ multiple: false, filters });
+          return selected
+            ? await invoke<string>("read_text_file", { path: String(selected) })
+            : null;
+        }
+        return await readPickedFile();
+      });
+      return result.current ? result.value : null;
     } catch (e) {
-      flash(`读取文件失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`读取文件失败：${e}`);
       return null;
     }
   }
 
   /** Resolve each row's group and add it as an entry; reports a one-shot summary. */
-  async function importEntries(entries: ImportEntry[]): Promise<void> {
+  async function importEntries(
+    entries: ImportEntry[],
+    view: SessionViewToken,
+    baseGroupUuid: string | null,
+  ): Promise<void> {
+    if (!sessionView.isCurrent(view)) return;
     const startState = currentVault;
     if (!startState) return;
-    const view = sessionView.capture();
-    if (!view) return;
     const { sessionId } = view;
     const operation = busyOperations.begin();
     busy = true;
@@ -1153,16 +1131,24 @@
       // bulk-insert all entries in a single IPC call instead of one
       // `add_entry` round-trip per row.
       const groupCache = new Map<string, string>();
-      const resolver: ImportGroupResolver = {
+      const resolver: ImportGroupResolver<VaultState> = {
         state: startState,
-        baseUuid: selectedGroup ?? startState.root.uuid,
+        baseUuid: baseGroupUuid ?? startState.root.uuid,
         groups: buildGroupPathIndex(startState.root),
       };
       for (const entry of entries) {
         if (!groupCache.has(entry.group)) {
-          const groupUuid = await vault.callInSession(sessionId, () =>
-            resolveImportGroup(entry.group, resolver),
-          );
+          const groupUuid = await resolveImportGroupPath({
+            path: entry.group,
+            sessionId,
+            resolver,
+            createGroup: (ownerId, parentUuid, name) =>
+              vault.callInSession(ownerId, () => vault.addGroup({ parentUuid, name })),
+            findCreatedUuid: (state, parentUuid, name) => {
+              const parent = findGroupIn(state.root, parentUuid);
+              return parent?.children.find((group) => group.name === name)?.uuid ?? null;
+            },
+          });
           groupCache.set(entry.group, groupUuid);
         }
       }
@@ -1190,7 +1176,10 @@
 
   async function handleImportCsv(): Promise<void> {
     if (!currentVault) return;
-    const text = await pickImportFile([{ name: "CSV 文件", extensions: ["csv"] }]);
+    const view = sessionView.capture();
+    if (!view) return;
+    const baseGroupUuid = selectedGroup;
+    const text = await pickImportFile(view, [{ name: "CSV 文件", extensions: ["csv"] }]);
     if (text === null) return;
     const entries: ImportEntry[] = parseCsvRows(parseCsv(text)).map((row) => ({
       ...row,
@@ -1200,12 +1189,15 @@
       flash("CSV 中没有可导入的条目");
       return;
     }
-    await importEntries(entries);
+    await importEntries(entries, view, baseGroupUuid);
   }
 
   async function handleImportXml(): Promise<void> {
     if (!currentVault) return;
-    const text = await pickImportFile([
+    const view = sessionView.capture();
+    if (!view) return;
+    const baseGroupUuid = selectedGroup;
+    const text = await pickImportFile(view, [
       { name: "KeePass XML 文件", extensions: ["xml"] },
       { name: "CSV 文件", extensions: ["csv"] },
     ]);
@@ -1215,19 +1207,28 @@
       flash("XML 中没有可导入的条目");
       return;
     }
-    await importEntries(entries);
+    await importEntries(entries, view, baseGroupUuid);
   }
 
   async function handleImportBitwarden(): Promise<void> {
     if (!currentVault) return;
-    const text = await pickImportFile([{ name: "Bitwarden JSON 文件", extensions: ["json"] }]);
+    const view = sessionView.capture();
+    if (!view) return;
+    const baseGroupUuid = selectedGroup;
+    const text = await pickImportFile(view, [
+      { name: "Bitwarden JSON 文件", extensions: ["json"] },
+    ]);
     if (text === null) return;
     let rows: ImportRow[];
     try {
       if (!isTauriRuntime()) throw new Error("浏览器预览不支持 Bitwarden 导入");
-      rows = await invoke<ImportRow[]>("parse_bitwarden_json", { text });
+      const parsed = await awaitCurrentView(sessionView, view, () =>
+        invoke<ImportRow[]>("parse_bitwarden_json", { text }),
+      );
+      if (!parsed.current) return;
+      rows = parsed.value;
     } catch (e) {
-      flash(`导入 Bitwarden 失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`导入 Bitwarden 失败：${e}`);
       return;
     }
     const entries: ImportEntry[] = rows.map((row) => ({
@@ -1244,19 +1245,28 @@
       flash("Bitwarden 文件中没有可导入的条目");
       return;
     }
-    await importEntries(entries);
+    await importEntries(entries, view, baseGroupUuid);
   }
 
   async function handleImportOnePassword(): Promise<void> {
     if (!currentVault) return;
-    const text = await pickImportFile([{ name: "1Password 1PIF 文件", extensions: ["1pif"] }]);
+    const view = sessionView.capture();
+    if (!view) return;
+    const baseGroupUuid = selectedGroup;
+    const text = await pickImportFile(view, [
+      { name: "1Password 1PIF 文件", extensions: ["1pif"] },
+    ]);
     if (text === null) return;
     let rows: ImportRow[];
     try {
       if (!isTauriRuntime()) throw new Error("浏览器预览不支持 1Password 导入");
-      rows = await invoke<ImportRow[]>("parse_1pif", { text });
+      const parsed = await awaitCurrentView(sessionView, view, () =>
+        invoke<ImportRow[]>("parse_1pif", { text }),
+      );
+      if (!parsed.current) return;
+      rows = parsed.value;
     } catch (e) {
-      flash(`导入 1Password 失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`导入 1Password 失败：${e}`);
       return;
     }
     const entries: ImportEntry[] = rows.map((row) => ({
@@ -1273,7 +1283,7 @@
       flash("1PIF 文件中没有可导入的条目");
       return;
     }
-    await importEntries(entries);
+    await importEntries(entries, view, baseGroupUuid);
   }
 
   function openSettings(): void {

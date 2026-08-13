@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  awaitCurrentView,
   canToggleSecretReveal,
   commitNewestSessionState,
   KeyedViewGuard,
@@ -226,6 +227,24 @@ test("an exclusive UI task stays active until the parent promise settles", async
   gate.resolve();
   assert.equal(await first, true);
   assert.equal(running, false);
+});
+
+test("a native-dialog result is discarded after A to B to A", async () => {
+  const view = new SessionViewGuard();
+  view.activate("A");
+  const firstA = view.capture();
+  assert.ok(firstA);
+  const gate = deferred();
+  const picked = awaitCurrentView(view, firstA, async () => {
+    await gate.promise;
+    return "vault.csv";
+  });
+
+  view.activate("B");
+  view.activate("A");
+  gate.resolve();
+
+  assert.deepEqual(await picked, { current: false });
 });
 
 test("secret reveal requires a loaded value for the current session and entry", () => {

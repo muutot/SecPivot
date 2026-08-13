@@ -110,6 +110,19 @@ export async function runExclusiveTask(
   }
 }
 
+export type CurrentViewResult<T> = { current: true; value: T } | { current: false };
+
+/** Await a non-session async boundary (for example a native file picker) and
+ * accept its result only when the exact visible-tab lifetime still exists. */
+export async function awaitCurrentView<T>(
+  guard: SessionViewGuard,
+  token: SessionViewToken,
+  task: () => Promise<T>,
+): Promise<CurrentViewResult<T>> {
+  const value = await task();
+  return guard.isCurrent(token) ? { current: true, value } : { current: false };
+}
+
 /** A secret read may affect reveal state only when it produced a value for the
  * still-visible session and entry. Empty strings are valid secret values;
  * `null` means missing, still loading, or invalidated. */
