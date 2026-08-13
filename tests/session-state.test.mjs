@@ -5,6 +5,7 @@ import {
   awaitCurrentView,
   canToggleSecretReveal,
   commitNewestSessionState,
+  consumeCurrentView,
   KeyedViewGuard,
   LatestOperationGuard,
   resolveListedActiveId,
@@ -258,6 +259,50 @@ test("session resource keys distinguish copied sessions and browser paths", () =
     sessionResourceKey("browser", "demo://second.kdbx"),
   );
   assert.notEqual(sessionResourceKey("a", "bc"), sessionResourceKey("ab", "c"));
+});
+
+test("a stale secret response cannot reach an external consumer", async () => {
+  const view = new SessionViewGuard();
+  view.activate("A");
+  const firstA = view.capture();
+  assert.ok(firstA);
+  const gate = deferred();
+  const consumed = [];
+  const copy = consumeCurrentView(
+    view,
+    firstA,
+    async () => {
+      await gate.promise;
+      return "old-a-secret";
+    },
+    (value) => consumed.push(value),
+  );
+
+  view.activate("B");
+  view.activate("A");
+  gate.resolve();
+
+  assert.equal(await copy, false);
+  assert.deepEqual(consumed, []);
+});
+
+test("a current secret response reaches its external consumer once", async () => {
+  const view = new SessionViewGuard();
+  view.activate("A");
+  const token = view.capture();
+  assert.ok(token);
+  const consumed = [];
+
+  assert.equal(
+    await consumeCurrentView(
+      view,
+      token,
+      async () => "current-secret",
+      (value) => consumed.push(value),
+    ),
+    true,
+  );
+  assert.deepEqual(consumed, ["current-secret"]);
 });
 
 test("secret reveal requires a loaded value for the current session and entry", () => {

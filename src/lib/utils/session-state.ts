@@ -123,6 +123,21 @@ export async function awaitCurrentView<T>(
   return guard.isCurrent(token) ? { current: true, value } : { current: false };
 }
 
+/** Deliver a resolved value to an external side effect (clipboard, native
+ * shell, etc.) only while the exact visible-tab lifetime that requested it is
+ * still current. */
+export async function consumeCurrentView<T>(
+  guard: SessionViewGuard,
+  token: SessionViewToken,
+  task: () => Promise<T>,
+  consume: (value: T) => Promise<void> | void,
+): Promise<boolean> {
+  const result = await awaitCurrentView(guard, token, task);
+  if (!result.current) return false;
+  await consume(result.value);
+  return true;
+}
+
 /** Build a stable once-per-session-and-resource key. Session ids alone are
  * insufficient for the browser demo, which always uses `browser` while the
  * user may open another path in the same page lifetime. */

@@ -61,6 +61,7 @@
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
   import {
     awaitCurrentView,
+    consumeCurrentView,
     LatestOperationGuard,
     sessionResourceKey,
     SessionViewGuard,
@@ -1093,16 +1094,19 @@
   );
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     try {
-      const password = await vault.callInSession(sessionId, () =>
-        vault.getEntryPassword(entry.uuid),
+      const copied = await consumeCurrentView(
+        sessionView,
+        view,
+        () => vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid)),
+        (password) => copyValue(password, true),
       );
-      if (vault.getActiveSessionId() !== sessionId) return;
-      await copyEntryValue(password, "密码", true);
+      if (copied && sessionView.isCurrent(view)) flash("已复制密码");
     } catch {
-      flash("复制失败");
+      if (sessionView.isCurrent(view)) flash("复制失败");
     }
   }
 
