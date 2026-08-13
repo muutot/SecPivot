@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   commitNewestSessionState,
+  LatestOperationGuard,
   resolveListedActiveId,
+  SessionViewGuard,
   SessionStateCache,
   SessionSwitchQueue,
   switchSession,
@@ -164,6 +166,31 @@ test("tab refresh keeps only an active id that still exists", () => {
   assert.equal(resolveListedActiveId("s1", sessions), "s2");
   assert.equal(resolveListedActiveId(null, sessions), "s2");
   assert.equal(resolveListedActiveId("s1", []), null);
+});
+
+test("A to B to A invalidates callbacks from the first A view", () => {
+  const view = new SessionViewGuard();
+  view.activate("A");
+  const oldA = view.capture();
+  assert.ok(oldA);
+  assert.equal(view.isCurrent(oldA), true);
+
+  view.activate("B");
+  view.activate("A");
+  const newA = view.capture();
+  assert.ok(newA);
+  assert.equal(view.isCurrent(oldA), false);
+  assert.equal(view.isCurrent(newA), true);
+});
+
+test("only the latest operation may clear a shared activity flag", () => {
+  const operations = new LatestOperationGuard();
+  const oldOperation = operations.begin();
+  const newOperation = operations.begin();
+  assert.equal(operations.isCurrent(oldOperation), false);
+  assert.equal(operations.isCurrent(newOperation), true);
+  operations.invalidate();
+  assert.equal(operations.isCurrent(newOperation), false);
 });
 
 test("a wholesale session replacement rejects every response from the old epoch", () => {

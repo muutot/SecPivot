@@ -58,6 +58,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
+  import { LatestOperationGuard, SessionViewGuard } from "$lib/utils/session-state";
   import { matchesAdvancedSearch, type AdvancedSearchQuery } from "$lib/utils/entry-search";
   import {
     buildGroupPathIndex,
@@ -77,6 +78,10 @@
 
   let currentVault = $state<VaultState | null>(null);
   let activeSessionId = $state<string | null>(null);
+  const sessionView = new SessionViewGuard();
+  const busyOperations = new LatestOperationGuard();
+  const groupCreateOperations = new LatestOperationGuard();
+  const groupIconOperations = new LatestOperationGuard();
   let rememberedPath = $state<{ path: string; fileName: string } | null>(null);
   let search = $state("");
   let advancedQuery = $state<AdvancedSearchQuery | null>(null);
@@ -178,6 +183,16 @@
     const unsubActive = vault.activeId.subscribe((value) => {
       if (value === activeSessionId) return;
       activeSessionId = value;
+      sessionView.activate(value);
+      // A long operation that started in the previous tab intentionally skips
+      // its `finally` write after switching. Reset shared activity flags here
+      // so the newly visible tab cannot inherit a disabled toolbar/dialog.
+      busyOperations.invalidate();
+      groupCreateOperations.invalidate();
+      groupIconOperations.invalidate();
+      busy = false;
+      groupCreating = false;
+      groupIconSaving = false;
       selectedGroup = null;
       revealGroupUuid = null;
       selectedEntry = null;
@@ -762,16 +777,18 @@
       flash("数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续");
       return;
     }
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const operation = busyOperations.begin();
     busy = true;
     try {
       const saved = await vault.callInSession(sessionId, () => vault.save());
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
       flash("已保存到数据库");
     } catch (e) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       const message = String(e);
       if (message.startsWith("REMOTE_CHANGED")) {
         remoteConflict = message.replace("REMOTE_CHANGED\n", "");
@@ -779,7 +796,7 @@
         flash(`保存失败：${message}`);
       }
     } finally {
-      if (vault.getActiveSessionId() === sessionId) busy = false;
+      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
@@ -787,38 +804,40 @@
     const message = remoteConflict;
     remoteConflict = null;
     if (!currentVault) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     if (
       action === "download" &&
       !window.confirm("下载远程版本将丢弃当前未保存的本地修改，继续？")
     ) {
-      if (vault.getActiveSessionId() === sessionId) remoteConflict = message;
+      if (sessionView.isCurrent(view)) remoteConflict = message;
       return;
     }
+    const operation = busyOperations.begin();
     busy = true;
     try {
       if (action === "merge") {
         const merged = await vault.callInSession(sessionId, () => vault.mergeRemote());
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         selectedEntry = findEntryByUuid(merged, selectedEntry?.uuid ?? null);
         flash("已合并本地与远程版本");
       } else if (action === "overwrite") {
         const saved = await vault.callInSession(sessionId, () => vault.save(true));
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
         flash("已覆盖远程版本");
       } else {
         const refreshed = await vault.callInSession(sessionId, () => vault.refreshRemote());
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         selectedEntry = findEntryByUuid(refreshed, selectedEntry?.uuid ?? null);
         flash("已下载远程版本");
       }
     } catch (e) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`操作失败：${e}`);
     } finally {
-      if (vault.getActiveSessionId() === sessionId) busy = false;
+      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
@@ -928,19 +947,21 @@
 
   async function handleOpenReport(): Promise<void> {
     if (reportOpen || busy || !currentVault) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const operation = busyOperations.begin();
     busy = true;
     try {
       const report = await vault.callInSession(sessionId, () => vault.securityReport());
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       securityReport = report;
       reportOpen = true;
     } catch (e) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`安全分析失败：${e}`);
     } finally {
-      if (vault.getActiveSessionId() === sessionId) busy = false;
+      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
@@ -963,8 +984,10 @@
       flash("浏览器预览不支持下载图标");
       return;
     }
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const operation = busyOperations.begin();
     busy = true;
     faviconDialog = {
       phase: "working",
@@ -974,7 +997,7 @@
     };
     try {
       const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
-        if (e.payload.sessionId !== sessionId || vault.getActiveSessionId() !== sessionId) return;
+        if (e.payload.sessionId !== sessionId || !sessionView.isCurrent(view)) return;
         faviconDialog = {
           phase: "working",
           progress: e.payload,
@@ -984,7 +1007,7 @@
       });
       try {
         const report = await vault.callInSession(sessionId, () => vault.downloadFavicons(uuids));
-        if (vault.getActiveSessionId() !== sessionId) return;
+        if (!sessionView.isCurrent(view)) return;
         faviconDialog = {
           phase: "done",
           progress: { sessionId, done: report.attempted, total: report.attempted },
@@ -998,7 +1021,7 @@
         unlisten();
       }
     } catch (e) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       faviconDialog = {
         phase: "done",
         progress: { sessionId, done: 0, total: 0 },
@@ -1006,7 +1029,7 @@
         error: true,
       };
     } finally {
-      if (vault.getActiveSessionId() === sessionId) busy = false;
+      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
@@ -1120,8 +1143,10 @@
   async function importEntries(entries: ImportEntry[]): Promise<void> {
     const startState = currentVault;
     if (!startState) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const operation = busyOperations.begin();
     busy = true;
     try {
       // Resolve every unique group path once (creating missing groups), then
@@ -1153,13 +1178,13 @@
         attachments: [],
       }));
       await vault.callInSession(sessionId, () => vault.addEntries(inputs));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`已导入 ${entries.length} 个条目`);
     } catch (e) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       flash(`导入失败：${e}`);
     } finally {
-      if (vault.getActiveSessionId() === sessionId) busy = false;
+      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
@@ -1454,9 +1479,11 @@
   async function confirmCreateGroup(): Promise<void> {
     const name = newGroupName.trim();
     if (!name || groupCreating) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
     const parentUuid = groupModalParent;
+    const operation = groupCreateOperations.begin();
     groupCreating = true;
     try {
       await vault.callInSession(sessionId, () =>
@@ -1466,13 +1493,15 @@
           icon: groupIconIndex ?? undefined,
         }),
       );
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       groupModalOpen = false;
       flash("已创建分组");
     } catch (e) {
-      flash(`创建失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`创建失败：${e}`);
     } finally {
-      groupCreating = false;
+      if (sessionView.isCurrent(view) && groupCreateOperations.isCurrent(operation)) {
+        groupCreating = false;
+      }
     }
   }
 
@@ -1518,18 +1547,22 @@
   async function confirmChangeGroupIcon(): Promise<void> {
     const uuid = groupIconDialogUuid;
     if (!uuid || groupIconSaving) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const operation = groupIconOperations.begin();
     groupIconSaving = true;
     try {
       await vault.callInSession(sessionId, () => vault.setGroupIcon(uuid, groupIconPick));
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!sessionView.isCurrent(view)) return;
       groupIconDialogUuid = null;
       flash("已更新分组图标");
     } catch (e) {
-      flash(`更新图标失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`更新图标失败：${e}`);
     } finally {
-      groupIconSaving = false;
+      if (sessionView.isCurrent(view) && groupIconOperations.isCurrent(operation)) {
+        groupIconSaving = false;
+      }
     }
   }
 

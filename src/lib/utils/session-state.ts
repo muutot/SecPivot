@@ -25,6 +25,51 @@ export function resolveListedActiveId<T extends { sessionId: string }>(
     : (sessions[0]?.sessionId ?? null);
 }
 
+export interface SessionViewToken {
+  sessionId: string;
+  epoch: number;
+}
+
+/** Identify one continuous visible-tab lifetime. Returning A after A→B is a
+ * new epoch, so callbacks captured before the switch cannot reopen dialogs or
+ * clear activity started after returning to A. */
+export class SessionViewGuard {
+  #sessionId: string | null = null;
+  #epoch = 0;
+
+  activate(sessionId: string | null): void {
+    if (sessionId === this.#sessionId) return;
+    this.#sessionId = sessionId;
+    this.#epoch += 1;
+  }
+
+  capture(): SessionViewToken | null {
+    return this.#sessionId ? { sessionId: this.#sessionId, epoch: this.#epoch } : null;
+  }
+
+  isCurrent(token: SessionViewToken): boolean {
+    return token.sessionId === this.#sessionId && token.epoch === this.#epoch;
+  }
+}
+
+/** Only the latest operation may clear a shared activity flag. */
+export class LatestOperationGuard {
+  #generation = 0;
+
+  begin(): number {
+    this.#generation += 1;
+    return this.#generation;
+  }
+
+  invalidate(): void {
+    this.#generation += 1;
+  }
+
+  isCurrent(generation: number): boolean {
+    return generation === this.#generation;
+  }
+}
+
 /**
  * Serialize complete backend-active tab switch attempts in request order.
  * Enqueue is synchronous, so snapshot validation for an uncached tab and its
