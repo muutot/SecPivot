@@ -335,7 +335,9 @@ impl VaultSessions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vault::{persist_save, EntryInput};
+    use crate::vault::{
+        persist_remote_refresh, persist_save, EntryInput, RemoteMode, DEFAULT_BACKUP_TEMPLATE,
+    };
     use tempfile::TempDir;
 
     fn create_vault<'a>(
@@ -664,6 +666,77 @@ mod tests {
         assert!(
             !saved.dirty,
             "the originating parked vault must be marked saved"
+        );
+    }
+
+    #[test]
+    fn remote_refresh_completion_stays_bound_to_originating_session() {
+        let dir = TempDir::new().unwrap();
+        let local_dir = dir.path().join("mirror");
+        let source = dir.path().join("remote-source.kdbx");
+        let mut seed = VaultSession::default();
+        seed.create(&source, "pw", "Aes", "Aes256", "None", None)
+            .unwrap();
+        let storage = crate::remote::MemoryStorage::default();
+        storage.seed("vaults/a.kdbx", std::fs::read(&source).unwrap());
+
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let remote = registry
+            .open(&mut active, |fresh| {
+                fresh.open_remote(
+                    std::sync::Arc::new(storage),
+                    "vaults/a.kdbx",
+                    "pw",
+                    None,
+                    RemoteMode::InMemory,
+                    &local_dir,
+                    3,
+                    DEFAULT_BACKUP_TEMPLATE,
+                )
+            })
+            .unwrap();
+        let local = registry
+            .open(&mut active, create_vault(&dir, "local.kdbx"))
+            .unwrap();
+
+        let (originating_id, job) = registry
+            .with_resolved_session_mut(&mut active, Some(&remote.session_id), |target| {
+                target.prepare_remote_refresh()
+            })
+            .unwrap();
+        let revision = job.revision;
+        let downloaded = persist_remote_refresh(job).unwrap();
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(local.session_id.as_str())
+        );
+
+        registry
+            .with_session_mut(&mut active, Some(&originating_id), |target| {
+                target.complete_remote_refresh(revision, downloaded)
+            })
+            .unwrap();
+
+        assert_eq!(
+            registry.active_id().as_deref(),
+            Some(local.session_id.as_str())
+        );
+        assert_eq!(
+            registry
+                .state(&mut active, Some(&remote.session_id))
+                .unwrap()
+                .unwrap()
+                .file_name,
+            "a.kdbx"
+        );
+        assert_eq!(
+            registry
+                .state(&mut active, Some(&local.session_id))
+                .unwrap()
+                .unwrap()
+                .file_name,
+            "local.kdbx"
         );
     }
 

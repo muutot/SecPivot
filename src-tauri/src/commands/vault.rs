@@ -253,34 +253,64 @@ pub(crate) fn save_vault(
 /// Download the remote vault's latest bytes and replace the in-memory
 /// session (discards local unsaved edits). Only for remote sessions.
 #[tauri::command]
-pub(crate) fn refresh_remote_vault(
+pub(crate) async fn refresh_remote_vault(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<VaultState, String> {
-    with_vault_session(
-        vaults.inner(),
-        session.inner(),
-        session_id.as_deref(),
-        |target| target.refresh_remote(),
-    )
+    let (session_id, job) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_remote_refresh()
+        })?
+    };
+    let revision = job.revision;
+    let result = tauri::async_runtime::spawn_blocking(move || vault::persist_remote_refresh(job))
+        .await
+        .map_err(|e| format!("远程刷新任务异常: {e}"))??;
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        target.complete_remote_refresh(revision, result)
+    })
 }
 
 /// Merge the remote vault's latest bytes into the session by entry/group
 /// UUID + last-modified (histories preserved, recycle bin excluded), persist
 /// the merged database back and adopt it. Only for remote sessions.
 #[tauri::command]
-pub(crate) fn merge_remote_vault(
+pub(crate) async fn merge_remote_vault(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
 ) -> Result<VaultState, String> {
-    with_vault_session(
-        vaults.inner(),
-        session.inner(),
-        session_id.as_deref(),
-        |target| target.merge_remote(),
-    )
+    let (session_id, job) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            target.prepare_remote_merge()
+        })?
+    };
+    let revision = job.revision;
+    let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_remote_merge(job))
+        .await
+        .map_err(|e| format!("远程合并任务异常: {e}"))?;
+    let result = match persisted {
+        Ok(result) => result,
+        Err(e) => {
+            if e.persist_failure {
+                if let Ok(mut active) = session.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
+            }
+            return Err(e.message);
+        }
+    };
+    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        target.complete_remote_merge(revision, result)
+    })
 }
 
 #[tauri::command]

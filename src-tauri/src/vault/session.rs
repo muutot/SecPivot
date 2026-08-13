@@ -2,17 +2,15 @@
 //! the lock-free prepare/persist handoff internals (extracted from mod.rs).
 
 use super::helpers::{
-    apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
-    wipe_secret_bytes, wipe_secret_string,
+    apply_cipher, apply_compression, apply_kdf, wipe_secret_bytes, wipe_secret_string,
 };
-use super::merge::merge_databases;
 use super::persist::{
-    persist_change, persist_save, persist_snapshot, prepare_local_create, prepare_local_open,
-    prepare_remote_create, prepare_remote_open, read_keyfile, SaveJob, SaveTarget,
+    persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
+    prepare_remote_open, read_keyfile, RemoteMergeJob, RemoteMergeResult, RemoteRefreshJob,
+    RemoteRefreshResult, SaveJob, SaveTarget,
 };
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
-use crate::remote::backup::{remote_key_basename, write_local_copy};
 use crate::remote::{RemoteStorage, REMOTE_URI_PREFIX};
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::Database;
@@ -342,131 +340,6 @@ impl VaultSession {
         self.complete_change(password.to_owned(), keyfile_bytes, revision, new_hash)
     }
 
-    /// Download the remote vault's latest bytes, decrypt with the session
-    /// key and replace the in-memory database (discarding local unsaved
-    /// edits). Advances the sync base hash. Only valid for remote sessions.
-    pub fn refresh_remote(&mut self) -> Result<VaultState, String> {
-        let (storage, key, password, keyfile, mode, local_dir, backup_count, backup_template) = {
-            let remote = self
-                .remote
-                .as_ref()
-                .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
-            (
-                remote.storage.clone(),
-                remote.key.clone(),
-                self.require_password()?.to_owned(),
-                self.keyfile.clone(),
-                remote.mode,
-                remote.local_dir.clone(),
-                remote.backup_count,
-                remote.backup_template.clone(),
-            )
-        };
-        let data = storage
-            .get(&key)
-            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
-        let db_key = build_database_key(&password, keyfile.as_deref())?;
-        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
-        self.db = Some(db);
-        self.dirty = false;
-        // Replacing the in-memory database is a state mutation just like an
-        // edit. Advance the revision so a late pre-refresh snapshot cannot
-        // overwrite the downloaded remote state in the renderer cache.
-        self.revision += 1;
-        self.modified_at = now_iso();
-        self.cached_snapshot = None;
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = crate::crypto::sha256_bytes(&data);
-        }
-        if mode == RemoteMode::SaveLocal {
-            write_local_copy(
-                &local_dir,
-                &remote_key_basename(&key),
-                &data,
-                backup_count,
-                &backup_template,
-            )
-            .map_err(|e| format!("刷新本地副本失败: {e}"))?;
-        }
-        self.snapshot()
-    }
-
-    /// Entry-level merge (官方同步·条目级合并): download the remote vault's
-    /// latest bytes, merge them into the session database by entry/group
-    /// UUID + last-modified (histories preserved, recycle bin excluded),
-    /// persist the merged database back and adopt it. Only valid for remote
-    /// sessions. A remote write racing the merge still surfaces
-    /// REMOTE_CHANGED instead of being silently overwritten.
-    pub fn merge_remote(&mut self) -> Result<VaultState, String> {
-        let (storage, key, password, keyfile, mode, local_dir, backup_count, backup_template) = {
-            let remote = self
-                .remote
-                .as_ref()
-                .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
-            (
-                remote.storage.clone(),
-                remote.key.clone(),
-                self.require_password()?.to_owned(),
-                self.keyfile.clone(),
-                remote.mode,
-                remote.local_dir.clone(),
-                remote.backup_count,
-                remote.backup_template.clone(),
-            )
-        };
-        // Key material is needed only to build the DatabaseKey; wipe the
-        // clones right after (same lifecycle as persist_save).
-        let db_key = build_database_key(&password, keyfile.as_deref())?;
-        let mut password = password;
-        wipe_secret_string(&mut password);
-        if let Some(mut keyfile) = keyfile {
-            wipe_secret_bytes(&mut keyfile);
-        }
-
-        let data = storage
-            .get(&key)
-            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
-        let remote_db = Database::parse(&data, db_key.clone()).map_err(classify_open_error)?;
-
-        // Merge into a clone so a failed merge leaves the session untouched.
-        let local_db = self.db.clone().ok_or_else(|| "数据库未打开".to_owned())?;
-        let merged = merge_databases(&local_db, &remote_db)?;
-
-        // Persist with the downloaded bytes as the conflict base: a remote
-        // write racing the merge fails with REMOTE_CHANGED (not counted as a
-        // save failure); genuine persist failures count toward read-only
-        // degradation exactly like save().
-        let target = SaveTarget::Remote {
-            storage,
-            key,
-            mode,
-            local_dir,
-            backup_count,
-            backup_template,
-            base_hash: crate::crypto::sha256_bytes(&data),
-        };
-        let new_hash = match persist_snapshot(&merged, &db_key, &target, false) {
-            Ok(hash) => hash,
-            Err(e) => {
-                if !e.starts_with(super::REMOTE_CHANGED_MARKER) {
-                    self.note_save_failure();
-                }
-                return Err(e);
-            }
-        };
-
-        self.db = Some(merged);
-        self.dirty = false;
-        self.revision += 1;
-        self.modified_at = now_iso();
-        self.cached_snapshot = None;
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = new_hash;
-        }
-        self.note_save_success();
-        self.snapshot()
-    }
-
     /// Save As: persist the current database (same master key) to a new local
     /// path, then switch the session to that path. On success a remote
     /// session becomes a plain local one — later saves go to the new file,
@@ -677,6 +550,95 @@ impl VaultSession {
             revision: self.revision,
             force: false,
         })
+    }
+
+    /// Capture the remote target and cloned key material for a lock-free
+    /// download-and-replace operation.
+    pub(crate) fn prepare_remote_refresh(&self) -> Result<RemoteRefreshJob, String> {
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
+        Ok(RemoteRefreshJob {
+            storage: remote.storage.clone(),
+            key: remote.key.clone(),
+            password: self.require_password()?.to_owned(),
+            keyfile: self.keyfile.clone(),
+            mode: remote.mode,
+            local_dir: remote.local_dir.clone(),
+            backup_count: remote.backup_count,
+            backup_template: remote.backup_template.clone(),
+            revision: self.revision,
+        })
+    }
+
+    /// Adopt a downloaded database only if the originating session did not
+    /// change while I/O ran. Refresh intentionally discards the dirty state
+    /// captured at prepare time, but never edits that arrived afterwards.
+    pub(crate) fn complete_remote_refresh(
+        &mut self,
+        revision: u64,
+        result: RemoteRefreshResult,
+    ) -> Result<VaultState, String> {
+        if self.revision != revision {
+            return Err("远程刷新期间数据库已发生修改，请重试".to_owned());
+        }
+        self.db = Some(result.db);
+        self.dirty = false;
+        self.revision += 1;
+        self.modified_at = now_iso();
+        self.cached_snapshot = None;
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = result.base_hash;
+        }
+        self.snapshot()
+    }
+
+    /// Capture the local clone, remote target and key material for lock-free
+    /// remote merge + upload.
+    pub(crate) fn prepare_remote_merge(&self) -> Result<RemoteMergeJob, String> {
+        self.ensure_writable()?;
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| "当前会话不是远程数据库".to_owned())?;
+        Ok(RemoteMergeJob {
+            local_db: self.require_db()?.clone(),
+            storage: remote.storage.clone(),
+            key: remote.key.clone(),
+            password: self.require_password()?.to_owned(),
+            keyfile: self.keyfile.clone(),
+            mode: remote.mode,
+            local_dir: remote.local_dir.clone(),
+            backup_count: remote.backup_count,
+            backup_template: remote.backup_template.clone(),
+            revision: self.revision,
+        })
+    }
+
+    /// Adopt a persisted merge only if no newer local edit landed during the
+    /// remote operation. The uploaded bytes remain a valid remote merge, but
+    /// a stale completion must never replace newer in-memory work.
+    pub(crate) fn complete_remote_merge(
+        &mut self,
+        revision: u64,
+        result: RemoteMergeResult,
+    ) -> Result<VaultState, String> {
+        if self.revision != revision {
+            return Err(
+                "远程合并期间数据库已发生修改；远程已保存合并结果，请重新同步本地更改".to_owned(),
+            );
+        }
+        self.db = Some(result.db);
+        self.dirty = false;
+        self.revision += 1;
+        self.modified_at = now_iso();
+        self.cached_snapshot = None;
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = result.base_hash;
+        }
+        self.note_save_success();
+        self.snapshot()
     }
 
     /// Locked completion of `save_as`: switch the session target to the new

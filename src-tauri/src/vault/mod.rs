@@ -29,9 +29,9 @@ pub(crate) use self::helpers::{
     entry_has_otp, entry_match_urls, kprpc_matches_url, parse_entry_id, recycle_bin_id,
 };
 pub(crate) use self::persist::{
-    persist_change, persist_save, prepare_local_create, prepare_local_open, prepare_remote_create,
-    prepare_remote_open, read_keyfile, write_attachment_file, write_csv_file,
-    REMOTE_CHANGED_MARKER,
+    persist_change, persist_remote_merge, persist_remote_refresh, persist_save,
+    prepare_local_create, prepare_local_open, prepare_remote_create, prepare_remote_open,
+    read_keyfile, write_attachment_file, write_csv_file, REMOTE_CHANGED_MARKER,
 };
 
 /// Virtual root group id used by the frontend; maps to the DB root group.

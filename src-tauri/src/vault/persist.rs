@@ -49,6 +49,55 @@ pub(crate) struct SaveJob {
     pub force: bool,
 }
 
+/// Snapshot needed to download and replace a remote session without holding
+/// the registry lock across transport I/O or KDF parsing.
+pub(crate) struct RemoteRefreshJob {
+    pub storage: Arc<dyn RemoteStorage>,
+    pub key: String,
+    pub password: String,
+    pub keyfile: Option<Vec<u8>>,
+    pub mode: RemoteMode,
+    pub local_dir: PathBuf,
+    pub backup_count: usize,
+    pub backup_template: String,
+    pub revision: u64,
+}
+
+/// Snapshot needed to download, merge and upload a remote session without
+/// holding the registry lock. Completion adopts the result only when the
+/// originating session revision is unchanged.
+pub(crate) struct RemoteMergeJob {
+    pub local_db: Database,
+    pub storage: Arc<dyn RemoteStorage>,
+    pub key: String,
+    pub password: String,
+    pub keyfile: Option<Vec<u8>>,
+    pub mode: RemoteMode,
+    pub local_dir: PathBuf,
+    pub backup_count: usize,
+    pub backup_template: String,
+    pub revision: u64,
+}
+
+pub(crate) struct RemoteRefreshResult {
+    pub db: Database,
+    pub base_hash: [u8; 32],
+}
+
+pub(crate) struct RemoteMergeResult {
+    pub db: Database,
+    pub base_hash: [u8; 32],
+}
+
+/// Classified remote-merge failure. Only persistence failures should count
+/// toward the session's read-only degradation; download, decrypt and merge
+/// errors happened before any save was attempted.
+#[derive(Debug)]
+pub(crate) struct RemoteMergeError {
+    pub message: String,
+    pub persist_failure: bool,
+}
+
 /// Read an optional keyfile into memory (called without the session lock).
 pub(crate) fn read_keyfile(keyfile: Option<&Path>) -> Result<Option<Vec<u8>>, String> {
     match keyfile {
@@ -254,6 +303,97 @@ pub(crate) fn persist_change(
 ) -> Result<[u8; 32], String> {
     let key = build_database_key(password, keyfile)?;
     persist_snapshot(db, &key, target, false)
+}
+
+/// Download, decrypt and optionally mirror the latest remote database. Runs
+/// entirely outside the session lock; cloned secrets are always zeroized.
+pub(crate) fn persist_remote_refresh(job: RemoteRefreshJob) -> Result<RemoteRefreshResult, String> {
+    let result = (|| {
+        let data = job
+            .storage
+            .get(&job.key)
+            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
+        let db_key = build_database_key(&job.password, job.keyfile.as_deref())?;
+        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
+        if job.mode == RemoteMode::SaveLocal {
+            write_local_copy(
+                &job.local_dir,
+                &remote_key_basename(&job.key),
+                &data,
+                job.backup_count,
+                &job.backup_template,
+            )
+            .map_err(|e| format!("刷新本地副本失败: {e}"))?;
+        }
+        Ok(RemoteRefreshResult {
+            db,
+            base_hash: crate::crypto::sha256_bytes(&data),
+        })
+    })();
+    let mut password = job.password;
+    wipe_secret_string(&mut password);
+    if let Some(mut keyfile) = job.keyfile {
+        wipe_secret_bytes(&mut keyfile);
+    }
+    result
+}
+
+/// Download, decrypt, merge and upload a remote database outside the session
+/// lock. The downloaded bytes are the conflict base, so a racing write still
+/// returns `REMOTE_CHANGED`.
+pub(crate) fn persist_remote_merge(
+    job: RemoteMergeJob,
+) -> Result<RemoteMergeResult, RemoteMergeError> {
+    let result = (|| {
+        let db_key =
+            build_database_key(&job.password, job.keyfile.as_deref()).map_err(|message| {
+                RemoteMergeError {
+                    message,
+                    persist_failure: false,
+                }
+            })?;
+        let data = job.storage.get(&job.key).map_err(|e| RemoteMergeError {
+            message: format!("下载远程最新版本失败: {e}"),
+            persist_failure: false,
+        })?;
+        let remote_db = Database::parse(&data, db_key.clone()).map_err(|e| RemoteMergeError {
+            message: classify_open_error(e),
+            persist_failure: false,
+        })?;
+        let merged =
+            super::merge::merge_databases(&job.local_db, &remote_db).map_err(|message| {
+                RemoteMergeError {
+                    message,
+                    persist_failure: false,
+                }
+            })?;
+        let target = SaveTarget::Remote {
+            storage: job.storage.clone(),
+            key: job.key.clone(),
+            mode: job.mode,
+            local_dir: job.local_dir.clone(),
+            backup_count: job.backup_count,
+            backup_template: job.backup_template.clone(),
+            base_hash: crate::crypto::sha256_bytes(&data),
+        };
+        let base_hash = persist_snapshot(&merged, &db_key, &target, false).map_err(|message| {
+            let persist_failure = !message.starts_with(REMOTE_CHANGED_MARKER);
+            RemoteMergeError {
+                message,
+                persist_failure,
+            }
+        })?;
+        Ok(RemoteMergeResult {
+            db: merged,
+            base_hash,
+        })
+    })();
+    let mut password = job.password;
+    wipe_secret_string(&mut password);
+    if let Some(mut keyfile) = job.keyfile {
+        wipe_secret_bytes(&mut keyfile);
+    }
+    result
 }
 
 /// Write attachment bytes extracted under the lock (file I/O outside it).

@@ -5345,7 +5345,11 @@ fn remote_conflict_resolution_force_save_and_refresh() {
     // 下载远程: refresh replaces the session (local edit discarded) and
     // advances the base hash so the next save succeeds.
     storage.put("vaults/seed.kdbx", &original).unwrap();
-    let refreshed = session.refresh_remote().unwrap();
+    let job = session.prepare_remote_refresh().unwrap();
+    let revision = job.revision;
+    let refreshed = session
+        .complete_remote_refresh(revision, persist_remote_refresh(job).unwrap())
+        .unwrap();
     assert!(refreshed.revision > revision_before_local_edit);
     assert!(!refreshed.dirty);
     assert!(
@@ -5356,6 +5360,45 @@ fn remote_conflict_resolution_force_save_and_refresh() {
         session.save().is_ok(),
         "base hash must advance after refresh"
     );
+}
+
+#[test]
+fn remote_refresh_completion_rejects_edits_landed_during_download() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+
+    let job = session.prepare_remote_refresh().unwrap();
+    let revision = job.revision;
+    let downloaded = persist_remote_refresh(job).unwrap();
+    session
+        .add_entry(&merge_test_input("EditDuringRefresh"))
+        .unwrap();
+
+    let err = session
+        .complete_remote_refresh(revision, downloaded)
+        .unwrap_err();
+    assert!(err.contains("已发生修改"));
+    let state = session.state().unwrap().unwrap();
+    assert!(state.dirty);
+    assert!(state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "EditDuringRefresh"));
 }
 
 #[test]
@@ -7913,7 +7956,11 @@ fn merge_remote_vault_merges_both_sides_and_advances_base_hash() {
     // Local unsaved edit.
     session.add_entry(&merge_test_input("LocalAdded")).unwrap();
 
-    let merged = session.merge_remote().unwrap();
+    let job = session.prepare_remote_merge().unwrap();
+    let revision = job.revision;
+    let merged = session
+        .complete_remote_merge(revision, persist_remote_merge(job).unwrap())
+        .unwrap();
     assert!(!merged.dirty);
     let titles: Vec<&str> = merged
         .root
@@ -7945,4 +7992,103 @@ fn merge_remote_vault_merges_both_sides_and_advances_base_hash() {
     // Base hash advanced: a later save no longer reports REMOTE_CHANGED.
     session.add_entry(&merge_test_input("PostMerge")).unwrap();
     session.save().unwrap();
+}
+
+#[test]
+fn remote_merge_completion_rejects_newer_local_edits() {
+    let dir = TempDir::new().unwrap();
+    let (storage, seed_path) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session
+        .add_entry(&merge_test_input("LocalBeforeMerge"))
+        .unwrap();
+
+    let mut other = VaultSession::default();
+    other.open(&seed_path, "pw", None).unwrap();
+    other.add_entry(&merge_test_input("RemoteAdded")).unwrap();
+    other.save().unwrap();
+    storage
+        .put("vaults/seed.kdbx", &std::fs::read(&seed_path).unwrap())
+        .unwrap();
+
+    let job = session.prepare_remote_merge().unwrap();
+    let revision = job.revision;
+    let merged = persist_remote_merge(job).unwrap();
+    session
+        .add_entry(&merge_test_input("EditDuringMerge"))
+        .unwrap();
+
+    let err = session.complete_remote_merge(revision, merged).unwrap_err();
+    assert!(err.contains("已发生修改"));
+    let state = session.state().unwrap().unwrap();
+    assert!(state.dirty);
+    assert!(state
+        .root
+        .entries
+        .iter()
+        .any(|entry| entry.title == "EditDuringMerge"));
+
+    // The remote upload did succeed and contains the snapshot merge, while
+    // the newer local edit remains only in memory for the next sync.
+    let key = crate::vault::helpers::build_database_key("pw", None).unwrap();
+    let uploaded = Database::parse(&storage.get("vaults/seed.kdbx").unwrap(), key).unwrap();
+    let titles: Vec<String> = uploaded
+        .root()
+        .entries()
+        .filter_map(|entry| entry.get_title().map(ToOwned::to_owned))
+        .collect();
+    assert!(titles.contains(&"LocalBeforeMerge".to_owned()));
+    assert!(titles.contains(&"RemoteAdded".to_owned()));
+    assert!(!titles.contains(&"EditDuringMerge".to_owned()));
+}
+
+#[test]
+fn remote_merge_pre_persist_errors_do_not_trigger_read_only() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+
+    // A malformed download fails before the upload/persistence phase. Three
+    // retries must not degrade the session to read-only.
+    storage.put("vaults/seed.kdbx", &[7u8; 32]).unwrap();
+    for _ in 0..3 {
+        let err = match persist_remote_merge(session.prepare_remote_merge().unwrap()) {
+            Ok(_) => panic!("malformed remote bytes unexpectedly merged"),
+            Err(err) => err,
+        };
+        if err.persist_failure {
+            session.note_save_failure();
+        }
+        assert!(!err.persist_failure);
+        assert!(
+            err.message.contains("无法打开数据库") || err.message.contains("密码或密钥文件错误")
+        );
+    }
+    assert!(!session.is_read_only());
 }
