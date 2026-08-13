@@ -127,7 +127,7 @@ impl BridgeHost for VaultSession {
         &mut self,
         login: &str,
         password: &str,
-        url: &str,
+        _url: &str,
         uuid: Option<&str>,
     ) -> Result<(), String> {
         let uuid = uuid.unwrap_or_default();
@@ -135,9 +135,14 @@ impl BridgeHost for VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
-            entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
-            entry.set(FIELD_URL, Value::unprotected(url.to_owned()));
+            if entry.get_username() == Some(login) && entry.get_password() == Some(password) {
+                return Ok(());
+            }
+            entry.edit_tracking(|tracked| {
+                let mut entry = tracked.as_mut();
+                entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
+                entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
+            });
         }
         self.mark_dirty();
         Ok(())

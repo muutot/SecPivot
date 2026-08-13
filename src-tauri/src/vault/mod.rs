@@ -39,6 +39,9 @@ pub(crate) use self::persist::{
 /// Virtual root group id used by the frontend; maps to the DB root group.
 pub const ROOT_GROUP_UUID: &str = "root";
 pub const ROOT_GROUP_NAME: &str = "Root";
+/// Shared browser-integration write notification. Both KeePassHttp and
+/// KeePassRPC emit this after a successful mutation response.
+pub(crate) const BROWSER_VAULT_CHANGED_EVENT: &str = "browser-vault-changed";
 
 /// Default backup file name template. `{name}` = file stem, `{timestamp}` =
 /// `YYYYMMDDHHmmssSSS`, `{ext}` = original extension. Single source lives in

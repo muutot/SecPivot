@@ -19,7 +19,10 @@
 
 use crate::config::PasswordGeneratorSettings;
 use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
-use crate::vault::{persist_rpc_write, VaultSession, VaultSessions, REMOTE_CHANGED_MARKER};
+use crate::vault::{
+    persist_rpc_write, VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT,
+    REMOTE_CHANGED_MARKER,
+};
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -55,10 +58,6 @@ const MAX_FRAME_BYTES: usize = 1024 * 1024;
 /// Event emitted to the frontend so the side-channel password can be shown.
 /// Payload: `{ password, expiresInSecs }` — never persisted, never logged.
 pub(crate) const SIDE_CHANNEL_EVENT: &str = "rpc-side-channel-request";
-/// Emitted after a browser-originated write (AddLogin/UpdateLogin) so the
-/// desktop UI refreshes its entry list immediately.
-pub(crate) const VAULT_CHANGED_EVENT: &str = "rpc-vault-changed";
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SideChannelRequest {
@@ -420,7 +419,7 @@ fn reply_jsonrpc(
             if matches!(method.as_str(), "AddLogin" | "UpdateLogin") {
                 // Writes mutate the vault in place; tell the desktop UI to
                 // refresh so the new/edited entry shows up without a reopen.
-                let _ = app.emit(VAULT_CHANGED_EVENT, ());
+                let _ = app.emit(BROWSER_VAULT_CHANGED_EVENT, ());
             }
             send_envelope(ws, &reply)
         }
@@ -535,7 +534,7 @@ fn reply_jsonrpc_write(
     let sent = encode_jsonrpc_result(conn, &request.id, result)
         .is_some_and(|reply| send_envelope(ws, &reply));
     if success {
-        let _ = app.emit(VAULT_CHANGED_EVENT, ());
+        let _ = app.emit(BROWSER_VAULT_CHANGED_EVENT, ());
     }
     sent
 }

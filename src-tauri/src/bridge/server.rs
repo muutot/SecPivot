@@ -13,7 +13,7 @@ use crate::bridge::{
     handle_request_with_generator, new_client_id, BridgeRequest, BridgeResponse, BRIDGE_PORT,
 };
 use crate::config::PasswordGeneratorSettings;
-use crate::vault::VaultSession;
+use crate::vault::{VaultSession, BROWSER_VAULT_CHANGED_EVENT};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -226,6 +226,9 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
             }
         }
     };
+    if request_type == "set-login" && response.success {
+        let _ = app.emit(BROWSER_VAULT_CHANGED_EVENT, ());
+    }
     match serde_json::to_string(&response) {
         Ok(json) => {
             let _ = write_http_response(&mut stream, &json);

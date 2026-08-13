@@ -6714,8 +6714,25 @@ fn bridge_set_login_updates_entry_fields() {
     );
     assert_eq!(
         session.autotype_context(&uuid).unwrap().url,
-        "https://example.com/sso"
+        "https://example.com"
     );
+    let id = parse_entry_id(&uuid).unwrap();
+    let entry = session.require_db().unwrap().entry(id).unwrap();
+    let history = entry.history.as_ref().unwrap();
+    assert!(history.get_entries().iter().any(|entry| {
+        entry.get_username() == Some("old-user") && entry.get_password() == Some("old-pw")
+    }));
+
+    let revision = session.state().unwrap().unwrap().revision;
+    session
+        .set_login(
+            "new-user",
+            "new-pw",
+            "https://unrelated.example/ignored",
+            Some(&uuid),
+        )
+        .unwrap();
+    assert_eq!(session.state().unwrap().unwrap().revision, revision);
 
     let err = session.set_login(
         "u",

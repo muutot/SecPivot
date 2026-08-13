@@ -24,6 +24,17 @@ test("nested group nodes forward every metadata action", async () => {
   assert.match(recursiveBlock[1], /\{onmeta\}/);
 });
 
+test("browser write event stays aligned across backend and page listener", async () => {
+  const [vaultSource, pageSource] = await Promise.all([
+    readFile(new URL("../src-tauri/src/vault/mod.rs", import.meta.url), "utf8"),
+    readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
+  ]);
+  const event = vaultSource.match(/BROWSER_VAULT_CHANGED_EVENT:\s*&str\s*=\s*"([^"]+)"/);
+
+  assert.ok(event, "backend browser-write event constant must exist");
+  assert.match(pageSource, new RegExp(`listen\\("${event[1]}"`));
+});
+
 test("entry detail invalidates detached secret-copy consumers", async () => {
   const source = await readFile(
     new URL("../src/lib/components/EntryDetail.svelte", import.meta.url),

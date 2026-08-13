@@ -274,12 +274,12 @@
         statusTimer = undefined;
       }
     });
-    // A browser extension write (AddLogin/UpdateLogin) lands straight into the
-    // vault in memory; refresh so the entry list shows it without a reopen.
+    // Browser-extension writes land straight in the backend session; refresh
+    // so the entry list and dirty tab state update without a reopen.
     let unlistenVaultChanged: UnlistenFn | undefined;
     let unlistenAutotypePick: UnlistenFn | undefined;
     if (isTauriRuntime()) {
-      void listen("rpc-vault-changed", () => void vault.refresh()).then(
+      void listen("browser-vault-changed", () => void vault.refresh()).then(
         (stop) => (unlistenVaultChanged = stop),
       );
       void listen<AutotypeCandidate[]>("autotype-pick-request", (event) => {
