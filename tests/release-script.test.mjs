@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { bumpVersion, parseSemver, resolveReleaseTarget } from "../scripts/versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "../scripts/release-files.mjs";
+import { hasReleaseHeading } from "../scripts/release-document.mjs";
 
 const releaseScript = readFileSync(new URL("../scripts/release.mjs", import.meta.url), "utf-8");
 
@@ -70,4 +71,14 @@ test("release subprocesses pass refs as literal arguments without a shell", () =
   assert.doesNotMatch(releaseScript, /execSync|shell:\s*true/);
   assert.match(releaseScript, /execFileSync\(command, args/);
   assert.match(releaseScript, /\["push", "origin", BRANCH\]/);
+});
+
+test("release notes require the exact target heading instead of a body mention", () => {
+  assert.equal(hasReleaseHeading("# SecPivot Desktop v1.3.0\n", "1.3.0"), true);
+  assert.equal(hasReleaseHeading("\uFEFF# SecPivot Desktop v1.3.0\r\n", "1.3.0"), true);
+  assert.equal(
+    hasReleaseHeading("# SecPivot Desktop v1.2.0\n\nUpcoming compatibility: v1.3.0\n", "1.3.0"),
+    false,
+  );
+  assert.match(releaseScript, /hasReleaseHeading\(readFileSync\(RELEASE_PATH/);
 });

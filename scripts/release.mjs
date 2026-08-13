@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
 import { isBumpType, resolveReleaseTarget } from "./versioning.mjs";
 import { RELEASE_FILES, findUnexpectedReleaseChanges } from "./release-files.mjs";
+import { hasReleaseHeading } from "./release-document.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -65,7 +66,7 @@ function getCommittedVersion() {
 
 function checkReleaseMd(ver) {
   if (!existsSync(RELEASE_PATH)) return false;
-  return readFileSync(RELEASE_PATH, "utf-8").includes(`v${ver}`);
+  return hasReleaseHeading(readFileSync(RELEASE_PATH, "utf-8"), ver);
 }
 
 function gitChangedFiles(args = []) {

@@ -111,6 +111,8 @@ All child processes receive argument arrays rather than interpolated shell strin
 
 Changelog Git failures are fatal. An invalid `--from` revision or a failed tag query must exit non-zero rather than being reported as an empty commit range, which could otherwise leave stale release notes in a release commit.
 
+`RELEASE.md` is considered current only when its first heading is exactly `# SecPivot Desktop v<target version>`. A version mention elsewhere in stale release notes does not satisfy the second-pass gate.
+
 ### Dry run
 
 ```
