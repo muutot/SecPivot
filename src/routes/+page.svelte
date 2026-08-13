@@ -926,21 +926,26 @@
 
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
-    const sessionId = vault.getActiveSessionId();
-    if (isTauriRuntime() && !sessionId) return;
     if (!window.confirm("导出的 CSV 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const fileName = currentVault.fileName;
     try {
       if (isTauriRuntime()) {
-        const selected = await save({
-          defaultPath: (currentVault.fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".csv",
-          filters: [{ name: "CSV 文件", extensions: ["csv"] }],
-        });
-        if (!selected) return;
+        const picked = await awaitCurrentView(sessionView, view, () =>
+          save({
+            defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".csv",
+            filters: [{ name: "CSV 文件", extensions: ["csv"] }],
+          }),
+        );
+        if (!picked.current || !picked.value) return;
         await invoke("export_csv", {
           sessionId,
-          path: String(selected),
+          path: String(picked.value),
         });
       } else {
+        if (!sessionView.isCurrent(view)) return;
         const rows = reportEntries.map(({ entry, path }) => ({
           group: path,
           title: entry.title,
@@ -960,31 +965,36 @@
         anchor.click();
         URL.revokeObjectURL(url);
       }
-      flash("已导出 CSV");
+      if (sessionView.isCurrent(view)) flash("已导出 CSV");
     } catch (e) {
-      flash(`导出失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`导出失败：${e}`);
     }
   }
 
   async function confirmExportEmergency(): Promise<void> {
     if (!currentVault) return;
-    const sessionId = vault.getActiveSessionId();
-    if (!sessionId) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const includePasswords = emergencyIncludePasswords;
     try {
-      const selected = await save({
-        defaultPath: `SecPivot-应急表-${new Date().toISOString().slice(0, 10)}.html`,
-        filters: [{ name: "HTML 文件", extensions: ["html"] }],
-      });
-      if (!selected) return;
+      const picked = await awaitCurrentView(sessionView, view, () =>
+        save({
+          defaultPath: `SecPivot-应急表-${new Date().toISOString().slice(0, 10)}.html`,
+          filters: [{ name: "HTML 文件", extensions: ["html"] }],
+        }),
+      );
+      if (!picked.current || !picked.value) return;
       await invoke("export_emergency_sheet", {
         sessionId,
-        path: String(selected),
-        includePasswords: emergencyIncludePasswords,
+        path: String(picked.value),
+        includePasswords,
       });
+      if (!sessionView.isCurrent(view)) return;
       emergencyExportOpen = false;
       flash("应急表已导出");
     } catch (e) {
-      flash(`导出应急表失败：${e}`);
+      if (sessionView.isCurrent(view)) flash(`导出应急表失败：${e}`);
     }
   }
 
