@@ -1,3 +1,8 @@
+---
+name: version-release
+description: Release workflow for SecPivot. Bump, release, or regenerate versions via scripts/release.mjs with the two-pass RELEASE.md flow, semantic versioning, and CI/CD release triggers.
+---
+
 # Skill: version-release
 
 # Version Release

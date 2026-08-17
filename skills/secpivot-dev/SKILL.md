@@ -1,3 +1,8 @@
+---
+name: secpivot-dev
+description: SecPivot Desktop development workflow. Read before any repository change: maintenance workflow, theme-token and documentation currency gates, verification commands, and gitmoji commit conventions.
+---
+
 # Skill: secpivot-dev
 
 # SecPivot Desktop Development
