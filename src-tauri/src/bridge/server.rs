@@ -1,19 +1,20 @@
 //! Loopback HTTP server for the KeePassHttp bridge.
 //!
 //! Binds `127.0.0.1:19455` only (never `0.0.0.0`) and serves one JSON POST
-//! per connection. Every request is dispatched through `bridge::handle_request`
-//! under the `VaultSession` lock; a fresh `associate` first asks the user via
-//! a frontend event (`bridge-associate-request`) and blocks up to
-//! `APPROVAL_TIMEOUT` for an explicit allow/deny (`bridge_approve`).
+//! per connection. Ordinary requests dispatch under the `VaultSession` lock.
+//! A fresh `associate` validates under the lock, waits up to
+//! `APPROVAL_TIMEOUT` for `bridge_approve` outside it, then completes only if
+//! the same stable backend-active session still owns browser integration.
 //!
 //! The server itself holds no secrets: keys live in the session and are
 //! wiped on lock, so a locked vault responds with a plain error envelope.
 
 use crate::bridge::{
-    handle_request_with_generator, new_client_id, BridgeRequest, BridgeResponse, BRIDGE_PORT,
+    complete_associate, handle_request_with_generator, new_client_id, prepare_associate,
+    BridgeRequest, BridgeResponse, BRIDGE_PORT,
 };
 use crate::config::PasswordGeneratorSettings;
-use crate::vault::{VaultSession, BROWSER_VAULT_CHANGED_EVENT};
+use crate::vault::{VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -186,46 +187,25 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
         );
         return;
     };
-    let request_type = request.request_type.clone();
-    let response = {
-        // The guard must outlive the `catch_unwind` closure: when a handler
-        // panics (e.g. a hypothetical OS RNG failure inside `random_bytes`),
-        // the guard is dropped normally after the panic is caught, so the
-        // session mutex is never poisoned and later requests keep working.
-        let Ok(mut session) = session_state.lock() else {
-            let _ = write_http_response(
-                &mut stream,
-                r#"{"Success":false,"Error":"内部错误","Version":"1.8.4"}"#,
-            );
-            return;
-        };
-        let app = app.clone();
-        let generator = app
-            .state::<BridgeState>()
-            .generator
-            .lock()
-            .ok()
-            .map(|guard| guard.clone())
-            .unwrap_or_default();
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handle_request_with_generator(
-                request,
-                &mut *session,
-                move |id| {
-                    let app = app.clone();
-                    request_approval(&app, &board, id)
-                },
-                &generator,
-            )
-        }));
-        match outcome {
-            Ok(response) => response,
-            Err(_) => {
-                eprintln!("[bridge] request handler panicked");
-                BridgeResponse::failure(&request_type, "内部错误")
-            }
-        }
+    let Some(sessions) = app.try_state::<VaultSessions>() else {
+        let _ = write_http_response(
+            &mut stream,
+            r#"{"Success":false,"Error":"内部错误","Version":"1.8.4"}"#,
+        );
+        return;
     };
+    let request_type = request.request_type.clone();
+    let generator = app
+        .state::<BridgeState>()
+        .generator
+        .lock()
+        .ok()
+        .map(|guard| guard.clone())
+        .unwrap_or_default();
+    let response =
+        dispatch_request_with_approval(request, &session_state, &sessions, &generator, |id| {
+            request_approval(app, &board, id)
+        });
     if request_type == "set-login" && response.success {
         let _ = app.emit(BROWSER_VAULT_CHANGED_EVENT, ());
     }
@@ -238,6 +218,83 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
                 &mut stream,
                 r#"{"Success":false,"Error":"内部错误","Version":"1.8.4"}"#,
             );
+        }
+    }
+}
+
+/// Dispatch one request while keeping the potentially 120-second association
+/// approval outside the vault mutex. Association completion is allowed only
+/// if the backend-active session still has the stable id captured at prepare.
+fn dispatch_request_with_approval(
+    request: BridgeRequest,
+    session_state: &Mutex<VaultSession>,
+    sessions: &VaultSessions,
+    generator: &PasswordGeneratorSettings,
+    approve: impl FnOnce(&str) -> bool,
+) -> BridgeResponse {
+    let request_type = request.request_type.clone();
+    if request_type != "associate" {
+        // The guard must outlive the `catch_unwind` closure: a protocol panic
+        // is caught before the guard is dropped, so the mutex is not poisoned.
+        let Ok(mut session) = session_state.lock() else {
+            return BridgeResponse::failure(&request_type, "内部错误");
+        };
+        return match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            handle_request_with_generator(request, &mut *session, |_| false, generator)
+        })) {
+            Ok(response) => response,
+            Err(_) => {
+                eprintln!("[bridge] request handler panicked");
+                BridgeResponse::failure(&request_type, "内部错误")
+            }
+        };
+    }
+
+    let (originating_id, prepared) = {
+        let Ok(session) = session_state.lock() else {
+            return BridgeResponse::failure(&request_type, "内部错误");
+        };
+        let Some(originating_id) = sessions.active_id() else {
+            return BridgeResponse::failure(&request_type, "数据库未打开或已锁定");
+        };
+        let prepared = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            prepare_associate(request, &*session)
+        })) {
+            Ok(Ok(prepared)) => prepared,
+            Ok(Err(response)) => return *response,
+            Err(_) => {
+                eprintln!("[bridge] request handler panicked");
+                return BridgeResponse::failure(&request_type, "内部错误");
+            }
+        };
+        (originating_id, prepared)
+    };
+
+    let approved =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| approve(prepared.id()))) {
+            Ok(approved) => approved,
+            Err(_) => {
+                eprintln!("[bridge] approval handler panicked");
+                return BridgeResponse::failure(&request_type, "内部错误");
+            }
+        };
+    if !approved {
+        return prepared.reject("已拒绝浏览器连接授权");
+    }
+
+    let Ok(mut session) = session_state.lock() else {
+        return BridgeResponse::failure(&request_type, "内部错误");
+    };
+    if sessions.active_id().as_deref() != Some(originating_id.as_str()) {
+        return prepared.reject("数据库会话已切换,请重新关联");
+    }
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        complete_associate(prepared, &mut *session)
+    })) {
+        Ok(response) => response,
+        Err(_) => {
+            eprintln!("[bridge] request handler panicked");
+            BridgeResponse::failure(&request_type, "内部错误")
         }
     }
 }
@@ -423,7 +480,11 @@ fn write_http_response(stream: &mut TcpStream, body: &str) -> std::io::Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bridge::{make_verifier, BridgeHost};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use std::io::Write;
+    use std::sync::Arc;
+    use tempfile::TempDir;
 
     /// Serve `raw` over a real loopback socket; the returned stream is the
     /// server side after the client wrote and half-closed.
@@ -438,6 +499,40 @@ mod tests {
         });
         let (stream, _) = listener.accept().unwrap();
         (stream, writer)
+    }
+
+    fn associate_request(id: &str) -> BridgeRequest {
+        let key = [0x44; 32];
+        let nonce = crate::crypto::random_bytes(16);
+        BridgeRequest {
+            request_type: "associate".to_owned(),
+            id: Some(id.to_owned()),
+            nonce: STANDARD.encode(&nonce),
+            verifier: Some(make_verifier(&key, &nonce)),
+            key: Some(STANDARD.encode(key)),
+            ..Default::default()
+        }
+    }
+
+    fn open_test_vault(
+        sessions: &VaultSessions,
+        active: &mut VaultSession,
+        dir: &TempDir,
+        name: &str,
+    ) -> String {
+        sessions
+            .open(active, |fresh| {
+                fresh.create(
+                    &dir.path().join(name),
+                    "master",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    None,
+                )
+            })
+            .unwrap()
+            .session_id
     }
 
     #[test]
@@ -581,5 +676,85 @@ mod tests {
         );
         assert!(!decided);
         assert!(!board.decide(&token.lock().unwrap(), true));
+    }
+
+    #[test]
+    fn associate_approval_wait_does_not_hold_vault_mutex() {
+        let dir = TempDir::new().unwrap();
+        let sessions = Arc::new(VaultSessions::default());
+        let active = Arc::new(Mutex::new(VaultSession::default()));
+        open_test_vault(
+            &sessions,
+            &mut active.lock().unwrap(),
+            &dir,
+            "approval.kdbx",
+        );
+
+        let (approval_started_tx, approval_started_rx) = mpsc::channel();
+        let (decision_tx, decision_rx) = mpsc::channel();
+        let worker_active = active.clone();
+        let worker_sessions = sessions.clone();
+        let worker = std::thread::spawn(move || {
+            dispatch_request_with_approval(
+                associate_request("waiting-client"),
+                &worker_active,
+                &worker_sessions,
+                &PasswordGeneratorSettings::default(),
+                |_| {
+                    approval_started_tx.send(()).unwrap();
+                    decision_rx.recv().unwrap()
+                },
+            )
+        });
+
+        approval_started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert!(
+            active.try_lock().is_ok(),
+            "approval wait must not retain the vault mutex"
+        );
+        decision_tx.send(false).unwrap();
+        let response = worker.join().unwrap();
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("拒绝"));
+    }
+
+    #[test]
+    fn associate_approval_rejects_after_active_session_switch() {
+        let dir = TempDir::new().unwrap();
+        let sessions = VaultSessions::default();
+        let active = Mutex::new(VaultSession::default());
+        let first_id = open_test_vault(&sessions, &mut active.lock().unwrap(), &dir, "first.kdbx");
+        let second_id =
+            open_test_vault(&sessions, &mut active.lock().unwrap(), &dir, "second.kdbx");
+        assert_eq!(sessions.active_id().as_deref(), Some(second_id.as_str()));
+
+        let response = dispatch_request_with_approval(
+            associate_request("switched-client"),
+            &active,
+            &sessions,
+            &PasswordGeneratorSettings::default(),
+            |_| {
+                sessions
+                    .switch_active(&mut active.lock().unwrap(), &first_id)
+                    .unwrap();
+                true
+            },
+        );
+
+        assert!(!response.success);
+        assert_eq!(
+            response.error.as_deref(),
+            Some("数据库会话已切换,请重新关联")
+        );
+        let mut active = active.lock().unwrap();
+        assert!(active.list_clients().is_empty());
+        assert!(sessions
+            .with_session_mut(&mut active, Some(&second_id), |session| {
+                Ok(session.list_clients())
+            })
+            .unwrap()
+            .is_empty());
     }
 }

@@ -397,6 +397,7 @@ fn associate_rejects_bad_key_or_rejection() {
     let mut host = MockHost::open();
 
     // Key of the wrong length is refused before the approval prompt.
+    let prompted = std::cell::Cell::new(false);
     let nonce = random_bytes(16);
     let nonce_b64 = STANDARD.encode(&nonce);
     let bad_key_request = BridgeRequest {
@@ -406,9 +407,31 @@ fn associate_rejects_bad_key_or_rejection() {
         key: Some(STANDARD.encode([1u8; 16])),
         ..Default::default()
     };
-    let response = handle_request(bad_key_request, &mut host, |_| true);
+    let response = handle_request(bad_key_request, &mut host, |_| {
+        prompted.set(true);
+        true
+    });
     assert!(!response.success);
     assert!(response.error.unwrap().contains("256"));
+    assert!(!prompted.get());
+
+    // A valid-length key with a bad verifier is also refused before approval.
+    let key = [0x32; 32];
+    let nonce = random_bytes(16);
+    let bad_verifier_request = BridgeRequest {
+        request_type: "associate".to_owned(),
+        nonce: STANDARD.encode(&nonce),
+        verifier: Some(make_verifier(&[0x31; 32], &nonce)),
+        key: Some(STANDARD.encode(key)),
+        ..Default::default()
+    };
+    let response = handle_request(bad_verifier_request, &mut host, |_| {
+        prompted.set(true);
+        true
+    });
+    assert!(!response.success);
+    assert_eq!(response.error.as_deref(), Some("关联校验失败"));
+    assert!(!prompted.get());
 
     // User rejection cancels the association.
     let key = [0x33; 32];
@@ -432,6 +455,7 @@ fn associate_rejects_bad_key_or_rejection() {
 fn associate_fails_when_locked() {
     let mut host = MockHost::open();
     host.open = false;
+    let prompted = std::cell::Cell::new(false);
     let nonce = random_bytes(16);
     let nonce_b64 = STANDARD.encode(&nonce);
     let request = BridgeRequest {
@@ -441,9 +465,13 @@ fn associate_fails_when_locked() {
         key: Some(STANDARD.encode([1u8; 32])),
         ..Default::default()
     };
-    let response = handle_request(request, &mut host, |_| true);
+    let response = handle_request(request, &mut host, |_| {
+        prompted.set(true);
+        true
+    });
     assert!(!response.success);
     assert_eq!(response.error.as_deref(), Some("数据库未打开或已锁定"));
+    assert!(!prompted.get());
 }
 
 #[test]

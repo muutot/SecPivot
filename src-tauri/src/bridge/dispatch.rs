@@ -45,11 +45,18 @@ pub fn handle_request_with_generator(
     if request_type.trim().is_empty() {
         return BridgeResponse::failure(&request_type, "缺少 RequestType");
     }
+    if request_type == "associate" {
+        let prepared = match prepare_associate(request, host) {
+            Ok(prepared) => prepared,
+            Err(response) => return *response,
+        };
+        if !approve(prepared.id()) {
+            return prepared.reject("已拒绝浏览器连接授权");
+        }
+        return complete_associate(prepared, host);
+    }
     if !host.is_open() {
         return BridgeResponse::failure(&request_type, "数据库未打开或已锁定");
-    }
-    if request_type == "associate" {
-        return handle_associate(request, host, approve);
     }
 
     let id = request.id.clone().unwrap_or_default();
@@ -77,20 +84,65 @@ pub fn handle_request_with_generator(
     response
 }
 
-/// `associate` adds a new client key after explicit user approval; the key is
-/// then bound to `id` inside the (session-held) host state.
-fn handle_associate(
+/// Validated association request retained while the desktop waits for the
+/// user's decision. The key never leaves backend memory and is zeroized if the
+/// request is rejected, expires, panics, or loses its originating session.
+pub(crate) struct PreparedAssociate {
+    request_type: String,
+    id: String,
+    key: Vec<u8>,
+}
+
+impl PreparedAssociate {
+    pub(crate) fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub(crate) fn reject(self, error: &str) -> BridgeResponse {
+        BridgeResponse::failure(&self.request_type, error)
+    }
+}
+
+impl Drop for PreparedAssociate {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
+
+/// Validate an `associate` request before prompting. This phase is cheap and
+/// must run while the originating vault session is still locked so a locked
+/// vault or invalid key/verifier never triggers an approval prompt.
+pub(crate) fn prepare_associate(
     request: BridgeRequest,
-    host: &mut dyn BridgeHost,
-    approve: impl FnOnce(&str) -> bool,
-) -> BridgeResponse {
+    host: &dyn BridgeHost,
+) -> Result<PreparedAssociate, Box<BridgeResponse>> {
     let request_type = request.request_type.clone();
+    if request_type.trim().is_empty() {
+        return Err(Box::new(BridgeResponse::failure(
+            &request_type,
+            "缺少 RequestType",
+        )));
+    }
+    if !host.is_open() {
+        return Err(Box::new(BridgeResponse::failure(
+            &request_type,
+            "数据库未打开或已锁定",
+        )));
+    }
     let Some(key_b64) = request.key.as_deref() else {
-        return BridgeResponse::failure(&request_type, "关联请求缺少 Key");
+        return Err(Box::new(BridgeResponse::failure(
+            &request_type,
+            "关联请求缺少 Key",
+        )));
     };
     let mut key = match STANDARD.decode(key_b64) {
         Ok(bytes) if bytes.len() == KEY_LEN => bytes,
-        _ => return BridgeResponse::failure(&request_type, "关联密钥必须是 256 位"),
+        _ => {
+            return Err(Box::new(BridgeResponse::failure(
+                &request_type,
+                "关联密钥必须是 256 位",
+            )))
+        }
     };
     let valid = check_verifier(
         &key,
@@ -99,23 +151,35 @@ fn handle_associate(
     );
     if !valid {
         key.zeroize();
-        return BridgeResponse::failure(&request_type, "关联校验失败");
+        return Err(Box::new(BridgeResponse::failure(
+            &request_type,
+            "关联校验失败",
+        )));
     }
     let id = request.id.clone().unwrap_or_else(new_client_id);
-    if !approve(&id) {
-        key.zeroize();
-        return BridgeResponse::failure(&request_type, "已拒绝浏览器连接授权");
+    Ok(PreparedAssociate {
+        request_type,
+        id,
+        key,
+    })
+}
+
+/// Bind a previously validated association to the still-current vault. The
+/// server rechecks stable session ownership before calling this phase.
+pub(crate) fn complete_associate(
+    mut prepared: PreparedAssociate,
+    host: &mut dyn BridgeHost,
+) -> BridgeResponse {
+    if !host.is_open() {
+        return prepared.reject("数据库未打开或已锁定");
     }
-    host.register_client(&id, key);
-    // Echo the bound id under the stored key (fresh response nonce).
-    let mut key = host.client_key(&id).unwrap_or_default();
     let nonce = random_bytes(NONCE_LEN);
     let nonce_b64 = STANDARD.encode(&nonce);
-    let verifier_b64 = make_verifier(&key, &nonce);
+    let verifier_b64 = make_verifier(&prepared.key, &nonce);
     let response = BridgeResponse {
-        request_type,
+        request_type: prepared.request_type.clone(),
         success: true,
-        id: Some(id),
+        id: Some(prepared.id.clone()),
         entries: Vec::new(),
         count: None,
         password: None,
@@ -123,10 +187,11 @@ fn handle_associate(
         verifier: verifier_b64.clone(),
         hash: host.db_hash(),
         version: PROTOCOL_VERSION.to_owned(),
-        hmac: response_hmac(&key, &nonce_b64, &verifier_b64),
+        hmac: response_hmac(&prepared.key, &nonce_b64, &verifier_b64),
         error: None,
     };
-    key.zeroize();
+    let key = std::mem::take(&mut prepared.key);
+    host.register_client(&prepared.id, key);
     response
 }
 
