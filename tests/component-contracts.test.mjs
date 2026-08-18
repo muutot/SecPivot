@@ -38,7 +38,7 @@ test("browser write event stays aligned across backend and page listener", async
 test("global auto-type emits picker events after releasing the vault lock", async () => {
   const source = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
   const lockedPreparation = source.match(/let action = \{([\s\S]*?)\n    \};/);
-  const unlockedDispatch = source.match(/match action \{([\s\S]*?)\n    \}\n\}/);
+  const unlockedDispatch = source.match(/match action \{([\s\S]*?)\r?\n    \}\r?\n\}/);
 
   assert.ok(lockedPreparation, "global hotkey locked preparation must exist");
   assert.match(lockedPreparation[1], /session\.lock\(\)/);
