@@ -1,0 +1,31 @@
+# SecPivot line-ending policy
+# ---------------------------------------------------------------------------
+# Enforce LF for every text file on BOTH commit (normalize to LF) and checkout.
+# This keeps the repository consistent across platforms. Windows CI checks out
+# with core.autocrlf by default, which produced CRLF working trees and broke
+# the source-structure regex tests (e.g. the global auto-type contract). The
+# explicit eol=lf overrides core.autocrlf for every text file.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending normalized or diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.exe binary
+*.dll binary
+*.pdf binary
+*.sqlite binary
+*.db binary
