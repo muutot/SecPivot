@@ -16,6 +16,12 @@
       "options": {
         "parser": "jsonc"
       }
+    },
+    {
+      "files": ["src-tauri/*.json", "src-tauri/**/*.json"],
+      "options": {
+        "trailingComma": "none"
+      }
     }
   ]
 }
