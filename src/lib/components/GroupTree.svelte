@@ -167,6 +167,20 @@
     const uuids = [...all].filter((uuid) => uuid !== root.uuid);
     if (uuids.length > 0) onsetexpanded(uuids, false);
   }
+
+  /** Every renderable group (the root itself is never shown) is expanded. */
+  const allExpanded = $derived.by(() => {
+    const all = new Set<string>();
+    collectUuids(root, all);
+    all.delete(root.uuid);
+    return all.size > 0 && [...all].every((uuid) => expanded.has(uuid));
+  });
+
+  /** Single expand/collapse-all toggle: collapse when everything is open. */
+  function toggleExpandAll(): void {
+    if (allExpanded) collapseAll();
+    else expandAll();
+  }
 </script>
 
 <div class="group-tree">
@@ -181,11 +195,13 @@
       >
         <AppIcon name="folder-plus" size={13} />
       </button>
-      <button class="tool-btn" title="全部展开" aria-label="全部展开" onclick={expandAll}>
-        <AppIcon name="chevrons-down" size={13} />
-      </button>
-      <button class="tool-btn" title="全部折叠" aria-label="全部折叠" onclick={collapseAll}>
-        <AppIcon name="chevrons-right" size={13} />
+      <button
+        class="tool-btn"
+        title={allExpanded ? "全部折叠" : "全部展开"}
+        aria-label={allExpanded ? "全部折叠" : "全部展开"}
+        onclick={toggleExpandAll}
+      >
+        <AppIcon name={allExpanded ? "chevrons-right" : "chevrons-down"} size={13} />
       </button>
     </div>
   </div>
