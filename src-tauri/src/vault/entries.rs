@@ -195,6 +195,48 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Update a single custom field's value in place, leaving every other field
+    /// (and every other custom field) untouched. `protected` keeps or drops the
+    /// KDBX protected flag for this field; reserved/standard column names are
+    /// rejected so this never clobbers Title/UserName/… . A history snapshot is
+    /// recorded like the other mutations.
+    pub fn update_custom_field(
+        &mut self,
+        uuid: &str,
+        name: &str,
+        value: &str,
+        protected: bool,
+    ) -> Result<VaultState, String> {
+        let field_name = name.trim().to_owned();
+        if field_name.is_empty() || RESERVED_FIELDS.contains(&field_name.as_str()) {
+            return Err("自定义字段名称无效".to_owned());
+        }
+        let id = parse_entry_id(uuid)?;
+        let cap = {
+            let db = self.require_db()?;
+            history_cap(&db.meta)
+        };
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            {
+                let mut tracked = entry.track_changes();
+                tracked.set(
+                    field_name.clone(),
+                    if protected {
+                        Value::protected(value.to_owned())
+                    } else {
+                        Value::unprotected(value.to_owned())
+                    },
+                );
+                tracked.times.last_modification = Some(Times::now());
+                trim_entry_history(&mut tracked, cap);
+            }
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
     /// Move an entry into another group (used by drag-and-drop).
     pub fn move_entry(&mut self, uuid: &str, group_uuid: &str) -> Result<VaultState, String> {
         let id = parse_entry_id(uuid)?;

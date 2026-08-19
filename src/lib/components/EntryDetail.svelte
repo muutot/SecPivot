@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, tick } from "svelte";
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
+  import type { EntryPatch } from "$lib/types/vault";
   import type { EntryStorage } from "$lib/types/vault";
   import { copyValue } from "$lib/services/security";
   import { formatBytes } from "$lib/utils/format";
@@ -64,6 +65,18 @@
   let customFieldLoaded = $state<Record<string, boolean>>({});
   let customFieldLoading = $state<Record<string, boolean>>({});
   let customFieldRevealed = $state<Record<string, boolean>>({});
+  /** Inline field editor: at most one field is edited at a time. `kind`
+   *  selects which stored field to persist; `name`/`protected` qualify
+   *  custom fields. Protected fields must be revealed before editing. */
+  type EditTarget = {
+    kind: "username" | "password" | "url" | "custom";
+    name?: string;
+    protected?: boolean;
+  };
+  let editing = $state<EditTarget | null>(null);
+  let editValue = $state("");
+  let editSaving = $state(false);
+  let editInput = $state<HTMLInputElement | null>(null);
   let copied = $state("");
   let activeTab = $state<"fields" | "meta" | "attachments" | "history">("fields");
   let historyVersions = $state<HistoryVersion[]>([]);
@@ -95,6 +108,8 @@
     customFieldLoaded = {};
     customFieldLoading = {};
     customFieldRevealed = {};
+    editing = null;
+    editSaving = false;
     historyLoadedUuid = null;
     historyLoading = false;
     historyVersions = [];
@@ -337,6 +352,8 @@
         return "已删除历史版本";
       case "url":
         return "已复制网址";
+      case "saved":
+        return "已保存";
       default:
         return "已复制到剪贴板";
     }
@@ -359,6 +376,113 @@
       flash("attachment");
     } catch {
       if (detailView.isCurrent(view)) flash("error");
+    }
+  }
+
+  function editingMatches(target: EditTarget): boolean {
+    return editing !== null && editing.kind === target.kind && editing.name === target.name;
+  }
+
+  /** Right-click entry into inline edit mode. Protected fields (password,
+   *  protected custom fields) are revealed — value fetched on demand and shown
+   *  as plain text — before the editor opens, so the user can see what they
+   *  are about to change. */
+  async function startEdit(target: EditTarget): Promise<void> {
+    const view = detailView.capture();
+    if (!view || editSaving) return;
+    let value: string;
+    if (target.kind === "password") {
+      const loaded = await ensurePassword(view);
+      if (loaded === null) return;
+      value = loaded;
+      revealPassword = true;
+    } else if (target.kind === "custom" && target.protected) {
+      const loaded = await ensureCustomField(target.name!, view);
+      if (loaded === null) return;
+      value = loaded;
+      customFieldRevealed = { ...customFieldRevealed, [target.name!]: true };
+    } else if (target.kind === "custom") {
+      value = entry.customFields?.find((f) => f.name === target.name)?.value ?? "";
+    } else {
+      value = entry[target.kind] ?? "";
+    }
+    if (!detailView.isCurrent(view)) return;
+    editing = target;
+    editValue = value;
+    editSaving = false;
+    await tick();
+    editInput?.focus();
+    editInput?.select();
+  }
+
+  /** Commit the inline edit: blur, Enter, or any other exit path persist the
+   *  value. Unchanged values close the editor silently. */
+  async function commitEdit(): Promise<void> {
+    const target = editing;
+    if (!target || editSaving) return;
+    const value = editValue;
+    const unchanged =
+      target.kind === "custom"
+        ? target.protected
+          ? (customFieldValues[target.name!] ?? "") === value
+          : (entry.customFields?.find((f) => f.name === target.name)?.value ?? "") === value
+        : target.kind === "password"
+          ? fetchedPassword === value
+          : (entry[target.kind] ?? "") === value;
+    if (unchanged) {
+      editing = null;
+      return;
+    }
+    // Exit edit mode before the await so the unmount blur cannot re-enter.
+    editing = null;
+    editSaving = true;
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    const view = detailView.capture();
+    if (!sessionId || !view) {
+      editSaving = false;
+      return;
+    }
+    try {
+      if (target.kind === "custom") {
+        await vault.callInSession(sessionId, () =>
+          vault.updateCustomFieldValue(uuid, target.name!, value, target.protected ?? false),
+        );
+      } else {
+        let patch: EntryPatch;
+        if (target.kind === "username") patch = { username: value };
+        else if (target.kind === "password") patch = { password: value };
+        else patch = { url: value };
+        await vault.callInSession(sessionId, () => vault.updateEntries([uuid], patch));
+      }
+      if (detailView.isCurrent(view)) flash("saved");
+    } catch {
+      if (detailView.isCurrent(view)) flash("error");
+    } finally {
+      if (detailView.isCurrent(view)) editSaving = false;
+    }
+  }
+
+  function cancelEdit(): void {
+    if (!editing || editSaving) return;
+    editing = null;
+  }
+
+  function onEditKeydown(event: KeyboardEvent): void {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commitEdit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEdit();
+    }
+  }
+
+  /** Keyboard entry for the field-value right-click targets (role="button"). */
+  function onFieldKeydown(event: KeyboardEvent, target: EditTarget): void {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void startEdit(target);
     }
   }
 </script>
@@ -461,53 +585,119 @@
         <div class="fields-scroll">
           <div class="field-block">
             <span class="field-label">用户名</span>
-            <div class="field-value">
-              <span class="field-text">{entry.username || "—"}</span>
-              {#if entry.username}
-                <button
-                  class="copy-btn"
-                  onclick={() => handleCopy(entry.username, "username")}
-                  title="复制用户名"
-                >
-                  <AppIcon name="copy" size={13} />
-                </button>
+            <div
+              class="field-value"
+              class:editing={editingMatches({ kind: "username" })}
+              role="button"
+              tabindex="0"
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                void startEdit({ kind: "username" });
+              }}
+              onkeydown={(e) => onFieldKeydown(e, { kind: "username" })}
+              title="右键编辑"
+            >
+              {#if editingMatches({ kind: "username" })}
+                <input
+                  class="inline-edit"
+                  bind:this={editInput}
+                  bind:value={editValue}
+                  onkeydown={onEditKeydown}
+                  onblur={() => void commitEdit()}
+                  spellcheck="false"
+                />
+              {:else}
+                <span class="field-text">{entry.username || "—"}</span>
+                {#if entry.username}
+                  <button
+                    class="copy-btn"
+                    onclick={() => handleCopy(entry.username, "username")}
+                    title="复制用户名"
+                  >
+                    <AppIcon name="copy" size={13} />
+                  </button>
+                {/if}
               {/if}
             </div>
           </div>
 
           <div class="field-block">
             <span class="field-label">密码</span>
-            <div class="field-value">
-              <span class="field-text mono"
-                >{revealPassword ? fetchedPassword : "••••••••••••"}</span
-              >
-              <button
-                class="copy-btn"
-                onclick={toggleReveal}
-                title={revealPassword ? "隐藏密码" : "显示密码"}
-              >
-                <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
-              </button>
-              <button class="copy-btn" onclick={copyPassword} title="复制密码">
-                <AppIcon name="copy" size={13} />
-              </button>
+            <div
+              class="field-value"
+              class:editing={editingMatches({ kind: "password" })}
+              role="button"
+              tabindex="0"
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                void startEdit({ kind: "password" });
+              }}
+              onkeydown={(e) => onFieldKeydown(e, { kind: "password" })}
+              title="右键编辑"
+            >
+              {#if editingMatches({ kind: "password" })}
+                <input
+                  class="inline-edit mono"
+                  bind:this={editInput}
+                  bind:value={editValue}
+                  onkeydown={onEditKeydown}
+                  onblur={() => void commitEdit()}
+                  spellcheck="false"
+                />
+              {:else}
+                <span class="field-text mono"
+                  >{revealPassword ? fetchedPassword : "••••••••••••"}</span
+                >
+                <button
+                  class="copy-btn"
+                  onclick={toggleReveal}
+                  title={revealPassword ? "隐藏密码" : "显示密码"}
+                >
+                  <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
+                </button>
+                <button class="copy-btn" onclick={copyPassword} title="复制密码">
+                  <AppIcon name="copy" size={13} />
+                </button>
+              {/if}
             </div>
           </div>
 
           {#if entry.url}
             <div class="field-block">
               <span class="field-label">网址</span>
-              <div class="field-value">
-                <button class="url-link" onclick={openUrlExternal} title={entry.url}>
-                  <span class="field-text link">{entry.url}</span>
-                </button>
-                <button
-                  class="copy-btn"
-                  onclick={() => handleCopy(entry.url, "url")}
-                  title="复制网址"
-                >
-                  <AppIcon name="copy" size={13} />
-                </button>
+              <div
+                class="field-value"
+                class:editing={editingMatches({ kind: "url" })}
+                role="button"
+                tabindex="0"
+                oncontextmenu={(e) => {
+                  e.preventDefault();
+                  void startEdit({ kind: "url" });
+                }}
+                onkeydown={(e) => onFieldKeydown(e, { kind: "url" })}
+                title="右键编辑"
+              >
+                {#if editingMatches({ kind: "url" })}
+                  <input
+                    class="inline-edit"
+                    bind:this={editInput}
+                    bind:value={editValue}
+                    onkeydown={onEditKeydown}
+                    onblur={() => void commitEdit()}
+                    spellcheck="false"
+                  />
+                {:else}
+                  <button class="url-link" onclick={openUrlExternal} title={entry.url}>
+                    <span class="field-text link">{entry.url}</span>
+                  </button>
+                  <button
+                    class="copy-btn"
+                    onclick={() => handleCopy(entry.url, "url")}
+                    title="复制网址"
+                  >
+                    <AppIcon name="copy" size={13} />
+                  </button>
+                {/if}
               </div>
             </div>
           {/if}
@@ -532,8 +722,38 @@
                     </span>
                   {/if}
                 </span>
-                <div class="field-value">
-                  {#if field.protected}
+                <div
+                  class="field-value"
+                  class:editing={editingMatches({ kind: "custom", name: field.name })}
+                  role="button"
+                  tabindex="0"
+                  oncontextmenu={(e) => {
+                    e.preventDefault();
+                    void startEdit({
+                      kind: "custom",
+                      name: field.name,
+                      protected: field.protected,
+                    });
+                  }}
+                  onkeydown={(e) =>
+                    onFieldKeydown(e, {
+                      kind: "custom",
+                      name: field.name,
+                      protected: field.protected,
+                    })}
+                  title="右键编辑"
+                >
+                  {#if editingMatches({ kind: "custom", name: field.name })}
+                    <input
+                      class="inline-edit"
+                      class:mono={field.protected}
+                      bind:this={editInput}
+                      bind:value={editValue}
+                      onkeydown={onEditKeydown}
+                      onblur={() => void commitEdit()}
+                      spellcheck="false"
+                    />
+                  {:else if field.protected}
                     <span class="field-text mono">
                       {customFieldRevealed[field.name]
                         ? customFieldValues[field.name] || ""
@@ -1013,6 +1233,35 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
+  }
+
+  .field-value.editing {
+    border-color: var(--selection-color);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--selection-color) 25%, transparent);
+  }
+
+  .inline-edit {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: var(--settings-control-radius, 6px);
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .inline-edit:focus {
+    border-color: var(--selection-color);
+    background: var(--input-bg);
+  }
+
+  .inline-edit.mono {
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    letter-spacing: 0.02em;
   }
 
   .field-text {

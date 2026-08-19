@@ -324,6 +324,7 @@ pub fn run() {
             commands::update_entry,
             commands::update_entry_flags,
             commands::update_entries,
+            commands::update_custom_field,
             commands::delete_entry,
             commands::delete_entries,
             commands::move_entry,

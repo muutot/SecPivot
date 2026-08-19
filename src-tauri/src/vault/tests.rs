@@ -1413,6 +1413,108 @@ fn entry_history_covers_all_snapshot_fields() {
 }
 
 #[test]
+fn update_custom_field_edits_one_field_and_keeps_protection() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "acct".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "https://example.com".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![
+                CustomField {
+                    name: "API Key".into(),
+                    value: "plain".into(),
+                    protected: false,
+                },
+                CustomField {
+                    name: "Secret".into(),
+                    value: "top".into(),
+                    protected: true,
+                },
+            ],
+            attachments: Vec::new(),
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // Edit the unprotected field; flag stays false, other fields untouched.
+    let updated = session
+        .update_custom_field(&uuid, "API Key", "plain-v2", false)
+        .unwrap();
+    let entry = &updated.root.entries[0];
+    let api = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "API Key")
+        .unwrap();
+    assert_eq!(api.value, "plain-v2");
+    assert!(!api.protected);
+    let secret = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Secret")
+        .unwrap();
+    // Protected values are redacted in snapshots; the flag must survive.
+    assert_eq!(secret.value, "");
+    assert!(secret.protected);
+    assert_eq!(entry.username, "u");
+
+    // Edit the protected field; flag stays true.
+    session
+        .update_custom_field(&uuid, "Secret", "top-v2", true)
+        .unwrap();
+    let fetched_secret = session.get_custom_field_value(&uuid, "Secret").unwrap();
+    assert_eq!(fetched_secret.as_deref(), Some("top-v2"));
+
+    // Reserved/standard names are rejected.
+    assert!(session
+        .update_custom_field(&uuid, "UserName", "x", false)
+        .is_err());
+    assert!(session
+        .update_custom_field(&uuid, "  ", "x", false)
+        .is_err());
+
+    // History captured the two custom-field edits.
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 2);
+
+    // Save + reopen keeps values and the protection flag.
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    let state = reopened.open(&path, "master-password", None).unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    let api = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "API Key")
+        .unwrap();
+    assert_eq!(api.value, "plain-v2");
+    assert!(!api.protected);
+    let secret = entry
+        .custom_fields
+        .iter()
+        .find(|f| f.name == "Secret")
+        .unwrap();
+    assert!(secret.protected);
+    assert_eq!(
+        reopened
+            .get_custom_field_value(&uuid, "Secret")
+            .unwrap()
+            .as_deref(),
+        Some("top-v2")
+    );
+}
+
+#[test]
 fn entry_history_supports_manual_delete() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

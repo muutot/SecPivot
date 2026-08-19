@@ -542,6 +542,24 @@ pub(crate) fn update_entries(
 }
 
 #[tauri::command]
+pub(crate) fn update_custom_field(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+    uuid: String,
+    name: String,
+    value: String,
+    protected: bool,
+) -> Result<VaultState, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.update_custom_field(&uuid, &name, &value, protected),
+    )
+}
+
+#[tauri::command]
 pub(crate) fn delete_entry(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,

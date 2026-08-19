@@ -105,6 +105,14 @@ interface VaultStore {
   getEntryPassword: (uuid: string) => Promise<string>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
   getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
+  /** Update one custom field's value in place, keeping its protected flag and
+   *  every other field untouched. Used by the detail panel inline editor. */
+  updateCustomFieldValue: (
+    uuid: string,
+    name: string,
+    value: string,
+    protectedField: boolean,
+  ) => Promise<VaultState>;
   securityReport: () => Promise<SecurityReport>;
   similarPasswords: () => Promise<SimilarPasswordGroup[]>;
   clearAllHistory: () => Promise<number>;
@@ -989,6 +997,36 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.customFields?.find((f) => f.name === name)?.value ?? null;
+  },
+
+  async updateCustomFieldValue(
+    uuid: string,
+    name: string,
+    value: string,
+    protectedField: boolean,
+  ): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      return invokeSessionState("update_custom_field", {
+        uuid,
+        name,
+        value,
+        protected: protectedField,
+      });
+    }
+    const result = applyEdit((draft) => {
+      const groups = collectAllGroups(draft.root);
+      for (const group of groups) {
+        const entry = group.entries.find((e) => e.uuid === uuid);
+        if (entry) {
+          const field = entry.customFields?.find((f) => f.name === name);
+          if (field) field.value = value;
+          return;
+        }
+      }
+      throw new Error("entry not found");
+    });
+    state.set(applyBackendState(result));
+    return result;
   },
 
   async securityReport(): Promise<SecurityReport> {
