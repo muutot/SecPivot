@@ -1,5 +1,101 @@
 # Changelog
 
+## 1.3.0 (2026-08-19)
+
+### ✨ Features
+
+- **bridge**: drop the vault mutex during associate approval and guard against session switch (9893f4a9)
+- **attachment**: retry temp cleanup across session close (bd8dadc4)
+- **rpc**: preserve session keys only across lock (ad065bda)
+- **release**: validate regeneration ancestry (bba1201e)
+- **release**: pass subprocess arguments without a shell (e6f5eaa6)
+- **release**: validate version inputs before git (063357aa)
+- **attachment**: bind preview actions to view (e324ea1e)
+- **tcato**: preserve focus-lock ownership (9d79ed81)
+- **clipboard**: bind detail secret copies to view (b0694c94)
+- **export**: bind plaintext exports to view (740751dd)
+- **clipboard**: reject stale password copies (4e592089)
+
+### 🐛 Bug Fixes
+
+- **ci**: pass repo to gh release upload in publish-android job (055d8bd8)
+- **build**: silence Android-only dead-code and unused-variable warnings (ea81e942)
+- **build**: align editorconfig end_of_line with gitattributes LF policy (5ad9490c)
+- **tauri**: exempt Tauri config JSON from trailing-comma reformatting (046ba9bf)
+- **test**: tolerate CRLF in global-hotkey contract regex (0a227282)
+- **bridge**: remove expired approval tokens (28575d5b)
+- **bridge**: align set-login update semantics (01511773)
+- **rpc**: persist writes outside session lock (fb7ad9b0)
+- **database**: reencrypt settings outside session lock (e8ca2c7b)
+- **remote**: run refresh and merge outside session lock (a7a364ca)
+- **settings**: sync rpc matching across sessions (975c14eb)
+- **settings**: align generator profile normalization (b8250b60)
+- **settings**: preserve edits across async saves (65006946)
+- **release**: require exact release notes heading (c9288426)
+- **release**: fail on changelog git errors (86a68283)
+- **release**: isolate release commit files (6cc7d98f)
+- **release**: make dry run read only (faf3dd2b)
+- **release**: reuse semantic bump target (2a89362d)
+- **release**: reserve force push for regeneration (9e33321d)
+- **release**: synchronize Android asset publishing (bd2a03ec)
+- **release**: validate release version identity (f725d576)
+- **database**: restrict writable cipher contract (7ff1fd7e)
+- **entry**: reset nested detail dialogs (1102817a)
+- **database**: bind settings dialog lifecycle (b4329493)
+- **database**: bind metadata dialog lifecycle (bd9de36d)
+- **group**: bind auto-type dialog lifecycle (a538be09)
+- **group**: await metadata save lifecycle (4db23717)
+- **session**: gate page mutation completions (51a4ee27)
+- **attachment**: reject stale save destinations (823f05d9)
+- **vault**: bind save-as picker to view (aa349333)
+- **group**: forward nested metadata action (6a450cd2)
+- **session**: clear stale tab ui state (ebe763a8)
+- **import**: bind file imports to view (a2b867a7)
+- **entry**: await editor save lifecycle (9c29bd36)
+- **attachment**: clean up dialog temp files (ae708625)
+- **entry**: reject stale detail responses (728c34fb)
+- **entry**: reveal secrets only after load (1936f51d)
+- **ui**: invalidate stale session activity (607f5a47)
+- **vault**: return committed session state (944eebbe)
+- **vault**: serialize session topology changes (aa9a458f)
+- **vault**: isolate renderer operations by session (9cb04986)
+- **ci**: use supported Rust cache input (820c74a2)
+- **release**: repair Android artifact pipeline (a945917f)
+- **password**: enforce configured generator constraints (a19f8338)
+- **entry**: select from final editor state (5d7c3bc6)
+- **vault**: bind long operations to session ids (ddbba9a1)
+- **entry**: persist entry flags from editor (f877aad3)
+
+### 🚀 Performance
+
+- **autotype**: emit picker events outside vault lock (3684fb29)
+- **attachment**: read temp imports outside session lock (e3365505)
+
+### 🎨 Styling
+
+- **release**: trim release name to version only (0d9ec155)
+- update app icon to v22 (head crossbar extended to outer ring) (f2f68a36)
+- **prettier**: treat *.json as jsonc and reformat JSON files (3a8bf584)
+
+### 📝 Documentation
+
+- **skill**: add YAML frontmatter metadata to secpivot-dev and version-release skills (45af3252)
+- **bridge**: document two-phase associate and session-stability guard (ee99585d)
+- **remote**: 修正条目级合并 TODO 描述并补充 LocationChanged 戳记陷阱 (6604e831)
+- **security**: align references with current behavior (58f958ee)
+- **todo**: correct completion evidence (c61a823f)
+
+### ✅ Testing
+
+- **android**: verify release signing configuration (42eb7c73)
+- **search**: verify advanced search predicates (1ca83516)
+
+### 🔧 Chores
+
+- **git**: enforce LF line endings via .gitattributes (95c9a0a8)
+- **ci**: upgrade actions to Node 24 runtimes (9530e414)
+- **ci**: run frontend behavior tests (c225b6c4)
+
 ## 1.2.0 (2026-08-12)
 
 ### ✨ Features
