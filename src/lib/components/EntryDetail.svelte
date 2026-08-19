@@ -457,123 +457,136 @@
 
   <div class="detail-body" role="tabpanel">
     {#if activeTab === "fields"}
-      <div class="field-block">
-        <span class="field-label">用户名</span>
-        <div class="field-value">
-          <span class="field-text">{entry.username || "—"}</span>
-          {#if entry.username}
-            <button
-              class="copy-btn"
-              onclick={() => handleCopy(entry.username, "username")}
-              title="复制用户名"
-            >
-              <AppIcon name="copy" size={13} />
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      <div class="field-block">
-        <span class="field-label">密码</span>
-        <div class="field-value">
-          <span class="field-text mono">{revealPassword ? fetchedPassword : "••••••••••••"}</span>
-          <button
-            class="copy-btn"
-            onclick={toggleReveal}
-            title={revealPassword ? "隐藏密码" : "显示密码"}
-          >
-            <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
-          </button>
-          <button class="copy-btn" onclick={copyPassword} title="复制密码">
-            <AppIcon name="copy" size={13} />
-          </button>
-        </div>
-      </div>
-
-      {#if entry.url}
-        <div class="field-block">
-          <span class="field-label">网址</span>
-          <div class="field-value">
-            <button class="url-link" onclick={openUrlExternal} title={entry.url}>
-              <span class="field-text link">{entry.url}</span>
-            </button>
-            <button class="copy-btn" onclick={() => handleCopy(entry.url, "url")} title="复制网址">
-              <AppIcon name="copy" size={13} />
-            </button>
-          </div>
-        </div>
-      {/if}
-
-      {#if entry.hasTotp}
-        <div class="field-block">
-          <span class="field-label">OTP 验证码</span>
-          <div class="field-value">
-            <TotpWidget entryUuid={entry.uuid} />
-          </div>
-        </div>
-      {/if}
-
-      {#if entry.notes}
-        <div class="field-block">
-          <span class="field-label">备注</span>
-          <div class="field-notes">{entry.notes}</div>
-        </div>
-      {/if}
-
-      {#if entry.customFields?.some((f) => f.name !== "KPRPC JSON")}
-        {#each entry.customFields.filter((f) => f.name !== "KPRPC JSON") as field}
+      <div class="fields-layout">
+        <div class="fields-scroll">
           <div class="field-block">
-            <span class="field-label">
-              {field.name}
-              {#if field.protected}
-                <span class="protected-badge" title="受保护字段 (值不进入快照)">
-                  <AppIcon name="lock" size={10} />
-                </span>
-              {/if}
-            </span>
+            <span class="field-label">用户名</span>
             <div class="field-value">
-              {#if field.protected}
-                <span class="field-text mono">
-                  {customFieldRevealed[field.name]
-                    ? customFieldValues[field.name] || ""
-                    : "••••••••••••"}
-                </span>
-                {#if customFieldLoading[field.name]}
-                  <span class="copy-btn" aria-hidden="true">
-                    <AppIcon name="clock" size={13} />
-                  </span>
-                {:else}
-                  <button
-                    class="copy-btn"
-                    onclick={() => toggleCustomFieldReveal(field.name)}
-                    title={customFieldRevealed[field.name] ? "隐藏字段值" : "显示字段值"}
-                  >
-                    <AppIcon name={customFieldRevealed[field.name] ? "eye-off" : "eye"} size={13} />
-                  </button>
-                  <button
-                    class="copy-btn"
-                    onclick={() => copyCustomField(field.name)}
-                    title="复制字段值"
-                  >
-                    <AppIcon name="copy" size={13} />
-                  </button>
-                {/if}
-              {:else}
-                <span class="field-text" title={field.value}>{field.value || "—"}</span>
-                {#if field.value}
-                  <button
-                    class="copy-btn"
-                    onclick={() => handleCopy(field.value, "custom")}
-                    title="复制字段值"
-                  >
-                    <AppIcon name="copy" size={13} />
-                  </button>
-                {/if}
+              <span class="field-text">{entry.username || "—"}</span>
+              {#if entry.username}
+                <button
+                  class="copy-btn"
+                  onclick={() => handleCopy(entry.username, "username")}
+                  title="复制用户名"
+                >
+                  <AppIcon name="copy" size={13} />
+                </button>
               {/if}
             </div>
           </div>
-        {/each}
-      {/if}
+
+          <div class="field-block">
+            <span class="field-label">密码</span>
+            <div class="field-value">
+              <span class="field-text mono"
+                >{revealPassword ? fetchedPassword : "••••••••••••"}</span
+              >
+              <button
+                class="copy-btn"
+                onclick={toggleReveal}
+                title={revealPassword ? "隐藏密码" : "显示密码"}
+              >
+                <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
+              </button>
+              <button class="copy-btn" onclick={copyPassword} title="复制密码">
+                <AppIcon name="copy" size={13} />
+              </button>
+            </div>
+          </div>
+
+          {#if entry.url}
+            <div class="field-block">
+              <span class="field-label">网址</span>
+              <div class="field-value">
+                <button class="url-link" onclick={openUrlExternal} title={entry.url}>
+                  <span class="field-text link">{entry.url}</span>
+                </button>
+                <button
+                  class="copy-btn"
+                  onclick={() => handleCopy(entry.url, "url")}
+                  title="复制网址"
+                >
+                  <AppIcon name="copy" size={13} />
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if entry.hasTotp}
+            <div class="field-block">
+              <span class="field-label">OTP 验证码</span>
+              <div class="field-value">
+                <TotpWidget entryUuid={entry.uuid} />
+              </div>
+            </div>
+          {/if}
+
+          {#if entry.customFields?.some((f) => f.name !== "KPRPC JSON")}
+            {#each entry.customFields.filter((f) => f.name !== "KPRPC JSON") as field}
+              <div class="field-block">
+                <span class="field-label">
+                  {field.name}
+                  {#if field.protected}
+                    <span class="protected-badge" title="受保护字段 (值不进入快照)">
+                      <AppIcon name="lock" size={10} />
+                    </span>
+                  {/if}
+                </span>
+                <div class="field-value">
+                  {#if field.protected}
+                    <span class="field-text mono">
+                      {customFieldRevealed[field.name]
+                        ? customFieldValues[field.name] || ""
+                        : "••••••••••••"}
+                    </span>
+                    {#if customFieldLoading[field.name]}
+                      <span class="copy-btn" aria-hidden="true">
+                        <AppIcon name="clock" size={13} />
+                      </span>
+                    {:else}
+                      <button
+                        class="copy-btn"
+                        onclick={() => toggleCustomFieldReveal(field.name)}
+                        title={customFieldRevealed[field.name] ? "隐藏字段值" : "显示字段值"}
+                      >
+                        <AppIcon
+                          name={customFieldRevealed[field.name] ? "eye-off" : "eye"}
+                          size={13}
+                        />
+                      </button>
+                      <button
+                        class="copy-btn"
+                        onclick={() => copyCustomField(field.name)}
+                        title="复制字段值"
+                      >
+                        <AppIcon name="copy" size={13} />
+                      </button>
+                    {/if}
+                  {:else}
+                    <span class="field-text" title={field.value}>{field.value || "—"}</span>
+                    {#if field.value}
+                      <button
+                        class="copy-btn"
+                        onclick={() => handleCopy(field.value, "custom")}
+                        title="复制字段值"
+                      >
+                        <AppIcon name="copy" size={13} />
+                      </button>
+                    {/if}
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
+
+        {#if entry.notes}
+          <div class="field-block fields-notes">
+            <span class="field-label">备注</span>
+            <div class="field-notes">{entry.notes}</div>
+          </div>
+        {/if}
+      </div>
     {:else if activeTab === "meta"}
       <div class="field-block">
         <span class="field-label">所属分组</span>
@@ -939,6 +952,34 @@
     padding: 12px 14px 40px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .fields-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .fields-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .fields-notes {
+    flex: 0 0 auto;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .fields-notes .field-notes {
+    max-height: 120px;
+    overflow-y: auto;
   }
 
   .field-block {
