@@ -354,6 +354,8 @@
         return "已复制网址";
       case "saved":
         return "已保存";
+      case "protected":
+        return "受保护字段需先显示后再编辑";
       default:
         return "已复制到剪贴板";
     }
@@ -384,23 +386,25 @@
   }
 
   /** Right-click entry into inline edit mode. Protected fields (password,
-   *  protected custom fields) are revealed — value fetched on demand and shown
-   *  as plain text — before the editor opens, so the user can see what they
-   *  are about to change. */
+   *  protected custom fields) must already be revealed — their value shown as
+   *  plain text — before editing is allowed; otherwise the editor refuses to
+   *  open and flashes a hint to reveal first. */
   async function startEdit(target: EditTarget): Promise<void> {
     const view = detailView.capture();
     if (!view || editSaving) return;
     let value: string;
     if (target.kind === "password") {
-      const loaded = await ensurePassword(view);
-      if (loaded === null) return;
-      value = loaded;
-      revealPassword = true;
+      if (!revealPassword) {
+        if (detailView.isCurrent(view)) flash("protected");
+        return;
+      }
+      value = fetchedPassword;
     } else if (target.kind === "custom" && target.protected) {
-      const loaded = await ensureCustomField(target.name!, view);
-      if (loaded === null) return;
-      value = loaded;
-      customFieldRevealed = { ...customFieldRevealed, [target.name!]: true };
+      if (!customFieldRevealed[target.name!]) {
+        if (detailView.isCurrent(view)) flash("protected");
+        return;
+      }
+      value = customFieldValues[target.name!] ?? "";
     } else if (target.kind === "custom") {
       value = entry.customFields?.find((f) => f.name === target.name)?.value ?? "";
     } else {
