@@ -100,6 +100,7 @@ fn wininet_https_proxy() -> Option<String> {
 /// Parse a WinINET `ProxyServer` value: plain `host:port`, scheme-qualified
 /// `http=host:port;https=host:port;…`, or default-plus-`secure=` form
 /// `host:port;secure=host:port`. Returns the proxy for https traffic.
+#[cfg(any(windows, test))]
 pub(crate) fn parse_proxy_server(raw: &str) -> Option<String> {
     let parts: Vec<&str> = raw
         .split(';')

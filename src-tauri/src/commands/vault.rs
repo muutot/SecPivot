@@ -834,7 +834,7 @@ pub(crate) fn auto_type(
 /// fired, so window associations resolve correctly here.
 #[tauri::command]
 pub(crate) fn autotype_pick(
-    app: tauri::AppHandle,
+    #[cfg_attr(not(desktop), allow(unused_variables))] app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: String,
