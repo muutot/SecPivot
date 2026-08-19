@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import { formatEntryDescription } from "$lib/utils/format";
 
   export interface EntryTableColumn {
     id: string;
@@ -430,7 +431,7 @@
                 {/if}</span
               >
               {#if showDescriptions}
-                <span class="entry-row-sub">{row.entry.username}</span>
+                <span class="entry-row-sub">{formatEntryDescription(row.entry)}</span>
               {/if}
             </span>
           </span>
@@ -444,7 +445,7 @@
                     {/if}</span
                   >
                   {#if showDescriptions}
-                    <span class="entry-row-sub">{row.entry.username}</span>
+                    <span class="entry-row-sub">{formatEntryDescription(row.entry)}</span>
                   {/if}
                 </div>
               </span>
