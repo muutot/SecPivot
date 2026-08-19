@@ -25,6 +25,13 @@
       applySettingsToDocument();
       syncCompactShellClass(s.general.compactMode);
     });
+    // Kill middle-button autoscroll globally: WebView2/Chromium engages it on
+    // mousedown, so a capture-phase preventDefault here beats any element
+    // handler (which would otherwise fire too late, on auxclick/mouseup).
+    const onMiddleDown = (event: MouseEvent): void => {
+      if (event.button === 1) event.preventDefault();
+    };
+    document.addEventListener("mousedown", onMiddleDown, true);
     // Auto-lock lives here (not in +page) so it survives navigation to
     // /settings; focus-lock already lived here.
     const stopFocusLock = isTcatoOverlay ? () => {} : installFocusLock();
@@ -38,6 +45,7 @@
     }
     return () => {
       unsubscribe();
+      document.removeEventListener("mousedown", onMiddleDown, true);
       stopFocusLock();
       stopAutoLock();
       stopTrayLock?.();
