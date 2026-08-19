@@ -194,7 +194,7 @@
     <SettingToggleCard
       icon="eye"
       label="显示条目描述"
-      description="在列表中展示用户名与备注预览"
+      description="在列表中展示去除协议后的网址信息"
       checked={general.showDescriptions}
       ariaLabel="显示描述"
       onchange={(checked) => change("showDescriptions", checked)}
@@ -206,6 +206,30 @@
       description="控制按钮只显示图标，按钮名称在鼠标悬浮时提示"
       checked={general.iconOnlyButtons}
       onchange={(checked) => change("iconOnlyButtons", checked)}
+    />
+
+    <SettingToggleCard
+      icon="folder"
+      label="显示分组图标"
+      description="在分组名称前显示文件夹图标"
+      checked={s.general.density.showGroupIcon}
+      onchange={(checked) =>
+        change("density", {
+          ...s.general.density,
+          showGroupIcon: checked,
+        })}
+    />
+
+    <SettingToggleCard
+      icon="chevron-down"
+      label="显示折叠箭头"
+      description="在可展开分组前显示折叠箭头"
+      checked={s.general.density.showGroupChevron}
+      onchange={(checked) =>
+        change("density", {
+          ...s.general.density,
+          showGroupChevron: checked,
+        })}
     />
 
     <SettingRangeCard
@@ -282,30 +306,6 @@
           })}
       />
     {/each}
-
-    <SettingToggleCard
-      icon="folder"
-      label="显示分组图标"
-      description="在分组名称前显示文件夹图标"
-      checked={s.general.density.showGroupIcon}
-      onchange={(checked) =>
-        change("density", {
-          ...s.general.density,
-          showGroupIcon: checked,
-        })}
-    />
-
-    <SettingToggleCard
-      icon="chevron-down"
-      label="显示折叠箭头"
-      description="在可展开分组前显示折叠箭头"
-      checked={s.general.density.showGroupChevron}
-      onchange={(checked) =>
-        change("density", {
-          ...s.general.density,
-          showGroupChevron: checked,
-        })}
-    />
 
     {#each fontSliders as slider (slider.key)}
       <SettingRangeCard

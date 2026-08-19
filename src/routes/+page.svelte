@@ -2215,8 +2215,8 @@
               selected={selectedGroup}
               reveal={revealGroupUuid}
               customIcons={currentVault.customIcons}
-              showIcon={compactMode ? groupDensity.showGroupIcon : true}
-              showChevron={compactMode ? groupDensity.showGroupChevron : true}
+              showIcon={groupDensity.showGroupIcon}
+              showChevron={groupDensity.showGroupChevron}
               onselect={(uuid: string | null) => {
                 selectedGroup = uuid;
                 selectedEntry = null;
