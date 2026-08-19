@@ -28,3 +28,6 @@ export
 /src-tauri/gen
 /app-icon.png
 /dist
+
+# Local tooling data
+/.workbuddy
