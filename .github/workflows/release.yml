@@ -161,7 +161,7 @@ jobs:
     env:
       # Same extreme runtime optimization as the Windows build (fat LTO, opt3,
       # cgu1). target-cpu is x86-64 specific and is NOT applied here — each of
-      # the four Android ABIs is tuned by the NDK target instead. Without these
+      # the two Android ABIs is tuned by the NDK target instead. Without these
       # overrides the local fast `release` profile (opt-level 0, cgu 256) would
       # ship an unoptimized, much larger native library in every ABI.
       CARGO_PROFILE_RELEASE_LTO: "true"
@@ -181,7 +181,8 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          # 64-bit ABIs only: armv7/i686 32-bit targets are not shipped.
+          targets: aarch64-linux-android,x86_64-linux-android
 
       - uses: mozilla-actions/sccache-action@v0.0.11
 
@@ -234,20 +235,24 @@ jobs:
         shell: pwsh
         run: ./scripts/configure-android-signing.ps1
 
-      - name: Build Android APK (release)
+      - name: Build Android APKs (release, per-ABI)
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: npx tauri android build --apk --ci
+        # `--split-per-abi` emits one signed APK per architecture
+        # (`apk/<arch>/release/app-<arch>-release.apk`) instead of a fat
+        # universal APK, cutting per-device download size to a quarter.
+        # `--target` restricts to the shipped 64-bit ABIs.
+        run: npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64
         working-directory: src-tauri
 
-      - name: Verify Android release APK
+      - name: Verify Android release APKs
         shell: bash
         run: |
-          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
-          if [ ! -f "$apk" ]; then
-            echo "Android release APK not found at $apk." >&2
+          apks=(src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
             exit 1
           fi
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
@@ -256,20 +261,25 @@ jobs:
             echo "Android apksigner not found at $apksigner." >&2
             exit 1
           fi
-          "$apksigner" verify --verbose "$apk"
+          for apk in "${apks[@]}"; do
+            "$apksigner" verify --verbose "$apk"
+          done
 
-      - name: Stage Android release asset
+      - name: Stage Android release assets
         shell: bash
         run: |
-          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
-          if [ ! -f "$apk" ]; then
-            echo "Android release APK not found at $apk." >&2
+          apks=(src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
             exit 1
           fi
-          asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
-          mkdir -p "$(dirname "$asset")"
-          cp "$apk" "$asset"
-          echo "Staged $(basename "$asset")"
+          mkdir -p dist/android
+          for apk in "${apks[@]}"; do
+            abi=$(basename "$(dirname "$apk")")
+            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            cp "$apk" "$asset"
+            echo "Staged $(basename "$asset")"
+          done
 
       - name: Preserve Android release asset
         uses: actions/upload-artifact@v7
@@ -290,17 +300,20 @@ jobs:
           name: android-release-apk
           path: dist/android
 
-      - name: Upload Android APK to release
+      - name: Upload Android APKs to release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: |
-          asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-universal.apk"
-          if [ ! -f "$asset" ]; then
-            echo "Android release asset not found at $asset." >&2
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          shopt -s nullglob
+          assets=(dist/android/SecPivot-*-android-*.apk)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No Android release asset found under dist/android/." >&2
             exit 1
           fi
-          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
-          gh release upload "$RELEASE_TAG" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
-          echo "Uploaded $(basename "$asset")"
+          for asset in "${assets[@]}"; do
+            gh release upload "$RELEASE_TAG" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+            echo "Uploaded $(basename "$asset")"
+          done
