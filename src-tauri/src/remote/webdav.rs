@@ -1,13 +1,13 @@
 //! WebDAV transport over blocking reqwest + quick_xml multistatus parsing
 //! (extracted from remote/mod.rs).
 
+use super::shared_blocking_client;
 use super::RemoteObject;
 use super::RemoteStorage;
-use super::{REMOTE_CONNECT_TIMEOUT, REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
+use super::{REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
 use crate::config::RemoteSettings;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::sync::OnceLock;
 use std::time::Duration;
 use url::Url;
 // ---------------------------------------------------------------------------
@@ -23,31 +23,6 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     <d:getlastmodified/>
   </d:prop>
 </d:propfind>"#;
-
-/// One process-wide shared reqwest blocking client. The client owns a tokio
-/// runtime that must never be dropped from an async context (dropping it on a
-/// runtime worker panics — e.g. when a vault session closes); keeping the
-/// original alive forever means per-storage clones never tear the runtime down.
-///
-/// `reqwest::blocking::Client::build` also *blocks* (`wait::enter`), so it must
-/// run off any async worker or it panics on first use — hence a dedicated
-/// init thread for the one-time construction.
-fn shared_blocking_client() -> &'static reqwest::blocking::Client {
-    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        std::thread::Builder::new()
-            .name("webdav-client-init".into())
-            .spawn(|| {
-                reqwest::blocking::Client::builder()
-                    .connect_timeout(REMOTE_CONNECT_TIMEOUT)
-                    .build()
-                    .expect("无法初始化 WebDAV 客户端: reqwest 资源不足")
-            })
-            .expect("spawn webdav client init thread")
-            .join()
-            .expect("webdav client init thread panicked")
-    })
-}
 
 /// WebDAV transport. `endpoint` is the WebDAV base URL, `access_key`/`secret_key`
 /// are the Basic-auth username/password, and `prefix` is the folder to list

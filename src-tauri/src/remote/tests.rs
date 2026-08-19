@@ -3,7 +3,7 @@
 
 use super::local::{profile_storage_parts, sanitize_dir_name};
 use super::s3::S3Storage;
-use super::shared_runtime;
+use super::shared_blocking_client;
 use super::webdav::WebDavStorage;
 use super::webdav::{href_to_key, parse_multistatus};
 use super::*;
@@ -53,13 +53,13 @@ fn local_dir_name_is_sanitized() {
     assert!(profile_storage_parts("s3").is_err());
 }
 
-/// S3 transports must share one process-wide runtime: a fresh thread pool
-/// per command would defeat its purpose. Both calls must resolve to the
-/// exact same instance.
+/// S3 transports must share one process-wide reqwest client: a fresh client
+/// per command would spin up (and tear down) a full connection pool on each
+/// list/open/save. Both calls must resolve to the exact same instance.
 #[test]
-fn s3_uses_a_single_shared_runtime() {
-    let a = shared_runtime() as *const _;
-    let b = shared_runtime() as *const _;
+fn s3_uses_a_single_shared_client() {
+    let a = shared_blocking_client() as *const _;
+    let b = shared_blocking_client() as *const _;
     assert!(std::ptr::eq(a, b));
 }
 
@@ -207,27 +207,6 @@ fn s3_transport_round_trips_against_live_s3_server() {
     }
 
     let bucket_name = format!("secpivot-live-{}", std::process::id());
-    let region = ::s3::Region::Custom {
-        region: "us-east-1".to_owned(),
-        endpoint: ENDPOINT.to_owned(),
-    };
-    let credentials =
-        ::s3::creds::Credentials::new(Some("rustfsadmin"), Some("rustfsadmin"), None, None, None)
-            .expect("credentials");
-    let created = shared_runtime()
-        .block_on(::s3::Bucket::create_with_path_style(
-            &bucket_name,
-            region.clone(),
-            credentials.clone(),
-            ::s3::BucketConfiguration::default(),
-        ))
-        .expect("create bucket");
-    assert!(
-        created.response_code == 200 || created.response_code == 409,
-        "unexpected create-bucket HTTP {}",
-        created.response_code
-    );
-
     let cfg = RemoteSettings {
         kind: "s3".into(),
         endpoint: ENDPOINT.to_owned(),
@@ -239,6 +218,7 @@ fn s3_transport_round_trips_against_live_s3_server() {
     };
     let storage = S3Storage::with_timeouts(&cfg, Duration::from_secs(10), Duration::from_secs(10))
         .expect("storage");
+    storage.create_bucket().expect("create bucket");
 
     let key = "vaults/live.kdbx";
     storage.put(key, &[1, 2, 3]).expect("put");
@@ -249,14 +229,8 @@ fn s3_transport_round_trips_against_live_s3_server() {
     assert_eq!(storage.get(key).expect("get"), vec![1, 2, 3]);
 
     // Best-effort cleanup so repeated runs on the local server stay tidy.
-    let raw = ::s3::Bucket::new(&bucket_name, region, credentials)
-        .expect("raw bucket")
-        .with_path_style();
-    let _ = shared_runtime().block_on(raw.delete_object(&format!("/{key}")));
-    match shared_runtime().block_on(raw.delete()) {
-        Ok(code) if code == 204 || code == 200 || code == 404 => {}
-        other => eprintln!("note: live test bucket cleanup skipped ({other:?})"),
-    }
+    let _ = storage.delete_object(key);
+    let _ = storage.delete_bucket();
 }
 
 /// The Tauri commands run on async runtime worker threads, where

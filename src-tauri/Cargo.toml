@@ -43,16 +43,12 @@ getrandom = "0.2"
 # Download favicons (KeePass "Download Favicons"); TLS via rustls, no native deps.
 reqwest = { version = "0.13", features = ["rustls", "blocking"] }
 url = "2"
-# Parse WebDAV PROPFIND multistatus responses (same minor as keepass/rust-s3's
-# vendored copy, so no extra crate version enters the lock).
+# Parse WebDAV PROPFIND multistatus responses (same minor as keepass's vendored
+# copy, so no extra crate version enters the lock).
 quick-xml = "0.30"
 # KeePassRPC entry match accuracy: Perl-compatible regex matching for
 # per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
 regex = "1"
-# S3 remote vault transport. TODO(D): replaced by hand-rolled SigV4 over the
-# rustls reqwest client; until then it pulls native-tls → openssl and the
-# Android build needs the vendored OpenSSL target below.
-rust-s3 = "0.34"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
@@ -79,17 +75,6 @@ aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 cipher = "0.4"
 block-padding = "0.3"
-
-# Android: openssl-sys is pulled in via native-tls (rust-s3's tokio client — the
-# tokio backend hardwires native-tls, so no feature switch can avoid it). The NDK
-# ships no OpenSSL, so we build a vendored OpenSSL with openssl-src for the Android
-# target. openssl-src cannot cross-compile OpenSSL from a native Windows host
-# (OpenSSL refuses the Windows perl path format), hence the release workflow's
-# android job runs on ubuntu-latest where openssl-src + NDK clang work. Windows
-# desktop is unaffected (native-tls uses schannel there, no openssl-sys).
-
-[target.'cfg(target_os = "android")'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3"

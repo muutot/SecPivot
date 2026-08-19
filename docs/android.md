@@ -37,8 +37,8 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 ### 2. 完成真实 Android 编译（继续暴露剩余裁剪点）
 
 - `npm run build` 产出前端静态资源，再 `npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64`
-- Tauri 2 Android 构建默认会编译四个 Rust targets；当前工作流用 `--split-per-abi --target aarch64 --target x86_64` 限定 64 位 ABI 并产出按 ABI 拆分的 APK。NDK 的 `toolchains/llvm/prebuilt/<host>/bin/llvm-ranlib` 必须通过 `TARGET_RANLIB` 提供给 `openssl-src`，否则会在 `make install_dev` 阶段退回不存在的 `<target>-ranlib`
-- 已完成的后端依赖裁剪（不进 Android 编译）：`enigo`、`keyring`、`tauri-plugin-global-shortcut`、`tungstenite`、`num-bigint`、`aes/cbc/cipher/block-padding` 移入 `Cargo.toml` 的桌面专属 target 段；bridge/RPC loopback 服务、TCATO、凭据存储、全局热键、auto-type 执行、DPAPI 相关命令已用 `#[cfg(desktop)]` 隔离。剩余 `rust-s3`（native-tls → openssl）仍待替换为 rustls 传输后移除 openssl vendored 段（TODO(D)）
+- Tauri 2 Android 构建默认会编译四个 Rust targets；当前工作流用 `--split-per-abi --target aarch64 --target x86_64` 限定 64 位 ABI 并产出按 ABI 拆分的 APK
+- 已完成的后端依赖裁剪（不进 Android 编译）：`enigo`、`keyring`、`tauri-plugin-global-shortcut`、`tungstenite`、`num-bigint`、`aes/cbc/cipher/block-padding` 移入 `Cargo.toml` 的桌面专属 target 段；bridge/RPC loopback 服务、TCATO、凭据存储、全局热键、auto-type 执行、DPAPI 相关命令已用 `#[cfg(desktop)]` 隔离。S3 传输已自研 SigV4（`remote/s3.rs`，rustls 无原生依赖），`rust-s3` 与 `openssl` vendored 段已彻底移除；`tokio` 与 `reqwest`（rustls）保持跨平台共享，Android 编译不再链接任何 OpenSSL
 - 真机/模拟器跑通首包
 
 ### 3. 前端移动端适配
@@ -61,7 +61,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 ### 5. 打包与 CI
 
 - 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上用 `--split-per-abi --target aarch64 --target x86_64` 构建 **64 位按 ABI 拆分** 的签名 release APK；工作流用 `apksigner verify` 逐包校验签名，将精确命名的 APK 暂存为 Actions artifact，再由同时依赖 Windows/Android 构建成功的 `publish-android` job 上传 `SecPivot-<version>-android-<abi>.apk`。这样不会用固定超时轮询较慢的极限 LTO 桌面构建；APK 缺失、未签名、draft release 缺失或上传失败仍会使发布失败。Android job 与桌面构建一样应用 `CARGO_PROFILE_RELEASE_LTO/CODEGEN_UNITS/OPT_LEVEL` 极限优化覆盖（`target-cpu=x86-64-v3` 是 x86-64 专用，不在 Android job 上设置），避免以本地快速 `release` 档（opt-level 0）打包出体积显著偏大的原生库。
-- Android 目标需编译 `openssl-sys`（rust-s3 的 native-tls 硬依赖，无特性开关可避）；NDK 不带 OpenSSL，故在 `Cargo.toml` 对 `cfg(target_os = "android")` 启用 `openssl = { features = ["vendored"] }`，由 openssl-src 交叉编译。该交叉编译只能发生在非 Windows host（OpenSSL 拒绝 Windows perl 路径格式），因此 `android` job 固定在 Linux。
+- 所有网络栈均为 rustls（reqwest blocking + rustls），Android 不再编译任何 OpenSSL/native-tls/openssl-sys 依赖，也不再有 openssl-src 交叉编译与 `TARGET_RANLIB` 需求。
 - 签名配置：`scripts/configure-android-signing.ps1` 要求全部四个 secrets（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS`），解码 keystore 并幂等 patch `build.gradle.kts`（Tauri 2 模板默认无 signingConfigs）；Gradle 在构建时从环境读取存储密码与独立 key password，缺任一项立即失败，不把密码写入 `keystore.properties`，并清理旧版脚本遗留的该文件。需先在任意有 JDK 的机器生成 keystore：
   ```
   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload

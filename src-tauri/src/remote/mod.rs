@@ -27,21 +27,36 @@ use std::time::Duration;
 /// Prefix used for the display path of remote vaults (`s3://<key>`).
 pub const REMOTE_URI_PREFIX: &str = "s3://";
 
-/// TCP connect timeout for remote storage requests (shared). rust-s3's
-/// default is 60 s; 15 s keeps an unreachable endpoint failure snappy.
+/// TCP connect timeout for remote storage requests (shared).
 const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Overall bound for the object listing call (small payloads).
 const REMOTE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Overall bound for download/upload calls (vault files; generous for slow links).
 const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// A single process-wide tokio runtime shared by every S3 transport. Creating
-/// a runtime per command would spin up (and tear down) a full thread pool on
-/// each list/open/save, which is measurable overhead on hot paths.
-fn shared_runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Runtime::new().expect("无法初始化 S3 运行时: tokio 资源不足")
+/// One process-wide shared reqwest blocking client used by both the S3 and
+/// WebDAV transports. The client owns a tokio runtime that must never be
+/// dropped from an async context (dropping it on a runtime worker panics —
+/// e.g. when a vault session closes); keeping the original alive forever means
+/// per-storage clones never tear the runtime down.
+///
+/// `reqwest::blocking::Client::build` also *blocks* (`wait::enter`), so it must
+/// run off any async worker or it panics on first use — hence a dedicated
+/// init thread for the one-time construction.
+pub(crate) fn shared_blocking_client() -> &'static reqwest::blocking::Client {
+    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("remote-client-init".into())
+            .spawn(|| {
+                reqwest::blocking::Client::builder()
+                    .connect_timeout(REMOTE_CONNECT_TIMEOUT)
+                    .build()
+                    .expect("无法初始化远程存储客户端: reqwest 资源不足")
+            })
+            .expect("spawn remote client init thread")
+            .join()
+            .expect("remote client init thread panicked")
     })
 }
 
