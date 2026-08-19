@@ -293,6 +293,6 @@ jobs:
             echo "Android release asset not found at $asset." >&2
             exit 1
           fi
-          gh release view "$RELEASE_TAG" >/dev/null
-          gh release upload "$RELEASE_TAG" "$asset" --clobber
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          gh release upload "$RELEASE_TAG" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
           echo "Uploaded $(basename "$asset")"
