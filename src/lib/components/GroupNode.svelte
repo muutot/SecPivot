@@ -5,6 +5,11 @@
   import { keepassGroupIconName } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
+  import {
+    activeContextMenu,
+    closeContextMenu,
+    openContextMenu,
+  } from "$lib/stores/activeContextMenu.svelte";
 
   interface Props {
     group: VaultGroup;
@@ -155,11 +160,19 @@
     event.preventDefault();
     onselect(group.uuid);
     menu = { x: event.clientX, y: event.clientY };
+    openContextMenu("group");
   }
 
   function closeMenu(): void {
     menu = null;
+    closeContextMenu("group");
   }
+
+  // Only one context menu may be visible at a time. When another owner (a
+  // page-level menu) becomes active, close this node's menu.
+  $effect(() => {
+    if ($activeContextMenu !== "group" && menu) menu = null;
+  });
 
   function handleMenuAction(id: string): void {
     if (id === "add-subgroup") onaddsubgroup(group.uuid);

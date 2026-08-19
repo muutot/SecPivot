@@ -36,6 +36,10 @@
     keepassGroupIconName,
   } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
+  import {
+    closeContextMenu,
+    openContextMenu,
+  } from "$lib/stores/activeContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
@@ -265,6 +269,7 @@
       blankMenu = null;
       toolbarMenu = null;
       columnMenu = null;
+      closeContextMenu();
       advancedSearchOpen = false;
       mobileNavOpen = false;
       emergencyIncludePasswords = false;
@@ -660,7 +665,11 @@
   });
   function openColumnMenu(e: MouseEvent): void {
     e.preventDefault();
+    entryMenu = null;
+    blankMenu = null;
+    toolbarMenu = null;
     columnMenu = { x: e.clientX, y: e.clientY };
+    openContextMenu("page");
   }
   function toggleColumn(id: string): void {
     const existing = entryColumns.find((c) => c.id === id);
@@ -1839,6 +1848,7 @@
     if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
     selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
+    openContextMenu("page");
   }
 
   function openBlankMenu(event: MouseEvent): void {
@@ -1846,18 +1856,21 @@
     entryMenu = null;
     toolbarMenu = null;
     blankMenu = { x: event.clientX, y: event.clientY };
+    openContextMenu("page");
   }
 
   function toggleToolbarMenu(event: MouseEvent): void {
     event.stopPropagation();
     if (toolbarMenu) {
       toolbarMenu = null;
+      closeContextMenu("page");
       return;
     }
     entryMenu = null;
     blankMenu = null;
     const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
     toolbarMenu = { x: rect.left, y: rect.bottom + 4 };
+    openContextMenu("page");
   }
 
   function selectAllEntries(): void {
@@ -2066,6 +2079,7 @@
     style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
     style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
     style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
+    oncontextmenu={(e) => e.preventDefault()}
   >
     {#if currentVault}
       <div class="toolbar" role="presentation" data-tauri-drag-region>
@@ -2449,7 +2463,10 @@
     x={columnMenu.x}
     y={columnMenu.y}
     sections={columnMenuSections}
-    onclose={() => (columnMenu = null)}
+    onclose={() => {
+      columnMenu = null;
+      closeContextMenu("page");
+    }}
     ontoggle={toggleColumn}
   />
 {/if}
@@ -2645,10 +2662,14 @@
     x={entryMenu.x}
     y={entryMenu.y}
     items={entryMenuItems(entryMenu.entry)}
-    onclose={() => (entryMenu = null)}
+    onclose={() => {
+      entryMenu = null;
+      closeContextMenu("page");
+    }}
     onaction={(id) => {
       const menuEntry = entryMenu!.entry;
       entryMenu = null;
+      closeContextMenu("page");
       handleEntryMenuAction(id, menuEntry);
     }}
   />
@@ -2659,9 +2680,13 @@
     x={blankMenu.x}
     y={blankMenu.y}
     items={blankMenuItems}
-    onclose={() => (blankMenu = null)}
+    onclose={() => {
+      blankMenu = null;
+      closeContextMenu("page");
+    }}
     onaction={(id) => {
       blankMenu = null;
+      closeContextMenu("page");
       handleBlankMenuAction(id);
     }}
   />
@@ -2672,9 +2697,13 @@
     x={toolbarMenu.x}
     y={toolbarMenu.y}
     items={toolbarMenuItems}
-    onclose={() => (toolbarMenu = null)}
+    onclose={() => {
+      toolbarMenu = null;
+      closeContextMenu("page");
+    }}
     onaction={(id) => {
       toolbarMenu = null;
+      closeContextMenu("page");
       handleToolbarMenuAction(id);
     }}
   />
