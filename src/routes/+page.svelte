@@ -2788,7 +2788,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 6px 14px;
+    padding: 8px 14px;
     border-top: 1px solid var(--border-subtle);
     border-bottom: 1px solid var(--border-subtle);
   }

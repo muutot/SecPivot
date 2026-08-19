@@ -162,7 +162,7 @@
 
   <div id="settings-content" class="settings-content">
     <section class="settings-section-header" data-tauri-drag-region>
-      <div class="settings-section-heading-row">
+      <div class="settings-section-heading-row" data-tauri-drag-region>
         <div class="settings-heading-main">
           <button
             class="settings-nav-toggle"
@@ -355,7 +355,7 @@
 
   .settings-section-header {
     flex: 0 0 auto;
-    padding: 14px 18px 10px;
+    padding: 16px 18px 10px;
     border-bottom: 1px solid var(--border-subtle);
   }
 
