@@ -780,7 +780,7 @@ impl VaultSession {
                 group.is_expanded = expanded;
             }
         }
-        self.mark_dirty();
+        self.bump_revision();
         let groups = uuids.iter().cloned().map(|uuid| (uuid, expanded)).collect();
         Ok(MutationDelta::GroupsExpanded {
             revision: self.revision,

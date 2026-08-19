@@ -433,6 +433,14 @@ impl VaultSession {
         self.modified_at = now_iso();
     }
 
+    /// Advance the revision for an in-memory-only mutation (group
+    /// expand/collapse) so snapshot ordering stays consistent without marking
+    /// the vault as having unsaved database changes.
+    pub(crate) fn bump_revision(&mut self) {
+        self.revision += 1;
+        self.cached_snapshot = None;
+    }
+
     /// Whether the write path is disabled after repeated save failures.
     pub fn is_read_only(&self) -> bool {
         self.save_failures >= SAVE_FAILURE_READ_ONLY_LIMIT

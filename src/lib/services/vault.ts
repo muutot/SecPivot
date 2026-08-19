@@ -256,11 +256,13 @@ function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function applyEdit(mutator: (draft: VaultState) => void): VaultState {
+function applyEdit(mutator: (draft: VaultState) => void, markDirty = true): VaultState {
   const current = browserState ?? buildDemoVaultState();
   const next = deepClone(current);
-  next.dirty = true;
-  next.modifiedAt = new Date().toISOString();
+  if (markDirty) {
+    next.dirty = true;
+    next.modifiedAt = new Date().toISOString();
+  }
   mutator(next);
   browserState = next;
   return deepClone(next);
@@ -1186,7 +1188,7 @@ export const vault: VaultStore = {
       const group = findGroup(draft.root, uuid);
       if (!group) throw new Error("group not found");
       group.isExpanded = expanded;
-    });
+    }, false);
     state.set(applyBackendState(result));
     return result;
   },
@@ -1205,7 +1207,7 @@ export const vault: VaultStore = {
     }
     const result = applyEdit((draft) => {
       setGroupsExpandedInTree(draft.root, uuids, expanded);
-    });
+    }, false);
     state.set(applyBackendState(result));
     return result;
   },

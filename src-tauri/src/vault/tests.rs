@@ -2121,7 +2121,7 @@ fn group_expand_batch_is_atomic_and_persists() {
     let state = session
         .set_groups_expanded(&[mail_uuid.clone(), work_uuid.clone()], false)
         .unwrap();
-    assert!(state.dirty);
+    assert!(!state.dirty, "expansion must not mark the vault dirty");
     assert!(state.root.children.iter().all(|group| !group.is_expanded));
     session.save().unwrap();
 
