@@ -157,6 +157,7 @@ Do not use a parent scoped selector to style inside a child Svelte component. Pa
 | ------------------------------------------------------------------- | --------------- |
 | modal backdrop / dialog                                             | 50              |
 | app-level security prompts (association approval, RPC side-channel) | 80              |
+| transient tips / toast host (`TipsHost.svelte`)                     | 1000            |
 | context menu / popover                                              | 9999            |
 
 Use `.modal-backdrop` for the shared fixed, centered, dimmed layer at

@@ -15,6 +15,7 @@
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
+  import { showTip } from "$lib/services/tips";
   import type {
     EntryInput,
     EntryPatch,
@@ -36,10 +37,7 @@
     keepassGroupIconName,
   } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
-  import {
-    closeContextMenu,
-    openContextMenu,
-  } from "$lib/stores/activeContextMenu.svelte";
+  import { closeContextMenu, openContextMenu } from "$lib/stores/activeContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
@@ -121,7 +119,6 @@
   let groupIconSaving = $state(false);
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let autotypePick = $state<AutotypeCandidate[] | null>(null);
-  let statusMsg = $state("");
   let busy = $state(false);
   let reportOpen = $state(false);
   let remoteConflict = $state<string | null>(null);
@@ -140,7 +137,6 @@
     error: boolean;
   } | null>(null);
 
-  let statusTimer: ReturnType<typeof setTimeout> | undefined = $state();
   const expiredNotifiedViews = new Set<string>();
 
   function countExpiredEntries(group: VaultGroup): number {
@@ -273,11 +269,6 @@
       advancedSearchOpen = false;
       mobileNavOpen = false;
       emergencyIncludePasswords = false;
-      statusMsg = "";
-      if (statusTimer) {
-        clearTimeout(statusTimer);
-        statusTimer = undefined;
-      }
     });
     // Browser-extension writes land straight in the backend session; refresh
     // so the entry list and dirty tab state update without a reopen.
@@ -316,18 +307,12 @@
       void unlistenAutotypePick?.();
       window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
-      if (statusTimer) clearTimeout(statusTimer);
       sessionView.activate(null);
     };
   });
 
   function flash(message: string): void {
-    statusMsg = message;
-    if (statusTimer) clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => {
-      statusMsg = "";
-      statusTimer = undefined;
-    }, 1800);
+    showTip(message);
   }
 
   /** Reactive mirror of the settings store. `$derived(get(appSettings))` would
@@ -2346,7 +2331,6 @@
             <span class="status-dirty"><i></i>未保存的修改</span>
           {/if}
         </span>
-        <span class="status-msg">{statusMsg}</span>
         <span class="status-right">
           {#if currentVault.path}
             <button
@@ -3170,13 +3154,6 @@
     height: 6px;
     border-radius: 50%;
     background: var(--warning-color);
-  }
-
-  .status-msg {
-    overflow: hidden;
-    color: var(--text-secondary);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .status-path {

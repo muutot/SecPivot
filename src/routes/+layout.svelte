@@ -7,6 +7,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
   import RpcSideChannelPrompt from "$lib/components/RpcSideChannelPrompt.svelte";
+  import TipsHost from "$lib/components/TipsHost.svelte";
 
   let { children } = $props();
 
@@ -58,6 +59,7 @@
 {#if !isTcatoOverlay}
   <BridgeApprovalPrompt />
   <RpcSideChannelPrompt />
+  <TipsHost />
 {/if}
 
 <svelte:head>
