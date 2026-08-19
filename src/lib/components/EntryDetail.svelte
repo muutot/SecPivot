@@ -5,6 +5,7 @@
   import type { EntryPatch } from "$lib/types/vault";
   import type { EntryStorage } from "$lib/types/vault";
   import { copyValue } from "$lib/services/security";
+  import { showTip } from "$lib/services/tips";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
   import { isTauriRuntime } from "$lib/services/settings";
@@ -77,7 +78,13 @@
   let editValue = $state("");
   let editSaving = $state(false);
   let editInput = $state<HTMLInputElement | null>(null);
-  let copied = $state("");
+  /** Live editable notes draft; persisted debounced on input and on blur.
+   *  Initial value captured once; the reset `$effect` resyncs on entry change. */
+  // svelte-ignore state_referenced_locally
+  let notesDraft = $state(entry.notes ?? "");
+  let notesDirty = $state(false);
+  let notesSaving = $state(false);
+  let notesSaveTimer: ReturnType<typeof setTimeout> | undefined;
   let activeTab = $state<"fields" | "meta" | "attachments" | "history">("fields");
   let historyVersions = $state<HistoryVersion[]>([]);
   let historyLoading = $state(false);
@@ -88,8 +95,6 @@
   let previewAttachmentName = $state<string | null>(null);
   const detailView = new KeyedViewGuard();
 
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
   function detailSessionId(): string | null {
     return vault.getActiveSessionId();
   }
@@ -97,13 +102,17 @@
   $effect(() => {
     const sessionId = detailSessionId();
     detailView.activate(sessionId ? `${sessionId}:${entry.uuid}` : null);
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = undefined;
-    copied = "";
     revealPassword = false;
     passwordLoaded = false;
     passwordLoading = false;
     fetchedPassword = "";
+    notesDraft = entry.notes ?? "";
+    notesDirty = false;
+    notesSaving = false;
+    if (notesSaveTimer) {
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = undefined;
+    }
     customFieldValues = {};
     customFieldLoaded = {};
     customFieldLoading = {};
@@ -121,8 +130,10 @@
 
   onDestroy(() => {
     detailView.activate(null);
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = undefined;
+    if (notesSaveTimer) {
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = undefined;
+    }
   });
 
   async function loadStorage(): Promise<void> {
@@ -309,13 +320,36 @@
     }
   }
 
+  function toastMessage(kind: string): { message: string; isError: boolean } {
+    switch (kind) {
+      case "error":
+        return { message: "操作失败", isError: true };
+      case "attachment":
+        return { message: "附件已保存", isError: false };
+      case "username":
+        return { message: "已复制用户名", isError: false };
+      case "password":
+        return { message: "已复制密码", isError: false };
+      case "restored":
+        return { message: "已恢复历史版本", isError: false };
+      case "deleted":
+        return { message: "已删除历史版本", isError: false };
+      case "url":
+        return { message: "已复制网址", isError: false };
+      case "notes":
+        return { message: "备注已保存", isError: false };
+      case "saved":
+        return { message: "已保存", isError: false };
+      case "protected":
+        return { message: "受保护字段需先显示后再编辑", isError: true };
+      default:
+        return { message: "已复制到剪贴板", isError: false };
+    }
+  }
+
   function flash(kind: string): void {
-    copied = kind;
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => {
-      copied = "";
-      copiedTimer = undefined;
-    }, 1200);
+    const { message, isError } = toastMessage(kind);
+    showTip(message, isError ? "error" : "success");
   }
 
   async function handleCopy(value: string, kind: string, sensitive = false): Promise<void> {
@@ -336,31 +370,6 @@
     }
   }
 
-  function toastMessage(): string {
-    switch (copied) {
-      case "error":
-        return "操作失败";
-      case "attachment":
-        return "附件已保存";
-      case "username":
-        return "已复制用户名";
-      case "password":
-        return "已复制密码";
-      case "restored":
-        return "已恢复历史版本";
-      case "deleted":
-        return "已删除历史版本";
-      case "url":
-        return "已复制网址";
-      case "saved":
-        return "已保存";
-      case "protected":
-        return "受保护字段需先显示后再编辑";
-      default:
-        return "已复制到剪贴板";
-    }
-  }
-
   async function saveAttachment(name: string): Promise<void> {
     const sessionId = detailSessionId();
     const uuid = entry.uuid;
@@ -378,6 +387,42 @@
       flash("attachment");
     } catch {
       if (detailView.isCurrent(view)) flash("error");
+    }
+  }
+
+  /** Debounced auto-save for the inline notes editor. Fires 800ms after the
+   *  last keystroke and again on blur, so the last committed draft never
+   *  depends on a single timer. */
+  function scheduleNotesSave(): void {
+    if (notesSaveTimer) clearTimeout(notesSaveTimer);
+    notesDirty = true;
+    notesSaveTimer = setTimeout(() => void persistNotes(), 800);
+  }
+
+  async function persistNotes(): Promise<void> {
+    if (notesSaveTimer) {
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = undefined;
+    }
+    const view = detailView.capture();
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    if (!view || !sessionId || notesSaving || !notesDirty) return;
+    if (notesDraft === entry.notes) {
+      notesDirty = false;
+      return;
+    }
+    const value = notesDraft;
+    notesSaving = true;
+    try {
+      await vault.callInSession(sessionId, () => vault.updateEntries([uuid], { notes: value }));
+      if (!detailView.isCurrent(view)) return;
+      notesDirty = false;
+      flash("notes");
+    } catch {
+      if (detailView.isCurrent(view)) flash("error");
+    } finally {
+      if (detailView.isCurrent(view)) notesSaving = false;
     }
   }
 
@@ -804,12 +849,18 @@
           {/if}
         </div>
 
-        {#if entry.notes}
-          <div class="field-block fields-notes">
-            <span class="field-label">备注</span>
-            <div class="field-notes">{entry.notes}</div>
+        <div class="notes-section">
+          <div class="notes-divider" role="presentation">
+            <span>备注</span>
           </div>
-        {/if}
+          <textarea
+            class="notes-textarea"
+            bind:value={notesDraft}
+            placeholder="添加备注…"
+            oninput={scheduleNotesSave}
+            onblur={() => void persistNotes()}
+            spellcheck="false"></textarea>
+        </div>
       </div>
     {:else if activeTab === "meta"}
       <div class="field-block">
@@ -966,12 +1017,6 @@
       {/if}
     {/if}
   </div>
-
-  {#if copied}
-    <p class="copy-toast" class:error={copied === "error"} aria-live="polite">
-      {toastMessage()}
-    </p>
-  {/if}
 
   {#if viewingVersion}
     <HistoryVersionDialog
@@ -1186,24 +1231,67 @@
   }
 
   .fields-scroll {
-    flex: 1;
-    min-height: 0;
+    flex: 0 1 48%;
+    min-height: 96px;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
 
-  .fields-notes {
-    flex: 0 0 auto;
-    margin: 0;
+  .notes-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 52%;
+    min-height: 96px;
     padding-top: 12px;
-    border-top: 1px solid var(--border-subtle);
   }
 
-  .fields-notes .field-notes {
-    max-height: 120px;
-    overflow-y: auto;
+  .notes-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 560;
+    letter-spacing: 0.08em;
+  }
+
+  .notes-divider::before,
+  .notes-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  .notes-textarea {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: none;
+    word-break: break-word;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .notes-textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .notes-textarea:focus {
+    outline: none;
+    border-color: var(--selection-color);
   }
 
   .field-block {
@@ -1248,19 +1336,14 @@
     flex: 1;
     min-width: 0;
     height: 24px;
-    padding: 0 6px;
-    border: 1px solid transparent;
-    border-radius: var(--settings-control-radius, 6px);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
     background: transparent;
     color: var(--text-primary);
     font-family: inherit;
     font-size: 12px;
     outline: none;
-  }
-
-  .inline-edit:focus {
-    border-color: var(--selection-color);
-    background: var(--input-bg);
   }
 
   .inline-edit.mono {
@@ -1308,18 +1391,6 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
-  }
-
-  .field-notes {
-    padding: 8px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
-    background: var(--input-bg);
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   .attachment-list {
@@ -1443,24 +1514,5 @@
   .tab-empty p {
     margin: 0;
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .copy-toast {
-    position: absolute;
-    right: 14px;
-    bottom: 12px;
-    margin: 0;
-    padding: 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--success-color) 40%, transparent);
-    border-radius: var(--settings-feedback-radius, 7px);
-    color: color-mix(in srgb, var(--success-color) 80%, white);
-    background: color-mix(in srgb, var(--success-color) 12%, var(--surface-bg));
-    font-size: var(--font-size-secondary, 11px);
-  }
-
-  .copy-toast.error {
-    border-color: color-mix(in srgb, var(--danger-color) 40%, transparent);
-    color: color-mix(in srgb, var(--danger-color) 80%, white);
-    background: color-mix(in srgb, var(--danger-color) 12%, var(--surface-bg));
   }
 </style>

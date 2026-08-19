@@ -58,7 +58,7 @@ test("entry detail invalidates detached secret-copy consumers", async () => {
 
   assert.ok(destroyBlock, "EntryDetail must clean up when detached");
   assert.match(destroyBlock[1], /detailView\.activate\(null\)/);
-  assert.match(destroyBlock[1], /clearTimeout\(copiedTimer\)/);
+  assert.match(destroyBlock[1], /clearTimeout\(notesSaveTimer\)/);
   assert.equal(guardedConsumers?.length, 2);
   assert.match(source, /ensurePassword\(view\)/);
   assert.match(source, /ensureCustomField\(name, view\)/);
