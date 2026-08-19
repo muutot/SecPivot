@@ -6,9 +6,8 @@ export function formatBytes(bytes: number): string {
 }
 
 /** Compact entry-description string: the URL with its scheme stripped.
- *  Falls back to the username when no URL is present. */
-export function formatEntryDescription(entry: { url?: string; username?: string }): string {
+ *  Only shown when a URL exists; otherwise empty. */
+export function formatEntryDescription(entry: { url?: string }): string {
   const url = entry.url?.trim();
-  if (url) return url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
-  return entry.username || "";
+  return url ? url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "") : "";
 }

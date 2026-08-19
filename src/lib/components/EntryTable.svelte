@@ -431,7 +431,10 @@
                 {/if}</span
               >
               {#if showDescriptions}
-                <span class="entry-row-sub">{formatEntryDescription(row.entry)}</span>
+                {@const description = formatEntryDescription(row.entry)}
+                {#if description}
+                  <span class="entry-row-sub">{description}</span>
+                {/if}
               {/if}
             </span>
           </span>
@@ -445,7 +448,10 @@
                     {/if}</span
                   >
                   {#if showDescriptions}
-                    <span class="entry-row-sub">{formatEntryDescription(row.entry)}</span>
+                    {@const description = formatEntryDescription(row.entry)}
+                    {#if description}
+                      <span class="entry-row-sub">{description}</span>
+                    {/if}
                   {/if}
                 </div>
               </span>
