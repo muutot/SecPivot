@@ -59,7 +59,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 5. 打包与 CI
 
-- 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上构建四 ABI 的 **universal release APK**；工作流用 `apksigner verify` 校验签名，将精确命名的 APK 暂存为 Actions artifact，再由同时依赖 Windows/Android 构建成功的 `publish-android` job 上传 `SecPivot-<version>-android-universal.apk`。这样不会用固定超时轮询较慢的极限 LTO 桌面构建；APK 缺失、未签名、draft release 缺失或上传失败仍会使发布失败。
+- 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上构建四 ABI 的 **universal release APK**；工作流用 `apksigner verify` 校验签名，将精确命名的 APK 暂存为 Actions artifact，再由同时依赖 Windows/Android 构建成功的 `publish-android` job 上传 `SecPivot-<version>-android-universal.apk`。这样不会用固定超时轮询较慢的极限 LTO 桌面构建；APK 缺失、未签名、draft release 缺失或上传失败仍会使发布失败。Android job 与桌面构建一样应用 `CARGO_PROFILE_RELEASE_LTO/CODEGEN_UNITS/OPT_LEVEL` 极限优化覆盖（`target-cpu=x86-64-v3` 是 x86-64 专用，不在 Android job 上设置），避免以本地快速 `release` 档（opt-level 0）打包出体积显著偏大的原生库。
 - Android 目标需编译 `openssl-sys`（rust-s3 的 native-tls 硬依赖，无特性开关可避）；NDK 不带 OpenSSL，故在 `Cargo.toml` 对 `cfg(target_os = "android")` 启用 `openssl = { features = ["vendored"] }`，由 openssl-src 交叉编译。该交叉编译只能发生在非 Windows host（OpenSSL 拒绝 Windows perl 路径格式），因此 `android` job 固定在 Linux。
 - 签名配置：`scripts/configure-android-signing.ps1` 要求全部四个 secrets（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS`），解码 keystore 并幂等 patch `build.gradle.kts`（Tauri 2 模板默认无 signingConfigs）；Gradle 在构建时从环境读取存储密码与独立 key password，缺任一项立即失败，不把密码写入 `keystore.properties`，并清理旧版脚本遗留的该文件。需先在任意有 JDK 的机器生成 keystore：
   ```

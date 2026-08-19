@@ -159,6 +159,14 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     env:
+      # Same extreme runtime optimization as the Windows build (fat LTO, opt3,
+      # cgu1). target-cpu is x86-64 specific and is NOT applied here — each of
+      # the four Android ABIs is tuned by the NDK target instead. Without these
+      # overrides the local fast `release` profile (opt-level 0, cgu 256) would
+      # ship an unoptimized, much larger native library in every ABI.
+      CARGO_PROFILE_RELEASE_LTO: "true"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: "3"
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
     steps:
