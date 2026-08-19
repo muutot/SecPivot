@@ -73,6 +73,7 @@ Read `CHANGELOG.md` and use `skills/version-release/release_template.md` as a fo
    - **Feature description** — detail | [`hash`](https://github.com/<owner>/<repo>/commit/hash)
    ```
 3. Write the curated body to `RELEASE.md`
+4. Run `npx prettier --write RELEASE.md` (matches the Prettier config in the repo root). `release.mjs` gates `RELEASE.md` only on the version heading, and CI `verify` runs `format:check` — a trailing-newline or line-length violation in the release body would block the release job.
 
 **Do NOT commit** — Pass 2 will include `RELEASE.md` in the release commit automatically.
 
