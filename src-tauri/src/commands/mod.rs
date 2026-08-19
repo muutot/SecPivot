@@ -4,27 +4,33 @@
 use crate::vault::{VaultSession, VaultSessions};
 use std::sync::Mutex;
 
+#[cfg(desktop)]
 pub(crate) mod bridge;
 pub(crate) mod clipboard;
 pub(crate) mod config;
+#[cfg(desktop)]
 pub(crate) mod credential;
 pub(crate) mod entries;
 pub(crate) mod favicon;
 pub(crate) mod groups;
 pub(crate) mod remote;
+#[cfg(desktop)]
 pub(crate) mod tcato;
 #[cfg(test)]
 mod tests;
 pub(crate) mod vault;
 
+#[cfg(desktop)]
 pub(crate) use self::bridge::*;
 pub(crate) use self::clipboard::*;
 pub(crate) use self::config::*;
+#[cfg(desktop)]
 pub(crate) use self::credential::*;
 pub(crate) use self::entries::*;
 pub(crate) use self::favicon::*;
 pub(crate) use self::groups::*;
 pub(crate) use self::remote::*;
+#[cfg(desktop)]
 pub(crate) use self::tcato::*;
 pub(crate) use self::vault::*;
 

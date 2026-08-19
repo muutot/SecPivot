@@ -1,23 +1,32 @@
 //! Shared cryptographic primitives for the loopback protocols (KeePassHttp
 //! bridge, KeePassRPC) and vault hashing. Both protocols used to re-implement
 //! the same AES-256-CBC + PKCS7 / HMAC / hex / base64 stack; this module is the
-//! single source so a fix lands once.
+//! single source so a fix lands once. The AES/CBC half is desktop-only (the
+//! bridge/RPC servers do not exist on mobile); hashing/base64 stay shared.
 
+#[cfg(desktop)]
 use aes::Aes256;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+#[cfg(desktop)]
 use block_padding::Pkcs7;
+#[cfg(desktop)]
 use cbc::{Decryptor, Encryptor};
+#[cfg(desktop)]
 use cipher::{generic_array::GenericArray, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
 /// AES-256 key length in bytes.
+#[cfg(desktop)]
 pub const KEY_LEN: usize = 32;
 /// AES-CBC IV / nonce length in bytes.
+#[cfg(desktop)]
 pub const NONCE_LEN: usize = 16;
 
+#[cfg(desktop)]
 type Aes256CbcEnc = Encryptor<Aes256>;
+#[cfg(desktop)]
 type Aes256CbcDec = Decryptor<Aes256>;
 
 /// CSPRNG bytes from the OS.
@@ -29,12 +38,14 @@ pub fn random_bytes(len: usize) -> Vec<u8> {
 
 /// AES-256-CBC encrypt with PKCS7 padding (raw bytes). `key` must be 32 bytes,
 /// `iv` 16 bytes.
+#[cfg(desktop)]
 pub fn aes_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Vec<u8> {
     Aes256CbcEnc::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
         .encrypt_padded_vec_mut::<Pkcs7>(plaintext)
 }
 
 /// AES-256-CBC decrypt with PKCS7 padding (raw bytes).
+#[cfg(desktop)]
 pub fn aes_cbc_decrypt(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, String> {
     Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
         .decrypt_padded_vec_mut::<Pkcs7>(ciphertext)
@@ -42,11 +53,13 @@ pub fn aes_cbc_decrypt(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Result<Vec<u
 }
 
 /// AES-256-CBC encrypt a string, base64-encoded for the wire.
+#[cfg(desktop)]
 pub fn aes_cbc_encrypt_b64(key: &[u8], iv: &[u8], plaintext: &str) -> String {
     STANDARD.encode(aes_cbc_encrypt(key, iv, plaintext.as_bytes()))
 }
 
 /// Decrypt a base64 AES-256-CBC value back into a string.
+#[cfg(desktop)]
 pub fn aes_cbc_decrypt_b64(key: &[u8], iv: &[u8], encoded: &str) -> Result<String, String> {
     let ciphertext = STANDARD
         .decode(encoded)

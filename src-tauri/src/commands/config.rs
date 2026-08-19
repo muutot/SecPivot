@@ -38,7 +38,9 @@ pub(crate) fn set_config(
     #[cfg(desktop)]
     register_global_hotkey(&app, &saved.keyboard.auto_type_global);
     sync_vault_matching(&app, &saved);
+    #[cfg(desktop)]
     sync_bridge(&app, &saved);
+    #[cfg(desktop)]
     sync_rpc(&app, &saved);
     Ok(saved)
 }
@@ -63,6 +65,7 @@ pub(crate) fn sync_vault_matching(app: &tauri::AppHandle, config: &config::AppCo
 
 /// Start or stop the loopback bridge to match `bridge.enabled`; failures are
 /// logged, never fatal (the app stays usable without browser integration).
+#[cfg(desktop)]
 pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
     let state = app.state::<crate::bridge::server::BridgeState>();
     state.set_generator(config.database.generator.clone());
@@ -77,6 +80,7 @@ pub(crate) fn sync_bridge(app: &tauri::AppHandle, config: &config::AppConfig) {
 
 /// Start or stop the loopback KeePassRPC server to match `rpc.enabled`;
 /// failures are logged, never fatal (the app stays usable without Kee).
+#[cfg(desktop)]
 pub(crate) fn sync_rpc(app: &tauri::AppHandle, config: &config::AppConfig) {
     let state = app.state::<crate::rpc::server::RpcState>();
     state.set_generator(config.database.generator.clone());

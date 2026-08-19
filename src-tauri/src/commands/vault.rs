@@ -3,6 +3,7 @@
 
 use super::{with_resolved_vault_session, with_vault_session};
 use crate::config::ConfigStore;
+#[cfg(desktop)]
 use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
@@ -17,6 +18,7 @@ use zeroize::Zeroize;
 
 /// Fallback sequence when an entry resolves no explicit Auto-Type sequence
 /// (mirrors `lib.rs::GLOBAL_AUTOTYPE_SEQUENCE`).
+#[cfg(desktop)]
 const GLOBAL_AUTOTYPE_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 // ---------------------------------------------------------------------------
 
@@ -803,7 +805,7 @@ pub(crate) fn update_entry_autotype(
 /// The main window is minimized first so keystrokes land in the window the
 /// user switches to during the replay delay, never in SecPivot itself.
 #[tauri::command]
-#[cfg_attr(not(desktop), allow(unused_variables))]
+#[cfg(desktop)]
 pub(crate) fn auto_type(
     app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
@@ -822,7 +824,6 @@ pub(crate) fn auto_type(
             Ok((ctx, expanded))
         },
     )?;
-    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();
     }
@@ -833,8 +834,9 @@ pub(crate) fn auto_type(
 /// multi-match dialog. The focused window title was captured when the hotkey
 /// fired, so window associations resolve correctly here.
 #[tauri::command]
+#[cfg(desktop)]
 pub(crate) fn autotype_pick(
-    #[cfg_attr(not(desktop), allow(unused_variables))] app: tauri::AppHandle,
+    app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: String,
@@ -863,7 +865,6 @@ pub(crate) fn autotype_pick(
             Ok((expanded, ctx))
         },
     )?;
-    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();
     }

@@ -10,12 +10,14 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ## 已完成的仓库改动
 
-| 改动              | 文件                                          | 说明                                                                                                                                                                                                                                 |
-| ----------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 安卓最小 SDK 声明 | `src-tauri/tauri.conf.json`                   | `bundle.android.minSdkVersion: 24`；桌面 NSIS 分支不受影响                                                                                                                                                                           |
-| 安卓独立包名      | `src-tauri/tauri.android.conf.json`（新增）   | `identifier: com.secpivot.mobile`；桌面仍为 `com.secpivot.desktop`                                                                                                                                                                   |
-| 安卓能力          | `src-tauri/capabilities/android.json`（新增） | `platforms:["android"]` + `core/dialog/opener` 权限；Windows 下被过滤                                                                                                                                                                |
-| 桌面功能门控      | `src-tauri/src/lib.rs`                        | 系统托盘 / 全局热键 / auto-type / TCATO 的 `register_global_hotkey`、`setup_tray`、`handle_global_hotkey`、`toggle_main_window`、`handle_close_requested` 及 import/常量加 `#[cfg(desktop)]`；builder 链重构为分步变量以支持条件编译 |
+| 改动              | 文件                                                                     | 说明                                                                                                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 安卓最小 SDK 声明 | `src-tauri/tauri.conf.json`                                              | `bundle.android.minSdkVersion: 24`；桌面 NSIS 分支不受影响                                                                                                                                                                           |
+| 安卓独立包名      | `src-tauri/tauri.android.conf.json`（新增）                              | `identifier: com.secpivot.mobile`；桌面仍为 `com.secpivot.desktop`                                                                                                                                                                   |
+| 安卓能力          | `src-tauri/capabilities/android.json`（新增）                            | `platforms:["android"]` + `core/dialog/opener` 权限；Windows 下被过滤                                                                                                                                                                |
+| 桌面功能门控      | `src-tauri/src/lib.rs`                                                   | 系统托盘 / 全局热键 / auto-type / TCATO 的 `register_global_hotkey`、`setup_tray`、`handle_global_hotkey`、`toggle_main_window`、`handle_close_requested` 及 import/常量加 `#[cfg(desktop)]`；builder 链重构为分步变量以支持条件编译 |
+| 桌面专属依赖隔离  | `src-tauri/Cargo.toml`                                                   | `enigo` / `keyring` / `tauri-plugin-global-shortcut` / `tungstenite` / `num-bigint` / `aes` / `cbc` / `cipher` / `block-padding` 移入 `[target.'cfg(any(windows,macos,linux))'.dependencies]`，Android 不编译                        |
+| 桌面专属模块门控  | `src-tauri/src/lib.rs`、`src-tauri/src/{commands,platform,vault,crypto}` | `bridge`/`rpc` 模块、`commands::bridge/credential/tcato`、`platform::credential/focus`、`vault::hosts`、AES 加解密、auto-type 执行（`enigo`）整体 `#[cfg(desktop)]`；桌面 IPC 命令与 manage 状态同步门控                             |
 
 > 验证状态（2026-08-19）：
 >
@@ -36,6 +38,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 - `npm run build` 产出前端静态资源，再 `npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64`
 - Tauri 2 Android 构建默认会编译四个 Rust targets；当前工作流用 `--split-per-abi --target aarch64 --target x86_64` 限定 64 位 ABI 并产出按 ABI 拆分的 APK。NDK 的 `toolchains/llvm/prebuilt/<host>/bin/llvm-ranlib` 必须通过 `TARGET_RANLIB` 提供给 `openssl-src`，否则会在 `make install_dev` 阶段退回不存在的 `<target>-ranlib`
+- 已完成的后端依赖裁剪（不进 Android 编译）：`enigo`、`keyring`、`tauri-plugin-global-shortcut`、`tungstenite`、`num-bigint`、`aes/cbc/cipher/block-padding` 移入 `Cargo.toml` 的桌面专属 target 段；bridge/RPC loopback 服务、TCATO、凭据存储、全局热键、auto-type 执行、DPAPI 相关命令已用 `#[cfg(desktop)]` 隔离。剩余 `rust-s3`（native-tls → openssl）仍待替换为 rustls 传输后移除 openssl vendored 段（TODO(D)）
 - 真机/模拟器跑通首包
 
 ### 3. 前端移动端适配

@@ -31,24 +31,15 @@ rust-argon2 = "3"
 uuid = "1"
 chrono = { version = "0.4", features = ["serde"] }
 tauri-plugin-opener = "2"
-enigo = "0.6"
-tauri-plugin-global-shortcut = "2"
-keyring = "4.1.6"
-rust-s3 = "0.34"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 zeroize = "1"
-# KeePassHttp browser bridge crypto (all already vendored in Cargo.lock).
-aes = "0.8"
-cbc = { version = "0.1", features = ["alloc"] }
-cipher = "0.4"
-block-padding = "0.3"
+# KeePassHttp bridge / KeePassRPC AES-256-CBC wire crypto (desktop-only, see
+# desktop target section). hmac/sha2/sha1/base64/getrandom stay shared because
+# vault hashing, TOTP and breach-check all use them.
 hmac = "0.12"
 sha2 = "0.10"
 sha1 = "0.10"
 getrandom = "0.2"
-# KeePassRPC bridge (Phase 2): SRP big-number math + WebSocket loopback server.
-num-bigint = "0.4"
-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 # Download favicons (KeePass "Download Favicons"); TLS via rustls, no native deps.
 reqwest = { version = "0.13", features = ["rustls", "blocking"] }
 url = "2"
@@ -58,9 +49,36 @@ quick-xml = "0.30"
 # KeePassRPC entry match accuracy: Perl-compatible regex matching for
 # per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
 regex = "1"
+# S3 remote vault transport. TODO(D): replaced by hand-rolled SigV4 over the
+# rustls reqwest client; until then it pulls native-tls → openssl and the
+# Android build needs the vendored OpenSSL target below.
+rust-s3 = "0.34"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
+
+# Desktop-only dependencies. `cfg(desktop)`/`cfg(mobile)` are set by the
+# tauri-build build script and are NOT visible to Cargo's target resolution,
+# so this section pins the explicit desktop OS set instead. Nothing here is
+# compiled or linked for the Android target, which keeps the mobile APK lean.
+# - enigo: auto-type keystroke replay (platform/autotype execution).
+# - tauri-plugin-global-shortcut: desktop global hotkey (lib.rs, cfg(desktop)).
+# - keyring: saved-credential store backed by OS credential vaults.
+# - tungstenite + num-bigint: KeePassRPC loopback server (rpc module).
+# - aes/cbc/cipher/block-padding: bridge/RPC AES-256-CBC wire crypto
+#   (crypto/primitives.rs, cfg(desktop)).
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+enigo = "0.6"
+tauri-plugin-global-shortcut = "2"
+keyring = "4.1.6"
+# KeePassRPC bridge (Phase 2): SRP big-number math + WebSocket loopback server.
+num-bigint = "0.4"
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+# KeePassHttp / KeePassRPC AES-256-CBC wire crypto.
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+cipher = "0.4"
+block-padding = "0.3"
 
 # Android: openssl-sys is pulled in via native-tls (rust-s3's tokio client — the
 # tokio backend hardwires native-tls, so no feature switch can avoid it). The NDK

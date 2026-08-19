@@ -1,9 +1,11 @@
+#[cfg(desktop)]
 pub mod bridge;
 pub mod commands;
 pub mod config;
 pub mod crypto;
 pub mod platform;
 pub mod remote;
+#[cfg(desktop)]
 pub mod rpc;
 pub mod util;
 pub mod vault;
@@ -266,12 +268,18 @@ pub fn run() {
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(VaultSessions::default());
             app.manage(vault::AttachmentTempStore::default());
+            #[cfg(desktop)]
             app.manage(commands::TcatoTarget(Mutex::new(None)));
+            #[cfg(desktop)]
             app.manage(crate::bridge::server::BridgeState::default());
+            #[cfg(desktop)]
             app.manage(crate::bridge::server::ApprovalBoard::default());
+            #[cfg(desktop)]
             app.manage(crate::rpc::server::RpcState::default());
             commands::sync_vault_matching(app.handle(), &config);
+            #[cfg(desktop)]
             commands::sync_bridge(app.handle(), &config);
+            #[cfg(desktop)]
             commands::sync_rpc(app.handle(), &config);
             Ok(())
         });
@@ -334,11 +342,17 @@ pub fn run() {
             commands::totp_code,
             commands::toggle_favorite,
             commands::update_entry_autotype,
+            #[cfg(desktop)]
             commands::auto_type,
+            #[cfg(desktop)]
             commands::autotype_pick,
+            #[cfg(desktop)]
             commands::open_tcato_overlay,
+            #[cfg(desktop)]
             commands::tcato_state,
+            #[cfg(desktop)]
             commands::tcato_send,
+            #[cfg(desktop)]
             commands::close_tcato_overlay,
             commands::add_group,
             commands::rename_group,
@@ -365,16 +379,24 @@ pub fn run() {
             commands::parse_1pif,
             commands::clipboard_read_text,
             commands::clipboard_clear,
+            #[cfg(desktop)]
             commands::remember_credential,
+            #[cfg(desktop)]
             commands::get_saved_credential,
+            #[cfg(desktop)]
             commands::clear_saved_credential,
             commands::s3_list_objects,
             commands::open_remote_vault,
             commands::create_remote_vault,
+            #[cfg(desktop)]
             commands::bridge_status,
+            #[cfg(desktop)]
             commands::bridge_clients,
+            #[cfg(desktop)]
             commands::bridge_remove_client,
+            #[cfg(desktop)]
             commands::bridge_approve,
+            #[cfg(desktop)]
             commands::rpc_status
         ])
         .build(tauri::generate_context!())

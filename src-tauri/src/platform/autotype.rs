@@ -17,9 +17,12 @@
 //! thread so the UI never blocks while keystrokes are being sent.
 
 use std::fmt;
+#[cfg(desktop)]
 use std::thread;
+#[cfg(desktop)]
 use std::time::Duration;
 
+#[cfg(desktop)]
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
 /// Values available for `{PLACEHOLDER}` substitution.
@@ -231,6 +234,7 @@ impl SpecialKey {
     }
 
     /// Map the special key to the enigo `Key` variant.
+    #[cfg(desktop)]
     fn to_enigo(self) -> Key {
         match self {
             SpecialKey::Tab => Key::Tab,
@@ -322,6 +326,7 @@ pub fn parse_sequence(
 }
 
 /// Replay a resolved token stream via enigo keyboard simulation.
+#[cfg(desktop)]
 pub fn execute_tokens(tokens: &[AutotypeToken]) -> Result<(), AutotypeError> {
     let mut enigo =
         Enigo::new(&Settings::default()).map_err(|e| AutotypeError::Input(e.to_string()))?;
@@ -348,6 +353,7 @@ pub fn execute_tokens(tokens: &[AutotypeToken]) -> Result<(), AutotypeError> {
 /// caller is expected to have minimized its own window first) before
 /// keystrokes are sent. Failures are logged rather than propagated,
 /// because the replay happens after this call has already returned.
+#[cfg(desktop)]
 pub fn run_sequence(sequence: &str, ctx: &AutotypeContext) -> Result<(), AutotypeError> {
     let tokens = parse_sequence(sequence, ctx)?;
     thread::spawn(move || {

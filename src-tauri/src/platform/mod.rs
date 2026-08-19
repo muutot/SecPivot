@@ -11,7 +11,9 @@
 
 pub mod autotype;
 pub mod clipboard;
+#[cfg(desktop)]
 pub mod credential;
 pub mod dpapi;
+#[cfg(desktop)]
 pub mod focus;
 pub mod shield;
