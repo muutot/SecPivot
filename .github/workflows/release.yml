@@ -113,7 +113,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ env.RELEASE_TAG }}
-          releaseName: "SecPivot Desktop v__VERSION__"
+          releaseName: "v__VERSION__"
           releaseBody: ${{ steps.release_body.outputs.body }}
           releaseDraft: true
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
