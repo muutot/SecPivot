@@ -76,7 +76,7 @@
 
   const COL_WIDTH_MIN = 30;
   const COL_WIDTH_MAX = 400;
-  const ROW_HEIGHT = 40;
+  const ROW_HEIGHT = 30;
   const COMPACT_ROW_HEIGHT = 34;
   const NARROW_ROW_HEIGHT = 48;
   const VIRTUAL_OVERSCAN = 6;
@@ -688,7 +688,7 @@
     grid-template-columns: var(--entry-cols);
     align-items: center;
     gap: 0;
-    height: 40px;
+    height: 30px;
     padding: 0;
     cursor: pointer;
   }
