@@ -8,7 +8,7 @@
   import { showTip } from "$lib/services/tips";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
-  import { classifyContact, detectContacts } from "$lib/utils/contact";
+  import { classifyContact, linkifyContacts, type ContactKind } from "$lib/utils/contact";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import {
@@ -83,7 +83,13 @@
    *  Initial value captured once; the reset `$effect` resyncs on entry change. */
   // svelte-ignore state_referenced_locally
   let notesDraft = $state(entry.notes ?? "");
-  const notesDetections = $derived(detectContacts(notesDraft));
+  /** Notes editor mode: the read view renders inline clickable links, clicking
+   *  anywhere else switches to the textarea editor (debounced auto-save). */
+  let notesEditing = $state(false);
+  let notesTextareaEl = $state<HTMLTextAreaElement | null>(null);
+  let notesViewEl = $state<HTMLDivElement | null>(null);
+  let fieldsLayoutEl = $state<HTMLDivElement | null>(null);
+  let notesResizeObserver: ResizeObserver | undefined;
   let notesDirty = $state(false);
   let notesSaving = $state(false);
   let notesSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -119,6 +125,7 @@
       passwordLoading = false;
       fetchedPassword = "";
       notesDraft = entry.notes ?? "";
+      notesEditing = false;
       notesDirty = false;
       notesSaving = false;
       if (notesSaveTimer) {
@@ -456,6 +463,76 @@
     return editing !== null && editing.kind === target.kind && editing.name === target.name;
   }
 
+  /** The notes region hugs its content up to ~45% of the detail body; taller
+   *  content scrolls inside the region so the fields keep the remaining space. */
+  function resizeNotes(): void {
+    const layout = fieldsLayoutEl;
+    const active = notesTextareaEl ?? notesViewEl;
+    if (!layout || !active) return;
+    const cap = Math.max(64, Math.round(layout.clientHeight * 0.45));
+    active.style.maxHeight = `${cap}px`;
+    if (notesTextareaEl) {
+      notesTextareaEl.style.height = "auto";
+      notesTextareaEl.style.height = `${Math.min(notesTextareaEl.scrollHeight, cap)}px`;
+    }
+  }
+
+  $effect(() => {
+    void notesDraft;
+    void notesEditing;
+    resizeNotes();
+  });
+
+  $effect(() => {
+    const layout = fieldsLayoutEl;
+    if (!layout) return;
+    resizeNotes();
+    notesResizeObserver ??= new ResizeObserver(() => resizeNotes());
+    notesResizeObserver.observe(layout);
+    return () => {
+      notesResizeObserver?.disconnect();
+      notesResizeObserver = undefined;
+    };
+  });
+
+  async function enterNotesEdit(): Promise<void> {
+    notesEditing = true;
+    await tick();
+    const textarea = notesTextareaEl;
+    textarea?.focus();
+    const length = textarea?.value.length ?? 0;
+    textarea?.setSelectionRange(length, length);
+    resizeNotes();
+  }
+
+  function onNotesViewClick(): void {
+    void enterNotesEdit();
+  }
+
+  function onNotesViewKeydown(event: KeyboardEvent): void {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void enterNotesEdit();
+    }
+  }
+
+  /** Inline note contact: URLs open externally, emails/phones copy. The click
+   *  is stopped from reaching the surrounding view, which would start editing. */
+  function onNotesLinkClick(event: MouseEvent, kind: ContactKind, value: string): void {
+    event.stopPropagation();
+    if (kind === "url") openExternalUrl(value);
+    else void handleCopy(value, kind);
+  }
+
+  function onNotesLinkKeydown(event: KeyboardEvent, kind: ContactKind, value: string): void {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (kind === "url") openExternalUrl(value);
+      else void handleCopy(value, kind);
+    }
+  }
+
   /** Right-click entry into inline edit mode. Protected fields (password,
    *  protected custom fields) must already be revealed — their value shown as
    *  plain text — before editing is allowed; otherwise the editor refuses to
@@ -656,7 +733,7 @@
 
   <div class="detail-body" role="tabpanel">
     {#if activeTab === "fields"}
-      <div class="fields-layout">
+      <div class="fields-layout" bind:this={fieldsLayoutEl}>
         <div class="fields-scroll">
           <div class="field-block">
             <span class="field-label">用户名</span>
@@ -907,30 +984,48 @@
           <div class="notes-divider" role="presentation">
             <span>备注</span>
           </div>
-          <textarea
-            class="notes-textarea"
-            bind:value={notesDraft}
-            placeholder="添加备注…"
-            oninput={scheduleNotesSave}
-            onblur={() => void persistNotes()}
-            spellcheck="false"></textarea>
-          {#if notesDetections.length}
-            <div class="notes-detections">
-              {#each notesDetections as d (d.kind + "\u0000" + d.value)}
-                <button
-                  class="notes-detect"
-                  class:url={d.kind === "url"}
-                  onclick={() =>
-                    d.kind === "url" ? openExternalUrl(d.value) : void handleCopy(d.value, d.kind)}
-                  title={d.kind === "url" ? "打开链接" : "点击复制"}
-                >
-                  <AppIcon
-                    name={d.kind === "url" ? "link" : d.kind === "email" ? "mail" : "phone"}
-                    size={11}
-                  />
-                  <span>{d.value}</span>
-                </button>
-              {/each}
+          {#if notesEditing}
+            <textarea
+              class="notes-textarea"
+              bind:this={notesTextareaEl}
+              bind:value={notesDraft}
+              placeholder="添加备注…"
+              oninput={() => {
+                scheduleNotesSave();
+                resizeNotes();
+              }}
+              onblur={() => {
+                void persistNotes();
+                notesEditing = false;
+              }}
+              spellcheck="false"></textarea>
+          {:else}
+            <div
+              class="notes-view"
+              role="button"
+              tabindex="0"
+              aria-label="备注（点击编辑）"
+              bind:this={notesViewEl}
+              onclick={onNotesViewClick}
+              onkeydown={onNotesViewKeydown}
+            >
+              {#if notesDraft}
+                {#each linkifyContacts(notesDraft) as token, i (i)}
+                  {#if token.kind === "text"}
+                    <span>{token.value}</span>
+                  {:else}
+                    <button
+                      class="notes-link"
+                      type="button"
+                      onclick={(e) => onNotesLinkClick(e, token.kind, token.value)}
+                      onkeydown={(e) => onNotesLinkKeydown(e, token.kind, token.value)}
+                      title={token.kind === "url" ? "打开链接" : "点击复制"}>{token.value}</button
+                    >
+                  {/if}
+                {/each}
+              {:else}
+                <span class="notes-placeholder">添加备注…</span>
+              {/if}
             </div>
           {/if}
         </div>
@@ -1291,7 +1386,7 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 12px 14px 40px;
+    padding: 12px 14px 16px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
@@ -1304,8 +1399,8 @@
   }
 
   .fields-scroll {
-    flex: 0 1 48%;
-    min-height: 96px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -1315,8 +1410,8 @@
   .notes-section {
     display: flex;
     flex-direction: column;
-    flex: 1 1 52%;
-    min-height: 96px;
+    flex: 0 1 auto;
+    min-height: 0;
     padding-top: 12px;
   }
 
@@ -1341,8 +1436,7 @@
   }
 
   .notes-textarea {
-    flex: 1;
-    min-height: 0;
+    min-height: 64px;
     width: 100%;
     padding: 8px 10px;
     border: 1px solid var(--border-subtle);
@@ -1367,36 +1461,51 @@
     border-color: var(--selection-color);
   }
 
-  .notes-detections {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    flex: 0 0 auto;
-    margin-top: 8px;
-  }
-
-  .notes-detect {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    max-width: 100%;
-    padding: 3px 8px;
+  .notes-view {
+    min-height: 64px;
+    width: 100%;
+    padding: 8px 10px;
     border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
-    color: var(--text-secondary);
-    font-size: var(--font-size-tiny, 10px);
-    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-y: auto;
+    cursor: text;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
   }
 
-  .notes-detect span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .notes-view:focus {
+    outline: none;
+    border-color: var(--selection-color);
   }
 
-  .notes-detect.url {
+  .notes-placeholder {
+    color: var(--text-faint);
+  }
+
+  .notes-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
     color: var(--link-color);
+    cursor: pointer;
+    text-align: left;
+    word-break: break-all;
+  }
+
+  .notes-link:hover {
+    text-decoration: underline;
+  }
+
+  .notes-link:focus {
+    outline: none;
+    text-decoration: underline;
   }
 
   .field-block {

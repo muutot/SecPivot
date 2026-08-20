@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyContact, detectContacts } from "../src/lib/utils/contact.ts";
+import { classifyContact, detectContacts, linkifyContacts } from "../src/lib/utils/contact.ts";
 
 test("classifyContact recognizes whole-value URLs with and without scheme", () => {
   assert.equal(classifyContact("https://example.com"), "url");
@@ -52,4 +52,43 @@ test("detectContacts does not treat a date as a phone", () => {
     found.some((m) => m.kind === "phone"),
     false,
   );
+});
+
+test("linkifyContacts flags inline URL/email/phone and keeps surrounding text", () => {
+  const tokens = linkifyContacts(
+    "联系 alice@example.com,站点 https://example.com/x?q=1 或 13800138000",
+  );
+  const texts = tokens.filter((t) => t.kind === "text").map((t) => t.value);
+  const contacts = tokens.filter((t) => t.kind !== "text");
+  assert.equal(texts.join(""), "联系 ,站点  或 ");
+  assert.deepEqual(contacts, [
+    { kind: "email", value: "alice@example.com" },
+    { kind: "url", value: "https://example.com/x?q=1" },
+    { kind: "phone", value: "13800138000" },
+  ]);
+});
+
+test("linkifyContacts preserves newlines and trailing URL punctuation as text", () => {
+  const tokens = linkifyContacts("第一行 https://a.example.com.\n第二行 www.b.example.org/");
+  assert.deepEqual(tokens, [
+    { kind: "text", value: "第一行 " },
+    { kind: "url", value: "https://a.example.com" },
+    { kind: "text", value: ".\n第二行 " },
+    { kind: "url", value: "www.b.example.org/" },
+  ]);
+});
+
+test("linkifyContacts never double-links a phone-shaped fragment inside a URL", () => {
+  const tokens = linkifyContacts("查 https://x.example/1234567890 末尾");
+  const contacts = tokens.filter((t) => t.kind !== "text");
+  assert.deepEqual(contacts, [{ kind: "url", value: "https://x.example/1234567890" }]);
+});
+
+test("linkifyContacts returns plain text when there are no contacts", () => {
+  const tokens = linkifyContacts("纯文本，无链接。\n第二行");
+  assert.deepEqual(tokens, [{ kind: "text", value: "纯文本，无链接。\n第二行" }]);
+});
+
+test("linkifyContacts returns empty tokens for empty text", () => {
+  assert.deepEqual(linkifyContacts(""), []);
 });
