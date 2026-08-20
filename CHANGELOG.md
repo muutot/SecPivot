@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.3.1 (2026-08-20)
+
+### ✨ Features
+
+- **detail**: pin notes editor at bottom with debounced auto-save (07e04a9e)
+- **ui**: add global transient tips/toast host (8e1ef735)
+- **ui**: enforce single visible context menu app-wide and suppress native menu on main shell (162b4974)
+- **detail**: right-click inline edit fields, reveal protected values first (75eee889)
+- **remote**: replace rust-s3 with hand-rolled SigV4 over rustls reqwest (cb104679)
+- **session**: group expand/collapse no longer marks vault unsaved (726289f3)
+- **detail**: pin notes field at bottom with fixed region, scroll other fields (286919ea)
+- **ui**: add drag regions in settings dialog and enlarge main toolbar drag area (0ec0b232)
+- **entries**: show protocol-stripped URL as entry description (3fa33e27)
+- **settings**: move group icon/chevron toggles to display, decouple from compact mode (6c5cf177)
+- **android**: gate desktop-only modules and deps out of mobile build (b9807af3)
+
+### 🐛 Bug Fixes
+
+- **entry**: show scheme-stripped URL description only when present (313f55e7)
+- **detail**: refuse inline edit of protected fields until revealed (10872c11)
+- **app**: globally cancel middle-button autoscroll before it engages (c6647ea8)
+- **android**: apply extreme release optimization to APK build (14ca4514)
+
+### ♻️ Refactoring
+
+- **groups**: consolidate expand-all/collapse-all into one toggle button (4f52d533)
+
+### 📝 Documentation
+
+- enforce format:check before every commit (674d8e9b)
+- refresh issue tracker with pending items (a1951718)
+- **release**: format RELEASE.md before release commit (d9f9969c)
+
+### 🔧 Chores
+
+- ignore local .workbuddy tooling data (d02f0132)
+- **android**: split APK per 64-bit ABI and drop 32-bit targets (700f4832)
+
 ## 1.3.0 (2026-08-19)
 
 ### ✨ Features
