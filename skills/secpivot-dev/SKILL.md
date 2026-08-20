@@ -139,10 +139,11 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 ## Commit discipline
 
 1. Review `git diff` and `git diff --cached`; stage only the intended unit.
-2. Run the relevant verification and the mandatory documentation currency gate.
-3. Update matching TODO evidence in the same commit only when completion is directly proven.
-4. Write the commit message in the gitmoji format described above.
-5. Recheck `git status` after committing and report verification plus any evidence gaps.
+2. Run `npm run format:check` (Prettier + `cargo fmt`) and fix or stage any reformatting it produces; a formatting warning is a blocker, never commit an unformatted file.
+3. Run the relevant verification for the change scope and the mandatory documentation currency gate.
+4. Update matching TODO evidence in the same commit only when completion is directly proven.
+5. Write the commit message in the gitmoji format described above.
+6. Recheck `git status` after committing and report verification plus any evidence gaps.
 
 Base directory for this skill: B:\Program\Project\SecPivot\skills\secpivot-dev
 Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.

@@ -15,8 +15,9 @@ Read this before any repository change. It is the operating contract for every e
 3. Read the routing-table references fully before editing a subsystem.
 4. Make one minimal change with an independent verification path.
 5. Verify with the narrowest relevant command, then the gate for the change's scope.
-6. Run the documentation currency gate.
-7. Commit one unit with the gitmoji message format; recheck status.
+6. Run `npm run format:check`; a formatting warning is a blocker and any reformatting must be staged.
+7. Run the documentation currency gate.
+8. Commit one unit with the gitmoji message format; recheck status.
 
 ## TODO audit rule
 
