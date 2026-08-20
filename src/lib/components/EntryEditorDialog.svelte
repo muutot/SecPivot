@@ -867,9 +867,9 @@
             placeholder={expiresMulti ? "多个值" : undefined}
             oninput={() => markTouched("expires")}
           />
-          <span class="field-hint"
-            >{multi ? "清空并保存将移除所有选中条目的过期时间" : "到期后条目标记为已过期"}</span
-          >
+          {#if multi}
+            <span class="field-hint">清空并保存将移除所有选中条目的过期时间</span>
+          {/if}
         </label>
 
         <section class="field full">
@@ -942,7 +942,15 @@
 
         {#if !multi}
           <label class="field">
-            <span>覆盖 URL（OverrideURL）</span>
+            <span>
+              覆盖 URL（OverrideURL）
+              <span
+                class="field-help"
+                title="仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址"
+              >
+                <AppIcon name="info" size={12} />
+              </span>
+            </span>
             <input
               class="text-input mono"
               type="text"
@@ -950,11 +958,15 @@
               placeholder="https://real.example"
               oninput={() => markTouched("overrideUrl")}
             />
-            <span class="field-hint">仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址</span>
           </label>
 
-          <label class="field">
-            <span>质量检查</span>
+          <label class="field full">
+            <span>
+              质量检查
+              <span class="field-help" title="禁用后条目不参与弱密码安全检查">
+                <AppIcon name="info" size={12} />
+              </span>
+            </span>
             <div class="flag-row">
               <button
                 type="button"
@@ -966,7 +978,6 @@
                 {qualityCheck ? "已启用" : "已禁用"}
               </button>
             </div>
-            <span class="field-hint">禁用后条目不参与弱密码安全检查</span>
           </label>
 
           <section class="field full">
@@ -1373,6 +1384,15 @@
     margin-top: 4px;
     color: var(--text-faint);
     font-size: 10px;
+  }
+
+  .field-help {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 4px;
+    color: var(--text-faint);
+    cursor: help;
   }
 
   .field > span {

@@ -414,6 +414,7 @@
           class:selected={selectedUuids.has(row.entry.uuid)}
           class:expired-row={row.entry.expired}
           style:--row-color={row.entry.color ?? "transparent"}
+          style:--row-fg={row.entry.foregroundColor}
           data-entry-index={rowIndex}
           role="option"
           aria-selected={selectedUuids.has(row.entry.uuid)}
@@ -691,6 +692,7 @@
     height: 30px;
     padding: 0;
     cursor: pointer;
+    color: var(--row-fg, var(--text-primary));
   }
 
   .entry-row-color-bar {
@@ -759,7 +761,7 @@
 
   .entry-row-title {
     overflow: hidden;
-    color: var(--text-primary);
+    color: var(--row-fg, var(--text-primary));
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
