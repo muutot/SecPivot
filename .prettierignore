@@ -4,3 +4,4 @@ node_modules
 /src-tauri/icons
 package-lock.json
 .workbuddy
+.opencode
