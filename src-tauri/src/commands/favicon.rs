@@ -140,9 +140,9 @@ fn wininet_https_proxy() -> Option<String> {
 /// every failure reason is logged to stderr (full error chain) so server-side
 /// diagnosis is possible without changing the renderer contract.
 async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> {
-    for path in ["/favicon.ico", "/favicon.png"] {
+    'paths: for path in ["/favicon.ico", "/favicon.png"] {
         let url = format!("https://{host}{path}");
-        let response = match client.get(&url).send().await {
+        let mut response = match client.get(&url).send().await {
             Ok(response) => response,
             Err(e) => {
                 eprintln!("[favicon] 请求 {url} 失败: {e:#}");
@@ -153,22 +153,32 @@ async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> 
             eprintln!("[favicon] {url} 返回 {}", response.status());
             continue;
         }
-        let bytes = match response.bytes().await {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                eprintln!("[favicon] 读取 {url} 响应失败: {e}");
-                continue;
+        // Stream the body and abort as soon as the cumulative size reaches the
+        // cap, so a server that never ends (or sends an oversized payload) is
+        // rejected without buffering the whole body into memory first.
+        let mut body = Vec::new();
+        let mut total = 0usize;
+        loop {
+            let chunk = match response.chunk().await {
+                Ok(Some(chunk)) => chunk,
+                Ok(None) => break,
+                Err(e) => {
+                    eprintln!("[favicon] 读取 {url} 响应失败: {e}");
+                    continue 'paths;
+                }
+            };
+            total += chunk.len();
+            if total >= 512 * 1024 {
+                eprintln!("[favicon] {url} 超过 512 KiB 上限 (已读取 {total} 字节)");
+                continue 'paths;
             }
-        };
-        if bytes.is_empty() {
+            body.extend_from_slice(&chunk);
+        }
+        if body.is_empty() {
             eprintln!("[favicon] {url} 返回空内容");
             continue;
         }
-        if bytes.len() >= 512 * 1024 {
-            eprintln!("[favicon] {url} 超过 512 KiB 上限 ({} 字节)", bytes.len());
-            continue;
-        }
-        return Some(bytes.to_vec());
+        return Some(body);
     }
     None
 }
