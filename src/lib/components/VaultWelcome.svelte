@@ -334,11 +334,15 @@
 
 <div class="welcome">
   <div class="welcome-inner">
-    <div class="welcome-logo">
-      <img class="welcome-logo-img" src="/app-icon.png" alt="SecPivot" />
+    <div class="welcome-header">
+      <div class="welcome-logo">
+        <img class="welcome-logo-img" src="/app-icon.png" alt="SecPivot" />
+      </div>
+      <div class="welcome-heading">
+        <h1 class="welcome-title">SecPivot</h1>
+        <p class="welcome-subtitle">本地优先的 KeePass 密码管理器</p>
+      </div>
     </div>
-    <h1 class="welcome-title">SecPivot</h1>
-    <p class="welcome-subtitle">本地优先的 KeePass 密码管理器</p>
 
     <div class="welcome-actions">
       <button class="welcome-button primary" onclick={handleOpen} disabled={busy}>
@@ -775,15 +779,19 @@
     text-align: center;
   }
 
+  .welcome-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
   .welcome-logo {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 72px;
-    height: 72px;
-    border: 1px solid var(--border-color);
-    border-radius: 18px;
-    background: var(--card-bg);
+    width: 56px;
+    height: 56px;
+    flex: 0 0 auto;
     overflow: hidden;
   }
 
@@ -794,15 +802,20 @@
     object-fit: cover;
   }
 
+  .welcome-heading {
+    min-width: 0;
+    text-align: left;
+  }
+
   .welcome-title {
-    margin: 16px 0 0;
+    margin: 0;
     font-size: 24px;
     font-weight: 590;
     letter-spacing: 0.01em;
   }
 
   .welcome-subtitle {
-    margin: 6px 0 0;
+    margin: 4px 0 0;
     color: var(--text-muted);
     font-size: 12px;
   }
