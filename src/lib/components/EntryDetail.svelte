@@ -8,6 +8,7 @@
   import { showTip } from "$lib/services/tips";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
+  import { classifyContact, detectContacts } from "$lib/utils/contact";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import {
@@ -82,6 +83,7 @@
    *  Initial value captured once; the reset `$effect` resyncs on entry change. */
   // svelte-ignore state_referenced_locally
   let notesDraft = $state(entry.notes ?? "");
+  const notesDetections = $derived(detectContacts(notesDraft));
   let notesDirty = $state(false);
   let notesSaving = $state(false);
   let notesSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -347,6 +349,10 @@
         return { message: "已删除历史版本", isError: false };
       case "url":
         return { message: "已复制网址", isError: false };
+      case "email":
+        return { message: "已复制邮箱", isError: false };
+      case "phone":
+        return { message: "已复制电话号码", isError: false };
       case "notes":
         return { message: "备注已保存", isError: false };
       case "saved":
@@ -373,11 +379,15 @@
   }
 
   function openUrlExternal(): void {
-    if (!entry.url) return;
+    if (entry.url) openExternalUrl(entry.url);
+  }
+
+  function openExternalUrl(url: string): void {
+    if (!url) return;
     if (isTauriRuntime()) {
-      void openUrl(entry.url);
+      void openUrl(url);
     } else {
-      window.open(entry.url, "_blank", "noopener,noreferrer");
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -857,7 +867,26 @@
                       </button>
                     {/if}
                   {:else}
-                    <span class="field-text" title={field.value}>{field.value || "—"}</span>
+                    {@const contact = field.value ? classifyContact(field.value) : null}
+                    {#if contact === "url"}
+                      <button
+                        class="field-text link contact"
+                        onclick={() => openExternalUrl(field.value)}
+                        title={field.value}
+                      >
+                        {field.value}
+                      </button>
+                    {:else if contact}
+                      <button
+                        class="field-text link contact"
+                        onclick={() => handleCopy(field.value, contact)}
+                        title="点击复制"
+                      >
+                        {field.value}
+                      </button>
+                    {:else}
+                      <span class="field-text" title={field.value}>{field.value || "—"}</span>
+                    {/if}
                     {#if field.value}
                       <button
                         class="copy-btn"
@@ -885,6 +914,25 @@
             oninput={scheduleNotesSave}
             onblur={() => void persistNotes()}
             spellcheck="false"></textarea>
+          {#if notesDetections.length}
+            <div class="notes-detections">
+              {#each notesDetections as d (d.kind + "\u0000" + d.value)}
+                <button
+                  class="notes-detect"
+                  class:url={d.kind === "url"}
+                  onclick={() =>
+                    d.kind === "url" ? openExternalUrl(d.value) : void handleCopy(d.value, d.kind)}
+                  title={d.kind === "url" ? "打开链接" : "点击复制"}
+                >
+                  <AppIcon
+                    name={d.kind === "url" ? "link" : d.kind === "email" ? "mail" : "phone"}
+                    size={11}
+                  />
+                  <span>{d.value}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
       </div>
     {:else if activeTab === "meta"}
@@ -1319,6 +1367,38 @@
     border-color: var(--selection-color);
   }
 
+  .notes-detections {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 0 0 auto;
+    margin-top: 8px;
+  }
+
+  .notes-detect {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 3px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny, 10px);
+    cursor: pointer;
+  }
+
+  .notes-detect span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notes-detect.url {
+    color: var(--link-color);
+  }
+
   .field-block {
     min-width: 0;
     margin-bottom: 14px;
@@ -1396,7 +1476,16 @@
   }
 
   .field-text.link {
-    color: var(--selection-color);
+    color: var(--link-color);
+  }
+
+  .field-text.contact {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .field-text.faint {

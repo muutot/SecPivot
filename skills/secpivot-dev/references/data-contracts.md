@@ -25,6 +25,8 @@ Frontend normalization lives in `services/settings.ts::normalizeSettings`; the b
 
 > **Pitfall — the read side: missing fields must not crash load.** Deserialization is strict by default: a required field absent from an existing `config.json` (old version, manual edit) makes `ConfigStore::load` fail, which propagates from the setup hook and **panics the app on startup**. Settings structs therefore use container-level `#[serde(default)]` (every struct also impls `Default`), while `AppConfig` applies `#[serde(default)]` per field. When adding a field, keep the matching `Default` impl current and add a load test. Guarded by `old_config_without_density_loads_with_defaults` and `empty_config_object_loads_with_defaults`.
 
+`ThemeColors` mirrors the frontend `ThemeColors` key-for-key and now includes `linkColor` (defaults: dark `#ff5050`, light `#e04040`; normalized via `valid_hex`, missing keys fall back to the dark preset). A new theme color must be added on both sides (frontend `types/theme.ts` + `utils/theme.ts` map + `app.css` root default + settings picker in `GeneralSettingsPanel.svelte`, Rust `ThemeColors` struct + `dark()`/`light()` + `normalize_colors`) and covered by a round-trip test like `link_color_survives_deserialize_write_reload_and_old_configs_default`.
+
 ## Vault IPC contract
 
 The vault session is held in backend managed state and returned to the frontend as serialized `VaultState`.

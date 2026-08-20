@@ -18,6 +18,7 @@ export const COLOR_CSS_MAP: Record<keyof ThemeColors, string> = {
   placeholderColor: "--placeholder-color",
   borderSubtle: "--border-subtle",
   selectionColor: "--selection-color",
+  linkColor: "--link-color",
   successColor: "--success-color",
   dangerColor: "--danger-color",
   warningColor: "--warning-color",

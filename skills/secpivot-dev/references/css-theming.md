@@ -32,7 +32,7 @@ Preserve these characteristics unless the task explicitly requests a redesign:
 
 ## Theme color contract
 
-The `ThemeColors` interface has 20 semantic values (identical names to Clipboard):
+The `ThemeColors` interface has 21 semantic values (identical names to Clipboard plus `linkColor` for URL/contact links):
 
 | CSS variable          | ThemeColors key    | Purpose                           |
 | --------------------- | ------------------ | --------------------------------- |
@@ -52,12 +52,13 @@ The `ThemeColors` interface has 20 semantic values (identical names to Clipboard
 | `--hover-bg`          | `hoverBg`          | hover and quiet selected surfaces |
 | `--input-bg`          | `inputBg`          | inputs and inset surfaces         |
 | `--selection-color`   | `selectionColor`   | selection/current state           |
+| `--link-color`        | `linkColor`        | URL / clickable contact links     |
 | `--success-color`     | `successColor`     | successful state                  |
 | `--danger-color`      | `dangerColor`      | destructive/error state           |
 | `--warning-color`     | `warningColor`     | caution/favorite emphasis         |
 | `--scrollbar-color`   | `scrollbarColor`   | scroll thumb                      |
 
-Use these variables for reusable surfaces, text, borders, controls, and status states. Derive translucency with `color-mix` instead of inventing parallel shades.
+Use these variables for reusable surfaces, text, borders, controls, and status states. Derive translucency with `color-mix` instead of inventing parallel shades. URL link text uses `--link-color` (a dedicated theme token, editable in General → 外观), never `--selection-color`, which is reserved for selection/current state (see `.field-text.link`/`.field-text.contact` in `EntryDetail.svelte`, `.read-text.link` in `HistoryVersionDialog.svelte`, and the notes detection strip).
 
 ## Global font and display variables
 

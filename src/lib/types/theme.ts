@@ -15,6 +15,7 @@ export interface ThemeColors {
   placeholderColor: string;
   borderSubtle: string;
   selectionColor: string;
+  linkColor: string;
   successColor: string;
   dangerColor: string;
   warningColor: string;
@@ -38,6 +39,7 @@ export const DARK_THEME_COLORS: ThemeColors = {
   placeholderColor: "#6e6e6e",
   borderSubtle: "#292929",
   selectionColor: "#4aa8ff",
+  linkColor: "#ff5050",
   successColor: "#51b96b",
   dangerColor: "#e85d5d",
   warningColor: "#e2c05d",
@@ -61,6 +63,7 @@ export const LIGHT_THEME_COLORS: ThemeColors = {
   placeholderColor: "#aaaaaa",
   borderSubtle: "#dddddd",
   selectionColor: "#2196f3",
+  linkColor: "#e04040",
   successColor: "#388e3c",
   dangerColor: "#d32f2f",
   warningColor: "#f9a825",

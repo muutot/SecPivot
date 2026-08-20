@@ -536,7 +536,7 @@
   }
 
   .read-text.link {
-    color: var(--selection-color);
+    color: var(--link-color);
   }
 
   .read-text.faint {

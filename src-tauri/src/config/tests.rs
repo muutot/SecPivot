@@ -659,6 +659,33 @@ fn density_survives_deserialize_write_reload() {
 }
 
 #[test]
+fn link_color_survives_deserialize_write_reload_and_old_configs_default() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.general.theme_colors.link_color = "#66bde1".into();
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"linkColor\": \"#66bde1\""));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let again = reloaded.get().unwrap();
+    assert_eq!(again.general.theme_colors.link_color, "#66bde1");
+
+    let conf = dir.path().join("conf");
+    std::fs::write(
+        conf.join("config.json"),
+        r##"{"general":{"theme":"light","themeColors":{"accent":"#00aa00"}}}"##,
+    )
+    .unwrap();
+    let old = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let loaded = old.get().unwrap();
+    assert_eq!(loaded.general.theme_colors.accent, "#00aa00");
+    assert_eq!(loaded.general.theme_colors.link_color, "#ff5050");
+}
+
+#[test]
 fn toolbar_overflow_menu_uses_platform_default_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

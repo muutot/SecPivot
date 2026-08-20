@@ -75,6 +75,7 @@
   const customColorFields: { key: keyof ThemeColors; label: string; description: string }[] = [
     { key: "accent", label: "强调色", description: "主按钮与高亮" },
     { key: "selectionColor", label: "选中色", description: "选中项与焦点边框" },
+    { key: "linkColor", label: "链接色", description: "网址与可点击链接" },
     { key: "bg", label: "背景", description: "窗口与整体底色" },
     { key: "cardBg", label: "卡片", description: "卡片与面板底色" },
     { key: "border", label: "边框", description: "分隔线与控件描边" },

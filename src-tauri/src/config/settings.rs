@@ -32,6 +32,7 @@ pub struct ThemeColors {
     pub placeholder_color: String,
     pub border_subtle: String,
     pub selection_color: String,
+    pub link_color: String,
     pub success_color: String,
     pub danger_color: String,
     pub warning_color: String,
@@ -57,6 +58,7 @@ impl ThemeColors {
             placeholder_color: "#6e6e6e".into(),
             border_subtle: "#292929".into(),
             selection_color: "#4aa8ff".into(),
+            link_color: "#ff5050".into(),
             success_color: "#51b96b".into(),
             danger_color: "#e85d5d".into(),
             warning_color: "#e2c05d".into(),
@@ -82,6 +84,7 @@ impl ThemeColors {
             placeholder_color: "#aaaaaa".into(),
             border_subtle: "#dddddd".into(),
             selection_color: "#2196f3".into(),
+            link_color: "#e04040".into(),
             success_color: "#388e3c".into(),
             danger_color: "#d32f2f".into(),
             warning_color: "#f9a825".into(),
@@ -677,6 +680,7 @@ fn normalize_colors(mut colors: ThemeColors) -> ThemeColors {
     colors.placeholder_color = valid_hex(&colors.placeholder_color, &defaults.placeholder_color);
     colors.border_subtle = valid_hex(&colors.border_subtle, &defaults.border_subtle);
     colors.selection_color = valid_hex(&colors.selection_color, &defaults.selection_color);
+    colors.link_color = valid_hex(&colors.link_color, &defaults.link_color);
     colors.success_color = valid_hex(&colors.success_color, &defaults.success_color);
     colors.danger_color = valid_hex(&colors.danger_color, &defaults.danger_color);
     colors.warning_color = valid_hex(&colors.warning_color, &defaults.warning_color);
