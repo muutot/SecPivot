@@ -777,6 +777,7 @@
     max-width: 380px;
     padding: 24px;
     text-align: center;
+    transform: translateY(10vh);
   }
 
   .welcome-header {
