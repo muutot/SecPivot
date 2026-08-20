@@ -25,7 +25,7 @@ fn defaults_round_trip_and_persist() {
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let again = reloaded.get().unwrap();
     assert_eq!(again.general.theme, "dark");
-    assert_eq!(again.general.theme_colors.accent, "#ff5050");
+    assert_eq!(again.general.theme_colors.accent, "#8bc34a");
     assert_eq!(again.general.density.group_gap, 2);
 }
 
@@ -682,7 +682,7 @@ fn link_color_survives_deserialize_write_reload_and_old_configs_default() {
     let old = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let loaded = old.get().unwrap();
     assert_eq!(loaded.general.theme_colors.accent, "#00aa00");
-    assert_eq!(loaded.general.theme_colors.link_color, "#ff5050");
+    assert_eq!(loaded.general.theme_colors.link_color, "#1e90ff");
 }
 
 #[test]
@@ -795,7 +795,7 @@ fn normalization_clamps_and_fixes_enums() {
     assert_eq!(normalized.database.compression, "Gzip");
     assert_eq!(normalized.database.generator.length, 20);
     assert_eq!(normalized.general.font_sizes.base, 14);
-    assert_eq!(normalized.general.theme_colors.accent, "#ff5050");
+    assert_eq!(normalized.general.theme_colors.accent, "#8bc34a");
     assert_eq!(normalized.general.density.group_gap, 2);
     assert_eq!(normalized.general.density.group_indent, 12);
 }
