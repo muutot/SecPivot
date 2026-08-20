@@ -334,7 +334,9 @@
 
 <div class="welcome">
   <div class="welcome-inner">
-    <div class="welcome-logo"><AppIcon name="key" size={34} /></div>
+    <div class="welcome-logo">
+      <img class="welcome-logo-img" src="/app-icon.png" alt="SecPivot" />
+    </div>
     <h1 class="welcome-title">SecPivot</h1>
     <p class="welcome-subtitle">本地优先的 KeePass 密码管理器</p>
 
@@ -777,12 +779,19 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    color: var(--warning-color);
+    border-radius: 18px;
     background: var(--card-bg);
+    overflow: hidden;
+  }
+
+  .welcome-logo-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .welcome-title {
