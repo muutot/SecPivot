@@ -184,6 +184,50 @@ fn s3_transport_round_trips_against_local_mock() {
     storage.put("vaults/b.kdbx", &[9, 9]).expect("put");
 }
 
+#[test]
+fn s3_rejects_scheme_less_or_non_http_endpoints() {
+    let base = |endpoint: &str| RemoteSettings {
+        kind: "s3".into(),
+        endpoint: endpoint.to_owned(),
+        region: "us-east-1".to_owned(),
+        bucket: "test-bucket".to_owned(),
+        access_key: "AK".to_owned(),
+        secret_key: "SK".to_owned(),
+        ..Default::default()
+    };
+    // A bare host (no scheme) used to panic inside `host_header`.
+    for bad in [
+        "127.0.0.1:9000",
+        "localhost:9000",
+        "ftp://example.com",
+        "://nope",
+    ] {
+        match S3Storage::with_timeouts(&base(bad), Duration::from_secs(10), Duration::from_secs(10))
+        {
+            Err(err) => assert!(
+                err.contains("S3 服务地址无效"),
+                "unexpected error for {bad:?}: {err}"
+            ),
+            Ok(_) => panic!("misconfigured endpoint must be rejected: {bad:?}"),
+        }
+    }
+    // A valid http(s) endpoint still builds and yields the expected host header.
+    let storage = S3Storage::with_timeouts(
+        &base("http://127.0.0.1:9000"),
+        Duration::from_secs(10),
+        Duration::from_secs(10),
+    )
+    .expect("valid endpoint");
+    assert_eq!(storage.host_header().unwrap(), "127.0.0.1:9000");
+    let storage = S3Storage::with_timeouts(
+        &base("https://minio.example.com"),
+        Duration::from_secs(10),
+        Duration::from_secs(10),
+    )
+    .expect("valid endpoint");
+    assert_eq!(storage.host_header().unwrap(), "minio.example.com");
+}
+
 /// Live end-to-end S3 round trip against a real local S3-compatible server
 /// (MinIO at `B:\Program\s3\minio`, `http://127.0.0.1:9000`,
 /// `rustfsadmin`/`rustfsadmin`, path-style). It exercises the same

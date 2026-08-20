@@ -53,6 +53,21 @@ impl S3Storage {
         if endpoint.is_empty() {
             return Err("请先在设置中配置 S3 服务地址".to_owned());
         }
+        // The endpoint must parse as an absolute http(s) URL: SigV4 signs the
+        // `host` header from it and every request is sent to
+        // `{endpoint}/{bucket}/{key}`. Rejecting scheme-less strings here turns
+        // a would-be panic in `host_header` (or a cryptic reqwest error) into a
+        // clear settings-time message.
+        let parsed_endpoint = Url::parse(endpoint);
+        let has_http_scheme_and_host = parsed_endpoint
+            .as_ref()
+            .map(|u| (u.scheme() == "http" || u.scheme() == "https") && u.host_str().is_some())
+            .unwrap_or(false);
+        if !has_http_scheme_and_host {
+            return Err(format!(
+                "S3 服务地址无效: {endpoint}（需要形如 https://host:port 的完整地址）"
+            ));
+        }
         if region.is_empty() {
             return Err("请先在设置中配置 S3 区域".to_owned());
         }
@@ -100,12 +115,16 @@ impl S3Storage {
         out
     }
 
-    /// `host[:port]` header value matching the configured endpoint.
-    fn host_header(&self) -> String {
-        let url = Url::parse(&self.endpoint).expect("endpoint was validated");
+    /// `host[:port]` header value matching the configured endpoint. Returns an
+    /// error instead of panicking so a malformed stored endpoint can never take
+    /// down a request (construction validates the endpoint, but the stored
+    /// `ConfigStore` value is user-editable at any time).
+    pub(crate) fn host_header(&self) -> Result<String, String> {
+        let url = Url::parse(&self.endpoint)
+            .map_err(|e| format!("S3 服务地址无效: {}（{e}）", self.endpoint))?;
         match url.port() {
-            Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()),
-            None => url.host_str().unwrap_or_default().to_owned(),
+            Some(port) => Ok(format!("{}:{port}", url.host_str().unwrap_or_default())),
+            None => Ok(url.host_str().unwrap_or_default().to_owned()),
         }
     }
 
@@ -133,7 +152,7 @@ impl S3Storage {
 
         let payload_hash = hex(&sha256_bytes(body));
 
-        let host = self.host_header();
+        let host = self.host_header()?;
         let canonical_headers =
             format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n");
         let signed_headers = "host;x-amz-content-sha256;x-amz-date";
