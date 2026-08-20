@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
   import type { EntryPatch } from "$lib/types/vault";
@@ -100,33 +100,43 @@
     return vault.getActiveSessionId();
   }
 
-  $effect(() => {
+  /** Identity of the currently shown entry (session + UUID). Keying the reset
+   *  effect on this string prevents wholesale snapshot replacement (saves,
+   *  favorite toggles, remote refresh) from re-running the reset and clobbering
+   *  an uncommitted inline draft; the value is stable across such replacements. */
+  const detailKey = $derived.by(() => {
     const sessionId = detailSessionId();
-    detailView.activate(sessionId ? `${sessionId}:${entry.uuid}` : null);
-    revealPassword = false;
-    passwordLoaded = false;
-    passwordLoading = false;
-    fetchedPassword = "";
-    notesDraft = entry.notes ?? "";
-    notesDirty = false;
-    notesSaving = false;
-    if (notesSaveTimer) {
-      clearTimeout(notesSaveTimer);
-      notesSaveTimer = undefined;
-    }
-    customFieldValues = {};
-    customFieldLoaded = {};
-    customFieldLoading = {};
-    customFieldRevealed = {};
-    editing = null;
-    editSaving = false;
-    historyLoadedUuid = null;
-    historyLoading = false;
-    historyVersions = [];
-    viewingVersion = null;
-    storage = null;
-    storageLoading = false;
-    previewAttachmentName = null;
+    return sessionId ? `${sessionId}:${entry.uuid}` : null;
+  });
+
+  $effect(() => {
+    detailView.activate(detailKey);
+    untrack(() => {
+      revealPassword = false;
+      passwordLoaded = false;
+      passwordLoading = false;
+      fetchedPassword = "";
+      notesDraft = entry.notes ?? "";
+      notesDirty = false;
+      notesSaving = false;
+      if (notesSaveTimer) {
+        clearTimeout(notesSaveTimer);
+        notesSaveTimer = undefined;
+      }
+      customFieldValues = {};
+      customFieldLoaded = {};
+      customFieldLoading = {};
+      customFieldRevealed = {};
+      editing = null;
+      editSaving = false;
+      historyLoadedUuid = null;
+      historyLoading = false;
+      historyVersions = [];
+      viewingVersion = null;
+      storage = null;
+      storageLoading = false;
+      previewAttachmentName = null;
+    });
   });
 
   onDestroy(() => {
