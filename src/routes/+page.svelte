@@ -137,7 +137,20 @@
     error: boolean;
   } | null>(null);
 
+  /** Seen (sessionId, path) pairs that already flashed the expired-entries
+   *  toast. Session ids are never recycled, so the keys accumulate for the
+   *  whole window lifetime; cap the set and evict the oldest key so long
+   *  sessions cannot grow it without bound. The dedupe only suppresses a
+   *  transient toast, so a rare re-notify for an evicted key is benign. */
   const expiredNotifiedViews = new Set<string>();
+  const MAX_EXPIRED_NOTIFICATIONS = 256;
+  function markExpiredNotified(key: string): void {
+    if (expiredNotifiedViews.size >= MAX_EXPIRED_NOTIFICATIONS) {
+      const oldest = expiredNotifiedViews.values().next().value;
+      if (oldest !== undefined) expiredNotifiedViews.delete(oldest);
+    }
+    expiredNotifiedViews.add(key);
+  }
 
   function countExpiredEntries(group: VaultGroup): number {
     return collectEntries(group).filter((e) => e.expired).length;
@@ -161,7 +174,7 @@
 
     const notificationKey = sessionResourceKey(view.sessionId, requestedPath);
     if (expiredNotifiedViews.has(notificationKey)) return;
-    expiredNotifiedViews.add(notificationKey);
+    markExpiredNotified(notificationKey);
 
     const expired = countExpiredEntries(currentVault.root);
     if (expired > 0) flash(`有 ${expired} 个条目已过期,请及时更新密码`);
