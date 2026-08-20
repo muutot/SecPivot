@@ -333,7 +333,12 @@
   }
 </script>
 
-<div class="entry-table" class:compact style={`--entry-cols: ${entryGridCols}`} bind:this={entryTableEl}>
+<div
+  class="entry-table"
+  class:compact
+  style={`--entry-cols: ${entryGridCols}`}
+  bind:this={entryTableEl}
+>
   <div
     class="entry-table-head"
     role="row"
