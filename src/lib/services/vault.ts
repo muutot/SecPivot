@@ -246,18 +246,52 @@ function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState 
   const current =
     sessionStates.get(sessionId) ?? (activeSessionId === sessionId ? get(state) : null);
   if (!current) return null;
-  const next = deepClone(current);
-  next.revision = delta.revision;
+  let entryPatches: Map<string, Partial<VaultEntry>> | null = null;
+  let groupPatches: Map<string, Partial<VaultGroup>> | null = null;
   if (delta.kind === "favorite") {
-    const entry = findEntry(next.root, delta.uuid);
-    if (entry) entry.favorite = delta.favorite;
+    entryPatches = new Map([[delta.uuid, { favorite: delta.favorite }]]);
   } else if (delta.kind === "groupsExpanded") {
-    for (const [uuid, expanded] of Object.entries(delta.groups)) {
-      const group = findGroup(next.root, uuid);
-      if (group) group.isExpanded = expanded;
+    groupPatches = new Map(
+      Object.entries(delta.groups).map(([uuid, expanded]) => [uuid, { isExpanded: expanded }]),
+    );
+  }
+  const next = { ...current, revision: delta.revision };
+  next.root = applyTreeDelta(current.root, entryPatches, groupPatches);
+  return commitSessionState(sessionId, next);
+}
+
+/** Clone only the groups along the paths to the mutated nodes and the mutated
+ *  nodes themselves, sharing every untouched subtree. Delta mutations must not
+ *  deep-clone the whole vault (full JSON serialize/parse on every favorite
+ *  toggle), and committed snapshots are immutable — a stale reference must
+ *  never observe a mutation, so nodes are replaced, never edited in place. */
+function applyTreeDelta(
+  root: VaultGroup,
+  entryPatches: Map<string, Partial<VaultEntry>> | null,
+  groupPatches: Map<string, Partial<VaultGroup>> | null,
+): VaultGroup {
+  let entries = root.entries;
+  if (entryPatches && root.entries.some((entry) => entryPatches.has(entry.uuid))) {
+    entries = root.entries.map((entry) => {
+      const patch = entryPatches.get(entry.uuid);
+      return patch ? { ...entry, ...patch } : entry;
+    });
+  }
+  let children = root.children;
+  for (let i = 0; i < children.length; i += 1) {
+    const nextChild = applyTreeDelta(children[i], entryPatches, groupPatches);
+    if (nextChild !== children[i]) {
+      if (children === root.children) children = [...children];
+      children[i] = nextChild;
     }
   }
-  return commitSessionState(sessionId, next);
+  const groupPatch = groupPatches?.get(root.uuid);
+  const changed =
+    groupPatch !== undefined || entries !== root.entries || children !== root.children;
+  if (!changed) return root;
+  return groupPatch
+    ? { ...root, ...groupPatch, entries, children }
+    : { ...root, entries, children };
 }
 
 function deepClone<T>(value: T): T {
