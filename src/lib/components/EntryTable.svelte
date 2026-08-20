@@ -83,6 +83,7 @@
 
   let entryHeadEl = $state<HTMLElement>();
   let entryListEl = $state<HTMLDivElement>();
+  let entryTableEl = $state<HTMLDivElement>();
   let colDrag = $state<{ id: string; fromIndex: number } | null>(null);
   let colDropIndex = $state<number | null>(null);
   let suppressColumnSort = $state(false);
@@ -148,13 +149,22 @@
     const renderWidth = cellEl ? Math.round(cellEl.getBoundingClientRect().width) : 0;
     const storedWidth = visibleCols.find((column) => column.id === colId)?.width ?? 0;
     const startWidth = storedWidth > 0 ? storedWidth : Math.max(renderWidth, COL_WIDTH_MIN);
+    const container = entryTableEl;
+    const colIndex = visibleCols.findIndex((column) => column.id === colId);
     document.body.classList.add("resizing-column");
     const onMove = (moveEvent: PointerEvent): void => {
       const width = Math.min(
         COL_WIDTH_MAX,
         Math.max(COL_WIDTH_MIN, startWidth + (moveEvent.clientX - startX)),
       );
-      oncolumnresize(colId, width);
+      // Update the shared grid template directly on the DOM during the drag so
+      // the header and every row reflow via CSS without re-rendering the whole
+      // table on each pointermove; the width is committed to state on pointerup.
+      if (container && colIndex >= 0) {
+        const tokens = entryGridCols.split(" ");
+        tokens[1 + colIndex] = `${width}px`;
+        container.style.setProperty("--entry-cols", tokens.join(" "));
+      }
     };
     const onUp = (upEvent: PointerEvent): void => {
       if (target.hasPointerCapture(upEvent.pointerId)) {
@@ -164,6 +174,12 @@
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
+      const finalWidth = Math.min(
+        COL_WIDTH_MAX,
+        Math.max(COL_WIDTH_MIN, startWidth + (upEvent.clientX - startX)),
+      );
+      if (container) container.style.removeProperty("--entry-cols");
+      oncolumnresize(colId, finalWidth);
       onsavelayout();
     };
     window.addEventListener("pointermove", onMove);
@@ -317,7 +333,7 @@
   }
 </script>
 
-<div class="entry-table" class:compact style={`--entry-cols: ${entryGridCols}`}>
+<div class="entry-table" class:compact style={`--entry-cols: ${entryGridCols}`} bind:this={entryTableEl}>
   <div
     class="entry-table-head"
     role="row"
