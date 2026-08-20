@@ -308,7 +308,42 @@ test("remaining async dialogs reset or unmount with their owning view", async ()
     "storageLoading",
     "viewingVersion",
     "previewAttachmentName",
+    "attachmentDragActive",
   ]) {
     assert.match(detailReset[1], new RegExp(`${state} = (?:false|\\{\\}|null)`));
   }
+});
+
+test("detail-pane drag-and-drop attachment add stays IPC-aligned", async () => {
+  const [detail, service, lib, session] = await Promise.all([
+    readFile(new URL("../src/lib/components/EntryDetail.svelte", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/services/vault.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8"),
+    readFile(new URL("../src-tauri/src/vault/entries.rs", import.meta.url), "utf8"),
+  ]);
+
+  // EntryDetail dropzone calls the service method in the captured session.
+  const dropzone = detail.match(
+    /class="attachment-dropzone"[\s\S]*?ondrop=\{handleAttachmentDrop\}/,
+  );
+  assert.ok(dropzone, "attachment dropzone must be wired");
+  assert.match(
+    detail,
+    /vault\.callInSession\(sessionId, \(\) => vault\.addAttachments\(uuid, attachments\)\)/,
+  );
+
+  // The service method invokes the backend command by its exact name.
+  const method = service.match(
+    /async addAttachments\(uuid: string, attachments: AttachmentInput\[\]\): Promise<VaultState> \{([\s\S]*?)\n  \},/,
+  );
+  assert.ok(method, "vault.addAttachments must exist");
+  assert.match(method[1], /invokeSessionState\("add_attachments", \{ uuid, attachments \}\)/);
+
+  // The command is registered and its session method records history.
+  assert.match(lib, /commands::add_attachments/);
+  assert.match(
+    session,
+    /pub fn add_attachments\([\s\S]*?&mut self,[\s\S]*?uuid: &str,[\s\S]*?attachments: &\[AttachmentInput\],[\s\S]*?\)/,
+  );
+  assert.match(session, /track_changes\(\)/);
 });

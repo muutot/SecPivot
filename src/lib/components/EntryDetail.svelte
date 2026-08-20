@@ -4,6 +4,7 @@
   import type { HistoryVersion } from "$lib/types/vault";
   import type { EntryPatch } from "$lib/types/vault";
   import type { EntryStorage } from "$lib/types/vault";
+  import type { AttachmentInput } from "$lib/types/vault";
   import { copyValue } from "$lib/services/security";
   import { showTip } from "$lib/services/tips";
   import { formatBytes } from "$lib/utils/format";
@@ -102,6 +103,11 @@
   let storage = $state<EntryStorage | null>(null);
   let storageLoading = $state(false);
   let previewAttachmentName = $state<string | null>(null);
+  /** Highlight + drop-target state for drag-and-drop attachment add. */
+  let attachmentDragActive = $state(false);
+  /** Nesting counter for `dragenter`/`dragleave` so moving between the
+   *  dropzone's own children does not flicker the highlight. */
+  let attachmentDragDepth = 0;
   const detailView = new KeyedViewGuard();
 
   function detailSessionId(): string | null {
@@ -145,6 +151,8 @@
       storage = null;
       storageLoading = false;
       previewAttachmentName = null;
+      attachmentDragActive = false;
+      attachmentDragDepth = 0;
     });
   });
 
@@ -346,6 +354,8 @@
         return { message: "操作失败", isError: true };
       case "attachment":
         return { message: "附件已保存", isError: false };
+      case "attachmentAdded":
+        return { message: "附件已添加", isError: false };
       case "username":
         return { message: "已复制用户名", isError: false };
       case "password":
@@ -413,6 +423,60 @@
       await vault.callInSession(sessionId, () => vault.saveAttachment(uuid, name, dest));
       if (!detailView.isCurrent(view)) return;
       flash("attachment");
+    } catch {
+      if (detailView.isCurrent(view)) flash("error");
+    }
+  }
+
+  /** Read a dropped file into base64 (kept in memory only, never persisted or
+   *  logged), mirroring the editor dialog's attachment flow. */
+  function readDroppedFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleAttachmentDragEnter(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    attachmentDragDepth += 1;
+    attachmentDragActive = true;
+  }
+
+  function handleAttachmentDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleAttachmentDragLeave(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
+    if (attachmentDragDepth === 0) attachmentDragActive = false;
+  }
+
+  async function handleAttachmentDrop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    attachmentDragDepth = 0;
+    attachmentDragActive = false;
+    const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+    if (!files.length) return;
+    const uuid = entry.uuid;
+    const sessionId = detailSessionId();
+    const view = detailView.capture();
+    if (!sessionId || !view) return;
+    try {
+      const attachments: AttachmentInput[] = [];
+      for (const file of files) {
+        const data = await readDroppedFileAsBase64(file);
+        attachments.push({ name: file.name, data });
+      }
+      await vault.callInSession(sessionId, () => vault.addAttachments(uuid, attachments));
+      if (!detailView.isCurrent(view)) return;
+      flash("attachmentAdded");
     } catch {
       if (detailView.isCurrent(view)) flash("error");
     }
@@ -1104,36 +1168,48 @@
         </div>
       </div>
     {:else if activeTab === "attachments"}
-      {#if entry.attachments?.length}
-        <div class="attachment-list">
-          {#each entry.attachments as attachment}
-            <div class="attachment-item" title={attachment.name}>
-              <AppIcon name="file" size={14} />
-              <span class="attachment-name">{attachment.name}</span>
-              <span class="attachment-size">{formatBytes(attachment.size)}</span>
-              <button
-                class="copy-btn"
-                onclick={() => (previewAttachmentName = attachment.name)}
-                title="预览附件"
-              >
-                <AppIcon name="eye" size={13} />
-              </button>
-              <button
-                class="copy-btn"
-                onclick={() => saveAttachment(attachment.name)}
-                title="保存附件"
-              >
-                <AppIcon name="download" size={13} />
-              </button>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div class="tab-empty">
-          <AppIcon name="file" size={18} />
-          <p>该条目没有附件</p>
-        </div>
-      {/if}
+      <div
+        class="attachment-dropzone"
+        class:dragging={attachmentDragActive}
+        role="group"
+        aria-label="附件拖放区域"
+        ondragenter={handleAttachmentDragEnter}
+        ondragover={handleAttachmentDragOver}
+        ondragleave={handleAttachmentDragLeave}
+        ondrop={handleAttachmentDrop}
+      >
+        {#if entry.attachments?.length}
+          <div class="attachment-list">
+            {#each entry.attachments as attachment}
+              <div class="attachment-item" title={attachment.name}>
+                <AppIcon name="file" size={14} />
+                <span class="attachment-name">{attachment.name}</span>
+                <span class="attachment-size">{formatBytes(attachment.size)}</span>
+                <button
+                  class="copy-btn"
+                  onclick={() => (previewAttachmentName = attachment.name)}
+                  title="预览附件"
+                >
+                  <AppIcon name="eye" size={13} />
+                </button>
+                <button
+                  class="copy-btn"
+                  onclick={() => saveAttachment(attachment.name)}
+                  title="保存附件"
+                >
+                  <AppIcon name="download" size={13} />
+                </button>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="tab-empty">
+            <AppIcon name="file" size={18} />
+            <p>该条目没有附件</p>
+          </div>
+        {/if}
+        <p class="attachment-drop-hint">拖拽文件到此处添加附件</p>
+      </div>
     {:else if activeTab === "history"}
       {#if historyLoading}
         <div class="tab-empty">
@@ -1614,6 +1690,30 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
+  }
+
+  .attachment-dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    padding: 10px;
+    transition:
+      border-color 120ms ease,
+      background 120ms ease;
+  }
+
+  .attachment-dropzone.dragging {
+    border-color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 10%, transparent);
+  }
+
+  .attachment-drop-hint {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+    text-align: center;
   }
 
   .attachment-list {

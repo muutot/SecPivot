@@ -3995,6 +3995,81 @@ fn custom_fields_and_attachments_round_trip() {
 }
 
 #[test]
+fn add_attachments_appends_without_rewriting_fields() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "E".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![AttachmentInput {
+                name: "note.txt".into(),
+                data: Some(BASE64.encode(b"original".as_slice())),
+            }],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // Add two new attachments; the existing one is kept untouched.
+    let state = session
+        .add_attachments(
+            &uuid,
+            &[
+                AttachmentInput {
+                    name: "second.bin".into(),
+                    data: Some(BASE64.encode([1u8, 2, 3, 4].as_slice())),
+                },
+                AttachmentInput {
+                    name: "note.txt".into(),
+                    data: Some(BASE64.encode(b"replaced".as_slice())),
+                },
+            ],
+        )
+        .unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert_eq!(entry.attachments.len(), 2);
+    let second = entry
+        .attachments
+        .iter()
+        .find(|a| a.name == "second.bin")
+        .expect("second attachment present");
+    assert_eq!(second.size, 4);
+    let note = entry
+        .attachments
+        .iter()
+        .find(|a| a.name == "note.txt")
+        .expect("note.txt attachment present");
+    assert_eq!(note.size, b"replaced".len());
+    // Fields (including the password) were never touched.
+    assert_eq!(entry.title, "E");
+    assert_eq!(session.get_entry_password(&uuid).unwrap(), "pw");
+
+    // A bad base64 payload aborts the whole mutation.
+    assert!(session
+        .add_attachments(
+            &uuid,
+            &[AttachmentInput {
+                name: "bad".into(),
+                data: Some("!!!".into())
+            }]
+        )
+        .is_err());
+    let state = session.snapshot().unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert_eq!(entry.attachments.len(), 2);
+}
+
+#[test]
 fn attachment_preview_text_image_and_binary_in_memory() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

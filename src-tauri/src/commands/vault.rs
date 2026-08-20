@@ -8,8 +8,8 @@ use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
 use crate::vault::{
-    EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode, VaultOpenResult,
-    VaultSession, VaultSessions, VaultState,
+    AttachmentInput, EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode,
+    VaultOpenResult, VaultSession, VaultSessions, VaultState,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -816,6 +816,24 @@ pub(crate) fn import_attachment_from_temp(
     )?;
     let _ = store.discard(&token);
     Ok(result)
+}
+
+/// Add (or replace by name) new attachments to an existing entry without
+/// rewriting its fields; used by the detail-pane drag-and-drop add flow.
+#[tauri::command]
+pub(crate) fn add_attachments(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+    uuid: String,
+    attachments: Vec<AttachmentInput>,
+) -> Result<VaultState, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.add_attachments(&uuid, &attachments),
+    )
 }
 
 #[tauri::command]

@@ -6,9 +6,9 @@ use super::helpers::{
     recycle_bin_id, resolve_group_id,
 };
 use super::serialize::{
-    apply_patch_fields, attachment_size, custom_data_entries, decode_attachments,
-    delete_history_entry, format_iso, history_cap, sync_attachments, sync_custom_fields,
-    trim_entry_history, write_fields, AttachmentPayload,
+    add_attachment_payloads, apply_patch_fields, attachment_size, custom_data_entries,
+    decode_attachments, delete_history_entry, format_iso, history_cap, sync_attachments,
+    sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
 };
 use super::*;
 use keepass::db::{
@@ -770,6 +770,38 @@ impl VaultSession {
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             entry.remove_attachment_by_name(name);
             entry.add_attachment(name.to_owned(), Value::protected(data));
+        }
+        self.mark_dirty();
+        self.snapshot_without_icons()
+    }
+
+    /// Add (or replace by name) new attachment payloads to an existing entry
+    /// without rewriting its fields. Decodes all payloads up-front so a bad
+    /// base64 payload aborts the whole mutation; existing attachments that are
+    /// not named by a payload are kept untouched.
+    pub fn add_attachments(
+        &mut self,
+        uuid: &str,
+        attachments: &[AttachmentInput],
+    ) -> Result<VaultState, String> {
+        let payloads = decode_attachments(attachments)?;
+        if payloads.is_empty() {
+            return self.snapshot_without_icons();
+        }
+        let id = parse_entry_id(uuid)?;
+        let cap = {
+            let db = self.require_db()?;
+            history_cap(&db.meta)
+        };
+        {
+            let db = self.require_db_mut()?;
+            let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            {
+                let mut tracked = entry.track_changes();
+                add_attachment_payloads(&mut tracked.as_mut(), &payloads);
+                tracked.times.last_modification = Some(Times::now());
+            }
+            trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
         self.snapshot_without_icons()

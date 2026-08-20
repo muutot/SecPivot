@@ -588,3 +588,13 @@ pub(crate) fn sync_attachments(
         entry.add_attachment(payload.name.clone(), Value::protected(payload.data.clone()));
     }
 }
+
+/// Add or replace the given decoded payloads on the entry, keeping every
+/// existing attachment that is not named by a payload (used by the
+/// detail-pane drag-and-drop add flow).
+pub(crate) fn add_attachment_payloads(entry: &mut EntryMut<'_>, payloads: &[AttachmentPayload]) {
+    for payload in payloads {
+        entry.remove_attachment_by_name(&payload.name);
+        entry.add_attachment(payload.name.clone(), Value::protected(payload.data.clone()));
+    }
+}

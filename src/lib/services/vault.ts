@@ -7,6 +7,7 @@ import type {
   VaultEntry,
   EntryInput,
   EntryPatch,
+  AttachmentInput,
   EntryFlags,
   EntryAutoTypeConfig,
   GroupInput,
@@ -126,6 +127,9 @@ interface VaultStore {
   openAttachmentTemp: (uuid: string, name: string) => Promise<TempAttachmentRef>;
   cleanupAttachmentTemp: (token: string) => Promise<void>;
   importAttachmentFromTemp: (uuid: string, name: string, token: string) => Promise<VaultState>;
+  /** Add (or replace by name) new attachments to an entry without rewriting
+   *  its fields; used by the detail-pane drag-and-drop add flow. */
+  addAttachments: (uuid: string, attachments: AttachmentInput[]) => Promise<VaultState>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
@@ -1178,6 +1182,35 @@ export const vault: VaultStore = {
       // Keep the token so the session close/lock path can retry it.
     }
     return commitSessionStateAtEpoch(sessionId, epoch, result);
+  },
+
+  async addAttachments(uuid: string, attachments: AttachmentInput[]): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      return invokeSessionState("add_attachments", { uuid, attachments });
+    }
+    const result = applyEdit((draft) => {
+      const groups = collectAllGroups(draft.root);
+      for (const group of groups) {
+        const entry = group.entries.find((e) => e.uuid === uuid);
+        if (entry) {
+          const existing = entry.attachments ?? [];
+          for (const incoming of attachments) {
+            if (!incoming.data) continue;
+            // Approximate size from base64 length for the demo list display.
+            const size = Math.floor((incoming.data.length * 3) / 4);
+            const index = existing.findIndex((a) => a.name === incoming.name);
+            if (index >= 0) existing[index] = { name: incoming.name, size };
+            else existing.push({ name: incoming.name, size });
+          }
+          entry.attachments = existing;
+          entry.modified = new Date().toISOString();
+          return;
+        }
+      }
+      throw new Error("entry not found");
+    });
+    state.set(applyBackendState(result));
+    return result;
   },
 
   async addGroup(input: GroupInput): Promise<VaultState> {
