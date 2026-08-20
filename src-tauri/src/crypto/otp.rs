@@ -105,8 +105,32 @@ fn counter_block(counter: u64) -> [u8; 8] {
 }
 
 fn pad_code(binary: u32, digits: u32) -> String {
-    let modulo = 10u32.checked_pow(digits).unwrap_or(u32::MAX);
-    format!("{:0width$}", binary % modulo, width = digits as usize)
+    let modulo = 10u64.checked_pow(digits).unwrap_or(u64::MAX);
+    format!(
+        "{:0width$}",
+        (binary as u64) % modulo,
+        width = digits as usize
+    )
+}
+
+/// Maximum decimal code length: the 31-bit dynamic-truncation value (RFC 4226
+/// §5.3) cannot reach a 10-digit modulus, and zero digits would emit an empty
+/// code. Seeds declaring anything outside `1..=MAX_CODE_DIGITS` are rejected
+/// instead of silently producing a wrong or empty code.
+const MAX_CODE_DIGITS: u32 = 9;
+
+fn validate_digits(kind: OtpKind, digits: u32) -> Result<(), String> {
+    if digits == 0 {
+        return Err(match kind {
+            OtpKind::Totp => "TOTP 位数不能为 0".to_owned(),
+            OtpKind::Hotp => "HOTP 位数不能为 0".to_owned(),
+            OtpKind::Steam => "Steam 位数不能为 0".to_owned(),
+        });
+    }
+    if digits > MAX_CODE_DIGITS {
+        return Err(format!("OTP 位数不能超过 {MAX_CODE_DIGITS}"));
+    }
+    Ok(())
 }
 
 /// Map a truncated 31-bit value onto the Steam alphabet (5 rolls, mod 26).
@@ -286,6 +310,7 @@ pub fn parse_steam_seed(value: &str) -> Result<OtpSpec, String> {
 pub fn compute(spec: &OtpSpec, unix_time: u64) -> Result<OtpCode, String> {
     match spec.kind {
         OtpKind::Totp | OtpKind::Steam => {
+            validate_digits(spec.kind, spec.digits)?;
             if spec.period == 0 {
                 return Err("OTP 周期不能为 0".to_owned());
             }
@@ -306,9 +331,7 @@ pub fn compute(spec: &OtpSpec, unix_time: u64) -> Result<OtpCode, String> {
             })
         }
         OtpKind::Hotp => {
-            if spec.digits == 0 {
-                return Err("HOTP 位数不能为 0".to_owned());
-            }
+            validate_digits(spec.kind, spec.digits)?;
             let hash = hmac(&spec.secret, &counter_block(spec.counter), spec.algorithm);
             let binary = dynamic_truncate(&hash);
             Ok(OtpCode {
@@ -489,6 +512,30 @@ mod tests {
         let rendered = render_hotp_seed(&spec);
         assert_eq!(rendered, "JBSWY3DPEHPK3PXP::0");
         assert_eq!(parse_hotp_seed(&rendered).unwrap().counter, 0);
+    }
+
+    #[test]
+    fn oversized_or_zero_digits_are_rejected_instead_of_miscomputed() {
+        let totp =
+            parse_totp_seed("otpauth://totp/Acme:bob?secret=JBSWY3DPEHPK3PXP&digits=10").unwrap();
+        assert!(
+            compute(&totp, 0).is_err(),
+            "digits beyond the 31-bit truncation range must error"
+        );
+        let hotp = parse_hotp_seed("JBSWY3DPEHPK3PXP:10:0").unwrap();
+        assert!(compute(&hotp, 0).is_err());
+        let zero = parse_hotp_seed("JBSWY3DPEHPK3PXP:0:0").unwrap();
+        assert!(compute(&zero, 0).is_err());
+        // The maximum representable length still works.
+        let nine = OtpSpec {
+            kind: OtpKind::Totp,
+            secret: decode_base32("JBSWY3DPEHPK3PXP").unwrap(),
+            algorithm: HashAlgo::Sha1,
+            digits: 9,
+            period: 30,
+            counter: 0,
+        };
+        assert_eq!(compute(&nine, 0).unwrap().code.len(), 9);
     }
 
     #[test]
