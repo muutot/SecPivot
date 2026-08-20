@@ -98,8 +98,16 @@ export function installAutoLock(): () => void {
   window.addEventListener("scroll", onContinuous, { capture: true, passive: true });
   armIdleLock();
   // Re-arm immediately when `autoLockMinutes` changes instead of waiting for
-  // the next user activity or vault transition.
-  const unsubSettings = appSettings.subscribe(() => armIdleLock());
+  // the next user activity or vault transition. Guard on the actual value so
+  // unrelated settings emissions (theme, clipboard, …) do not reset the idle
+  // deadline or churn the timer on every write.
+  let lastAutoLockMinutes = get(appSettings).security.autoLockMinutes;
+  const unsubSettings = appSettings.subscribe((settings) => {
+    if (settings.security.autoLockMinutes !== lastAutoLockMinutes) {
+      lastAutoLockMinutes = settings.security.autoLockMinutes;
+      armIdleLock();
+    }
+  });
   return () => {
     window.removeEventListener("pointerdown", onDiscrete);
     window.removeEventListener("keydown", onDiscrete);

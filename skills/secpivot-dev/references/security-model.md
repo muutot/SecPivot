@@ -23,7 +23,7 @@ SecPivot stores credentials in standard KDBX 4.0 files. This reference documents
 Lock happens on:
 
 - explicit lock action (`close_all_vaults`; ordinary tab close uses `close_vault` and does not enter the retained-RPC lock lifecycle);
-- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`/`mousemove`/`wheel`/`scroll`, re-armed at most once per 15 s to avoid churn, reset on vault open, skipped when 0 or no vault open);
+- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`/`mousemove`/`wheel`/`scroll`, re-armed at most once per 15 s to avoid churn, reset on vault open, skipped when 0 or no vault open; the settings subscription re-arms only when `autoLockMinutes` itself changes, never on unrelated settings writes);
 - `lockAfterAction` immediately after a password copy;
 - focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open). TCATO suppresses this path while an open attempt is pending and while the backend-confirmed overlay exists; pending attempts hold independent leases, so one late failure cannot clear another attempt's confirmed overlay state and accidentally re-enable focus-loss locking.
 
