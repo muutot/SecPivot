@@ -51,20 +51,6 @@
     onsetexpanded,
   }: Props = $props();
 
-  function collectUuids(group: VaultGroup, into: Set<string>): void {
-    into.add(group.uuid);
-    for (const child of group.children) collectUuids(child, into);
-  }
-
-  function findParent(group: VaultGroup, uuid: string): VaultGroup | null {
-    for (const child of group.children) {
-      if (child.uuid === uuid) return group;
-      const found = findParent(child, uuid);
-      if (found) return found;
-    }
-    return null;
-  }
-
   function collectExpanded(group: VaultGroup, into: Set<string>): void {
     if (group.isExpanded) into.add(group.uuid);
     for (const child of group.children) collectExpanded(child, into);
@@ -94,26 +80,49 @@
     ontoggle?.(uuid, nowExpanded);
   }
 
-  $effect(() => {
+  /** One depth-first walk per `root`, supplying the full uuid set and the
+   *  child→parent map that the new-group diff, the reveal effect, and
+   *  `allExpanded` share. Recomputing any of them by re-walking the tree on
+   *  every snapshot is the O(N)/O(N²) churn this memoization removes. */
+  const treeWalk = $derived.by(() => {
     const uuids = new Set<string>();
-    collectUuids(root, uuids);
-    // A brand-new database (no overlapping uuids) also starts collapsed.
-    if (uuids.size > 0 && ![...uuids].some((uuid) => knownUuids.has(uuid))) {
-      expanded = new Set([root.uuid]);
-      knownUuids = new Set(uuids);
-      return;
-    }
-    let next: Set<string> | null = null;
-    for (const uuid of uuids) {
-      if (!knownUuids.has(uuid)) {
-        next ??= new Set(expanded);
-        next.add(uuid);
-        const parent = findParent(root, uuid);
-        if (parent) next.add(parent.uuid);
+    const parentByGroupUuid = new Map<string, string>();
+    const visit = (group: VaultGroup, parentUuid: string | null) => {
+      uuids.add(group.uuid);
+      if (parentUuid) parentByGroupUuid.set(group.uuid, parentUuid);
+      for (const child of group.children) visit(child, group.uuid);
+    };
+    visit(root, null);
+    return { uuids, parentByGroupUuid };
+  });
+
+  $effect(() => {
+    const { uuids, parentByGroupUuid } = treeWalk;
+    untrack(() => {
+      // A brand-new database (no overlapping uuids) also starts collapsed.
+      let overlaps = false;
+      for (const uuid of uuids) {
+        if (knownUuids.has(uuid)) {
+          overlaps = true;
+          break;
+        }
       }
-    }
-    if (next) expanded = next;
-    knownUuids = new Set(uuids);
+      if (uuids.size > 0 && !overlaps) {
+        expanded = new Set([root.uuid]);
+        return;
+      }
+      let next: Set<string> | null = null;
+      for (const uuid of uuids) {
+        if (!knownUuids.has(uuid)) {
+          next ??= new Set(expanded);
+          next.add(uuid);
+          const parent = parentByGroupUuid.get(uuid);
+          if (parent) next.add(parent);
+        }
+      }
+      if (next) expanded = next;
+    });
+    knownUuids = uuids;
   });
 
   /** Subtree entry counts per group, computed once per `root` change (a
@@ -129,10 +138,10 @@
   /** Ancestor chain (excluding the target itself, root-adjacent last) of a uuid. */
   function ancestorsOf(uuid: string): string[] {
     const chain: string[] = [];
-    let cursor = findParent(root, uuid);
+    let cursor = treeWalk.parentByGroupUuid.get(uuid);
     while (cursor) {
-      chain.push(cursor.uuid);
-      cursor = findParent(root, cursor.uuid);
+      chain.push(cursor);
+      cursor = treeWalk.parentByGroupUuid.get(cursor);
     }
     return chain;
   }
@@ -152,8 +161,7 @@
 
   /** Expand every group (keep the root itself; it is not rendered). */
   function expandAll(): void {
-    const next = new Set<string>();
-    collectUuids(root, next);
+    const next = new Set(treeWalk.uuids);
     expanded = next;
     const uuids = [...next].filter((uuid) => uuid !== root.uuid);
     if (uuids.length > 0) onsetexpanded(uuids, true);
@@ -161,19 +169,18 @@
 
   /** Collapse every group (keep only the root). */
   function collapseAll(): void {
-    const all = new Set<string>();
-    collectUuids(root, all);
     expanded = new Set([root.uuid]);
-    const uuids = [...all].filter((uuid) => uuid !== root.uuid);
+    const uuids = [...treeWalk.uuids].filter((uuid) => uuid !== root.uuid);
     if (uuids.length > 0) onsetexpanded(uuids, false);
   }
 
   /** Every renderable group (the root itself is never shown) is expanded. */
   const allExpanded = $derived.by(() => {
-    const all = new Set<string>();
-    collectUuids(root, all);
-    all.delete(root.uuid);
-    return all.size > 0 && [...all].every((uuid) => expanded.has(uuid));
+    if (treeWalk.uuids.size <= 1) return false;
+    for (const uuid of treeWalk.uuids) {
+      if (uuid !== root.uuid && !expanded.has(uuid)) return false;
+    }
+    return true;
   });
 
   /** Single expand/collapse-all toggle: collapse when everything is open. */
