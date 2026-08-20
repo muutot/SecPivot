@@ -549,6 +549,23 @@
     if (colId === "totp") return entry.hasTotp ? "1" : "0";
     return colText(entry, colId);
   }
+  /** Entries are immutable within a vault snapshot, so sort keys are memoized
+   *  per (entry, column) exactly like `searchTextFor`: recomputing them for
+   *  every filtered row on each search keystroke is pure waste. Replaced
+   *  snapshots release the old entries naturally (WeakMap). */
+  const entrySortKeyCache = new WeakMap<VaultEntry, Map<SortCol, string>>();
+  function sortKeyFor(entry: VaultEntry, col: SortCol): string {
+    let perCol = entrySortKeyCache.get(entry);
+    if (!perCol) {
+      perCol = new Map();
+      entrySortKeyCache.set(entry, perCol);
+    }
+    const cached = perCol.get(col);
+    if (cached !== undefined) return cached;
+    const key = sortValue(entry, col);
+    perCol.set(col, key);
+    return key;
+  }
   /** Display text of an entry cell for a column id. */
   function colText(entry: VaultEntry, colId: string): string {
     if (colId.startsWith("custom:")) {
@@ -599,7 +616,7 @@
     const keyedEntries = filteredEntries.map((row) => ({
       row,
       favorite: Number(row.entry.favorite),
-      key: sortValue(row.entry, col),
+      key: sortKeyFor(row.entry, col),
     }));
     keyedEntries.sort((a, b) => {
       const fav = b.favorite - a.favorite;
