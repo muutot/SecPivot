@@ -17,11 +17,16 @@
   let outcomeMsg = $state("");
 
   let unlisten: UnlistenFn | null = null;
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
     if (!isTauriRuntime()) return;
     let cancelled = false;
     void listen<AssociateRequest>("bridge-associate-request", (event) => {
+      if (dismissTimer) {
+        clearTimeout(dismissTimer);
+        dismissTimer = undefined;
+      }
       pending = event.payload;
       busy = false;
       outcome = null;
@@ -36,6 +41,10 @@
     return () => {
       cancelled = true;
       unlisten?.();
+      if (dismissTimer) {
+        clearTimeout(dismissTimer);
+        dismissTimer = undefined;
+      }
     };
   });
 
@@ -52,7 +61,8 @@
     } finally {
       busy = false;
     }
-    setTimeout(() => {
+    if (dismissTimer) clearTimeout(dismissTimer);
+    dismissTimer = setTimeout(() => {
       pending = null;
       outcome = null;
       outcomeMsg = "";
