@@ -35,27 +35,32 @@ fn keep_rpc_session(app: &tauri::AppHandle) -> bool {
 }
 
 #[tauri::command]
-pub(crate) fn open_vault(
+pub(crate) async fn open_vault(
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
-    mut password: String,
+    password: String,
     keyfile: Option<String>,
 ) -> Result<VaultOpenResult, String> {
-    // Slow work (file read, KDF, parse) runs outside the session lock; only
-    // the state adoption is locked.
-    let prepared = vault::prepare_local_open(
-        Path::new(&path),
-        &password,
-        keyfile.as_deref().map(Path::new),
-    );
+    // Slow work (file read, KDF, parse) runs outside the session lock and off
+    // the async worker thread; only the state adoption is locked.
+    let path_for_work = PathBuf::from(&path);
+    let keyfile_path = keyfile.map(PathBuf::from);
+    let path_for_closure = path_for_work.clone();
+    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+        let result =
+            vault::prepare_local_open(&path_for_closure, &password, keyfile_path.as_deref());
+        (result, password)
+    })
+    .await
+    .map_err(|e| format!("数据库打开任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
-                fresh.adopt_local(db, Path::new(&path), &password, keyfile_bytes)
+                fresh.adopt_local(db, &path_for_work, &password, keyfile_bytes)
             })
         }
         Err(e) => Err(e),
@@ -77,7 +82,7 @@ pub(crate) fn apply_capture_guard(app: &tauri::AppHandle, config: &ConfigStore) 
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn create_vault(
+pub(crate) async fn create_vault(
     app: tauri::AppHandle,
     config: tauri::State<'_, ConfigStore>,
     vaults: tauri::State<'_, VaultSessions>,
@@ -90,21 +95,35 @@ pub(crate) fn create_vault(
     keyfile: Option<String>,
 ) -> Result<VaultOpenResult, String> {
     // Slow work (KDF, serialization, file write) runs outside the session
-    // lock; only the state adoption is locked.
-    let _persistence = vaults.acquire_persistence();
-    let prepared = vault::prepare_local_create(
-        Path::new(&path),
-        &password,
-        &kdf,
-        &cipher,
-        &compression,
-        keyfile.as_deref().map(Path::new),
-    );
+    // lock and off the async worker thread; only the state adoption is locked.
+    let _persistence = match vaults.acquire_persistence_async().await {
+        Ok(permit) => permit,
+        Err(error) => {
+            password.zeroize();
+            return Err(error);
+        }
+    };
+    let path_for_work = PathBuf::from(&path);
+    let keyfile_path = keyfile.map(PathBuf::from);
+    let path_for_closure = path_for_work.clone();
+    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+        let result = vault::prepare_local_create(
+            &path_for_closure,
+            &password,
+            &kdf,
+            &cipher,
+            &compression,
+            keyfile_path.as_deref(),
+        );
+        (result, password)
+    })
+    .await
+    .map_err(|e| format!("数据库创建任务异常: {e}"))?;
     let result = match prepared {
         Ok((db, keyfile_bytes)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
-                fresh.adopt_local(db, Path::new(&path), &password, keyfile_bytes)
+                fresh.adopt_local(db, &path_for_work, &password, keyfile_bytes)
             })
         }
         Err(e) => Err(e),
@@ -256,15 +275,16 @@ pub(crate) async fn update_database_settings(
 }
 
 #[tauri::command]
-pub(crate) fn save_vault(
+pub(crate) async fn save_vault(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
     force: bool,
 ) -> Result<VaultState, String> {
     // Capture a cheap job under the lock, then run KDF + serialization +
-    // transport outside it, then mark clean under the lock again.
-    let _persistence = vaults.acquire_persistence();
+    // transport outside it (off the async worker thread), then mark clean
+    // under the lock again.
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -272,7 +292,10 @@ pub(crate) fn save_vault(
         })?
     };
     let revision = job.revision;
-    match vault::persist_save(job) {
+    let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_save(job))
+        .await
+        .map_err(|e| format!("数据库保存任务异常: {e}"))?;
+    match persisted {
         Ok(new_hash) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.with_session_mut(&mut active, Some(&session_id), |target| {
@@ -359,16 +382,16 @@ pub(crate) async fn merge_remote_vault(
 }
 
 #[tauri::command]
-pub(crate) fn save_vault_as(
+pub(crate) async fn save_vault_as(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
     path: String,
 ) -> Result<VaultState, String> {
     // Capture a cheap job (db clone + new path) under the lock, run the
-    // re-encrypt (KDF) + serialization + disk write outside it, then switch
-    // the session target under the lock again.
-    let _persistence = vaults.acquire_persistence();
+    // re-encrypt (KDF) + serialization + disk write outside it (off the async
+    // worker thread), then switch the session target under the lock again.
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, job) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
@@ -376,40 +399,65 @@ pub(crate) fn save_vault_as(
         })?
     };
     let revision = job.revision;
-    let _ = vault::persist_save(job).inspect_err(|e| {
-        if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-            if let Ok(mut active) = session.lock() {
-                let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                    target.note_save_failure();
-                    Ok(())
-                });
-            }
+    let path_for_complete = PathBuf::from(&path);
+    let persisted = tauri::async_runtime::spawn_blocking(move || vault::persist_save(job))
+        .await
+        .map_err(|e| format!("另存为任务异常: {e}"))?;
+    match persisted {
+        Ok(_new_hash) => {
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                target.complete_save_as(path_for_complete, revision)
+            })
         }
-    })?;
-    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-        target.complete_save_as(PathBuf::from(path), revision)
-    })
+        Err(e) => {
+            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                if let Ok(mut active) = session.lock() {
+                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                        target.note_save_failure();
+                        Ok(())
+                    });
+                }
+            }
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
-pub(crate) fn change_master_key(
+pub(crate) async fn change_master_key(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
     mut password: String,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
-    // Keyfile read, KDF and persistence all happen without the session lock.
+    // Keyfile read, KDF and persistence all happen without the session lock,
+    // and the KDF + serialization + transport run off the async worker thread.
     let mut keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
-    let _persistence = vaults.acquire_persistence();
+    let _persistence = match vaults.acquire_persistence_async().await {
+        Ok(permit) => permit,
+        Err(error) => {
+            password.zeroize();
+            if let Some(bytes) = keyfile_bytes.as_deref_mut() {
+                bytes.zeroize();
+            }
+            return Err(error);
+        }
+    };
     let (session_id, (db, target, revision)) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
             target.prepare_change()
         })?
     };
-    let persisted = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
+    let (persisted, mut password, mut keyfile_bytes) =
+        tauri::async_runtime::spawn_blocking(move || {
+            let result = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
+            (result, password, keyfile_bytes)
+        })
+        .await
+        .map_err(|e| format!("更换主密钥任务异常: {e}"))?;
     let result = match persisted {
         Ok(new_hash) => {
             let mut password_slot = Some(password);
