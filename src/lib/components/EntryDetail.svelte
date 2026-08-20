@@ -643,8 +643,9 @@
                 e.preventDefault();
                 void startEdit({ kind: "username" });
               }}
+              ondblclick={() => void startEdit({ kind: "username" })}
               onkeydown={(e) => onFieldKeydown(e, { kind: "username" })}
-              title="右键编辑"
+              title="双击或右键编辑"
             >
               {#if editingMatches({ kind: "username" })}
                 <input
@@ -681,8 +682,9 @@
                 e.preventDefault();
                 void startEdit({ kind: "password" });
               }}
+              ondblclick={() => void startEdit({ kind: "password" })}
               onkeydown={(e) => onFieldKeydown(e, { kind: "password" })}
-              title="右键编辑"
+              title="双击或右键编辑"
             >
               {#if editingMatches({ kind: "password" })}
                 <input
@@ -723,8 +725,9 @@
                   e.preventDefault();
                   void startEdit({ kind: "url" });
                 }}
+                ondblclick={() => void startEdit({ kind: "url" })}
                 onkeydown={(e) => onFieldKeydown(e, { kind: "url" })}
-                title="右键编辑"
+                title="双击或右键编辑"
               >
                 {#if editingMatches({ kind: "url" })}
                   <input
@@ -784,13 +787,19 @@
                       protected: field.protected,
                     });
                   }}
+                  ondblclick={() =>
+                    void startEdit({
+                      kind: "custom",
+                      name: field.name,
+                      protected: field.protected,
+                    })}
                   onkeydown={(e) =>
                     onFieldKeydown(e, {
                       kind: "custom",
                       name: field.name,
                       protected: field.protected,
                     })}
-                  title="右键编辑"
+                  title="双击或右键编辑"
                 >
                   {#if editingMatches({ kind: "custom", name: field.name })}
                     <input
