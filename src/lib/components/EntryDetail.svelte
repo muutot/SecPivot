@@ -85,6 +85,7 @@
   let notesDirty = $state(false);
   let notesSaving = $state(false);
   let notesSaveTimer: ReturnType<typeof setTimeout> | undefined;
+  let notesSaveVersion = 0;
   let activeTab = $state<"fields" | "meta" | "attachments" | "history">("fields");
   let historyVersions = $state<HistoryVersion[]>([]);
   let historyLoading = $state(false);
@@ -394,6 +395,7 @@
    *  last keystroke and again on blur, so the last committed draft never
    *  depends on a single timer. */
   function scheduleNotesSave(): void {
+    notesSaveVersion += 1;
     if (notesSaveTimer) clearTimeout(notesSaveTimer);
     notesDirty = true;
     notesSaveTimer = setTimeout(() => void persistNotes(), 800);
@@ -413,16 +415,20 @@
       return;
     }
     const value = notesDraft;
+    const version = notesSaveVersion;
     notesSaving = true;
     try {
       await vault.callInSession(sessionId, () => vault.updateEntries([uuid], { notes: value }));
       if (!detailView.isCurrent(view)) return;
-      notesDirty = false;
+      if (notesSaveVersion === version) notesDirty = false;
       flash("notes");
     } catch {
       if (detailView.isCurrent(view)) flash("error");
     } finally {
-      if (detailView.isCurrent(view)) notesSaving = false;
+      if (detailView.isCurrent(view)) {
+        notesSaving = false;
+        if (notesDirty && notesSaveVersion !== version) void persistNotes();
+      }
     }
   }
 
