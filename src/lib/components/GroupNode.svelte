@@ -79,11 +79,19 @@
     // successive frames until the row is actually visible, or abort.
     const vpad = 8;
     let frames = 0;
+    let rafId = 0;
     function attempt(): void {
       const el = nodeEl;
-      if (!el) return;
-      const scroller = el.closest(".tree-list");
-      if (!scroller) return;
+      const scroller = el?.closest(".tree-list");
+      if (!el || !scroller) {
+        // The row may not be mounted inside the tree yet; keep retrying within
+        // the same paint budget instead of silently aborting the reveal.
+        if (frames < 10) {
+          frames += 1;
+          rafId = requestAnimationFrame(attempt);
+        }
+        return;
+      }
       const elRect = el.getBoundingClientRect();
       const scrRect = scroller.getBoundingClientRect();
       if (
@@ -102,10 +110,11 @@
       scroller.scrollTop = Math.max(0, target);
       if (frames < 10) {
         frames += 1;
-        requestAnimationFrame(attempt);
+        rafId = requestAnimationFrame(attempt);
       }
     }
-    requestAnimationFrame(attempt);
+    rafId = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(rafId);
   });
 
   const groupName = $derived(group.name);
