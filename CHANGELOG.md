@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.3.2 (2026-08-21)
+
+### ✨ Features
+
+- **attachments**: 附件区域支持拖放添加附件 (b8e562dd)
+- **detail**: render notes as inline clickable contacts with dual-mode editor (9ea4c80a)
+- **detail**: add configurable link color and URL/email/phone detection (42bb961d)
+- **detail**: 双击详情字段进入内联编辑 (53e36893)
+
+### 🐛 Bug Fixes
+
+- **s3**: reject invalid endpoints instead of panicking in host_header (2b33d0ca)
+- **otp**: reject out-of-range digits instead of a miscomputed code (8280868d)
+- **tree**: retry reveal when row not yet mounted and cancel rAF on cleanup (02c1bd5a)
+- **bridge**: clear stale approval-prompt dismiss timer (c7ec37c0)
+- **detail**: keep notes draft across snapshot replacement (2cd78b5f)
+- **detail**: persist notes typed during an in-flight autosave (b18daf5b)
+
+### 🚀 Performance
+
+- **entry**: cap the expired-entries notification dedupe set (184a2f53)
+- **favicon**: enforce size cap while streaming instead of buffering the body (765a4021)
+- **security**: re-arm idle lock only when autoLockMinutes changes (f6fb1cd8)
+- **table**: resize columns via CSS variable during drag, commit on release (668c274b)
+- **tree**: memoize one walk per snapshot for group diff and reveal (a98f012f)
+- **vault**: share untouched subtrees in backend deltas (283c6ebd)
+- **entry**: memoize sort keys across search keystrokes (30fe085c)
+- **vault**: run local open/create/save/key-change on the blocking pool (33ffb3c3)
+
+### 🎨 Styling
+
+- **editor**: refine entry hints and render foreground color in the list (16d0098b)
+- **theme**: restyle accent/selection/link-color palette defaults (87be965a)
+- **table**: reduce desktop entry row height to 30px (38213430)
+- **welcome**: shift welcome content down 10% of window height (e3671899)
+- **welcome**: place app logo beside title without border (ae14ddfb)
+- **welcome**: replace key icon with app logo on welcome screen (fe3ed396)
+- reflow favicon docs table and table bind tag per prettier (f47fef1e)
+
+### 📝 Documentation
+
+- **css**: document 30px desktop entry row height (23716db4)
+
+### 🔧 Chores
+
+- track opencode session state summary (6befb6a0)
+- ignore .opencode state in prettier (de2b048e)
+
 ## 1.3.1 (2026-08-20)
 
 ### ✨ Features
