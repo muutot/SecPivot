@@ -53,18 +53,24 @@ Write-Host "[2/3] Staging portable folder..."
 if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 New-Item -ItemType Directory -Path $OutDir | Out-Null
 Copy-Item $ReleaseExe (Join-Path $OutDir "SecPivot.exe")
+# Portable marker: forces data-beside-executable mode even before the first
+# config write (see config::resolve_data_dir).
+New-Item -ItemType File -Path (Join-Path $OutDir "portable.flag") | Out-Null
 
 $Readme = @"
 SecPivot v$Version - 便携版 (Portable)
-========================================
+=======================================
 
 解压后直接运行 SecPivot.exe,无需安装。WebView2 Runtime 需系统已安装
 (Windows 10/11 通常自带)。
 
-数据位置:
+数据位置(配置随行,整个目录可放 U 盘):
 - 配置(含设置与加密的 S3 密钥):  本目录 conf/config.json
 - 本地数据库:                     用户自行选择的位置
 - 远端镜像:                       本目录 Storage/remote/
+
+注意:S3/WebDAV 凭据经 Windows DPAPI 加密,绑定当前系统账户;
+换机器后需在设置中重新输入。
 
 升级:用新版本覆盖 SecPivot.exe 即可,配置与数据不受影响。
 "@

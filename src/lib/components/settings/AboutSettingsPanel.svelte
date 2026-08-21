@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { isTauriRuntime } from "$lib/services/settings";
 
   interface Props {
     onclose: () => void;
@@ -8,6 +10,25 @@
   }
 
   let { onclose, showHeader = true, appVersion = "0.1.0" }: Props = $props();
+
+  interface AppInfo {
+    portable: boolean;
+    configPath: string;
+    dataDir: string;
+  }
+
+  let info = $state<AppInfo | null>(null);
+
+  $effect(() => {
+    void (async () => {
+      if (!isTauriRuntime()) return;
+      try {
+        info = await invoke<AppInfo>("app_info");
+      } catch {
+        info = null;
+      }
+    })();
+  });
 </script>
 
 {#if showHeader}
@@ -48,6 +69,16 @@
         <dt>许可证</dt>
         <dd>MIT</dd>
       </div>
+      {#if info}
+        <div class="about-item">
+          <dt>运行模式</dt>
+          <dd>{info.portable ? "便携版（配置随行）" : "标准安装"}</dd>
+        </div>
+        <div class="about-item about-item-wide">
+          <dt>数据目录</dt>
+          <dd class="mono" title={info.dataDir}>{info.dataDir}</dd>
+        </div>
+      {/if}
     </dl>
   </section>
 
@@ -115,5 +146,18 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+  }
+
+  .about-item-wide {
+    grid-column: 1 / -1;
+  }
+
+  .about-item-wide dd {
+    overflow: hidden;
+    direction: rtl;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
   }
 </style>
