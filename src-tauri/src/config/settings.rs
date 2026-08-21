@@ -572,6 +572,13 @@ pub struct RpcSettings {
     /// `passport.aliyun.com` both match an entry filed under `aliyun.com`.
     #[serde(default)]
     pub match_by_registrable_domain: bool,
+    /// Lifetime of the SRP session keys in seconds, counted from the most
+    /// recent vault unlock (every unlock resets the countdown). `0` (default)
+    /// keeps them until the app exits or the user closes the database. When
+    /// the timeout lapses the keys are wiped and the Kee extension must
+    /// re-authorize with a fresh side-channel password.
+    #[serde(default)]
+    pub session_timeout_secs: u64,
 }
 
 impl Default for RpcSettings {
@@ -580,6 +587,7 @@ impl Default for RpcSettings {
             enabled: false,
             keep_session_after_lock: true,
             match_by_registrable_domain: false,
+            session_timeout_secs: 0,
         }
     }
 }

@@ -154,8 +154,9 @@ pub struct RpcDatabase {
 /// (vault.rs) so dispatch stays independent of vault internals.
 pub trait RpcHost {
     fn is_open(&self) -> bool;
-    /// Raw 32-byte session key for a client username (wiped on lock).
-    fn rpc_key(&self, username: &str) -> Option<Vec<u8>>;
+    /// Raw 32-byte session key for a client username (wiped on lock). Takes
+    /// `&mut self` so an implementation can lazily enforce its key lifetime.
+    fn rpc_key(&mut self, username: &str) -> Option<Vec<u8>>;
     fn register_rpc_key(&mut self, username: &str, key: Vec<u8>);
     fn database(&self) -> Option<RpcDatabase>;
     /// Find logins by URL host match (recycle bin skipped), uuid, or

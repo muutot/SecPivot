@@ -68,6 +68,10 @@ struct SessionsInner {
     /// registry prevents parked or newly opened tabs from reverting to the
     /// `VaultSession` default.
     match_registrable_domain: bool,
+    /// KeePassRPC SRP session-key lifetime in seconds (`0` = never), mirroring
+    /// `rpc.sessionTimeoutSecs`; same registry-level reasoning as the match
+    /// mode above.
+    rpc_session_timeout_secs: u64,
     next_id: u64,
 }
 
@@ -118,6 +122,25 @@ impl VaultSessions {
             session.match_registrable_domain = enabled;
         }
         inner.match_registrable_domain = enabled;
+        Ok(())
+    }
+
+    /// Apply the configured SRP session-key lifetime to the active slot,
+    /// every parked session and all sessions opened later. Lowering the
+    /// timeout re-arms the countdown immediately; raising it or setting `0`
+    /// clears a pending expiry.
+    pub(crate) fn set_rpc_session_timeout(
+        &self,
+        active: &mut VaultSession,
+        secs: u64,
+    ) -> Result<(), String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        active.rpc_session_timeout_secs = secs;
+        for session in inner.parked.values_mut() {
+            session.rpc_session_timeout_secs = secs;
+        }
+        inner.rpc_session_timeout_secs = secs;
+        active.reset_rpc_key_expiry();
         Ok(())
     }
 
@@ -230,12 +253,15 @@ impl VaultSessions {
         let state = adopt(&mut fresh)?;
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         fresh.match_registrable_domain = inner.match_registrable_domain;
+        fresh.rpc_session_timeout_secs = inner.rpc_session_timeout_secs;
         // `close_all(..., keep_rpc = true)` leaves the active slot as a
         // locked RPC-key carrier. Move those keys only after the next vault
         // has opened successfully; a failed unlock must keep them available
         // for retry, while bridge keys and vault secrets were already wiped.
         if inner.active_id.is_none() && !active.is_open() {
             fresh.rpc_keys = std::mem::take(&mut active.rpc_keys);
+            // Unlock: restart the session-key countdown from now.
+            fresh.reset_rpc_key_expiry();
         }
         // Park the current active session under its existing id so ids stay
         // stable for the frontend across tab switches.
@@ -1139,6 +1165,49 @@ mod tests {
         assert!(active.is_open());
         assert_eq!(active.rpc_keys.get("active-client"), Some(&vec![2; 32]));
         assert!(!active.rpc_keys.contains_key("parked-client"));
+    }
+
+    #[test]
+    fn rpc_session_timeout_applies_everywhere_and_resets_on_unlock() {
+        use crate::rpc::RpcHost;
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+
+        // Configured before any vault opens: future sessions inherit it.
+        registry.set_rpc_session_timeout(&mut active, 3600).unwrap();
+        registry
+            .open(&mut active, create_vault(&dir, "a.kdbx"))
+            .unwrap();
+        assert_eq!(active.rpc_session_timeout_secs, 3600);
+
+        // Registering a key arms the countdown.
+        active.register_rpc_key("kee", vec![7; 32]);
+        let armed = active.rpc_keys_expiry.unwrap();
+
+        // Lock keeps the keys; unlock restarts the countdown from now.
+        registry.close_all(&mut active, true).unwrap();
+        registry
+            .open(&mut active, create_vault(&dir, "b.kdbx"))
+            .unwrap();
+        assert_eq!(active.rpc_keys.get("kee"), Some(&vec![7; 32]));
+        let reset = active.rpc_keys_expiry.unwrap();
+        assert!(reset >= armed);
+
+        // The setting reaches parked sessions too, and `0` clears expiry.
+        let parked_id = registry
+            .open(&mut active, create_vault(&dir, "c.kdbx"))
+            .unwrap()
+            .session_id;
+        registry.set_rpc_session_timeout(&mut active, 0).unwrap();
+        registry
+            .with_session_mut(&mut active, Some(&parked_id), |session| {
+                assert_eq!(session.rpc_session_timeout_secs, 0);
+                session.register_rpc_key("kee2", vec![8; 32]);
+                assert!(session.rpc_keys_expiry.is_none());
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

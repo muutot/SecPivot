@@ -29,7 +29,16 @@
     error: string | null;
   }
 
+  interface RpcSessionInfo {
+    id: number;
+    username: string | null;
+    peer: string;
+    connectedAtMs: number;
+    authenticated: boolean;
+  }
+
   let status = $state<RpcStatus | null>(null);
+  let sessions = $state<RpcSessionInfo[]>([]);
 
   function change<K extends keyof RpcSettings>(key: K, value: RpcSettings[K]): void {
     appSettings.updateRpc(key, value);
@@ -38,6 +47,7 @@
   async function refreshStatus(): Promise<void> {
     if (!isTauriRuntime()) {
       status = null;
+      sessions = [];
       return;
     }
     try {
@@ -45,6 +55,24 @@
     } catch {
       status = null;
     }
+    try {
+      sessions = await invoke<RpcSessionInfo[]>("rpc_sessions");
+    } catch {
+      sessions = [];
+    }
+  }
+
+  async function closeSession(id: number): Promise<void> {
+    try {
+      await invoke("rpc_close_session", { id });
+    } catch {
+      /* already gone */
+    }
+    void refreshStatus();
+  }
+
+  function formatConnectedAt(ms: number): string {
+    return new Date(ms).toLocaleTimeString();
   }
 
   onMount(() => {
@@ -103,6 +131,26 @@
     onchange={(checked) => change("keepSessionAfterLock", checked)}
   />
 
+  <section class="setting-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="clock" size={17} /></span>
+      <div>
+        <strong>会话密钥超时</strong>
+        <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
+      </div>
+      <input
+        class="timeout-input"
+        type="number"
+        min="0"
+        max="2592000"
+        value={rpc.sessionTimeoutSecs}
+        aria-label="会话密钥超时秒数"
+        oninput={(e) =>
+          change("sessionTimeoutSecs", Math.max(0, Math.floor(Number(e.currentTarget.value) || 0)))}
+      />
+    </div>
+  </section>
+
   <SettingToggleCard
     icon="shield"
     label="按注册域匹配（KeePassRPC 兼容）"
@@ -111,6 +159,36 @@
     ariaLabel="按注册域匹配"
     onchange={(checked) => change("matchByRegistrableDomain", checked)}
   />
+
+  <section class="setting-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+      <div>
+        <strong>已连接会话</strong>
+        <p>当前与 Kee 扩展保持连接的浏览器会话，可手动断开任意一个</p>
+      </div>
+      <span class="value-label">{sessions.length > 0 ? `${sessions.length} 个连接` : "无连接"}</span
+      >
+    </div>
+    {#if sessions.length > 0}
+      <ul class="session-list">
+        {#each sessions as session (session.id)}
+          <li class="session-item">
+            <span class="session-identity">
+              <span class="session-name" class:unauth={!session.authenticated}>
+                {session.authenticated ? (session.username ?? "已认证客户端") : "握手中…"}
+              </span>
+              <span class="session-meta"
+                >{session.peer} · {formatConnectedAt(session.connectedAtMs)}</span
+              >
+            </span>
+            <button class="session-close" onclick={() => void closeSession(session.id)}>断开</button
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 
   <section class="setting-card">
     <div class="setting-heading">
@@ -137,5 +215,72 @@
 <style>
   .status-off {
     color: var(--text-faint);
+  }
+
+  .timeout-input {
+    width: 90px;
+    flex: 0 0 auto;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-primary);
+    background: var(--input-bg);
+    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+  }
+
+  .session-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+  }
+
+  .session-identity {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .session-name {
+    color: var(--text-primary);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .session-name.unauth {
+    color: var(--text-faint);
+  }
+
+  .session-meta {
+    color: var(--text-faint);
+    font-size: var(--font-size-tertiary, 10px);
+  }
+
+  .session-close {
+    flex: 0 0 auto;
+    padding: 3px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: transparent;
+    color: var(--text-secondary, var(--text-primary));
+    cursor: pointer;
+    font-size: var(--font-size-tertiary, 10px);
+  }
+
+  .session-close:hover {
+    color: var(--danger-color, var(--text-primary));
+    border-color: var(--danger-color, var(--border-color));
   }
 </style>

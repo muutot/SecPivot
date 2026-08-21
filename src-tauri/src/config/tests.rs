@@ -825,11 +825,13 @@ fn rpc_defaults_off_keep_session_on_and_survive_round_trip() {
     assert!(!store.get().unwrap().rpc.enabled);
     assert!(store.get().unwrap().rpc.keep_session_after_lock);
     assert!(!store.get().unwrap().rpc.match_by_registrable_domain);
+    assert_eq!(store.get().unwrap().rpc.session_timeout_secs, 0);
 
     let mut config = AppConfig::default();
     config.rpc.enabled = true;
     config.rpc.keep_session_after_lock = false;
     config.rpc.match_by_registrable_domain = true;
+    config.rpc.session_timeout_secs = 3600;
     store.set(config.clone()).unwrap();
 
     let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
@@ -837,11 +839,13 @@ fn rpc_defaults_off_keep_session_on_and_survive_round_trip() {
     assert!(text.contains("\"enabled\": true"));
     assert!(text.contains("\"keepSessionAfterLock\": false"));
     assert!(text.contains("\"matchByRegistrableDomain\": true"));
+    assert!(text.contains("\"sessionTimeoutSecs\": 3600"));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(reloaded.get().unwrap().rpc.enabled);
     assert!(!reloaded.get().unwrap().rpc.keep_session_after_lock);
     assert!(reloaded.get().unwrap().rpc.match_by_registrable_domain);
+    assert_eq!(reloaded.get().unwrap().rpc.session_timeout_secs, 3600);
 }
 
 #[test]

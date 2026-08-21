@@ -26,8 +26,9 @@ use crate::vault::{
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tungstenite::{accept_hdr, Message as WsMessage, WebSocket};
@@ -90,6 +91,31 @@ pub(crate) struct RpcState {
     server: Mutex<Option<ServerHandle>>,
     last_error: Mutex<Option<String>>,
     generator: Mutex<PasswordGeneratorSettings>,
+    /// Live browser connections, for the settings UI (list + manual close).
+    sessions: Mutex<Vec<LiveSession>>,
+    next_conn_id: AtomicU64,
+}
+
+/// One live browser connection. `stream` is a `try_clone` of the socket used
+/// only to force a shutdown on manual close; no secret material lives here.
+pub(crate) struct LiveSession {
+    id: u64,
+    username: Option<String>,
+    peer: String,
+    connected_at: SystemTime,
+    authenticated: bool,
+    stream: TcpStream,
+}
+
+/// Frontend-facing snapshot of one live connection.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RpcSessionInfo {
+    pub(crate) id: u64,
+    pub(crate) username: Option<String>,
+    pub(crate) peer: String,
+    pub(crate) connected_at_ms: u64,
+    pub(crate) authenticated: bool,
 }
 
 impl RpcState {
@@ -104,6 +130,75 @@ impl RpcState {
     pub(crate) fn set_generator(&self, settings: PasswordGeneratorSettings) {
         if let Ok(mut guard) = self.generator.lock() {
             *guard = settings;
+        }
+    }
+
+    /// Register a freshly upgraded WebSocket connection; returns its id.
+    fn register_session(&self, peer: String, stream: &TcpStream) -> u64 {
+        let id = self.next_conn_id.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.push(LiveSession {
+                id,
+                username: None,
+                peer,
+                connected_at: SystemTime::now(),
+                authenticated: false,
+                stream: stream.try_clone().expect("socket clone"),
+            });
+        }
+        id
+    }
+
+    fn update_session(&self, id: u64, username: Option<String>, authenticated: bool) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
+                session.username = username;
+                session.authenticated = authenticated;
+            }
+        }
+    }
+
+    fn unregister_session(&self, id: u64) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.retain(|s| s.id != id);
+        }
+    }
+
+    pub(crate) fn list_sessions(&self) -> Vec<RpcSessionInfo> {
+        self.sessions
+            .lock()
+            .map(|sessions| {
+                sessions
+                    .iter()
+                    .map(|s| RpcSessionInfo {
+                        id: s.id,
+                        username: s.username.clone(),
+                        peer: s.peer.clone(),
+                        connected_at_ms: s
+                            .connected_at
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_millis() as u64)
+                            .unwrap_or_default(),
+                        authenticated: s.authenticated,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Force-close one connection by shutting down its socket clone; the
+    /// serving thread's blocked read errors out and the loop tears down.
+    pub(crate) fn close_session(&self, id: u64) -> bool {
+        let stream = match self.sessions.lock() {
+            Ok(sessions) => sessions
+                .iter()
+                .find(|s| s.id == id)
+                .and_then(|s| s.stream.try_clone().ok()),
+            Err(_) => None,
+        };
+        match stream {
+            Some(stream) => stream.shutdown(std::net::Shutdown::Both).is_ok(),
+            None => false,
         }
     }
 
@@ -148,6 +243,10 @@ impl RpcState {
                 handle.stop();
             }
         }
+        // The joined accept loop has torn every connection thread down.
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.clear();
+        }
     }
 }
 
@@ -156,13 +255,14 @@ impl RpcState {
 fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()>) {
     while stop.try_recv().is_err() {
         match listener.accept() {
-            Ok((stream, _addr)) => {
+            Ok((stream, addr)) => {
                 // Accepted streams inherit the listener's non-blocking flag on
                 // Windows; tungstenite needs a blocking stream, so restore it
                 // (a non-blocking read yields WSAEWOULDBLOCK → os error 10035).
                 let _ = stream.set_nonblocking(false);
                 let app = app.clone();
-                std::thread::spawn(move || handle_connection(stream, &app));
+                let peer = addr.to_string();
+                std::thread::spawn(move || handle_connection(stream, &peer, &app));
             }
             Err(_) => std::thread::sleep(Duration::from_millis(50)),
         }
@@ -177,6 +277,8 @@ fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()
 /// drop; the long-lived session key lives in `VaultSession` (wiped on lock).
 #[derive(Default)]
 pub(crate) struct Conn {
+    /// Registry id assigned at WebSocket upgrade (for the settings UI).
+    id: u64,
     /// SRP username (`I`) — registered as the stored-key identity at proof.
     username: Option<String>,
     /// Client's ephemeral `A` (needed again at `proofToServer`).
@@ -264,16 +366,19 @@ fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
     }
 }
 
-fn handle_connection(stream: TcpStream, app: &AppHandle) {
+fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
     let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
-    eprintln!("[rpc] connection accepted");
+    eprintln!("[rpc] connection accepted from {peer}");
     let Some(mut ws) = serve_connection(stream) else {
         return;
     };
-    eprintln!("[rpc] websocket upgraded");
+    eprintln!("[rpc] websocket upgraded ({peer})");
+    let rpc_state = app.state::<RpcState>();
+    let conn_id = rpc_state.register_session(peer.to_owned(), ws.get_mut());
     // Handshake is done; allow longer idle on the data path.
     let _ = ws.get_mut().set_read_timeout(Some(DATA_TIMEOUT));
     let mut conn = Conn::default();
+    conn.id = conn_id;
     loop {
         let msg = match ws.read() {
             Ok(msg) => msg,
@@ -299,6 +404,8 @@ fn handle_connection(stream: TcpStream, app: &AppHandle) {
             WsMessage::Binary(_) | WsMessage::Frame(_) | WsMessage::Pong(_) => {}
         }
     }
+    rpc_state.unregister_session(conn_id);
+    eprintln!("[rpc] connection closed ({peer})");
 }
 
 /// Dispatch one text envelope; returns `false` when the connection should
@@ -377,6 +484,12 @@ fn reply_setup(
         return false;
     };
     let error_sent = reply.error.is_some();
+    if conn.session_key.is_some() {
+        // Authenticated (SRP proof or stored-key challenge passed): surface
+        // the client identity in the settings UI session list.
+        app.state::<RpcState>()
+            .update_session(conn.id, conn.username.clone(), true);
+    }
     let sent = send_envelope(ws, &reply);
     eprintln!("[rpc] setup reply sent={sent} error={error_sent}");
     if !sent || error_sent {
