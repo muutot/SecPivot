@@ -80,6 +80,7 @@ pub(crate) fn sync_vault_matching(app: &tauri::AppHandle, config: &config::AppCo
     };
     let _ =
         vaults.set_match_registrable_domain(&mut active, config.rpc.match_by_registrable_domain);
+    let _ = vaults.set_rpc_session_timeout(&mut active, config.rpc.session_timeout_secs);
 }
 
 /// Start or stop the loopback bridge to match `bridge.enabled`; failures are
