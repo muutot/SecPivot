@@ -31,6 +31,10 @@
     customIconUrl: (entry: VaultEntry) => string | undefined;
     entryIconName: (entry: VaultEntry) => IconName;
     colText: (entry: VaultEntry, colId: string) => string;
+    /** Resolve the entry's password for in-place reveal (explicit user
+     * action); returns `null` when the secret cannot be fetched (stale
+     * session, locked vault, no password) and the cell stays masked. */
+    onrevealpassword: (entry: VaultEntry) => Promise<string | null>;
     oncyclesort: (colId: string) => void;
     oncolumnresize: (colId: string, width: number) => void;
     oncolumnreorder: (colId: string, toIndex: number) => void;
@@ -59,6 +63,7 @@
     customIconUrl,
     entryIconName,
     colText,
+    onrevealpassword,
     oncyclesort,
     oncolumnresize,
     oncolumnreorder,
@@ -80,6 +85,34 @@
   const COMPACT_ROW_HEIGHT = 34;
   const NARROW_ROW_HEIGHT = 48;
   const VIRTUAL_OVERSCAN = 6;
+  /** How long an in-place revealed password stays visible before the cell
+   * re-masks itself (also re-masked on second click, mouse leave, unmount). */
+  const REVEAL_TIMEOUT_MS = 10_000;
+
+  let revealedPassword = $state<{ uuid: string; value: string } | null>(null);
+  let revealTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function hideRevealedPassword(): void {
+    if (revealTimer !== undefined) clearTimeout(revealTimer);
+    revealTimer = undefined;
+    revealedPassword = null;
+  }
+
+  async function toggleRevealPassword(entry: VaultEntry): Promise<void> {
+    if (revealedPassword?.uuid === entry.uuid) {
+      hideRevealedPassword();
+      return;
+    }
+    hideRevealedPassword();
+    const value = await onrevealpassword(entry);
+    if (!value) return;
+    revealedPassword = { uuid: entry.uuid, value };
+    revealTimer = setTimeout(hideRevealedPassword, REVEAL_TIMEOUT_MS);
+  }
+
+  $effect(() => {
+    return () => hideRevealedPassword();
+  });
 
   let entryHeadEl = $state<HTMLElement>();
   let entryListEl = $state<HTMLDivElement>();
@@ -483,13 +516,40 @@
                   <EntryTotpBadge entryUuid={row.entry.uuid} />
                 {/if}
               </span>
+            {:else if col.id === "password"}
+              {@const revealed = revealedPassword?.uuid === row.entry.uuid}
+              <span
+                class="entry-row-col col-password"
+                class:col-revealable={row.entry.hasPassword || row.entry.password}
+                class:col-revealed={revealed}
+                role="button"
+                tabindex="-1"
+                title={revealed ? "点击隐藏" : "点击显示密码"}
+                onclick={(event) => {
+                  event.stopPropagation();
+                  void toggleRevealPassword(row.entry);
+                }}
+                onkeydown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void toggleRevealPassword(row.entry);
+                }}
+                onmouseleave={() => {
+                  if (revealed) hideRevealedPassword();
+                }}
+              >
+                <span class="entry-row-col-text">
+                  {revealed
+                    ? revealedPassword?.value
+                    : row.entry.hasPassword || row.entry.password
+                      ? "••••••"
+                      : ""}
+                </span>
+              </span>
             {:else}
               {@const text = colText(row.entry, col.id)}
-              <span
-                class="entry-row-col"
-                class:col-masked={col.id === "password"}
-                title={text || undefined}
-              >
+              <span class="entry-row-col" title={text || undefined}>
                 <span class="entry-row-col-text">{text}</span>
               </span>
             {/if}
@@ -814,8 +874,14 @@
     color: var(--text-primary);
   }
 
-  .col-masked {
+  .col-password.col-revealable {
+    cursor: pointer;
     color: var(--text-faint);
+  }
+
+  .col-password.col-revealed {
+    font-family: var(--font-mono, Consolas, monospace);
+    color: var(--text-primary);
   }
 
   .col-totp {

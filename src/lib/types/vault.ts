@@ -6,6 +6,9 @@ export interface VaultEntry {
   /** Absent in the Tauri runtime (fetched on demand via `get_entry_password`);
    * present only in the browser demo fallback. */
   password?: string;
+  /** Whether the entry carries a non-empty password (always present in the
+   * Tauri runtime; drives the masked placeholder in the entry list). */
+  hasPassword?: boolean;
   url: string;
   notes: string;
   /** Whether the entry carries a TOTP seed. The seed itself is never part of

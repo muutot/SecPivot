@@ -165,6 +165,7 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
         username: entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
         url: entry.get(FIELD_URL).unwrap_or_default().to_owned(),
         notes: entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
+        has_password: !entry.get(FIELD_PASSWORD).unwrap_or_default().is_empty(),
         has_totp: entry_has_otp(entry),
         icon: match entry.icon() {
             Some(Icon::BuiltIn(id)) => Some(*id as u32),

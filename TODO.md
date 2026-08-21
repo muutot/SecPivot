@@ -152,6 +152,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 导入·1Password/LastPass：`parse_1pif`（`***Key:value` 块、续行、Folder/Field 映射，跳过 folder 定义）+ LastPass CSV 表头别名（`name`/`extra`/`grouping`）；1PUX（ZIP/加密导出）暂缓，待引入 zip 依赖后再做
 - [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认
 - [x] 导出·KeePass XML：`export_xml`（嵌套分组 UUID+名称、标准字段、otp 种子、自定义字段；密码/受保护字段按 KeePass 惯例 `Protected="True"`+Base64，明文确认对话框），浏览器回退 `buildKeePassXml` 同格式（`tests/kdbx-xml.test.mjs`）
+- [x] 列表·密码列遮蔽与就地显示：快照新增 `hasPassword` 标志（值不出会话），密码列显示 `••••••` 遮蔽符，点击经 `get_entry_password` 就地显示（二次点击/移出/10 秒/卸载自动遮回，绑定当前会话视图）
 - [x] 数据库维护·相似密码检查：`similar_passwords` 服务端分析（编辑距离 ≤ 2 聚类、回收站排除、2000 条上限、密码不外传），`SimilarPasswordsDialog` 报告并可定位条目
 - [x] 数据库维护·历史清理：`clear_all_history` 全库清理（返回清理数量 + 刷新状态，当前条目保留，保存/重开验证），菜单入口带确认
 - [x] 数据库维护·过期维护：`expired_entries` 集中清单（回收站排除、按过期时间排序、无敏感字段），`ExpiredEntriesDialog` 支持单条/全部「延期 30 天」与「删除」（复用 updateEntries/deleteEntries）
