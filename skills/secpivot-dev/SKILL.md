@@ -101,7 +101,7 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 - **gitmoji**: single emoji indicating the change category.
 - **type**: lowercase change type matching the emoji.
 - **scope**: optional, lowercase, in **square brackets**.
-- **message**: concise imperative description, Chinese or English.
+- **message**: concise imperative description, English only. Never use Chinese (or any other language) in any part of the commit message.
 
 ### Gitmoji mapping
 
