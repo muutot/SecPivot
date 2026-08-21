@@ -72,13 +72,56 @@
     },
   ];
 
-  const customColorFields: { key: keyof ThemeColors; label: string; description: string }[] = [
-    { key: "accent", label: "强调色", description: "主按钮与高亮" },
-    { key: "selectionColor", label: "选中色", description: "选中项与焦点边框" },
-    { key: "linkColor", label: "链接色", description: "网址与可点击链接" },
-    { key: "bg", label: "背景", description: "窗口与整体底色" },
-    { key: "cardBg", label: "卡片", description: "卡片与面板底色" },
-    { key: "border", label: "边框", description: "分隔线与控件描边" },
+  const customColorGroups: {
+    label: string;
+    fields: { key: keyof ThemeColors; label: string; description: string }[];
+  }[] = [
+    {
+      label: "基础",
+      fields: [
+        { key: "accent", label: "强调色", description: "主按钮与高亮" },
+        { key: "selectionColor", label: "选中色", description: "选中项与焦点边框" },
+        { key: "linkColor", label: "链接色", description: "网址与可点击链接" },
+      ],
+    },
+    {
+      label: "文本",
+      fields: [
+        { key: "textPrimary", label: "主要文本", description: "正文与标题" },
+        { key: "textSecondary", label: "次要文本", description: "次级内容" },
+        { key: "textMuted", label: "弱化文本", description: "描述与元数据" },
+        { key: "textFaint", label: "最弱文本", description: "最低强调的文字与图标" },
+        { key: "placeholderColor", label: "占位符", description: "输入框占位文字" },
+      ],
+    },
+    {
+      label: "表面",
+      fields: [
+        { key: "bg", label: "背景", description: "窗口与整体底色" },
+        { key: "settingsBg", label: "设置背景", description: "设置界面底色" },
+        { key: "cardBg", label: "卡片", description: "卡片与面板底色" },
+        { key: "surfaceBg", label: "浮层", description: "弹出层与面板" },
+        { key: "statusBarBg", label: "状态栏", description: "底部状态栏底色" },
+        { key: "hoverBg", label: "悬停背景", description: "悬停与静默选中表面" },
+        { key: "inputBg", label: "输入框", description: "输入框与内嵌表面" },
+      ],
+    },
+    {
+      label: "边框",
+      fields: [
+        { key: "border", label: "边框", description: "分隔线与控件描边" },
+        { key: "borderSubtle", label: "细分隔线", description: "更安静的分割线" },
+        { key: "scrollbarColor", label: "滚动条", description: "滚动条滑块颜色" },
+      ],
+    },
+    {
+      label: "状态",
+      fields: [
+        { key: "successColor", label: "成功", description: "成功状态提示" },
+        { key: "dangerColor", label: "危险", description: "删除与错误状态" },
+        { key: "warningColor", label: "警告", description: "警示与收藏强调" },
+      ],
+    },
   ];
 </script>
 
@@ -156,35 +199,38 @@
           </div>
         </div>
         <div class="color-list">
-          {#each customColorFields as field (field.key)}
-            <div class="setting-row">
-              <div class="setting-heading">
-                <span
-                  class="setting-icon color-swatch"
-                  style:background-color={s.general.themeColors[field.key]}
-                ></span>
-                <div>
-                  <strong>{field.label}</strong>
-                  <p>{field.description}</p>
+          {#each customColorGroups as group (group.label)}
+            <div class="color-group-label">{group.label}</div>
+            {#each group.fields as field (field.key)}
+              <div class="setting-row">
+                <div class="setting-heading">
+                  <span
+                    class="setting-icon color-swatch"
+                    style:background-color={s.general.themeColors[field.key]}
+                  ></span>
+                  <div>
+                    <strong>{field.label}</strong>
+                    <p>{field.description}</p>
+                  </div>
+                </div>
+                <div class="color-control">
+                  <input
+                    type="color"
+                    class="color-input"
+                    value={s.general.themeColors[field.key].slice(0, 7)}
+                    oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                  />
+                  <input
+                    class="settings-input color-hex-input"
+                    type="text"
+                    spellcheck="false"
+                    value={s.general.themeColors[field.key]}
+                    placeholder="#RRGGBBAA"
+                    oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                  />
                 </div>
               </div>
-              <div class="color-control">
-                <input
-                  type="color"
-                  class="color-input"
-                  value={s.general.themeColors[field.key].slice(0, 7)}
-                  oninput={(e) => updateColor(field.key, e.currentTarget.value)}
-                />
-                <input
-                  class="settings-input color-hex-input"
-                  type="text"
-                  spellcheck="false"
-                  value={s.general.themeColors[field.key]}
-                  placeholder="#RRGGBBAA"
-                  oninput={(e) => updateColor(field.key, e.currentTarget.value)}
-                />
-              </div>
-            </div>
+            {/each}
           {/each}
         </div>
       </section>
@@ -400,6 +446,14 @@
     display: flex;
     gap: 6px;
     margin-top: 10px;
+  }
+
+  .color-group-label {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .heading-inline .preset-row {
