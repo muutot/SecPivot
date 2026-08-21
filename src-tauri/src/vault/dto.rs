@@ -101,6 +101,10 @@ pub struct VaultEntry {
     pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
+    /// Total in-memory byte size of the entry (field values + attachment
+    /// data + all historical snapshots), mirroring `get_entry_storage.total`.
+    /// Backs the KeePass-style "Size" list column.
+    pub size: u64,
     /// Entry-level Auto-Type config; absent when the entry has none stored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub autotype: Option<EntryAutoTypeConfig>,
@@ -557,6 +561,45 @@ pub struct HistoryVersion {
     pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
+    /// Backend-computed difference between this snapshot and the entry's
+    /// current state (see `HistoryDiff`).
+    pub diff: HistoryDiff,
+}
+
+/// One changed item (custom field / custom data key / attachment) inside a
+/// `HistoryDiff`. `change` is `"added"`, `"removed"` or `"modified"`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryItemChange {
+    pub name: String,
+    pub change: String,
+}
+
+/// Authoritative per-field difference between one historical snapshot and the
+/// entry's current state. Computed in the backend so the password and the
+/// protected custom-field values (which are never serialized to the renderer)
+/// still take part in the comparison; only the change flags cross the wire.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryDiff {
+    pub title: bool,
+    pub username: bool,
+    /// Whether the password text differs; the values themselves never leave
+    /// the backend.
+    pub password: bool,
+    pub url: bool,
+    pub notes: bool,
+    pub expires: bool,
+    pub has_totp: bool,
+    /// Built-in icon or custom-icon reference changed.
+    pub icon: bool,
+    pub color: bool,
+    pub tags: bool,
+    pub favorite: bool,
+    pub quality_check: bool,
+    pub custom_fields: Vec<HistoryItemChange>,
+    pub custom_data: Vec<HistoryItemChange>,
+    pub attachments: Vec<HistoryItemChange>,
 }
 
 /// Byte-size breakdown of everything an entry holds: field text, attachments,

@@ -1413,6 +1413,106 @@ fn entry_history_covers_all_snapshot_fields() {
 }
 
 #[test]
+fn entry_history_diff_reports_backend_authoritative_changes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    // v1: baseline with a protected custom field whose value never leaves the
+    // backend in snapshots — only the backend diff can see its changes.
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "v1".into(),
+            username: "u".into(),
+            password: "p1".into(),
+            url: "https://example.com".into(),
+            notes: "n1".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![
+                CustomField {
+                    name: "Note".into(),
+                    value: "x".into(),
+                    protected: false,
+                },
+                CustomField {
+                    name: "Secret".into(),
+                    value: "top".into(),
+                    protected: true,
+                },
+            ],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // v2 changes title + password, edits Note, removes Secret, adds Added.
+    session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "v2".into(),
+                username: "u".into(),
+                password: "p2".into(),
+                url: "https://example.com".into(),
+                notes: "n1".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![
+                    CustomField {
+                        name: "Note".into(),
+                        value: "y".into(),
+                        protected: false,
+                    },
+                    CustomField {
+                        name: "Added".into(),
+                        value: "new".into(),
+                        protected: false,
+                    },
+                ],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 1);
+    let diff = &history[0].diff;
+    assert!(diff.title);
+    // The password change is detected even though passwords are never
+    // serialized into history payloads.
+    assert!(diff.password);
+    assert!(!diff.username);
+    assert!(!diff.url);
+    assert!(!diff.notes);
+    assert!(!diff.expires);
+    assert!(!diff.has_totp);
+    assert!(!diff.icon);
+    assert!(!diff.color);
+    assert!(!diff.tags);
+    assert!(!diff.favorite);
+    assert!(!diff.quality_check);
+
+    let change_of = |name: &str| {
+        diff.custom_fields
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| c.change.as_str())
+    };
+    assert_eq!(change_of("Note"), Some("modified"));
+    assert_eq!(change_of("Secret"), Some("removed"));
+    assert_eq!(change_of("Added"), Some("added"));
+    assert!(diff.custom_data.is_empty());
+    assert!(diff.attachments.is_empty());
+}
+
+#[test]
 fn update_custom_field_edits_one_field_and_keeps_protection() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);
@@ -1672,6 +1772,62 @@ fn entry_storage_counts_fields_attachments_and_history() {
         storage.total,
         storage.fields + storage.attachments + storage.history
     );
+}
+
+#[test]
+fn entry_snapshot_size_matches_storage_total() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "sized".into(),
+            username: "user".into(),
+            password: "pass".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![AttachmentInput {
+                name: "payload.bin".into(),
+                data: Some(BASE64.encode(vec![0u8; 64])),
+            }],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+
+    // The snapshot column value equals the on-demand storage breakdown.
+    let entry = &session.snapshot().unwrap().root.entries[0];
+    assert_eq!(entry.size as usize, session.get_entry_storage(&uuid).unwrap().total);
+    assert!(entry.size >= 64);
+
+    // An edit snapshots history, which counts toward the reported size.
+    session
+        .update_entry(
+            &uuid,
+            &EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "sized2".into(),
+                username: "user".into(),
+                password: "pass".into(),
+                url: "".into(),
+                notes: "".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+    let entry = &session.snapshot().unwrap().root.entries[0];
+    assert_eq!(entry.size as usize, session.get_entry_storage(&uuid).unwrap().total);
 }
 
 #[test]
