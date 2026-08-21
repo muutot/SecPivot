@@ -6882,6 +6882,20 @@ fn expand_autotype_sequence_resolves_refs_across_entries() {
             .unwrap(),
         "alice"
     );
+    // Custom string field name as the target field (KeePass
+    // `{REF:<CustomName>@...}`), matched case-insensitively.
+    assert_eq!(
+        session
+            .expand_autotype_sequence("{REF:Customer Id@T:Bank}")
+            .unwrap(),
+        "CUST-42"
+    );
+    assert_eq!(
+        session
+            .expand_autotype_sequence("{REF:customer id@T:Bank}")
+            .unwrap(),
+        "CUST-42"
+    );
     // Unresolvable reference fails with a Chinese message.
     let err = session
         .expand_autotype_sequence("{REF:P@T:missing}")

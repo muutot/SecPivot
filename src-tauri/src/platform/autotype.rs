@@ -5,8 +5,10 @@
 //! - `{USERNAME}` `{PASSWORD}` `{TITLE}` `{URL}` `{NOTES}` — entry placeholders
 //! - `{REF:<Field>@<SearchIn>:<Text>}` — field references to other entries
 //!   (`{REF:U@I:46C9...}` inserts the user name of the entry whose UUID
-//!   matches; `T`/`U`/`P`/`A`/`N`/`I` are searchable fields, `O` searches
-//!   custom string names; text matching is case-insensitive substring)
+//!   matches). `Field` is `T`/`U`/`P`/`A`/`N`/`I` or a custom string field
+//!   name (`{REF:PIN@T:Bank}`); `SearchIn` is `T`/`U`/`P`/`A`/`N`/`I`/`O`
+//!   (`O` searches custom string names); text matching is case-insensitive
+//!   substring
 //! - `{TAB}` `{ENTER}` `{SPACE}` `{BACKSPACE}` `{DELETE}` `{ESC}` `{UP}`
 //!   `{DOWN}` `{LEFT}` `{RIGHT}` `{HOME}` `{END}` `{PAGEUP}` `{PAGEDOWN}` —
 //!   special keys
@@ -105,9 +107,11 @@ impl std::error::Error for AutotypeError {}
 
 /// A parsed `{REF:<Field>@<SearchIn>:<Text>}` field reference.
 ///
-/// `field` is the value to fetch (`T`/`U`/`P`/`A`/`N`/`I`), `search` the field
-/// to match on (`T`/`U`/`P`/`A`/`N`/`I`/`O` — `O` matches custom string
-/// names), and `text` the search string (substring, case-insensitive).
+/// `field` is the value to fetch: one of `T`/`U`/`P`/`A`/`N`/`I`, or a custom
+/// string field name (matched case-insensitively against the entry's custom
+/// fields). `search` is the field to match on (`T`/`U`/`P`/`A`/`N`/`I`/`O` —
+/// `O` matches custom string names), and `text` the search string
+/// (substring, case-insensitive).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RefSpec<'a> {
     pub field: &'a str,
@@ -192,6 +196,11 @@ fn escape_value(value: &str) -> String {
 }
 
 /// Parse the inner text of a `{REF:...}` placeholder (`<Field>@<Search>:<Text>`).
+///
+/// The target `Field` accepts the standard codes (`T`/`U`/`P`/`A`/`N`/`I`)
+/// or any non-empty custom string field name, mirroring KeePass. Names
+/// containing `@` or `:` cannot be expressed in this syntax (same as the
+/// official client).
 fn parse_ref(rest: &str) -> Result<RefSpec<'_>, AutotypeError> {
     let invalid = || AutotypeError::InvalidRef(rest.to_owned());
     let (field, after_at) = rest.split_once('@').ok_or_else(invalid)?;
@@ -200,7 +209,16 @@ fn parse_ref(rest: &str) -> Result<RefSpec<'_>, AutotypeError> {
         let code = code.to_ascii_uppercase();
         code.len() == 1 && valid.contains(&code)
     };
-    if !is_code(field, REF_FIELDS) || !is_code(search, REF_SEARCH_FIELDS) {
+    if field.is_empty() {
+        return Err(invalid());
+    }
+    if !is_code(field, REF_FIELDS) && is_code(field, REF_SEARCH_FIELDS) {
+        // A bare search-in code that is not a target code (e.g. `O`) would
+        // otherwise silently resolve to a custom field named "o"; keep the
+        // standard codes unambiguous.
+        return Err(invalid());
+    }
+    if !is_code(search, REF_SEARCH_FIELDS) {
         return Err(invalid());
     }
     Ok(RefSpec {
@@ -522,7 +540,7 @@ mod tests {
     #[test]
     fn expand_refs_rejects_malformed_or_unresolved() {
         let never = |_: RefSpec<'_>| None::<String>;
-        for bad in ["{REF:U}", "{REF:X@I:1}", "{REF:U@X:1}"] {
+        for bad in ["{REF:U}", "{REF:@I:1}", "{REF:O@I:1}", "{REF:U@X:1}"] {
             let err = expand_refs(bad, never).expect_err("invalid");
             assert!(matches!(err, AutotypeError::InvalidRef(_)), "{bad}");
         }
@@ -533,5 +551,23 @@ mod tests {
         assert!(matches!(err, AutotypeError::RefNotFound(_)));
         let err = expand_refs("{REF:U@I:1", never).expect_err("unclosed");
         assert!(matches!(err, AutotypeError::UnclosedPlaceholder));
+    }
+
+    #[test]
+    fn expand_refs_accepts_custom_string_field_names() {
+        // Any non-empty target that is not a standard code names a custom
+        // string field; the resolver decides whether it exists.
+        let resolve = |spec: RefSpec<'_>| match spec.field {
+            "PIN" => Some("9999".to_owned()),
+            _ => None,
+        };
+        assert_eq!(
+            expand_refs("{REF:PIN@T:Bank}", resolve).expect("expand"),
+            "9999"
+        );
+        // Case-insensitive target codes still parse; unknown custom names
+        // surface as RefNotFound, not InvalidRef.
+        let err = expand_refs("{REF:Missing@I:46C9}", resolve).expect_err("not found");
+        assert!(matches!(err, AutotypeError::RefNotFound(_)));
     }
 }
