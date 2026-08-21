@@ -49,7 +49,9 @@
     | "maximize"
     | "restore"
     | "menu"
-    | "more-horizontal";
+    | "more-horizontal"
+    | "crop"
+    | "scan";
 
   interface Props {
     name: IconName;
@@ -126,6 +128,8 @@
     menu: '<path d="M4 7h16M4 12h16M4 17h16"></path>',
     "more-horizontal":
       '<circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle>',
+    crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"></path><path d="M18 22V8a2 2 0 0 0-2-2H2"></path>',
+    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M7 12h10"></path>',
   };
 </script>
 
