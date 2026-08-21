@@ -105,12 +105,13 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 
 pub use self::dto::{
     AttachmentInfo, AttachmentInput, AttachmentPreview, AutoTypeAssociationDto, AutotypeCandidate,
-    CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords, EntryAutoTypeConfig,
-    EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, ExpiredEntry, FaviconFetch,
-    FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig, GroupAutoTypeInput,
-    GroupInput, HistoryCleanResult, HistoryVersion, MutationDelta, SecurityReport, SessionInfo,
-    SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup,
-    VaultOpenResult, VaultState, WeakEntry, WritableDatabaseCipher,
+    CustomDataEntry, CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords,
+    EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, ExpiredEntry,
+    FaviconFetch, FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig,
+    GroupAutoTypeInput, GroupInput, HistoryCleanResult, HistoryDiff, HistoryItemChange,
+    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup,
+    TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
+    WritableDatabaseCipher,
 };
 
 pub use self::breach::BreachFinding;

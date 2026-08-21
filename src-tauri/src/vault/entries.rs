@@ -7,12 +7,13 @@ use super::helpers::{
 };
 use super::serialize::{
     add_attachment_payloads, apply_patch_fields, attachment_size, custom_data_entries,
-    decode_attachments, delete_history_entry, format_iso, history_cap, sync_attachments,
-    sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
+    decode_attachments, delete_history_entry, entry_size, format_iso, history_cap,
+    sync_attachments, sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
 };
 use super::*;
 use keepass::db::{
-    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, GroupId, Icon, Times, Value,
+    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, EntryRef, GroupId, Icon,
+    Times, Value,
 };
 use std::collections::HashMap;
 
@@ -21,6 +22,212 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
+}
+
+/// All user-visible custom fields of an entry (reserved and KPRPC config
+/// fields excluded), with full values — backend-internal only.
+fn visible_custom_fields(entry: &EntryRef<'_>) -> Vec<CustomField> {
+    let mut fields: Vec<CustomField> = entry
+        .fields
+        .iter()
+        .filter(|(name, _)| {
+            !name.is_empty()
+                && !RESERVED_FIELDS.contains(&name.as_str())
+                && name.as_str() != FIELD_KPRPC_CONFIG
+        })
+        .map(|(name, value)| CustomField {
+            name: name.clone(),
+            value: value.get().clone(),
+            protected: value.is_protected(),
+        })
+        .collect();
+    fields.sort_by(|a, b| a.name.cmp(&b.name));
+    fields
+}
+
+/// Union-by-name diff of two custom-field lists (values compared including
+/// protection flags; the backend holds the real protected values).
+fn diff_custom_fields(
+    historical: &[CustomField],
+    current: &[CustomField],
+) -> Vec<HistoryItemChange> {
+    let current_by_name: HashMap<&str, &CustomField> =
+        current.iter().map(|f| (f.name.as_str(), f)).collect();
+    let mut changes: Vec<HistoryItemChange> = Vec::new();
+    for vf in historical {
+        match current_by_name.get(vf.name.as_str()) {
+            None => changes.push(HistoryItemChange {
+                name: vf.name.clone(),
+                change: "removed".to_owned(),
+            }),
+            Some(cf) => {
+                if cf.protected != vf.protected || cf.value != vf.value {
+                    changes.push(HistoryItemChange {
+                        name: vf.name.clone(),
+                        change: "modified".to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    for cf in current {
+        if !historical.iter().any(|vf| vf.name == cf.name) {
+            changes.push(HistoryItemChange {
+                name: cf.name.clone(),
+                change: "added".to_owned(),
+            });
+        }
+    }
+    changes.sort_by(|a, b| a.name.cmp(&b.name));
+    changes
+}
+
+/// Union-by-key diff of two `CustomData` projections.
+fn diff_custom_data(
+    historical: &[CustomDataEntry],
+    current: &[CustomDataEntry],
+) -> Vec<HistoryItemChange> {
+    let current_by_key: HashMap<&str, &CustomDataEntry> = current
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect();
+    let mut changes: Vec<HistoryItemChange> = Vec::new();
+    for vf in historical {
+        match current_by_key.get(vf.key.as_str()) {
+            None => changes.push(HistoryItemChange {
+                name: vf.key.clone(),
+                change: "removed".to_owned(),
+            }),
+            Some(item) => {
+                if item.value != vf.value || item.binary != vf.binary {
+                    changes.push(HistoryItemChange {
+                        name: vf.key.clone(),
+                        change: "modified".to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    for item in current {
+        if !historical.iter().any(|vf| vf.key == item.key) {
+            changes.push(HistoryItemChange {
+                name: item.key.clone(),
+                change: "added".to_owned(),
+            });
+        }
+    }
+    changes.sort_by(|a, b| a.name.cmp(&b.name));
+    changes
+}
+
+/// Union-by-name diff of two attachment lists; a size change counts as a
+/// modification.
+fn diff_attachments(
+    historical: &[AttachmentInfo],
+    current: &[AttachmentInfo],
+) -> Vec<HistoryItemChange> {
+    let current_by_name: HashMap<&str, &AttachmentInfo> =
+        current.iter().map(|a| (a.name.as_str(), a)).collect();
+    let mut changes: Vec<HistoryItemChange> = Vec::new();
+    for va in historical {
+        match current_by_name.get(va.name.as_str()) {
+            None => changes.push(HistoryItemChange {
+                name: va.name.clone(),
+                change: "removed".to_owned(),
+            }),
+            Some(ca) => {
+                if ca.size != va.size {
+                    changes.push(HistoryItemChange {
+                        name: va.name.clone(),
+                        change: "modified".to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    for ca in current {
+        if !historical.iter().any(|va| va.name == ca.name) {
+            changes.push(HistoryItemChange {
+                name: ca.name.clone(),
+                change: "added".to_owned(),
+            });
+        }
+    }
+    changes.sort_by(|a, b| a.name.cmp(&b.name));
+    changes
+}
+
+/// Compare one historical snapshot with the entry's current state. Runs in
+/// the backend so the password and protected custom-field values (which are
+/// never serialized to the renderer) still take part in the comparison.
+fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) -> HistoryDiff {
+    let field_of =
+        |entry: &EntryRef<'_>, field: &str| entry.get(field).unwrap_or_default().to_owned();
+    let expires_of = |entry: &EntryRef<'_>| match entry.times.expires {
+        Some(true) => entry.times.expiry.map(format_iso),
+        _ => None,
+    };
+    let icon_ids = |entry: &EntryRef<'_>| match entry.icon() {
+        Some(Icon::BuiltIn(id)) => (Some(*id as u32), None::<String>),
+        Some(Icon::Custom(id)) => (None, Some(id.uuid().to_string())),
+        _ => (None, None),
+    };
+    let tags_of = |entry: &EntryRef<'_>| {
+        if entry.tags.is_empty() {
+            None
+        } else {
+            Some(entry.tags.join(", "))
+        }
+    };
+    let (historical_icon, historical_custom_icon) = icon_ids(historical);
+    let (current_icon, current_custom_icon) = icon_ids(current);
+    let historical_fields = visible_custom_fields(historical);
+    let current_fields = visible_custom_fields(current);
+
+    HistoryDiff {
+        title: field_of(historical, FIELD_TITLE) != field_of(current, FIELD_TITLE),
+        username: field_of(historical, FIELD_USERNAME) != field_of(current, FIELD_USERNAME),
+        password: field_of(historical, FIELD_PASSWORD) != field_of(current, FIELD_PASSWORD),
+        url: field_of(historical, FIELD_URL) != field_of(current, FIELD_URL),
+        notes: field_of(historical, FIELD_NOTES) != field_of(current, FIELD_NOTES),
+        expires: expires_of(historical) != expires_of(current),
+        has_totp: entry_has_otp(historical) != entry_has_otp(current),
+        icon: historical_icon != current_icon || historical_custom_icon != current_custom_icon,
+        color: historical
+            .background_color
+            .as_ref()
+            .map(ToString::to_string)
+            != current.background_color.as_ref().map(ToString::to_string),
+        tags: tags_of(historical) != tags_of(current),
+        favorite: (historical.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE))
+            != (current.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE)),
+        quality_check: historical.quality_check != current.quality_check,
+        custom_fields: diff_custom_fields(&historical_fields, &current_fields),
+        custom_data: diff_custom_data(
+            &custom_data_entries(&historical.custom_data),
+            &custom_data_entries(&current.custom_data),
+        ),
+        attachments: diff_attachments(
+            &historical
+                .attachments_named()
+                .filter_map(|(name, attachment)| {
+                    attachment_size(&attachment).map(|size| AttachmentInfo {
+                        name: name.to_owned(),
+                        size,
+                    })
+                })
+                .collect::<Vec<_>>(),
+            &current
+                .attachments_named()
+                .filter_map(|(name, attachment)| {
+                    attachment_size(&attachment).map(|size| AttachmentInfo {
+                        name: name.to_owned(),
+                        size,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ),
+    }
 }
 
 impl VaultSession {
@@ -334,6 +541,7 @@ impl VaultSession {
             .filter_map(|index| entry.historical(index).map(|h| (index, h)))
             .map(|(index, historical)| HistoryVersion {
                 index,
+                diff: history_diff(&historical, &entry),
                 modified: historical.times.last_modification.map(format_iso),
                 title: historical.get_title().unwrap_or_default().to_owned(),
                 username: historical
@@ -403,42 +611,12 @@ impl VaultSession {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
         let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-
-        let fields = entry
-            .fields
-            .values()
-            .map(|value| value.get().len())
-            .sum::<usize>();
-        let attachments = entry
-            .attachments_named()
-            .map(|(_, attachment)| attachment.data.get().len())
-            .sum::<usize>();
-        let history = match &entry.history {
-            None => 0,
-            Some(h) => {
-                let count = h.get_entries().len();
-                (0..count)
-                    .filter_map(|index| entry.historical(index))
-                    .map(|historical| {
-                        let f = historical
-                            .fields
-                            .values()
-                            .map(|value| value.get().len())
-                            .sum::<usize>();
-                        let a = historical
-                            .attachments_named()
-                            .filter_map(|(_, attachment)| attachment_size(&attachment))
-                            .sum::<usize>();
-                        f + a
-                    })
-                    .sum()
-            }
-        };
+        let breakdown = entry_size(&entry);
         Ok(EntryStorage {
-            fields,
-            attachments,
-            history,
-            total: fields + attachments + history,
+            fields: breakdown.fields,
+            attachments: breakdown.attachments,
+            history: breakdown.history,
+            total: breakdown.total(),
         })
     }
 

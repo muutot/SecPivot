@@ -38,6 +38,10 @@ export interface VaultEntry {
   customData?: CustomDataEntry[];
   customFields?: CustomField[];
   attachments?: AttachmentInfo[];
+  /** Total in-memory byte size of the entry (fields + attachments + history),
+   *  computed by the backend; backs the KeePass-style "Size" list column.
+   *  Absent in the browser demo fallback. */
+  size?: number;
   /** Entry-level Auto-Type configuration, if stored. */
   autoType?: EntryAutoTypeConfig;
 }
@@ -381,6 +385,36 @@ export interface TotpCode {
   counter?: number;
 }
 
+/** One changed item (custom field / custom data key / attachment) in a
+ * backend-computed history diff. */
+export interface HistoryItemChange {
+  name: string;
+  change: "added" | "removed" | "modified";
+}
+
+/** Backend-computed per-field difference between one historical snapshot and
+ * the entry's current state. Computed backend-side so the password and
+ * protected custom-field values (never serialized to the renderer) still
+ * take part; only change flags cross the wire. */
+export interface HistoryDiff {
+  title: boolean;
+  username: boolean;
+  /** Whether the password text differs; values never leave the backend. */
+  password: boolean;
+  url: boolean;
+  notes: boolean;
+  expires: boolean;
+  hasTotp: boolean;
+  icon: boolean;
+  color: boolean;
+  tags: boolean;
+  favorite: boolean;
+  qualityCheck: boolean;
+  customFields: HistoryItemChange[];
+  customData: HistoryItemChange[];
+  attachments: HistoryItemChange[];
+}
+
 export interface HistoryVersion {
   index: number;
   modified: string | null;
@@ -403,6 +437,7 @@ export interface HistoryVersion {
   customData?: CustomDataEntry[];
   customFields: CustomField[];
   attachments: AttachmentInfo[];
+  diff: HistoryDiff;
 }
 
 /** Byte-size breakdown of everything an entry stores. */
