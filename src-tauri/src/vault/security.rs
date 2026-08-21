@@ -940,6 +940,98 @@ impl VaultSession {
         html.push_str("</body></html>\n");
         Ok(html)
     }
+
+    /// Export all entries as a KeePass 2.x XML file (passwords included).
+    pub fn export_xml(&self, path: &str) -> Result<(), String> {
+        let content = self.export_xml_content()?;
+        write_csv_file(path, &content)
+    }
+
+    /// Build the KeePass 2.x XML payload under the lock; the caller writes it
+    /// outside the lock (same pattern as `export_csv_content`). The layout
+    /// mirrors the official `File ▸ Export ▸ KeePass XML` output closely
+    /// enough for re-import by SecPivot and KeePass: nested `<Group>`s carry
+    /// UUID + name, entries carry their standard string fields, the TOTP seed
+    /// (`otp`) and custom fields. Passwords and protected custom fields use
+    /// the KeePass convention `Protected="True"` + Base64 value.
+    pub(crate) fn export_xml_content(&self) -> Result<String, String> {
+        let db = self.require_db()?;
+        let mut xml = String::from(
+            "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n\
+             <KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>",
+        );
+        fn write_string_field(xml: &mut String, key: &str, value: &str, protected: bool) {
+            xml.push_str("<String><Key>");
+            xml.push_str(&escape_html(key));
+            xml.push_str("</Key><Value");
+            if protected {
+                xml.push_str(" Protected=\"True\">");
+                xml.push_str(&BASE64.encode(value.as_bytes()));
+            } else {
+                xml.push('>');
+                xml.push_str(&escape_html(value));
+            }
+            xml.push_str("</Value></String>");
+        }
+        fn write_entry(xml: &mut String, entry: &keepass::db::EntryRef<'_>) {
+            xml.push_str("<Entry><UUID>");
+            xml.push_str(&BASE64.encode(entry.id().uuid().as_bytes()));
+            xml.push_str("</UUID>");
+            write_string_field(xml, "Title", entry.get_title().unwrap_or_default(), false);
+            write_string_field(
+                xml,
+                "UserName",
+                entry.get(FIELD_USERNAME).unwrap_or_default(),
+                false,
+            );
+            write_string_field(
+                xml,
+                "Password",
+                entry.get(FIELD_PASSWORD).unwrap_or_default(),
+                true,
+            );
+            write_string_field(xml, "URL", entry.get(FIELD_URL).unwrap_or_default(), false);
+            write_string_field(
+                xml,
+                "Notes",
+                entry.get(FIELD_NOTES).unwrap_or_default(),
+                false,
+            );
+            if let Some(seed) = entry.get_raw_otp_value() {
+                if !seed.is_empty() {
+                    write_string_field(xml, "otp", seed, false);
+                }
+            }
+            let mut names: Vec<&String> = entry
+                .fields
+                .keys()
+                .filter(|name| !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str()))
+                .collect();
+            names.sort();
+            for name in names {
+                let value = &entry.fields[name];
+                write_string_field(xml, name, value.get(), value.is_protected());
+            }
+            xml.push_str("</Entry>");
+        }
+        fn walk(xml: &mut String, group: &keepass::db::GroupRef<'_>) {
+            xml.push_str("<Group><UUID>");
+            xml.push_str(&BASE64.encode(group.id().uuid().as_bytes()));
+            xml.push_str("</UUID><Name>");
+            xml.push_str(&escape_html(&group.name));
+            xml.push_str("</Name>");
+            for entry in group.entries() {
+                write_entry(xml, &entry);
+            }
+            for child in group.groups() {
+                walk(xml, &child);
+            }
+            xml.push_str("</Group>");
+        }
+        walk(&mut xml, &db.root());
+        xml.push_str("</Root></KeePassFile>\n");
+        Ok(xml)
+    }
 }
 
 /// HTML-escape text for the emergency sheet (never inject markup).
