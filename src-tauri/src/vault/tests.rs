@@ -1733,10 +1733,11 @@ fn entry_storage_counts_fields_attachments_and_history() {
     let uuid = state.root.entries[0].uuid.clone();
 
     let storage = session.get_entry_storage(&uuid).unwrap();
-    // fields: title+username+password+url+notes+custom (+ "custom" key, not
-    // counted) + empty-key overhead; assert exact field bytes.
-    assert!(storage.fields >= "storage".len() + "user".len() + "pass".len());
-    assert_eq!(storage.attachments, 128);
+    // KeePass GetSize accounting: fields include the fixed base overhead;
+    // an attachment costs 65 bytes overhead + name chars ×2 + payload bytes
+    // ("payload.bin" = 11 chars).
+    assert!(storage.fields >= 248);
+    assert_eq!(storage.attachments, 65 + 11 * 2 + 128);
     assert_eq!(storage.history, 0);
     assert_eq!(
         storage.total,
@@ -1802,7 +1803,7 @@ fn entry_snapshot_size_matches_storage_total() {
 
     // The snapshot column value equals the on-demand storage breakdown.
     let entry = &session.snapshot().unwrap().root.entries[0];
-    assert_eq!(entry.size as usize, session.get_entry_storage(&uuid).unwrap().total);
+    assert_eq!(entry.size, session.get_entry_storage(&uuid).unwrap().total);
     assert!(entry.size >= 64);
 
     // An edit snapshots history, which counts toward the reported size.
@@ -1827,7 +1828,7 @@ fn entry_snapshot_size_matches_storage_total() {
         )
         .unwrap();
     let entry = &session.snapshot().unwrap().root.entries[0];
-    assert_eq!(entry.size as usize, session.get_entry_storage(&uuid).unwrap().total);
+    assert_eq!(entry.size, session.get_entry_storage(&uuid).unwrap().total);
 }
 
 #[test]

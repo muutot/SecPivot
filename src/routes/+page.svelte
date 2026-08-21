@@ -60,6 +60,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
+  import { formatKeePassSize } from "$lib/utils/format";
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
   import {
     awaitCurrentView,
@@ -465,6 +466,7 @@
     { id: "created", label: "创建时间" },
     { id: "modified", label: "修改时间" },
     { id: "expires", label: "过期时间" },
+    { id: "size", label: "大小" },
   ];
   /** Custom-field column names present in the vault, most frequent first. */
   const customColumnNames = $derived.by(() => {
@@ -560,6 +562,9 @@
   /** Sort key of an entry for a column id (password is never sortable). */
   function sortValue(entry: VaultEntry, colId: string): string {
     if (colId === "totp") return entry.hasTotp ? "1" : "0";
+    // Size sorts numerically: zero-pad the byte count so lexicographic
+    // string comparison over the memoized sort keys matches numeric order.
+    if (colId === "size") return String(entry.size ?? 0).padStart(15, "0");
     return colText(entry, colId);
   }
   /** Entries are immutable within a vault snapshot, so sort keys are memoized
@@ -592,6 +597,7 @@
       return formatDateOnly(entry[colId] as string | undefined);
     }
     if (colId === "password") return entry.password ? "••••••" : "";
+    if (colId === "size") return entry.size == null ? "" : formatKeePassSize(entry.size);
     return String(entry[colId as keyof VaultEntry] ?? "");
   }
   let groupWidth = $state(get(appSettings).general.panelWidths.group);

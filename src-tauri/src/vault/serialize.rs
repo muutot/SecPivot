@@ -226,6 +226,7 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
                 size: attachment.data.get().len(),
             })
             .collect(),
+        size: entry_size(entry).total(),
         autotype: entry.autotype.as_ref().map(|at| EntryAutoTypeConfig {
             enabled: at.enabled,
             default_sequence: at.default_sequence.clone(),
@@ -243,6 +244,104 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
 
 pub(crate) fn format_iso(time: NaiveDateTime) -> String {
     time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// Fixed per-entry byte overhead assumed by KeePass's `PwEntry.GetSize`
+/// (.NET object overhead, 64-bit references).
+const KEEPASS_ENTRY_BASE_BYTES: u64 = 248;
+
+/// UTF-16 code-unit count — KeePass measures .NET string lengths
+/// (2 bytes per character).
+fn utf16_len(value: &str) -> u64 {
+    value.encode_utf16().count() as u64
+}
+
+/// In-memory byte-size breakdown of an entry: a faithful port of the KeePass
+/// official client's `PwEntry.GetSize()` (KeePass 2.39+) so the Size column
+/// reports exactly what KeePass shows for the same record. The fixed object
+/// overhead plus the Auto-Type / OverrideURL / tags / custom-data
+/// contributions are folded into `fields`; history snapshots recurse exactly
+/// like KeePass (`cb += peHistory.GetSize()`).
+pub(crate) struct EntrySizeBreakdown {
+    pub fields: u64,
+    pub attachments: u64,
+    pub history: u64,
+}
+
+impl EntrySizeBreakdown {
+    pub const fn total(&self) -> u64 {
+        self.fields + self.attachments + self.history
+    }
+}
+
+pub(crate) fn entry_size(entry: &EntryRef<'_>) -> EntrySizeBreakdown {
+    // Fields bucket: fixed base + strings + Auto-Type + OverrideURL + tags +
+    // custom data. Strings cost 40 bytes of dictionary overhead per item and
+    // both key and value characters count double (UTF-16).
+    let mut fields_cb = KEEPASS_ENTRY_BASE_BYTES + entry.fields.len() as u64 * 40;
+    let mut fields_cc: u64 = entry
+        .fields
+        .iter()
+        .map(|(name, value)| utf16_len(name) + utf16_len(value.get()))
+        .sum();
+    if let Some(at) = &entry.autotype {
+        fields_cc += utf16_len(at.default_sequence.as_deref().unwrap_or(""));
+        fields_cb += at.associations.len() as u64 * 24;
+        for association in &at.associations {
+            fields_cc += utf16_len(&association.window) + utf16_len(&association.sequence);
+        }
+    }
+    fields_cc += utf16_len(entry.override_url.as_deref().unwrap_or(""));
+    fields_cb += entry.tags.len() as u64 * 8;
+    for tag in &entry.tags {
+        fields_cc += utf16_len(tag);
+    }
+    fields_cb += entry.custom_data.len() as u64 * 16;
+    for (key, item) in entry.custom_data.iter() {
+        match &item.value {
+            Some(CustomDataValue::String(value)) => fields_cc += utf16_len(key) + utf16_len(value),
+            // Binary custom data has no string counterpart in KeePass's
+            // `GetSize`; count the payload once like attachment data.
+            Some(CustomDataValue::Binary(bytes)) => {
+                fields_cb += bytes.len() as u64;
+                fields_cc += utf16_len(key);
+            }
+            None => {}
+        }
+    }
+
+    // Attachments bucket: 65 bytes of dictionary overhead per item, name
+    // characters count double, payload bytes count once. Dangling references
+    // (possible on historical snapshots, see `attachment_size`) count as 0.
+    let mut attachments_cb = 0u64;
+    let mut attachments_cc = 0u64;
+    for (name, attachment) in entry.attachments_named() {
+        attachments_cc += utf16_len(name);
+        attachments_cb += attachment_size(&attachment).unwrap_or(0) as u64;
+    }
+    attachments_cb += entry.attachments_named().count() as u64 * 65;
+
+    // History bucket: 8 bytes of list overhead per snapshot, each snapshot's
+    // full recursive size added to the byte pool (not doubled).
+    let history = match &entry.history {
+        None => 0,
+        Some(h) => {
+            let count = h.get_entries().len();
+            let mut size = count as u64 * 8;
+            for index in 0..count {
+                if let Some(historical) = entry.historical(index) {
+                    size += entry_size(&historical).total();
+                }
+            }
+            size
+        }
+    };
+
+    EntrySizeBreakdown {
+        fields: fields_cb + fields_cc * 2,
+        attachments: attachments_cb + attachments_cc * 2,
+        history,
+    }
 }
 
 /// Project a KDBX `CustomData` map into the read-only DTO list, sorted by key.
