@@ -401,7 +401,11 @@ pub fn run() {
             #[cfg(desktop)]
             commands::bridge_approve,
             #[cfg(desktop)]
-            commands::rpc_status
+            commands::rpc_status,
+            #[cfg(desktop)]
+            commands::rpc_sessions,
+            #[cfg(desktop)]
+            commands::rpc_close_session
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
