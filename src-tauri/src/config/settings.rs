@@ -145,9 +145,10 @@ impl Default for DensitySettings {
 
 /// One entry-table column's persisted state (KeePass-style list). `id` is
 /// the built-in column id ("title", "username", "password", "url", "totp",
-/// "notes", "tags", "created", "modified", "expires") or `custom:<field name>`
-/// for entry custom fields. `width` is px; the "title" column uses `0` as an
-/// auto sentinel (the frontend resolves it to the default column width).
+/// "notes", "tags", "created", "modified", "expires", "size") or
+/// `custom:<field name>` for entry custom fields. `width` is px; the "title"
+/// column uses `0` as an auto sentinel (the frontend resolves it to the
+/// default column width).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EntryColumnState {
@@ -188,6 +189,7 @@ pub fn default_entry_columns() -> Vec<EntryColumnState> {
         col("created", false, 140),
         col("modified", false, 140),
         col("expires", false, 140),
+        col("size", false, 80),
     ]
 }
 

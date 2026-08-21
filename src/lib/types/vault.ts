@@ -38,8 +38,9 @@ export interface VaultEntry {
   customData?: CustomDataEntry[];
   customFields?: CustomField[];
   attachments?: AttachmentInfo[];
-  /** Total in-memory byte size of the entry (fields + attachments + history),
-   *  computed by the backend; backs the KeePass-style "Size" list column.
+  /** Total byte size of the entry per the KeePass official client's
+   *  `PwEntry.GetSize()` accounting (fields + attachments + history);
+   *  displayed via `formatKeePassSize` so both clients read identically.
    *  Absent in the browser demo fallback. */
   size?: number;
   /** Entry-level Auto-Type configuration, if stored. */
@@ -440,15 +441,17 @@ export interface HistoryVersion {
   diff: HistoryDiff;
 }
 
-/** Byte-size breakdown of everything an entry stores. */
+/** Byte-size breakdown of everything an entry stores, following the KeePass
+ *  official client's `PwEntry.GetSize()` accounting. */
 export interface EntryStorage {
-  /** Bytes of the entry's own field values (including the password). */
+  /** Field values plus entry metadata (Auto-Type, OverrideURL, tags,
+   *  custom data) and the fixed object overhead. */
   fields: number;
-  /** Bytes of the entry's own attachment data. */
+  /** Attachment names (UTF-16) + payload bytes + per-item overhead. */
   attachments: number;
-  /** Bytes of all historical snapshots (their fields + attachments). */
+  /** All historical snapshots, recursively sized like KeePass. */
   history: number;
-  /** `fields + attachments + history`. */
+  /** `fields + attachments + history` — identical to `VaultEntry.size`. */
   total: number;
 }
 

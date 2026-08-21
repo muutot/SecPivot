@@ -188,6 +188,9 @@ export interface RpcSettings {
    * hosts under one domain (e.g. `account.aliyun.com` / `passport.aliyun.com`
    * under `aliyun.com`) all match an entry. */
   matchByRegistrableDomain: boolean;
+  /** SRP session-key lifetime in seconds, counted from the most recent vault
+   *  unlock (each unlock resets it). `0` (default) = never expire. */
+  sessionTimeoutSecs: number;
 }
 
 /** Favicon download behavior ("Download Favicons").

@@ -101,9 +101,10 @@ pub struct VaultEntry {
     pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
     pub attachments: Vec<AttachmentInfo>,
-    /// Total in-memory byte size of the entry (field values + attachment
-    /// data + all historical snapshots), mirroring `get_entry_storage.total`.
-    /// Backs the KeePass-style "Size" list column.
+    /// Total byte size of the entry per the KeePass official client's
+    /// `PwEntry.GetSize()` accounting (fields + attachments + history),
+    /// identical to `get_entry_storage.total`. Backs the KeePass-style
+    /// "Size" list column.
     pub size: u64,
     /// Entry-level Auto-Type config; absent when the entry has none stored.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -602,19 +603,20 @@ pub struct HistoryDiff {
     pub attachments: Vec<HistoryItemChange>,
 }
 
-/// Byte-size breakdown of everything an entry holds: field text, attachments,
-/// and its historical snapshots (fields + attachments of every version).
+/// Byte-size breakdown of everything an entry holds, following the KeePass
+/// official client's `PwEntry.GetSize()` accounting (see `entry_size`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryStorage {
-    /// Bytes of the entry's own field values (including the password).
-    pub fields: usize,
-    /// Bytes of the entry's own attachment data.
-    pub attachments: usize,
-    /// Bytes of all historical snapshots (their fields + attachments).
-    pub history: usize,
-    /// `fields + attachments + history`.
-    pub total: usize,
+    /// Field values plus entry metadata (Auto-Type, OverrideURL, tags,
+    /// custom data) and the fixed object overhead.
+    pub fields: u64,
+    /// Attachment names (UTF-16) + payload bytes + per-item overhead.
+    pub attachments: u64,
+    /// All historical snapshots, recursively sized like KeePass.
+    pub history: u64,
+    /// `fields + attachments + history` — identical to `VaultEntry.size`.
+    pub total: u64,
 }
 
 /// Server-side security analysis. Passwords never cross into the report.
