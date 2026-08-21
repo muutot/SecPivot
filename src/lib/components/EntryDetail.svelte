@@ -156,6 +156,20 @@
     });
   });
 
+  /** An edit snapshots a new history version and changes storage accounting,
+   *  but `detailKey` is stable across saves, so the reset effect above never
+   *  fires. Track `modified` to invalidate the cached history/storage and
+   *  reload immediately when the history tab is already open. */
+  $effect(() => {
+    void entry.modified;
+    untrack(() => {
+      historyLoadedUuid = null;
+      viewingVersion = null;
+      storage = null;
+      if (activeTab === "history") void loadHistory(true);
+    });
+  });
+
   onDestroy(() => {
     detailView.activate(null);
     if (notesSaveTimer) {
