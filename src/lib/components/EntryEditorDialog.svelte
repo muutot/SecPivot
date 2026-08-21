@@ -805,19 +805,6 @@
               <AppIcon name={showPassword ? "eye-off" : "eye"} size={14} />
             </button>
           </div>
-          <div class="strength-row">
-            <span class="strength-bar"
-              ><span
-                class:strong={strength.className === "strong"}
-                class:fair={strength.className === "fair"}
-                class:weak={strength.className === "weak"}
-                style:width={`${Math.min(100, entropy)}%`}
-              ></span></span
-            >
-            <span class="strength-label {strength.className}"
-              >{strength.label} · {entropy} bits</span
-            >
-          </div>
           {#if generatorError}
             <p class="generator-error" role="alert">{generatorError}</p>
           {/if}
@@ -1468,7 +1455,7 @@
     background: color-mix(in srgb, var(--accent-color, var(--primary-color)) 12%, transparent);
   }
 
-  .field-header {
+  .field > span.field-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
