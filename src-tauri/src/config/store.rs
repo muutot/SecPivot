@@ -11,6 +11,36 @@ const CONFIG_SUBDIR: &str = "conf";
 
 const CONFIG_FILE: &str = "config.json";
 
+/// Marker file shipped in the portable ZIP: its presence beside the
+/// executable forces portable mode even before the first config write.
+const PORTABLE_MARKER: &str = "portable.flag";
+
+/// Resolve the data root ("project dir") and the portable flag. Portable mode
+/// keeps everything (config, remote mirrors) beside the executable so a
+/// directory copied to a USB stick travels as one unit; it is active when a
+/// `portable.flag` marker or a legacy `conf/config.json` sits beside the
+/// executable. Otherwise the standard per-user app-data directory is used
+/// (installed builds must not write into `Program Files`). When neither
+/// location is available the executable dir (or `.`, dev fallback) is used.
+pub fn resolve_data_dir(exe_dir: Option<&Path>, app_data_dir: Option<PathBuf>) -> (PathBuf, bool) {
+    if let Some(dir) = exe_dir {
+        if dir.join(PORTABLE_MARKER).is_file()
+            || dir.join(CONFIG_SUBDIR).join(CONFIG_FILE).is_file()
+        {
+            return (dir.to_path_buf(), true);
+        }
+    }
+    match app_data_dir {
+        Some(dir) => (dir, false),
+        None => (
+            exe_dir
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from(".")),
+            false,
+        ),
+    }
+}
+
 fn config_path(project_dir: &Path) -> PathBuf {
     project_dir.join(CONFIG_SUBDIR).join(CONFIG_FILE)
 }
@@ -54,19 +84,40 @@ fn encrypt_profile_creds(settings: &mut RemoteSettings) -> Result<(), String> {
     Ok(())
 }
 
-/// Managed state: the in-memory normalized config plus its project dir.
+/// Managed state: the in-memory normalized config plus its data root.
 pub struct ConfigStore {
     project_dir: PathBuf,
+    portable: bool,
     config: Mutex<AppConfig>,
 }
 
 impl ConfigStore {
     pub fn load(project_dir: PathBuf) -> Result<Self, String> {
+        Self::load_with_mode(project_dir, false)
+    }
+
+    pub fn load_with_mode(project_dir: PathBuf, portable: bool) -> Result<Self, String> {
         let config = read_config(&project_dir)?;
         Ok(Self {
             project_dir,
+            portable,
             config: Mutex::new(config),
         })
+    }
+
+    /// Data root for everything that travels with the installation:
+    /// `conf/config.json` and the remote mirror hierarchy live under it.
+    pub fn data_dir(&self) -> &Path {
+        &self.project_dir
+    }
+
+    /// Whether the app runs in portable mode (data beside the executable).
+    pub fn is_portable(&self) -> bool {
+        self.portable
+    }
+
+    pub fn config_path(&self) -> PathBuf {
+        config_path(&self.project_dir)
     }
 
     pub fn get(&self) -> Result<AppConfig, String> {

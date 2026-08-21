@@ -12,7 +12,7 @@ pub mod vault;
 
 use crate::config::ConfigStore;
 use crate::vault::{VaultSession, VaultSessions};
-use std::path::PathBuf;
+
 use std::sync::Mutex;
 #[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
@@ -250,15 +250,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let project_dir = std::env::current_exe()
+            let exe_dir = std::env::current_exe()
                 .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                .unwrap_or_else(|| {
-                    app.path()
-                        .app_data_dir()
-                        .unwrap_or_else(|_| PathBuf::from("."))
-                });
-            let store = ConfigStore::load(project_dir)?;
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+            let app_data = app.path().app_data_dir().ok();
+            let (project_dir, portable) = config::resolve_data_dir(exe_dir.as_deref(), app_data);
+            let store = ConfigStore::load_with_mode(project_dir, portable)?;
             let config = store.get()?;
             #[cfg(desktop)]
             register_global_hotkey(app.handle(), &config.keyboard.auto_type_global);
@@ -304,6 +301,7 @@ pub fn run() {
     let app = builder
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
+            commands::app_info,
             commands::set_config,
             commands::open_vault,
             commands::create_vault,

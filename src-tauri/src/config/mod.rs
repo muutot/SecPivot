@@ -11,4 +11,4 @@ pub(crate) const RECENT_FILES_MAX: usize = 8;
 
 pub(crate) use self::settings::DEFAULT_BACKUP_TEMPLATE;
 pub use self::settings::*;
-pub use self::store::ConfigStore;
+pub use self::store::{resolve_data_dir, ConfigStore};

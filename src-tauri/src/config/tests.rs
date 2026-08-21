@@ -891,3 +891,60 @@ fn normalization_is_idempotent() {
         serde_json::to_string(&twice).unwrap()
     );
 }
+
+#[test]
+fn portable_marker_beside_exe_forces_portable_mode() {
+    let exe_dir = TempDir::new().unwrap();
+    fs::write(exe_dir.path().join("portable.flag"), b"").unwrap();
+    let app_data = TempDir::new().unwrap();
+    let (dir, portable) =
+        super::resolve_data_dir(Some(exe_dir.path()), Some(app_data.path().to_path_buf()));
+    assert!(portable);
+    assert_eq!(dir, exe_dir.path());
+}
+
+#[test]
+fn legacy_conf_beside_exe_stays_portable() {
+    let exe_dir = TempDir::new().unwrap();
+    fs::create_dir_all(exe_dir.path().join("conf")).unwrap();
+    fs::write(exe_dir.path().join("conf").join("config.json"), b"{}").unwrap();
+    let app_data = TempDir::new().unwrap();
+    let (dir, portable) =
+        super::resolve_data_dir(Some(exe_dir.path()), Some(app_data.path().to_path_buf()));
+    assert!(portable);
+    assert_eq!(dir, exe_dir.path());
+}
+
+#[test]
+fn installed_layout_uses_app_data_dir() {
+    let exe_dir = TempDir::new().unwrap();
+    let app_data = TempDir::new().unwrap();
+    let (dir, portable) =
+        super::resolve_data_dir(Some(exe_dir.path()), Some(app_data.path().to_path_buf()));
+    assert!(!portable);
+    assert_eq!(dir, app_data.path());
+}
+
+#[test]
+fn missing_app_data_falls_back_to_exe_dir() {
+    let exe_dir = TempDir::new().unwrap();
+    let (dir, portable) = super::resolve_data_dir(Some(exe_dir.path()), None);
+    assert!(!portable);
+    assert_eq!(dir, exe_dir.path());
+
+    let (dir, portable) = super::resolve_data_dir(None, None);
+    assert!(!portable);
+    assert_eq!(dir, std::path::PathBuf::from("."));
+}
+
+#[test]
+fn load_with_mode_reports_portable_flag_and_paths() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load_with_mode(dir.path().to_path_buf(), true).unwrap();
+    assert!(store.is_portable());
+    assert_eq!(store.data_dir(), dir.path());
+    assert_eq!(
+        store.config_path(),
+        dir.path().join("conf").join("config.json")
+    );
+}

@@ -1,5 +1,6 @@
 //! Local mirror helpers (`save to local` mode; extracted from remote/mod.rs).
 
+use crate::config::ConfigStore;
 use std::path::PathBuf;
 use tauri::Manager;
 // ---------------------------------------------------------------------------
@@ -7,13 +8,11 @@ use tauri::Manager;
 // ---------------------------------------------------------------------------
 
 /// Base directory for local copies:
-/// `<app_data>/Storage/remote/<kind>/<profile_name>`. The input is the canonical
-/// profile path (`s3/config_1` or `webdav/config_1`).
+/// `<data_dir>/Storage/remote/<kind>/<profile_name>` where `<data_dir>` is the
+/// resolved data root (portable: beside the executable, installed: app-data).
+/// The input is the canonical profile path (`s3/config_1` or `webdav/config_1`).
 pub fn local_storage_dir(app: &tauri::AppHandle, profile_path: &str) -> Result<PathBuf, String> {
-    let base = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位应用数据目录: {e}"))?;
+    let base = app.state::<ConfigStore>().data_dir().to_path_buf();
     let (kind, name) = profile_storage_parts(profile_path)?;
     Ok(base.join("Storage").join("remote").join(kind).join(name))
 }

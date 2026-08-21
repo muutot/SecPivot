@@ -18,6 +18,25 @@ pub(crate) fn get_config(
     store.get()
 }
 
+/// Where the app keeps its data and whether it runs portably (data beside the
+/// executable). Read-only introspection for the About panel.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub portable: bool,
+    pub config_path: String,
+    pub data_dir: String,
+}
+
+#[tauri::command]
+pub(crate) fn app_info(store: tauri::State<'_, ConfigStore>) -> AppInfo {
+    AppInfo {
+        portable: store.is_portable(),
+        config_path: store.config_path().to_string_lossy().to_string(),
+        data_dir: store.data_dir().to_string_lossy().to_string(),
+    }
+}
+
 /// Trim a stored backup template, falling back to the default when empty.
 pub(crate) fn normalize_backup_template(template: &str) -> String {
     let trimmed = template.trim();
