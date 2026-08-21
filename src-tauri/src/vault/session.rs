@@ -215,6 +215,30 @@ impl VaultSession {
         self.close_impl(false);
     }
 
+    /// Restart the SRP session-key countdown. Called on every vault unlock
+    /// and whenever a new key is registered; a zero timeout disables expiry.
+    pub(crate) fn reset_rpc_key_expiry(&mut self) {
+        self.rpc_keys_expiry = (self.rpc_session_timeout_secs > 0 && !self.rpc_keys.is_empty())
+            .then(|| {
+                std::time::Instant::now()
+                    + std::time::Duration::from_secs(self.rpc_session_timeout_secs)
+            });
+    }
+
+    /// Wipe the SRP session keys once their configured lifetime has lapsed.
+    /// A lazy check at key lookup is enough: an expired key must never be
+    /// handed out, and nothing else depends on prompt removal.
+    pub(crate) fn expire_rpc_keys_if_due(&mut self) {
+        if let Some(expiry) = self.rpc_keys_expiry {
+            if std::time::Instant::now() >= expiry && !self.rpc_keys.is_empty() {
+                for (_, mut key) in self.rpc_keys.drain() {
+                    wipe_secret_bytes(&mut key);
+                }
+                self.rpc_keys_expiry = None;
+            }
+        }
+    }
+
     fn close_impl(&mut self, wipe_rpc_keys: bool) {
         self.path = None;
         // Wipe secret material before dropping the buffers: setting `None`
@@ -232,6 +256,7 @@ impl VaultSession {
             for (_, mut key) in self.rpc_keys.drain() {
                 wipe_secret_bytes(&mut key);
             }
+            self.rpc_keys_expiry = None;
         }
         self.db = None;
         self.dirty = false;

@@ -176,12 +176,17 @@ impl RpcHost for VaultSession {
 
     /// The 32-byte SRP-derived session key for a Kee client username. Held
     /// only in memory; wiped by `close()` along with the master key.
-    fn rpc_key(&self, username: &str) -> Option<Vec<u8>> {
+    fn rpc_key(&mut self, username: &str) -> Option<Vec<u8>> {
+        // Lazy expiry: a lapsed key is wiped instead of served, forcing the
+        // Kee extension to re-authorize with a fresh side-channel password.
+        self.expire_rpc_keys_if_due();
         self.rpc_keys.get(username).cloned()
     }
 
     fn register_rpc_key(&mut self, username: &str, key: Vec<u8>) {
         self.rpc_keys.insert(username.to_owned(), key);
+        // A fresh authorization restarts the configured key lifetime.
+        self.reset_rpc_key_expiry();
     }
 
     fn database(&self) -> Option<RpcDatabase> {

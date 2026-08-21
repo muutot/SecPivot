@@ -52,7 +52,7 @@ impl RpcHost for FakeHost {
     fn is_open(&self) -> bool {
         self.open
     }
-    fn rpc_key(&self, username: &str) -> Option<Vec<u8>> {
+    fn rpc_key(&mut self, username: &str) -> Option<Vec<u8>> {
         self.keys.get(username).cloned()
     }
     fn register_rpc_key(&mut self, username: &str, key: Vec<u8>) {
