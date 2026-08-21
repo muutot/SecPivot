@@ -376,14 +376,26 @@ pub(crate) fn walk_ref_match(
             _ => false,
         };
         if matched {
-            let value = match spec.field.to_ascii_uppercase().as_str() {
+            let upper_field = spec.field.to_ascii_uppercase();
+            let value = match upper_field.as_str() {
                 "T" => entry.get_title().unwrap_or_default().to_owned(),
                 "U" => entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
                 "P" => entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned(),
                 "A" => entry.get(FIELD_URL).unwrap_or_default().to_owned(),
                 "N" => entry.get(FIELD_NOTES).unwrap_or_default().to_owned(),
                 "I" => entry.id().uuid().to_string(),
-                _ => return,
+                // KeePass: any other target field names a custom string
+                // field, matched case-insensitively; empty when the matched
+                // entry has no such field.
+                _ => entry
+                    .fields
+                    .iter()
+                    .find(|(name, _)| {
+                        !RESERVED_FIELDS.contains(&name.as_str())
+                            && name.eq_ignore_ascii_case(spec.field)
+                    })
+                    .map(|(_, value)| value.get().to_owned())
+                    .unwrap_or_default(),
             };
             *out = Some(value);
             return;
