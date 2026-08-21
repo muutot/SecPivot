@@ -54,6 +54,7 @@ export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
   { id: "created", visible: false, width: 140 },
   { id: "modified", visible: false, width: 140 },
   { id: "expires", visible: false, width: 140 },
+  { id: "size", visible: false, width: 80 },
 ];
 
 /** Merge a persisted column list over the defaults: unknown ids (custom-field
