@@ -603,6 +603,21 @@ pub struct HistoryDiff {
     pub attachments: Vec<HistoryItemChange>,
 }
 
+/// One vault-wide change event on the change timeline: a transition between
+/// two consecutive snapshots of an entry (or the newest snapshot → current).
+/// `title`/`username` are the values as of *after* the change; `diff` compares
+/// the older side with the newer side. No secrets cross the wire.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeTimelineEvent {
+    pub uuid: String,
+    pub title: String,
+    pub username: String,
+    /// ISO timestamp of the change (last modification of the newer side).
+    pub time: String,
+    pub diff: HistoryDiff,
+}
+
 /// Byte-size breakdown of everything an entry holds, following the KeePass
 /// official client's `PwEntry.GetSize()` accounting (see `entry_size`).
 #[derive(Debug, Clone, Serialize)]

@@ -105,13 +105,13 @@ const AES_KDF_ROUNDS: u64 = 600_000;
 
 pub use self::dto::{
     AttachmentInfo, AttachmentInput, AttachmentPreview, AutoTypeAssociationDto, AutotypeCandidate,
-    CustomDataEntry, CustomField, DatabaseSettings, DatabaseSettingsPatch, DuplicatePasswords,
-    EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch, EntryStorage, ExpiredEntry,
-    FaviconFetch, FaviconJob, FaviconProgress, FaviconReport, GroupAutoTypeConfig,
-    GroupAutoTypeInput, GroupInput, HistoryCleanResult, HistoryDiff, HistoryItemChange,
-    HistoryVersion, MutationDelta, SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup,
-    TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
-    WritableDatabaseCipher,
+    ChangeTimelineEvent, CustomDataEntry, CustomField, DatabaseSettings, DatabaseSettingsPatch,
+    DuplicatePasswords, EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch,
+    EntryStorage, ExpiredEntry, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport,
+    GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput, HistoryCleanResult, HistoryDiff,
+    HistoryItemChange, HistoryVersion, MutationDelta, SecurityReport, SessionInfo, SimilarEntry,
+    SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult,
+    VaultState, WeakEntry, WritableDatabaseCipher,
 };
 
 pub use self::breach::BreachFinding;
@@ -192,6 +192,13 @@ pub struct VaultSession {
     /// so `account.aliyun.com` and `passport.aliyun.com` both match under
     /// `aliyun.com`, mirroring KeePassRPC).
     pub(crate) match_registrable_domain: bool,
+    /// KeePassRPC SRP session-key lifetime in seconds (config
+    /// `rpc.sessionTimeoutSecs`); `0` means no expiry. The countdown restarts
+    /// on every vault unlock; when it lapses the keys are wiped so the Kee
+    /// extension must re-authorize with a fresh side-channel password.
+    pub(crate) rpc_session_timeout_secs: u64,
+    /// When the SRP session keys expire (`None` = never). Reset on unlock.
+    pub(crate) rpc_keys_expiry: Option<std::time::Instant>,
     /// Window title captured by a global-hotkey multi-match request; consumed
     /// by `autotype_pick` when the user chooses an entry from the picker.
     pub(crate) pending_autotype_window: Option<String>,

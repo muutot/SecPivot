@@ -1734,7 +1734,6 @@ fn entry_storage_counts_fields_attachments_and_history() {
 
     let storage = session.get_entry_storage(&uuid).unwrap();
     // KeePass GetSize accounting: fields include the fixed base overhead;
-    // an attachment costs 65 bytes overhead + name chars ×2 + payload bytes
     // ("payload.bin" = 11 chars).
     assert!(storage.fields >= 248);
     assert_eq!(storage.attachments, 65 + 11 * 2 + 128);
@@ -7133,6 +7132,33 @@ fn rpc_keys_are_session_held_and_wiped_on_close() {
 }
 
 #[test]
+fn rpc_session_timeout_wipes_keys_after_expiry_and_resets_on_register() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+
+    // Zero timeout (default): keys never expire.
+    session.register_rpc_key("user@browser", vec![7u8; 32]);
+    assert!(session.rpc_keys_expiry.is_none());
+    assert_eq!(session.rpc_key("user@browser").unwrap(), vec![7u8; 32]);
+
+    // A one-second timeout arms the countdown at registration.
+    session.rpc_session_timeout_secs = 1;
+    session.reset_rpc_key_expiry();
+    assert!(session.rpc_keys_expiry.is_some());
+    assert_eq!(session.rpc_key("user@browser").unwrap(), vec![7u8; 32]);
+
+    // Once the countdown lapses the key is wiped, not served.
+    session.rpc_keys_expiry = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
+    assert!(session.rpc_key("user@browser").is_none());
+    assert!(session.rpc_keys.is_empty());
+    assert!(session.rpc_keys_expiry.is_none());
+
+    // Re-registering restarts the countdown.
+    session.register_rpc_key("user@browser", vec![8u8; 32]);
+    assert!(session.rpc_key("user@browser").is_some());
+}
+
+#[test]
 fn close_keeping_rpc_session_retains_rpc_keys_but_wipes_bridge_and_secrets() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
@@ -8728,4 +8754,76 @@ fn remote_merge_pre_persist_errors_do_not_trigger_read_only() {
         );
     }
     assert!(!session.is_read_only());
+}
+
+#[test]
+fn change_timeline_lists_transitions_newest_first_and_skips_recycle_bin() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let mk = |title: &str, password: &str, notes: &str| EntryInput {
+        group_uuid: ROOT_GROUP_UUID.to_owned(),
+        title: title.into(),
+        username: "u".into(),
+        password: password.into(),
+        url: String::new(),
+        notes: notes.into(),
+        totp: None,
+        expires: None,
+        icon: Some(None),
+        color: None,
+        tags: None,
+        custom_fields: vec![],
+        attachments: vec![],
+    };
+    let state = session.add_entry(&mk("E", "pw1", "")).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    session.update_entry(&uuid, &mk("E2", "pw2", "")).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    session
+        .update_entry(&uuid, &mk("E2", "pw3", "note"))
+        .unwrap();
+
+    // A second entry with history that moves to the recycle bin must not
+    // contribute events.
+    session.add_entry(&mk("Bin", "bin1", "")).unwrap();
+    let state_after = session.snapshot_without_icons().unwrap();
+    let bin_uuid = state_after
+        .root
+        .entries
+        .iter()
+        .find(|e| e.title == "Bin")
+        .unwrap()
+        .uuid
+        .clone();
+    session
+        .update_entry(&bin_uuid, &mk("Bin", "bin2", ""))
+        .unwrap();
+    session.delete_entry(&bin_uuid).unwrap();
+
+    let events = session.change_timeline().unwrap();
+    assert_eq!(events.len(), 2);
+    assert!(events.iter().all(|e| e.uuid == uuid));
+    assert!(events.windows(2).all(|w| w[0].time >= w[1].time));
+
+    // Newest event: newest snapshot -> current (notes + password changed).
+    assert_eq!(events[0].title, "E2");
+    assert!(events[0].diff.notes);
+    assert!(events[0].diff.password);
+    assert!(!events[0].diff.title);
+
+    // Oldest event: oldest snapshot -> newer snapshot (title + password).
+    assert_eq!(events[1].title, "E2");
+    assert!(events[1].diff.title);
+    assert!(events[1].diff.password);
+    assert!(!events[1].diff.notes);
+
+    // No secrets ever cross the wire.
+    let serialized = format!("{events:?}");
+    assert!(!serialized.contains("pw1"));
+    assert!(!serialized.contains("pw2"));
+    assert!(!serialized.contains("pw3"));
+
+    // Clearing the history empties the timeline.
+    session.clear_all_history().unwrap();
+    assert!(session.change_timeline().unwrap().is_empty());
 }
