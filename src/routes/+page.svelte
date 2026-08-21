@@ -599,7 +599,7 @@
     if (colId === "created" || colId === "modified" || colId === "expires") {
       return formatDateOnly(entry[colId] as string | undefined);
     }
-    if (colId === "password") return entry.password ? "••••••" : "";
+    if (colId === "password") return entry.hasPassword || entry.password ? "••••••" : "";
     if (colId === "size") return entry.size == null ? "" : formatKeePassSize(entry.size);
     return String(entry[colId as keyof VaultEntry] ?? "");
   }
@@ -1203,6 +1203,20 @@
       if (copied && sessionView.isCurrent(view)) flash("已复制密码");
     } catch {
       if (sessionView.isCurrent(view)) flash("复制失败");
+    }
+  }
+
+  /** In-place reveal for the entry-list password column: resolve the secret
+   * only for the still-current session view; any staleness or failure keeps
+   * the cell masked (EntryTable re-masks on timeout/mouse leave as well). */
+  async function revealEntryPassword(entry: VaultEntry): Promise<string | null> {
+    const view = sessionView.capture();
+    if (!view) return null;
+    const { sessionId } = view;
+    try {
+      return await vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid));
+    } catch {
+      return null;
     }
   }
 
@@ -2356,6 +2370,7 @@
             {customIconUrl}
             {entryIconName}
             {colText}
+            onrevealpassword={revealEntryPassword}
             oncyclesort={cycleSort}
             oncolumnresize={resizeEntryColumn}
             oncolumnreorder={applyColumnReorder}

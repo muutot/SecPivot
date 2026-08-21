@@ -61,6 +61,10 @@ pub struct VaultEntry {
     pub username: String,
     pub url: String,
     pub notes: String,
+    /// Whether the entry carries a non-empty password. The value itself never
+    /// leaves the session; the list shows a masked placeholder and resolves
+    /// the secret on demand (`get_entry_password`) for in-place reveal.
+    pub has_password: bool,
     /// Whether the entry carries a TOTP seed. The seed itself is never part
     /// of the snapshot: the renderer fetches codes via `totp_code` or the
     /// seed on demand via `get_entry_totp`.
