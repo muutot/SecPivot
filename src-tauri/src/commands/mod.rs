@@ -13,6 +13,8 @@ pub(crate) mod credential;
 pub(crate) mod entries;
 pub(crate) mod favicon;
 pub(crate) mod groups;
+#[cfg(desktop)]
+pub(crate) mod qrcode;
 pub(crate) mod remote;
 #[cfg(desktop)]
 pub(crate) mod tcato;
@@ -29,6 +31,8 @@ pub(crate) use self::credential::*;
 pub(crate) use self::entries::*;
 pub(crate) use self::favicon::*;
 pub(crate) use self::groups::*;
+#[cfg(desktop)]
+pub(crate) use self::qrcode::*;
 pub(crate) use self::remote::*;
 #[cfg(desktop)]
 pub(crate) use self::tcato::*;

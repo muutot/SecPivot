@@ -376,6 +376,9 @@ pub fn run() {
             commands::export_csv,
             commands::export_emergency_sheet,
             commands::download_favicons,
+            #[cfg(desktop)]
+            commands::capture_screen_png,
+            commands::decode_barcode_png,
             commands::read_text_file,
             commands::parse_bitwarden_json,
             commands::parse_1pif,

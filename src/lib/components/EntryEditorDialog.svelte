@@ -21,6 +21,7 @@
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import TotpQrButtons from "$lib/components/TotpQrButtons.svelte";
 
   interface Props {
     mode: "create" | "edit" | "edit-multi";
@@ -764,7 +765,22 @@
         </label>
 
         <label class="field">
-          <span>密码</span>
+          <span class="field-header">
+            <span>密码</span>
+            <span class="strength-row"
+              ><span class="strength-bar"
+                ><span
+                  class:strong={strength.className === "strong"}
+                  class:fair={strength.className === "fair"}
+                  class:weak={strength.className === "weak"}
+                  style:width={`${Math.min(100, entropy)}%`}
+                ></span></span
+              >
+              <span class="strength-label {strength.className}"
+                >{strength.label} · {entropy} bits</span
+              ></span
+            >
+          </span>
           <div class="input-row">
             <input
               class="text-input mono"
@@ -853,9 +869,17 @@
             disabled={totpLoading}
             oninput={() => markTouched("totp")}
           />
-          {#if multi}
-            <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
-          {/if}
+          <span class="totp-qr-row">
+            <TotpQrButtons
+              onpick={(value) => {
+                totp = value;
+                markTouched("totp");
+              }}
+            />
+            {#if multi}
+              <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
+            {/if}
+          </span>
         </label>
 
         <label class="field">
@@ -1386,6 +1410,13 @@
     font-size: 10px;
   }
 
+  .totp-qr-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
   .field-help {
     display: inline-flex;
     align-items: center;
@@ -1437,15 +1468,23 @@
     background: color-mix(in srgb, var(--accent-color, var(--primary-color)) 12%, transparent);
   }
 
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+
   .strength-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 6px;
+    gap: 6px;
+    min-width: 0;
   }
 
   .strength-bar {
-    flex: 1;
+    width: 56px;
     height: 4px;
     border-radius: 2px;
     background: var(--hover-bg);
