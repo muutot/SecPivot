@@ -5556,6 +5556,74 @@ fn export_csv_writes_escaped_rows_and_bom() {
     assert!(text.contains("JBSWY3DPEHPK3PXP"));
 }
 
+#[test]
+fn export_xml_writes_kepass_structure_and_escapes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            icon: None,
+            name: "Web <prod>".into(),
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+    let entry_state = session
+        .add_entry(&EntryInput {
+            group_uuid,
+            title: "Git&Hub".into(),
+            username: "alice".into(),
+            password: "s3cret".into(),
+            url: "https://x".into(),
+            notes: "line1\nline2".into(),
+            totp: Some("JBSWY3DPEHPK3PXP".into()),
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![CustomField {
+                name: "PIN".into(),
+                value: "9999".into(),
+                protected: true,
+            }],
+            attachments: vec![],
+        })
+        .unwrap();
+
+    let dest = dir.path().join("export.xml");
+    session.export_xml(dest.to_str().unwrap()).unwrap();
+    let text = std::fs::read_to_string(&dest).unwrap();
+
+    assert!(text.starts_with("<?xml version=\"1.0\" encoding=\"utf-8\""));
+    assert!(text.contains("<KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>"));
+    // Group names are escaped; nested group carries its own element.
+    assert!(text.contains("<Name>Web &lt;prod&gt;</Name>"));
+    // Standard fields present; text values escaped.
+    assert!(text.contains("<Key>Title</Key><Value>Git&amp;Hub</Value>"));
+    assert!(text.contains("<Key>UserName</Key><Value>alice</Value>"));
+    // Password uses the KeePass Protected+Base64 convention.
+    assert!(text.contains(&format!(
+        "<Key>Password</Key><Value Protected=\"True\">{}</Value>",
+        BASE64.encode(b"s3cret")
+    )));
+    assert!(text.contains("<Key>otp</Key><Value>JBSWY3DPEHPK3PXP</Value>"));
+    // Protected custom field is Base64 too.
+    assert!(text.contains(&format!(
+        "<Key>PIN</Key><Value Protected=\"True\">{}</Value>",
+        BASE64.encode(b"9999")
+    )));
+    // Entry UUID is Base64 of the raw 16 bytes and matches the snapshot UUID.
+    let entry_uuid = entry_state.root.children[0]
+        .entries
+        .last()
+        .unwrap()
+        .uuid
+        .clone();
+    let expected_b64 = BASE64.encode(uuid::Uuid::parse_str(&entry_uuid).unwrap().as_bytes());
+    assert!(text.contains(&format!("<Entry><UUID>{expected_b64}</UUID>")));
+    assert!(text.ends_with("</Root></KeePassFile>\n"));
+}
+
 /// Create a local vault and seed it into an in-memory remote storage.
 fn seed_remote_storage(dir: &TempDir) -> (crate::remote::MemoryStorage, std::path::PathBuf) {
     let seed_path = dir.path().join("seed.kdbx");

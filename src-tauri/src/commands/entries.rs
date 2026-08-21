@@ -225,6 +225,25 @@ pub(crate) fn export_emergency_sheet(
     vault::write_csv_file(&path, &content)
 }
 
+/// Export all entries as a KeePass 2.x XML file (passwords resolved
+/// server-side, protected values Base64-encoded per the KeePass convention).
+#[tauri::command]
+pub(crate) fn export_xml(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+    path: String,
+) -> Result<(), String> {
+    // Build the payload under the lock, write the file outside it.
+    let content = with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.export_xml_content(),
+    )?;
+    vault::write_csv_file(&path, &content)
+}
+
 /// Read a UTF-8 text file from a user-picked path (CSV / KeePass XML import).
 /// Only `.csv` and `.xml` files are accepted: the command must never serve as
 /// an arbitrary local file reader (e.g. for config.json, credentials, or other

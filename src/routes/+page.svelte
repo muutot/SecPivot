@@ -59,7 +59,7 @@
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
-  import { parseKdbxXml } from "$lib/utils/kdbx-xml";
+  import { buildKeePassXml, parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
   import { formatBytes, formatKeePassSize } from "$lib/utils/format";
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
@@ -1002,6 +1002,52 @@
         URL.revokeObjectURL(url);
       }
       if (sessionView.isCurrent(view)) flash("已导出 CSV");
+    } catch (e) {
+      if (sessionView.isCurrent(view)) flash(`导出失败：${e}`);
+    }
+  }
+
+  async function handleExportXml(): Promise<void> {
+    if (!currentVault) return;
+    if (!window.confirm("导出的 XML 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const fileName = currentVault.fileName;
+    try {
+      if (isTauriRuntime()) {
+        const picked = await awaitCurrentView(sessionView, view, () =>
+          save({
+            defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".xml",
+            filters: [{ name: "KeePass XML 文件", extensions: ["xml"] }],
+          }),
+        );
+        if (!picked.current || !picked.value) return;
+        await invoke("export_xml", {
+          sessionId,
+          path: String(picked.value),
+        });
+      } else {
+        if (!sessionView.isCurrent(view)) return;
+        const rows = reportEntries.map(({ entry, path }) => ({
+          group: path,
+          title: entry.title,
+          username: entry.username,
+          password: entry.password ?? "",
+          url: entry.url,
+          notes: entry.notes,
+          totp: entry.totp ?? "",
+        }));
+        const xml = buildKeePassXml(rows);
+        const blob = new Blob([xml], { type: "text/xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "secpivot-export.xml";
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+      if (sessionView.isCurrent(view)) flash("已导出 XML");
     } catch (e) {
       if (sessionView.isCurrent(view)) flash(`导出失败：${e}`);
     }
@@ -1978,6 +2024,8 @@
     { id: "clear-history", label: "清理全部历史", icon: "trash" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
+    { id: "export-csv", label: "导出 CSV", icon: "download" },
+    { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
   ]);
@@ -1993,6 +2041,7 @@
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
     { id: "export-csv", label: "导出 CSV", icon: "download" },
+    { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
     { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
     { id: "settings", label: "设置", icon: "settings" },
@@ -2070,6 +2119,8 @@
     else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
     else if (id === "refresh") void vault.refresh();
+    else if (id === "export-csv") void handleExportCsv();
+    else if (id === "export-xml") void handleExportXml();
     else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
   }
@@ -2081,6 +2132,7 @@
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "hibp-check") hibpOpen = true;
     else if (id === "export-csv") void handleExportCsv();
+    else if (id === "export-xml") void handleExportXml();
     else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "db-settings") dbSettingsOpen = true;
     else if (id === "settings") openSettings();

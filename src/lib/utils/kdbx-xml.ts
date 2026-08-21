@@ -114,3 +114,84 @@ export function parseKdbxXml(xmlText: string): XmlImportEntry[] {
   groupOf(root, []);
   return entries;
 }
+
+/** One flat row of a vault export (mirrors the CSV export shape). */
+export interface XmlExportRow {
+  group: string;
+  title: string;
+  username: string;
+  password: string;
+  url: string;
+  notes: string;
+  totp: string;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Base64 of the UTF-8 bytes, the KeePass convention for Protected values. */
+function encodeProtected(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+interface XmlGroupNode {
+  name: string;
+  entries: XmlExportRow[];
+  children: Map<string, XmlGroupNode>;
+}
+
+/** Build a KeePass 2.x XML document from flat rows (`A / B` group paths),
+ *  mirroring the desktop `export_xml` payload so both runtimes produce the
+ *  same format. Passwords are written `Protected="True"` + Base64. */
+export function buildKeePassXml(rows: XmlExportRow[]): string {
+  const root: XmlGroupNode = { name: "", entries: [], children: new Map() };
+  for (const row of rows) {
+    let node = root;
+    if (row.group) {
+      for (const part of row.group.split(" / ")) {
+        let child = node.children.get(part);
+        if (!child) {
+          child = { name: part || "未命名", entries: [], children: new Map() };
+          node.children.set(part, child);
+        }
+        node = child;
+      }
+    }
+    node.entries.push(row);
+  }
+
+  let xml =
+    '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>';
+  const writeField = (key: string, value: string, protect: boolean): void => {
+    xml += `<String><Key>${escapeXml(key)}</Key><Value${
+      protect ? ' Protected="True">' + encodeProtected(value) : ">" + escapeXml(value)
+    }</Value></String>`;
+  };
+  const walk = (node: XmlGroupNode): void => {
+    xml += `<Group><Name>${escapeXml(node.name)}</Name>`;
+    for (const row of node.entries) {
+      xml += "<Entry>";
+      writeField("Title", row.title, false);
+      writeField("UserName", row.username, false);
+      writeField("Password", row.password, true);
+      writeField("URL", row.url, false);
+      writeField("Notes", row.notes, false);
+      if (row.totp) writeField("otp", row.totp, false);
+      xml += "</Entry>";
+    }
+    for (const child of node.children.values()) walk(child);
+    xml += "</Group>";
+  };
+  walk(root);
+  xml += "</Root></KeePassFile>\n";
+  return xml;
+}

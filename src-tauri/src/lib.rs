@@ -373,6 +373,7 @@ pub fn run() {
             commands::change_timeline,
             commands::check_hibp,
             commands::export_csv,
+            commands::export_xml,
             commands::export_emergency_sheet,
             commands::download_favicons,
             #[cfg(desktop)]
