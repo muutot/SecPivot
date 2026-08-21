@@ -52,6 +52,7 @@
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
   import ExpiredEntriesDialog from "$lib/components/ExpiredEntriesDialog.svelte";
+  import ChangeTimelineDialog from "$lib/components/ChangeTimelineDialog.svelte";
   import HibpCheckDialog from "$lib/components/HibpCheckDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
   import DatabaseSettingsDialog from "$lib/components/DatabaseSettingsDialog.svelte";
@@ -60,7 +61,7 @@
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
   import { parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
-  import { formatKeePassSize } from "$lib/utils/format";
+  import { formatBytes, formatKeePassSize } from "$lib/utils/format";
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
   import {
     awaitCurrentView,
@@ -125,6 +126,7 @@
   let remoteConflict = $state<string | null>(null);
   let similarOpen = $state(false);
   let expiredOpen = $state(false);
+  let timelineOpen = $state(false);
   let hibpOpen = $state(false);
   let emergencyExportOpen = $state(false);
   let emergencyIncludePasswords = $state(false);
@@ -267,6 +269,7 @@
       reportOpen = false;
       similarOpen = false;
       expiredOpen = false;
+      timelineOpen = false;
       hibpOpen = false;
       emergencyExportOpen = false;
       dbMetaOpen = false;
@@ -1970,6 +1973,7 @@
     { id: "save-as", label: "另存为…", icon: "copy" },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "expired-entries", label: "过期条目", icon: "clock" },
+    { id: "change-timeline", label: "变更时间线", icon: "undo" },
     { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
     { id: "clear-history", label: "清理全部历史", icon: "trash" },
     { id: "lock", label: "锁定数据库", icon: "lock" },
@@ -2061,6 +2065,7 @@
     else if (id === "save-as") void handleSaveAs();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "expired-entries") expiredOpen = true;
+    else if (id === "change-timeline") timelineOpen = true;
     else if (id === "hibp-check") hibpOpen = true;
     else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
@@ -2438,6 +2443,19 @@
       if (target) {
         setSingleSelection(target);
         expiredOpen = false;
+      }
+    }}
+  />
+{/if}
+
+{#if timelineOpen}
+  <ChangeTimelineDialog
+    onclose={() => (timelineOpen = false)}
+    onselect={(uuid: string) => {
+      const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
+      if (target) {
+        setSingleSelection(target);
+        timelineOpen = false;
       }
     }}
   />

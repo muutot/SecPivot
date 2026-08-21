@@ -441,6 +441,19 @@ export interface HistoryVersion {
   diff: HistoryDiff;
 }
 
+/** One vault-wide change event on the change timeline: a transition between
+ * two consecutive snapshots of an entry (or the newest snapshot → current).
+ * `title`/`username` are the values as of after the change; `diff` compares
+ * the older side with the newer side. No secrets cross the wire. */
+export interface ChangeTimelineEvent {
+  uuid: string;
+  title: string;
+  username: string;
+  /** ISO timestamp of the change (last modification of the newer side). */
+  time: string;
+  diff: HistoryDiff;
+}
+
 /** Byte-size breakdown of everything an entry stores, following the KeePass
  *  official client's `PwEntry.GetSize()` accounting. */
 export interface EntryStorage {

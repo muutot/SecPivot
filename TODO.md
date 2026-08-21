@@ -169,6 +169,11 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - 账户绑定 (Hardware-bound, TPM) —— 用户暂缓
 - 其余见 roadmap
 
+## Stage 9 — 便携模式与变更时间线
+
+- [x] 便携版 + 配置随行:`config::resolve_data_dir` 检测 exe 旁 `portable.flag` 标记或既有 `conf/config.json` → 便携模式(数据根 = exe 目录),否则标准安装(app-data 目录,避免写入 Program Files);`ConfigStore` 暴露 `data_dir()`/`is_portable()`/`config_path()`,远程镜像 `local_storage_dir` 改用同一数据根(便携版镜像真正随行);新命令 `app_info` 返回 `{portable, configPath, dataDir}`,About 面板显示运行模式与数据目录;`package-portable.ps1` 打包 `portable.flag` 并修正 README;5 个 config 单测覆盖标记/遗留/安装/回退/路径
+- [x] 变更时间线:后端 `change_timeline`(回收站排除、500 条上限、无敏感字段)把每条目的相邻历史快照迁移(最新快照→当前)聚合为全库事件流,按时间倒序;复用后端权威 `history_diff`(密码/受保护字段参与比较但值不出后端);前端 `ChangeTimelineDialog`(ModalShell,按日分组、字段变更 chips、点击定位条目),空白区右键菜单入口;测试覆盖排序/diff 标志/回收站排除/历史清空/序列化无明文
+
 ## 浏览器集成(调研完成,提案见 `docs/browser-integration.md`)
 
 - [~] Phase 1 — KeePassHttp 兼容协议:后台 loopback HTTP 服务(`associate`/`test-associate`/`get-logins`/`get-logins-count`/`set-login`/`generate-password`),AES-256-CBC 逐字段加密 + HMAC-SHA256;匹配复用 `VaultSession::autotype_match` 评分,skips 回收站;associate 密钥存会话内、锁定即销毁。已交付:`bridge.rs`(协议核心,19 测试含 NIST SP 800-38A/RFC 4231 向量)、`bridge_server.rs`(127.0.0.1:19455 服务 + 审批板 + 生命周期,7 测试)、`VaultSession` 桥接(5 测试)、设置「集成」面板(开关/状态/已授权客户端管理)+ 全局关联审批提示,共 132 后端测试通过 (🚧 真机浏览器扩展验证不可行,离线仅协议级测试)

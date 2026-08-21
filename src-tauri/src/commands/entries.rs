@@ -126,6 +126,22 @@ pub(crate) fn expired_entries(
     )
 }
 
+/// Vault-wide change timeline: transitions between consecutive snapshots,
+/// newest first (recycle bin excluded, capped, no secrets).
+#[tauri::command]
+pub(crate) fn change_timeline(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+) -> Result<Vec<crate::vault::ChangeTimelineEvent>, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.change_timeline(),
+    )
+}
+
 /// Check the selected (or every) entry's passwords against HIBP using
 /// k-anonymity: only the first 5 hex chars of each SHA-1 leave the machine.
 /// Strictly opt-in; network I/O runs off the async runtime.

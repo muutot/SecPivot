@@ -2,6 +2,7 @@
 //! report and CSV export helpers on the open `VaultSession` (extracted from
 //! mod.rs).
 
+use super::entries::history_diff;
 use super::helpers::{
     otp_kind_name, parse_entry_id, parse_entry_otp_spec, recycle_bin_id, walk_match,
     walk_match_candidates, walk_ref_match,
@@ -692,6 +693,83 @@ impl VaultSession {
         walk(&db.root(), bin_id, now, &mut out);
         out.sort_by(|a, b| a.expires.cmp(&b.expires));
         Ok(out)
+    }
+
+    /// Vault-wide change timeline: every transition between consecutive
+    /// snapshots of an entry (and each newest snapshot → current state) as one
+    /// event, newest first. Recycle-bin entries are excluded and the result is
+    /// capped so huge databases stay responsive; no secrets cross the wire.
+    pub fn change_timeline(&self) -> Result<Vec<ChangeTimelineEvent>, String> {
+        const MAX_EVENTS: usize = 500;
+        let db = self.require_db()?;
+        let bin_id = recycle_bin_id(db);
+        let mut events: Vec<ChangeTimelineEvent> = Vec::new();
+
+        fn walk(
+            group: &keepass::db::GroupRef<'_>,
+            bin_id: Option<GroupId>,
+            events: &mut Vec<ChangeTimelineEvent>,
+        ) {
+            if Some(group.id()) == bin_id {
+                return;
+            }
+            for entry in group.entries() {
+                let count = entry
+                    .history
+                    .as_ref()
+                    .map(|history| history.get_entries().len())
+                    .unwrap_or(0);
+                // History snapshots are stored newest first: transition t
+                // pairs snapshot t (older) with the current entry for t == 0,
+                // or with snapshot t-1 (newer) otherwise. The event time is
+                // the newer side's last modification — when either side lacks
+                // a timestamp the event cannot be placed on a timeline and is
+                // skipped.
+                for t in 0..count {
+                    let Some(older) = entry.historical(t) else {
+                        continue;
+                    };
+                    let (diff, title, username, time) = if t == 0 {
+                        let Some(time) = entry.times.last_modification else {
+                            continue;
+                        };
+                        (
+                            history_diff(&older, &entry),
+                            entry.get_title().unwrap_or_default().to_owned(),
+                            entry.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                            format_iso(time),
+                        )
+                    } else {
+                        let Some(newer) = entry.historical(t - 1) else {
+                            continue;
+                        };
+                        let Some(time) = newer.times.last_modification else {
+                            continue;
+                        };
+                        (
+                            history_diff(&older, &newer),
+                            newer.get_title().unwrap_or_default().to_owned(),
+                            newer.get(FIELD_USERNAME).unwrap_or_default().to_owned(),
+                            format_iso(time),
+                        )
+                    };
+                    events.push(ChangeTimelineEvent {
+                        uuid: entry.id().uuid().to_string(),
+                        title,
+                        username,
+                        time,
+                        diff,
+                    });
+                }
+            }
+            for child in group.groups() {
+                walk(&child, bin_id, events);
+            }
+        }
+        walk(&db.root(), bin_id, &mut events);
+        events.sort_by(|a, b| b.time.cmp(&a.time));
+        events.truncate(MAX_EVENTS);
+        Ok(events)
     }
 
     /// Export all entries as CSV (passwords included) straight to a file.

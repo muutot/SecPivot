@@ -157,10 +157,12 @@ fn diff_attachments(
     changes
 }
 
-/// Compare one historical snapshot with the entry's current state. Runs in
-/// the backend so the password and protected custom-field values (which are
-/// never serialized to the renderer) still take part in the comparison.
-fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) -> HistoryDiff {
+/// Compare two entry states field by field. Runs in the backend so the
+/// password and protected custom-field values (which are never serialized to
+/// the renderer) still take part in the comparison. Shared by the per-entry
+/// history view (snapshot vs current) and the vault-wide change timeline
+/// (consecutive snapshots).
+pub(crate) fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) -> HistoryDiff {
     let field_of =
         |entry: &EntryRef<'_>, field: &str| entry.get(field).unwrap_or_default().to_owned();
     let expires_of = |entry: &EntryRef<'_>| match entry.times.expires {
