@@ -30,15 +30,14 @@ function readJson(filePath) {
 
 function writeJson(filePath, data) {
   writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
-  try {
-    execFileSync(process.execPath, [PRETTIER_CLI, "--write", filePath], {
-      cwd: ROOT,
-      encoding: "utf-8",
-      stdio: "pipe",
-    });
-  } catch {
-    // non-fatal — file is valid JSON regardless
-  }
+  // Formatting is part of the bump contract: release commits must pass
+  // `npm run format:check`, so a prettier failure fails the bump loudly
+  // instead of leaving an unformatted file for the release commit.
+  execFileSync(process.execPath, [PRETTIER_CLI, "--write", filePath], {
+    cwd: ROOT,
+    encoding: "utf-8",
+    stdio: "pipe",
+  });
 }
 
 function readToml(filePath) {
