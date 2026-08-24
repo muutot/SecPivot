@@ -1,0 +1,8 @@
+# Pinned toolchain for reproducible local and CI builds. The GitHub release
+# workflow still applies extreme runtime optimization via CARGO_PROFILE_RELEASE_*
+# env overrides; this file only fixes the compiler version. Bump deliberately
+# and re-run the full verification set after every bump.
+[toolchain]
+channel = "1.96.0"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
