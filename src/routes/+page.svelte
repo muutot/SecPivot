@@ -21,6 +21,19 @@
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
   import {
+    changeGroupIconFlow,
+    confirmDeleteGroupFlow,
+    confirmEmptyRecycleBinFlow,
+    createGroupFlow,
+    moveEntriesFlow,
+    renameGroupFlow,
+    restoreGroupFlow,
+    saveGroupMetaFlow,
+    setGroupExpandedFlow,
+    setGroupsExpandedFlow,
+    type GroupFlowHost,
+  } from "$lib/services/group-flows";
+  import {
     csvToImportEntries,
     downloadTextFile,
     importEntries as runImportEntries,
@@ -182,6 +195,18 @@
     notify: flash,
     setDialog: (state) => {
       faviconDialog = state;
+    },
+  };
+
+  /** Component hooks for the extracted group/recycle-bin flows; `ask` feeds
+   *  the page-owned confirmation dialog. */
+  const groupFlowHost: GroupFlowHost = {
+    sessionView,
+    createOperations: groupCreateOperations,
+    iconOperations: groupIconOperations,
+    notify: flash,
+    ask: (message, onconfirm) => {
+      confirmState = { message, onconfirm };
     },
   };
 
@@ -1133,41 +1158,21 @@
     if (!name || groupCreating) return;
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    const parentUuid = groupModalParent;
-    const operation = groupCreateOperations.begin();
-    groupCreating = true;
-    try {
-      await vault.callInSession(sessionId, () =>
-        vault.addGroup({
-          parentUuid,
-          name,
-          icon: groupIconIndex ?? undefined,
-        }),
-      );
-      if (!sessionView.isCurrent(view)) return;
-      groupModalOpen = false;
-      flash("已创建分组");
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`创建失败：${e}`);
-    } finally {
-      if (sessionView.isCurrent(view) && groupCreateOperations.isCurrent(operation)) {
-        groupCreating = false;
-      }
-    }
+    await createGroupFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      parentUuid: groupModalParent,
+      name,
+      iconIndex: groupIconIndex,
+      closeModal: () => (groupModalOpen = false),
+      resetBusy: () => (groupCreating = false),
+    });
   }
 
   async function renameGroup(uuid: string, name: string): Promise<void> {
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    try {
-      await vault.callInSession(sessionId, () => vault.renameGroup(uuid, name));
-      if (!sessionView.isCurrent(view)) return;
-      flash("已重命名分组");
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`重命名失败：${e}`);
-    }
+    await renameGroupFlow(groupFlowHost, { view, sessionId: view.sessionId, uuid, name });
   }
 
   async function saveGroupMeta(meta: {
@@ -1178,17 +1183,14 @@
     if (!groupMetaUuid) return false;
     const view = sessionView.capture();
     if (!view) return false;
-    const { sessionId } = view;
-    const uuid = groupMetaUuid;
-    try {
-      await vault.callInSession(sessionId, () => vault.updateGroupMeta(uuid, meta));
-      if (!sessionView.isCurrent(view) || groupMetaUuid !== uuid) return false;
-      flash("已保存分组属性");
-      return true;
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`保存分组属性失败：${e}`);
-      return false;
-    }
+    const targetUuid = groupMetaUuid;
+    return saveGroupMetaFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      uuid: targetUuid,
+      meta,
+      stillTarget: () => groupMetaUuid === targetUuid,
+    });
   }
 
   /** Open the group icon picker dialog, seeding the selection from the group's
@@ -1205,76 +1207,41 @@
     if (!uuid || groupIconSaving) return;
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    const operation = groupIconOperations.begin();
-    groupIconSaving = true;
-    try {
-      await vault.callInSession(sessionId, () => vault.setGroupIcon(uuid, groupIconPick));
-      if (!sessionView.isCurrent(view)) return;
-      groupIconDialogUuid = null;
-      flash("已更新分组图标");
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`更新图标失败：${e}`);
-    } finally {
-      if (sessionView.isCurrent(view) && groupIconOperations.isCurrent(operation)) {
-        groupIconSaving = false;
-      }
-    }
+    await changeGroupIconFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      uuid,
+      pick: groupIconPick,
+      closeModal: () => (groupIconDialogUuid = null),
+      resetBusy: () => (groupIconSaving = false),
+    });
   }
 
   function askDeleteGroup(uuid: string): void {
     const inBin = selectedGroupInBin(uuid);
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    confirmState = {
-      message: inBin
-        ? "永久删除该分组及其全部内容？此操作无法撤销。"
-        : "删除该分组？其下条目将移动到回收站。",
-      onconfirm: async () => {
-        if (!sessionView.isCurrent(view)) return;
-        try {
-          await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
-          if (!sessionView.isCurrent(view)) return;
-          if (selectedGroup === uuid) selectedGroup = null;
-          flash(inBin ? "已永久删除分组" : "已移入回收站");
-        } catch (e) {
-          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
-        }
+    confirmDeleteGroupFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      uuid,
+      inBin,
+      resetSelectedGroup: () => {
+        if (selectedGroup === uuid) selectedGroup = null;
       },
-    };
+    });
   }
 
   function askEmptyRecycleBin(): void {
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    confirmState = {
-      message: "清空回收站？其中的条目和分组将被永久删除，此操作无法撤销。",
-      onconfirm: async () => {
-        if (!sessionView.isCurrent(view)) return;
-        try {
-          await vault.callInSession(sessionId, () => vault.emptyRecycleBin());
-          if (!sessionView.isCurrent(view)) return;
-          flash("已清空回收站");
-        } catch (e) {
-          if (sessionView.isCurrent(view)) flash(`清空失败：${e}`);
-        }
-      },
-    };
+    confirmEmptyRecycleBinFlow(groupFlowHost, { view, sessionId: view.sessionId });
   }
 
   async function restoreGroup(uuid: string): Promise<void> {
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    try {
-      await vault.callInSession(sessionId, () => vault.restoreGroup(uuid));
-      if (!sessionView.isCurrent(view)) return;
-      flash("已恢复分组");
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`恢复失败：${e}`);
-    }
+    await restoreGroupFlow(groupFlowHost, { view, sessionId: view.sessionId, uuid });
   }
 
   async function restoreEntry(entry: VaultEntry): Promise<void> {
@@ -1349,38 +1316,34 @@
     if (!currentVault || uuids.length === 0) return;
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    try {
-      for (const uuid of uuids) {
-        await vault.callInSession(sessionId, () => vault.moveEntry(uuid, groupUuid));
-      }
-      if (!sessionView.isCurrent(view)) return;
-      flash(`已移动 ${uuids.length} 个条目`);
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`移动失败：${e}`);
-    }
+    await moveEntriesFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      groupUuid,
+      uuids,
+    });
   }
 
   async function toggleGroupExpanded(uuid: string, expanded: boolean): Promise<void> {
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    try {
-      await vault.callInSession(sessionId, () => vault.setGroupExpanded(uuid, expanded));
-    } catch (error) {
-      if (sessionView.isCurrent(view)) flash(`展开分组失败：${error}`);
-    }
+    await setGroupExpandedFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      uuid,
+      expanded,
+    });
   }
 
   async function toggleGroupsExpanded(uuids: string[], expanded: boolean): Promise<void> {
     const view = sessionView.capture();
     if (!view) return;
-    const { sessionId } = view;
-    try {
-      await vault.callInSession(sessionId, () => vault.setGroupsExpanded(uuids, expanded));
-    } catch (error) {
-      if (sessionView.isCurrent(view)) flash(`展开分组失败：${error}`);
-    }
+    await setGroupsExpandedFlow(groupFlowHost, {
+      view,
+      sessionId: view.sessionId,
+      uuids,
+      expanded,
+    });
   }
 
   async function copyEntryValue(value: string, label: string, sensitive = false): Promise<void> {

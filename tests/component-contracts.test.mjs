@@ -100,25 +100,31 @@ test("TCATO open attempts release only their own focus-lock lease", async () => 
 });
 
 test("page mutations gate completion UI by the originating view epoch", async () => {
-  const source = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const [source, groupFlows] = await Promise.all([
+    readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/services/group-flows.ts", import.meta.url), "utf8"),
+  ]);
+  // Actions whose completion gating stays inline in the page.
   const asyncActions = [
     "toggleFavorite",
     "handleClearHistory",
-    "renameGroup",
-    "saveGroupMeta",
-    "restoreGroup",
     "restoreEntry",
-    "moveEntriesTo",
-    "toggleGroupExpanded",
-    "toggleGroupsExpanded",
     "copyEntryValue",
     "runAutoType",
   ];
-  const confirmedActions = [
-    "askDeleteGroup",
-    "askEmptyRecycleBin",
-    "askDeleteEntry",
-    "askDeleteEntries",
+  const confirmedActions = ["askDeleteEntry", "askDeleteEntries"];
+  // Actions delegated to group-flows.ts: the page must capture a view and
+  // delegate; the service file carries the actual isCurrent gating.
+  const delegated = [
+    { page: "renameGroup", flow: "renameGroupFlow" },
+    { page: "restoreGroup", flow: "restoreGroupFlow" },
+    { page: "moveEntriesTo", flow: "moveEntriesFlow" },
+    { page: "toggleGroupExpanded", flow: "setGroupExpandedFlow" },
+    { page: "toggleGroupsExpanded", flow: "setGroupsExpandedFlow" },
+    { page: "confirmCreateGroup", flow: "createGroupFlow" },
+    { page: "confirmChangeGroupIcon", flow: "changeGroupIconFlow" },
+    { page: "askDeleteGroup", flow: "confirmDeleteGroupFlow" },
+    { page: "askEmptyRecycleBin", flow: "confirmEmptyRecycleBinFlow" },
   ];
 
   for (const name of asyncActions) {
@@ -139,6 +145,21 @@ test("page mutations gate completion UI by the originating view epoch", async ()
     );
     assert.doesNotMatch(block, /vault\.getActiveSessionId\(\)/);
   }
+
+  for (const { page, flow } of delegated) {
+    const block = topLevelFunction(source, page);
+    assert.ok(block, `${page} must exist`);
+    assert.match(block, /sessionView\.capture\(\)/, `${page} must capture a view`);
+    assert.match(block, new RegExp(flow), `${page} must delegate to ${flow}`);
+    const flowBodyStart = groupFlows.indexOf(`export function ${flow}`);
+    const flowBodyAlt = groupFlows.indexOf(`export async function ${flow}`);
+    const start = Math.max(flowBodyStart, flowBodyAlt);
+    assert.ok(start !== -1, `${flow} must exist in group-flows.ts`);
+    const nextExport = groupFlows.indexOf("export ", start + 10);
+    const body = groupFlows.slice(start, nextExport === -1 ? undefined : nextExport);
+    assert.match(body, /isCurrent\(view\)/, `${flow} must gate completion by view staleness`);
+    assert.doesNotMatch(body, /getActiveSessionId/);
+  }
 });
 
 test("group metadata waits for the parent save before closing", async () => {
@@ -146,17 +167,25 @@ test("group metadata waits for the parent save before closing", async () => {
     new URL("../src/lib/components/GroupMetaDialog.svelte", import.meta.url),
     "utf8",
   );
-  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const [page, groupFlows] = await Promise.all([
+    readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/services/group-flows.ts", import.meta.url), "utf8"),
+  ]);
   const saveBlock = topLevelFunction(page, "saveGroupMeta");
+  const flowStart = groupFlows.indexOf("export async function saveGroupMetaFlow");
 
   assert.match(dialog, /onsaved: \([^]*?\) => Promise<boolean>/);
   assert.match(dialog, /const current = await onsaved\(/);
   assert.match(dialog, /if \(current\) onclose\(\)/);
   assert.match(dialog, /closeOnEscape=\{!saving\}/);
   assert.match(dialog, /onclick=\{onclose\} disabled=\{saving\}/);
+  // The page wrapper keeps the target-uuid guard; the flow gates on it after
+  // the write so a re-targeted or stale dialog reports "not saved".
   assert.ok(saveBlock, "saveGroupMeta must exist");
   assert.match(saveBlock, /Promise<boolean>/);
-  assert.match(saveBlock, /groupMetaUuid !== uuid/);
+  assert.match(saveBlock, /stillTarget: \(\) => groupMetaUuid === targetUuid/);
+  const flowBody = groupFlows.slice(flowStart, groupFlows.indexOf("export ", flowStart + 10));
+  assert.match(flowBody, /stillTarget\(\)/);
   assert.match(page, /onsaved=\{saveGroupMeta\}/);
 });
 
