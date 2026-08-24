@@ -549,14 +549,19 @@ export const vault: VaultStore = {
   tabs,
   activeId,
 
+  /** Current vault snapshot (or `null` when closed) without subscribing. */
   get(): VaultState | null {
     return get(state);
   },
 
+  /** Backend session id of the active tab (`null` when closed). */
   getActiveSessionId(): string | null {
     return activeSessionId;
   },
 
+  /** Run an operation with every session-scoped vault call bound to
+   *  `sessionId`, even when another tab is active. Async work after the first
+   *  await is no longer bound — keep overrides synchronous. */
   callInSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     const previous = invocationSessionId;
     invocationSessionId = sessionId;
@@ -569,12 +574,15 @@ export const vault: VaultStore = {
     }
   },
 
+  /** Database storage settings (KDF/cipher/compression/history cap) of the
+   *  addressed session; `null` outside Tauri. */
   async getDatabaseSettings(): Promise<DatabaseSettings | null> {
     if (!isTauriRuntime()) return null;
     const sessionId = captureSessionId();
     return backendInvoke<DatabaseSettings | null>("get_database_settings", { sessionId });
   },
 
+  /** Patch database storage settings; epoch-guarded commit. */
   async updateDatabaseSettings(patch: DatabaseSettingsPatch): Promise<VaultState> {
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
@@ -589,6 +597,8 @@ export const vault: VaultStore = {
   },
 
   remembered: remembered.subscribe,
+  /** Last opened local vault for the lock screen quick-reopen; `null` after a
+   *  remote open (a remote session cannot be reopened from the lock screen). */
   getRemembered(): RememberedVault | null {
     return get(remembered);
   },
@@ -596,6 +606,8 @@ export const vault: VaultStore = {
     remembered.set(null);
   },
 
+  /** Open a local KDBX file; serializes through the topology queue, records
+   *  the path for quick reopen and recent files, and switches the tab bar. */
   async open(path, password, keyfile): Promise<VaultState> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
@@ -654,6 +666,9 @@ export const vault: VaultStore = {
     return result;
   },
 
+  /** Close the active session: zeroizes its backend state, discards its temp
+   *  attachments, drops the remembered credential when not persisted, and
+   *  promotes the next tab (clearing all state when none remains). */
   async close(): Promise<void> {
     if (isTauriRuntime()) {
       const path = get(state)?.path;
@@ -692,6 +707,9 @@ export const vault: VaultStore = {
     tabs.set([]);
   },
 
+  /** Lock-everything path shared by lock/idle/focus-loss: closes all backend
+   *  sessions (zeroizing keys server-side) and discards every temp
+   *  attachment directory. */
   async closeAll(): Promise<void> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
@@ -717,6 +735,9 @@ export const vault: VaultStore = {
     activeId.set(null);
   },
 
+  /** List remote vault objects under the active profile's prefix (`.kdbx`
+   *  first, key descending). Flushes pending settings so a just-added profile
+   *  is visible to the backend. */
   async listRemoteObjects(): Promise<RemoteObject[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
     await appSettings.flush();
@@ -725,6 +746,9 @@ export const vault: VaultStore = {
     });
   },
 
+  /** Download and open a remote vault. `mode` is `"memory"` (upload back only)
+   *  or `"local"` (mirror under Storage/remote/…); clears the remembered local
+   *  path since a remote session cannot be reopened from the lock screen. */
   async openRemote(key, password, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
     return topologyQueue.enqueue(async () => {
@@ -748,6 +772,8 @@ export const vault: VaultStore = {
     });
   },
 
+  /** Create a fresh remote vault and open it with the same mode semantics as
+   *  `openRemote`. */
   async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
     return topologyQueue.enqueue(async () => {
@@ -774,6 +800,8 @@ export const vault: VaultStore = {
     });
   },
 
+  /** Persist dirty changes; `force` overwrites a detected remote conflict.
+   *  Rejects with the `REMOTE_CHANGED\n` sentinel when remote bytes moved. */
   async save(force = false): Promise<VaultState> {
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
@@ -792,6 +820,8 @@ export const vault: VaultStore = {
     return saved;
   },
 
+  /** Re-download the remote bytes and replace session state, discarding local
+   *  unsaved edits (the caller confirms that first). */
   async refreshRemote(): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
     const sessionId = captureSessionId();
@@ -833,6 +863,7 @@ export const vault: VaultStore = {
     return saved;
   },
 
+  /** Re-encrypt the session with a new master password and/or keyfile. */
   async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
@@ -1004,6 +1035,7 @@ export const vault: VaultStore = {
     return result;
   },
 
+  /** Compute the entry's current TOTP/HOTP/Steam code with its validity window. */
   async totpCode(uuid: string): Promise<TotpCode> {
     if (isTauriRuntime()) {
       return invokeSession<TotpCode>("totp_code", { uuid });
@@ -1015,6 +1047,8 @@ export const vault: VaultStore = {
     return computeTotp(entry.totp);
   },
 
+  /** Resolve the entry's plaintext password server-side; only for explicit
+   *  user actions (copy/reveal), never part of list state. */
   async getEntryPassword(uuid: string): Promise<string> {
     if (isTauriRuntime()) {
       return invokeSession<string>("get_entry_password", { uuid });
@@ -1039,6 +1073,8 @@ export const vault: VaultStore = {
     return findEntry(current.root, uuid)?.customFields?.find((f) => f.name === name)?.value ?? null;
   },
 
+  /** Write back a custom field value, preserving or setting its protected
+   *  flag; editing never downgrades an existing protection. */
   async updateCustomFieldValue(
     uuid: string,
     name: string,
@@ -1069,6 +1105,8 @@ export const vault: VaultStore = {
     return result;
   },
 
+  /** Session-wide security audit (reuse, weakness, expiry; no secrets in
+   *  results). */
   async securityReport(): Promise<SecurityReport> {
     if (isTauriRuntime()) {
       return invokeSession<SecurityReport>("security_report");
@@ -1077,6 +1115,7 @@ export const vault: VaultStore = {
     return computeSecurityReport(current.root);
   },
 
+  /** Edit-distance clusters of similar passwords (values stay backend-side). */
   async similarPasswords(): Promise<SimilarPasswordGroup[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持相似密码检查");
     return invokeSession<SimilarPasswordGroup[]>("similar_passwords");
@@ -1101,6 +1140,8 @@ export const vault: VaultStore = {
     return invokeSession<ChangeTimelineEvent[]>("change_timeline");
   },
 
+  /** Opt-in k-anonymity breach check; `uuids` narrows the run to selected
+   *  entries. Only SHA-1 prefixes leave the machine. */
   async checkHibp(uuids?: string[]): Promise<BreachFinding[]> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持 HIBP 检查");
     return invokeSession<BreachFinding[]>("check_hibp", {
@@ -1108,6 +1149,8 @@ export const vault: VaultStore = {
     });
   },
 
+  /** Fetch site icons for all (or the given) entries; state is refreshed only
+   *  when no user edit landed during the network run. */
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
     const sessionId = captureSessionId();
@@ -1155,6 +1198,8 @@ export const vault: VaultStore = {
     return ref;
   },
 
+  /** Discard a temp extraction directory; failure keeps the token registered
+   *  so the session close/lock path can retry it. */
   async cleanupAttachmentTemp(token: string): Promise<void> {
     if (!isTauriRuntime()) {
       tempAttachmentTokens.delete(token);
@@ -1168,6 +1213,8 @@ export const vault: VaultStore = {
     }
   },
 
+  /** Import a previously extracted attachment back into the entry from its
+   *  temp token (session-bound), then clean the token up. */
   async importAttachmentFromTemp(uuid: string, name: string, token: string): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件导入");
     const sessionId = tempAttachmentTokens.get(token);
@@ -1389,6 +1436,7 @@ export const vault: VaultStore = {
     return result;
   },
 
+  /** Delete entries to the recycle bin (multi-select). */
   async deleteEntries(uuids: string[]): Promise<VaultState> {
     if (isTauriRuntime()) {
       return invokeSessionState("delete_entries", { uuids });
@@ -1544,6 +1592,9 @@ export const vault: VaultStore = {
     await refreshTabs();
   },
 
+  /** Switch the active tab: validates an uncached session before swapping the
+   *  backend-active session, epoch-guarding the commit so a failed load never
+   *  leaves renderer and backend pointing at different sessions. */
   async setActiveSession(sessionId: string): Promise<VaultState> {
     if (!isTauriRuntime()) throw new Error("浏览器预览不支持多库标签");
     if (sessionId === activeSessionId) {
@@ -1581,6 +1632,8 @@ export const vault: VaultStore = {
     return resolved;
   },
 
+  /** Close one tab's session (same semantics as `close`, addressed by id) and
+   *  promote the next tab. */
   async closeTab(sessionId: string): Promise<void> {
     if (!isTauriRuntime()) return;
     const tab = get(tabs).find((t) => t.sessionId === sessionId);
