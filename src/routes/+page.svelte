@@ -18,6 +18,7 @@
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
+  import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
   import {
@@ -137,10 +138,6 @@
   let advancedSearchOpen = $state(false);
   let selectedGroup = $state<string | null>(null);
   let revealGroupUuid = $state<string | null>(null);
-  let editorOpen = $state(false);
-  let editorMode: "create" | "edit" | "edit-multi" = $state("create");
-  let editEntry: VaultEntry | null = $state(null);
-  let editEntries: VaultEntry[] = $state([]);
   let groupModalOpen = $state(false);
   let groupModalParent = $state<string | null>(null);
   let newGroupName = $state("");
@@ -292,8 +289,7 @@
         selection.selectedEntry = null;
         selection.selectedUuids = new Set();
         selection.selectionAnchor = null;
-        editorOpen = false;
-        editEntries = [];
+        editor.reset();
       } else {
         selection.selectedEntry = findEntryByUuid(value, selection.selectedEntry?.uuid ?? null);
       }
@@ -329,9 +325,7 @@
       securityReport = null;
       // Session-scoped overlays/forms must never survive a tab switch: their
       // captured uuids may also exist in an identical copy of another vault.
-      editorOpen = false;
-      editEntry = null;
-      editEntries = [];
+      editor.reset();
       groupModalOpen = false;
       groupIconDialogUuid = null;
       groupAutoTypeUuid = null;
@@ -995,12 +989,17 @@
     flash("数据库已锁定");
   }
 
-  function openCreateEntry(): void {
-    editorMode = "create";
-    editEntry = null;
-    editEntries = [];
-    editorOpen = true;
-  }
+  /** Editor dialog flow (open modes + guarded save pipeline); see
+   *  `useEntryEditor.svelte.ts`. */
+  const editor = useEntryEditor({
+    sessionView,
+    notify: flash,
+    findEntry: findEntryByUuid,
+    findNewestInGroup: findNewestEntryInGroup,
+    setSingleSelection,
+    setSelectedEntry: (entry) => (selection.selectedEntry = entry),
+    getSelectedEntry: () => selection.selectedEntry,
+  });
 
   let searchInputEl = $state<HTMLInputElement | null>(null);
 
@@ -1018,7 +1017,7 @@
     // never start a second action while another (import/favicon/save) is running.
     if (event.repeat || busy) return;
     if (
-      editorOpen ||
+      editor.editorOpen ||
       groupModalOpen ||
       groupIconDialogUuid ||
       reportOpen ||
@@ -1044,7 +1043,7 @@
       "copy-password": () => {
         if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
       },
-      "new-entry": () => openCreateEntry(),
+      "new-entry": () => editor.openCreate(),
       "focus-search": () => searchInputEl?.focus(),
       "locate-in-tree": () => {
         if (selection.selectedEntry && currentVault) {
@@ -1070,80 +1069,16 @@
 
   function openEditEntry(entry: VaultEntry): void {
     if (selection.selectedUuids.size > 1 && selection.selectedUuids.has(entry.uuid)) {
-      editorMode = "edit-multi";
-      editEntry = null;
-      editEntries = collectSelectedEntries();
-      if (editEntries.length < 2) {
+      const multiEntries = collectSelectedEntries();
+      if (multiEntries.length < 2) {
         setSingleSelection(entry);
-        editorMode = "edit";
-        editEntry = entry;
-        editEntries = [];
+        editor.openEdit(entry);
+        return;
       }
-      editorOpen = true;
+      editor.openEdit(entry, multiEntries);
       return;
     }
-    editorMode = "edit";
-    editEntry = entry;
-    editEntries = [];
-    editorOpen = true;
-  }
-
-  async function handleEditorSave(
-    input: EntryInput | null,
-    patch: EntryPatch | null,
-    autotype: EntryAutoTypeConfig | null,
-    flags?: EntryFlags | null,
-  ): Promise<void> {
-    const view = sessionView.capture();
-    if (!view) return;
-    const { sessionId } = view;
-    const mode = editorMode;
-    const targetEntry = editEntry;
-    const targetEntries = [...editEntries];
-    try {
-      if (mode === "create" && input) {
-        let state = await vault.callInSession(sessionId, () => vault.addEntry(input));
-        const created = findNewestEntryInGroup(state, input.groupUuid);
-        if (autotype && created) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryAutoType(created.uuid, autotype),
-          );
-        }
-        if (flags && created) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryFlags(created.uuid, flags),
-          );
-        }
-        if (!sessionView.isCurrent(view)) return;
-        setSingleSelection(findEntryByUuid(state, created?.uuid ?? null));
-        editorOpen = false;
-        flash("已创建条目");
-      } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
-        const uuids = targetEntries.map((e) => e.uuid);
-        const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
-        if (!sessionView.isCurrent(view)) return;
-        selection.selectedEntry = findEntryByUuid(state, selection.selectedEntry?.uuid ?? null);
-        editorOpen = false;
-        flash(`已更新 ${uuids.length} 个条目`);
-      } else if (mode === "edit" && input && targetEntry) {
-        const uuid = targetEntry.uuid;
-        let state = await vault.callInSession(sessionId, () => vault.updateEntry(uuid, input));
-        if (autotype) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryAutoType(uuid, autotype),
-          );
-        }
-        if (flags) {
-          state = await vault.callInSession(sessionId, () => vault.updateEntryFlags(uuid, flags));
-        }
-        if (!sessionView.isCurrent(view)) return;
-        setSingleSelection(findEntryByUuid(state, uuid));
-        editorOpen = false;
-        flash("已保存修改");
-      }
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`操作失败：${e}`);
-    }
+    editor.openEdit(entry);
   }
 
   function openGroupModal(parentUuid: string | null): void {
@@ -1478,7 +1413,7 @@
   }
 
   function handleBlankMenuAction(id: string): void {
-    if (id === "new-entry") openCreateEntry();
+    if (id === "new-entry") editor.openCreate();
     else if (id === "new-group") openGroupModal(selectedGroup);
     else if (id === "import-csv") void handleImportCsv();
     else if (id === "import-xml") void handleImportXml();
@@ -1550,7 +1485,7 @@
           <button
             class="tool-button primary"
             class:icon-only={iconOnlyButtons}
-            onclick={openCreateEntry}
+            onclick={editor.openCreate}
             title="新建条目 (Ctrl+N)"
           >
             <AppIcon name="plus" size={14} />
@@ -1830,15 +1765,15 @@
   </main>
 {/if}
 
-{#if editorOpen}
+{#if editor.editorOpen}
   <EntryEditorDialog
-    mode={editorMode}
+    mode={editor.editorMode}
     groups={currentVault ? [currentVault.root] : []}
     groupUuid={selectedGroup ?? currentVault?.root.uuid ?? "root"}
-    entry={editEntry}
-    entries={editEntries}
-    onclose={() => (editorOpen = false)}
-    onsaved={(input, patch, autotype, flags) => handleEditorSave(input, patch, autotype, flags)}
+    entry={editor.editEntry}
+    entries={editor.editEntries}
+    onclose={editor.close}
+    onsaved={(input, patch, autotype, flags) => editor.handleSave(input, patch, autotype, flags)}
   />
 {/if}
 
