@@ -151,6 +151,33 @@ jobs:
           }
           Write-Host "Uploaded $(Split-Path -Leaf $zip)"
 
+      - name: Generate and upload Windows SHA256SUMS
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          $ver = $env:RELEASE_TAG.TrimStart("v")
+          $nsis = "${{ github.workspace }}\src-tauri\target\release\bundle\nsis\SecPivot_$($ver)_x64-setup.exe"
+          $zip = "${{ github.workspace }}\dist\SecPivot-$ver-portable.zip"
+          foreach ($artifact in @($nsis, $zip)) {
+            if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+              throw "Artifact for checksumming not found at $artifact."
+            }
+          }
+          $sumsFile = "${{ github.workspace }}\dist\SHA256SUMS-windows.txt"
+          $lines = @()
+          foreach ($artifact in @($nsis, $zip)) {
+            $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "$hash  $(Split-Path -Leaf $artifact)"
+          }
+          Set-Content -LiteralPath $sumsFile -Value $lines -Encoding ascii
+          gh release upload "$env:RELEASE_TAG" $sumsFile --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "SHA256SUMS-windows.txt upload failed with exit code $LASTEXITCODE."
+          }
+          Write-Host "Uploaded $(Split-Path -Leaf $sumsFile)"
+
   android:
     name: Build (Android APK)
     # Parallel to the Windows build: runs as soon as verification passes. The
@@ -281,11 +308,24 @@ jobs:
             echo "Staged $(basename "$asset")"
           done
 
+      - name: Generate Android SHA256SUMS
+        shell: bash
+        run: |
+          sums="dist/android/SHA256SUMS-android.txt"
+          : > "$sums"
+          for asset in dist/android/*.apk; do
+            hash=$(sha256sum "$asset" | cut -d' ' -f1)
+            printf '%s  %s\n' "$hash" "$(basename "$asset")" >> "$sums"
+          done
+          cat "$sums"
+
       - name: Preserve Android release asset
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: android-release-apk
-          path: dist/android/*.apk
+          path: |
+            dist/android/*.apk
+            dist/android/SHA256SUMS-android.txt
           if-no-files-found: error
           retention-days: 1
 
@@ -308,7 +348,7 @@ jobs:
         run: |
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
           shopt -s nullglob
-          assets=(dist/android/SecPivot-*-android-*.apk)
+          assets=(dist/android/SecPivot-*-android-*.apk dist/android/SHA256SUMS-android.txt)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "No Android release asset found under dist/android/." >&2
             exit 1
