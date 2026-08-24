@@ -17,6 +17,7 @@
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
+  import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
   import {
@@ -460,36 +461,15 @@
     return collectGroups(group);
   });
 
-  /** Entry objects are immutable within a vault snapshot, so search text can
-   *  be normalized lazily on the first non-empty query and reused for each
-   *  following keystroke. Replaced snapshots naturally release old entries. */
-  const entrySearchTextCache = new WeakMap<VaultEntry, string>();
-  function searchTextFor(entry: VaultEntry): string {
-    const cached = entrySearchTextCache.get(entry);
-    if (cached !== undefined) return cached;
-    const text = [entry.title, entry.username, entry.url, entry.notes, entry.tags]
-      .join(" ")
-      .toLowerCase();
-    entrySearchTextCache.set(entry, text);
-    return text;
-  }
-
-  const filteredEntries = $derived.by((): { entry: VaultEntry }[] => {
-    if (!currentVault) return [];
-    const query = search.trim().toLowerCase();
-    const result: { entry: VaultEntry }[] = [];
-    for (const group of selectedSubtree) {
-      // KeePass: groups with "EnableSearching" off contribute no entries to
-      // search results (per-group; descendants each carry their own flag).
-      if (!group.enableSearching) continue;
-      for (const entry of group.entries) {
-        if (query && !searchTextFor(entry).includes(query)) continue;
-        if (advancedQuery && !matchesAdvancedSearch(entry, advancedQuery)) continue;
-        result.push({ entry });
-      }
-    }
-    return result;
+  /** Search/filter pipeline lives in the extracted composable; see
+   *  `useEntryFilter.svelte.ts`. */
+  const entryFilter = useEntryFilter({
+    currentVault: () => currentVault,
+    selectedSubtree: () => selectedSubtree,
+    search: () => search,
+    advancedQuery: () => advancedQuery,
   });
+  const filteredEntries = entryFilter.filteredEntries;
 
   type SortCol = string;
   let sortCol = $state<SortCol>("title");
