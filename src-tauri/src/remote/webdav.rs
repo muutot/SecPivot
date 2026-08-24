@@ -59,7 +59,7 @@ impl WebDavStorage {
             Some((username.to_owned(), cfg.secret_key.clone()))
         };
         Ok(Self {
-            client: shared_blocking_client().clone(),
+            client: shared_blocking_client()?.clone(),
             auth,
             base_url,
             list_timeout,

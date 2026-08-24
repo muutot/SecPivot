@@ -40,24 +40,33 @@ const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(120);
 /// e.g. when a vault session closes); keeping the original alive forever means
 /// per-storage clones never tear the runtime down.
 ///
-/// `reqwest::blocking::Client::build` also *blocks* (`wait::enter`), so it must
-/// run off any async worker or it panics on first use — hence a dedicated
-/// init thread for the one-time construction.
-pub(crate) fn shared_blocking_client() -> &'static reqwest::blocking::Client {
-    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        std::thread::Builder::new()
-            .name("remote-client-init".into())
-            .spawn(|| {
-                reqwest::blocking::Client::builder()
-                    .connect_timeout(REMOTE_CONNECT_TIMEOUT)
-                    .build()
-                    .expect("无法初始化远程存储客户端: reqwest 资源不足")
-            })
-            .expect("spawn remote client init thread")
-            .join()
-            .expect("remote client init thread panicked")
-    })
+/// `reqwest::blocking::Client::build` also *blocks* (`wait::enter`), so it
+/// must run off any async worker or it panics on first use — hence a dedicated
+/// init thread for the one-time construction. A failed construction (thread
+/// spawn/join failure, resource exhaustion) is cached and reported as an
+/// error instead of aborting the process: remote sync stays unavailable but
+/// the vault session survives. The failure is sticky by design — retrying a
+/// half-initialized runtime is not safe.
+pub(crate) fn shared_blocking_client() -> Result<&'static reqwest::blocking::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            let handle = std::thread::Builder::new()
+                .name("remote-client-init".into())
+                .spawn(|| {
+                    reqwest::blocking::Client::builder()
+                        .connect_timeout(REMOTE_CONNECT_TIMEOUT)
+                        .build()
+                })
+                .map_err(|e| format!("无法初始化远程存储客户端: 创建初始化线程失败: {e}"))?;
+            match handle.join() {
+                Ok(Ok(client)) => Ok(client),
+                Ok(Err(e)) => Err(format!("无法初始化远程存储客户端: {e}")),
+                Err(_) => Err("无法初始化远程存储客户端: 初始化线程异常退出".to_owned()),
+            }
+        })
+        .as_ref()
+        .map_err(|message| message.clone())
 }
 
 #[derive(Debug, Clone, Serialize)]

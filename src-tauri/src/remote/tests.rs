@@ -58,8 +58,14 @@ fn local_dir_name_is_sanitized() {
 /// list/open/save. Both calls must resolve to the exact same instance.
 #[test]
 fn s3_uses_a_single_shared_client() {
-    let a = shared_blocking_client() as *const _;
-    let b = shared_blocking_client() as *const _;
+    let Ok(a) = shared_blocking_client() else {
+        panic!("shared client must initialize in tests");
+    };
+    let a: *const reqwest::blocking::Client = a;
+    let Ok(b) = shared_blocking_client() else {
+        panic!("shared client must stay initialized");
+    };
+    let b: *const reqwest::blocking::Client = b;
     assert!(std::ptr::eq(a, b));
 }
 

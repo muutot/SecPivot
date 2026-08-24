@@ -88,7 +88,7 @@ impl S3Storage {
             return Err("请先在设置中配置 S3 Secret Key".to_owned());
         }
         Ok(Self {
-            client: shared_blocking_client().clone(),
+            client: shared_blocking_client()?.clone(),
             endpoint: endpoint.trim_end_matches('/').to_owned(),
             region: region.to_owned(),
             bucket: bucket_name.to_owned(),

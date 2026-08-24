@@ -133,8 +133,14 @@ impl RpcState {
         }
     }
 
-    /// Register a freshly upgraded WebSocket connection; returns its id.
-    fn register_session(&self, peer: String, stream: &TcpStream) -> u64 {
+    /// Register a freshly upgraded WebSocket connection; returns its id, or
+    /// `None` when the socket cannot be cloned for tracking (fd exhaustion) —
+    /// the caller must then drop the connection instead of crashing.
+    fn register_session(&self, peer: String, stream: &TcpStream) -> Option<u64> {
+        let Ok(stream_clone) = stream.try_clone() else {
+            eprintln!("[rpc] socket clone failed; dropping connection ({peer})");
+            return None;
+        };
         let id = self.next_conn_id.fetch_add(1, Ordering::Relaxed);
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.push(LiveSession {
@@ -143,10 +149,10 @@ impl RpcState {
                 peer,
                 connected_at: SystemTime::now(),
                 authenticated: false,
-                stream: stream.try_clone().expect("socket clone"),
+                stream: stream_clone,
             });
         }
-        id
+        Some(id)
     }
 
     fn update_session(&self, id: u64, username: Option<String>, authenticated: bool) {
@@ -374,7 +380,9 @@ fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
     };
     eprintln!("[rpc] websocket upgraded ({peer})");
     let rpc_state = app.state::<RpcState>();
-    let conn_id = rpc_state.register_session(peer.to_owned(), ws.get_mut());
+    let Some(conn_id) = rpc_state.register_session(peer.to_owned(), ws.get_mut()) else {
+        return;
+    };
     // Handshake is done; allow longer idle on the data path.
     let _ = ws.get_mut().set_read_timeout(Some(DATA_TIMEOUT));
     let mut conn = Conn::default();
