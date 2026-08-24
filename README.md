@@ -23,6 +23,15 @@
 
 ## 开发
 
+### 前置依赖
+
+- **Node.js 24**（`.nvmrc` 已固定；类型检查与构建依赖其原生 TS 剥离）
+- **Rust stable**（版本由根目录 `rust-toolchain.toml` 固定，rustup 会自动安装）
+- **Windows**：Visual Studio Build Tools（MSVC）+ WebView2 运行时；首次 `cargo build` 需要联网拉取 crates
+- Android 构建需另备 JDK 17 + Android SDK/NDK（见 `docs/android.md`）
+
+### 常用命令
+
 ```powershell
 npm install
 npm run dev          # 浏览器预览（demo 金库，localStorage 演示）
@@ -31,6 +40,10 @@ npm run verify       # 全量校验：格式化 + svelte-check + build + rust te
 ```
 
 浏览器模式仅用于 UI 开发；真实 KDBX 读写行为以 Rust 后端为准。
+
+## 安全报告
+
+发现安全漏洞请**不要**提交公开 issue：通过 GitHub Security Advisories（仓库 Security 标签页 → Report a vulnerability）私密报告。密钥与主密码从不离开本机会话；报告请附复现步骤与影响范围，我们会在修复发布前保持保密。
 
 ## 文档
 
