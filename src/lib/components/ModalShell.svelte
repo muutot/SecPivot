@@ -37,23 +37,65 @@
     actions,
   }: Props = $props();
 
+  let dialogRef = $state<HTMLDivElement>();
+
+  /** Focusable descendants kept inside the dialog while it is open. */
+  const FOCUSABLE_SELECTOR =
+    "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
+  function focusables(): HTMLElement[] {
+    if (!dialogRef) return [];
+    return Array.from(dialogRef.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  }
+
   function handleKeydown(event: KeyboardEvent): void {
     if (closeOnEscape && event.key === "Escape") {
       event.preventDefault();
       onclose?.();
+      return;
+    }
+    // Focus trap: keyboard navigation must not escape a modal dialog even
+    // though background content remains in the DOM behind the backdrop.
+    if (event.key !== "Tab" || !dialogRef) return;
+    const items = focusables();
+    if (items.length === 0) {
+      event.preventDefault();
+      dialogRef.focus();
+      return;
+    }
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    if (index === -1) {
+      event.preventDefault();
+      (event.shiftKey ? items[items.length - 1] : items[0]).focus();
+      return;
+    }
+    const next = index + (event.shiftKey ? -1 : 1);
+    if (next < 0 || next >= items.length) {
+      event.preventDefault();
+      items[next < 0 ? items.length - 1 : 0].focus();
     }
   }
+
+  // Initial focus goes to the dialog itself; focus returns to the invoker
+  // when the modal unmounts so keyboard users are not stranded.
+  $effect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef?.focus();
+    return () => previous?.focus();
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="modal-backdrop" class:modal-backdrop--prompt={prompt} role="presentation">
   <div
+    bind:this={dialogRef}
     class={`modal-shell modal-shell--${size}`}
     class:modal-shell--scrollable={scrollable}
     role="dialog"
     aria-modal="true"
     aria-label={ariaLabel ?? title}
+    tabindex="-1"
   >
     <div class="modal-shell__head">
       {#if icon}
@@ -93,6 +135,12 @@
     border-radius: 13px;
     background: var(--surface-bg);
     box-shadow: 0 12px 40px color-mix(in srgb, #000 40%, transparent);
+  }
+
+  /* The dialog container receives initial focus for the focus trap; the
+     programmatic focus ring would duplicate the visible border. */
+  .modal-shell:focus {
+    outline: none;
   }
 
   .modal-shell--small {
