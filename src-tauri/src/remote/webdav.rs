@@ -207,6 +207,10 @@ fn record_prop(
         "href" => *href = Some(text.to_string()),
         "getcontentlength" => *size = text.parse().ok(),
         "getlastmodified" => *modified = Some(text.to_string()),
+        // Real servers emit many more PROPFIND properties (displayname,
+        // resourcetype, supportedreport-set, …); skipping them here is the
+        // intended parse, not swallowed errors. Server-side failures are
+        // reported by the HTTP status checks around each request.
         _ => {}
     }
 }
