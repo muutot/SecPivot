@@ -15,6 +15,18 @@
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
+  import {
+    csvToImportEntries,
+    downloadTextFile,
+    importEntries as runImportEntries,
+    importRowsToEntries,
+    pickImportFile,
+    toCsvExportRows,
+    toXmlExportRows,
+    xmlToImportEntries,
+    type IoHost,
+    type ImportEntry,
+  } from "$lib/services/io";
   import { showTip } from "$lib/services/tips";
   import type {
     EntryInput,
@@ -139,6 +151,18 @@
     result: string;
     error: boolean;
   } | null>(null);
+
+  /** Component hooks handed to the shared import/export orchestration in
+   *  `$lib/services/io`; keeps every stale-view branch behavior-identical. */
+  const ioHost: IoHost = {
+    sessionView,
+    operations: busyOperations,
+    setBusy: (value) => {
+      busy = value;
+    },
+    notify: flash,
+    currentState: () => currentVault,
+  };
 
   /** Seen (sessionId, path) pairs that already flashed the expired-entries
    *  toast. Session ids are never recycled, so the keys accumulate for the
@@ -982,24 +1006,11 @@
         });
       } else {
         if (!sessionView.isCurrent(view)) return;
-        const rows = reportEntries.map(({ entry, path }) => ({
-          group: path,
-          title: entry.title,
-          username: entry.username,
-          password: entry.password ?? "",
-          url: entry.url,
-          notes: entry.notes,
-          totp: entry.totp ?? "",
-          favorite: entry.favorite === true,
-        }));
-        const csv = buildCsv(rows);
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = "secpivot-export.csv";
-        anchor.click();
-        URL.revokeObjectURL(url);
+        downloadTextFile(
+          buildCsv(toCsvExportRows(reportEntries)),
+          "secpivot-export.csv",
+          "text/csv;charset=utf-8",
+        );
       }
       if (sessionView.isCurrent(view)) flash("已导出 CSV");
     } catch (e) {
@@ -1029,23 +1040,11 @@
         });
       } else {
         if (!sessionView.isCurrent(view)) return;
-        const rows = reportEntries.map(({ entry, path }) => ({
-          group: path,
-          title: entry.title,
-          username: entry.username,
-          password: entry.password ?? "",
-          url: entry.url,
-          notes: entry.notes,
-          totp: entry.totp ?? "",
-        }));
-        const xml = buildKeePassXml(rows);
-        const blob = new Blob([xml], { type: "text/xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = "secpivot-export.xml";
-        anchor.click();
-        URL.revokeObjectURL(url);
+        downloadTextFile(
+          buildKeePassXml(toXmlExportRows(reportEntries)),
+          "secpivot-export.xml",
+          "text/xml;charset=utf-8",
+        );
       }
       if (sessionView.isCurrent(view)) flash("已导出 XML");
     } catch (e) {
@@ -1220,137 +1219,19 @@
     }
   }
 
-  function readPickedFile(): Promise<string | null> {
-    return new Promise((resolve) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".csv,text/csv,.xml,text/xml";
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.onerror = () => resolve(null);
-        reader.readAsText(file);
-      };
-      input.click();
-    });
-  }
-
-  /** Normalized import row shared by the CSV and KeePass-XML importers. */
-  type ImportEntry = {
-    group: string;
-    title: string;
-    username: string;
-    password: string;
-    url: string;
-    notes: string;
-    totp?: string;
-    customFields: { name: string; value: string }[];
-  };
-
-  /** Pick an import file via the Tauri dialog (desktop) or a hidden file input,
-   *  returning its text, or `null` when cancelled / unreadable. */
-  async function pickImportFile(
-    view: SessionViewToken,
-    filters: { name: string; extensions: string[] }[],
-  ): Promise<string | null> {
-    try {
-      const result = await awaitCurrentView(sessionView, view, async () => {
-        if (isTauriRuntime()) {
-          const selected = await open({ multiple: false, filters });
-          return selected
-            ? await invoke<string>("read_text_file", { path: String(selected) })
-            : null;
-        }
-        return await readPickedFile();
-      });
-      return result.current ? result.value : null;
-    } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`读取文件失败：${e}`);
-      return null;
-    }
-  }
-
-  /** Resolve each row's group and add it as an entry; reports a one-shot summary. */
-  async function importEntries(
-    entries: ImportEntry[],
-    view: SessionViewToken,
-    baseGroupUuid: string | null,
-  ): Promise<void> {
-    if (!sessionView.isCurrent(view)) return;
-    const startState = currentVault;
-    if (!startState) return;
-    const { sessionId } = view;
-    const operation = busyOperations.begin();
-    busy = true;
-    try {
-      // Resolve every unique group path once (creating missing groups), then
-      // bulk-insert all entries in a single IPC call instead of one
-      // `add_entry` round-trip per row.
-      const groupCache = new Map<string, string>();
-      const resolver: ImportGroupResolver<VaultState> = {
-        state: startState,
-        baseUuid: baseGroupUuid ?? startState.root.uuid,
-        groups: buildGroupPathIndex(startState.root),
-      };
-      for (const entry of entries) {
-        if (!groupCache.has(entry.group)) {
-          const groupUuid = await resolveImportGroupPath({
-            path: entry.group,
-            sessionId,
-            resolver,
-            createGroup: (ownerId, parentUuid, name) =>
-              vault.callInSession(ownerId, () => vault.addGroup({ parentUuid, name })),
-            findCreatedUuid: (state, parentUuid, name) => {
-              const parent = findGroupIn(state.root, parentUuid);
-              return parent?.children.find((group) => group.name === name)?.uuid ?? null;
-            },
-          });
-          groupCache.set(entry.group, groupUuid);
-        }
-      }
-      const inputs: EntryInput[] = entries.map((entry) => ({
-        groupUuid: groupCache.get(entry.group)!,
-        title: entry.title,
-        username: entry.username,
-        password: entry.password,
-        url: entry.url,
-        notes: entry.notes,
-        totp: entry.totp || undefined,
-        customFields: entry.customFields,
-        attachments: [],
-      }));
-      await vault.callInSession(sessionId, () => vault.addEntries(inputs));
-      if (!sessionView.isCurrent(view)) return;
-      flash(`已导入 ${entries.length} 个条目`);
-    } catch (e) {
-      if (!sessionView.isCurrent(view)) return;
-      flash(`导入失败：${e}`);
-    } finally {
-      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
-    }
-  }
-
   async function handleImportCsv(): Promise<void> {
     if (!currentVault) return;
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(view, [{ name: "CSV 文件", extensions: ["csv"] }]);
+    const text = await pickImportFile(ioHost, view, [{ name: "CSV 文件", extensions: ["csv"] }]);
     if (text === null) return;
-    const entries: ImportEntry[] = parseCsvRows(parseCsv(text)).map((row) => ({
-      ...row,
-      customFields: [],
-    }));
+    const entries: ImportEntry[] = csvToImportEntries(text);
     if (entries.length === 0) {
       flash("CSV 中没有可导入的条目");
       return;
     }
-    await importEntries(entries, view, baseGroupUuid);
+    await runImportEntries(ioHost, entries, view, baseGroupUuid);
   }
 
   async function handleImportXml(): Promise<void> {
@@ -1358,17 +1239,17 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(view, [
+    const text = await pickImportFile(ioHost, view, [
       { name: "KeePass XML 文件", extensions: ["xml"] },
       { name: "CSV 文件", extensions: ["csv"] },
     ]);
     if (text === null) return;
-    const entries: ImportEntry[] = parseKdbxXml(text);
+    const entries: ImportEntry[] = xmlToImportEntries(text);
     if (entries.length === 0) {
       flash("XML 中没有可导入的条目");
       return;
     }
-    await importEntries(entries, view, baseGroupUuid);
+    await runImportEntries(ioHost, entries, view, baseGroupUuid);
   }
 
   async function handleImportBitwarden(): Promise<void> {
@@ -1376,7 +1257,7 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(view, [
+    const text = await pickImportFile(ioHost, view, [
       { name: "Bitwarden JSON 文件", extensions: ["json"] },
     ]);
     if (text === null) return;
@@ -1392,21 +1273,12 @@
       if (sessionView.isCurrent(view)) flash(`导入 Bitwarden 失败：${e}`);
       return;
     }
-    const entries: ImportEntry[] = rows.map((row) => ({
-      group: row.group,
-      title: row.title,
-      username: row.username,
-      password: row.password,
-      url: row.url,
-      notes: row.notes,
-      totp: row.totp || undefined,
-      customFields: row.customFields,
-    }));
+    const entries: ImportEntry[] = importRowsToEntries(rows);
     if (entries.length === 0) {
       flash("Bitwarden 文件中没有可导入的条目");
       return;
     }
-    await importEntries(entries, view, baseGroupUuid);
+    await runImportEntries(ioHost, entries, view, baseGroupUuid);
   }
 
   async function handleImportOnePassword(): Promise<void> {
@@ -1414,7 +1286,7 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(view, [
+    const text = await pickImportFile(ioHost, view, [
       { name: "1Password 1PIF 文件", extensions: ["1pif"] },
     ]);
     if (text === null) return;
@@ -1430,21 +1302,12 @@
       if (sessionView.isCurrent(view)) flash(`导入 1Password 失败：${e}`);
       return;
     }
-    const entries: ImportEntry[] = rows.map((row) => ({
-      group: row.group,
-      title: row.title,
-      username: row.username,
-      password: row.password,
-      url: row.url,
-      notes: row.notes,
-      totp: row.totp || undefined,
-      customFields: row.customFields,
-    }));
+    const entries: ImportEntry[] = importRowsToEntries(rows);
     if (entries.length === 0) {
       flash("1PIF 文件中没有可导入的条目");
       return;
     }
-    await importEntries(entries, view, baseGroupUuid);
+    await runImportEntries(ioHost, entries, view, baseGroupUuid);
   }
 
   function openSettings(): void {
