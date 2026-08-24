@@ -13,15 +13,22 @@ let lastCopiedText: string | null = null;
 export async function copyText(text: string): Promise<void> {
   lastCopiedText = text;
   await copyRaw(text);
-  scheduleClipboardClear();
+  scheduleClipboardClear(text);
 }
 
-export function scheduleClipboardClear(): void {
+export function scheduleClipboardClear(text: string): void {
   const seconds = get(appSettings).security.clipboardClearSeconds;
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = null;
   if (seconds <= 0) return;
   clearTimer = setTimeout(() => void clearClipboardIfUnchanged(), seconds * 1000);
+  if (isTauriRuntime()) {
+    // Backend safety net: clears even when this renderer dies before its
+    // timer fires. Best-effort — a scheduling failure just leaves the
+    // renderer timer in charge. The backend re-verifies ownership before
+    // wiping, so a superseded or already-replaced clipboard stays untouched.
+    void invoke("clipboard_schedule_wipe", { text, seconds }).catch(() => {});
+  }
 }
 
 /** Wipe the clipboard only when it still holds the text we copied. If the
@@ -60,6 +67,11 @@ export async function clearClipboard(): Promise<void> {
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = null;
   lastCopiedText = null;
+  if (isTauriRuntime()) {
+    // Cancel any pending backend wipe: after an explicit clear it must not
+    // fire later and destroy content the user copied in another app.
+    void invoke("clipboard_cancel_scheduled_wipe").catch(() => {});
+  }
   try {
     if (isTauriRuntime()) {
       await invoke("clipboard_clear");

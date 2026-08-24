@@ -384,6 +384,8 @@ pub fn run() {
             commands::parse_1pif,
             commands::clipboard_read_text,
             commands::clipboard_clear,
+            commands::clipboard_schedule_wipe,
+            commands::clipboard_cancel_scheduled_wipe,
             #[cfg(desktop)]
             commands::remember_credential,
             #[cfg(desktop)]
@@ -412,9 +414,10 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|_app_handle, event| {
-        // The scheduled clipboard wipe lives in the renderer (a JS timer that
-        // dies with the process); quitting via the tray must clear any copied
-        // password now, or it would stay on the system clipboard forever.
+        // The scheduled clipboard wipe runs as a renderer timer plus a backend
+        // safety-net thread (`clipboard_schedule_wipe`); both die with the
+        // process, so quitting via the tray must clear any copied password
+        // now, or it would stay on the system clipboard forever.
         if let tauri::RunEvent::Exit = event {
             let _ = crate::platform::clipboard::clear_clipboard();
         }
