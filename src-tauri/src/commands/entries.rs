@@ -7,6 +7,7 @@ use crate::vault;
 use crate::vault::{EntryStorage, SecurityReport, VaultSession, VaultSessions};
 use std::path::Path;
 use std::sync::Mutex;
+use zeroize::Zeroize;
 
 /// CSV/XML import cap (8 MiB): guards the read-text command against oversized
 /// files; the `.csv`/`.xml` extension whitelist stops arbitrary file
@@ -164,7 +165,13 @@ pub(crate) async fn check_hibp(
             .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
             .build()
             .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
-        crate::vault::check_hibp(&entries, &client, crate::vault::HIBP_RANGE_URL)
+        let result = crate::vault::check_hibp(&entries, &client, crate::vault::HIBP_RANGE_URL);
+        // The plaintext password copies collected for the check follow the
+        // project-wide secret-hygiene rule: zeroize before drop.
+        for (_, _, _, mut password) in entries {
+            password.zeroize();
+        }
+        result
     })
     .await
     .map_err(|e| format!("HIBP 任务异常: {e}"))?
