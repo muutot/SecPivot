@@ -347,3 +347,27 @@ test("detail-pane drag-and-drop attachment add stays IPC-aligned", async () => {
   );
   assert.match(session, /track_changes\(\)/);
 });
+
+test("remote-conflict sentinel stays byte-identical across backend and frontend", async () => {
+  const [persist, page] = await Promise.all([
+    readFile(new URL("../src-tauri/src/vault/persist.rs", import.meta.url), "utf8"),
+    readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
+  ]);
+
+  // The backend marker constant is the single source of truth. Both sources
+  // spell the newline as the two characters `\` + `n`, so comparisons operate
+  // on the escaped form; the branch prefix compares with that escape stripped.
+  const marker = persist.match(/REMOTE_CHANGED_MARKER:\s*&str\s*=\s*"([^"]+)"/);
+  assert.ok(marker, "backend REMOTE_CHANGED_MARKER constant must exist");
+  const sentinel = marker[1];
+
+  // The page must branch on the exact sentinel and strip exactly it; a
+  // reworded message here would silently disable remote conflict detection.
+  const branch = page.match(/message\.startsWith\("([^"]+)"\)/);
+  assert.ok(branch, "frontend must branch on a literal sentinel prefix");
+  assert.equal(`${branch[1]}\\n`, sentinel, "branch prefix must equal the backend marker");
+
+  const strip = page.match(/\.replace\("([^"]+)", ""\)/);
+  assert.ok(strip, "frontend must strip the literal sentinel");
+  assert.equal(strip[1], sentinel, "strip target must be byte-identical to the backend marker");
+});
