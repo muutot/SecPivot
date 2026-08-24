@@ -34,13 +34,13 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 发现统计 Finding Statistics
 
-| 严重度 | 数量 | 已确认 | 存疑 |
-|--------|------|--------|------|
-| Critical | 0 | 0 | 0 |
-| High | 0 | 0 | 0 |
-| Medium | 6 | 6 | 0 |
-| Low | 10 | 10 | 0 |
-| Info | 0 | 0 | 0 |
+| 严重度   | 数量   | 已确认 | 存疑  |
+| -------- | ------ | ------ | ----- |
+| Critical | 0      | 0      | 0     |
+| High     | 0      | 0      | 0     |
+| Medium   | 6      | 6      | 0     |
+| Low      | 10     | 10     | 0     |
+| Info     | 0      | 0      | 0     |
 | **合计** | **16** | **16** | **0** |
 
 > 另有 5 条补充观察项（L-1、L-2、L-3、I-1、I-2）列于第 4 节末尾简表，属低危/信息级，为保持与详细发现卡计数一致不计入上表。
@@ -64,33 +64,33 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 覆盖矩阵 Coverage Matrix
 
-| 维度 | 覆盖度 | 检查证据 | 排除 / 限制 |
-|------|--------|----------|-------------|
-| 架构 Architecture | High | 全目录树、模块依赖方向、invoke 调用点分布（~120 处）、状态归属分析 | 未运行时追踪 |
-| 安全 Security | High | unwrap/panic 全量扫描、zeroize 点位清单、两网络服务认证模型、unsafe 全部 ~36 处逐一核对、CSP/capabilities | 未做动态渗透/模糊测试 |
-| 稳定 Stability | High | 错误传播路径、锁序、poison 处理、原子写实现（util.rs:24-56）、fallback 扫描 | 无长时间压力运行 |
-| 性能 Performance | Medium | Cargo profile 策略、依赖重量、线程模型审查 | 无性能基准/剖析数据 |
-| 测试 Testing | High | 14 个前端测试文件逐个阅读、392 个 Rust 测试分布统计、runner 配置 | 未测覆盖率百分比 |
-| 可维护 Maintainability | High | 文件行数排行、JSDoc 覆盖率统计、命名/导入一致性抽查 | — |
-| 设计 Design | High | principles 对照（SRP/DRY/fail-fast/CQS 等）、fallback 分类扫描 | — |
-| 发布 Release | High | ci.yml/release.yml 逐行、scripts/*.mjs|ps1、tauri.conf.json、Cargo profiles | 未实际跑一次发布 |
-| 文档 Documentation | High | README/AGENTS/docs/* 与 package.json、release.yml 交叉验证 | — |
-| 配置 Configuration | High | tauri.conf.json、capabilities、env var 处理、默认值审查 | Android 构建未实机验证 |
-| 可观测 Observability | Medium | 日志语句审查（eprintln 内容检查）、错误分类函数 | 桌面应用无 metrics/alerting 面 |
-| 数据完整性 Data-Integrity | High | 原子写、合并不变量、备份策略、三阶段 RPC 写、冲突标记 | 备份恢复未实测演练 |
-| 隐私 Privacy | High | 遥测/console/network 全量搜索（零命中）、剪贴板/HIBP/日志脱敏审查 | — |
-| 无障碍 Accessibility | Medium | aria 属性统计（146 处）、ModalShell 焦点行为、键盘处理 | 未用屏幕阅读器实测 |
-| 供应链 Supply-Chain | High | workflow 权限/action 固定方式、lockfile 提交状态、工具链固定、签名/checksum/SBOM | 依赖 CVE 数据库未全量比对 |
-| 成本 Cost | Medium | 外部调用清单、后台任务、存储增长点 | 单机桌面应用，成本低风险 |
-| AI 安全 AI-Safety | Not assessed | 产品代码无 LLM/prompt/tool 调用表面（rg 零命中） | 不适用 |
-| Fallback | High | unwrap_or_default / 空 match 分支全量扫描并逐个定性 | — |
-| 测试真实性 Testing-Authenticity | High | 逐文件评估 mock 策略与断言对象（行为 vs 实现细节） | — |
-| 类型安全 Type-Safety | High | as any/@ts-ignore 零命中验证、tsconfig strict、Rust Result 一致性 | — |
-| 前端状态 Frontend-State | High | $effect 清单、store 数量、组件行数排行、invoke 分散度 | — |
-| 后端 API Backend-API | Medium | commands 层错误契约（Result<T,String>）、输入校验、sentinel 契约 | IPC 面非传统 REST API |
-| 依赖重量 Dependency-Weight | High | package.json（3 个运行时依赖）、Cargo.toml feature 纪律 | 未逐包统计传递体积 |
-| 代码一致性 Code-Consistency | Medium | 命名约定、导入组织、错误处理模式抽样 | 未逐文件比对风格 |
-| 注释覆盖 Comment-Coverage | Medium | vault.ts 导出符号 vs JSDoc 计数、过期注释搜索 | — |
+| 维度                            | 覆盖度       | 检查证据                                                                                                  | 排除 / 限制                          |
+| ------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 架构 Architecture               | High         | 全目录树、模块依赖方向、invoke 调用点分布（~120 处）、状态归属分析                                        | 未运行时追踪                         |
+| 安全 Security                   | High         | unwrap/panic 全量扫描、zeroize 点位清单、两网络服务认证模型、unsafe 全部 ~36 处逐一核对、CSP/capabilities | 未做动态渗透/模糊测试                |
+| 稳定 Stability                  | High         | 错误传播路径、锁序、poison 处理、原子写实现（util.rs:24-56）、fallback 扫描                               | 无长时间压力运行                     |
+| 性能 Performance                | Medium       | Cargo profile 策略、依赖重量、线程模型审查                                                                | 无性能基准/剖析数据                  |
+| 测试 Testing                    | High         | 14 个前端测试文件逐个阅读、392 个 Rust 测试分布统计、runner 配置                                          | 未测覆盖率百分比                     |
+| 可维护 Maintainability          | High         | 文件行数排行、JSDoc 覆盖率统计、命名/导入一致性抽查                                                       | —                                    |
+| 设计 Design                     | High         | principles 对照（SRP/DRY/fail-fast/CQS 等）、fallback 分类扫描                                            | —                                    |
+| 发布 Release                    | High         | ci.yml/release.yml 逐行、scripts/*.mjs                                                                    | ps1、tauri.conf.json、Cargo profiles | 未实际跑一次发布 |
+| 文档 Documentation              | High         | README/AGENTS/docs/* 与 package.json、release.yml 交叉验证                                                | —                                    |
+| 配置 Configuration              | High         | tauri.conf.json、capabilities、env var 处理、默认值审查                                                   | Android 构建未实机验证               |
+| 可观测 Observability            | Medium       | 日志语句审查（eprintln 内容检查）、错误分类函数                                                           | 桌面应用无 metrics/alerting 面       |
+| 数据完整性 Data-Integrity       | High         | 原子写、合并不变量、备份策略、三阶段 RPC 写、冲突标记                                                     | 备份恢复未实测演练                   |
+| 隐私 Privacy                    | High         | 遥测/console/network 全量搜索（零命中）、剪贴板/HIBP/日志脱敏审查                                         | —                                    |
+| 无障碍 Accessibility            | Medium       | aria 属性统计（146 处）、ModalShell 焦点行为、键盘处理                                                    | 未用屏幕阅读器实测                   |
+| 供应链 Supply-Chain             | High         | workflow 权限/action 固定方式、lockfile 提交状态、工具链固定、签名/checksum/SBOM                          | 依赖 CVE 数据库未全量比对            |
+| 成本 Cost                       | Medium       | 外部调用清单、后台任务、存储增长点                                                                        | 单机桌面应用，成本低风险             |
+| AI 安全 AI-Safety               | Not assessed | 产品代码无 LLM/prompt/tool 调用表面（rg 零命中）                                                          | 不适用                               |
+| Fallback                        | High         | unwrap_or_default / 空 match 分支全量扫描并逐个定性                                                       | —                                    |
+| 测试真实性 Testing-Authenticity | High         | 逐文件评估 mock 策略与断言对象（行为 vs 实现细节）                                                        | —                                    |
+| 类型安全 Type-Safety            | High         | as any/@ts-ignore 零命中验证、tsconfig strict、Rust Result 一致性                                         | —                                    |
+| 前端状态 Frontend-State         | High         | $effect 清单、store 数量、组件行数排行、invoke 分散度                                                     | —                                    |
+| 后端 API Backend-API            | Medium       | commands 层错误契约（Result<T,String>）、输入校验、sentinel 契约                                          | IPC 面非传统 REST API                |
+| 依赖重量 Dependency-Weight      | High         | package.json（3 个运行时依赖）、Cargo.toml feature 纪律                                                   | 未逐包统计传递体积                   |
+| 代码一致性 Code-Consistency     | Medium       | 命名约定、导入组织、错误处理模式抽样                                                                      | 未逐文件比对风格                     |
+| 注释覆盖 Comment-Coverage       | Medium       | vault.ts 导出符号 vs JSDoc 计数、过期注释搜索                                                             | —                                    |
 
 **覆盖率说明**：检查范围为一方源码（69 个 Rust、49 个 Svelte、32 个 TS 文件）、14 个测试文件、2 个 CI workflow、10 个脚本、全部文档。排除项：`.git`、`node_modules`、`.venv`、`build/`、`src-tauri/target`、`src-tauri/gen`、图标二进制与 lockfile 内容。所有结论基于静态证据，未执行动态模糊测试或性能剖析。
 
@@ -425,13 +425,13 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 以下为低危/信息级观察，未单独出具发现卡：
 
-| ID | 严重度 | 类别 | 摘要 | 证据 |
-|----|--------|------|------|------|
-| L-1 | Low | Maintainability | vault.ts 约 90 个导出仅 28 个有 JSDoc（31%） | src/lib/services/vault.ts |
-| L-2 | Low | Frontend-State | `void invoke(...)` fire-and-forget 三处可能吞 rejection | LockScreen.svelte:36, TcatoOverlay.svelte:41, +page.svelte:2834 |
-| L-3 | Low | Configuration | version.mjs 中 prettier 失败视为非致命 | scripts/version.mjs:38-40 |
-| I-1 | Info | Supply-Chain | ci.yml 未声明显式 permissions 块（继承默认） | .github/workflows/ci.yml |
-| I-2 | Info | Maintainability | 中文 UI 字符串硬编码内联，未来 i18n 受阻（项目语境下可接受） | ModalShell.svelte:73-74 等 |
+| ID  | 严重度 | 类别            | 摘要                                                         | 证据                                                            |
+| --- | ------ | --------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| L-1 | Low    | Maintainability | vault.ts 约 90 个导出仅 28 个有 JSDoc（31%）                 | src/lib/services/vault.ts                                       |
+| L-2 | Low    | Frontend-State  | `void invoke(...)` fire-and-forget 三处可能吞 rejection      | LockScreen.svelte:36, TcatoOverlay.svelte:41, +page.svelte:2834 |
+| L-3 | Low    | Configuration   | version.mjs 中 prettier 失败视为非致命                       | scripts/version.mjs:38-40                                       |
+| I-1 | Info   | Supply-Chain    | ci.yml 未声明显式 permissions 块（继承默认）                 | .github/workflows/ci.yml                                        |
+| I-2 | Info   | Maintainability | 中文 UI 字符串硬编码内联，未来 i18n 受阻（项目语境下可接受） | ModalShell.svelte:73-74 等                                      |
 
 ---
 
@@ -445,13 +445,13 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 架构摘要
 
-| 子类 | 数量 | 影响区域 | 建议动作 |
-|------|------|----------|----------|
-| ModuleBoundary | 1 | +page.svelte | 拆分导入导出/窗口管理/布局状态机（见 MA-1） |
-| DependencyDirection | 0 | — | — |
-| StateOwnership | 0 | — | — |
-| BoundaryContract | 1 | persist.rs↔vault.ts | REMOTE_CHANGED 哨兵结构化（D-1/Low 表外，见第 4 节独立卡） |
-| EvolutionRisk | 1 | settings 面板绕过 services 直接 invoke | 收敛到 services 层保持统一 |
+| 子类                | 数量 | 影响区域                               | 建议动作                                                   |
+| ------------------- | ---- | -------------------------------------- | ---------------------------------------------------------- |
+| ModuleBoundary      | 1    | +page.svelte                           | 拆分导入导出/窗口管理/布局状态机（见 MA-1）                |
+| DependencyDirection | 0    | —                                      | —                                                          |
+| StateOwnership      | 0    | —                                      | —                                                          |
+| BoundaryContract    | 1    | persist.rs↔vault.ts                    | REMOTE_CHANGED 哨兵结构化（D-1/Low 表外，见第 4 节独立卡） |
+| EvolutionRisk       | 1    | settings 面板绕过 services 直接 invoke | 收敛到 services 层保持统一                                 |
 
 ## 6. 安全分析 Security Analysis
 
@@ -489,18 +489,18 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 测试真实性评估 Testing Authenticity Assessment
 
-| 测试域 | 真实置信度 | 风险 | 动作 |
-|--------|-----------|------|------|
-| 解锁/keyfile/错密码（vault/tests.rs） | High | — | Keep |
-| 保存/只读降级/并发（vault/tests.rs） | High | — | Keep |
-| 加密原语（crypto/*, NIST/RFC 向量） | High | — | Keep |
-| bridge/rpc 协议矩阵 | High | — | Keep |
-| 合并/同步语义 | High | — | Keep |
-| 配置规范化（40 测） | High | — | Keep |
-| 前端纯逻辑 utils（9 文件，注入式协作对象） | Medium-High | UI 集成回归 | Keep |
-| 发布/签名脚本（含注入探针） | Medium-High | — | Keep |
-| vault.ts IPC glue | Low | 参数/序列化逃逸 | Add（runtime mock 测试） |
-| component-contracts 正则测试 | Low-Medium | 脆弱但守护跨层契约 | Keep 并标注 |
+| 测试域                                     | 真实置信度  | 风险               | 动作                     |
+| ------------------------------------------ | ----------- | ------------------ | ------------------------ |
+| 解锁/keyfile/错密码（vault/tests.rs）      | High        | —                  | Keep                     |
+| 保存/只读降级/并发（vault/tests.rs）       | High        | —                  | Keep                     |
+| 加密原语（crypto/*, NIST/RFC 向量）        | High        | —                  | Keep                     |
+| bridge/rpc 协议矩阵                        | High        | —                  | Keep                     |
+| 合并/同步语义                              | High        | —                  | Keep                     |
+| 配置规范化（40 测）                        | High        | —                  | Keep                     |
+| 前端纯逻辑 utils（9 文件，注入式协作对象） | Medium-High | UI 集成回归        | Keep                     |
+| 发布/签名脚本（含注入探针）                | Medium-High | —                  | Keep                     |
+| vault.ts IPC glue                          | Low         | 参数/序列化逃逸    | Add（runtime mock 测试） |
+| component-contracts 正则测试               | Low-Medium  | 脆弱但守护跨层契约 | Keep 并标注              |
 
 ## 10. 可维护性分析 Maintainability Analysis
 
@@ -514,12 +514,12 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 违反的原则
 
-| 原则 | 违反数 | 严重度 | 影响区域 |
-|------|--------|--------|----------|
-| Fail-Fast | 3 | Low | remote/mod.rs:81（未知 kind 回退 S3）、webdav.rs:210（吞分支）、version.mjs prettier 非致命 |
-| SRP | 1 | Medium | +page.svelte（四职责聚合） |
-| CQS / 显式契约 | 1 | Low | REMOTE_CHANGED 字符串哨兵 |
-| DRY | 0 | — | — |
+| 原则           | 违反数 | 严重度 | 影响区域                                                                                    |
+| -------------- | ------ | ------ | ------------------------------------------------------------------------------------------- |
+| Fail-Fast      | 3      | Low    | remote/mod.rs:81（未知 kind 回退 S3）、webdav.rs:210（吞分支）、version.mjs prettier 非致命 |
+| SRP            | 1      | Medium | +page.svelte（四职责聚合）                                                                  |
+| CQS / 显式契约 | 1      | Low    | REMOTE_CHANGED 字符串哨兵                                                                   |
+| DRY            | 0      | —      | —                                                                                           |
 
 ### 遵守良好的原则
 
@@ -540,14 +540,14 @@ SecPivot 是一个工程质量明显高于平均水平的项目。Rust 后端表
 
 ### 文档摘要
 
-| 子类 | 数量 | 涉及文档 | 建议动作 |
-|------|------|----------|----------|
-| StaleDocs | 5 | RELEASE.md:56, TODO.md:50, docs/android.md:26/64, skills/version-release/SKILL.md:164-170, secpivot-dev/SKILL.md:148 | 修正（见 D-1） |
-| UserDocs | 1 | README.md 缺前置依赖（Node/Rust 版本、VS Build Tools/WebView2）与安全报告渠道 | 补充 |
-| OperatorDocs | 0 | — | — |
-| DeveloperDocs | 0 | AGENTS.md 与 SKILL.md 命令集和 package.json 完全一致 | — |
-| ApiDocs | 0 | browser-integration.md 与实现一致 | — |
-| DecisionRecord | 0 | PITFALLS.md 实质承担了决策记录职能且质量高 | — |
+| 子类           | 数量 | 涉及文档                                                                                                             | 建议动作       |
+| -------------- | ---- | -------------------------------------------------------------------------------------------------------------------- | -------------- |
+| StaleDocs      | 5    | RELEASE.md:56, TODO.md:50, docs/android.md:26/64, skills/version-release/SKILL.md:164-170, secpivot-dev/SKILL.md:148 | 修正（见 D-1） |
+| UserDocs       | 1    | README.md 缺前置依赖（Node/Rust 版本、VS Build Tools/WebView2）与安全报告渠道                                        | 补充           |
+| OperatorDocs   | 0    | —                                                                                                                    | —              |
+| DeveloperDocs  | 0    | AGENTS.md 与 SKILL.md 命令集和 package.json 完全一致                                                                 | —              |
+| ApiDocs        | 0    | browser-integration.md 与实现一致                                                                                    | —              |
+| DecisionRecord | 0    | PITFALLS.md 实质承担了决策记录职能且质量高                                                                           | —              |
 
 ## 14. 配置安全分析 Configuration Safety Analysis
 
@@ -615,13 +615,13 @@ aria 覆盖广（EntryDetail 40 处、EntryEditorDialog 37 处），Escape 关�
 
 ### Fallback 摘要
 
-| 子类 | 数量 | 保留并告警 | Fail-Fast | 移除 |
-|------|------|-----------|-----------|------|
-| SilentFallback | 1 | 0 | 1 | 0 |
-| EmptyCatch/EmptyArm | 2 | 1 | 1 | 0 |
-| CompatibilityBranch | 0 | — | — | — |
-| SilentCorrection | 1 | 1 | 0 | 0 |
-| DefensiveGuess | 0 | — | — | — |
+| 子类                | 数量 | 保留并告警 | Fail-Fast | 移除 |
+| ------------------- | ---- | ---------- | --------- | ---- |
+| SilentFallback      | 1    | 0          | 1         | 0    |
+| EmptyCatch/EmptyArm | 2    | 1          | 1         | 0    |
+| CompatibilityBranch | 0    | —          | —         | —    |
+| SilentCorrection    | 1    | 1          | 0         | 0    |
+| DefensiveGuess      | 0    | —          | —         | —    |
 
 明细：remote/mod.rs:81（DefensiveGuess→应 fail-fast，见 F-2）；webdav.rs:210（EmptyArm→保留但加日志，见 F-1）；lib.rs:212 `_ => {}`（keepalive 场景，保留合理）；otp.rs:256 counter 默认 0（语义可接受，保留）；serialize.rs/hosts.rs 的 unwrap_or_default 均为可选字段正确语义，非问题。整体 fallback 纪律良好。
 
@@ -629,15 +629,15 @@ aria 覆盖广（EntryDetail 40 处、EntryEditorDialog 37 处），Escape 关�
 
 ### 摘要
 
-| 子类 | 数量 | Critical | High | Medium | Low |
-|------|------|----------|------|--------|-----|
-| UnsafeBlock | ~36（全 Win32 FFI） | 0 | 0 | 0 | 0 |
-| TypeAssertion | 0（as any/@ts-ignore/as unknown as 零命中，tsconfig strict） | 0 | 0 | 0 | 0 |
-| InputBoundary | 0（网络解析全部返回 Result，字节上限齐备） | 0 | 0 | 0 | 0 |
-| OutputLeak | 0（classify_open_error 统一折叠敏感错误） | 0 | 0 | 0 | 0 |
-| BooleanTrap | 0 | 0 | 0 | 0 | 0 |
-| StringlyTyped | 1（REMOTE_CHANGED 哨兵 + Result<T,String> IPC 契约） | 0 | 0 | 0 | 1 |
-| ErrorType | 1（同上，String 错误阻碍程序化匹配） | 0 | 0 | 0 | 1 |
+| 子类          | 数量                                                         | Critical | High | Medium | Low |
+| ------------- | ------------------------------------------------------------ | -------- | ---- | ------ | --- |
+| UnsafeBlock   | ~36（全 Win32 FFI）                                          | 0        | 0    | 0      | 0   |
+| TypeAssertion | 0（as any/@ts-ignore/as unknown as 零命中，tsconfig strict） | 0        | 0    | 0      | 0   |
+| InputBoundary | 0（网络解析全部返回 Result，字节上限齐备）                   | 0        | 0    | 0      | 0   |
+| OutputLeak    | 0（classify_open_error 统一折叠敏感错误）                    | 0        | 0    | 0      | 0   |
+| BooleanTrap   | 0                                                            | 0        | 0    | 0      | 0   |
+| StringlyTyped | 1（REMOTE_CHANGED 哨兵 + Result<T,String> IPC 契约）         | 0        | 0    | 0      | 1   |
+| ErrorType     | 1（同上，String 错误阻碍程序化匹配）                         | 0        | 0    | 0      | 1   |
 
 unsafe 逐处核验：GMEM_ZEROINIT 剪贴板副本、DPAPI 边界由返回长度约束、RegCloseKey 全路径清理——FFI 卫生优秀。
 
@@ -645,16 +645,16 @@ unsafe 逐处核验：GMEM_ZEROINIT 剪贴板副本、DPAPI 边界由返回长�
 
 ### 摘要
 
-| 子类 | 数量 | 影响组件 |
-|------|------|----------|
-| ComponentSize | 3 | +page.svelte(3338), EntryDetail(1719), EntryEditorDialog(1719) |
-| StateDuplication | 0 | — |
-| PropDrilling | 0 | — |
-| EffectChain | 1 | +page.svelte:485-489/:780-784 面板宽度顺序耦合（有注释自证） |
-| UIBusinessCoupling | 1 | +page.svelte 导入导出编排内联（MA-1 的一部分） |
-| DOMasState | 0 | — |
-| RequestState | 1 | void invoke fire-and-forget 三处（L-2） |
-| RenderPerf | 0 | 大库下未验证（见性能分析限制） |
+| 子类               | 数量 | 影响组件                                                       |
+| ------------------ | ---- | -------------------------------------------------------------- |
+| ComponentSize      | 3    | +page.svelte(3338), EntryDetail(1719), EntryEditorDialog(1719) |
+| StateDuplication   | 0    | —                                                              |
+| PropDrilling       | 0    | —                                                              |
+| EffectChain        | 1    | +page.svelte:485-489/:780-784 面板宽度顺序耦合（有注释自证）   |
+| UIBusinessCoupling | 1    | +page.svelte 导入导出编排内联（MA-1 的一部分）                 |
+| DOMasState         | 0    | —                                                              |
+| RequestState       | 1    | void invoke fire-and-forget 三处（L-2）                        |
+| RenderPerf         | 0    | 大库下未验证（见性能分析限制）                                 |
 
 ## 25. 后端 API 分析 Backend API Analysis
 
@@ -668,13 +668,13 @@ IPC 面一致性好：统一 `Result<T, String>`、命令白名单对齐由 comp
 
 ### 依赖记分板
 
-| 依赖 | 状态 | 用途 | 建议动作 |
-|------|------|------|----------|
-| @tauri-apps/api, plugin-dialog, plugin-opener | Healthy | 运行时 IPC/dialog/opener | Keep |
-| image =0.25.8（no default features, png only） | Healthy | 图标解码 | Keep（feature 纪律范本） |
-| reqwest（rustls+blocking, no OpenSSL） | Healthy | HIBP/favicon/WebDAV/S3 | Keep |
-| 桌面专属 crate（enigo/global-shortcut/keyring/tungstenite/aes-cbc） | Healthy | cfg(any(windows,macos,linux)) 隔离，Android 保持精瘦 | Keep |
-| windows-sys（显式 feature 列表） | Healthy | Win32 FFI | Keep |
+| 依赖                                                                | 状态    | 用途                                                 | 建议动作                 |
+| ------------------------------------------------------------------- | ------- | ---------------------------------------------------- | ------------------------ |
+| @tauri-apps/api, plugin-dialog, plugin-opener                       | Healthy | 运行时 IPC/dialog/opener                             | Keep                     |
+| image =0.25.8（no default features, png only）                      | Healthy | 图标解码                                             | Keep（feature 纪律范本） |
+| reqwest（rustls+blocking, no OpenSSL）                              | Healthy | HIBP/favicon/WebDAV/S3                               | Keep                     |
+| 桌面专属 crate（enigo/global-shortcut/keyring/tungstenite/aes-cbc） | Healthy | cfg(any(windows,macos,linux)) 隔离，Android 保持精瘦 | Keep                     |
+| windows-sys（显式 feature 列表）                                    | Healthy | Win32 FFI                                            | Keep                     |
 
 无 overweight/unused 依赖。rust-s3 已移除（PITFALLS.md:69）但 TODO.md:50 仍引用（D-1）。
 
@@ -702,31 +702,31 @@ IPC 面一致性好：统一 `Result<T, String>`、命令白名单对齐由 comp
 
 无 Critical/High 问题。以下两项因触及用户信任链建议尽快：
 
-| ID | 问题 | 工作量 |
-|----|------|--------|
-| R-2 | CI Actions 固定到 commit SHA | 1–2 小时 |
-| F-2 | 未知存储 kind fail-fast（一行级修复，防数据误路由） | 15 分钟 |
+| ID  | 问题                                                | 工作量   |
+| --- | --------------------------------------------------- | -------- |
+| R-2 | CI Actions 固定到 commit SHA                        | 1–2 小时 |
+| F-2 | 未知存储 kind fail-fast（一行级修复，防数据误路由） | 15 分钟  |
 
 ### 稳定版发布前修复
 
-| ID | 问题 | 工作量 |
-|----|------|--------|
-| R-1 | Windows 产物 SHA256SUMS（+评估签名证书） | 半天起 |
-| R-3 | rust-toolchain.toml + .nvmrc | 30 分钟 |
-| M-1 | bridge 关联请求限流 + CORS 收敛 | 2–4 小时 |
-| A-1 | ModalShell 焦点陷阱 | 2–4 小时 |
-| D-1 | 五处过期文档修正 | 30 分钟 |
+| ID  | 问题                                     | 工作量   |
+| --- | ---------------------------------------- | -------- |
+| R-1 | Windows 产物 SHA256SUMS（+评估签名证书） | 半天起   |
+| R-3 | rust-toolchain.toml + .nvmrc             | 30 分钟  |
+| M-1 | bridge 关联请求限流 + CORS 收敛          | 2–4 小时 |
+| A-1 | ModalShell 焦点陷阱                      | 2–4 小时 |
+| D-1 | 五处过期文档修正                         | 30 分钟  |
 
 ### 稍后安排
 
-| ID | 问题 | 工作量 |
-|----|------|--------|
-| MA-1 | +page.svelte 拆分 | 2–3 天 |
-| T-1 | vault.ts 运行时测试 | 1 天 |
-| S-1 | 后端剪贴板兜底清除 | 3–5 小时 |
-| F-1 | webdav 空 arm 加告警 | 30 分钟 |
-| ST-1 / L-4 | expect 降级 / 双查找合并 | 2 小时 |
-| L-1 / L-2 / L-3 | JSDoc 补齐 / void invoke 收口 / prettier 非致命复查 | 半天 |
+| ID              | 问题                                                | 工作量   |
+| --------------- | --------------------------------------------------- | -------- |
+| MA-1            | +page.svelte 拆分                                   | 2–3 天   |
+| T-1             | vault.ts 运行时测试                                 | 1 天     |
+| S-1             | 后端剪贴板兜底清除                                  | 3–5 小时 |
+| F-1             | webdav 空 arm 加告警                                | 30 分钟  |
+| ST-1 / L-4      | expect 降级 / 双查找合并                            | 2 小时   |
+| L-1 / L-2 / L-3 | JSDoc 补齐 / void invoke 收口 / prettier 非致命复查 | 半天     |
 
 ### 暂时忽略
 
@@ -734,25 +734,25 @@ I-1（ci permissions，低风险）、I-2（中文硬编码，项目语境合理
 
 ## 30. Quick Wins 快赢修复（1–2 小时内移除真实风险）
 
-| 修复 | 移除的风险 | 工作量 |
-|------|-----------|--------|
-| rust-toolchain.toml + .nvmrc | 构建漂移/发布中断 | 30 分钟 |
-| 未知 kind 返回 Err | 配置错误静默连错协议 | 15 分钟 |
-| sessions.rs remove-and-check 合并 | 重构引爆点 | 15 分钟 |
-| breach.rs 副本 wipe | 机密卫生例外 | 15 分钟 |
-| SHA256SUMS 生成步骤 | 产物完整性不可验证 | 1 小时 |
-| webdav.rs:210 加日志 | 同步错误静默 | 30 分钟 |
-| 五处文档修正 | 维护误导 | 30 分钟 |
+| 修复                              | 移除的风险           | 工作量  |
+| --------------------------------- | -------------------- | ------- |
+| rust-toolchain.toml + .nvmrc      | 构建漂移/发布中断    | 30 分钟 |
+| 未知 kind 返回 Err                | 配置错误静默连错协议 | 15 分钟 |
+| sessions.rs remove-and-check 合并 | 重构引爆点           | 15 分钟 |
+| breach.rs 副本 wipe               | 机密卫生例外         | 15 分钟 |
+| SHA256SUMS 生成步骤               | 产物完整性不可验证   | 1 小时  |
+| webdav.rs:210 加日志              | 同步错误静默         | 30 分钟 |
+| 五处文档修正                      | 维护误导             | 30 分钟 |
 
 ## 31. 长期重构计划 Long-term Refactor Plan
 
-| 项 | 动机 | 方案 | 风险 | 测试策略 |
-|----|------|------|------|----------|
-| +page.svelte 模块化 | 唯一系统性前端债务 | 抽 io.ts 服务 + layout composable + shell 瘦身，目标 <1000 行 | 回归风险集中于面板宽度 effect 顺序耦合 | 先为 io 编排写 node:test（fake-invoke 模式），重构后契约正则测试保持绿 |
-| 错误契约结构化 | REMOTE_CHANGED 哨兵脆弱 + String 错误无法程序化匹配 | IPC 错误升级为 {code,message}，保留字符串兼容期 | 跨层同步改动量大 | component-contracts 扩展守护 code 枚举；Rust 侧新增错误枚举单测 |
-| 剪贴板生命周期后端化 | 前端定时器不可靠 | 后端计时清除 + 锁定/退出钩子 | 平台差异（Win32 剪贴板所有权） | platform/clipboard.rs 集成测试 |
-| CI 增加 cargo-deny | 供应链持续防线 | deny.toml + advisory DB 检查入 ci.yml | CI 时长小幅增加 | cargo-deny 自身即验证 |
+| 项                   | 动机                                                | 方案                                                          | 风险                                   | 测试策略                                                               |
+| -------------------- | --------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| +page.svelte 模块化  | 唯一系统性前端债务                                  | 抽 io.ts 服务 + layout composable + shell 瘦身，目标 <1000 行 | 回归风险集中于面板宽度 effect 顺序耦合 | 先为 io 编排写 node:test（fake-invoke 模式），重构后契约正则测试保持绿 |
+| 错误契约结构化       | REMOTE_CHANGED 哨兵脆弱 + String 错误无法程序化匹配 | IPC 错误升级为 {code,message}，保留字符串兼容期               | 跨层同步改动量大                       | component-contracts 扩展守护 code 枚举；Rust 侧新增错误枚举单测        |
+| 剪贴板生命周期后端化 | 前端定时器不可靠                                    | 后端计时清除 + 锁定/退出钩子                                  | 平台差异（Win32 剪贴板所有权）         | platform/clipboard.rs 集成测试                                         |
+| CI 增加 cargo-deny   | 供应链持续防线                                      | deny.toml + advisory DB 检查入 ci.yml                         | CI 时长小幅增加                        | cargo-deny 自身即验证                                                  |
 
 ---
 
-*本报告由 fuck-my-shit-mountain 技能流程生成。所有严重度/置信度标注遵循技能 rubric；每项发现的证据均来自静态代码审读，未执行动态渗透或性能剖析。*
+_本报告由 fuck-my-shit-mountain 技能流程生成。所有严重度/置信度标注遵循技能 rubric；每项发现的证据均来自静态代码审读，未执行动态渗透或性能剖析。_

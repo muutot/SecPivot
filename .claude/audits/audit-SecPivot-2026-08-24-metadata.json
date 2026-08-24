@@ -17,14 +17,14 @@
     "testing": 7.5,
     "maintainability": 6.5,
     "design": 7.5,
-    "release": 6.5
+    "release": 6.5,
   },
   "finding_counts": {
     "critical": 0,
     "high": 0,
     "medium": 6,
     "low": 10,
-    "info": 0
+    "info": 0,
   },
   "top_risks": [
     "KeePassHttp 本地协议面 CORS * + 无关联速率限制 (Medium)",
@@ -32,7 +32,7 @@
     "CI Actions 未按 SHA 固定 (Medium)",
     "无 rust-toolchain.toml 工具链锁定 (Medium)",
     "+page.svelte 3338 行 god-component (Medium)",
-    "ModalShell 无焦点陷阱 (Medium)"
+    "ModalShell 无焦点陷阱 (Medium)",
   ],
-  "lint_status": "OK"
+  "lint_status": "OK",
 }
