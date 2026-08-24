@@ -16,11 +16,11 @@ use crate::bridge::{
 use crate::config::PasswordGeneratorSettings;
 use crate::vault::{VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{mpsc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Body cap: the largest legal KeePassHttp payload is a few KiB.
@@ -29,6 +29,11 @@ const MAX_BODY_BYTES: usize = 1024 * 1024;
 /// How long an associate approval may stay unanswered before it is rejected.
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
+/// Sliding-window cap on new `associate` attempts. Any local process or page
+/// can reach the loopback port, so unauthenticated association floods must not
+/// repeatedly surface the approval prompt (approval-spam social engineering).
+const ASSOCIATE_WINDOW: Duration = Duration::from_secs(60);
+const ASSOCIATE_MAX_PER_WINDOW: usize = 5;
 
 /// Event emitted to the frontend when a browser requests association.
 /// Payload: `{ token: string, id: string }` (never the key material).
@@ -66,6 +71,49 @@ pub(crate) struct BridgeState {
     server: Mutex<Option<ServerHandle>>,
     last_error: Mutex<Option<String>>,
     generator: Mutex<PasswordGeneratorSettings>,
+    associate_limiter: AssociateRateLimiter,
+}
+
+/// Sliding-window limiter for unauthenticated `associate` attempts.
+#[derive(Default)]
+struct AssociateRateLimiter {
+    accepted: Mutex<VecDeque<Instant>>,
+}
+
+impl AssociateRateLimiter {
+    fn allow(&self) -> bool {
+        let Ok(mut accepted) = self.accepted.lock() else {
+            return false;
+        };
+        admit_associate(
+            &mut accepted,
+            Instant::now(),
+            ASSOCIATE_WINDOW,
+            ASSOCIATE_MAX_PER_WINDOW,
+        )
+    }
+}
+
+/// Pure sliding-window admission so the expiry logic is testable without
+/// real sleeps. Returns true and records the attempt when under the cap.
+fn admit_associate(
+    accepted: &mut VecDeque<Instant>,
+    now: Instant,
+    window: Duration,
+    max_per_window: usize,
+) -> bool {
+    while let Some(front) = accepted.front() {
+        if now.duration_since(*front) > window {
+            accepted.pop_front();
+        } else {
+            break;
+        }
+    }
+    if accepted.len() >= max_per_window {
+        return false;
+    }
+    accepted.push_back(now);
+    true
 }
 
 impl BridgeState {
@@ -195,6 +243,16 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
         return;
     };
     let request_type = request.request_type.clone();
+    // Cap new-association floods before they can surface approval prompts.
+    // Already-associated clients never hit this path (their request types are
+    // authenticated against stored keys), so normal browser usage is unaffected.
+    if request_type == "associate" && !app.state::<BridgeState>().associate_limiter.allow() {
+        let response = BridgeResponse::failure(&request_type, "关联请求过于频繁,请稍后再试");
+        if let Ok(json) = serde_json::to_string(&response) {
+            let _ = write_http_response(&mut stream, &json);
+        }
+        return;
+    }
     let generator = app
         .state::<BridgeState>()
         .generator
@@ -448,6 +506,9 @@ fn read_http_request(stream: &mut TcpStream) -> Result<(String, String), String>
 /// Shared CORS policy: browser extensions fetch this loopback port from a
 /// different origin, so every response must carry these headers and OPTIONS
 /// preflights must be answered (mirrors KeePassXC's KeePassHttp server).
+/// `*` is required by the protocol — extension origins are not known up
+/// front; the abuse surface (association flooding) is bounded by the
+/// `AssociateRateLimiter` instead of by an origin allow-list.
 fn cors_headers() -> &'static str {
     "Access-Control-Allow-Origin: *\r\n\
      Access-Control-Allow-Methods: POST, OPTIONS\r\n\
@@ -631,6 +692,40 @@ mod tests {
         assert!(frame.contains("Access-Control-Allow-Origin: *\r\n"));
         assert!(frame.contains("Access-Control-Allow-Methods: POST, OPTIONS\r\n"));
         assert!(frame.contains("Content-Length: 0\r\n"));
+    }
+
+    #[test]
+    fn associate_rate_limiter_blocks_flood_and_expires() {
+        let window = Duration::from_secs(60);
+        let max: usize = 5;
+        let start = Instant::now();
+        let mut accepted = VecDeque::new();
+
+        for i in 0u64..max as u64 {
+            assert!(
+                admit_associate(&mut accepted, start + Duration::from_secs(i), window, max),
+                "attempt {i} within the cap must be admitted"
+            );
+        }
+        assert!(
+            !admit_associate(
+                &mut accepted,
+                start + Duration::from_secs(max as u64),
+                window,
+                max
+            ),
+            "attempt past the cap must be rejected"
+        );
+        // Old attempts age out of the window and capacity frees up again.
+        assert!(
+            admit_associate(
+                &mut accepted,
+                start + window + Duration::from_secs(1),
+                window,
+                max
+            ),
+            "attempts older than the window must expire"
+        );
     }
 
     #[test]
