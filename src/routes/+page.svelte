@@ -3427,6 +3427,8 @@
       display: block;
       position: relative;
       min-width: 0;
+      min-height: 0;
+      height: 100%;
     }
 
     .mobile-drawer-backdrop {
@@ -3459,6 +3461,7 @@
     .entry-panel {
       min-width: 0;
       width: 100%;
+      height: 100%;
     }
 
     .group-resize-handle,
