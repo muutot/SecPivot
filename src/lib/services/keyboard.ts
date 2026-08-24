@@ -72,3 +72,29 @@ export function effectiveShortcuts(shortcuts: Record<string, string>): Record<st
   }
   return out;
 }
+
+/** True when the event's pressed modifiers match `combo` ("Ctrl+Shift+C").
+ *  Modifier order in the combo is irrelevant; the last non-modifier token is
+ *  the key. Single-character keys compare case-insensitively ("Space" is the
+ *  canonical name for `" "`). */
+export function matchesShortcut(event: KeyboardEvent, combo: string): boolean {
+  const mods: [string, boolean][] = [
+    ["Ctrl", event.ctrlKey],
+    ["Alt", event.altKey],
+    ["Shift", event.shiftKey],
+    ["Meta", event.metaKey],
+  ];
+  const parts = combo.split("+").map((p) => p.trim());
+  let keyPart = "";
+  for (const part of parts) {
+    if (part === "Ctrl" || part === "Alt" || part === "Shift" || part === "Meta") continue;
+    keyPart = part;
+  }
+  for (const [name, pressed] of mods) {
+    if (parts.includes(name) !== pressed) return false;
+  }
+  if (!keyPart) return false;
+  const eventKey =
+    event.key === " " ? "Space" : event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  return eventKey === keyPart;
+}
