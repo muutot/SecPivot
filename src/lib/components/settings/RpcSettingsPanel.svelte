@@ -163,12 +163,15 @@
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
-      <div>
-        <strong>已连接会话</strong>
-        <p>当前与 Kee 扩展保持连接的浏览器会话，可手动断开任意一个</p>
+      <div class="heading-inline">
+        <div>
+          <strong>已连接会话</strong>
+          <p>当前与 Kee 扩展保持连接的浏览器会话，可手动断开任意一个</p>
+        </div>
+        <span class="value-label"
+          >{sessions.length > 0 ? `${sessions.length} 个连接` : "无连接"}</span
+        >
       </div>
-      <span class="value-label">{sessions.length > 0 ? `${sessions.length} 个连接` : "无连接"}</span
-      >
     </div>
     {#if sessions.length > 0}
       <ul class="session-list">
@@ -182,11 +185,15 @@
                 >{session.peer} · {formatConnectedAt(session.connectedAtMs)}</span
               >
             </span>
-            <button class="session-close" onclick={() => void closeSession(session.id)}>断开</button
+            <button
+              class="settings-action-button session-close"
+              onclick={() => void closeSession(session.id)}>断开</button
             >
           </li>
         {/each}
       </ul>
+    {:else}
+      <p class="settings-note">暂无已连接会话；在 Kee 扩展中发起连接后显示在这里</p>
     {/if}
   </section>
 
@@ -237,10 +244,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
+    padding: 6px 8px;
+    border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
-    background: var(--input-bg);
+    background: var(--card-bg);
   }
 
   .session-identity {
@@ -263,19 +270,11 @@
     font-size: var(--font-size-tiny, 10px);
   }
 
+  /* Layout override only — button chrome comes from `.settings-action-button`
+   * (mirrors the bridge panel's client-remove row). */
   .session-close {
-    flex: 0 0 auto;
-    padding: 3px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
+    height: 22px;
+    padding: 0 8px;
     background: transparent;
-    color: var(--text-secondary, var(--text-primary));
-    cursor: pointer;
-    font-size: var(--font-size-tiny, 10px);
-  }
-
-  .session-close:hover {
-    color: var(--danger-color, var(--text-primary));
-    border-color: var(--danger-color, var(--border-color));
   }
 </style>
