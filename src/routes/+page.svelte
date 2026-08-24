@@ -12,11 +12,12 @@
   import ColumnConfigMenu, {
     type ColumnMenuSection,
   } from "$lib/components/ColumnConfigMenu.svelte";
-  import { effectiveShortcuts } from "$lib/services/keyboard";
+  import { effectiveShortcuts, matchesShortcut } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
+  import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
   import {
     csvToImportEntries,
     downloadTextFile,
@@ -164,6 +165,20 @@
     },
     notify: flash,
     currentState: () => currentVault,
+  };
+
+  /** Component hooks for the extracted favicon download flow. */
+  const faviconHost: FaviconFlowHost = {
+    sessionView,
+    operations: busyOperations,
+    isBusy: () => busy,
+    setBusy: (value) => {
+      busy = value;
+    },
+    notify: flash,
+    setDialog: (state) => {
+      faviconDialog = state;
+    },
   };
 
   /** Seen (sessionId, path) pairs that already flashed the expired-entries
@@ -848,71 +863,13 @@
   }
 
   async function handleDownloadFavicons(): Promise<void> {
-    await runFaviconDownload(undefined, "没有可下载的网址图标");
+    await runFaviconDownload(faviconHost, undefined, "没有可下载的网址图标");
   }
 
   /** Download icons for the selected entries only (context menu, multi-select aware). */
   async function downloadSelectedFavicons(entry: VaultEntry): Promise<void> {
     const uuids = selectedUuids.size > 1 ? Array.from(selectedUuids) : [entry.uuid];
-    await runFaviconDownload(uuids, "所选条目没有可下载的网址图标");
-  }
-
-  async function runFaviconDownload(
-    uuids: string[] | undefined,
-    noneMessage: string,
-  ): Promise<void> {
-    if (busy) return;
-    if (!isTauriRuntime()) {
-      flash("浏览器预览不支持下载图标");
-      return;
-    }
-    const view = sessionView.capture();
-    if (!view) return;
-    const { sessionId } = view;
-    const operation = busyOperations.begin();
-    busy = true;
-    faviconDialog = {
-      phase: "working",
-      progress: { sessionId, done: 0, total: 0 },
-      result: "正在连接站点…",
-      error: false,
-    };
-    try {
-      const unlisten = await listen<FaviconProgress>("favicon-progress", (e) => {
-        if (e.payload.sessionId !== sessionId || !sessionView.isCurrent(view)) return;
-        faviconDialog = {
-          phase: "working",
-          progress: e.payload,
-          result: `正在下载，已完成 ${e.payload.done}/${e.payload.total}`,
-          error: false,
-        };
-      });
-      try {
-        const report = await vault.callInSession(sessionId, () => vault.downloadFavicons(uuids));
-        if (!sessionView.isCurrent(view)) return;
-        faviconDialog = {
-          phase: "done",
-          progress: { sessionId, done: report.attempted, total: report.attempted },
-          result:
-            report.attempted === 0
-              ? noneMessage
-              : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
-          error: false,
-        };
-      } finally {
-        unlisten();
-      }
-    } catch (e) {
-      if (!sessionView.isCurrent(view)) return;
-      faviconDialog = {
-        phase: "done",
-        progress: { sessionId, done: 0, total: 0 },
-        result: `图标下载失败：${e}`,
-        error: true,
-      };
-    } finally {
-      if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
-    }
+    await runFaviconDownload(faviconHost, uuids, "所选条目没有可下载的网址图标");
   }
 
   let progressPct = $derived(
@@ -1061,29 +1018,6 @@
   }
 
   let searchInputEl = $state<HTMLInputElement | null>(null);
-
-  /** True when the event's pressed modifiers match `combo` ("Ctrl+Shift+C"). */
-  function matchesShortcut(event: KeyboardEvent, combo: string): boolean {
-    const mods: [string, boolean][] = [
-      ["Ctrl", event.ctrlKey],
-      ["Alt", event.altKey],
-      ["Shift", event.shiftKey],
-      ["Meta", event.metaKey],
-    ];
-    const parts = combo.split("+").map((p) => p.trim());
-    let keyPart = "";
-    for (const part of parts) {
-      if (part === "Ctrl" || part === "Alt" || part === "Shift" || part === "Meta") continue;
-      keyPart = part;
-    }
-    for (const [name, pressed] of mods) {
-      if (parts.includes(name) !== pressed) return false;
-    }
-    if (!keyPart) return false;
-    const eventKey =
-      event.key === " " ? "Space" : event.key.length === 1 ? event.key.toUpperCase() : event.key;
-    return eventKey === keyPart;
-  }
 
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
