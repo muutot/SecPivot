@@ -78,7 +78,8 @@ pub trait RemoteStorage: Send + Sync {
 pub fn make_storage(cfg: &RemoteSettings) -> Result<Arc<dyn RemoteStorage>, String> {
     match cfg.kind.as_str() {
         "webdav" => Ok(Arc::new(WebDavStorage::new(cfg)?)),
-        _ => Ok(Arc::new(S3Storage::new(cfg)?)),
+        "s3" => Ok(Arc::new(S3Storage::new(cfg)?)),
+        other => Err(format!("未知的远程存储类型: {other}（仅支持 s3 / webdav）")),
     }
 }
 

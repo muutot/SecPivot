@@ -167,6 +167,24 @@ fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
 }
 
 #[test]
+fn unknown_storage_kind_is_rejected() {
+    // A typo'd kind must fail fast instead of silently building an S3 client
+    // (which would surface as a confusing network error later).
+    let mut cfg = mock_config("127.0.0.1:9000".parse().expect("addr"));
+    cfg.kind = "WebDav".into();
+    match make_storage(&cfg) {
+        Err(err) => assert!(
+            err.contains("未知的远程存储类型"),
+            "unexpected error: {err}"
+        ),
+        Ok(_) => panic!("unknown kind must be rejected"),
+    }
+
+    cfg.kind = "s3".into();
+    assert!(make_storage(&cfg).is_ok(), "canonical s3 must build");
+}
+
+#[test]
 fn s3_transport_round_trips_against_local_mock() {
     let storage = S3Storage::with_timeouts(
         &mock_config(spawn_s3_mock()),
