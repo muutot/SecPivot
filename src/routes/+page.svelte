@@ -15,6 +15,7 @@
   import { effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
+  import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import {
     csvToImportEntries,
     downloadTextFile,
@@ -308,7 +309,7 @@
       columnMenu = null;
       closeContextMenu();
       advancedSearchOpen = false;
-      mobileNavOpen = false;
+      layout.mobileNavOpen = false;
       emergencyIncludePasswords = false;
     });
     // Browser-extension writes land straight in the backend session; refresh
@@ -627,35 +628,13 @@
     if (colId === "size") return entry.size == null ? "" : formatKeePassSize(entry.size);
     return String(entry[colId as keyof VaultEntry] ?? "");
   }
-  let groupWidth = $state(get(appSettings).general.panelWidths.group);
-  let detailWidth = $state(get(appSettings).general.panelWidths.detail);
-  let detailVisible = $state(false);
-  /** Set before a selection change that must not auto-open the detail panel
-   *  (right-click context menu). Consumed by the effect below. Deliberately
-   *  non-reactive: the effect must not track it and re-run when it resets. */
-  let suppressDetailAutoOpen = false;
-  /** Whether the group tree drawer is open on narrow/mobile layouts. */
-  let mobileNavOpen = $state(false);
-
-  $effect(() => {
-    const p = settings.general.panelWidths;
-    groupWidth = p.group;
-    detailWidth = p.detail;
+  /** Panel widths, detail visibility, mobile drawer and drag-resize logic live
+   *  in the extracted composable; see `usePanelLayout.svelte.ts`. */
+  const layout = usePanelLayout({
+    entryColumns: () => entryColumns,
+    urlColWidth: () => colState("url").width || 200,
+    selectedEntry: () => selectedEntry,
   });
-
-  $effect(() => {
-    if (selectedEntry) {
-      if (suppressDetailAutoOpen) {
-        suppressDetailAutoOpen = false;
-      } else {
-        detailVisible = true;
-      }
-    } else {
-      suppressDetailAutoOpen = false;
-      detailVisible = false;
-    }
-  });
-
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     const col = sortCol;
@@ -749,71 +728,6 @@
       cols.splice(anchor === -1 ? cols.length : anchor, 0, moved);
     }
     entryColumns = cols;
-  }
-
-  function startDetailResize(e: PointerEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const startX = e.clientX;
-    const startW = detailWidth;
-    document.body.classList.add("resizing-column");
-    const onMove = (ev: PointerEvent): void => {
-      detailWidth = Math.min(640, Math.max(260, startW - (ev.clientX - startX)));
-    };
-    const onUp = (ev: PointerEvent): void => {
-      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      document.body.classList.remove("resizing-column");
-      saveLayout();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
-
-  function startGroupResize(e: PointerEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const startX = e.clientX;
-    const startW = groupWidth;
-    document.body.classList.add("resizing-column");
-    const onMove = (ev: PointerEvent): void => {
-      groupWidth = Math.min(320, Math.max(140, startW + (ev.clientX - startX)));
-    };
-    const onUp = (ev: PointerEvent): void => {
-      if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      document.body.classList.remove("resizing-column");
-      saveLayout();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
-
-  function saveLayout(): void {
-    // Write entryColumns first: mirroring settings back into `entryColumns`
-    // (the $effect subscribing to appSettings) resets that state to whatever
-    // is currently in the store. If we wrote panelWidths first, the store's
-    // stale column widths would clobber the freshly dragged widths before this
-    // line reads `entryColumns`, reverting the resize on release.
-    appSettings.updateGeneral(
-      "entryColumns",
-      entryColumns.map((c) => ({ ...c })),
-    );
-    appSettings.updateGeneral("panelWidths", {
-      group: groupWidth,
-      detail: detailWidth,
-      urlCol: colState("url").width || 200,
-    });
   }
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
@@ -1791,7 +1705,7 @@
     toolbarMenu = null;
     // Right-click updates the selection (so menu actions target this entry)
     // but must not force the detail panel open.
-    if (selectedEntry !== entry) suppressDetailAutoOpen = true;
+    if (selectedEntry !== entry) layout.suppressNextAutoOpen();
     if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
     selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
@@ -1911,8 +1825,8 @@
     { id: "save-as", label: "另存为…", icon: "copy" },
     {
       id: "toggle-detail",
-      label: detailVisible ? "隐藏详情面板" : "显示详情面板",
-      icon: detailVisible ? "eye-off" : "eye",
+      label: layout.detailVisible ? "隐藏详情面板" : "显示详情面板",
+      icon: layout.detailVisible ? "eye-off" : "eye",
     },
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
@@ -2004,7 +1918,7 @@
 
   function handleToolbarMenuAction(id: string): void {
     if (id === "save-as") void handleSaveAs();
-    else if (id === "toggle-detail") detailVisible = !detailVisible;
+    else if (id === "toggle-detail") layout.detailVisible = !layout.detailVisible;
     else if (id === "security-report") void handleOpenReport();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "hibp-check") hibpOpen = true;
@@ -2029,7 +1943,7 @@
     class="app-shell"
     class:compact={compactMode}
     class:standalone={!currentVault}
-    class:mobile-nav-open={mobileNavOpen}
+    class:mobile-nav-open={layout.mobileNavOpen}
     style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
     style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
     style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
@@ -2041,11 +1955,11 @@
         <div class="toolbar-left">
           <button
             class="mobile-nav-toggle"
-            class:active={mobileNavOpen}
-            onclick={() => (mobileNavOpen = !mobileNavOpen)}
+            class:active={layout.mobileNavOpen}
+            onclick={() => (layout.mobileNavOpen = !layout.mobileNavOpen)}
             title="分组"
             aria-label="切换分组面板"
-            aria-expanded={mobileNavOpen}
+            aria-expanded={layout.mobileNavOpen}
           >
             <AppIcon name="menu" size={15} />
           </button>
@@ -2141,11 +2055,11 @@
           {:else}
             <button
               class="icon-action"
-              onclick={() => (detailVisible = !detailVisible)}
-              title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
-              aria-pressed={detailVisible}
+              onclick={() => (layout.detailVisible = !layout.detailVisible)}
+              title={layout.detailVisible ? "隐藏详情面板" : "显示详情面板"}
+              aria-pressed={layout.detailVisible}
             >
-              <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
+              <AppIcon name={layout.detailVisible ? "chevron-right" : "chevron-left"} size={15} />
             </button>
             <button class="icon-action" onclick={() => void handleOpenReport()} title="安全报告">
               <AppIcon name="shield" size={15} />
@@ -2168,13 +2082,13 @@
 
       <div
         class="main-content"
-        style={`--group-width: ${groupWidth}px; --detail-width: ${detailVisible ? detailWidth : 0}px`}
+        style={`--group-width: ${layout.groupWidth}px; --detail-width: ${layout.detailVisible ? layout.detailWidth : 0}px`}
       >
-        {#if mobileNavOpen}
+        {#if layout.mobileNavOpen}
           <button
             class="mobile-drawer-backdrop"
             aria-label="关闭分组面板"
-            onclick={() => (mobileNavOpen = false)}
+            onclick={() => (layout.mobileNavOpen = false)}
           ></button>
         {/if}
         <section class="group-panel">
@@ -2191,7 +2105,7 @@
                 selectedEntry = null;
                 selectedUuids = new Set();
                 selectionAnchor = null;
-                mobileNavOpen = false;
+                layout.mobileNavOpen = false;
               }}
               onaddsubgroup={openGroupModal}
               onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
@@ -2216,7 +2130,7 @@
           role="separator"
           aria-orientation="vertical"
           title="调整分组宽度"
-          onpointerdown={startGroupResize}
+          onpointerdown={layout.startGroupResize}
         ></span>
 
         <section class="entry-panel">
@@ -2237,7 +2151,7 @@
             oncyclesort={cycleSort}
             oncolumnresize={resizeEntryColumn}
             oncolumnreorder={applyColumnReorder}
-            onsavelayout={saveLayout}
+            onsavelayout={layout.saveLayout}
             onrowclick={handleRowClick}
             onentrycontextmenu={openEntryMenu}
             oncolumncontextmenu={openColumnMenu}
@@ -2252,13 +2166,13 @@
           />
         </section>
 
-        {#if detailVisible}
+        {#if layout.detailVisible}
           <span
             class="detail-resize-handle"
             role="separator"
             aria-orientation="vertical"
             title="调整详情宽度"
-            onpointerdown={startDetailResize}
+            onpointerdown={layout.startDetailResize}
           ></span>
 
           <section class="detail-panel">
