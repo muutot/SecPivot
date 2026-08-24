@@ -16,6 +16,7 @@
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
+  import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
   import {
@@ -117,9 +118,6 @@
   let advancedSearchOpen = $state(false);
   let selectedGroup = $state<string | null>(null);
   let revealGroupUuid = $state<string | null>(null);
-  let selectedEntry = $state<VaultEntry | null>(null);
-  let selectedUuids = $state<Set<string>>(new Set());
-  let selectionAnchor = $state<string | null>(null);
   let editorOpen = $state(false);
   let editorMode: "create" | "edit" | "edit-multi" = $state("create");
   let editEntry: VaultEntry | null = $state(null);
@@ -260,13 +258,13 @@
         if (view?.sessionId === currentVaultSessionId) void notifyExpiredEntries(view);
       }
       if (!value) {
-        selectedEntry = null;
-        selectedUuids = new Set();
-        selectionAnchor = null;
+        selection.selectedEntry = null;
+        selection.selectedUuids = new Set();
+        selection.selectionAnchor = null;
         editorOpen = false;
         editEntries = [];
       } else {
-        selectedEntry = findEntryByUuid(value, selectedEntry?.uuid ?? null);
+        selection.selectedEntry = findEntryByUuid(value, selection.selectedEntry?.uuid ?? null);
       }
       // Re-arm the idle timer only on open/close transitions; every refresh
       // (save, favicon run, RPC write) otherwise silently resets the deadline
@@ -294,9 +292,9 @@
       groupIconSaving = false;
       selectedGroup = null;
       revealGroupUuid = null;
-      selectedEntry = null;
-      selectedUuids = new Set();
-      selectionAnchor = null;
+      selection.selectedEntry = null;
+      selection.selectedUuids = new Set();
+      selection.selectionAnchor = null;
       securityReport = null;
       // Session-scoped overlays/forms must never survive a tab switch: their
       // captured uuids may also exist in an identical copy of another vault.
@@ -504,7 +502,7 @@
   const layout = usePanelLayout({
     entryColumns: () => columns.entryColumns,
     urlColWidth: () => columns.colState("url").width || 200,
-    selectedEntry: () => selectedEntry,
+    selectedEntry: () => selection.selectedEntry,
   });
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -520,6 +518,12 @@
       return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
     });
     return keyedEntries.map(({ row }) => row);
+  });
+
+  /** Selection model (single/shift-range/ctrl-toggle) lives in the extracted
+   *  composable; see `useVaultSelection.svelte.ts`. */
+  const selection = useVaultSelection({
+    visibleUuids: () => sortedEntries.map((r) => r.entry.uuid),
   });
 
   function cycleSort(col: SortCol): void {
@@ -582,37 +586,7 @@
   }
 
   function setSingleSelection(entry: VaultEntry | null): void {
-    selectedUuids = entry ? new Set([entry.uuid]) : new Set();
-    selectionAnchor = entry?.uuid ?? null;
-    selectedEntry = entry;
-  }
-
-  function handleRowClick(event: MouseEvent, entry: VaultEntry): void {
-    if (event.shiftKey && selectionAnchor) {
-      const uuids = sortedEntries.map((r) => r.entry.uuid);
-      const start = uuids.indexOf(selectionAnchor);
-      const end = uuids.indexOf(entry.uuid);
-      if (start !== -1 && end !== -1) {
-        const [lo, hi] = start <= end ? [start, end] : [end, start];
-        selectedUuids = new Set(uuids.slice(lo, hi + 1));
-        selectionAnchor = entry.uuid;
-        selectedEntry = entry;
-        return;
-      }
-    }
-    if (event.ctrlKey || event.metaKey) {
-      const next = new Set(selectedUuids);
-      if (next.has(entry.uuid)) {
-        next.delete(entry.uuid);
-      } else {
-        next.add(entry.uuid);
-      }
-      selectedUuids = next;
-      selectionAnchor = entry.uuid;
-      selectedEntry = entry;
-      return;
-    }
-    setSingleSelection(entry);
+    selection.setSingleSelection(entry);
   }
 
   async function toggleFavorite(entry: VaultEntry): Promise<void> {
@@ -622,8 +596,8 @@
     try {
       const saved = await vault.callInSession(sessionId, () => vault.toggleFavorite(entry.uuid));
       if (!sessionView.isCurrent(view)) return;
-      if (selectedEntry?.uuid === entry.uuid) {
-        selectedEntry = findEntryByUuid(saved, entry.uuid);
+      if (selection.selectedEntry?.uuid === entry.uuid) {
+        selection.selectedEntry = findEntryByUuid(saved, entry.uuid);
       }
     } catch (e) {
       if (sessionView.isCurrent(view)) flash(`收藏失败：${e}`);
@@ -647,7 +621,7 @@
     try {
       const saved = await vault.callInSession(sessionId, () => vault.save());
       if (!sessionView.isCurrent(view)) return;
-      selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
+      selection.selectedEntry = findEntryByUuid(saved, selection.selectedEntry?.uuid ?? null);
       flash("已保存到数据库");
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
@@ -682,17 +656,17 @@
       if (action === "merge") {
         const merged = await vault.callInSession(sessionId, () => vault.mergeRemote());
         if (!sessionView.isCurrent(view)) return;
-        selectedEntry = findEntryByUuid(merged, selectedEntry?.uuid ?? null);
+        selection.selectedEntry = findEntryByUuid(merged, selection.selectedEntry?.uuid ?? null);
         flash("已合并本地与远程版本");
       } else if (action === "overwrite") {
         const saved = await vault.callInSession(sessionId, () => vault.save(true));
         if (!sessionView.isCurrent(view)) return;
-        selectedEntry = findEntryByUuid(saved, selectedEntry?.uuid ?? null);
+        selection.selectedEntry = findEntryByUuid(saved, selection.selectedEntry?.uuid ?? null);
         flash("已覆盖远程版本");
       } else {
         const refreshed = await vault.callInSession(sessionId, () => vault.refreshRemote());
         if (!sessionView.isCurrent(view)) return;
-        selectedEntry = findEntryByUuid(refreshed, selectedEntry?.uuid ?? null);
+        selection.selectedEntry = findEntryByUuid(refreshed, selection.selectedEntry?.uuid ?? null);
         flash("已下载远程版本");
       }
     } catch (e) {
@@ -868,7 +842,8 @@
 
   /** Download icons for the selected entries only (context menu, multi-select aware). */
   async function downloadSelectedFavicons(entry: VaultEntry): Promise<void> {
-    const uuids = selectedUuids.size > 1 ? Array.from(selectedUuids) : [entry.uuid];
+    const uuids =
+      selection.selectedUuids.size > 1 ? Array.from(selection.selectedUuids) : [entry.uuid];
     await runFaviconDownload(faviconHost, uuids, "所选条目没有可下载的网址图标");
   }
 
@@ -1061,10 +1036,10 @@
           void handleLock();
           break;
         case "edit":
-          if (selectedEntry) openEditEntry(selectedEntry);
+          if (selection.selectedEntry) openEditEntry(selection.selectedEntry);
           break;
         case "copy-password":
-          if (selectedEntry) void copyEntryPassword(selectedEntry);
+          if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
           break;
         case "new-entry":
           openCreateEntry();
@@ -1073,8 +1048,8 @@
           searchInputEl?.focus();
           break;
         case "locate-in-tree":
-          if (selectedEntry && currentVault) {
-            const targetGroup = selectedEntry.groupUuid;
+          if (selection.selectedEntry && currentVault) {
+            const targetGroup = selection.selectedEntry.groupUuid;
             selectedGroup = targetGroup;
             // Reset so a repeat locate on the same group still re-expands the
             // tree even after a full collapse (setting the identical uuid
@@ -1092,15 +1067,15 @@
   }
 
   /** Collect the fully-populated entries behind the current selection. */
-  function selectedEntries(): VaultEntry[] {
-    return allEntries.filter((entry) => selectedUuids.has(entry.uuid));
+  function collectSelectedEntries(): VaultEntry[] {
+    return allEntries.filter((entry) => selection.selectedUuids.has(entry.uuid));
   }
 
   function openEditEntry(entry: VaultEntry): void {
-    if (selectedUuids.size > 1 && selectedUuids.has(entry.uuid)) {
+    if (selection.selectedUuids.size > 1 && selection.selectedUuids.has(entry.uuid)) {
       editorMode = "edit-multi";
       editEntry = null;
-      editEntries = selectedEntries();
+      editEntries = collectSelectedEntries();
       if (editEntries.length < 2) {
         setSingleSelection(entry);
         editorMode = "edit";
@@ -1150,7 +1125,7 @@
         const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
         if (!sessionView.isCurrent(view)) return;
-        selectedEntry = findEntryByUuid(state, selectedEntry?.uuid ?? null);
+        selection.selectedEntry = findEntryByUuid(state, selection.selectedEntry?.uuid ?? null);
         editorOpen = false;
         flash(`已更新 ${uuids.length} 个条目`);
       } else if (mode === "edit" && input && targetEntry) {
@@ -1337,7 +1312,7 @@
     try {
       await vault.callInSession(sessionId, () => vault.restoreEntry(entry.uuid));
       if (!sessionView.isCurrent(view)) return;
-      if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
+      if (selection.selectedEntry?.uuid === entry.uuid) selection.selectedEntry = null;
       flash("已恢复条目");
     } catch (e) {
       if (sessionView.isCurrent(view)) flash(`恢复失败：${e}`);
@@ -1358,11 +1333,11 @@
         try {
           await vault.callInSession(sessionId, () => vault.deleteEntry(entry.uuid));
           if (!sessionView.isCurrent(view)) return;
-          if (selectedEntry?.uuid === entry.uuid) selectedEntry = null;
-          if (selectedUuids.has(entry.uuid)) {
-            const next = new Set(selectedUuids);
+          if (selection.selectedEntry?.uuid === entry.uuid) selection.selectedEntry = null;
+          if (selection.selectedUuids.has(entry.uuid)) {
+            const next = new Set(selection.selectedUuids);
             next.delete(entry.uuid);
-            selectedUuids = next;
+            selection.selectedUuids = next;
           }
           flash(inBin ? "已永久删除条目" : "已移入回收站");
         } catch (e) {
@@ -1373,7 +1348,7 @@
   }
 
   function askDeleteEntries(): void {
-    const uuids = Array.from(selectedUuids);
+    const uuids = Array.from(selection.selectedUuids);
     if (uuids.length === 0) return;
     const allInBin = uuids.every((uuid) => entryInBin(uuid));
     const view = sessionView.capture();
@@ -1388,8 +1363,8 @@
         try {
           await vault.callInSession(sessionId, () => vault.deleteEntries(uuids));
           if (!sessionView.isCurrent(view)) return;
-          selectedUuids = new Set();
-          selectedEntry = null;
+          selection.selectedUuids = new Set();
+          selection.selectedEntry = null;
           flash(allInBin ? "已永久删除所选条目" : "所选条目已移入回收站");
         } catch (e) {
           if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
@@ -1458,9 +1433,9 @@
     toolbarMenu = null;
     // Right-click updates the selection (so menu actions target this entry)
     // but must not force the detail panel open.
-    if (selectedEntry !== entry) layout.suppressNextAutoOpen();
-    if (!selectedUuids.has(entry.uuid)) setSingleSelection(entry);
-    selectedEntry = entry;
+    if (selection.selectedEntry !== entry) layout.suppressNextAutoOpen();
+    if (!selection.selectedUuids.has(entry.uuid)) setSingleSelection(entry);
+    selection.selectedEntry = entry;
     entryMenu = { x: event.clientX, y: event.clientY, entry };
     openContextMenu("page");
   }
@@ -1488,30 +1463,24 @@
   }
 
   function selectAllEntries(): void {
-    selectedUuids = new Set(sortedEntries.map((r) => r.entry.uuid));
-    selectionAnchor = null;
-    selectedEntry = sortedEntries[0]?.entry ?? null;
-  }
-
-  function clearSelection(): void {
-    selectedUuids = new Set();
-    selectionAnchor = null;
-    selectedEntry = null;
+    selection.selectedUuids = new Set(sortedEntries.map((r) => r.entry.uuid));
+    selection.selectionAnchor = null;
+    selection.selectedEntry = sortedEntries[0]?.entry ?? null;
   }
 
   function entryMenuItems(entry: VaultEntry): ContextMenuItem[] {
-    const multi = selectedUuids.size > 1;
+    const multi = selection.selectedUuids.size > 1;
     const items: ContextMenuItem[] = [
       ...(multi
         ? [
             {
               id: "edit-selected",
-              label: `编辑所选条目 (${selectedUuids.size})`,
+              label: `编辑所选条目 (${selection.selectedUuids.size})`,
               icon: "edit" as const,
             },
             {
               id: "delete-selected",
-              label: `删除所选条目 (${selectedUuids.size})`,
+              label: `删除所选条目 (${selection.selectedUuids.size})`,
               icon: "trash" as const,
               destructive: true,
             },
@@ -1530,7 +1499,7 @@
       { id: "autotype-password", label: "自动填充密码", icon: "key" },
       {
         id: "download-favicon",
-        label: multi ? `下载所选条目图标 (${selectedUuids.size})` : "下载网址图标",
+        label: multi ? `下载所选条目图标 (${selection.selectedUuids.size})` : "下载网址图标",
         icon: "globe",
         disabled: !isTauriRuntime() || (!multi && !entry.url),
       },
@@ -1855,9 +1824,9 @@
               showChevron={groupDensity.showGroupChevron}
               onselect={(uuid: string | null) => {
                 selectedGroup = uuid;
-                selectedEntry = null;
-                selectedUuids = new Set();
-                selectionAnchor = null;
+                selection.selectedEntry = null;
+                selection.selectedUuids = new Set();
+                selection.selectionAnchor = null;
                 layout.mobileNavOpen = false;
               }}
               onaddsubgroup={openGroupModal}
@@ -1893,7 +1862,7 @@
             entryGridCols={columns.entryGridCols}
             {sortCol}
             {sortDir}
-            {selectedUuids}
+            selectedUuids={selection.selectedUuids}
             {showDescriptions}
             compact={compactMode}
             searchActive={Boolean(search)}
@@ -1905,7 +1874,7 @@
             oncolumnresize={columns.resizeEntryColumn}
             oncolumnreorder={columns.applyColumnReorder}
             onsavelayout={layout.saveLayout}
-            onrowclick={handleRowClick}
+            onrowclick={selection.handleRowClick}
             onentrycontextmenu={openEntryMenu}
             oncolumncontextmenu={openColumnMenu}
             onblankcontextmenu={openBlankMenu}
@@ -1929,19 +1898,19 @@
           ></span>
 
           <section class="detail-panel">
-            {#if selectedEntry}
+            {#if selection.selectedEntry}
               <EntryDetail
-                entry={selectedEntry}
-                groupPath={pathOf(selectedEntry.groupUuid)}
-                inRecycleBin={groupInBin(selectedEntry.groupUuid)}
+                entry={selection.selectedEntry}
+                groupPath={pathOf(selection.selectedEntry.groupUuid)}
+                inRecycleBin={groupInBin(selection.selectedEntry.groupUuid)}
                 onfavorite={toggleFavorite}
                 onedit={openEditEntry}
                 ondelete={askDeleteEntry}
                 onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
                 onback={() => {
-                  selectedEntry = null;
-                  selectedUuids = new Set();
-                  selectionAnchor = null;
+                  selection.selectedEntry = null;
+                  selection.selectedUuids = new Set();
+                  selection.selectionAnchor = null;
                 }}
               />
             {:else}
@@ -1957,8 +1926,8 @@
       <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
           <span class="result-count">{filteredEntries.length} 个条目</span>
-          {#if selectedUuids.size > 1}
-            <span class="status-group-filter">已选 {selectedUuids.size} 个</span>
+          {#if selection.selectedUuids.size > 1}
+            <span class="status-group-filter">已选 {selection.selectedUuids.size} 个</span>
           {/if}
           {#if selectedGroup !== null}
             <span class="status-group-filter" title={pathOf(selectedGroup)}>
@@ -2060,7 +2029,7 @@
 
 {#if hibpOpen}
   <HibpCheckDialog
-    uuids={[...selectedUuids]}
+    uuids={[...selection.selectedUuids]}
     onclose={() => (hibpOpen = false)}
     onselect={(uuid: string) => {
       const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
