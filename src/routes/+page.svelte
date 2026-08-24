@@ -81,6 +81,8 @@
   import AdvancedSearchDialog from "$lib/components/AdvancedSearchDialog.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import AppToolbar from "$lib/components/AppToolbar.svelte";
+  import AutotypePickDialog from "$lib/components/AutotypePickDialog.svelte";
+  import FaviconProgressDialog from "$lib/components/FaviconProgressDialog.svelte";
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
   import ExpiredEntriesDialog from "$lib/components/ExpiredEntriesDialog.svelte";
@@ -851,12 +853,6 @@
       selection.selectedUuids.size > 1 ? Array.from(selection.selectedUuids) : [entry.uuid];
     await runFaviconDownload(faviconHost, uuids, "所选条目没有可下载的网址图标");
   }
-
-  let progressPct = $derived(
-    faviconDialog && faviconDialog.progress.total > 0
-      ? `${Math.round((faviconDialog.progress.done / faviconDialog.progress.total) * 100)}%`
-      : "0%",
-  );
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
     const view = sessionView.capture();
@@ -2014,73 +2010,15 @@
 {/if}
 
 {#if autotypePick}
-  <ModalShell
-    title="选择要自动填充的条目"
-    description="多个条目匹配当前窗口，请选择其一"
-    size="small"
-    closeOnEscape
+  <AutotypePickDialog
+    candidates={autotypePick}
     onclose={() => (autotypePick = null)}
-  >
-    {#snippet children()}
-      <div class="autotype-pick-list" role="listbox" aria-label="自动填充候选">
-        {#each autotypePick as candidate (candidate.uuid)}
-          <button
-            type="button"
-            class="autotype-pick-item"
-            role="option"
-            aria-selected="false"
-            onclick={() => {
-              // Close the picker immediately (responsive UX) but surface a
-              // failed pick instead of leaving the user with nothing typed
-              // and no feedback.
-              void invoke("autotype_pick", {
-                sessionId: candidate.sessionId,
-                uuid: candidate.uuid,
-              }).catch((e) => flash(`自动键入失败：${e}`));
-              autotypePick = null;
-            }}
-          >
-            <span class="autotype-pick-title">{candidate.title || "未命名条目"}</span>
-            {#if candidate.username}
-              <span class="autotype-pick-username">{candidate.username}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-    {/snippet}
-  </ModalShell>
+    onerror={(message) => flash(message)}
+  />
 {/if}
 
 {#if faviconDialog}
-  {@const dialog = faviconDialog}
-  <ModalShell
-    title={dialog.error ? "下载图标失败" : "下载网址图标"}
-    description={dialog.result}
-    size="small"
-    tone={dialog.error ? "danger" : "default"}
-    closeOnEscape={dialog.phase !== "working"}
-    onclose={() => (faviconDialog = null)}
-  >
-    {#snippet icon()}
-      <AppIcon name={dialog.error ? "x" : "globe"} size={16} />
-    {/snippet}
-    {#snippet children()}
-      {#if dialog.phase === "working"}
-        <div class="progress-track">
-          <div
-            class="progress-fill"
-            class:indeterminate={dialog.progress.total === 0}
-            style:--progress-pct={progressPct}
-          ></div>
-        </div>
-      {/if}
-    {/snippet}
-    {#snippet actions()}
-      {#if dialog.phase !== "working"}
-        <button class="modal-button primary" onclick={() => (faviconDialog = null)}>关闭</button>
-      {/if}
-    {/snippet}
-  </ModalShell>
+  <FaviconProgressDialog dialog={faviconDialog} onclose={() => (faviconDialog = null)} />
 {/if}
 
 <style>
@@ -2208,50 +2146,6 @@
     font-size: var(--font-size-tiny, 10px);
   }
 
-  .autotype-pick-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 40vh;
-    overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
-  }
-
-  .autotype-pick-item {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
-    background: var(--input-bg);
-    color: var(--text-primary);
-    font-size: 12px;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .autotype-pick-item:hover {
-    background: var(--hover-bg);
-  }
-
-  .autotype-pick-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .autotype-pick-username {
-    flex: 1;
-    overflow: hidden;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .status-left,
   .status-right {
     display: flex;
@@ -2342,36 +2236,6 @@
     background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   }
 
-  .progress-track {
-    height: 6px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
-    background: var(--input-bg);
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    width: var(--progress-pct, 0%);
-    height: 100%;
-    border-radius: inherit;
-    background: var(--selection-color);
-    transition: width 0.2s ease;
-  }
-
-  .progress-fill.indeterminate {
-    width: 40%;
-    animation: progress-slide 1.1s ease-in-out infinite alternate;
-  }
-
-  @keyframes progress-slide {
-    from {
-      transform: translateX(-110%);
-    }
-    to {
-      transform: translateX(260%);
-    }
-  }
-
   @media (max-width: 720px) {
     .app-shell,
     .app-shell.compact {
@@ -2441,12 +2305,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .progress-fill {
-      transition: none;
-    }
-    .progress-fill.indeterminate {
-      animation: none;
-    }
     .group-panel {
       transition: none;
     }
