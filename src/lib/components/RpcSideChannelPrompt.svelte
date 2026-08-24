@@ -136,7 +136,7 @@
     flex: 1;
     min-width: 0;
     color: var(--text-primary);
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 19px;
     font-weight: 590;
     letter-spacing: 0.08em;

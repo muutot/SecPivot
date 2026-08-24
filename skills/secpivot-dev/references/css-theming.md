@@ -62,13 +62,14 @@ Use these variables for reusable surfaces, text, borders, controls, and status s
 
 ## Global font and display variables
 
-| Variable                  | Current default | Use                   |
-| ------------------------- | --------------- | --------------------- |
-| `--font-size-base`        | `14px`          | general UI/body       |
-| `--font-size-secondary`   | `11px`          | metadata/descriptions |
-| `--font-size-tiny`        | `10px`          | smallest notes        |
-| `--font-size-cardTitle`   | `13px`          | card title            |
-| `--font-size-cardPreview` | `11px`          | card preview          |
+| Variable                  | Current default    | Use                                                                                                            |
+| ------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `--font-size-base`        | `14px`             | general UI/body                                                                                                |
+| `--font-size-secondary`   | `11px`             | metadata/descriptions                                                                                          |
+| `--font-size-tiny`        | `10px`             | smallest notes                                                                                                 |
+| `--font-size-cardTitle`   | `13px`             | card title                                                                                                     |
+| `--font-size-cardPreview` | `11px`             | card preview                                                                                                   |
+| `--font-mono`             | ui-monospace stack | monospace code/ids (client IDs, TOTP codes, side-channel passwords); do not hardcode font stacks in components |
 
 `settings-bootstrap.ts` applies these and the 20 theme variables at startup. Live settings panels must update the same contract; do not create alternate variable names for the same meaning.
 

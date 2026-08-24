@@ -139,7 +139,7 @@
         <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
       </div>
       <input
-        class="timeout-input"
+        class="settings-input timeout-input"
         type="number"
         min="0"
         max="2592000"
@@ -217,15 +217,10 @@
     color: var(--text-faint);
   }
 
+  /* Only the layout override — control chrome comes from `.settings-input`. */
   .timeout-input {
     width: 90px;
     flex: 0 0 auto;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
 
   .session-list {
@@ -265,7 +260,7 @@
 
   .session-meta {
     color: var(--text-faint);
-    font-size: var(--font-size-tertiary, 10px);
+    font-size: var(--font-size-tiny, 10px);
   }
 
   .session-close {
@@ -276,7 +271,7 @@
     background: transparent;
     color: var(--text-secondary, var(--text-primary));
     cursor: pointer;
-    font-size: var(--font-size-tertiary, 10px);
+    font-size: var(--font-size-tiny, 10px);
   }
 
   .session-close:hover {

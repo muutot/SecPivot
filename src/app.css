@@ -47,6 +47,7 @@
   --font-size-tiny: 10px;
   --font-size-cardTitle: 13px;
   --font-size-cardPreview: 11px;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --settings-page-title-size: 18px;
   --settings-heading-size: var(--font-size-cardTitle, 13px);
   --settings-description-size: var(--font-size-secondary, 11px);

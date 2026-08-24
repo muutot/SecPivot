@@ -206,7 +206,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
 
