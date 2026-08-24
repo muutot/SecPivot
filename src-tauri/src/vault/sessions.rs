@@ -379,15 +379,25 @@ impl VaultSessions {
         if inner.active_id.as_deref() == Some(session_id) {
             return active.state()?.ok_or_else(|| "数据库会话未打开".to_owned());
         }
-        let target = inner
+        // Remove the target in one step so no second lookup can diverge from
+        // the existence check; validation happens on the removed session so a
+        // failure must put it back before returning.
+        let mut target = inner
             .parked
-            .get_mut(session_id)
+            .remove(session_id)
             .ok_or_else(|| "找不到数据库会话".to_owned())?;
         // Validate before mutating so a failure leaves both sessions intact.
-        let state = target
-            .state()?
-            .ok_or_else(|| "数据库会话未打开".to_owned())?;
-        let target = inner.parked.remove(session_id).unwrap();
+        let state = match target.state() {
+            Ok(Some(state)) => state,
+            Ok(None) => {
+                inner.parked.insert(session_id.to_owned(), target);
+                return Err("数据库会话未打开".to_owned());
+            }
+            Err(e) => {
+                inner.parked.insert(session_id.to_owned(), target);
+                return Err(e);
+            }
+        };
         if let Some(current_id) = inner.active_id.take() {
             inner
                 .parked
