@@ -38,7 +38,10 @@
   }
 
   function close(): void {
-    void invoke("close_tcato_overlay");
+    // Surface a failed close instead of leaving a dead overlay silently open.
+    void invoke("close_tcato_overlay").catch((e) => {
+      error = `${e}`;
+    });
   }
 </script>
 

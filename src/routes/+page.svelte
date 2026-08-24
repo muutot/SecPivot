@@ -2361,10 +2361,13 @@
             role="option"
             aria-selected="false"
             onclick={() => {
+              // Close the picker immediately (responsive UX) but surface a
+              // failed pick instead of leaving the user with nothing typed
+              // and no feedback.
               void invoke("autotype_pick", {
                 sessionId: candidate.sessionId,
                 uuid: candidate.uuid,
-              });
+              }).catch((e) => flash(`自动键入失败：${e}`));
               autotypePick = null;
             }}
           >
