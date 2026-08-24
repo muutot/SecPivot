@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-08-24T00:00:00+08:00",
+  "commit": "f9aa08683a847b4b4e963f5af6577587e6693dc9",
+  "commit_date": "2026-08-21T16:23:45+08:00",
+  "project": "SecPivot",
+  "modes": ["full"],
+  "scope": "entire repository (excluded .git, node_modules, .venv, build/, src-tauri/target, src-tauri/gen, binaries, lockfile contents)",
+  "language": "zh-CN",
+  "output_format": "md",
+  "report_path": "audit-report-SecPivot-2026-08-24.md",
+  "overall_score": 7.6,
+  "overall_grade": "A",
+  "dimension_scores": {
+    "security": 8.0,
+    "stability": 8.5,
+    "performance": 8.5,
+    "testing": 7.5,
+    "maintainability": 6.5,
+    "design": 7.5,
+    "release": 6.5
+  },
+  "finding_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 6,
+    "low": 10,
+    "info": 0
+  },
+  "top_risks": [
+    "KeePassHttp 本地协议面 CORS * + 无关联速率限制 (Medium)",
+    "Windows 发布产物未签名、无 checksum/SBOM (Medium)",
+    "CI Actions 未按 SHA 固定 (Medium)",
+    "无 rust-toolchain.toml 工具链锁定 (Medium)",
+    "+page.svelte 3338 行 god-component (Medium)",
+    "ModalShell 无焦点陷阱 (Medium)"
+  ],
+  "lint_status": "OK"
+}
