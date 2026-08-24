@@ -12,7 +12,7 @@
   import ColumnConfigMenu, {
     type ColumnMenuSection,
   } from "$lib/components/ColumnConfigMenu.svelte";
-  import { effectiveShortcuts, matchesShortcut } from "$lib/services/keyboard";
+  import { dispatchShortcut, effectiveShortcuts } from "$lib/services/keyboard";
   import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
@@ -1010,45 +1010,32 @@
       return;
     }
     const shortcuts = effectiveShortcuts(get(appSettings).keyboard.shortcuts);
-    for (const [actionId, combo] of Object.entries(shortcuts)) {
-      if (!combo || !matchesShortcut(event, combo)) continue;
-      event.preventDefault();
-      switch (actionId) {
-        case "save":
-          void handleSave();
-          break;
-        case "lock":
-          void handleLock();
-          break;
-        case "edit":
-          if (selection.selectedEntry) openEditEntry(selection.selectedEntry);
-          break;
-        case "copy-password":
-          if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
-          break;
-        case "new-entry":
-          openCreateEntry();
-          break;
-        case "focus-search":
-          searchInputEl?.focus();
-          break;
-        case "locate-in-tree":
-          if (selection.selectedEntry && currentVault) {
-            const targetGroup = selection.selectedEntry.groupUuid;
-            selectedGroup = targetGroup;
-            // Reset so a repeat locate on the same group still re-expands the
-            // tree even after a full collapse (setting the identical uuid
-            // again would not re-run the reveal effect).
-            revealGroupUuid = null;
-            requestAnimationFrame(() => {
-              revealGroupUuid = targetGroup;
-            });
-            flash("已定位到所在分组");
-          }
-          break;
-      }
-      return;
-    }
+    dispatchShortcut(event, shortcuts, {
+      save: () => void handleSave(),
+      lock: () => void handleLock(),
+      edit: () => {
+        if (selection.selectedEntry) openEditEntry(selection.selectedEntry);
+      },
+      "copy-password": () => {
+        if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
+      },
+      "new-entry": () => openCreateEntry(),
+      "focus-search": () => searchInputEl?.focus(),
+      "locate-in-tree": () => {
+        if (selection.selectedEntry && currentVault) {
+          const targetGroup = selection.selectedEntry.groupUuid;
+          selectedGroup = targetGroup;
+          // Reset so a repeat locate on the same group still re-expands the
+          // tree even after a full collapse (setting the identical uuid
+          // again would not re-run the reveal effect).
+          revealGroupUuid = null;
+          requestAnimationFrame(() => {
+            revealGroupUuid = targetGroup;
+          });
+          flash("已定位到所在分组");
+        }
+      },
+    });
   }
 
   /** Collect the fully-populated entries behind the current selection. */

@@ -98,3 +98,22 @@ export function matchesShortcut(event: KeyboardEvent, combo: string): boolean {
     event.key === " " ? "Space" : event.key.length === 1 ? event.key.toUpperCase() : event.key;
   return eventKey === keyPart;
 }
+
+/**
+ * Dispatch the first matching shortcut to its handler. Iteration order follows
+ * `bindings` insertion order; a match consumes the event (`preventDefault`)
+ * and stops the search, so later bindings with identical combos never fire.
+ * Empty/blank combos are skipped (an action may be unbound).
+ */
+export function dispatchShortcut(
+  event: KeyboardEvent,
+  bindings: Record<string, string>,
+  handlers: Record<string, () => void>,
+): void {
+  for (const [actionId, combo] of Object.entries(bindings)) {
+    if (!combo || !matchesShortcut(event, combo)) continue;
+    event.preventDefault();
+    handlers[actionId]?.();
+    return;
+  }
+}
