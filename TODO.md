@@ -47,7 +47,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## Stage 6 — Remote vaults (S3 / WebDAV)
 
 - [x] Remote settings panel (`RemoteSettingsPanel.svelte`; S3/WebDAV 二级页签与各自 endpoint/credentials/prefix/backup 配置，凭据在 Windows 上经 DPAPI 加密落盘)
-- [x] Remote transport: `RemoteStorage` trait + `S3Storage` (rust-s3 0.34, path-style for MinIO) + `WebDavStorage` + `MemoryStorage` fake
+- [x] Remote transport: `RemoteStorage` trait + `S3Storage` (self-implemented SigV4 over rustls, path-style for MinIO) + `WebDavStorage` + `MemoryStorage` fake
 - [x] `open_remote_vault` / `create_remote_vault` / `s3_list_objects` commands; `save()` uploads back through the selected S3/WebDAV transport for remote sessions
 - [x] Save modes: `memory` (upload back only) / `local` (mirror to `Storage/remote/<kind>/<config>` with timestamped `.bak` rotation, `backupCount`)
 - [x] Welcome-screen remote browser: list S3/WebDAV files, open (password + keyfile) and create remote vaults

@@ -145,5 +145,5 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 5. Write the commit message in the gitmoji format described above.
 6. Recheck `git status` after committing and report verification plus any evidence gaps.
 
-Base directory for this skill: B:\Program\Project\SecPivot\skills\secpivot-dev
+Base directory for this skill: B:\Program\Project\Open\SecPivot\skills\secpivot-dev
 Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.

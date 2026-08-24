@@ -23,7 +23,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 >
 > - Windows host 的完整 `npm run verify` 已通过（格式、Svelte/Vite 前端、Rust 测试 373 个、clippy -D warnings）；它只能证明桌面分支与跨平台纯逻辑，不能替代 Android APK/真机证据。
 > - GitHub Release 运行 [31619359721](https://github.com/muutot/SecPivot/actions/runs/31619359721) 已真实完成 `tauri android init`、release 签名配置和 Android Rust 交叉编译的大部分流程；失败发生在 vendored OpenSSL 安装阶段：`openssl-src` 调用了不存在的 `aarch64-linux-android-ranlib`。
-> - 当前工作流显式选择同一 NDK、导出其 `llvm-ranlib` 为 `TARGET_RANLIB`、只安装 64 位 Android Rust targets（`aarch64-linux-android`、`x86_64-linux-android`），用 `--split-per-abi` 产出按 ABI 拆分的签名 release APK，再逐包 `apksigner verify` 并上传。此项修复仍需新的远端运行证明 APK 生成、签名与上传成功。
+> - 当前工作流显式选择同一 NDK、导出其 `llvm-ranlib` 为 `TARGET_RANLIB`、只安装 64 位 Android Rust targets（`aarch64-linux-android`、`x86_64-linux-android`），用 `--split-per-abi` 产出按 ABI 拆分的签名 release APK，再逐包 `apksigner verify` 并上传。此项修复仍需新的远端运行证明 APK 生成、签名与上传成功。（注：`TARGET_RANLIB` 导出现在已属冗余——S3/WebDAV 网络栈全部 rustls 化后不再有 openssl-src 交叉编译需求，见下文「打包与 CI」；工作流中保留该导出仅为历史兼容。）
 
 ## 后续必建（需工具链环境，按顺序执行）
 
