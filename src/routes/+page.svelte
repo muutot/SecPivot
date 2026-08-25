@@ -493,6 +493,13 @@
     return collectGroups(group);
   });
 
+  $effect(() => {
+    // 调试：F12 控制台可见，无需 window.__TAURI__
+    console.log(
+      `[SecPivot debug] vault=${currentVault?.path ?? "null"} groups=${allGroups.length} entries=${allEntries.length} filtered=${filteredEntries.length} subtree=${selectedSubtree.length} selectedGroup=${selectedGroup ?? "null"} search="${search}" adv=${advancedQuery ? "on" : "off"}`,
+    );
+  });
+
   /** Search/filter pipeline lives in the extracted composable; see
    *  `useEntryFilter.svelte.ts`. */
   const entryFilter = useEntryFilter({
@@ -1626,7 +1633,8 @@
 
       <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
-          <span class="result-count">{filteredEntries.length} 个条目</span>
+          <span class="result-count" title="all={allEntries.length} filtered={filteredEntries.length} groups={allGroups.length} subtree={selectedSubtree.length}">{filteredEntries.length} 个条目</span>
+          <span class="status-group-filter" title="debug all={allEntries.length} filtered={filteredEntries.length} groups={allGroups.length} subtree={selectedSubtree.length} search='{search}' adv={advancedQuery ? 'on' : 'off'}">[调试 {allEntries.length}/{filteredEntries.length}]</span>
           {#if selection.selectedUuids.size > 1}
             <span class="status-group-filter">已选 {selection.selectedUuids.size} 个</span>
           {/if}
