@@ -4894,8 +4894,9 @@ fn protected_custom_fields_round_trip_and_history() {
         .unwrap();
     assert!(secret.protected && secret.value.is_empty());
 
-    // History snapshots keep the value server-side for restore (never shown
-    // in the UI), and a restore brings the protected field back intact.
+    // History snapshots keep the value server-side only: the DTO blanks
+    // protected values (same invariant as the snapshot) while a restore —
+    // which happens server-side by index — brings the field back intact.
     let history = session.get_entry_history(&uuid).unwrap();
     assert!(!history.is_empty());
     let old_secret = history
@@ -4906,7 +4907,7 @@ fn protected_custom_fields_round_trip_and_history() {
         .find(|f| f.name == "Secret")
         .expect("history keeps the custom field");
     assert!(old_secret.protected);
-    assert_eq!(old_secret.value, "hunter2");
+    assert_eq!(old_secret.value, "");
     session
         .restore_entry_version(&uuid, history.len() - 1)
         .unwrap();

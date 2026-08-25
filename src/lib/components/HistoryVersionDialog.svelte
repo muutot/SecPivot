@@ -227,7 +227,9 @@
   }
 
   async function toggleReveal(row: CustomFieldRow): Promise<void> {
-    if (!row.protected) return;
+    // Only the current entry's protected values are fetchable on demand;
+    // historical snapshots never carry their plaintext (server-side policy).
+    if (!row.protected || !row.fetchable) return;
     if (revealedFields[row.name]) {
       revealedFields[row.name] = false;
       return;
@@ -478,7 +480,7 @@
                       : row.value) || "—"}
                   {/if}
                 </span>
-                {#if row.protected}
+                {#if row.protected && row.fetchable}
                   <button
                     class="copy-btn"
                     onclick={() => toggleReveal(row)}

@@ -587,10 +587,21 @@ impl VaultSession {
                         .filter(|(name, _)| {
                             !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str())
                         })
-                        .map(|(name, value)| CustomField {
-                            name: name.clone(),
-                            value: value.get().clone(),
-                            protected: value.is_protected(),
+                        .map(|(name, value)| {
+                            let protected = value.is_protected();
+                            CustomField {
+                                name: name.clone(),
+                                // Protected values never leave the session —
+                                // the history view shows a masked marker and
+                                // restoring a version happens server-side by
+                                // index, so the plaintext is not needed here.
+                                value: if protected {
+                                    String::new()
+                                } else {
+                                    value.get().clone()
+                                },
+                                protected,
+                            }
                         })
                         .collect();
                     fields.sort_by(|a, b| a.name.cmp(&b.name));
