@@ -224,7 +224,9 @@
           aria-checked={recycleEnabled}
           aria-label="启用回收站"
           onclick={() => (recycleEnabled = !recycleEnabled)}
-        ></button>
+        >
+          <span class="toggle-knob"></span>
+        </button>
       </div>
     {:else}
       <p class="dialog-hint">{error || "无法读取数据库设置"}</p>

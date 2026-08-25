@@ -1041,7 +1041,9 @@
             aria-checked={autoTypeEnabled}
             aria-label="启用自动填充"
             onclick={() => (autoTypeEnabled = !autoTypeEnabled)}
-          ></button>
+          >
+            <span class="toggle-knob"></span>
+          </button>
         </div>
         <label class="field">
           <span>默认序列</span>
