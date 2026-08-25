@@ -2520,6 +2520,47 @@ fn move_entry_between_groups() {
 }
 
 #[test]
+fn history_size_budget_drops_oldest_snapshots() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(ROOT_GROUP_UUID, "v0", "u", "p0", ""))
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for i in 1..=6 {
+        session
+            .update_entry(
+                &uuid,
+                &entry_input(
+                    ROOT_GROUP_UUID,
+                    &format!("v{i}"),
+                    "u",
+                    &format!("p{i}{}", "x".repeat(200)),
+                    "",
+                ),
+            )
+            .unwrap();
+    }
+    // A tiny byte budget keeps only the newest snapshots; the exact count
+    // follows the per-snapshot sizes, but must stay well below 7.
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_size = Some(600);
+    }
+    // Trigger one more edit so trimming runs with the new budget.
+    session
+        .update_entry(&uuid, &entry_input(ROOT_GROUP_UUID, "v7", "u", "p7", ""))
+        .unwrap();
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert!(
+        history.len() < 7,
+        "byte budget must trim history below the unbounded count (got {})",
+        history.len()
+    );
+    assert_eq!(history[0].title, "v6");
+}
+
+#[test]
 fn delete_with_recycle_bin_disabled_permanently_removes() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

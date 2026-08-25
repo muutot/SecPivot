@@ -8,12 +8,13 @@ use super::helpers::{
 use super::serialize::{
     add_attachment_payloads, apply_patch_fields, attachment_size, custom_data_entries,
     decode_attachments, delete_history_entry, entry_size, format_iso, history_cap,
-    sync_attachments, sync_custom_fields, trim_entry_history, write_fields, AttachmentPayload,
+    sync_attachments, sync_custom_fields, trim_entry_history, trim_entry_history_by_size,
+    write_fields, AttachmentPayload,
 };
 use super::*;
 use keepass::db::{
-    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, EntryRef, GroupId, Icon,
-    Times, Value,
+    AutoType, AutoTypeAssociation, DataTransferObfuscation, Database, EntryId, EntryRef, GroupId,
+    Icon, Meta, Times, Value,
 };
 use std::collections::HashMap;
 
@@ -22,6 +23,37 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
+}
+
+/// Both retention limits from the database meta: the snapshot-count cap and
+/// the cumulative byte budget (`<= 0` = unlimited).
+fn history_limits(meta: &Meta) -> (usize, i64) {
+    let max_size = meta.history_max_size.unwrap_or(0);
+    (
+        history_cap(meta),
+        if max_size > 0 { max_size as i64 } else { 0 },
+    )
+}
+
+/// Per-snapshot recursive totals in stored order (newest first), used by
+/// `trim_entry_history_by_size`. Must be captured while `db` is immutably
+/// borrowed — before `db.entry_mut` takes it mutably.
+fn snapshot_sizes(db: &Database, id: EntryId) -> Vec<u64> {
+    let Some(entry) = db.entry(id) else {
+        return Vec::new();
+    };
+    let Some(history) = entry.history.as_ref() else {
+        return Vec::new();
+    };
+    let count = history.get_entries().len();
+    (0..count)
+        .map(|index| {
+            entry
+                .historical(index)
+                .map(|snapshot| entry_size(&snapshot).total())
+                .unwrap_or(0)
+        })
+        .collect()
 }
 
 /// All user-visible custom fields of an entry (reserved and KPRPC config
@@ -294,9 +326,13 @@ impl VaultSession {
         // Decode attachment payloads up-front; a decode failure must not
         // leave a half-applied update (fields written, history snapshotted).
         let payloads = decode_attachments(&input.attachments)?;
-        let cap = {
+        let (cap, max_history_size) = {
             let db = self.require_db()?;
-            history_cap(&db.meta)
+            history_limits(&db.meta)
+        };
+        let sizes = {
+            let db = self.require_db()?;
+            snapshot_sizes(db, id)
         };
         {
             let db = self.require_db_mut()?;
@@ -321,6 +357,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         self.snapshot_without_icons()
@@ -378,9 +415,15 @@ impl VaultSession {
             .iter()
             .map(|uuid| parse_entry_id(uuid))
             .collect::<Result<_, _>>()?;
-        let cap = {
+        let (cap, max_history_size) = {
             let db = self.require_db()?;
-            history_cap(&db.meta)
+            history_limits(&db.meta)
+        };
+        let sizes_by_id: HashMap<EntryId, Vec<u64>> = {
+            let db = self.require_db()?;
+            ids.iter()
+                .map(|id| (*id, snapshot_sizes(db, *id)))
+                .collect()
         };
         {
             let db = self.require_db_mut()?;
@@ -398,6 +441,11 @@ impl VaultSession {
                     tracked.times.last_modification = Some(Times::now());
                 }
                 trim_entry_history(&mut entry, cap);
+                trim_entry_history_by_size(
+                    &mut entry,
+                    max_history_size,
+                    sizes_by_id.get(&id).map(|v| v.as_slice()).unwrap_or(&[]),
+                );
             }
         }
         self.mark_dirty();
@@ -421,9 +469,13 @@ impl VaultSession {
             return Err("自定义字段名称无效".to_owned());
         }
         let id = parse_entry_id(uuid)?;
-        let cap = {
+        let (cap, max_history_size) = {
             let db = self.require_db()?;
-            history_cap(&db.meta)
+            history_limits(&db.meta)
+        };
+        let sizes = {
+            let db = self.require_db()?;
+            snapshot_sizes(db, id)
         };
         {
             let db = self.require_db_mut()?;
@@ -444,6 +496,7 @@ impl VaultSession {
             // the pre-change snapshot, so trimming inside the scope would run
             // before the snapshot lands and let history grow to cap + 1.
             trim_entry_history(&mut entry, cap);
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         self.snapshot_without_icons()
@@ -661,9 +714,13 @@ impl VaultSession {
                 .clone()
         };
         {
-            let cap = {
+            let (cap, max_history_size) = {
                 let db = self.require_db()?;
-                history_cap(&db.meta)
+                history_limits(&db.meta)
+            };
+            let sizes = {
+                let db = self.require_db()?;
+                snapshot_sizes(db, id)
             };
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -705,6 +762,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         self.snapshot_without_icons()
@@ -1007,9 +1065,13 @@ impl VaultSession {
             return self.snapshot_without_icons();
         }
         let id = parse_entry_id(uuid)?;
-        let cap = {
+        let (cap, max_history_size) = {
             let db = self.require_db()?;
-            history_cap(&db.meta)
+            history_limits(&db.meta)
+        };
+        let sizes = {
+            let db = self.require_db()?;
+            snapshot_sizes(db, id)
         };
         {
             let db = self.require_db_mut()?;
@@ -1020,6 +1082,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         self.snapshot_without_icons()

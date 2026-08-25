@@ -412,6 +412,42 @@ pub(crate) fn trim_entry_history(entry: &mut Entry, cap: usize) {
     }
 }
 
+/// Drop the oldest snapshots until their cumulative recursive size fits
+/// `max_size` bytes (KeePass `Meta.historyMaxSize`; `<= 0` = unlimited).
+/// `snapshot_sizes` carries each stored snapshot's own total (newest first),
+/// captured before the mutable entry borrow was taken. Snapshots are dropped
+/// from the tail (oldest first), matching KeePass's retention order.
+pub(crate) fn trim_entry_history_by_size(entry: &mut Entry, max_size: i64, snapshot_sizes: &[u64]) {
+    if max_size <= 0 || snapshot_sizes.is_empty() {
+        return;
+    }
+    let budget = max_size as u64;
+    let total: u64 = snapshot_sizes.iter().sum();
+    if total <= budget {
+        return;
+    }
+    // Newest-first index list; pop the oldest until within budget.
+    let mut kept: Vec<usize> = (0..snapshot_sizes.len()).collect();
+    let mut running = total;
+    while running > budget && kept.len() > 1 {
+        if let Some(oldest) = kept.pop() {
+            running -= snapshot_sizes[oldest];
+        }
+    }
+    // Always keep at least the newest snapshot even if it alone exceeds the
+    // budget (KeePass keeps the most recent version too).
+    if let Some(history) = entry.history.as_mut() {
+        let all: Vec<Entry> = history.get_entries().to_vec();
+        let mut rebuilt = History::default();
+        for &index in kept.iter().rev() {
+            if let Some(snapshot) = all.get(index) {
+                rebuilt.add_entry(snapshot.clone());
+            }
+        }
+        entry.history = Some(rebuilt);
+    }
+}
+
 /// Remove one historical snapshot from an entry's history, keeping the order
 /// of the remaining snapshots. Returns `false` when the index is out of range
 /// or the entry has no history.
