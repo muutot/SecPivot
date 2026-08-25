@@ -1450,9 +1450,9 @@
   }
 
   .icon-btn.active {
-    color: var(--accent-color, var(--primary-color));
-    border-color: var(--accent-color, var(--primary-color));
-    background: color-mix(in srgb, var(--accent-color, var(--primary-color)) 12%, transparent);
+    color: var(--selection-color);
+    border-color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 
   .field > span.field-header {
@@ -1750,11 +1750,11 @@
   }
 
   .kv-identify-btn:hover {
-    background: var(--accent-bg, var(--hover-bg));
+    background: var(--hover-bg);
   }
 
   .kv-identify-code {
-    color: var(--accent-color, var(--text-primary));
+    color: var(--text-primary);
     font-family: var(--font-mono, monospace);
   }
 
@@ -1799,9 +1799,9 @@
   }
 
   .icon-option.selected {
-    color: var(--accent-color, var(--primary-color));
-    border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
-    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    color: var(--selection-color);
+    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 
   .color-row {

@@ -1615,7 +1615,7 @@
     display: inline-flex;
     vertical-align: middle;
     margin-left: 2px;
-    color: var(--accent-color, var(--primary-color));
+    color: var(--selection-color);
   }
 
   .field-value {

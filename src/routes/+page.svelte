@@ -2237,9 +2237,9 @@
   }
 
   .group-icon-grid .icon-option.selected {
-    color: var(--accent-color, var(--primary-color));
-    border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
-    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    color: var(--selection-color);
+    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
+    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 
   @media (max-width: 720px) {
