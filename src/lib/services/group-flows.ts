@@ -28,8 +28,9 @@ export type GroupFlowHost = {
  * Branch parity with the original page code:
  * - stale view after add → return without closing the dialog or toasting;
  * - failure → toast only when the view is still current, dialog stays open;
- * - busy flag resets only when the view is current AND the started operation
- *   is still the latest one (`resetBusy` runs under that exact condition). */
+ * - busy flag raises at flow start and resets only when the view is current
+ *   AND the started operation is still the latest one (`resetBusy` runs
+ *   under that exact condition). */
 export async function createGroupFlow(
   host: GroupFlowHost,
   params: {
@@ -39,11 +40,13 @@ export async function createGroupFlow(
     name: string;
     iconIndex: number | null;
     closeModal: () => void;
+    setBusy: (value: boolean) => void;
     resetBusy: () => void;
   },
 ): Promise<void> {
   const { view, sessionId } = params;
   const operation = host.createOperations.begin();
+  params.setBusy(true);
   try {
     await vault.callInSession(sessionId, () =>
       vault.addGroup({
@@ -116,11 +119,13 @@ export async function changeGroupIconFlow(
     uuid: string;
     pick: number | null;
     closeModal: () => void;
+    setBusy: (value: boolean) => void;
     resetBusy: () => void;
   },
 ): Promise<void> {
   const { view, sessionId } = params;
   const operation = host.iconOperations.begin();
+  params.setBusy(true);
   try {
     await vault.callInSession(sessionId, () => vault.setGroupIcon(params.uuid, params.pick));
     if (!host.sessionView.isCurrent(view)) return;

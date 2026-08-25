@@ -209,7 +209,6 @@
       confirmState = { message, onconfirm };
     },
   };
-
   /** Seen (sessionId, path) pairs that already flashed the expired-entries
    *  toast. Session ids are never recycled, so the keys accumulate for the
    *  whole window lifetime; cap the set and evict the oldest key so long
@@ -491,13 +490,6 @@
     const group = treeIndex?.groupByUuid.get(selectedGroup);
     if (!group) return allGroups;
     return collectGroups(group);
-  });
-
-  $effect(() => {
-    // 调试：F12 控制台可见，无需 window.__TAURI__
-    console.log(
-      `[SecPivot debug] vault=${currentVault?.path ?? "null"} groups=${allGroups.length} entries=${allEntries.length} filtered=${filteredEntries.length} subtree=${selectedSubtree.length} selectedGroup=${selectedGroup ?? "null"} search="${search}" adv=${advancedQuery ? "on" : "off"}`,
-    );
   });
 
   /** Search/filter pipeline lives in the extracted composable; see
@@ -1111,6 +1103,7 @@
       name,
       iconIndex: groupIconIndex,
       closeModal: () => (groupModalOpen = false),
+      setBusy: (value) => (groupCreating = value),
       resetBusy: () => (groupCreating = false),
     });
   }
@@ -1159,6 +1152,7 @@
       uuid,
       pick: groupIconPick,
       closeModal: () => (groupIconDialogUuid = null),
+      setBusy: (value) => (groupIconSaving = value),
       resetBusy: () => (groupIconSaving = false),
     });
   }
@@ -1633,8 +1627,7 @@
 
       <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
-          <span class="result-count" title="all={allEntries.length} filtered={filteredEntries.length} groups={allGroups.length} subtree={selectedSubtree.length}">{filteredEntries.length} 个条目</span>
-          <span class="status-group-filter" title="debug all={allEntries.length} filtered={filteredEntries.length} groups={allGroups.length} subtree={selectedSubtree.length} search='{search}' adv={advancedQuery ? 'on' : 'off'}">[调试 {allEntries.length}/{filteredEntries.length}]</span>
+          <span class="result-count">{filteredEntries.length} 个条目</span>
           {#if selection.selectedUuids.size > 1}
             <span class="status-group-filter">已选 {selection.selectedUuids.size} 个</span>
           {/if}
