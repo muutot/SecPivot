@@ -5,6 +5,7 @@
   import Select from "$lib/components/Select.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
   type Section = "appearance" | "display" | "compact" | "network";
@@ -220,14 +221,15 @@
                     value={s.general.themeColors[field.key].slice(0, 7)}
                     oninput={(e) => updateColor(field.key, e.currentTarget.value)}
                   />
-                  <input
-                    class="settings-input color-hex-input"
-                    type="text"
-                    spellcheck="false"
-                    value={s.general.themeColors[field.key]}
-                    placeholder="#RRGGBBAA"
-                    oninput={(e) => updateColor(field.key, e.currentTarget.value)}
-                  />
+                  <div class="color-hex-input">
+                    <TextField
+                      size="control"
+                      spellcheck={false}
+                      value={s.general.themeColors[field.key]}
+                      placeholder="#RRGGBBAA"
+                      oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                    />
+                  </div>
                 </div>
               </div>
             {/each}

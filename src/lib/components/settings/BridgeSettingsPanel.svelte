@@ -6,6 +6,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
+import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
@@ -127,14 +128,13 @@
           <strong>已授权客户端</strong>
           <p>浏览器首次连接需经你批准，密钥仅存于本次会话</p>
         </div>
-        <button
-          class="settings-action-button"
-          type="button"
+        <Button
+          variant="action"
           onclick={() => void refreshClients()}
           disabled={!bridge.enabled || !isTauriRuntime()}
         >
           刷新
-        </button>
+        </Button>
       </div>
     </div>
     {#if clientNote}
@@ -148,14 +148,13 @@
           <li class="client-row">
             <span class="client-icon"><AppIcon name="key" size={12} /></span>
             <span class="client-id" title={id}>{id}</span>
-            <button
-              class="settings-action-button client-remove"
-              type="button"
+            <Button
+              variant="action"
               onclick={() => void removeClient(id)}
-              aria-label={`移除客户端 ${id}`}
+              ariaLabel={`移除客户端 ${id}`}
             >
               移除
-            </button>
+            </Button>
           </li>
         {/each}
       </ul>
@@ -210,9 +209,4 @@
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
 
-  .client-remove {
-    height: 22px;
-    padding: 0 8px;
-    background: transparent;
-  }
 </style>

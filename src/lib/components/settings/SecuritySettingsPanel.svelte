@@ -7,6 +7,9 @@
   import type { SecuritySettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
+  import Feedback from "$lib/components/templates/form/Feedback.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
   interface Props {
@@ -174,18 +177,18 @@
       </div>
     </div>
     <label class="settings-label" for="mk-new-password">新主密码(留空则仅使用密钥文件)</label>
-    <input
+    <TextField
       id="mk-new-password"
-      class="settings-input settings-full-input"
+      size="control"
       type="password"
       placeholder="新主密码"
       bind:value={newPassword}
       autocomplete="new-password"
     />
     <label class="settings-label" for="mk-confirm-password">确认新主密码</label>
-    <input
+    <TextField
       id="mk-confirm-password"
-      class="settings-input settings-full-input"
+      size="control"
       type="password"
       placeholder="再次输入新主密码"
       bind:value={confirmPassword}
@@ -195,22 +198,11 @@
       <span class="mk-keyfile-name" class:mk-empty={!newKeyfile}>
         {newKeyfile ?? "未选择密钥文件(可选)"}
       </span>
-      <button
-        class="settings-action-button settings-action-button--field"
-        type="button"
-        onclick={pickKeyfile}
-        disabled={!isTauriRuntime()}
-      >
+      <Button variant="field" onclick={pickKeyfile} disabled={!isTauriRuntime()}>
         选择密钥文件
-      </button>
+      </Button>
       {#if newKeyfile}
-        <button
-          class="settings-action-button settings-action-button--field mk-clear-button"
-          type="button"
-          onclick={() => (newKeyfile = null)}
-        >
-          清除
-        </button>
+        <Button variant="field" onclick={() => (newKeyfile = null)}>清除</Button>
       {/if}
     </div>
     <div class="mk-submit-row">
@@ -224,9 +216,7 @@
       </button>
     </div>
     {#if feedback}
-      <p class="settings-feedback settings-feedback--inline" class:success={feedback.ok}>
-        {feedback.message}
-      </p>
+      <Feedback inline success={feedback.ok} message={feedback.message} />
     {/if}
   </section>
 
@@ -234,10 +224,6 @@
 </div>
 
 <style>
-  .settings-full-input {
-    width: 100%;
-    box-sizing: border-box;
-  }
 
   .mk-keyfile-row {
     margin-top: 12px;
@@ -257,9 +243,6 @@
     color: var(--text-faint);
   }
 
-  .mk-clear-button {
-    background: transparent;
-  }
 
   .mk-submit-row {
     margin-top: 14px;

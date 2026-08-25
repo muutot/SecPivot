@@ -17,11 +17,14 @@
     readonly?: boolean;
     spellcheck?: boolean;
     id?: string;
+    ariaLabel?: string;
     autocomplete?: HTMLInputAttributes["autocomplete"];
     /** Hide number spinners (numeric fields). */
     numeric?: boolean;
     /** Red invalid ring (inline validation). */
     invalid?: boolean;
+    /** `"control"` renders the compact 30px settings-control form. */
+    size?: "md" | "control";
     /** Focus the field once on mount. */
     autofocus?: boolean;
     /** Extra right padding (px) to reserve space for an embedded action. */
@@ -43,8 +46,10 @@
     spellcheck = undefined,
     id = undefined,
     autocomplete = undefined,
+    ariaLabel = undefined,
     numeric = false,
     invalid = false,
+    size = "md",
     autofocus = false,
     paddingRightPx = undefined,
     onkeydown,
@@ -63,6 +68,7 @@
     bind:this={el}
     {id}
     class="field mono"
+    class:control={size === "control"}
     style:padding-right={paddingRightPx ? `${paddingRightPx}px` : undefined}
     bind:value
     {placeholder}
@@ -71,6 +77,7 @@
     {disabled}
     {readonly}
     {spellcheck}
+    aria-label={ariaLabel}
     {onkeydown}
     {oninput}></textarea>
 {:else}
@@ -81,6 +88,7 @@
     class:mono
     class:numeric
     class:invalid
+    class:control={size === "control"}
     {type}
     style:padding-right={paddingRightPx ? `${paddingRightPx}px` : undefined}
     bind:value
@@ -90,6 +98,7 @@
     {readonly}
     {spellcheck}
     {autocomplete}
+    aria-label={ariaLabel}
     {onkeydown}
     {oninput}
   />
@@ -134,6 +143,12 @@
   .field.numeric::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
+  }
+
+  /* Compact settings-control form (.settings-input) */
+  .field.control {
+    height: 30px;
+    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
 
   .field.invalid {

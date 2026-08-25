@@ -6,6 +6,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
+import TextField from "$lib/components/templates/form/TextField.svelte";
+import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
@@ -138,13 +140,13 @@
         <strong>会话密钥超时</strong>
         <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
       </div>
-      <input
-        class="settings-input timeout-input"
+      <TextField
+        size="control"
+        numeric
         type="number"
-        min="0"
-        max="2592000"
-        value={rpc.sessionTimeoutSecs}
-        aria-label="会话密钥超时秒数"
+
+        value={String(rpc.sessionTimeoutSecs)}
+        ariaLabel="会话密钥超时秒数"
         oninput={(e) =>
           change("sessionTimeoutSecs", Math.max(0, Math.floor(Number(e.currentTarget.value) || 0)))}
       />
@@ -185,10 +187,7 @@
                 >{session.peer} · {formatConnectedAt(session.connectedAtMs)}</span
               >
             </span>
-            <button
-              class="settings-action-button session-close"
-              onclick={() => void closeSession(session.id)}>断开</button
-            >
+            <Button variant="action" onclick={() => void closeSession(session.id)}>断开</Button>
           </li>
         {/each}
       </ul>
@@ -225,10 +224,6 @@
   }
 
   /* Only the layout override — control chrome comes from `.settings-input`. */
-  .timeout-input {
-    width: 90px;
-    flex: 0 0 auto;
-  }
 
   .session-list {
     list-style: none;
@@ -272,9 +267,4 @@
 
   /* Layout override only — button chrome comes from `.settings-action-button`
    * (mirrors the bridge panel's client-remove row). */
-  .session-close {
-    height: 22px;
-    padding: 0 8px;
-    background: transparent;
-  }
 </style>

@@ -9,6 +9,8 @@
   import type { RemoteKind, RemoteProfilePath } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
 
   interface Props {
@@ -98,15 +100,11 @@
           <p>名称会作为配置路径和本地镜像目录的最后一级</p>
         </div>
       </div>
-      <input
-        id="remote-profile-name"
-        class="settings-input setting-row-input"
-        class:input-invalid={nameConflict}
-        type="text"
-        value={activeName}
-        spellcheck="false"
-        oninput={(event) => appSettings.renameRemoteProfile(activePath, event.currentTarget.value)}
-      />
+      <TextField id="remote-profile-name"
+         size="control"
+        invalid={nameConflict} type="text" value={activeName}
+        spellcheck={false}
+        oninput={(event) => appSettings.renameRemoteProfile(activePath, event.currentTarget.value)} />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -122,21 +120,17 @@
       <p class="settings-note input-error">同一协议下的配置名称不允许重复</p>
     {/if}
     <div class="profile-actions">
-      <button
-        class="settings-action-button"
-        onclick={() => appSettings.addRemoteProfile(kind, "")}
+      <Button variant="action"
+        onclick={() =>appSettings.addRemoteProfile(kind, "")}
         type="button"
       >
-        添加配置
-      </button>
-      <button
-        class="settings-action-button"
+        添加配置</Button>
+      <Button variant="action"
         disabled={profiles.length <= 1}
-        onclick={() => appSettings.removeRemoteProfile(activePath)}
+        onclick={() =>appSettings.removeRemoteProfile(activePath)}
         type="button"
       >
-        删除当前配置
-      </button>
+        删除当前配置</Button>
     </div>
   </section>
 
@@ -153,14 +147,10 @@
           </p>
         </div>
       </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.endpoint}
+      <TextField  size="control" type="text" value={remote.endpoint}
         placeholder={kind === "webdav" ? "https://dav.example.com/dav" : "https://s3.amazonaws.com"}
-        spellcheck="false"
-        oninput={(event) => change("endpoint", event.currentTarget.value)}
-      />
+        spellcheck={false}
+        oninput={(event) => change("endpoint", event.currentTarget.value)} />
     </div>
 
     {#if remote.kind === "s3"}
@@ -172,13 +162,9 @@
             <p>存储桶所在的地域</p>
           </div>
         </div>
-        <input
-          class="settings-input setting-row-input"
-          type="text"
-          value={remote.region}
+        <TextField  size="control" type="text" value={remote.region}
           placeholder="us-east-1"
-          oninput={(event) => change("region", event.currentTarget.value)}
-        />
+          oninput={(event) => change("region", event.currentTarget.value)} />
       </div>
       <div class="setting-row">
         <div class="setting-heading">
@@ -188,13 +174,9 @@
             <p>对象存储的桶名称</p>
           </div>
         </div>
-        <input
-          class="settings-input setting-row-input"
-          type="text"
-          value={remote.bucket}
+        <TextField  size="control" type="text" value={remote.bucket}
           placeholder="my-bucket"
-          oninput={(event) => change("bucket", event.currentTarget.value)}
-        />
+          oninput={(event) => change("bucket", event.currentTarget.value)} />
       </div>
     {/if}
 
@@ -206,15 +188,11 @@
           <p>{kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
         </div>
       </div>
-      <input
-        class="settings-input setting-row-input"
-        type="text"
-        autocomplete="off"
-        spellcheck="false"
+      <TextField  size="control" type="text" autocomplete="off"
+        spellcheck={false}
         value={remote.accessKey}
         placeholder={kind === "webdav" ? "user" : "AKIA..."}
-        oninput={(event) => change("accessKey", event.currentTarget.value)}
-      />
+        oninput={(event) => change("accessKey", event.currentTarget.value)} />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -224,15 +202,11 @@
           <p>{kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
         </div>
       </div>
-      <input
-        class="settings-input setting-row-input"
-        type="password"
-        autocomplete="off"
-        spellcheck="false"
+      <TextField  size="control" type="password" autocomplete="off"
+        spellcheck={false}
         value={remote.secretKey}
         placeholder="••••••••"
-        oninput={(event) => change("secretKey", event.currentTarget.value)}
-      />
+        oninput={(event) => change("secretKey", event.currentTarget.value)} />
     </div>
   </section>
 
@@ -250,14 +224,10 @@
           <p>远程文件列表的前缀过滤（可选）</p>
         </div>
       </div>
-      <input
-        id="remote-prefix"
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.prefix}
+      <TextField id="remote-prefix"
+         size="control" type="text" value={remote.prefix}
         placeholder="vaults/"
-        oninput={(event) => change("prefix", event.currentTarget.value)}
-      />
+        oninput={(event) => change("prefix", event.currentTarget.value)} />
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -292,15 +262,11 @@
           <p>时间戳备份的命名规则</p>
         </div>
       </div>
-      <input
-        id="remote-backup-template"
-        class="settings-input setting-row-input"
-        type="text"
-        value={remote.backupTemplate}
+      <TextField id="remote-backup-template"
+         size="control" type="text" value={remote.backupTemplate}
         placeholder={"{name}.{timestamp}.{ext}.bak"}
-        spellcheck="false"
-        oninput={(event) => change("backupTemplate", event.currentTarget.value)}
-      />
+        spellcheck={false}
+        oninput={(event) => change("backupTemplate", event.currentTarget.value)} />
     </div>
     <p class="settings-note">
       占位符：{"{name}"} 文件主名、{"{timestamp}"} 时间戳、{"{ext}"} 原扩展名
