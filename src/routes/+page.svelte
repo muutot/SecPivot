@@ -1168,6 +1168,9 @@
       inBin,
       resetSelectedGroup: () => {
         if (selectedGroup === uuid) selectedGroup = null;
+        // The deleted group's entries left the visible tree; drop them from
+        // the selection so a later batch action cannot hit invisible rows.
+        pruneSelectionToVisible();
       },
     });
   }
@@ -1262,6 +1265,20 @@
       groupUuid,
       uuids,
     });
+    // Moved entries left the visible view; drop them from the selection so a
+    // later batch delete cannot hit rows the user can no longer see.
+    if (sessionView.isCurrent(view)) pruneSelectionToVisible();
+  }
+
+  /** Remove selected uuids that are no longer present in the visible rows. */
+  function pruneSelectionToVisible(): void {
+    const visible = new Set(sortedEntries.map((r) => r.entry.uuid));
+    const next = new Set([...selection.selectedUuids].filter((u) => visible.has(u)));
+    if (next.size === selection.selectedUuids.size) return;
+    selection.selectedUuids = next;
+    if (selection.selectedEntry && !visible.has(selection.selectedEntry.uuid)) {
+      selection.selectionAnchor = null;
+    }
   }
 
   async function toggleGroupExpanded(uuid: string, expanded: boolean): Promise<void> {
