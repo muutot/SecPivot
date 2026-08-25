@@ -1016,21 +1016,9 @@
     gap: 6px;
   }
 
-  .text-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--input-bg);
-    font-size: 12px;
-  }
-
-  .text-input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
+  /* .text-input / .modal-actions / .modal-button come from the shared
+   * modal primitives (modal-shared.css via app.css); only this surface's
+   * unique layout lives here. */
 
   .browse-button {
     display: inline-flex;
@@ -1056,40 +1044,6 @@
     margin: 10px 0 0;
     color: var(--danger-color);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-button {
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .modal-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .modal-button.primary {
-    border-color: var(--selection-color);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
-  }
-
-  .modal-button:disabled {
-    cursor: wait;
-    opacity: 0.6;
   }
 
   .remote-tabs {

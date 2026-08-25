@@ -124,11 +124,11 @@ export function importRowsToEntries(rows: ImportRow[]): ImportEntry[] {
   }));
 }
 
-function readPickedFile(): Promise<string | null> {
+function readPickedFile(accept: string): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".csv,text/csv,.xml,text/xml";
+    input.accept = accept;
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) {
@@ -157,7 +157,13 @@ export async function pickImportFile(
         const selected = await open({ multiple: false, filters });
         return selected ? await invoke<string>("read_text_file", { path: String(selected) }) : null;
       }
-      return await readPickedFile();
+      // Mirror the native dialog's filters in the hidden input's accept list.
+      const accept = filters
+        .flatMap((f) => f.extensions)
+        .map((ext) => (ext === "*" ? "" : `.${ext.replace(/^\./, "")}`))
+        .filter(Boolean)
+        .join(",");
+      return await readPickedFile(accept);
     });
     return result.current ? result.value : null;
   } catch (e) {

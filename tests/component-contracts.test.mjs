@@ -378,16 +378,17 @@ test("detail-pane drag-and-drop attachment add stays IPC-aligned", async () => {
 });
 
 test("remote-conflict sentinel stays byte-identical across backend and frontend", async () => {
-  const [persist, page] = await Promise.all([
-    readFile(new URL("../src-tauri/src/vault/persist.rs", import.meta.url), "utf8"),
+  const [remote, page] = await Promise.all([
+    readFile(new URL("../src-tauri/src/remote/mod.rs", import.meta.url), "utf8"),
     readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
   ]);
 
-  // The backend marker constant is the single source of truth. Both sources
-  // spell the newline as the two characters `\` + `n`, so comparisons operate
-  // on the escaped form; the branch prefix compares with that escape stripped.
-  const marker = persist.match(/REMOTE_CHANGED_MARKER:\s*&str\s*=\s*"([^"]+)"/);
-  assert.ok(marker, "backend REMOTE_CHANGED_MARKER constant must exist");
+  // The marker constant lives in the remote module (conditional-write
+  // conflicts share it); both sources spell the newline as the two characters
+  // `\` + `n`, so comparisons operate on the escaped form; the branch prefix
+  // compares with that escape stripped.
+  const marker = remote.match(/REMOTE_CONFLICT_MARKER:\s*&str\s*=\s*"([^"]+)"/);
+  assert.ok(marker, "backend REMOTE_CONFLICT_MARKER constant must exist");
   const sentinel = marker[1];
 
   // The page must branch on the exact sentinel and strip exactly it; a

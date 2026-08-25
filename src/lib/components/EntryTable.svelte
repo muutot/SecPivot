@@ -523,7 +523,7 @@
                 class:col-revealable={row.entry.hasPassword || row.entry.password}
                 class:col-revealed={revealed}
                 role="button"
-                tabindex="-1"
+                tabindex="0"
                 title={revealed ? "点击隐藏" : "点击显示密码"}
                 onclick={(event) => {
                   event.stopPropagation();

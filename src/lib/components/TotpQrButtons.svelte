@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
 
   interface Props {
     /** Called with the decoded payload (otpauth URI or Base32 seed). */
@@ -202,21 +203,28 @@
 {/if}
 
 {#if results.length > 0}
-  <div class="modal-backdrop qr-pick-backdrop" role="presentation">
-    <div class="qr-pick" role="dialog" aria-modal="true" aria-label="选择识别结果">
-      <strong>识别到 {results.length} 个码，请选择：</strong>
+  <ModalShell
+    title={`识别到 ${results.length} 个码`}
+    description="请选择要使用的一项"
+    size="small"
+    closeOnEscape
+    onclose={() => (results = [])}
+  >
+    {#snippet children()}
       <ul class="qr-pick-list">
         {#each results as item, i (i)}
           <li>
-            <button type="button" class="qr-pick-item mono" onclick={() => pick(item)}>
+            <button type="button" class="text-input mono qr-pick-item" onclick={() => pick(item)}>
               {item}
             </button>
           </li>
         {/each}
       </ul>
-      <button type="button" class="qr-pick-cancel" onclick={() => (results = [])}>取消</button>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <button class="modal-button" onclick={() => (results = [])}>取消</button>
+    {/snippet}
+  </ModalShell>
 {/if}
 
 {#if error}
@@ -298,29 +306,6 @@
     pointer-events: none;
   }
 
-  .qr-pick-backdrop {
-    z-index: 1001;
-  }
-
-  .qr-pick {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: min(420px, calc(100% - 40px));
-    max-height: calc(100% - 80px);
-    padding: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px color-mix(in srgb, #000 40%, transparent);
-  }
-
-  .qr-pick strong {
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 560;
-  }
-
   .qr-pick-list {
     display: flex;
     flex-direction: column;
@@ -335,34 +320,15 @@
 
   .qr-pick-item {
     width: 100%;
+    height: auto;
+    min-height: 30px;
     padding: 7px 9px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: transparent;
     text-align: left;
     word-break: break-all;
-    font-size: 11px;
     cursor: pointer;
   }
 
   .qr-pick-item:hover {
-    background: var(--hover-bg);
-  }
-
-  .qr-pick-cancel {
-    align-self: flex-end;
-    padding: 4px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: transparent;
-    font-size: var(--font-size-tiny, 10px);
-    cursor: pointer;
-  }
-
-  .qr-pick-cancel:hover {
-    color: var(--text-primary);
     background: var(--hover-bg);
   }
 </style>

@@ -1031,10 +1031,25 @@
       editor.editorOpen ||
       groupModalOpen ||
       groupIconDialogUuid ||
+      groupAutoTypeUuid ||
+      groupMetaUuid ||
       reportOpen ||
       confirmState ||
       entryMenu ||
-      blankMenu
+      blankMenu ||
+      toolbarMenu !== null ||
+      columnMenu !== null ||
+      advancedSearchOpen ||
+      autotypePick !== null ||
+      remoteConflict !== null ||
+      emergencyExportOpen ||
+      dbMetaOpen ||
+      dbSettingsOpen ||
+      similarOpen ||
+      expiredOpen ||
+      timelineOpen ||
+      hibpOpen ||
+      faviconDialog !== null
     )
       return;
     const target = event.target as HTMLElement | null;

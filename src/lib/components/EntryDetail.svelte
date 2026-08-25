@@ -725,7 +725,10 @@
       </button>
     {/if}
     <div class="detail-title-row">
-      <span class="entry-icon" style:--entry-color={entry.color}
+      <span
+        class="entry-icon"
+        class:colored={Boolean(entry.color)}
+        style:--entry-color={entry.color}
         >{#if customIconUrl}
           <img class="entry-icon-img" src={customIconUrl} alt="" draggable="false" />
         {:else}
@@ -1349,7 +1352,7 @@
     object-fit: contain;
   }
 
-  .entry-icon[style*="--entry-color"] {
+  .entry-icon.colored {
     color: var(--entry-color);
     border-color: color-mix(in srgb, var(--entry-color) 45%, transparent);
     background: color-mix(in srgb, var(--entry-color) 12%, transparent);

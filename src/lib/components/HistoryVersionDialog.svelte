@@ -249,7 +249,7 @@
 
 <ModalShell
   title="历史版本"
-  description={`${version.modified ? formatLocalDate(version.modified) : "未知时间"}${totalDiffs > 0 ? `· ${totalDiffs} 处差异` : ""}`}
+  description={`${version.modified ? formatLocalDate(version.modified) : "未知时间"}${totalDiffs > 0 ? ` · ${totalDiffs} 处差异` : ""}`}
   size="large"
   scrollable
   closeOnEscape
