@@ -29,7 +29,9 @@ pub(crate) enum SaveTarget {
 
 /// Error prefix for a save that detected the remote file changed elsewhere.
 /// The frontend matches this marker to offer 覆盖远程/下载远程/保留本地.
-pub(crate) const REMOTE_CHANGED_MARKER: &str = "REMOTE_CHANGED\n";
+/// Single source lives in the remote module (conditional-write conflicts use
+/// the same wire format).
+pub(crate) const REMOTE_CHANGED_MARKER: &str = crate::remote::REMOTE_CONFLICT_MARKER;
 
 /// Result of a remote open/create: database, keyfile bytes, normalized key and
 /// the SHA-256 of the remote file bytes (the sync base hash).
@@ -246,9 +248,12 @@ pub(crate) fn persist_snapshot(
         } => {
             if !force {
                 // Conflict check: refuse to overwrite a remote file that
-                // changed since it was opened/last saved.
-                let current = storage
-                    .get(key)
+                // changed since it was opened/last saved. The observed ETag
+                // preconditioned the upload below, so a writer that slips in
+                // between the check and the put is rejected (HTTP 412) rather
+                // than silently clobbered.
+                let (current, etag) = storage
+                    .get_with_etag(key)
                     .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
                 if crate::crypto::sha256_bytes(&current) != *base_hash {
                     return Err(format!(
@@ -257,10 +262,14 @@ pub(crate) fn persist_snapshot(
                         buffer.len(),
                     ));
                 }
+                storage
+                    .put_if_match(key, &buffer, etag.as_deref())
+                    .map_err(|e| format!("上传远程文件失败: {e}"))?;
+            } else {
+                storage
+                    .put(key, &buffer)
+                    .map_err(|e| format!("上传远程文件失败: {e}"))?;
             }
-            storage
-                .put(key, &buffer)
-                .map_err(|e| format!("上传远程文件失败: {e}"))?;
             if *mode == RemoteMode::SaveLocal {
                 write_local_copy(
                     local_dir,

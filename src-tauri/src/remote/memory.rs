@@ -2,6 +2,7 @@
 
 use super::RemoteObject;
 use super::RemoteStorage;
+use crate::crypto::{hex, sha256_bytes};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 // ---------------------------------------------------------------------------
@@ -52,5 +53,38 @@ impl RemoteStorage for MemoryStorage {
             .map_err(|_| "存储锁已损坏".to_owned())?
             .insert(key.to_owned(), data.to_vec());
         Ok(())
+    }
+
+    /// The fake uses the content's SHA-256 hex as its ETag, so the
+    /// conditional write is a real compare-and-swap under the lock — strong
+    /// enough to unit-test the lost-race path of `persist_snapshot`.
+    fn get_with_etag(&self, key: &str) -> Result<(Vec<u8>, Option<String>), String> {
+        let guard = self.objects.read().map_err(|_| "存储锁已损坏".to_owned())?;
+        let data = guard
+            .get(key)
+            .cloned()
+            .ok_or_else(|| format!("远程文件不存在: {key}"))?;
+        let etag = hex(&sha256_bytes(&data));
+        Ok((data, Some(etag)))
+    }
+
+    fn put_if_match(&self, key: &str, data: &[u8], etag: Option<&str>) -> Result<(), String> {
+        let Some(expected) = etag else {
+            return self.put(key, data);
+        };
+        let mut guard = self
+            .objects
+            .write()
+            .map_err(|_| "存储锁已损坏".to_owned())?;
+        match guard.get(key) {
+            Some(current) if hex(&sha256_bytes(current)) == expected => {
+                guard.insert(key.to_owned(), data.to_vec());
+                Ok(())
+            }
+            _ => Err(format!(
+                "{}远程库已被其他设备修改（内容校验不匹配），请选择合并、覆盖远程、下载远程或保留本地",
+                super::REMOTE_CONFLICT_MARKER
+            )),
+        }
     }
 }

@@ -27,6 +27,12 @@ use std::time::Duration;
 /// Prefix used for the display path of remote vaults (`s3://<key>`).
 pub const REMOTE_URI_PREFIX: &str = "s3://";
 
+/// Error prefix for a lost save race: the remote object changed between our
+/// read and the preconditioned write (HTTP 412 / hash mismatch), so the
+/// upload was rejected instead of silently clobbering the other writer.
+/// The frontend matches this marker to offer 覆盖远程/下载远程/保留本地.
+pub const REMOTE_CONFLICT_MARKER: &str = "REMOTE_CHANGED\n";
+
 /// TCP connect timeout for remote storage requests (shared).
 const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Overall bound for the object listing call (small payloads).
@@ -83,6 +89,23 @@ pub trait RemoteStorage: Send + Sync {
     fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String>;
     fn get(&self, key: &str) -> Result<Vec<u8>, String>;
     fn put(&self, key: &str, data: &[u8]) -> Result<(), String>;
+
+    /// Download plus the transport's content identity (HTTP `ETag` when the
+    /// server exposes one). The identity feeds [`RemoteStorage::put_if_match`]
+    /// so a concurrent writer's change is rejected instead of clobbered.
+    /// Default: plain get with no identity.
+    fn get_with_etag(&self, key: &str) -> Result<(Vec<u8>, Option<String>), String> {
+        Ok((self.get(key)?, None))
+    }
+
+    /// Upload preconditioned on the identity observed by a matching
+    /// `get_with_etag`. `None` (or an unsupported transport) degrades to a
+    /// plain put. A lost race returns an error starting with
+    /// [`REMOTE_CONFLICT_MARKER`].
+    fn put_if_match(&self, key: &str, data: &[u8], etag: Option<&str>) -> Result<(), String> {
+        let _ = etag;
+        self.put(key, data)
+    }
 }
 pub fn make_storage(cfg: &RemoteSettings) -> Result<Arc<dyn RemoteStorage>, String> {
     match cfg.kind.as_str() {

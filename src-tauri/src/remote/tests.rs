@@ -31,6 +31,42 @@ fn memory_storage_lists_gets_puts() {
 }
 
 #[test]
+fn memory_conditional_put_is_compare_and_swap() {
+    let storage = MemoryStorage::default();
+    storage.seed("vaults/a.kdbx", b"original".to_vec());
+
+    let (data, etag) = storage.get_with_etag("vaults/a.kdbx").unwrap();
+    assert_eq!(data, b"original");
+    assert!(etag.is_some(), "the fake always exposes a content identity");
+
+    // A concurrent writer lands between our read and our write.
+    storage.put("vaults/a.kdbx", b"interloper").unwrap();
+
+    let error = storage
+        .put_if_match("vaults/a.kdbx", b"stale-write", etag.as_deref())
+        .unwrap_err();
+    assert!(error.starts_with(REMOTE_CONFLICT_MARKER));
+    assert_eq!(
+        storage.get("vaults/a.kdbx").unwrap(),
+        b"interloper".to_vec(),
+        "the stale conditional write must not clobber the newer object"
+    );
+
+    // A fresh observation precondition succeeds.
+    let (_, etag) = storage.get_with_etag("vaults/a.kdbx").unwrap();
+    storage
+        .put_if_match("vaults/a.kdbx", b"merged", etag.as_deref())
+        .unwrap();
+    assert_eq!(storage.get("vaults/a.kdbx").unwrap(), b"merged".to_vec());
+
+    // No precondition degrades to a plain put.
+    storage
+        .put_if_match("vaults/a.kdbx", b"forced", None)
+        .unwrap();
+    assert_eq!(storage.get("vaults/a.kdbx").unwrap(), b"forced".to_vec());
+}
+
+#[test]
 fn local_dir_name_is_sanitized() {
     assert_eq!(sanitize_dir_name("  "), "remote");
     assert_eq!(sanitize_dir_name("my vaults"), "my_vaults");

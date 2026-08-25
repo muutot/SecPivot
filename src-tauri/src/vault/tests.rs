@@ -6664,7 +6664,10 @@ fn autotype_match_skips_groups_with_searching_disabled() {
         group.enable_searching = Some(true);
     }
     let matched = session.autotype_match("Child secret window").unwrap();
-    assert!(!matched.is_empty(), "re-enabled ancestor re-includes subtree");
+    assert!(
+        !matched.is_empty(),
+        "re-enabled ancestor re-includes subtree"
+    );
 }
 
 #[test]

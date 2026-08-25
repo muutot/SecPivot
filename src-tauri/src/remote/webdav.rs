@@ -4,7 +4,7 @@
 use super::shared_blocking_client;
 use super::RemoteObject;
 use super::RemoteStorage;
-use super::{REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
+use super::{REMOTE_CONFLICT_MARKER, REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
 use crate::config::RemoteSettings;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -151,6 +151,10 @@ impl RemoteStorage for WebDavStorage {
     }
 
     fn get(&self, key: &str) -> Result<Vec<u8>, String> {
+        self.get_with_etag(key).map(|(data, _)| data)
+    }
+
+    fn get_with_etag(&self, key: &str) -> Result<(Vec<u8>, Option<String>), String> {
         let url = self.url_for(key)?;
         let mut builder = self.client.get(&url).timeout(self.io_timeout);
         if let Some((user, pass)) = &self.auth {
@@ -160,9 +164,15 @@ impl RemoteStorage for WebDavStorage {
             .send()
             .map_err(|e| format!("WebDAV 下载请求失败: {e}"))?;
         if response.status() == reqwest::StatusCode::OK {
+            // ETag support is optional in WebDAV servers; absent → plain put.
+            let etag = response
+                .headers()
+                .get("ETag")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             response
                 .bytes()
-                .map(|b| b.to_vec())
+                .map(|b| (b.to_vec(), etag))
                 .map_err(|e| format!("WebDAV 下载响应读取失败: {e}"))
         } else {
             Err(format!("WebDAV 下载失败: HTTP {}", response.status()))
@@ -170,6 +180,10 @@ impl RemoteStorage for WebDavStorage {
     }
 
     fn put(&self, key: &str, data: &[u8]) -> Result<(), String> {
+        self.put_if_match(key, data, None)
+    }
+
+    fn put_if_match(&self, key: &str, data: &[u8], etag: Option<&str>) -> Result<(), String> {
         let url = self.url_for(key)?;
         let mut builder = self
             .client
@@ -177,18 +191,28 @@ impl RemoteStorage for WebDavStorage {
             .header("Content-Type", "application/octet-stream")
             .timeout(self.io_timeout)
             .body(data.to_vec());
+        // RFC 7232 conditional upload; servers without ETag support ignore it,
+        // degrading gracefully to the previous best-effort behavior.
+        if let Some(etag) = etag {
+            builder = builder.header("If-Match", etag);
+        }
         if let Some((user, pass)) = &self.auth {
             builder = builder.basic_auth(user.clone(), Some(pass.clone()));
         }
         let response = builder
             .send()
             .map_err(|e| format!("WebDAV 上传请求失败: {e}"))?;
-        if response.status().is_success() {
+        let status = response.status();
+        if status.as_u16() == 412 {
+            return Err(format!(
+                "{REMOTE_CONFLICT_MARKER}远程库已被其他设备修改（条件写入被拒绝 HTTP 412），请选择合并、覆盖远程、下载远程或保留本地"
+            ));
+        }
+        if status.is_success() {
             Ok(())
         } else {
             Err(format!(
-                "WebDAV 上传失败: HTTP {}（请确认目录已存在）",
-                response.status()
+                "WebDAV 上传失败: HTTP {status}（请确认目录已存在）"
             ))
         }
     }

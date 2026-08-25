@@ -9,7 +9,7 @@
 use super::shared_blocking_client;
 use super::RemoteObject;
 use super::RemoteStorage;
-use super::{REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
+use super::{REMOTE_CONFLICT_MARKER, REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
 use crate::config::RemoteSettings;
 use crate::crypto::{hex, hmac_sha256, sha256_bytes};
 use quick_xml::events::Event;
@@ -130,7 +130,9 @@ impl S3Storage {
 
     /// Sign and send one request, returning the raw response. `path` is the
     /// canonical (already encoded) request path starting with `/`; `query` is
-    /// a sorted list of (name, value) pairs encoded here.
+    /// a sorted list of (name, value) pairs encoded here. `extra_headers` are
+    /// sent but not signed (SigV4 only requires `host`/`x-amz-*` in the
+    /// canonical request; e.g. `If-Match` stays unsigned).
     fn send(
         &self,
         method: &str,
@@ -138,6 +140,7 @@ impl S3Storage {
         query: &[(&str, &str)],
         body: &[u8],
         timeout: Duration,
+        extra_headers: &[(&str, &str)],
     ) -> Result<reqwest::blocking::Response, String> {
         let now = chrono::Utc::now();
         let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
@@ -201,6 +204,9 @@ impl S3Storage {
                 .header("Content-Type", "application/octet-stream")
                 .body(body.to_vec());
         }
+        for (name, value) in extra_headers {
+            request = request.header(*name, *value);
+        }
         request
             .send()
             .map_err(|e| Self::map_error(method, e, timeout))
@@ -238,6 +244,7 @@ impl RemoteStorage for S3Storage {
             &[("list-type", "2"), ("prefix", prefix)],
             b"",
             self.list_timeout,
+            &[],
         )?;
         let status = response.status();
         if !status.is_success() {
@@ -250,12 +257,21 @@ impl RemoteStorage for S3Storage {
     }
 
     fn get(&self, key: &str) -> Result<Vec<u8>, String> {
+        self.get_with_etag(key).map(|(data, _)| data)
+    }
+
+    fn get_with_etag(&self, key: &str) -> Result<(Vec<u8>, Option<String>), String> {
         let path = self.object_path(key);
-        let response = self.send("GET", &path, &[], b"", self.io_timeout)?;
+        let response = self.send("GET", &path, &[], b"", self.io_timeout, &[])?;
         if response.status() == reqwest::StatusCode::OK {
+            let etag = response
+                .headers()
+                .get("ETag")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             response
                 .bytes()
-                .map(|b| b.to_vec())
+                .map(|b| (b.to_vec(), etag))
                 .map_err(|e| format!("S3 下载响应读取失败: {e}"))
         } else {
             Err(format!("S3 下载失败: HTTP {}", response.status()))
@@ -263,12 +279,26 @@ impl RemoteStorage for S3Storage {
     }
 
     fn put(&self, key: &str, data: &[u8]) -> Result<(), String> {
+        self.put_if_match(key, data, None)
+    }
+
+    fn put_if_match(&self, key: &str, data: &[u8], etag: Option<&str>) -> Result<(), String> {
         let path = self.object_path(key);
-        let response = self.send("PUT", &path, &[], data, self.io_timeout)?;
-        if response.status().is_success() {
+        let headers: &[(&str, &str)] = match etag {
+            Some(etag) => &[("If-Match", etag)],
+            None => &[],
+        };
+        let response = self.send("PUT", &path, &[], data, self.io_timeout, headers)?;
+        let status = response.status();
+        if status.as_u16() == 412 {
+            return Err(format!(
+                "{REMOTE_CONFLICT_MARKER}远程库已被其他设备修改（条件写入被拒绝 HTTP 412），请选择合并、覆盖远程、下载远程或保留本地"
+            ));
+        }
+        if status.is_success() {
             Ok(())
         } else {
-            Err(format!("S3 上传失败: HTTP {}", response.status()))
+            Err(format!("S3 上传失败: HTTP {status}"))
         }
     }
 }
@@ -279,7 +309,7 @@ impl RemoteStorage for S3Storage {
 impl S3Storage {
     pub(crate) fn create_bucket(&self) -> Result<(), String> {
         let path = format!("/{}", self.bucket);
-        let response = self.send("PUT", &path, &[], b"", self.io_timeout)?;
+        let response = self.send("PUT", &path, &[], b"", self.io_timeout, &[])?;
         let status = response.status().as_u16();
         if status == 200 || status == 409 {
             Ok(())
@@ -290,7 +320,7 @@ impl S3Storage {
 
     pub(crate) fn delete_object(&self, key: &str) -> Result<(), String> {
         let path = self.object_path(key);
-        let response = self.send("DELETE", &path, &[], b"", self.io_timeout)?;
+        let response = self.send("DELETE", &path, &[], b"", self.io_timeout, &[])?;
         let status = response.status().as_u16();
         if status == 204 || status == 404 {
             Ok(())
@@ -301,7 +331,7 @@ impl S3Storage {
 
     pub(crate) fn delete_bucket(&self) -> Result<(), String> {
         let path = format!("/{}", self.bucket);
-        let response = self.send("DELETE", &path, &[], b"", self.io_timeout)?;
+        let response = self.send("DELETE", &path, &[], b"", self.io_timeout, &[])?;
         let status = response.status().as_u16();
         if status == 204 || status == 404 {
             Ok(())
