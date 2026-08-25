@@ -108,10 +108,12 @@ opt-level = 0
 # minimal storage. No debug info, no incremental cache, unoptimized objects.
 # The GitHub Actions release job overrides these via CARGO_PROFILE_RELEASE_*
 # env vars to enable extreme runtime optimization (see release.yml).
+# Unwinding (the default panic strategy) is required: `attachment_size`
+# tolerates dangling history attachment references via `catch_unwind`, which
+# is a silent no-op under `panic = "abort"` and aborted the process instead.
 [profile.release]
 opt-level = 0
 codegen-units = 256
-panic = "abort"
 strip = true
 debug = false
 incremental = false
