@@ -45,7 +45,7 @@ reqwest = { version = "0.13", features = ["rustls", "blocking"] }
 url = "2"
 # Parse WebDAV PROPFIND multistatus responses (same minor as keepass's vendored
 # copy, so no extra crate version enters the lock).
-quick-xml = "0.30"
+quick-xml = "0.41"
 # KeePassRPC entry match accuracy: Perl-compatible regex matching for
 # per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
 regex = "1"
@@ -73,11 +73,13 @@ keyring = "4.1.6"
 # KeePassRPC bridge (Phase 2): SRP big-number math + WebSocket loopback server.
 num-bigint = "0.4"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
-# KeePassHttp / KeePassRPC AES-256-CBC wire crypto.
-aes = "0.8"
-cbc = { version = "0.1", features = ["alloc"] }
-cipher = "0.4"
-block-padding = "0.3"
+# KeePassHttp / KeePassRPC AES-256-CBC wire crypto. Versions track the same
+# RustCrypto generation as keepass (aes 0.9 / cbc 0.2 / cipher 0.5 /
+# block-padding 0.4) so the lock keeps a single copy of each crate.
+aes = "0.9"
+cbc = { version = "0.2", features = ["alloc"] }
+cipher = "0.5"
+block-padding = "0.4"
 
 [dev-dependencies]
 tempfile = "3"

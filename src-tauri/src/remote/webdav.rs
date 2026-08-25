@@ -230,7 +230,7 @@ pub(crate) fn parse_multistatus(
         return Err("WebDAV 响应不是有效的 multistatus 列表，请检查服务地址与对象前缀".to_owned());
     }
     let mut reader = Reader::from_str(body);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let request_key = href_to_key(base_url, request_url);
     let request_key = request_key.trim_matches('/').to_owned();
     let mut objects = Vec::new();
@@ -265,7 +265,7 @@ pub(crate) fn parse_multistatus(
             }
             Ok(Event::Text(t)) => {
                 if in_response {
-                    let text = t.unescape().unwrap_or_default().trim().to_owned();
+                    let text = t.xml10_content().unwrap_or_default().trim().to_owned();
                     record_prop(&current, &mut href, &mut size, &mut modified, &text);
                 }
             }

@@ -12,7 +12,7 @@ use block_padding::Pkcs7;
 #[cfg(desktop)]
 use cbc::{Decryptor, Encryptor};
 #[cfg(desktop)]
-use cipher::{generic_array::GenericArray, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -40,15 +40,17 @@ pub fn random_bytes(len: usize) -> Vec<u8> {
 /// `iv` 16 bytes.
 #[cfg(desktop)]
 pub fn aes_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Vec<u8> {
-    Aes256CbcEnc::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
-        .encrypt_padded_vec_mut::<Pkcs7>(plaintext)
+    Aes256CbcEnc::new_from_slices(key, iv)
+        .expect("callers pass KEY_LEN key and NONCE_LEN iv")
+        .encrypt_padded_vec::<Pkcs7>(plaintext)
 }
 
 /// AES-256-CBC decrypt with PKCS7 padding (raw bytes).
 #[cfg(desktop)]
 pub fn aes_cbc_decrypt(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, String> {
-    Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
-        .decrypt_padded_vec_mut::<Pkcs7>(ciphertext)
+    Aes256CbcDec::new_from_slices(key, iv)
+        .expect("callers pass KEY_LEN key and NONCE_LEN iv")
+        .decrypt_padded_vec::<Pkcs7>(ciphertext)
         .map_err(|_| "解密失败".to_owned())
 }
 

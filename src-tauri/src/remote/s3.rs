@@ -314,7 +314,7 @@ impl S3Storage {
 /// Parse a `ListBucketResult` (ListObjectsV2) body into objects.
 fn parse_list_v2(body: &str) -> Result<Vec<RemoteObject>, String> {
     let mut reader = Reader::from_str(body);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut objects = Vec::new();
     let mut in_contents = false;
     let mut current = String::new();
@@ -339,7 +339,7 @@ fn parse_list_v2(body: &str) -> Result<Vec<RemoteObject>, String> {
             }
             Ok(Event::Text(t)) => {
                 if in_contents {
-                    let text = t.unescape().unwrap_or_default().trim().to_owned();
+                    let text = t.xml10_content().unwrap_or_default().trim().to_owned();
                     match current.as_str() {
                         "key" => key = Some(text),
                         "size" => size = text.parse().ok(),
