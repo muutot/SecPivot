@@ -439,8 +439,11 @@ impl VaultSession {
                     },
                 );
                 tracked.times.last_modification = Some(Times::now());
-                trim_entry_history(&mut tracked, cap);
             }
+            // Trim after the tracking scope drops: `EntryTrack::drop` appends
+            // the pre-change snapshot, so trimming inside the scope would run
+            // before the snapshot lands and let history grow to cap + 1.
+            trim_entry_history(&mut entry, cap);
         }
         self.mark_dirty();
         self.snapshot_without_icons()

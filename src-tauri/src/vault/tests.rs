@@ -1881,6 +1881,43 @@ fn entry_history_caps_at_ten_versions() {
 }
 
 #[test]
+fn custom_field_edits_respect_history_cap() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_items = Some(3);
+    }
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "v0".into(),
+            username: "".into(),
+            password: "p0".into(),
+            url: "".into(),
+            notes: "".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    // Repeated single-field edits via update_custom_field must trim the
+    // snapshot appended by the tracking scope, keeping history at the cap.
+    for i in 1..=8 {
+        session
+            .update_custom_field(&uuid, "Pin", &format!("{i}"), false)
+            .unwrap();
+    }
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(history.len(), 3, "meta cap of 3 must bound the history");
+}
+
+#[test]
 fn entry_history_cap_reads_database_meta() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);
