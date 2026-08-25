@@ -1,5 +1,83 @@
 # Changelog
 
+## 1.4.0 (2026-08-25)
+
+### ✨ Features
+
+- **security**: add backend-enforced scheduled clipboard wipe safety net (3b43a87f)
+- **privacy**: zeroize hibp password copies after breach check (67895921)
+- **bridge**: rate-limit unauthenticated associate requests (e4cd572b)
+- **autotype**: support custom string fields as {REF:...} target (52620a7c)
+- **entries**: mask list password column with click-to-reveal (6eaf43e6)
+- **export**: add KeePass XML export with protected-value convention (96045c96)
+- **capabilities**: allow window set-size permission (0862e508)
+- **rpc**: register rpc session commands and apply timeout setting (30b96298)
+- **rpc**: add SRP session-key timeout and live connection management (78268da9)
+- **history**: add vault-wide change timeline dialog (2bd41f9d)
+- **config**: resolve portable data root beside the executable (68af85aa)
+- **entries**: add KeePass-compatible entry size column (391db1bd)
+- **history**: compute version diffs in backend and add grouped tab view (4128ec38)
+- **totp**: add screenshot QR/barcode scan buttons for TOTP seed (f7aed403)
+
+### 🐛 Bug Fixes
+
+- **mobile**: gate desktop-only qr command registration and vault re-exports (89d5cca1)
+- **release**: fail the version bump loudly when prettier fails (bcb57511)
+- **frontend**: surface fire-and-forget invoke failures instead of swallowing (7365c190)
+- **vault**: merge session switch lookup into remove-and-check (e7278035)
+- **stability**: degrade remote client init and rpc socket clone instead of abort (41e03747)
+- **a11y**: trap tab focus in modal dialogs and restore invoker focus (fa069863)
+- **remote**: reject unknown storage kind instead of silently building S3 (ab46078a)
+- **mobile**: restore height chain so narrow layout scrolls with wheel (eb78c4bb)
+- **entry**: reload cached history and storage after entry edit (df1fb5c4)
+- **settings**: include size column in default entry columns (4bb0264d)
+- **editor**: show password strength inline with label and drop duplicate meter (0820f76c)
+- **attachments**: 关闭主窗口原生拖放以启用 HTML5 文件拖放 (9c09e1b4)
+
+### ♻️ Refactoring
+
+- **frontend**: extract autotype picker and favicon progress dialogs (101e3932)
+- **frontend**: extract main toolbar into AppToolbar component (1095127e)
+- **frontend**: extract entry editor flow into composable (10ac1fb1)
+- **frontend**: extract group flows into service with host seam (6c097525)
+- **keyboard**: generalize shortcut dispatch with handler map (69047376)
+- **frontend**: pure context-menu item builders with unit tests (60979d75)
+- **frontend**: extract search/filter pipeline into composable (04ae1036)
+- **frontend**: extract entry selection model into composable (a6cda028)
+- **frontend**: extract favicon download flow into service (770a3dc5)
+- **keyboard**: move shortcut matching into service with unit tests (0e5c3abd)
+- **frontend**: extract entry column configuration into service (343148cf)
+- **frontend**: extract panel layout state machine into composable (c4a114e2)
+- **frontend**: extract import/export orchestration into services/io (b87e7ef6)
+
+### 🎨 Styling
+
+- **rpc**: harmonize session card with shared settings primitives (3867044f)
+- **bridge,rpc**: adopt shared tokens and font-mono variable (fd6c01fb)
+- **audit**: apply prettier formatting to report and metadata (cc3af370)
+- **settings**: group custom theme color fields by category (59b8df39)
+
+### 📝 Documentation
+
+- **vault**: document store contract and public api methods (6fd5b2de)
+- add prerequisites and security reporting to README (933e5b29)
+- **remote**: clarify webdav propfind arm skip is intended parsing (48050beb)
+- fix stale android ABI, rust-s3, TARGET_RANLIB and base-path claims (840996ef)
+- **audit**: add full audit report and metadata for f9aa086 (adcd1f36)
+- **skill**: require English-only commit messages (50285644)
+
+### ✅ Testing
+
+- **vault**: runtime ipc glue tests via tauri internals seam (6ca1bf4e)
+- **contracts**: guard remote-conflict sentinel against cross-layer drift (fdeb1ded)
+
+### 🔧 Chores
+
+- **ci**: declare least-privilege contents:read permissions (8e2d8aa6)
+- **release**: publish SHA256 checksums for windows and android artifacts (842c6876)
+- **toolchain**: pin rust 1.96.0 and node 24 for reproducible builds (92e91839)
+- **ci**: pin all GitHub Actions to commit SHAs (440dd42a)
+
 ## 1.3.1 (2026-08-20)
 
 ### ✨ Features
