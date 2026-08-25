@@ -47,10 +47,6 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     const advancedQuery = options.advancedQuery();
     const searching = Boolean(query || advancedQuery);
     const subtree = options.selectedSubtree();
-    console.log(
-      `[useEntryFilter] searching=${searching} query="${query}" adv=${advancedQuery ? "on" : "off"} subtree=${subtree.length}`,
-      subtree.map((g) => `${g.name}(${g.uuid.slice(0, 4)}):es=${g.enableSearching} entries=${g.entries.length}`),
-    );
     const result: { entry: VaultEntry }[] = [];
     for (const group of subtree) {
       // KeePass: groups with "EnableSearching" off contribute no entries to
@@ -64,9 +60,12 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
         result.push({ entry });
       }
     }
-    console.log(`[useEntryFilter] result=${result.length}`);
     return result;
   });
 
-  return { filteredEntries };
+  return {
+    get filteredEntries() {
+      return filteredEntries;
+    },
+  };
 }
