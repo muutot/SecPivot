@@ -671,6 +671,9 @@ impl VaultSession {
                 let mut tracked = entry.track_changes();
                 {
                     let mut current = tracked.as_mut();
+                    // KeePass restore replaces the whole record: every stored
+                    // field plus all record-level attributes, so "restoring"
+                    // never silently keeps newer values.
                     current.fields.clear();
                     for (name, value) in &version.fields {
                         current.fields.insert(name.clone(), value.clone());
@@ -679,9 +682,25 @@ impl VaultSession {
                     current.times.expiry = version.times.expiry;
                     current.times.expires = version.times.expires;
                     match version.icon() {
-                        Some(Icon::BuiltIn(icon_id)) => current.set_icon_builtin(*icon_id),
-                        _ => current.set_icon_none(),
+                        Some(Icon::BuiltIn(icon_id)) => {
+                            current.set_icon_builtin(*icon_id);
+                        }
+                        Some(Icon::Custom(custom_icon_id)) => {
+                            // A snapshot can only reference icons that still
+                            // exist in the store; a missing one falls back to
+                            // the default icon instead of failing the restore.
+                            if current.set_icon_custom(*custom_icon_id).is_err() {
+                                current.set_icon_none();
+                            }
+                        }
+                        None => current.set_icon_none(),
                     }
+                    current.background_color = version.background_color.clone();
+                    current.foreground_color = version.foreground_color.clone();
+                    current.override_url = version.override_url.clone();
+                    current.quality_check = version.quality_check;
+                    current.autotype = version.autotype.clone();
+                    current.custom_data = version.custom_data.clone();
                 }
                 tracked.times.last_modification = Some(Times::now());
             }
