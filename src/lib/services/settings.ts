@@ -474,7 +474,9 @@ export function normalizeSettings(
         ? g.theme
         : g.theme === "dark"
           ? "dark"
-          : fallback.general.theme,
+          : // Invalid values resolve to the canonical default, matching the
+            // Rust normalizer — never the previous (possibly custom) value.
+            DEFAULT_APP_SETTINGS.general.theme,
     themeColors: normalizeThemeColors(g.themeColors, DARK_THEME_COLORS),
     customPresets: Array.isArray(g.customPresets)
       ? g.customPresets.map((p: unknown) => normalizeThemeColors(p, DARK_THEME_COLORS))
@@ -553,7 +555,9 @@ export function normalizeSettings(
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:
-      g.language === "en" || g.language === "zh-CN" ? g.language : fallback.general.language,
+      g.language === "en" || g.language === "zh-CN"
+        ? g.language
+        : DEFAULT_APP_SETTINGS.general.language,
     windowEffect:
       g.windowEffect === "acrylic" || g.windowEffect === "mica" ? g.windowEffect : "off",
   };

@@ -645,13 +645,15 @@ fn clamp_i32(value: i32, min: i32, max: i32, fallback: i32) -> i32 {
 }
 
 /// Clamp every column's width to 30..=400 px ("title" keeps its `0` auto
-/// sentinel) and keep ids/visibility verbatim — unknown ids survive the
-/// round-trip because custom-field columns appear dynamically on the frontend.
-/// Boundary-clamps (not fallback) to stay idempotent with the frontend
-/// `clampInt` in `normalizeEntryColumns`.
+/// sentinel) and dedup by id (first occurrence wins, mirroring the frontend
+/// `normalizeEntryColumns`), so a duplicated array cannot persist a file that
+/// disagrees with what the UI renders. Boundary-clamps (not fallback) to stay
+/// idempotent with the frontend `clampInt` in `normalizeEntryColumns`.
 fn normalize_entry_columns(columns: Vec<EntryColumnState>) -> Vec<EntryColumnState> {
+    let mut seen = std::collections::HashSet::new();
     columns
         .into_iter()
+        .filter(|c| seen.insert(c.id.clone()))
         .map(|mut c| {
             if c.id == "title" && c.width == 0 {
                 return c;
@@ -838,6 +840,10 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.database.generator_profiles =
         normalize_generator_profiles(config.database.generator_profiles);
     config.database.file_extension = normalize_file_extension(&config.database.file_extension);
+
+    // Mirror the frontend clamp (0..=30 days) so a hand-edited config.json
+    // cannot apply an absurd SRP session lifetime until the next save.
+    config.rpc.session_timeout_secs = config.rpc.session_timeout_secs.min(2_592_000);
 
     if config.remote_profiles.is_empty() {
         config.remote_profiles = vec![RemoteProfile::default(), RemoteProfile::webdav_default()];

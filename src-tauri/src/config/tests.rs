@@ -65,6 +65,21 @@ fn old_config_without_density_loads_with_defaults() {
 }
 
 #[test]
+fn icon_only_buttons_defaults_off_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    assert!(!config.general.icon_only_buttons, "defaults off on every platform");
+
+    config.general.icon_only_buttons = true;
+    let saved = store.set(config).unwrap();
+    assert!(saved.general.icon_only_buttons);
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(reloaded.get().unwrap().general.icon_only_buttons);
+}
+
+#[test]
 fn remote_profiles_survive_deserialize_write_reload() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

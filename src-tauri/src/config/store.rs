@@ -49,8 +49,28 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
     let path = config_path(project_dir);
     if path.exists() {
         let text = fs::read_to_string(&path).map_err(|e| format!("读取配置失败: {e}"))?;
-        let mut value: AppConfig =
-            serde_json::from_str(&text).map_err(|e| format!("解析配置失败: {e}"))?;
+        // A hand-edited or half-written file with wrong-typed scalars (e.g. a
+        // fraction where an integer is expected) fails the strict parse and
+        // used to abort the setup hook, bricking startup until the file was
+        // deleted by hand. Salvage instead: keep the corrupt file for
+        // inspection and start on defaults.
+        let value: AppConfig = match serde_json::from_str(&text) {
+            Ok(value) => value,
+            Err(e) => {
+                let backup = path.with_extension("json.bak");
+                let renamed = fs::rename(&path, &backup).is_ok();
+                eprintln!(
+                    "配置文件解析失败（{}），使用默认配置启动: {e}",
+                    if renamed {
+                        format!("已备份为 {}", backup.display())
+                    } else {
+                        "备份失败，原文件保留".to_owned()
+                    }
+                );
+                return Ok(normalize_config(AppConfig::default()));
+            }
+        };
+        let mut value = value;
         for profile in &mut value.remote_profiles {
             decrypt_profile_creds(&mut profile.settings);
         }
