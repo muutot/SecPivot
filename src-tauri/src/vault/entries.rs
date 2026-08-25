@@ -467,11 +467,13 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
-    /// Move several entries into the recycle bin (or permanently delete them
-    /// when they are already inside the recycle bin).
+    /// Move several entries into the recycle bin — or permanently delete them
+    /// when they are already recycled or the database disabled its recycle
+    /// bin (`Meta.recyclebin_enabled == Some(false)`).
     pub fn delete_entries(&mut self, uuids: &[String]) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
+            let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
             let bin_id = ensure_recycle_bin(db)?;
             for uuid in uuids {
                 let id = parse_entry_id(uuid)?;
@@ -479,7 +481,7 @@ impl VaultSession {
                     let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
                     entry.parent().id() == bin_id
                 };
-                if in_bin {
+                if in_bin || recycle_disabled {
                     let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                     entry.remove();
                 } else {
@@ -501,18 +503,19 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
-    /// Move an entry to the recycle bin (or permanently delete it when it is
-    /// already inside the recycle bin).
+    /// Move an entry to the recycle bin — or permanently delete it when it is
+    /// already recycled or the database disabled its recycle bin.
     pub fn delete_entry(&mut self, uuid: &str) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
+            let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
             let bin_id = ensure_recycle_bin(db)?;
             let in_bin = {
                 let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
                 entry.parent().id() == bin_id
             };
-            if in_bin {
+            if in_bin || recycle_disabled {
                 let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                 entry.remove();
             } else {
@@ -769,8 +772,9 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
-    /// Delete a group: move the whole subtree to the recycle bin, or
-    /// permanently delete it when it is already inside the recycle bin.
+    /// Delete a group: move the whole subtree to the recycle bin — or
+    /// permanently delete it when it is already recycled or the database
+    /// disabled its recycle bin.
     pub fn delete_group(&mut self, uuid: &str) -> Result<VaultState, String> {
         if uuid == ROOT_GROUP_UUID {
             return Err("不能删除根分组".to_owned());
@@ -778,11 +782,12 @@ impl VaultSession {
         {
             let db = self.require_db_mut()?;
             let id = parse_group_id(uuid)?;
+            let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
             let bin_id = ensure_recycle_bin(db)?;
             if id == bin_id {
                 return Err("请先清空或移动回收站内容,再删除回收站".to_owned());
             }
-            if group_contains(db, bin_id, id) {
+            if group_contains(db, bin_id, id) || recycle_disabled {
                 let group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
                 group.remove();
             } else {

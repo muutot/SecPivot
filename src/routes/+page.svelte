@@ -130,6 +130,9 @@
   let currentVault = $state<VaultState | null>(null);
   let currentVaultSessionId = $state<string | null>(null);
   let activeSessionId = $state<string | null>(null);
+  /** Database-level recycle-bin flag of the visible session; drives the
+   *  delete-confirmation wording (permanent vs recoverable). */
+  let recycleBinEnabled = $state(true);
   const sessionView = new SessionViewGuard();
   const busyOperations = new LatestOperationGuard();
   const groupCreateOperations = new LatestOperationGuard();
@@ -330,6 +333,11 @@
       selection.selectedUuids = new Set();
       selection.selectionAnchor = null;
       securityReport = null;
+      // The delete wording follows the newly visible database's meta.
+      void vault
+        .getDatabaseSettings()
+        .then((s) => (recycleBinEnabled = s ? s.recycleBinEnabled : true))
+        .catch(() => (recycleBinEnabled = true));
       // Session-scoped overlays/forms must never survive a tab switch: their
       // captured uuids may also exist in an identical copy of another vault.
       editor.reset();
@@ -1166,6 +1174,7 @@
       sessionId: view.sessionId,
       uuid,
       inBin,
+      permanent: !recycleBinEnabled,
       resetSelectedGroup: () => {
         if (selectedGroup === uuid) selectedGroup = null;
         // The deleted group's entries left the visible tree; drop them from
@@ -1202,12 +1211,12 @@
   }
 
   function askDeleteEntry(entry: VaultEntry): void {
-    const inBin = entryInBin(entry.uuid);
+    const permanent = entryInBin(entry.uuid) || !recycleBinEnabled;
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;
     confirmState = {
-      message: inBin
+      message: permanent
         ? `永久删除条目「${entry.title || "未命名"}」？此操作无法撤销。`
         : `删除条目「${entry.title || "未命名"}」？可从回收站恢复。`,
       onconfirm: async () => {
@@ -1221,7 +1230,7 @@
             next.delete(entry.uuid);
             selection.selectedUuids = next;
           }
-          flash(inBin ? "已永久删除条目" : "已移入回收站");
+          flash(permanent ? "已永久删除条目" : "已移入回收站");
         } catch (e) {
           if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
         }
@@ -1232,7 +1241,7 @@
   function askDeleteEntries(): void {
     const uuids = Array.from(selection.selectedUuids);
     if (uuids.length === 0) return;
-    const allInBin = uuids.every((uuid) => entryInBin(uuid));
+    const allInBin = uuids.every((uuid) => entryInBin(uuid)) || !recycleBinEnabled;
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;

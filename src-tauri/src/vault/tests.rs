@@ -2520,6 +2520,39 @@ fn move_entry_between_groups() {
 }
 
 #[test]
+fn delete_with_recycle_bin_disabled_permanently_removes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(ROOT_GROUP_UUID, "Doomed", "u", "p", ""))
+        .unwrap();
+    let entry_uuid = state.root.entries[0].uuid.clone();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+            name: "DoomedGroup".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_uuid = state.root.children[0].uuid.clone();
+    // KeePass: recyclebin_enabled == Some(false) disables the recycle bin.
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.recyclebin_enabled = Some(false);
+    }
+    session.delete_entry(&entry_uuid).unwrap();
+    assert!(
+        session.snapshot().unwrap().root.entries.is_empty(),
+        "disabled recycle bin deletes the entry permanently"
+    );
+    session.delete_group(&group_uuid).unwrap();
+    assert!(
+        session.snapshot().unwrap().root.children.is_empty(),
+        "disabled recycle bin deletes the group permanently"
+    );
+}
+
+#[test]
 fn delete_entries_moves_all_to_recycle_bin() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

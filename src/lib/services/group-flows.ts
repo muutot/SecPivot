@@ -150,19 +150,24 @@ export function confirmDeleteGroupFlow(
     sessionId: string;
     uuid: string;
     inBin: boolean;
+    /** The database disabled its recycle bin: deletion is permanent. */
+    permanent?: boolean;
     resetSelectedGroup: () => void;
   },
 ): void {
   const { view, sessionId, uuid, inBin } = params;
+  const permanent = inBin || (params.permanent ?? false);
   host.ask(
-    inBin ? "永久删除该分组及其全部内容？此操作无法撤销。" : "删除该分组？其下条目将移动到回收站。",
+    permanent
+      ? "永久删除该分组及其全部内容？此操作无法撤销。"
+      : "删除该分组？其下条目将移动到回收站。",
     async () => {
       if (!host.sessionView.isCurrent(view)) return;
       try {
         await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
         if (!host.sessionView.isCurrent(view)) return;
         params.resetSelectedGroup();
-        host.notify(inBin ? "已永久删除分组" : "已移入回收站");
+        host.notify(permanent ? "已永久删除分组" : "已移入回收站");
       } catch (e) {
         if (host.sessionView.isCurrent(view)) host.notify(`删除失败：${e}`);
       }
