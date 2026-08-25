@@ -45,11 +45,14 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     if (!options.currentVault()) return [];
     const query = options.search().trim().toLowerCase();
     const advancedQuery = options.advancedQuery();
+    const searching = Boolean(query || advancedQuery);
     const result: { entry: VaultEntry }[] = [];
     for (const group of options.selectedSubtree()) {
       // KeePass: groups with "EnableSearching" off contribute no entries to
       // search results (per-group; descendants each carry their own flag).
-      if (!group.enableSearching) continue;
+      // They remain visible when browsing the group directly; only exclude
+      // them when a search (free-text or advanced) is active.
+      if (!group.enableSearching && searching) continue;
       for (const entry of group.entries) {
         if (query && !searchTextFor(entry).includes(query)) continue;
         if (advancedQuery && !matchesAdvancedSearch(entry, advancedQuery)) continue;

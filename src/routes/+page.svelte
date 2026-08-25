@@ -292,6 +292,9 @@
         selection.selectedEntry = null;
         selection.selectedUuids = new Set();
         selection.selectionAnchor = null;
+        search = "";
+        advancedQuery = null;
+        selectedGroup = null;
         editor.reset();
       } else {
         selection.selectedEntry = findEntryByUuid(value, selection.selectedEntry?.uuid ?? null);
@@ -320,6 +323,8 @@
       busy = false;
       groupCreating = false;
       groupIconSaving = false;
+      search = "";
+      advancedQuery = null;
       selectedGroup = null;
       revealGroupUuid = null;
       selection.selectedEntry = null;
