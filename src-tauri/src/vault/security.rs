@@ -271,7 +271,7 @@ impl VaultSession {
         let bin_id = recycle_bin_id(db);
         autotype::expand_refs(sequence, |spec| {
             let mut found: Option<String> = None;
-            walk_ref_match(db.root(), bin_id, spec, &mut found);
+            walk_ref_match(db.root(), bin_id, spec, &mut found, true);
             found
         })
         .map_err(|e| e.to_string())
@@ -402,7 +402,7 @@ impl VaultSession {
         }
         let bin_id = recycle_bin_id(db);
         let mut best: Option<(i32, String)> = None;
-        walk_match(db.root(), bin_id, &lower, &mut best);
+        walk_match(db.root(), bin_id, &lower, &mut best, true);
         best.map(|(_, uuid)| uuid)
             .ok_or_else(|| "没有找到匹配的条目".to_owned())
     }
@@ -420,7 +420,7 @@ impl VaultSession {
         }
         let bin_id = recycle_bin_id(db);
         let mut scored: Vec<(i32, String)> = Vec::new();
-        walk_match_candidates(db.root(), bin_id, &lower, &mut scored);
+        walk_match_candidates(db.root(), bin_id, &lower, &mut scored, true);
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
 
         let mut candidates = Vec::new();

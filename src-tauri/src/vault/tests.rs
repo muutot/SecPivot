@@ -6567,8 +6567,9 @@ fn autotype_match_skips_groups_with_searching_disabled() {
         "disabled group must not match"
     );
 
-    // The flag is per-group: a descendant group with searching enabled still
-    // matches on its own entries.
+    // The flag is inherited (KeePass semantics: an absent flag means "take
+    // the parent's"): a descendant under a disabled group stays excluded even
+    // when its own flag is unset/enabled.
     let state = session
         .add_group(&GroupInput {
             parent_uuid: Some(group_a.clone()),
@@ -6585,7 +6586,7 @@ fn autotype_match_skips_groups_with_searching_disabled() {
         .children[0]
         .uuid
         .clone();
-    let state = session
+    let _state = session
         .add_entry(&EntryInput {
             group_uuid: group_a1.clone(),
             title: "Child secret".into(),
@@ -6602,20 +6603,10 @@ fn autotype_match_skips_groups_with_searching_disabled() {
             attachments: vec![],
         })
         .unwrap();
-    let child_uuid = state
-        .root
-        .children
-        .iter()
-        .find(|g| g.uuid == group_a)
-        .unwrap()
-        .children[0]
-        .entries[0]
-        .uuid
-        .clone();
-    assert_eq!(
-        session.autotype_match("Child secret window").unwrap(),
-        child_uuid,
-        "descendant with searching enabled still matches"
+    let err = session.autotype_match("Child secret window").unwrap_err();
+    assert!(
+        err.contains("没有找到匹配"),
+        "descendant must inherit the disabled ancestor flag"
     );
     let snapshot = session.snapshot().unwrap();
     let group = snapshot
@@ -6630,6 +6621,17 @@ fn autotype_match_skips_groups_with_searching_disabled() {
     );
     let a1 = group.children[0].clone();
     assert!(a1.enable_searching);
+
+    // Re-enabling the ancestor restores the whole subtree's matchability.
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db
+            .group_mut(super::helpers::parse_group_id(&group_a).unwrap())
+            .expect("group must exist");
+        group.enable_searching = Some(true);
+    }
+    let matched = session.autotype_match("Child secret window").unwrap();
+    assert!(!matched.is_empty(), "re-enabled ancestor re-includes subtree");
 }
 
 #[test]

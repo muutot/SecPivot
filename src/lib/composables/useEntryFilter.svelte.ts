@@ -47,13 +47,30 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     const advancedQuery = options.advancedQuery();
     const searching = Boolean(query || advancedQuery);
     const subtree = options.selectedSubtree();
+    // KeePass: an absent/unset EnableSearching means "inherit from the
+    // parent", so a group only contributes entries to search results when
+    // every ancestor (and itself) is searchable.
+    let effectiveSearchable: Map<string, boolean> | null = null;
+    if (searching) {
+      const byUuid = new Map(subtree.map((g) => [g.uuid, g]));
+      const resolved = new Map<string, boolean>();
+      const resolve = (group: VaultGroup): boolean => {
+        const cached = resolved.get(group.uuid);
+        if (cached !== undefined) return cached;
+        let value = group.enableSearching;
+        if (value) {
+          const parent = group.parentUuid ? byUuid.get(group.parentUuid) : undefined;
+          if (parent) value = resolve(parent);
+        }
+        resolved.set(group.uuid, value);
+        return value;
+      };
+      for (const group of subtree) resolve(group);
+      effectiveSearchable = resolved;
+    }
     const result: { entry: VaultEntry }[] = [];
     for (const group of subtree) {
-      // KeePass: groups with "EnableSearching" off contribute no entries to
-      // search results (per-group; descendants each carry their own flag).
-      // They remain visible when browsing the group directly; only exclude
-      // them when a search (free-text or advanced) is active.
-      if (!group.enableSearching && searching) continue;
+      if (effectiveSearchable?.get(group.uuid) === false) continue;
       for (const entry of group.entries) {
         if (query && !searchTextFor(entry).includes(query)) continue;
         if (advancedQuery && !matchesAdvancedSearch(entry, advancedQuery)) continue;

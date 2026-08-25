@@ -319,18 +319,20 @@ pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String>
 
 /// Depth-first scan of `group`'s subtree for a `{REF:...}` match. First
 /// matching entry wins (KeePass semantics); the recycle bin is skipped.
+/// `inherited_searchable` carries the parent chain's `EnableSearching`
+/// resolution: KeePass treats an absent flag as *inherited*, so a group only
+/// contributes entries when every ancestor (and itself) is searchable.
 pub(crate) fn walk_ref_match(
     group: GroupRef<'_>,
     bin_id: Option<GroupId>,
     spec: autotype::RefSpec<'_>,
     out: &mut Option<String>,
+    inherited_searchable: bool,
 ) {
     if bin_id == Some(group.id()) {
         return;
     }
-    // KeePass: groups with searching disabled contribute no entries to
-    // searches; descendants each carry their own flag, so keep walking.
-    let searchable = group.enable_searching != Some(false);
+    let searchable = inherited_searchable && group.enable_searching != Some(false);
     let needle = spec.text.to_lowercase();
     for entry in group.entries() {
         if !searchable {
@@ -402,24 +404,24 @@ pub(crate) fn walk_ref_match(
         }
     }
     for child in group.groups() {
-        walk_ref_match(child, bin_id, spec, out);
+        walk_ref_match(child, bin_id, spec, out, searchable);
     }
 }
 
 /// Depth-first scan of `group`'s subtree for an auto-type match; the recycle
-/// bin subtree is skipped entirely.
+/// bin subtree is skipped entirely. `inherited_searchable` carries the parent
+/// chain's `EnableSearching` resolution (KeePass: absent flag = inherited).
 pub(crate) fn walk_match(
     group: GroupRef<'_>,
     bin_id: Option<GroupId>,
     window_title: &str,
     best: &mut Option<(i32, String)>,
+    inherited_searchable: bool,
 ) {
     if bin_id == Some(group.id()) {
         return;
     }
-    // KeePass: groups with searching disabled contribute no entries to
-    // auto-type matching; descendants each carry their own flag.
-    let searchable = group.enable_searching != Some(false);
+    let searchable = inherited_searchable && group.enable_searching != Some(false);
     for entry in group.entries() {
         if !searchable {
             break;
@@ -458,23 +460,25 @@ pub(crate) fn walk_match(
         }
     }
     for child in group.groups() {
-        walk_match(child, bin_id, window_title, best);
+        walk_match(child, bin_id, window_title, best, searchable);
     }
 }
 
 /// Same matching semantics as `walk_match`, but collects every scoring entry
 /// (not just the best) so the global-hotkey handler can offer a picker when
-/// several entries match the focused window.
+/// several entries match the focused window. `inherited_searchable` carries
+/// the parent chain's `EnableSearching` resolution.
 pub(crate) fn walk_match_candidates(
     group: GroupRef<'_>,
     bin_id: Option<GroupId>,
     window_title: &str,
     out: &mut Vec<(i32, String)>,
+    inherited_searchable: bool,
 ) {
     if bin_id == Some(group.id()) {
         return;
     }
-    let searchable = group.enable_searching != Some(false);
+    let searchable = inherited_searchable && group.enable_searching != Some(false);
     for entry in group.entries() {
         if !searchable {
             break;
@@ -511,7 +515,7 @@ pub(crate) fn walk_match_candidates(
         }
     }
     for child in group.groups() {
-        walk_match_candidates(child, bin_id, window_title, out);
+        walk_match_candidates(child, bin_id, window_title, out, searchable);
     }
 }
 
