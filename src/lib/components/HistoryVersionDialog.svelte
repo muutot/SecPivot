@@ -717,7 +717,7 @@
   }
 
   .read-text.mono {
-    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-family: var(--font-mono);
     letter-spacing: 0.02em;
   }
 

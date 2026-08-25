@@ -1599,7 +1599,7 @@
   .kv-rule-value {
     flex: 1;
     height: 30px;
-    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-family: var(--font-mono);
   }
 
   .kv-tag {
@@ -1611,7 +1611,7 @@
     color: var(--text-muted);
     background: var(--input-bg);
     font-size: var(--font-size-secondary, 11px);
-    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-family: var(--font-mono);
     cursor: pointer;
   }
 
