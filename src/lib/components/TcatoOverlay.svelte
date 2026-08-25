@@ -82,7 +82,7 @@
     height: 100vh;
     padding: 12px;
     box-sizing: border-box;
-    background: var(--bg);
+    background: var(--bg-app);
     color: var(--text-primary);
     font-size: 12px;
     user-select: none;

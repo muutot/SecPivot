@@ -45,7 +45,11 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter") void save();
+    // Enter-to-save applies only to the name input (bound above); the
+    // description textarea must keep Enter for newlines.
+    if (event.key !== "Enter") return;
+    const target = event.target as HTMLElement | null;
+    if (target?.id === "db-name") void save();
   }
 </script>
 
@@ -63,13 +67,23 @@
   {#snippet children()}
     <div class="field-row">
       <label for="db-name">库名称</label>
-      <input id="db-name" bind:value={dbName} placeholder="留空则清除" maxlength="128" />
+      <input
+        id="db-name"
+        class="text-input"
+        bind:value={dbName}
+        placeholder="留空则清除"
+        maxlength="128"
+        onkeydown={(e) => {
+          if (e.key === "Enter") void save();
+        }}
+      />
     </div>
 
     <div class="field-row">
       <label for="db-description">描述</label>
       <textarea
         id="db-description"
+        class="text-input textarea"
         bind:value={dbDescription}
         placeholder="留空则清除"
         rows="4"
@@ -100,26 +114,18 @@
 
   .field-row input,
   .field-row textarea {
-    width: 100%;
     box-sizing: border-box;
-    padding: 6px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-primary);
-    background: var(--bg-input, var(--bg-secondary));
-    font-size: var(--font-size-primary, 13px);
     resize: vertical;
   }
 
   .field-row input:focus,
   .field-row textarea:focus {
     outline: none;
-    border-color: var(--selection-color);
   }
 
   .error-msg {
     margin: 0 0 10px;
-    color: var(--warning-color, var(--danger-color, #e5484d));
+    color: var(--danger-color);
     font-size: var(--font-size-secondary, 11px);
   }
 </style>
