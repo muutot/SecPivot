@@ -368,15 +368,22 @@ async function browserLoad(): Promise<VaultState | null> {
   return null;
 }
 
-/** Strip secrets (passwords, TOTP seeds) from a structural clone so the
- * browser-demo persistence never writes them to localStorage. On reload the
- * entries keep their metadata but passwords/tokens are gone. */
+/** Strip secrets (passwords, TOTP seeds, protected custom-field values) from
+ * a structural clone so the browser-demo persistence never writes them to
+ * localStorage. On reload the entries keep their metadata but secrets are
+ * gone. */
 function withoutSecrets(value: VaultState): VaultState {
   const clone = deepClone(value);
   const strip = (group: VaultGroup): void => {
     for (const entry of group.entries) {
       delete entry.password;
       delete entry.totp;
+      // The demo keeps custom fields inline; protected values must not.
+      if (entry.customFields) {
+        for (const field of entry.customFields) {
+          if (field.protected) field.value = "";
+        }
+      }
     }
     for (const child of group.children) strip(child);
   };
