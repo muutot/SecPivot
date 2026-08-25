@@ -796,6 +796,11 @@ fn normalization_clamps_and_fixes_enums() {
     assert_eq!(normalized.database.generator.length, 20);
     assert_eq!(normalized.general.font_sizes.base, 14);
     assert_eq!(normalized.general.theme_colors.accent, "#8bc34a");
+    // Empty strings pass through untouched so cleared custom-color inputs
+    // survive the persist round-trip (mirrors `validHex` on the frontend).
+    let mut cleared = AppConfig::default();
+    cleared.general.theme_colors.accent = String::new();
+    assert_eq!(normalize_config(cleared).general.theme_colors.accent, "");
     assert_eq!(normalized.general.density.group_gap, 2);
     assert_eq!(normalized.general.density.group_indent, 12);
 }

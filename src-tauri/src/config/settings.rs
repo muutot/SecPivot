@@ -663,6 +663,12 @@ fn normalize_entry_columns(columns: Vec<EntryColumnState>) -> Vec<EntryColumnSta
 }
 
 fn valid_hex(value: &str, fallback: &str) -> String {
+    // An empty string is kept as-is so cleared custom-color inputs stay clear
+    // while the user types a replacement (mirrors `validHex` in settings.ts);
+    // only non-empty invalid values fall back.
+    if value.is_empty() {
+        return value.to_owned();
+    }
     let bytes = value.as_bytes();
     let valid_len = bytes.len() == 7 || bytes.len() == 9;
     if valid_len && bytes[0] == b'#' && bytes[1..].iter().all(|b| b.is_ascii_hexdigit()) {
