@@ -12,6 +12,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     entry: VaultEntry;
     version: HistoryVersion;
@@ -569,7 +570,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button primary" onclick={onclose}>关闭</button>
+    <Button variant="primary" onclick={onclose}>关闭</Button>
   {/snippet}
 </ModalShell>
 

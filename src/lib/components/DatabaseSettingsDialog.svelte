@@ -9,6 +9,8 @@
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     onclose: () => void;
@@ -188,32 +190,15 @@
       </div>
       <div class="setting-block">
         <span class="setting-label">历史版本上限（留空为默认）</span>
-        <input
-          class="text-input"
-          type="number"
-          min="0"
-          bind:value={historyInput}
-          placeholder="默认"
-        />
+        <TextField numeric type="number" bind:value={historyInput} placeholder="默认" />
       </div>
       <div class="setting-block">
         <span class="setting-label">历史总大小上限（字节，留空为默认）</span>
-        <input
-          class="text-input"
-          type="number"
-          min="0"
-          bind:value={historySizeInput}
-          placeholder="默认"
-        />
+        <TextField numeric type="number" bind:value={historySizeInput} placeholder="默认" />
       </div>
       <div class="setting-block">
         <span class="setting-label">模板分组 UUID（留空清除）</span>
-        <input
-          class="text-input mono"
-          type="text"
-          bind:value={templateGroupInput}
-          placeholder="分组 UUID"
-        />
+        <TextField mono bind:value={templateGroupInput} placeholder="分组 UUID" />
       </div>
       <div class="setting-block setting-row">
         <span class="setting-label">启用回收站</span>
@@ -225,14 +210,10 @@
     {#if error && settings}<p class="dialog-error">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
-    <button
-      class="modal-button primary"
-      onclick={() => void save()}
-      disabled={saving || !settings || !dirty}
-    >
+    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button variant="primary" onclick={() => void save()} disabled={saving || !settings || !dirty}>
       {saving ? "保存中…" : "保存"}
-    </button>
+    </Button>
   {/snippet}
 </ModalShell>
 

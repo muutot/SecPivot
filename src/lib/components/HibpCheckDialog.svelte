@@ -3,6 +3,7 @@
   import { vault } from "$lib/services/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     uuids?: string[];
     onclose: () => void;
@@ -86,10 +87,10 @@
   {/snippet}
   {#snippet actions()}
     {#if !started}
-      <button class="modal-button" onclick={onclose}>取消</button>
-      <button class="modal-button primary" onclick={() => void start()}>开始检查</button>
+      <Button onclick={onclose}>取消</Button>
+      <Button variant="primary" onclick={() => void start()}>开始检查</Button>
     {:else}
-      <button class="modal-button primary" onclick={onclose}>关闭</button>
+      <Button variant="primary" onclick={onclose}>关闭</Button>
     {/if}
   {/snippet}
 </ModalShell>

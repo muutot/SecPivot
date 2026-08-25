@@ -22,8 +22,12 @@
     numeric?: boolean;
     /** Red invalid ring (inline validation). */
     invalid?: boolean;
+    /** Focus the field once on mount. */
+    autofocus?: boolean;
+    /** Extra right padding (px) to reserve space for an embedded action. */
+    paddingRightPx?: number;
     onkeydown?: (event: KeyboardEvent) => void;
-    oninput?: (event: Event) => void;
+    oninput?: (event: Event & { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => void;
   }
 
   let {
@@ -41,15 +45,25 @@
     autocomplete = undefined,
     numeric = false,
     invalid = false,
+    autofocus = false,
+    paddingRightPx = undefined,
     onkeydown,
     oninput,
   }: Props = $props();
+
+  let el = $state<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+  $effect(() => {
+    if (autofocus) el?.focus();
+  });
 </script>
 
 {#if multiline}
   <textarea
+    bind:this={el}
     {id}
     class="field mono"
+    style:padding-right={paddingRightPx ? `${paddingRightPx}px` : undefined}
     bind:value
     {placeholder}
     {rows}
@@ -58,16 +72,17 @@
     {readonly}
     {spellcheck}
     {onkeydown}
-    {oninput}
-  ></textarea>
+    {oninput}></textarea>
 {:else}
   <input
+    bind:this={el}
     {id}
     class="field"
     class:mono
     class:numeric
     class:invalid
     {type}
+    style:padding-right={paddingRightPx ? `${paddingRightPx}px` : undefined}
     bind:value
     {placeholder}
     {maxlength}

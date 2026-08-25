@@ -4,6 +4,8 @@
   import { vault } from "$lib/services/vault";
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     group: VaultGroup;
@@ -97,20 +99,15 @@
     </div>
     <label class="field">
       <span>默认序列</span>
-      <input
-        class="text-input mono"
-        type="text"
-        bind:value={defaultSeq}
-        placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"}
-      />
+      <TextField mono bind:value={defaultSeq} placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"} />
     </label>
     {#if error}<p class="dialog-error">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
-    <button class="modal-button primary" onclick={() => void save()} disabled={saving}>
+    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button variant="primary" onclick={() => void save()} disabled={saving}>
       {saving ? "保存中…" : "保存"}
-    </button>
+    </Button>
   {/snippet}
 </ModalShell>
 

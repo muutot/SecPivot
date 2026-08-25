@@ -4,6 +4,8 @@
   import type { SavedSearch } from "$lib/types/settings";
   import { appSettings } from "$lib/services/settings";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     initialQuery?: AdvancedSearchQuery | null;
@@ -122,12 +124,7 @@
     </div>
     <div class="block">
       <span class="label">关键词</span>
-      <input
-        class="text-input mono"
-        type="text"
-        bind:value={text}
-        placeholder="留空则只用下方条件"
-      />
+      <TextField mono bind:value={text} placeholder="留空则只用下方条件" />
       <div class="toggles">
         <button type="button" class="toggle" class:active={regex} onclick={() => (regex = !regex)}>
           正则
@@ -144,7 +141,7 @@
     </div>
     <div class="block">
       <span class="label">标签（空格或逗号分隔，需全部命中）</span>
-      <input class="text-input" type="text" bind:value={tags} placeholder="work dev" />
+      <TextField bind:value={tags} placeholder="work dev" />
     </div>
     <div class="toggles">
       <button
@@ -193,9 +190,7 @@
         <p class="saved-empty">尚无已保存的搜索</p>
       {/if}
       <div class="save-row">
-        <input
-          class="text-input"
-          type="text"
+        <TextField
           bind:value={saveName}
           placeholder="搜索名称"
           onkeydown={(event) => {
@@ -209,17 +204,16 @@
     </div>
   {/snippet}
   {#snippet actions()}
-    <button
-      class="modal-button"
+    <Button
       onclick={() => {
         onclear();
         onclose();
       }}
     >
       清除筛选
-    </button>
-    <button class="modal-button" onclick={onclose}>取消</button>
-    <button class="modal-button primary" onclick={apply}>应用</button>
+    </Button>
+    <Button onclick={onclose}>取消</Button>
+    <Button variant="primary" onclick={apply}>应用</Button>
   {/snippet}
 </ModalShell>
 

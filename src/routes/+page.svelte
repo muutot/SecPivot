@@ -106,6 +106,7 @@
     type SessionViewToken,
   } from "$lib/utils/session-state";
   import { matchesAdvancedSearch, type AdvancedSearchQuery } from "$lib/utils/entry-search";
+  import Button from "$lib/components/templates/action/Button.svelte";
   import {
     buildBlankMenuItems,
     buildEntryMenuItems,
@@ -1855,14 +1856,14 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (groupModalOpen = false)}>取消</button>
-      <button
-        class="modal-button primary"
+      <Button onclick={() => (groupModalOpen = false)}>取消</Button>
+      <Button
+        variant="primary"
         onclick={() => void confirmCreateGroup()}
         disabled={!newGroupName.trim() || groupCreating}
       >
-        创建
-      </button>
+        创建</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}
@@ -1894,14 +1895,14 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (groupIconDialogUuid = null)}>取消</button>
-      <button
-        class="modal-button primary"
+      <Button onclick={() => (groupIconDialogUuid = null)}>取消</Button>
+      <Button
+        variant="primary"
         onclick={() => void confirmChangeGroupIcon()}
         disabled={groupIconSaving}
       >
-        保存
-      </button>
+        保存</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}
@@ -1941,10 +1942,8 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (emergencyExportOpen = false)}>取消</button>
-      <button class="modal-button primary" onclick={() => void confirmExportEmergency()}
-        >导出</button
-      >
+      <Button onclick={() => (emergencyExportOpen = false)}>取消</Button>
+      <Button variant="primary" onclick={() => void confirmExportEmergency()}>导出</Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -1961,16 +1960,12 @@
       <p class="conflict-note">{remoteConflict}</p>
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (remoteConflict = null)}>取消（保留本地）</button>
-      <button class="modal-button" onclick={() => void resolveRemoteConflict("merge")}>
-        合并本地与远程
-      </button>
-      <button class="modal-button" onclick={() => void resolveRemoteConflict("download")}>
-        下载远程
-      </button>
-      <button class="modal-button danger" onclick={() => void resolveRemoteConflict("overwrite")}>
-        覆盖远程
-      </button>
+      <Button onclick={() => (remoteConflict = null)}>取消（保留本地）</Button>
+      <Button onclick={() => void resolveRemoteConflict("merge")}>合并本地与远程</Button>
+      <Button onclick={() => void resolveRemoteConflict("download")}>下载远程</Button>
+      <Button variant="danger" onclick={() => void resolveRemoteConflict("overwrite")}>
+        覆盖远程</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}
@@ -1987,9 +1982,9 @@
   >
     {#snippet icon()}<AppIcon name="trash" size={18} />{/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (confirmState = null)}>取消</button>
-      <button
-        class="modal-button danger"
+      <Button onclick={() => (confirmState = null)}>取消</Button>
+      <Button
+        variant="danger"
         onclick={() => {
           const state = confirmState;
           if (!state) return;
@@ -1998,8 +1993,8 @@
           action();
         }}
       >
-        删除
-      </button>
+        删除</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}

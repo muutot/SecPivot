@@ -16,6 +16,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
   import { formatBytes } from "$lib/utils/format";
 
   interface Props {
@@ -447,9 +449,7 @@
         <label class="field">
           <span>保存路径</span>
           <div class="path-row">
-            <input
-              class="text-input"
-              type="text"
+            <TextField
               bind:value={path}
               placeholder={isTauriRuntime() ? "点击右侧选择文件" : "默认保存到浏览器演示存储"}
               disabled={!isTauriRuntime()}
@@ -521,13 +521,11 @@
           </div>
           <div class="field">
             <span>配置名称</span>
-            <input
-              class="text-input"
-              class:input-invalid={remoteNameConflict}
-              type="text"
+            <TextField
+              invalid={remoteNameConflict}
               value={activeRemoteName}
               placeholder="config_1"
-              spellcheck="false"
+              spellcheck={false}
               oninput={(e) =>
                 appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
             />
@@ -541,14 +539,12 @@
           </div>
           <div class="field">
             <span>服务地址</span>
-            <input
-              class="text-input"
-              type="text"
+            <TextField
               value={remote.endpoint}
               placeholder={remote.kind === "webdav"
                 ? "https://dav.example.com/dav"
                 : "https://s3.amazonaws.com"}
-              spellcheck="false"
+              spellcheck={false}
               oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
             />
           </div>
@@ -556,23 +552,19 @@
             <div class="remote-config-grid">
               <div class="field">
                 <span>区域</span>
-                <input
-                  class="text-input"
-                  type="text"
+                <TextField
                   value={remote.region}
                   placeholder="us-east-1"
-                  spellcheck="false"
+                  spellcheck={false}
                   oninput={(e) => changeRemote("region", e.currentTarget.value)}
                 />
               </div>
               <div class="field">
                 <span>存储桶</span>
-                <input
-                  class="text-input"
-                  type="text"
+                <TextField
                   value={remote.bucket}
                   placeholder="my-bucket"
-                  spellcheck="false"
+                  spellcheck={false}
                   oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
                 />
               </div>
@@ -580,25 +572,22 @@
           {/if}
           <div class="field">
             <span>{remote.kind === "webdav" ? "用户名" : "Access Key"}</span>
-            <input
-              class="text-input"
-              type="text"
+            <TextField
               value={remote.accessKey}
               placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
               autocomplete="off"
-              spellcheck="false"
+              spellcheck={false}
               oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
             />
           </div>
           <div class="field">
             <span>{remote.kind === "webdav" ? "密码" : "Secret Key"}</span>
-            <input
-              class="text-input"
+            <TextField
               type="password"
               value={remote.secretKey}
               placeholder="••••••••"
               autocomplete="off"
-              spellcheck="false"
+              spellcheck={false}
               oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
             />
           </div>
@@ -639,13 +628,7 @@
         {:else}
           <label class="field">
             <span>远程对象键</span>
-            <input
-              class="text-input"
-              type="text"
-              bind:value={remoteKey}
-              placeholder="vaults/new.kdbx"
-              spellcheck="false"
-            />
+            <TextField bind:value={remoteKey} placeholder="vaults/new.kdbx" spellcheck={false} />
           </label>
         {/if}
 
@@ -678,8 +661,7 @@
         <label class="field">
           <span>主密码</span>
           <div class="path-row">
-            <input
-              class="text-input"
+            <TextField
               type={showPassword ? "text" : "password"}
               bind:value={password}
               placeholder={isDemo ? "演示模式可留空" : "必填"}
@@ -699,7 +681,7 @@
         <label class="field">
           <span>确认主密码</span>
           <div class="path-row">
-            <input class="text-input" type="password" bind:value={confirm} />
+            <TextField type="password" bind:value={confirm} />
           </div>
         </label>
       {/if}
@@ -708,13 +690,7 @@
         <label class="field">
           <span>密钥文件(可选)</span>
           <div class="path-row">
-            <input
-              class="text-input"
-              type="text"
-              bind:value={keyfilePath}
-              placeholder="点击右侧选择密钥文件"
-              readonly
-            />
+            <TextField bind:value={keyfilePath} placeholder="点击右侧选择密钥文件" readonly />
             <button class="browse-button" onclick={pickKeyfile} title="选择密钥文件">
               <AppIcon name="folder" size={15} />
             </button>
@@ -727,10 +703,10 @@
       {/if}
 
       <div class="modal-actions">
-        <button class="modal-button" onclick={() => (modal = "none")} disabled={busy}>取消</button>
+        <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
         {#if !(modal === "remote" && remoteTab === "config")}
-          <button
-            class="modal-button primary"
+          <Button
+            variant="primary"
             onclick={modal === "open"
               ? confirmOpen
               : modal === "create"
@@ -749,7 +725,7 @@
                   : remoteTab === "open"
                     ? "解锁"
                     : "创建"}
-          </button>
+          </Button>
         {/if}
       </div>
     </div>

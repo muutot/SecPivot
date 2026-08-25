@@ -3,6 +3,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import type { FaviconProgress } from "$lib/types/vault";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     dialog: {
       phase: "working" | "done";
@@ -46,7 +47,7 @@
   {/snippet}
   {#snippet actions()}
     {#if dialog.phase !== "working"}
-      <button class="modal-button primary" onclick={onclose}>关闭</button>
+      <Button variant="primary" onclick={onclose}>关闭</Button>
     {/if}
   {/snippet}
 </ModalShell>

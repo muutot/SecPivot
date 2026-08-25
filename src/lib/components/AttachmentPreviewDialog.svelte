@@ -9,6 +9,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatBytes } from "$lib/utils/format";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     entryUuid: string;
     attachment: AttachmentInfo;
@@ -207,28 +208,27 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={close} disabled={importing}>关闭</button>
+    <Button onclick={close} disabled={importing}>关闭</Button>
     {#if tempRef}
-      <button class="modal-button" onclick={() => void importChanges()} disabled={importing}>
-        {importing ? "正在导入…" : "导入修改"}
-      </button>
-      <button class="modal-button" onclick={discardTemp} disabled={importing}>丢弃修改</button>
+      <Button onclick={() => void importChanges()} disabled={importing}>
+        {importing ? "正在导入…" : "导入修改"}</Button
+      >
+      <Button onclick={discardTemp} disabled={importing}>丢弃修改</Button>
     {/if}
-    <button
-      class="modal-button"
-      class:primary={!tempRef}
+    <Button
+      variant={!tempRef ? "primary" : "plain"}
       onclick={() => void openExternal()}
       disabled={opening || importing}
     >
-      {confirmExternal ? "再次点击确认在外部打开" : tempRef ? "重新打开" : "外部打开…"}
-    </button>
-    <button
-      class="modal-button primary"
+      {confirmExternal ? "再次点击确认在外部打开" : tempRef ? "重新打开" : "外部打开…"}</Button
+    >
+    <Button
+      variant="primary"
       onclick={() => void saveToDisk()}
       disabled={opening || importing || savingToDisk}
     >
-      {savingToDisk ? "保存中…" : "保存到…"}
-    </button>
+      {savingToDisk ? "保存中…" : "保存到…"}</Button
+    >
   {/snippet}
 </ModalShell>
 

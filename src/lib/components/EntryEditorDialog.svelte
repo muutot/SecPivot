@@ -19,11 +19,13 @@
   import { shortestMatchable } from "$lib/utils/match-url";
   import { runExclusiveTask } from "$lib/utils/session-state";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
-   import GroupPicker from "$lib/components/GroupPicker.svelte";
+  import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TotpQrButtons from "$lib/components/TotpQrButtons.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     mode: "create" | "edit" | "edit-multi";
     groups: VaultGroup[];
@@ -733,9 +735,7 @@
       <div class="form-grid" role="tabpanel">
         <label class="field">
           <span>标题</span>
-          <input
-            class="text-input"
-            type="text"
+          <TextField
             bind:value={title}
             placeholder={titleMulti ? "多个值" : "例如：GitHub"}
             oninput={() => markTouched("title")}
@@ -755,9 +755,7 @@
 
         <label class="field">
           <span>用户名</span>
-          <input
-            class="text-input"
-            type="text"
+          <TextField
             bind:value={username}
             autocomplete="off"
             placeholder={usernameMulti ? "多个值" : undefined}
@@ -783,8 +781,8 @@
             >
           </span>
           <div class="input-row">
-            <input
-              class="text-input mono"
+            <TextField
+              mono
               type={showPassword ? "text" : "password"}
               bind:value={password}
               autocomplete="new-password"
@@ -813,8 +811,7 @@
 
         <label class="field full">
           <span>网址</span>
-          <input
-            class="text-input"
+          <TextField
             type="url"
             bind:value={url}
             placeholder={urlMulti ? "多个值" : "https://"}
@@ -824,19 +821,18 @@
 
         <label class="field full">
           <span>备注</span>
-          <textarea
-            class="text-input textarea"
-            bind:value={notes}
+          <TextField
+            multiline
             rows={4}
+            bind:value={notes}
             placeholder={notesMulti ? "多个值" : undefined}
-            oninput={() => markTouched("notes")}></textarea>
+            oninput={() => markTouched("notes")}
+          />
         </label>
 
         <label class="field full">
           <span>标签</span>
-          <input
-            class="text-input"
-            type="text"
+          <TextField
             bind:value={tags}
             placeholder={tagsMulti ? "多个值" : "逗号分隔，例如：工作, 邮箱"}
             oninput={() => markTouched("tags")}
@@ -850,9 +846,9 @@
         <label class="field">
           <span>TOTP 种子</span>
           <div class="totp-input-wrap">
-            <input
-              class="text-input mono"
-              type="text"
+            <TextField
+              paddingRightPx={60}
+              mono
               bind:value={totp}
               placeholder={multi
                 ? "多个值"
@@ -878,8 +874,7 @@
 
         <label class="field">
           <span>过期时间</span>
-          <input
-            class="text-input"
+          <TextField
             type="datetime-local"
             bind:value={expiresLocal}
             placeholder={expiresMulti ? "多个值" : undefined}
@@ -969,9 +964,8 @@
                 <AppIcon name="info" size={12} />
               </span>
             </span>
-            <input
-              class="text-input mono"
-              type="text"
+            <TextField
+              mono
               bind:value={overrideUrl}
               placeholder="https://real.example"
               oninput={() => markTouched("overrideUrl")}
@@ -1044,9 +1038,8 @@
         </div>
         <label class="field">
           <span>默认序列</span>
-          <input
-            class="text-input mono"
-            type="text"
+          <TextField
+            mono
             bind:value={autoTypeDefaultSeq}
             placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"}
           />
@@ -1054,18 +1047,12 @@
         <span class="autotype-label">窗口关联</span>
         {#each autoTypeAssociations as association, index (index)}
           <div class="association-row">
-            <input
-              class="text-input association-window"
-              type="text"
-              bind:value={association.window}
-              placeholder="窗口标题（* 通配）"
-            />
-            <input
-              class="text-input mono association-sequence"
-              type="text"
-              bind:value={association.sequence}
-              placeholder="序列，留空用默认"
-            />
+            <div class="association-window">
+              <TextField bind:value={association.window} placeholder="窗口标题（* 通配）" />
+            </div>
+            <div class="association-sequence">
+              <TextField mono bind:value={association.sequence} placeholder="序列，留空用默认" />
+            </div>
             <button
               class="association-remove"
               type="button"
@@ -1137,13 +1124,14 @@
             {/if}
             {#each kvRules as rule, i (i)}
               <div class="kv-rule-row">
-                <input
-                  class="text-input kv-rule-value"
-                  type="text"
-                  placeholder="https:// 或正则表达式"
-                  value={rule.value}
-                  oninput={(e) => updateKeyVaultRule(i, { value: e.currentTarget.value })}
-                />
+                <div class="kv-rule-value">
+                  <TextField
+                    mono
+                    placeholder="https:// 或正则表达式"
+                    value={rule.value}
+                    oninput={(e) => updateKeyVaultRule(i, { value: e.currentTarget.value })}
+                  />
+                </div>
                 <button
                   type="button"
                   class="kv-tag"
@@ -1183,13 +1171,13 @@
           <section class="field full">
             <span class="section-title">识别最短匹配地址</span>
             <div class="kv-identify-row">
-              <input
-                class="text-input kv-identify-input"
-                type="text"
-                placeholder="粘贴浏览器里真实网址(如 Kee 日志 FindLogins urls)"
-                value={kvIdentifyInput}
-                oninput={(e) => (kvIdentifyInput = e.currentTarget.value)}
-              />
+              <div class="kv-identify-input">
+                <TextField
+                  placeholder="粘贴浏览器里真实网址(如 Kee 日志 FindLogins urls)"
+                  value={kvIdentifyInput}
+                  oninput={(e) => (kvIdentifyInput = e.currentTarget.value)}
+                />
+              </div>
               <button
                 type="button"
                 class="kv-identify-btn"
@@ -1233,21 +1221,23 @@
           {#each customFields as field, i (i)}
             {#if field.name !== KPRPC_FIELD}
               <div class="custom-field-row">
-                <input
-                  class="text-input"
-                  type="text"
-                  placeholder="字段名"
-                  value={field.name}
-                  oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
-                />
-                <input
-                  class="text-input mono"
-                  type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
-                  placeholder="值"
-                  value={field.value}
-                  disabled={field.protected && protectedFieldsLoading}
-                  oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
-                />
+                <div class="cf-name">
+                  <TextField
+                    placeholder="字段名"
+                    value={field.name}
+                    oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
+                  />
+                </div>
+                <div class="cf-value">
+                  <TextField
+                    mono
+                    type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
+                    placeholder="值"
+                    value={field.value}
+                    disabled={field.protected && protectedFieldsLoading}
+                    oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
+                  />
+                </div>
                 {#if field.protected}
                   <button
                     class="icon-btn"
@@ -1323,7 +1313,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
+    <Button onclick={onclose} disabled={saving}>取消</Button>
     <button
       class="modal-button primary"
       onclick={submit}
@@ -1400,10 +1390,6 @@
     position: relative;
   }
 
-  .totp-input-wrap .text-input {
-    padding-right: 60px;
-  }
-
   .totp-input-actions {
     position: absolute;
     top: 50%;
@@ -1426,10 +1412,6 @@
     margin-bottom: 5px;
     color: var(--text-muted);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .text-input.select {
-    appearance: none;
   }
 
   .input-row {
@@ -1549,12 +1531,14 @@
     margin-bottom: 6px;
   }
 
-  .custom-field-row .text-input:first-child {
+  .custom-field-row .cf-name {
     flex: 0 0 42%;
+    min-width: 0;
   }
 
-  .custom-field-row .text-input {
+  .custom-field-row .cf-value {
     flex: 1;
+    min-width: 0;
   }
 
   .attachment-row {
@@ -1606,8 +1590,7 @@
 
   .kv-rule-value {
     flex: 1;
-    height: 30px;
-    font-family: var(--font-mono);
+    min-width: 0;
   }
 
   .kv-tag {
@@ -1703,10 +1686,12 @@
 
   .association-window {
     flex: 1;
+    min-width: 0;
   }
 
   .association-sequence {
     flex: 1;
+    min-width: 0;
   }
 
   .association-remove {
@@ -1741,6 +1726,7 @@
 
   .kv-identify-input {
     flex: 1;
+    min-width: 0;
   }
 
   .kv-identify-btn {

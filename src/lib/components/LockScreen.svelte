@@ -5,6 +5,7 @@
   import { rememberCredential } from "$lib/services/security";
   import { isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
 
   interface Props {
     remembered: { path: string; fileName: string } | null;
@@ -20,11 +21,6 @@
   let busy = $state(false);
   let error = $state("");
   let helloAvailable = $state(false);
-  let inputEl = $state<HTMLInputElement | null>(null);
-
-  $effect(() => {
-    inputEl?.focus();
-  });
 
   /** Probe the credential store for the remembered path so the Hello button only shows when usable. */
   $effect(() => {
@@ -99,12 +95,11 @@
     {/if}
 
     <div class="unlock-row">
-      <input
-        class="text-input"
+      <TextField
         type={showPassword ? "text" : "password"}
         bind:value={password}
         placeholder="输入主密码解锁"
-        bind:this={inputEl}
+        autofocus
         disabled={busy}
         onkeydown={(e) => {
           if (e.key === "Enter") void unlock();
@@ -117,14 +112,7 @@
 
     {#if isTauriRuntime()}
       <div class="unlock-row">
-        <input
-          class="text-input"
-          type="text"
-          bind:value={keyfilePath}
-          placeholder="密钥文件(可选)"
-          readonly
-          disabled={busy}
-        />
+        <TextField bind:value={keyfilePath} placeholder="密钥文件(可选)" readonly disabled={busy} />
         <button class="browse-button" onclick={pickKeyfile} title="选择密钥文件">
           <AppIcon name="folder" size={15} />
         </button>

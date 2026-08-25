@@ -32,5 +32,10 @@
       <p>{description}</p>
     </div>
   </div>
-  <Toggle bind:checked {disabled} ariaLabel={ariaLabel ?? label} onchange={(value) => onchange(value)} />
+  <Toggle
+    bind:checked
+    {disabled}
+    ariaLabel={ariaLabel ?? label}
+    onchange={(value) => onchange(value)}
+  />
 </section>

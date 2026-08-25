@@ -4,6 +4,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatLocalDate } from "$lib/utils/date";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     onselect?: (uuid: string) => void;
@@ -120,22 +121,18 @@
   {/snippet}
   {#snippet actions()}
     {#if entries.length > 0}
-      <button
-        class="modal-button"
-        disabled={busyAction}
-        onclick={() => void extend(entries.map((e) => e.uuid))}
+      <Button disabled={busyAction} onclick={() => void extend(entries.map((e) => e.uuid))}>
+        全部延期 30 天</Button
       >
-        全部延期 30 天
-      </button>
-      <button
-        class="modal-button danger"
+      <Button
+        variant="danger"
         disabled={busyAction}
         onclick={() => void remove(entries.map((e) => e.uuid))}
       >
-        全部删除
-      </button>
+        全部删除</Button
+      >
     {/if}
-    <button class="modal-button primary" onclick={onclose}>关闭</button>
+    <Button variant="primary" onclick={onclose}>关闭</Button>
   {/snippet}
 </ModalShell>
 

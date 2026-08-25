@@ -6,6 +6,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface AssociateRequest {
     token: string;
     id: string;
@@ -97,20 +98,14 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <button
-        class="modal-button"
-        onclick={() => void decide(false)}
-        disabled={busy || outcome !== null}
-      >
-        拒绝
-      </button>
-      <button
-        class="modal-button primary"
+      <Button onclick={() => void decide(false)} disabled={busy || outcome !== null}>拒绝</Button>
+      <Button
+        variant="primary"
         onclick={() => void decide(true)}
         disabled={busy || outcome !== null}
       >
-        允许
-      </button>
+        允许</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}

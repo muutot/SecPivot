@@ -3,6 +3,7 @@
   import { vault } from "$lib/services/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     onselect?: (uuid: string) => void;
@@ -72,7 +73,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose}>关闭</button>
+    <Button onclick={onclose}>关闭</Button>
   {/snippet}
 </ModalShell>
 

@@ -6,6 +6,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface SideChannelRequest {
     password: string;
     expiresInSecs: number;
@@ -116,7 +117,7 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={close}>关闭</button>
+      <Button onclick={close}>关闭</Button>
     {/snippet}
   </ModalShell>
 {/if}

@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     /** Called with the decoded payload (otpauth URI or Base32 seed). */
@@ -214,15 +215,15 @@
       <ul class="qr-pick-list">
         {#each results as item, i (i)}
           <li>
-            <button type="button" class="text-input mono qr-pick-item" onclick={() => pick(item)}>
-              {item}
-            </button>
+            <Button onclick={() => pick(item)}>
+              <span class="qr-pick-item mono">{item}</span>
+            </Button>
           </li>
         {/each}
       </ul>
     {/snippet}
     {#snippet actions()}
-      <button class="modal-button" onclick={() => (results = [])}>取消</button>
+      <Button onclick={() => (results = [])}>取消</Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -324,16 +325,10 @@
   }
 
   .qr-pick-item {
+    display: block;
     width: 100%;
-    height: auto;
-    min-height: 30px;
-    padding: 7px 9px;
+    font-family: var(--font-mono);
     text-align: left;
     word-break: break-all;
-    cursor: pointer;
-  }
-
-  .qr-pick-item:hover {
-    background: var(--hover-bg);
   }
 </style>
