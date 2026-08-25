@@ -13,8 +13,8 @@ use super::serialize::{
 };
 use super::*;
 use keepass::db::{
-    AutoType, AutoTypeAssociation, DataTransferObfuscation, Database, EntryId, EntryRef, GroupId,
-    Icon, Meta, Times, Value,
+    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, EntryRef, GroupId, Icon, Meta,
+    Times, Value,
 };
 use std::collections::HashMap;
 
@@ -36,19 +36,17 @@ fn history_limits(meta: &Meta) -> (usize, i64) {
 }
 
 /// Per-snapshot recursive totals in stored order (newest first), used by
-/// `trim_entry_history_by_size`. Must be captured while `db` is immutably
-/// borrowed — before `db.entry_mut` takes it mutably.
-fn snapshot_sizes(db: &Database, id: EntryId) -> Vec<u64> {
-    let Some(entry) = db.entry(id) else {
-        return Vec::new();
-    };
-    let Some(history) = entry.history.as_ref() else {
+/// `trim_entry_history_by_size`. `entry_ref` must view the entry *after* the
+/// tracking scope dropped, so index 0 is the just-appended pre-change
+/// snapshot and every size lines up with the list being trimmed.
+fn snapshot_sizes(entry_ref: &EntryRef<'_>) -> Vec<u64> {
+    let Some(history) = entry_ref.history.as_ref() else {
         return Vec::new();
     };
     let count = history.get_entries().len();
     (0..count)
         .map(|index| {
-            entry
+            entry_ref
                 .historical(index)
                 .map(|snapshot| entry_size(&snapshot).total())
                 .unwrap_or(0)
@@ -330,10 +328,6 @@ impl VaultSession {
             let db = self.require_db()?;
             history_limits(&db.meta)
         };
-        let sizes = {
-            let db = self.require_db()?;
-            snapshot_sizes(db, id)
-        };
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -357,6 +351,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
             trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
@@ -419,12 +414,6 @@ impl VaultSession {
             let db = self.require_db()?;
             history_limits(&db.meta)
         };
-        let sizes_by_id: HashMap<EntryId, Vec<u64>> = {
-            let db = self.require_db()?;
-            ids.iter()
-                .map(|id| (*id, snapshot_sizes(db, *id)))
-                .collect()
-        };
         {
             let db = self.require_db_mut()?;
             for id in &ids {
@@ -441,11 +430,8 @@ impl VaultSession {
                     tracked.times.last_modification = Some(Times::now());
                 }
                 trim_entry_history(&mut entry, cap);
-                trim_entry_history_by_size(
-                    &mut entry,
-                    max_history_size,
-                    sizes_by_id.get(&id).map(|v| v.as_slice()).unwrap_or(&[]),
-                );
+                let sizes = snapshot_sizes(&entry.as_ref());
+                trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
             }
         }
         self.mark_dirty();
@@ -473,10 +459,6 @@ impl VaultSession {
             let db = self.require_db()?;
             history_limits(&db.meta)
         };
-        let sizes = {
-            let db = self.require_db()?;
-            snapshot_sizes(db, id)
-        };
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -496,6 +478,7 @@ impl VaultSession {
             // the pre-change snapshot, so trimming inside the scope would run
             // before the snapshot lands and let history grow to cap + 1.
             trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
             trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
@@ -522,22 +505,32 @@ impl VaultSession {
 
     /// Move several entries into the recycle bin — or permanently delete them
     /// when they are already recycled or the database disabled its recycle
-    /// bin (`Meta.recyclebin_enabled == Some(false)`).
+    /// bin (`Meta.recyclebin_enabled == Some(false)`; no bin group is created
+    /// in that case).
     pub fn delete_entries(&mut self, uuids: &[String]) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
             let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
-            let bin_id = ensure_recycle_bin(db)?;
+            // Only materialize the bin when it is actually needed.
+            let bin_id = if recycle_disabled {
+                None
+            } else {
+                Some(ensure_recycle_bin(db)?)
+            };
             for uuid in uuids {
                 let id = parse_entry_id(uuid)?;
-                let in_bin = {
-                    let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-                    entry.parent().id() == bin_id
+                let in_bin = match bin_id {
+                    Some(bin_id) => {
+                        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+                        entry.parent().id() == bin_id
+                    }
+                    None => false,
                 };
-                if in_bin || recycle_disabled {
+                if recycle_disabled || in_bin {
                     let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                     entry.remove();
                 } else {
+                    let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                     let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                     if entry.get(FIELD_ORIGINAL_GROUP).is_none() {
                         let original = entry.parent_mut().id().uuid().to_string();
@@ -557,21 +550,30 @@ impl VaultSession {
     }
 
     /// Move an entry to the recycle bin — or permanently delete it when it is
-    /// already recycled or the database disabled its recycle bin.
+    /// already recycled or the database disabled its recycle bin (no bin group
+    /// is created in that case).
     pub fn delete_entry(&mut self, uuid: &str) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
-            let bin_id = ensure_recycle_bin(db)?;
-            let in_bin = {
-                let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-                entry.parent().id() == bin_id
+            let bin_id = if recycle_disabled {
+                None
+            } else {
+                Some(ensure_recycle_bin(db)?)
             };
-            if in_bin || recycle_disabled {
+            let in_bin = match bin_id {
+                Some(bin_id) => {
+                    let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+                    entry.parent().id() == bin_id
+                }
+                None => false,
+            };
+            if recycle_disabled || in_bin {
                 let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                 entry.remove();
             } else {
+                let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                 let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                 if entry.get(FIELD_ORIGINAL_GROUP).is_none() {
                     let original = entry.parent_mut().id().uuid().to_string();
@@ -718,10 +720,6 @@ impl VaultSession {
                 let db = self.require_db()?;
                 history_limits(&db.meta)
             };
-            let sizes = {
-                let db = self.require_db()?;
-                snapshot_sizes(db, id)
-            };
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             {
@@ -762,6 +760,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
             trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
@@ -851,7 +850,7 @@ impl VaultSession {
 
     /// Delete a group: move the whole subtree to the recycle bin — or
     /// permanently delete it when it is already recycled or the database
-    /// disabled its recycle bin.
+    /// disabled its recycle bin (no bin group is created in that case).
     pub fn delete_group(&mut self, uuid: &str) -> Result<VaultState, String> {
         if uuid == ROOT_GROUP_UUID {
             return Err("不能删除根分组".to_owned());
@@ -860,15 +859,26 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_group_id(uuid)?;
             let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
-            let bin_id = ensure_recycle_bin(db)?;
-            if id == bin_id {
-                return Err("请先清空或移动回收站内容,再删除回收站".to_owned());
-            }
-            if group_contains(db, bin_id, id) || recycle_disabled {
-                let group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            let bin_id = if recycle_disabled {
+                None
+            } else {
+                let bin_id = ensure_recycle_bin(db)?;
+                if id == bin_id {
+                    return Err("请先清空或移动回收站内容,再删除回收站".to_owned());
+                }
+                Some(bin_id)
+            };
+            // Permanent removal: recycling is disabled, or the group already
+            // sits inside the recycle bin.
+            let permanent = recycle_disabled
+                || bin_id
+                    .map(|bin_id| group_contains(db, bin_id, id))
+                    .unwrap_or(false);
+            let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            if permanent {
                 group.remove();
             } else {
-                let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+                let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                 group
                     .move_to(bin_id)
                     .map_err(|e| format!("移入回收站失败: {e}"))?;
@@ -1069,10 +1079,6 @@ impl VaultSession {
             let db = self.require_db()?;
             history_limits(&db.meta)
         };
-        let sizes = {
-            let db = self.require_db()?;
-            snapshot_sizes(db, id)
-        };
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -1082,6 +1088,7 @@ impl VaultSession {
                 tracked.times.last_modification = Some(Times::now());
             }
             trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
             trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
