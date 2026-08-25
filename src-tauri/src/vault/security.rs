@@ -489,6 +489,7 @@ impl VaultSession {
     /// Analyze all entries server-side; no passwords leave the session.
     pub fn security_report(&self) -> Result<SecurityReport, String> {
         let db = self.require_db()?;
+        let bin_id = recycle_bin_id(db);
         let mut total = 0usize;
         let mut empty: Vec<String> = Vec::new();
         let mut weak: Vec<WeakEntry> = Vec::new();
@@ -496,11 +497,18 @@ impl VaultSession {
 
         fn scan(
             group: &keepass::db::GroupRef<'_>,
+            bin_id: Option<GroupId>,
             total: &mut usize,
             empty: &mut Vec<String>,
             weak: &mut Vec<WeakEntry>,
             by_password: &mut HashMap<String, Vec<String>>,
         ) {
+            // Recycled entries are excluded like every other maintenance
+            // view (expired/similar/timeline): deleted junk must not inflate
+            // the weak-password alarm list.
+            if Some(group.id()) == bin_id {
+                return;
+            }
             for entry in group.entries() {
                 *total += 1;
                 let password = entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned();
@@ -528,11 +536,12 @@ impl VaultSession {
                 }
             }
             for child in group.groups() {
-                scan(&child, total, empty, weak, by_password);
+                scan(&child, bin_id, total, empty, weak, by_password);
             }
         }
         scan(
             &db.root(),
+            bin_id,
             &mut total,
             &mut empty,
             &mut weak,
