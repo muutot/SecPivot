@@ -69,7 +69,10 @@ fn icon_only_buttons_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = store.get().unwrap();
-    assert!(!config.general.icon_only_buttons, "defaults off on every platform");
+    assert!(
+        !config.general.icon_only_buttons,
+        "defaults off on every platform"
+    );
 
     config.general.icon_only_buttons = true;
     let saved = store.set(config).unwrap();
