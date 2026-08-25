@@ -9,7 +9,16 @@ import path from "node:path";
 // never re-declare primitive markup or styles. Retired shared-CSS primitives
 // are listed here once their usages are fully migrated; the list grows as the
 // migration proceeds and each entry forbids reintroduction.
-const RETIRED_CLASSES = ["toggle-switch", "toggle-knob"];
+const RETIRED_CLASSES = [
+  "toggle-switch",
+  "toggle-knob",
+  "text-input",
+  "modal-button",
+  "menu-item",
+  "settings-input",
+  "settings-action-button",
+  "settings-feedback",
+];
 
 const root = new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const templatesRoot = path.join(root, "lib", "components", "templates");
@@ -25,11 +34,14 @@ test("retired primitive classes are not reintroduced outside templates", async (
   );
   assert.ok(files.length > 0, "expected svelte sources");
 
+  const retiredPattern = new RegExp(
+    String.raw`class="[^"]*\b(` + RETIRED_CLASSES.join("|") + String.raw`)\b`,
+  );
   const violations = [];
   for (const file of files) {
     const text = await readFile(file, "utf8");
-    for (const retired of RETIRED_CLASSES) {
-      if (text.includes(retired)) violations.push(`${path.relative(root, file)}: ${retired}`);
+    if (retiredPattern.test(text)) {
+      violations.push(path.relative(root, file));
     }
   }
   assert.deepEqual(violations, [], "retired classes must only exist inside templates/");

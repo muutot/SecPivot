@@ -6,8 +6,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
-import TextField from "$lib/components/templates/form/TextField.svelte";
-import Button from "$lib/components/templates/action/Button.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
@@ -144,7 +144,6 @@ import Button from "$lib/components/templates/action/Button.svelte";
         size="control"
         numeric
         type="number"
-
         value={String(rpc.sessionTimeoutSecs)}
         ariaLabel="会话密钥超时秒数"
         oninput={(e) =>

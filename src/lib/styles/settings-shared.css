@@ -141,50 +141,6 @@ header p {
   flex-shrink: 0;
 }
 
-/* ── toggle switch ── */
-.toggle-switch {
-  width: 40px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--input-bg);
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  transition:
-    border-color 100ms ease,
-    background 100ms ease;
-}
-
-.toggle-switch.active {
-  border-color: var(--selection-color);
-  background: color-mix(in srgb, var(--selection-color) 18%, transparent);
-}
-
-.toggle-switch:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-.toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--text-faint);
-  transition:
-    transform 120ms ease,
-    background 100ms ease;
-}
-
-.toggle-switch.active .toggle-knob {
-  transform: translateX(18px);
-  background: var(--selection-color);
-}
-
 /* ── transparency / range slider ── */
 .transparency-slider {
   width: 100%;
@@ -258,55 +214,7 @@ header p {
   transform: scale(1.15);
 }
 
-/* ── inputs and selects ── */
-.settings-input,
-.settings-select {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--settings-control-radius, 6px);
-  color: var(--text-primary);
-  background: var(--input-bg);
-  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-}
-
-.settings-input {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.settings-input::-webkit-inner-spin-button,
-.settings-input::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.settings-select {
-  padding-right: 26px;
-}
-
 /* ── secondary action buttons ── */
-.settings-action-button {
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--settings-control-radius, 6px);
-  color: var(--text-secondary);
-  background: var(--hover-bg);
-  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-  flex: 0 0 auto;
-  cursor: pointer;
-}
-
-.settings-action-button--field {
-  height: 30px;
-  padding-inline: 12px;
-}
-
-.settings-action-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
 
 /* ── form labels, rows and notes ── */
 .settings-label {
@@ -428,38 +336,8 @@ header p {
 }
 
 /* ── feedback ── */
-.settings-feedback {
-  position: absolute;
-  right: 18px;
-  bottom: 13px;
-  left: 18px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent);
-  border-radius: var(--settings-feedback-radius, 7px);
-  color: color-mix(in srgb, var(--danger-color) 75%, white);
-  background: color-mix(in srgb, var(--danger-color) 12%, var(--surface-bg));
-  font-size: var(--settings-feedback-size, var(--font-size-secondary, 11px));
-}
-
-.settings-feedback.success {
-  border-color: color-mix(in srgb, var(--success-color) 35%, transparent);
-  color: color-mix(in srgb, var(--success-color) 75%, white);
-  background: color-mix(in srgb, var(--success-color) 12%, var(--surface-bg));
-}
-
-.settings-feedback--inline {
-  position: static;
-  margin: 10px 0 0;
-  padding: 7px 9px;
-  border-radius: var(--settings-control-radius, 6px);
-  font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-}
 
 /* ── inline field validation ── */
-.settings-input.input-invalid {
-  border-color: color-mix(in srgb, var(--danger-color) 60%, var(--border-color));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger-color) 25%, transparent);
-}
 
 .input-error {
   color: var(--danger-color);

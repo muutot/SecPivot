@@ -91,45 +91,67 @@ The settings shell defines the settings scope variables consumed by shell and ch
 | `--settings-icon-radius`                                                           | 7px                                             |
 | `--settings-close-size` / `--settings-close-radius` / `--settings-close-font-size` | 28px / 7px / 19px                               |
 
-## Shared settings primitives
+## Template layer (controls)
 
-`settings-shared.css` currently owns:
+All control chrome lives in `src/lib/components/templates/**` as Svelte
+components with scoped styles — feature components compose them and never
+re-declare primitive classes:
+
+- `templates/form/Toggle.svelte` — switch + knob (`checked` bindable,
+  `onchange`); replaces the retired `.toggle-switch`/`.toggle-knob`.
+- `templates/form/TextField.svelte` — input/textarea with `mono`, `numeric`,
+  `invalid`, `size="control"` (30px settings form), `paddingRightPx` (embedded
+  trailing action), `autofocus`; replaces `.text-input` and `.settings-input`.
+- `templates/form/Feedback.svelte` — success/danger banner, `inline` variant;
+  replaces `.settings-feedback`.
+- `templates/action/Button.svelte` — variants `plain`/`primary`/`danger`
+  (dialog footers), `action`/`field` (compact settings actions); replaces
+  `.modal-button` and `.settings-action-button`.
+- `templates/menu/MenuItem.svelte` — viewport-menu row with `leading` snippet;
+  replaces `.menu-item`.
+
+A static guard (`tests/ui-primitives.test.mjs`) fails when a retired class
+name reappears in any component outside `templates/`. Extend its
+`RETIRED_CLASSES` list as further primitives migrate.
+
+## Shared settings layout primitives
+
+`settings-shared.css` still owns the panel **layout** vocabulary (not controls):
 
 - standalone `header`, `.eyebrow`, `h2`, header description, and `.close-button`;
-- `.settings-scroll` and scrollbar treatment;
-- `.setting-card`, `.toggle-card`, `.setting-heading`, `.setting-icon`, `.heading-inline`, `.value-label`;
-- `.toggle-switch`, `.toggle-knob` and active/disabled states;
-- `.transparency-slider` including WebKit and Firefox tracks/thumbs;
-- `.settings-input` / `.settings-select` control styles (`.settings-select` is legacy — new code uses the shared `Select.svelte` component);
-- `.settings-action-button` for compact secondary actions, including the `--field` modifier when the button must align with a 30px input;
-- `.settings-scroll--stack-rows` for panels whose fixed right-side row controls stack below the 720px settings breakpoint;
-- `.settings-feedback` success/error states, with `--inline` for card-contained messages;
-- `.auto-save-note` and the default pointer cursor for buttons.
+- `.settings-scroll` (and scrollbar treatment) plus
+  `.settings-scroll--stack-rows` for the sub-720px stacked rows;
+- `.setting-card`, `.toggle-card`, `.setting-heading`, `.setting-icon`,
+  `.heading-inline`, `.value-label`, `.setting-row`, `.settings-label`,
+  `.settings-row`, `.settings-note(.warn)`;
+- `.transparency-slider` including WebKit/Firefox tracks/thumbs;
+- color-swatch/color-input helpers for the custom theme editor;
+- `.mirror-dir`, `.auto-save-note`, and the default pointer cursor.
 
-`src/app.css` imports this file globally. Child panels must rely on these primitives and add only their panel-specific layout.
+`src/app.css` imports this file globally. Child panels must rely on these
+layout classes and add only their panel-specific layout.
 `SettingToggleCard.svelte` and `SettingRangeCard.svelte` own the canonical
 standard-card markup and consume these classes without defining parallel scoped
-styles.
+styles. Migrating these layout blocks into template components is planned
+follow-up work.
 
-## Shared modal primitives
+## Modal surface
 
 `ModalShell.svelte` is the canonical dialog surface: backdrop/prompt layer,
 fixed size variants, bordered surface, header icon/title/description, optional
-close button, and optional scroll behavior. Dialogs supply only their body and
-action snippets. `modal-shared.css` owns the reusable `.text-input`,
-`.modal-actions`, and `.modal-button` states (`primary`/`danger`/disabled).
-Component CSS keeps only dialog-specific content layout; do not reintroduce
-parallel modal surfaces, header/icon blocks, buttons, or standard text inputs.
+close button, optional scroll behavior, and the `.modal-actions` footer that
+hosts `<Button>` templates from the caller's `actions` snippet. Dialogs supply
+only their body/action snippets; do not reintroduce parallel modal surfaces,
+header/icon blocks, or footer layouts.
 
-## Shared viewport-menu primitives
+## Viewport menu
 
 `ViewportMenuShell.svelte` is the canonical viewport-fixed popover menu: it
-clamps to the window with an 8px margin, closes on Escape or click-outside, and
+clamps to the window with an 8px margin, closes on Escape or click-outside,
 accepts role/aria label plus a `column-config` modifier for the bounded,
-scrollable column picker. `viewport-menu-shared.css` owns the elevated surface
-and the base `.menu-item`/`.menu-label` states; components keep only their
-item-specific variants (destructive, checked, icons). Do not introduce a second
-fixed-menu surface or duplicate `.menu-item` base rules.
+scrollable column picker, and owns the elevated-surface styles in its scoped
+block. Items are composed from `templates/menu/MenuItem.svelte`; do not
+introduce a second fixed-menu surface or duplicate item base rules.
 
 ## CSS ownership decision
 
@@ -137,19 +159,23 @@ Before adding a rule, place it at the narrowest correct stable level:
 
 - Theme color or global accessibility/reset → `app.css`, `ThemeColors`, presets, and `theme.ts` together.
 - Shared settings card/control/feedback primitive → `settings-shared.css`.
-- Shared modal shell/input/action/button primitive → `ModalShell.svelte` and `modal-shared.css`.
+- Shared modal shell primitive → `ModalShell.svelte`.
+- Shared control (toggle/text field/button/feedback/menu item) → the matching
+  `templates/**` component.
 - Settings shell/navigation layout → `SettingsDialog.svelte`.
 - One reusable component's unique layout → that component's scoped `<style>`.
 
-Do not use a parent scoped selector to style inside a child Svelte component. Pass props/classes or move the shared rule into a global/shared stylesheet.
+Do not use a parent scoped selector to style inside a child Svelte component.
+Compose the child with props, wrap it in a layout element, or move a genuinely
+shared rule into the owning template.
 
 ## Form and control conventions
 
-- Toggle card: label/icon/description on the left, switch on the right in one row.
+- Toggle card: label/icon/description on the left, `<Toggle>` on the right in one row.
 - Slider card: heading/value on one row, unwrapped `input[type="range"].transparency-slider` below, and `--slider-pct` updated from the current value.
-- Number input: use textfield appearance and hide WebKit spin buttons.
+- Number input: `TextField numeric` — textfield appearance, WebKit spin buttons hidden by the template.
 - Select: use the shared `Select.svelte` component (self-drawn trigger + fixed-position listbox, keyboard nav, `role="combobox"`/`listbox`); never introduce raw `<select>` markup. Trigger matches settings control size/radius/colors; the list is a `--surface-bg` popover at the popover z-index with a short pop-in animation that respects reduced motion.
-- Feedback: use `.settings-feedback` with `.success`; add `--inline` when the message belongs inside a card, and keep it dismissible by time and accessible.
+- Feedback: use `templates/form/Feedback.svelte` (`success` palette; `inline` for card-contained messages), dismissible by time and accessible.
 - Buttons and inputs need visible focus. Never remove outline without a replacement.
 - Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.
 

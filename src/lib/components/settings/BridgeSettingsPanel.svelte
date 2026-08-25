@@ -6,7 +6,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
 
-import Button from "$lib/components/templates/action/Button.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
@@ -208,5 +208,4 @@ import Button from "$lib/components/templates/action/Button.svelte";
     font-family: var(--font-mono);
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
-
 </style>

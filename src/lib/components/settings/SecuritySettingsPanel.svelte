@@ -224,7 +224,6 @@
 </div>
 
 <style>
-
   .mk-keyfile-row {
     margin-top: 12px;
   }
@@ -242,7 +241,6 @@
   .mk-keyfile-name.mk-empty {
     color: var(--text-faint);
   }
-
 
   .mk-submit-row {
     margin-top: 14px;
