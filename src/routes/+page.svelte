@@ -508,7 +508,7 @@
     search: () => search,
     advancedQuery: () => advancedQuery,
   });
-  const filteredEntries = entryFilter.filteredEntries;
+  const filteredEntries = $derived(entryFilter.filteredEntries);
 
   type SortCol = string;
   let sortCol = $state<SortCol>("title");
