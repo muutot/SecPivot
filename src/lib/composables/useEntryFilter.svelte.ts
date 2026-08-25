@@ -46,8 +46,13 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     const query = options.search().trim().toLowerCase();
     const advancedQuery = options.advancedQuery();
     const searching = Boolean(query || advancedQuery);
+    const subtree = options.selectedSubtree();
+    console.log(
+      `[useEntryFilter] searching=${searching} query="${query}" adv=${advancedQuery ? "on" : "off"} subtree=${subtree.length}`,
+      subtree.map((g) => `${g.name}(${g.uuid.slice(0, 4)}):es=${g.enableSearching} entries=${g.entries.length}`),
+    );
     const result: { entry: VaultEntry }[] = [];
-    for (const group of options.selectedSubtree()) {
+    for (const group of subtree) {
       // KeePass: groups with "EnableSearching" off contribute no entries to
       // search results (per-group; descendants each carry their own flag).
       // They remain visible when browsing the group directly; only exclude
@@ -59,6 +64,7 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
         result.push({ entry });
       }
     }
+    console.log(`[useEntryFilter] result=${result.length}`);
     return result;
   });
 
