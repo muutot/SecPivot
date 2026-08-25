@@ -107,6 +107,7 @@
   } from "$lib/utils/session-state";
   import { matchesAdvancedSearch, type AdvancedSearchQuery } from "$lib/utils/entry-search";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
   import {
     buildBlankMenuItems,
     buildEntryMenuItems,
@@ -1829,9 +1830,7 @@
   >
     {#snippet icon()}<AppIcon name="folder-plus" size={18} />{/snippet}
     {#snippet children()}
-      <input
-        class="text-input"
-        type="text"
+      <TextField
         bind:value={newGroupName}
         placeholder="分组名称"
         onkeydown={(e) => {

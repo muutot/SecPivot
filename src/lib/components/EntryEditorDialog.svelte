@@ -1314,13 +1314,13 @@
   {/snippet}
   {#snippet actions()}
     <Button onclick={onclose} disabled={saving}>取消</Button>
-    <button
-      class="modal-button primary"
+    <Button
+      variant="primary"
       onclick={submit}
       disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
       title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
         ? "正在载入敏感字段…"
-        : undefined}>保存</button
+        : undefined}>保存</Button
     >
   {/snippet}
 </ModalShell>
