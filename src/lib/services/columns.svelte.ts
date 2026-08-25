@@ -227,9 +227,15 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
     get entryColumns() {
       return entryColumns;
     },
-    customColumnNames,
-    visibleCols,
-    entryGridCols,
+    get customColumnNames() {
+      return customColumnNames;
+    },
+    get visibleCols() {
+      return visibleCols;
+    },
+    get entryGridCols() {
+      return entryGridCols;
+    },
     colState,
     toggleColumn,
     resizeEntryColumn,
