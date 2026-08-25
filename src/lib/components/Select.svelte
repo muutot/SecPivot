@@ -109,7 +109,12 @@
       if (!triggerEl?.contains(t) && !listEl?.contains(t)) closeMenu();
     };
     const onResize = (): void => closeMenu();
-    const onScroll = (): void => closeMenu();
+    const onScroll = (e: Event): void => {
+      // The open listbox scrolls internally; only outside scrolls reposition
+      // the anchored popover and need a close.
+      if (listEl?.contains(e.target as Node)) return;
+      closeMenu();
+    };
     document.addEventListener("mousedown", onDocDown);
     window.addEventListener("resize", onResize);
     window.addEventListener("scroll", onScroll, true);
