@@ -15,6 +15,7 @@
   import type { RemoteKind, RemoteProfilePath, RemoteSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
+  import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import { formatBytes } from "$lib/utils/format";
 
   interface Props {
@@ -378,20 +379,14 @@
           <span class="guard-title">防截屏守卫</span>
           <span class="guard-desc">库打开期间窗口不出现在截屏/录屏中</span>
         </div>
-        <button
-          class="toggle-switch"
-          class:active={guardEnabled}
-          role="switch"
-          aria-label="防截屏守卫"
-          aria-checked={guardEnabled}
-          title="库打开期间从截屏/录屏/共享中隐藏主窗口"
-          onclick={() => {
-            appSettings.updateSecurity("screenCaptureGuard", !guardEnabled);
+        <Toggle
+          checked={guardEnabled}
+          ariaLabel="防截屏守卫"
+          onchange={(next) => {
+            appSettings.updateSecurity("screenCaptureGuard", next);
             void appSettings.flush();
           }}
-        >
-          <span class="toggle-knob"></span>
-        </button>
+        />
       </div>
     {/if}
   </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
+  import Toggle from "$lib/components/templates/form/Toggle.svelte";
 
   interface Props {
     icon: IconName;
@@ -31,16 +32,5 @@
       <p>{description}</p>
     </div>
   </div>
-  <button
-    class="toggle-switch"
-    class:active={checked}
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-label={ariaLabel ?? label}
-    {disabled}
-    onclick={() => onchange(!checked)}
-  >
-    <span class="toggle-knob"></span>
-  </button>
+  <Toggle bind:checked {disabled} ariaLabel={ariaLabel ?? label} onchange={(value) => onchange(value)} />
 </section>

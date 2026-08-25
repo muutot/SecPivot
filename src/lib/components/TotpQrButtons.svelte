@@ -159,21 +159,21 @@
     type="button"
     class="totp-qr-btn"
     disabled={busy}
-    title="截图并框选二维码"
+    title="截图选取：截图并框选二维码"
+    aria-label="截图选取"
     onclick={startRegion}
   >
-    <AppIcon name="crop" size={12} />
-    截图选取
+    <AppIcon name="crop" size={13} />
   </button>
   <button
     type="button"
     class="totp-qr-btn"
     disabled={busy}
-    title="识别当前屏幕中的二维码"
+    title="屏幕识别：识别当前屏幕中的二维码"
+    aria-label="屏幕识别"
     onclick={startScreen}
   >
-    <AppIcon name="scan" size={12} />
-    屏幕识别
+    <AppIcon name="scan" size={13} />
   </button>
 </span>
 
@@ -228,7 +228,7 @@
 {/if}
 
 {#if error}
-  <span class="field-hint totp-qr-error">{error}</span>
+  <span class="totp-qr-error">{error}</span>
 {/if}
 
 <svelte:window
@@ -238,19 +238,20 @@
 <style>
   .totp-qr-btns {
     display: inline-flex;
-    gap: 6px;
+    gap: 2px;
   }
 
   .totp-qr-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border: 1px solid var(--border-color);
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
     border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
+    color: var(--text-muted);
     background: transparent;
-    font-size: var(--font-size-tiny, 10px);
     cursor: pointer;
   }
 
@@ -265,7 +266,11 @@
   }
 
   .totp-qr-error {
+    position: absolute;
+    top: calc(100% + 3px);
+    left: 0;
     color: var(--danger-color);
+    font-size: var(--font-size-tiny, 10px);
   }
 
   .qr-shot-overlay {

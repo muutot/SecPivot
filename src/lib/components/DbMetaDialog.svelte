@@ -4,6 +4,8 @@
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     name: string;
@@ -67,12 +69,11 @@
   {#snippet children()}
     <div class="field-row">
       <label for="db-name">库名称</label>
-      <input
+      <TextField
         id="db-name"
-        class="text-input"
         bind:value={dbName}
         placeholder="留空则清除"
-        maxlength="128"
+        maxlength={128}
         onkeydown={(e) => {
           if (e.key === "Enter") void save();
         }}
@@ -81,22 +82,23 @@
 
     <div class="field-row">
       <label for="db-description">描述</label>
-      <textarea
+      <TextField
         id="db-description"
-        class="text-input textarea"
+        multiline
+        rows={4}
         bind:value={dbDescription}
         placeholder="留空则清除"
-        rows="4"
-        maxlength="1024"></textarea>
+        maxlength={1024}
+      />
     </div>
 
     {#if error}<p class="error-msg">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
-    <button class="modal-button primary" onclick={() => void save()} disabled={saving}
-      >{saving ? "保存中…" : "保存"}</button
-    >
+    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button variant="primary" onclick={() => void save()} disabled={saving}>
+      {saving ? "保存中…" : "保存"}
+    </Button>
   {/snippet}
 </ModalShell>
 
@@ -110,17 +112,6 @@
     margin-bottom: 4px;
     color: var(--text-secondary);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .field-row input,
-  .field-row textarea {
-    box-sizing: border-box;
-    resize: vertical;
-  }
-
-  .field-row input:focus,
-  .field-row textarea:focus {
-    outline: none;
   }
 
   .error-msg {

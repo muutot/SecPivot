@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
 
   interface Props {
     group: VaultGroup;
@@ -45,11 +47,11 @@
   {#snippet children()}
     <div class="block">
       <span class="label">备注</span>
-      <textarea class="text-input" rows={3} bind:value={notes} placeholder="分组备注"></textarea>
+      <TextField multiline rows={3} bind:value={notes} placeholder="分组备注" />
     </div>
     <div class="block">
       <span class="label">标签（逗号分隔）</span>
-      <input class="text-input" type="text" bind:value={tags} placeholder="work, dev" />
+      <TextField bind:value={tags} placeholder="work, dev" />
     </div>
     <div class="block">
       <span class="label">搜索参与</span>
@@ -66,10 +68,10 @@
     </div>
   {/snippet}
   {#snippet actions()}
-    <button class="modal-button" onclick={onclose} disabled={saving}>取消</button>
-    <button class="modal-button primary" onclick={() => void submit()} disabled={saving}>
+    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button variant="primary" onclick={() => void submit()} disabled={saving}>
       {saving ? "保存中…" : "保存"}
-    </button>
+    </Button>
   {/snippet}
 </ModalShell>
 
@@ -83,11 +85,6 @@
     margin-bottom: 6px;
     color: var(--text-muted);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  textarea.text-input {
-    min-height: 64px;
-    resize: vertical;
   }
 
   .toggle {

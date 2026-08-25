@@ -8,6 +8,7 @@
   import { vault } from "$lib/services/vault";
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import Toggle from "$lib/components/templates/form/Toggle.svelte";
 
   interface Props {
     onclose: () => void;
@@ -216,17 +217,7 @@
       </div>
       <div class="setting-block setting-row">
         <span class="setting-label">启用回收站</span>
-        <button
-          type="button"
-          class="toggle-switch"
-          class:active={recycleEnabled}
-          role="switch"
-          aria-checked={recycleEnabled}
-          aria-label="启用回收站"
-          onclick={() => (recycleEnabled = !recycleEnabled)}
-        >
-          <span class="toggle-knob"></span>
-        </button>
+        <Toggle bind:checked={recycleEnabled} ariaLabel="启用回收站" />
       </div>
     {:else}
       <p class="dialog-hint">{error || "无法读取数据库设置"}</p>

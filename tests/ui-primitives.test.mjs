@@ -4,29 +4,33 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-// Shared-primitive completeness: `.toggle-switch` renders its sliding knob
-// through a child `.toggle-knob` span (settings-shared.css). A switch without
-// that child shows an empty track — exactly the drift static class-name greps
-// cannot catch. Every usage must carry the knob.
-test("every toggle-switch usage carries its toggle-knob child", async () => {
-  const root = new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-  const files = globSync(path.join(root, "**", "*.svelte"));
+// Template-first doctrine: control styling lives inside
+// src/lib/components/templates/**; feature components compose templates and
+// never re-declare primitive markup or styles. Retired shared-CSS primitives
+// are listed here once their usages are fully migrated; the list grows as the
+// migration proceeds and each entry forbids reintroduction.
+const RETIRED_CLASSES = ["toggle-switch", "toggle-knob"];
+
+const root = new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const templatesRoot = path.join(root, "lib", "components", "templates");
+
+test("the Toggle template owns its knob structure", async () => {
+  const text = await readFile(path.join(templatesRoot, "form", "Toggle.svelte"), "utf8");
+  assert.ok(text.includes('class="knob"'), "Toggle.svelte must render its knob child");
+});
+
+test("retired primitive classes are not reintroduced outside templates", async () => {
+  const files = globSync(path.join(root, "**", "*.svelte")).filter(
+    (file) => !file.startsWith(templatesRoot),
+  );
   assert.ok(files.length > 0, "expected svelte sources");
 
-  let switches = 0;
+  const violations = [];
   for (const file of files) {
     const text = await readFile(file, "utf8");
-    const matches = text.matchAll(
-      /<button[^>]*class="[^"]*toggle-switch[^"]*"[^>]*>([\s\S]*?)<\/button>/g,
-    );
-    for (const match of matches) {
-      switches += 1;
-      assert.ok(
-        match[1].includes("toggle-knob"),
-        `${path.relative(root, file)}: a toggle-switch button is missing its <span class="toggle-knob"></span> child`,
-      );
+    for (const retired of RETIRED_CLASSES) {
+      if (text.includes(retired)) violations.push(`${path.relative(root, file)}: ${retired}`);
     }
   }
-  // Guard against silently matching nothing after a future refactor.
-  assert.ok(switches >= 4, `expected at least 4 toggle-switch usages, found ${switches}`);
+  assert.deepEqual(violations, [], "retired classes must only exist inside templates/");
 });

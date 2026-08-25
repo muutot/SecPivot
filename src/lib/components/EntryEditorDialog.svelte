@@ -19,9 +19,10 @@
   import { shortestMatchable } from "$lib/utils/match-url";
   import { runExclusiveTask } from "$lib/utils/session-state";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
-  import GroupPicker from "$lib/components/GroupPicker.svelte";
+   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TotpQrButtons from "$lib/components/TotpQrButtons.svelte";
+  import Toggle from "$lib/components/templates/form/Toggle.svelte";
 
   interface Props {
     mode: "create" | "edit" | "edit-multi";
@@ -848,25 +849,31 @@
       <div class="form-grid" role="tabpanel">
         <label class="field">
           <span>TOTP 种子</span>
-          <input
-            class="text-input mono"
-            type="text"
-            bind:value={totp}
-            placeholder={multi ? "多个值" : totpLoading ? "正在加载…" : "Base32 密钥或 otpauth URI"}
-            disabled={totpLoading}
-            oninput={() => markTouched("totp")}
-          />
-          <span class="totp-qr-row">
-            <TotpQrButtons
-              onpick={(value) => {
-                totp = value;
-                markTouched("totp");
-              }}
+          <div class="totp-input-wrap">
+            <input
+              class="text-input mono"
+              type="text"
+              bind:value={totp}
+              placeholder={multi
+                ? "多个值"
+                : totpLoading
+                  ? "正在加载…"
+                  : "Base32 密钥或 otpauth URI"}
+              disabled={totpLoading}
+              oninput={() => markTouched("totp")}
             />
-            {#if multi}
-              <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
-            {/if}
-          </span>
+            <span class="totp-input-actions">
+              <TotpQrButtons
+                onpick={(value) => {
+                  totp = value;
+                  markTouched("totp");
+                }}
+              />
+            </span>
+          </div>
+          {#if multi}
+            <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
+          {/if}
         </label>
 
         <label class="field">
@@ -1033,17 +1040,7 @@
       <div class="autotype-section" role="tabpanel">
         <div class="autotype-row">
           <span class="autotype-label">启用自动填充</span>
-          <button
-            type="button"
-            class="toggle-switch"
-            class:active={autoTypeEnabled}
-            role="switch"
-            aria-checked={autoTypeEnabled}
-            aria-label="启用自动填充"
-            onclick={() => (autoTypeEnabled = !autoTypeEnabled)}
-          >
-            <span class="toggle-knob"></span>
-          </button>
+          <Toggle bind:checked={autoTypeEnabled} ariaLabel="启用自动填充" />
         </div>
         <label class="field">
           <span>默认序列</span>
@@ -1399,11 +1396,20 @@
     font-size: 10px;
   }
 
-  .totp-qr-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 6px;
+  .totp-input-wrap {
+    position: relative;
+  }
+
+  .totp-input-wrap .text-input {
+    padding-right: 60px;
+  }
+
+  .totp-input-actions {
+    position: absolute;
+    top: 50%;
+    right: 3px;
+    transform: translateY(-50%);
+    display: inline-flex;
   }
 
   .field-help {
