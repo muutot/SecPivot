@@ -2,6 +2,7 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ViewportMenuShell from "$lib/components/ViewportMenuShell.svelte";
+  import MenuItem from "$lib/components/templates/menu/MenuItem.svelte";
 
   export interface ContextMenuItem {
     id: string;
@@ -25,38 +26,17 @@
 <ViewportMenuShell {x} {y} {onclose} ariaLabel="上下文菜单">
   {#snippet children()}
     {#each items as item}
-      <button
-        type="button"
-        class="menu-item"
-        class:destructive={item.destructive}
-        role="menuitem"
+      <MenuItem
+        label={item.label}
+        destructive={item.destructive}
         disabled={item.disabled}
         onclick={() => {
           onaction(item.id);
           onclose();
         }}
       >
-        <span class="menu-icon"><AppIcon name={item.icon} size={15} /></span>
-        <span class="menu-label">{item.label}</span>
-      </button>
+        {#snippet leading()}<AppIcon name={item.icon} size={15} />{/snippet}
+      </MenuItem>
     {/each}
   {/snippet}
 </ViewportMenuShell>
-
-<style>
-  .menu-item.destructive {
-    color: var(--danger-color);
-  }
-
-  .menu-item.destructive:hover {
-    background: color-mix(in srgb, var(--danger-color) 12%, transparent);
-    color: var(--danger-color);
-  }
-
-  .menu-icon {
-    display: inline-flex;
-    align-items: center;
-    width: 18px;
-    flex-shrink: 0;
-  }
-</style>

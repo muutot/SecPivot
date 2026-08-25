@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ViewportMenuShell from "$lib/components/ViewportMenuShell.svelte";
+  import MenuItem from "$lib/components/templates/menu/MenuItem.svelte";
 
   export interface ColumnMenuSection {
     label: string;
@@ -23,17 +24,15 @@
     {#each sections as section}
       <div class="ccm-section-title">{section.label}</div>
       {#each section.items as item}
-        <button
-          type="button"
-          class="menu-item"
-          class:checked={item.visible}
+        <MenuItem
           role="menuitemcheckbox"
-          aria-checked={item.visible}
+          checked={item.visible}
+          label={item.label}
+          title={item.label}
           onclick={() => ontoggle(item.id)}
         >
-          <span class="menu-check"><AppIcon name="check" size={13} /></span>
-          <span class="menu-label" title={item.label}>{item.label}</span>
-        </button>
+          {#snippet leading()}<AppIcon name="check" size={13} />{/snippet}
+        </MenuItem>
       {/each}
     {/each}
     <div class="ccm-footer">右键列标题可快速显隐列</div>
@@ -52,27 +51,6 @@
   .ccm-section-title:not(:first-child) {
     margin-top: 4px;
     border-top: 1px solid var(--border-subtle);
-  }
-
-  .menu-check {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    flex-shrink: 0;
-    color: var(--text-faint);
-    opacity: 0;
-  }
-
-  .menu-item.checked .menu-check {
-    opacity: 1;
-    color: var(--selection-color);
-  }
-
-  .menu-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .ccm-footer {

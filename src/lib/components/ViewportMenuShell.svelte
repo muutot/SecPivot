@@ -56,3 +56,23 @@
 >
   {#if children}{@render children()}{/if}
 </div>
+
+<style>
+  .viewport-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: 160px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--surface-bg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .viewport-menu--column-config {
+    min-width: 190px;
+    max-width: 260px;
+    max-height: 60vh;
+    overflow: auto;
+  }
+</style>

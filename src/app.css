@@ -1,6 +1,4 @@
 @import "./lib/styles/settings-shared.css";
-@import "./lib/styles/modal-shared.css";
-@import "./lib/styles/viewport-menu-shared.css";
 
 :root {
   --bg-app: #111111;
