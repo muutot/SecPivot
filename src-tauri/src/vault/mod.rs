@@ -26,9 +26,12 @@ use std::sync::Arc;
 
 use crate::remote::RemoteStorage;
 
-pub(crate) use self::helpers::{
-    entry_has_otp, entry_match_urls, kprpc_matches_url, parse_entry_id, recycle_bin_id,
-};
+pub(crate) use self::helpers::{entry_has_otp, recycle_bin_id};
+// Desktop-only consumers: URL matching feeds the browser bridges, and the
+// cross-platform modules that need `parse_entry_id` import it from
+// `helpers` directly — so these re-exports are unused on mobile targets.
+#[cfg(desktop)]
+pub(crate) use self::helpers::{entry_match_urls, kprpc_matches_url, parse_entry_id};
 #[cfg(desktop)]
 pub(crate) use self::hosts::persist_rpc_write;
 pub(crate) use self::persist::{

@@ -378,6 +378,7 @@ pub fn run() {
             commands::download_favicons,
             #[cfg(desktop)]
             commands::capture_screen_png,
+            #[cfg(desktop)]
             commands::decode_barcode_png,
             commands::read_text_file,
             commands::parse_bitwarden_json,
