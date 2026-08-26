@@ -315,6 +315,15 @@
         })}
     />
 
+    <SettingToggleCard
+      icon="grid"
+      label="移动端显示列"
+      description="窄屏下也按桌面布局渲染条目表格的完整列，可在列配置菜单中自由选择显示哪些列；关闭则使用单列摘要卡片"
+      checked={s.general.mobileColumns}
+      ariaLabel="移动端显示列"
+      onchange={(checked) => change("mobileColumns", checked)}
+    />
+
     <SettingRangeCard
       icon="sliders"
       label="窗口不透明度"

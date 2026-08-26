@@ -1611,6 +1611,7 @@
             {showDescriptions}
             compact={compactMode}
             searchActive={Boolean(search)}
+            mobileColumns={settings.general.mobileColumns}
             {customIconUrl}
             {entryIconName}
             colText={columns.columnText}

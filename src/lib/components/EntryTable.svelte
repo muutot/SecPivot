@@ -28,6 +28,8 @@
     showDescriptions: boolean;
     compact: boolean;
     searchActive: boolean;
+    /** Render the full column grid on narrow screens too (user opt-in). */
+    mobileColumns?: boolean;
     customIconUrl: (entry: VaultEntry) => string | undefined;
     entryIconName: (entry: VaultEntry) => IconName;
     colText: (entry: VaultEntry, colId: string) => string;
@@ -42,8 +44,7 @@
     onrowclick: (event: MouseEvent, entry: VaultEntry) => void;
     onentrycontextmenu: (event: MouseEvent, entry: VaultEntry) => void;
     oncolumncontextmenu: (event: MouseEvent) => void;
-    onblankcontextmenu: (event: MouseEvent) => void;
-    onselectall: () => void;
+    onblankcontextmenu: (event: MouseEvent) => void;    onselectall: () => void;
     onselectentry: (entry: VaultEntry) => void;
     onfavorite: (entry: VaultEntry) => void;
     oncopyusername: (entry: VaultEntry) => void;
@@ -60,6 +61,7 @@
     showDescriptions,
     compact,
     searchActive,
+    mobileColumns = false,
     customIconUrl,
     entryIconName,
     colText,
@@ -91,6 +93,43 @@
 
   let revealedPassword = $state<{ uuid: string; value: string } | null>(null);
   let revealTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Long-press (touch) → context menu, mirroring desktop right-click. */
+  let pressTimer: ReturnType<typeof setTimeout> | undefined;
+  let pressStart: { x: number; y: number } | null = null;
+  /** Swallow the click that follows a fired long-press so the menu's target
+   *  row is not also selected when the finger lifts. */
+  let suppressClick = false;
+
+  function clearPress(): void {
+    if (pressTimer !== undefined) clearTimeout(pressTimer);
+    pressTimer = undefined;
+    pressStart = null;
+  }
+
+  function startPress(
+    event: PointerEvent,
+    fire: (event: MouseEvent) => void,
+  ): void {
+    if (event.pointerType === "mouse") return;
+    pressStart = { x: event.clientX, y: event.clientY };
+    pressTimer = setTimeout(() => {
+      pressTimer = undefined;
+      suppressClick = true;
+      event.preventDefault();
+      fire(
+        new MouseEvent("contextmenu", {
+          clientX: pressStart?.x ?? 0,
+          clientY: pressStart?.y ?? 0,
+        }),
+      );
+    }, 500);
+  }
+
+  function movePress(event: PointerEvent): void {
+    if (!pressStart) return;
+    if (Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > 12) clearPress();
+  }
 
   function hideRevealedPassword(): void {
     if (revealTimer !== undefined) clearTimeout(revealTimer);
@@ -369,6 +408,7 @@
 <div
   class="entry-table"
   class:compact
+  class:show-cols={mobileColumns}
   style={`--entry-cols: ${entryGridCols}`}
   bind:this={entryTableEl}
 >
@@ -377,6 +417,10 @@
     role="row"
     tabindex="-1"
     oncontextmenu={oncolumncontextmenu}
+    onpointerdown={(e) => startPress(e, oncolumncontextmenu)}
+    onpointermove={movePress}
+    onpointerup={clearPress}
+    onpointercancel={clearPress}
     bind:this={entryHeadEl}
   >
     <span class="head-icon-col" aria-hidden="true"></span>
@@ -424,6 +468,10 @@
     tabindex="-1"
     bind:this={entryListEl}
     oncontextmenu={onblankcontextmenu}
+    onpointerdown={(e) => startPress(e, onblankcontextmenu)}
+    onpointermove={movePress}
+    onpointerup={clearPress}
+    onpointercancel={clearPress}
     onscroll={handleListScroll}
     onkeydown={handleListKeydown}
   >
@@ -457,7 +505,17 @@
           draggable="true"
           onfocus={() => (lastFocusedIndex = rowIndex)}
           ondragstart={(event) => startEntryDrag(event, row.entry)}
-          onclick={(event) => onrowclick(event, row.entry)}
+          onpointerdown={(e) => startPress(e, (ev) => onentrycontextmenu(ev, row.entry))}
+          onpointermove={movePress}
+          onpointerup={clearPress}
+          onpointercancel={clearPress}
+          onclick={(event) => {
+            if (suppressClick) {
+              suppressClick = false;
+              return;
+            }
+            onrowclick(event, row.entry);
+          }}
           oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
           onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
         >
@@ -967,20 +1025,40 @@
 
   @media (max-width: 720px) {
     .entry-table {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-color) transparent;
+    }
+
+    /* Opt-in full column grid on mobile: behave exactly like desktop. */
+    .entry-table.show-cols .entry-table-head {
+      display: grid;
+    }
+
+    .entry-table.show-cols .entry-list {
+      width: max-content;
+    }
+
+    .entry-table.show-cols .entry-row,
+    .entry-table.show-cols.compact .entry-row {
+      height: 48px;
+    }
+
+    .entry-table:not(.show-cols) {
       overflow-x: hidden;
     }
 
-    .entry-table-head {
+    .entry-table:not(.show-cols) .entry-table-head {
       display: none;
     }
 
-    .entry-list {
+    .entry-table:not(.show-cols) .entry-list {
       width: 100%;
       overflow-x: hidden;
     }
 
-    .entry-row,
-    .entry-table.compact .entry-row {
+    .entry-table:not(.show-cols) .entry-row,
+    .entry-table:not(.show-cols).compact .entry-row {
       grid-template-columns: 44px minmax(0, 1fr) 100px;
       width: 100%;
       min-width: 0;
@@ -988,8 +1066,15 @@
       border-bottom: 1px solid var(--border-subtle);
     }
 
-    .entry-row-col {
+    .entry-table:not(.show-cols) .entry-row-col {
       display: none;
+    }
+
+    .entry-table:not(.show-cols) .mobile-entry-summary {
+      display: flex;
+      min-width: 0;
+      height: 100%;
+      padding: 0 6px;
     }
 
     .entry-row-icon-cell,
@@ -998,14 +1083,7 @@
       border: 0;
     }
 
-    .mobile-entry-summary {
-      display: flex;
-      min-width: 0;
-      height: 100%;
-      padding: 0 6px;
-    }
-
-    .entry-row-actions {
+    .entry-table:not(.show-cols) .entry-row-actions {
       gap: 4px;
       padding: 0 8px 0 2px;
       opacity: 1;

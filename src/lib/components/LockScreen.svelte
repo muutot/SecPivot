@@ -124,12 +124,19 @@
     {/if}
 
     <div class="unlock-actions">
-      <button class="welcome-button" class:busy={busy} onclick={onswitch} disabled={busy} title="选择其他数据库">
+      <button
+        class="welcome-button"
+        class:busy
+        onclick={onswitch}
+        disabled={busy}
+        title="选择其他数据库"
+      >
         使用其他数据库
       </button>
       {#if helloAvailable}
         <button
-          class="welcome-button hello" class:busy={busy}
+          class="welcome-button hello"
+          class:busy
           onclick={() => void unlockWithHello()}
           disabled={busy}
           title="使用系统凭据快速解锁"
@@ -138,7 +145,8 @@
         </button>
       {/if}
       <button
-        class="welcome-button primary" class:busy={busy}
+        class="welcome-button primary"
+        class:busy
         onclick={() => void unlock()}
         disabled={busy || (!password && !keyfilePath)}
       >

@@ -112,6 +112,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
   iconOnlyButtons: false,
+  mobileColumns: false,
   toolbarOverflowMenu: isMobile(),
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
@@ -548,6 +549,7 @@ export function normalizeSettings(
     },
     iconOnlyButtons:
       typeof g.iconOnlyButtons === "boolean" ? g.iconOnlyButtons : fallback.general.iconOnlyButtons,
+    mobileColumns: typeof g.mobileColumns === "boolean" ? g.mobileColumns : fallback.general.mobileColumns,
     toolbarOverflowMenu:
       typeof g.toolbarOverflowMenu === "boolean"
         ? g.toolbarOverflowMenu

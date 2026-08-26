@@ -255,6 +255,8 @@ pub struct GeneralSettings {
     pub icon_only_buttons: bool,
     /// Collect lower-frequency toolbar actions in a shared More menu.
     pub toolbar_overflow_menu: bool,
+    /// Render the full entry-table column grid on narrow screens too.
+    pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
     /// `keyboard` section existed; migrated into `keyboard.auto_type_global`
     /// on load, never re-serialized.
@@ -307,6 +309,7 @@ impl Default for GeneralSettings {
             window_height: 720,
             panel_widths: PanelWidths::default(),
             icon_only_buttons: false,
+            mobile_columns: false,
             toolbar_overflow_menu: cfg!(any(target_os = "android", target_os = "ios")),
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),

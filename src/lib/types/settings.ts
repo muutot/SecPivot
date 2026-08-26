@@ -155,6 +155,8 @@ export interface GeneralSettings {
   iconOnlyButtons: boolean;
   /** Collect lower-frequency toolbar actions in a shared More menu. */
   toolbarOverflowMenu: boolean;
+  /** Render the full entry-table column grid on narrow screens too. */
+  mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */
   entryColumns: EntryColumnState[];
   /** Named advanced-search queries. */

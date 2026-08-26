@@ -83,6 +83,21 @@ fn icon_only_buttons_defaults_off_and_survives_round_trip() {
 }
 
 #[test]
+fn mobile_columns_defaults_off_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    assert!(!config.general.mobile_columns, "defaults off");
+
+    config.general.mobile_columns = true;
+    let saved = store.set(config).unwrap();
+    assert!(saved.general.mobile_columns);
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(reloaded.get().unwrap().general.mobile_columns);
+}
+
+#[test]
 fn remote_profiles_survive_deserialize_write_reload() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
