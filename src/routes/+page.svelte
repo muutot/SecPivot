@@ -1349,6 +1349,7 @@
     event.stopPropagation();
     blankMenu = null;
     toolbarMenu = null;
+    columnMenu = null;
     // Right-click updates the selection (so menu actions target this entry)
     // but must not force the detail panel open.
     if (selection.selectedEntry !== entry) layout.suppressNextAutoOpen();
@@ -1362,6 +1363,7 @@
     event.preventDefault();
     entryMenu = null;
     toolbarMenu = null;
+    columnMenu = null;
     blankMenu = { x: event.clientX, y: event.clientY };
     openContextMenu("page");
   }
