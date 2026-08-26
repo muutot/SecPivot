@@ -345,8 +345,6 @@
     background: var(--hover-bg);
   }
 
-
-
   .tool-button:disabled {
     cursor: not-allowed;
     opacity: 0.55;

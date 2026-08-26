@@ -44,7 +44,8 @@
     onrowclick: (event: MouseEvent, entry: VaultEntry) => void;
     onentrycontextmenu: (event: MouseEvent, entry: VaultEntry) => void;
     oncolumncontextmenu: (event: MouseEvent) => void;
-    onblankcontextmenu: (event: MouseEvent) => void;    onselectall: () => void;
+    onblankcontextmenu: (event: MouseEvent) => void;
+    onselectall: () => void;
     onselectentry: (entry: VaultEntry) => void;
     onfavorite: (entry: VaultEntry) => void;
     oncopyusername: (entry: VaultEntry) => void;
@@ -107,10 +108,7 @@
     pressStart = null;
   }
 
-  function startPress(
-    event: PointerEvent,
-    fire: (event: MouseEvent) => void,
-  ): void {
+  function startPress(event: PointerEvent, fire: (event: MouseEvent) => void): void {
     if (event.pointerType === "mouse") return;
     pressStart = { x: event.clientX, y: event.clientY };
     pressTimer = setTimeout(() => {

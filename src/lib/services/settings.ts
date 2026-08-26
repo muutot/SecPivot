@@ -549,7 +549,8 @@ export function normalizeSettings(
     },
     iconOnlyButtons:
       typeof g.iconOnlyButtons === "boolean" ? g.iconOnlyButtons : fallback.general.iconOnlyButtons,
-    mobileColumns: typeof g.mobileColumns === "boolean" ? g.mobileColumns : fallback.general.mobileColumns,
+    mobileColumns:
+      typeof g.mobileColumns === "boolean" ? g.mobileColumns : fallback.general.mobileColumns,
     toolbarOverflowMenu:
       typeof g.toolbarOverflowMenu === "boolean"
         ? g.toolbarOverflowMenu

@@ -68,7 +68,11 @@
     keepassGroupIconName,
   } from "$lib/utils/keepass-icons";
   import ContextMenu, { type ContextMenuItem } from "$lib/components/ContextMenu.svelte";
-  import { closeContextMenu, openContextMenu } from "$lib/stores/activeContextMenu.svelte";
+  import {
+    activeContextMenu,
+    closeContextMenu,
+    openContextMenu,
+  } from "$lib/stores/activeContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
@@ -588,6 +592,18 @@
     columnMenu = { x: e.clientX, y: e.clientY };
     openContextMenu("page");
   }
+
+  // Owner symmetry with GroupNode: when another surface (e.g. the group
+  // tree) owns the context menu, drop every page-level menu so two menus
+  // can never be visible at once.
+  $effect(() => {
+    if ($activeContextMenu !== "page") {
+      entryMenu = null;
+      blankMenu = null;
+      toolbarMenu = null;
+      columnMenu = null;
+    }
+  });
 
   function findEntryByUuid(state: VaultState | null, uuid: string | null): VaultEntry | null {
     if (!state || !uuid) return null;
@@ -2305,17 +2321,20 @@
       position: absolute;
       top: 0;
       bottom: 0;
-      left: 0;
-      width: min(82vw, 320px);
+      /* Slide with `left` instead of `transform`: a transformed ancestor
+       * becomes the containing block for position:fixed menus rendered
+       * inside the tree, breaking their viewport coordinates. */
+      --drawer-width: min(82vw, 320px);
+      width: var(--drawer-width);
+      left: calc(-1 * var(--drawer-width) - 24px);
       z-index: 6;
       box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
       border-right: 1px solid var(--border-color);
-      transform: translateX(-100%);
-      transition: transform 0.16s ease;
+      transition: left 0.16s ease;
     }
 
     .app-shell.mobile-nav-open .group-panel {
-      transform: translateX(0);
+      left: 0;
     }
 
     .entry-panel {
