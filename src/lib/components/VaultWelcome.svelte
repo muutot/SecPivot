@@ -348,10 +348,10 @@
     </div>
 
     <div class="welcome-actions">
-      <button class="welcome-button primary" onclick={handleOpen} disabled={busy}>
+      <button class="welcome-button primary" class:busy={busy} onclick={handleOpen} disabled={busy}>
         <AppIcon name="open" size={16} />打开数据库
       </button>
-      <button class="welcome-button" onclick={handleCreate} disabled={busy}>
+      <button class="welcome-button" class:busy={busy} onclick={handleCreate} disabled={busy}>
         <AppIcon name="plus" size={16} />新建数据库
       </button>
       {#if isTauriRuntime()}
@@ -703,7 +703,7 @@
       {/if}
 
       <div class="modal-actions">
-        <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
+        <Button busy={busy} onclick={() => (modal = "none")} disabled={busy}>取消</Button>
         {#if !(modal === "remote" && remoteTab === "config")}
           <Button
             variant="primary"
@@ -831,8 +831,12 @@
   }
 
   .welcome-button:disabled {
-    cursor: wait;
+    cursor: not-allowed;
     opacity: 0.6;
+  }
+
+  .welcome-button.busy {
+    cursor: wait;
   }
 
   .welcome-hint {

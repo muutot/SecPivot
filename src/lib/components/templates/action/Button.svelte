@@ -14,6 +14,8 @@
     variant?: ButtonVariant;
     type?: "button" | "submit";
     disabled?: boolean;
+    /** Operation in flight: wait cursor wins over not-allowed. */
+    busy?: boolean;
     title?: string;
     ariaLabel?: string;
     onclick?: (event: MouseEvent) => void;
@@ -24,6 +26,7 @@
     variant = "plain",
     type = "button",
     disabled = false,
+    busy = false,
     title = undefined,
     ariaLabel = undefined,
     onclick,
@@ -33,6 +36,7 @@
 
 <button
   class={["btn", `btn--${variant}`]}
+  class:busy
   {type}
   {disabled}
   {title}
@@ -84,8 +88,12 @@
 
   .btn--plain:disabled,
   .btn--primary:disabled {
-    cursor: wait;
+    cursor: not-allowed;
     opacity: 0.6;
+  }
+
+  .btn.busy {
+    cursor: wait;
   }
 
   /* Compact secondary actions (.settings-action-button) */
