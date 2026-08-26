@@ -56,7 +56,7 @@ export const LIGHT_THEME_COLORS: ThemeColors = {
   cardBg: "#ffffff",
   surfaceBg: "#ffffff",
   statusBarBg: "#e8e8e8",
-  hoverBg: "#e0e0e0",
+  hoverBg: "#ffffff",
   inputBg: "#f0f0f0",
   textSecondary: "#444444",
   textFaint: "#999999",

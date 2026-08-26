@@ -77,7 +77,7 @@ impl ThemeColors {
             card_bg: "#ffffff".into(),
             surface_bg: "#ffffff".into(),
             status_bar_bg: "#e8e8e8".into(),
-            hover_bg: "#e0e0e0".into(),
+            hover_bg: "#ffffff".into(),
             input_bg: "#f0f0f0".into(),
             text_secondary: "#444444".into(),
             text_faint: "#999999".into(),
