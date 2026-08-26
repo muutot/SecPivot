@@ -663,13 +663,16 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    overflow-x: auto;
+    /* Single scroll container for both axes so the vertical scrollbar hugs
+     * the panel's right edge instead of the last rendered column. */
+    overflow: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .entry-table-head {
-    position: relative;
+    position: sticky;
+    top: 0;
     z-index: 1;
     display: grid;
     grid-template-columns: var(--entry-cols);
@@ -787,12 +790,12 @@
     flex: 1;
     min-height: 0;
     width: max-content;
-    overflow-y: auto;
-    overflow-x: hidden;
+    /* At least the full table width, so a narrow column set stretches to
+     * the panel edge while a wide one overflows into the shared scroller. */
+    min-width: 100%;
+    width: max-content;
     overflow-anchor: none;
     padding: 0 0 16px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .virtual-spacer {
