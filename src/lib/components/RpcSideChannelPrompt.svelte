@@ -152,7 +152,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-secondary);
-    background: var(--hover-bg);
+    background: var(--card-bg);
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
     cursor: pointer;
   }

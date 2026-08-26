@@ -188,7 +188,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--selection-color);
-    background: var(--hover-bg);
+    background: var(--card-bg);
   }
 
   .modal-shell__icon--danger {

@@ -1738,7 +1738,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     color: var(--text-primary);
-    background: var(--hover-bg);
+    background: var(--card-bg);
     font-size: var(--font-size-secondary, 11px);
     cursor: pointer;
   }

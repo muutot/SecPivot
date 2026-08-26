@@ -95,7 +95,7 @@
     padding: 0 10px;
     flex: 0 0 auto;
     color: var(--text-secondary);
-    background: var(--hover-bg);
+    background: var(--card-bg);
     font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
   }
 

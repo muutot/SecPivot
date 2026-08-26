@@ -1341,7 +1341,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--settings-icon-radius, 7px);
     color: var(--warning-color);
-    background: var(--hover-bg);
+    background: var(--card-bg);
   }
 
   .entry-icon-img {
@@ -1747,7 +1747,7 @@
     padding: 0 8px;
     border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
-    background: var(--hover-bg);
+    background: var(--card-bg);
   }
 
   .attachment-name {
@@ -1810,7 +1810,7 @@
     padding: 0 8px;
     border: 1px solid var(--border-subtle);
     border-radius: var(--settings-control-radius, 6px);
-    background: var(--hover-bg);
+    background: var(--card-bg);
     color: var(--text-muted);
   }
 
