@@ -100,15 +100,18 @@
           <p>名称会作为配置路径和本地镜像目录的最后一级</p>
         </div>
       </div>
-      <TextField
-        id="remote-profile-name"
-        size="control"
-        invalid={nameConflict}
-        type="text"
-        value={activeName}
-        spellcheck={false}
-        oninput={(event) => appSettings.renameRemoteProfile(activePath, event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          id="remote-profile-name"
+          size="control"
+          invalid={nameConflict}
+          type="text"
+          value={activeName}
+          spellcheck={false}
+          oninput={(event) =>
+            appSettings.renameRemoteProfile(activePath, event.currentTarget.value)}
+        />
+      </div>
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -151,14 +154,18 @@
           </p>
         </div>
       </div>
-      <TextField
-        size="control"
-        type="text"
-        value={remote.endpoint}
-        placeholder={kind === "webdav" ? "https://dav.example.com/dav" : "https://s3.amazonaws.com"}
-        spellcheck={false}
-        oninput={(event) => change("endpoint", event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          size="control"
+          type="text"
+          value={remote.endpoint}
+          placeholder={kind === "webdav"
+            ? "https://dav.example.com/dav"
+            : "https://s3.amazonaws.com"}
+          spellcheck={false}
+          oninput={(event) => change("endpoint", event.currentTarget.value)}
+        />
+      </div>
     </div>
 
     {#if remote.kind === "s3"}
@@ -170,13 +177,15 @@
             <p>存储桶所在的地域</p>
           </div>
         </div>
-        <TextField
-          size="control"
-          type="text"
-          value={remote.region}
-          placeholder="us-east-1"
-          oninput={(event) => change("region", event.currentTarget.value)}
-        />
+        <div class="setting-row-input">
+          <TextField
+            size="control"
+            type="text"
+            value={remote.region}
+            placeholder="us-east-1"
+            oninput={(event) => change("region", event.currentTarget.value)}
+          />
+        </div>
       </div>
       <div class="setting-row">
         <div class="setting-heading">
@@ -186,13 +195,15 @@
             <p>对象存储的桶名称</p>
           </div>
         </div>
-        <TextField
-          size="control"
-          type="text"
-          value={remote.bucket}
-          placeholder="my-bucket"
-          oninput={(event) => change("bucket", event.currentTarget.value)}
-        />
+        <div class="setting-row-input">
+          <TextField
+            size="control"
+            type="text"
+            value={remote.bucket}
+            placeholder="my-bucket"
+            oninput={(event) => change("bucket", event.currentTarget.value)}
+          />
+        </div>
       </div>
     {/if}
 
@@ -204,15 +215,17 @@
           <p>{kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
         </div>
       </div>
-      <TextField
-        size="control"
-        type="text"
-        autocomplete="off"
-        spellcheck={false}
-        value={remote.accessKey}
-        placeholder={kind === "webdav" ? "user" : "AKIA..."}
-        oninput={(event) => change("accessKey", event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          size="control"
+          type="text"
+          autocomplete="off"
+          spellcheck={false}
+          value={remote.accessKey}
+          placeholder={kind === "webdav" ? "user" : "AKIA..."}
+          oninput={(event) => change("accessKey", event.currentTarget.value)}
+        />
+      </div>
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -222,15 +235,17 @@
           <p>{kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
         </div>
       </div>
-      <TextField
-        size="control"
-        type="password"
-        autocomplete="off"
-        spellcheck={false}
-        value={remote.secretKey}
-        placeholder="••••••••"
-        oninput={(event) => change("secretKey", event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          size="control"
+          type="password"
+          autocomplete="off"
+          spellcheck={false}
+          value={remote.secretKey}
+          placeholder="••••••••"
+          oninput={(event) => change("secretKey", event.currentTarget.value)}
+        />
+      </div>
     </div>
   </section>
 
@@ -248,14 +263,16 @@
           <p>远程文件列表的前缀过滤（可选）</p>
         </div>
       </div>
-      <TextField
-        id="remote-prefix"
-        size="control"
-        type="text"
-        value={remote.prefix}
-        placeholder="vaults/"
-        oninput={(event) => change("prefix", event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          id="remote-prefix"
+          size="control"
+          type="text"
+          value={remote.prefix}
+          placeholder="vaults/"
+          oninput={(event) => change("prefix", event.currentTarget.value)}
+        />
+      </div>
     </div>
     <div class="setting-row">
       <div class="setting-heading">
@@ -290,15 +307,17 @@
           <p>时间戳备份的命名规则</p>
         </div>
       </div>
-      <TextField
-        id="remote-backup-template"
-        size="control"
-        type="text"
-        value={remote.backupTemplate}
-        placeholder={"{name}.{timestamp}.{ext}.bak"}
-        spellcheck={false}
-        oninput={(event) => change("backupTemplate", event.currentTarget.value)}
-      />
+      <div class="setting-row-input">
+        <TextField
+          id="remote-backup-template"
+          size="control"
+          type="text"
+          value={remote.backupTemplate}
+          placeholder={"{name}.{timestamp}.{ext}.bak"}
+          spellcheck={false}
+          oninput={(event) => change("backupTemplate", event.currentTarget.value)}
+        />
+      </div>
     </div>
     <p class="settings-note">
       占位符：{"{name}"} 文件主名、{"{timestamp}"} 时间戳、{"{ext}"} 原扩展名
