@@ -1652,11 +1652,6 @@
                 onedit={openEditEntry}
                 ondelete={askDeleteEntry}
                 onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
-                onback={() => {
-                  selection.selectedEntry = null;
-                  selection.selectedUuids = new Set();
-                  selection.selectionAnchor = null;
-                }}
                 oncollapse={() => (layout.detailVisible = false)}
               />
             {:else}
