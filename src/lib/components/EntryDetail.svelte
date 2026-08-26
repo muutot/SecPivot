@@ -37,6 +37,8 @@
     /** Optional back affordance for narrow/mobile layouts where the detail
      *  pane is a full-screen overlay; hidden on wide desktop layouts. */
     onback?: () => void;
+    /** Collapse the detail pane from within (desktop hide button). */
+    oncollapse?: () => void;
   }
 
   let {
@@ -48,6 +50,7 @@
     ondelete,
     onrestore,
     onback,
+    oncollapse,
   }: Props = $props();
 
   const iconName = $derived(keepassIconName(entry.icon));
@@ -760,6 +763,16 @@
       <button class="detail-btn danger" onclick={() => ondelete(entry)} title="删除条目">
         <AppIcon name="trash" size={15} />
       </button>
+      {#if oncollapse}
+        <button
+          class="detail-btn"
+          onclick={oncollapse}
+          title="隐藏详情面板"
+          aria-label="隐藏详情面板"
+        >
+          <AppIcon name="chevron-right" size={15} />
+        </button>
+      {/if}
     </div>
   </header>
 

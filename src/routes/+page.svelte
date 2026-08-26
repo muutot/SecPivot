@@ -1657,6 +1657,7 @@
                   selection.selectedUuids = new Set();
                   selection.selectionAnchor = null;
                 }}
+                oncollapse={() => (layout.detailVisible = false)}
               />
             {:else}
               <div class="detail-empty">
