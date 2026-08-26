@@ -436,7 +436,7 @@
     syncCompactShellClass(compactMode);
   });
 
-  const WELCOME_WINDOW_SIZE = { width: 620, height: 480 };
+  const WELCOME_WINDOW_SIZE = { width: 550, height: 730 };
   let lastAppliedSize = $state("");
   let windowResizeTimer: ReturnType<typeof setTimeout> | undefined;
   /** Mirror of the window-size settings; `get(appSettings)` is untracked in
