@@ -345,15 +345,7 @@
     background: var(--hover-bg);
   }
 
-  .tool-button.primary {
-    border-color: color-mix(in srgb, var(--selection-color) 45%, transparent);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 16%, var(--card-bg));
-  }
 
-  .tool-button.primary:hover {
-    background: color-mix(in srgb, var(--selection-color) 24%, var(--card-bg));
-  }
 
   .tool-button:disabled {
     cursor: not-allowed;
@@ -407,7 +399,6 @@
       padding: 0;
       justify-content: center;
     }
-
     .toolbar-center {
       flex: 1;
       justify-content: flex-start;
@@ -472,7 +463,6 @@
 
     .mobile-nav-toggle,
     .tool-button,
-    .tool-button.primary,
     .icon-action {
       width: 32px;
       height: 32px;

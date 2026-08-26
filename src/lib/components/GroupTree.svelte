@@ -28,6 +28,8 @@
     ontoggle?: (uuid: string, expanded: boolean) => void;
     /** Persist a bulk expand/collapse in one `set_groups_expanded` call. */
     onsetexpanded: (uuids: string[], expanded: boolean) => void;
+    /** Close affordance for the mobile drawer; hidden on desktop. */
+    onclose?: () => void;
   }
 
   let {
@@ -49,6 +51,7 @@
     ondropentry,
     ontoggle,
     onsetexpanded,
+    onclose,
   }: Props = $props();
 
   function collectExpanded(group: VaultGroup, into: Set<string>): void {
@@ -194,6 +197,16 @@
   <div class="tree-head">
     <span class="tree-label">分组</span>
     <div class="tree-tools">
+      {#if onclose}
+        <button
+          class="tool-btn drawer-close"
+          title="关闭分组面板"
+          aria-label="关闭分组面板"
+          onclick={onclose}
+        >
+          <AppIcon name="x" size={13} />
+        </button>
+      {/if}
       <button
         class="tool-btn"
         title="新建分组"
@@ -291,6 +304,17 @@
   .tool-btn:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  /* Drawer close affordance exists only in the mobile overlay. */
+  .drawer-close {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .drawer-close {
+      display: inline-flex;
+    }
   }
 
   .tree-list {

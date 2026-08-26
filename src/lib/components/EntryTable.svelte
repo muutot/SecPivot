@@ -681,6 +681,10 @@
     flex: 0 0 auto;
     height: 28px;
     padding: 0;
+    /* Match the scrollable content width so the header band covers every
+     * column even when the grid overflows the panel. */
+    width: max-content;
+    min-width: 100%;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-bg);
   }

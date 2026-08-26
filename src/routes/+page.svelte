@@ -1572,7 +1572,6 @@
                 selection.selectedEntry = null;
                 selection.selectedUuids = new Set();
                 selection.selectionAnchor = null;
-                layout.mobileNavOpen = false;
               }}
               onaddsubgroup={openGroupModal}
               onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
@@ -1588,6 +1587,7 @@
                 void toggleGroupsExpanded(uuids, expanded)}
               ondropentry={(groupUuid: string, uuids: string[]) =>
                 void moveEntriesTo(groupUuid, uuids)}
+              onclose={() => (layout.mobileNavOpen = false)}
             />
           {/key}
         </section>
