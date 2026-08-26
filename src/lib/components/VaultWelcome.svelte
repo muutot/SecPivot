@@ -1017,6 +1017,15 @@
     font-size: var(--font-size-secondary, 11px);
   }
 
+  /* This welcome surface is the documented exception that owns its own modal
+   * layout (ModalShell's `.modal-actions` footer does not apply here). */
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
   .remote-tabs {
     display: flex;
     gap: 6px;
