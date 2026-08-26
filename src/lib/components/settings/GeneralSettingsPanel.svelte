@@ -126,6 +126,36 @@
   ];
 </script>
 
+{#snippet presetPaletteCard(title: string, description: string, colors: ThemeColors)}
+  <section class="setting-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="settings" size={17} /></span>
+      <div>
+        <strong>{title}</strong>
+        <p>{description}</p>
+      </div>
+    </div>
+    <div class="color-list">
+      {#each customColorGroups as group (group.label)}
+        <div class="color-group-label">{group.label}</div>
+        {#each group.fields as field (field.key)}
+          <div class="setting-row">
+            <div class="setting-heading">
+              <span class="setting-icon color-swatch" style:background-color={colors[field.key]}
+              ></span>
+              <div>
+                <strong>{field.label}</strong>
+                <p>{field.description}</p>
+              </div>
+            </div>
+            <code class="readonly-hex">{colors[field.key]}</code>
+          </div>
+        {/each}
+      {/each}
+    </div>
+  </section>
+{/snippet}
+
 {#if showHeader}
   <header>
     <div>
@@ -236,6 +266,10 @@
           {/each}
         </div>
       </section>
+    {:else if general.theme === "dark"}
+      {@render presetPaletteCard("深色配色", "内置默认配色（只读）", DARK_THEME_COLORS)}
+    {:else if general.theme === "light"}
+      {@render presetPaletteCard("浅色配色", "内置默认配色（只读）", LIGHT_THEME_COLORS)}
     {/if}
   {/if}
 
@@ -456,6 +490,18 @@
     font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  .readonly-hex {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-secondary);
+    background: var(--input-bg);
+    font-family: var(--font-mono);
+    font-size: var(--settings-note-size, var(--font-size-tiny, 10px));
+    font-variant-numeric: tabular-nums;
   }
 
   .heading-inline .preset-row {
