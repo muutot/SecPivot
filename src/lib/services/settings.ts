@@ -88,6 +88,26 @@ export function normalizeEntryColumns(
   return Array.from(byId.values());
 }
 
+export function defaultToolbarItems(): import("$lib/types/settings").ToolbarItemVisibility {
+  const base = !isMobile();
+  return {
+    saveAs: base,
+    toggleDetail: base,
+    securityReport: base,
+    similarPasswords: false,
+    hibpCheck: false,
+    importMenu: false,
+    exportMenu: base,
+    expiredEntries: false,
+    clearHistory: false,
+    dbSettings: false,
+    appSettings: base,
+    windowMinimize: true,
+    windowMaximize: true,
+    windowClose: true,
+  };
+}
+
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   language: "zh-CN",
   theme: "dark",
@@ -114,6 +134,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   iconOnlyButtons: false,
   mobileColumns: false,
   toolbarOverflowMenu: isMobile(),
+  toolbarItems: defaultToolbarItems(),
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
 };
@@ -462,6 +483,54 @@ function normalizeSavedSearches(searches: SavedSearch[] | undefined): SavedSearc
   });
 }
 
+function normalizeToolbarItems(
+  source: unknown,
+  overflow: boolean | undefined,
+  fallback: import("$lib/types/settings").ToolbarItemVisibility,
+): import("$lib/types/settings").ToolbarItemVisibility {
+  if (source && typeof source === "object") {
+    const s = source as Record<string, unknown>;
+    const b = (key: string, def: boolean): boolean =>
+      typeof s[key] === "boolean" ? (s[key] as boolean) : def;
+    return {
+      saveAs: b("saveAs", fallback.saveAs),
+      toggleDetail: b("toggleDetail", fallback.toggleDetail),
+      securityReport: b("securityReport", fallback.securityReport),
+      similarPasswords: b("similarPasswords", fallback.similarPasswords),
+      hibpCheck: b("hibpCheck", fallback.hibpCheck),
+      importMenu: b("importMenu", fallback.importMenu),
+      exportMenu: b("exportMenu", fallback.exportMenu),
+      expiredEntries: b("expiredEntries", fallback.expiredEntries),
+      clearHistory: b("clearHistory", fallback.clearHistory),
+      dbSettings: b("dbSettings", fallback.dbSettings),
+      appSettings: b("appSettings", fallback.appSettings),
+      windowMinimize: b("windowMinimize", fallback.windowMinimize),
+      windowMaximize: b("windowMaximize", fallback.windowMaximize),
+      windowClose: b("windowClose", fallback.windowClose),
+    };
+  }
+  if (typeof overflow === "boolean") {
+    const base = !overflow;
+    return {
+      saveAs: base,
+      toggleDetail: base,
+      securityReport: base,
+      similarPasswords: false,
+      hibpCheck: false,
+      importMenu: false,
+      exportMenu: base,
+      expiredEntries: false,
+      clearHistory: false,
+      dbSettings: false,
+      appSettings: base,
+      windowMinimize: true,
+      windowMaximize: true,
+      windowClose: true,
+    };
+  }
+  return { ...fallback };
+}
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -555,6 +624,11 @@ export function normalizeSettings(
       typeof g.toolbarOverflowMenu === "boolean"
         ? g.toolbarOverflowMenu
         : fallback.general.toolbarOverflowMenu,
+    toolbarItems: normalizeToolbarItems(
+      (g as unknown as Record<string, unknown>).toolbarItems,
+      typeof g.toolbarOverflowMenu === "boolean" ? g.toolbarOverflowMenu : undefined,
+      fallback.general.toolbarItems,
+    ),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:

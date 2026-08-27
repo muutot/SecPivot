@@ -129,6 +129,26 @@ export interface PanelWidths {
   urlCol: number;
 }
 
+/** Per-item visibility for secondary toolbar/window actions.
+ *  `true` = show directly on the main toolbar (or window chrome);
+ *  `false` = collect inside the More menu (or hidden for window buttons). */
+export interface ToolbarItemVisibility {
+  saveAs: boolean;
+  toggleDetail: boolean;
+  securityReport: boolean;
+  similarPasswords: boolean;
+  hibpCheck: boolean;
+  importMenu: boolean;
+  exportMenu: boolean;
+  expiredEntries: boolean;
+  clearHistory: boolean;
+  dbSettings: boolean;
+  appSettings: boolean;
+  windowMinimize: boolean;
+  windowMaximize: boolean;
+  windowClose: boolean;
+}
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
@@ -153,8 +173,10 @@ export interface GeneralSettings {
   panelWidths: PanelWidths;
   /** Toolbar control buttons show icons only; button names appear in hover tooltips. */
   iconOnlyButtons: boolean;
-  /** Collect lower-frequency toolbar actions in a shared More menu. */
+  /** Collect lower-frequency toolbar actions in a shared More menu (legacy, kept for migration). */
   toolbarOverflowMenu: boolean;
+  /** Per-item visibility for secondary actions (toolbar + window controls). */
+  toolbarItems: ToolbarItemVisibility;
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

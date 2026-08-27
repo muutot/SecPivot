@@ -107,6 +107,20 @@ export type ToolbarMenuInput = {
   detailVisible: boolean;
   /** Whether a long operation is running (disables the security report). */
   busy: boolean;
+  /** Per-item visibility: when an item is pinned to the toolbar, hide it from the overflow menu. */
+  toolbarItems?: {
+    saveAs: boolean;
+    toggleDetail: boolean;
+    securityReport: boolean;
+    similarPasswords: boolean;
+    hibpCheck: boolean;
+    importMenu: boolean;
+    exportMenu: boolean;
+    expiredEntries: boolean;
+    clearHistory: boolean;
+    dbSettings: boolean;
+    appSettings: boolean;
+  };
 };
 
 /** Import sources as a cascade child list of the toolbar ⋯ menu. */
@@ -125,12 +139,14 @@ const EXPORT_ITEMS: ContextMenuItem[] = [
 ];
 
 /** Toolbar overflow menu (⋯): detail toggle, report, import/export cascades,
- *  maintenance and settings. */
+ *  maintenance and settings. When `toolbarItems` is provided, items pinned
+ *  to the toolbar (true) are omitted from the overflow to avoid duplication. */
 export function buildToolbarMenuItems({
   detailVisible,
   busy,
+  toolbarItems,
 }: ToolbarMenuInput): ContextMenuItem[] {
-  return [
+  const all: ContextMenuItem[] = [
     { id: "save-as", label: "另存为…", icon: "copy" },
     {
       id: "toggle-detail",
@@ -148,4 +164,23 @@ export function buildToolbarMenuItems({
     { id: "db-settings", label: "数据库设置", icon: "settings" },
     { id: "settings", label: "设置", icon: "settings" },
   ];
+  if (!toolbarItems) return all;
+  const map: Record<string, keyof NonNullable<ToolbarMenuInput["toolbarItems"]>> = {
+    "save-as": "saveAs",
+    "toggle-detail": "toggleDetail",
+    "security-report": "securityReport",
+    "similar-passwords": "similarPasswords",
+    "hibp-check": "hibpCheck",
+    import: "importMenu",
+    export: "exportMenu",
+    "expired-entries": "expiredEntries",
+    "clear-history": "clearHistory",
+    "db-settings": "dbSettings",
+    settings: "appSettings",
+  };
+  return all.filter((item) => {
+    const key = map[item.id];
+    if (!key) return true;
+    return !toolbarItems[key];
+  });
 }

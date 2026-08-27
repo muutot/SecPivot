@@ -431,7 +431,7 @@
   const compactMode = $derived(settings.general.compactMode);
   const groupDensity = $derived(settings.general.density);
   const iconOnlyButtons = $derived(settings.general.iconOnlyButtons);
-  const toolbarOverflowMenu = $derived(settings.general.toolbarOverflowMenu);
+  const toolbarItems = $derived(settings.general.toolbarItems);
   const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
@@ -1420,7 +1420,23 @@
   );
 
   const toolbarMenuItems = $derived<ContextMenuItem[]>(
-    buildToolbarMenuItems({ detailVisible: layout.detailVisible, busy }),
+    buildToolbarMenuItems({
+      detailVisible: layout.detailVisible,
+      busy,
+      toolbarItems: {
+        saveAs: toolbarItems.saveAs,
+        toggleDetail: toolbarItems.toggleDetail,
+        securityReport: toolbarItems.securityReport,
+        similarPasswords: toolbarItems.similarPasswords,
+        hibpCheck: toolbarItems.hibpCheck,
+        importMenu: toolbarItems.importMenu,
+        exportMenu: toolbarItems.exportMenu,
+        expiredEntries: toolbarItems.expiredEntries,
+        clearHistory: toolbarItems.clearHistory,
+        dbSettings: toolbarItems.dbSettings,
+        appSettings: toolbarItems.appSettings,
+      },
+    }),
   );
 
   function handleEntryMenuAction(id: string, entry: VaultEntry): void {
@@ -1546,7 +1562,7 @@
       <AppToolbar
         bind:search
         {iconOnlyButtons}
-        {toolbarOverflowMenu}
+        toolbarItems={toolbarItems}
         {showWindowControls}
         {busy}
         dirty={currentVault.dirty}
@@ -1567,6 +1583,12 @@
         onexportcsv={() => void handleExportCsv()}
         onsettings={openSettings}
         ontogglemenu={toggleToolbarMenu}
+        onsimilar={() => (similarOpen = true)}
+        onhibp={() => (hibpOpen = true)}
+        onexpired={() => (expiredOpen = true)}
+        onclearhistory={() => void handleClearHistory()}
+        ondbsettings={() => (dbSettingsOpen = true)}
+        onimportcsv={() => void handleImportCsv()}
         bind:this={toolbarEl}
       />
 
@@ -1719,7 +1741,12 @@
       </footer>
     {:else if showLockScreen}
       <div class="standalone-bar" data-tauri-drag-region>
-        <WindowControls variant="chrome" />
+        <WindowControls
+          variant="chrome"
+          showMinimize={toolbarItems.windowMinimize}
+          showMaximize={toolbarItems.windowMaximize}
+          showClose={toolbarItems.windowClose}
+        />
       </div>
       <LockScreen
         remembered={rememberedPath}
@@ -1728,7 +1755,12 @@
       />
     {:else}
       <div class="standalone-bar" data-tauri-drag-region>
-        <WindowControls variant="chrome" />
+        <WindowControls
+          variant="chrome"
+          showMinimize={toolbarItems.windowMinimize}
+          showMaximize={toolbarItems.windowMaximize}
+          showClose={toolbarItems.windowClose}
+        />
       </div>
       <VaultWelcome onopened={() => void vault.refresh()} />
     {/if}
@@ -1743,7 +1775,12 @@
     entry={editor.editEntry}
     entries={editor.editEntries}
     onclose={editor.close}
-    onsaved={(input, patch, autotype, flags) => editor.handleSave(input, patch, autotype, flags)}
+    onsaved={(
+      input: EntryInput | null,
+      patch: EntryPatch | null,
+      autotype: EntryAutoTypeConfig | null | undefined,
+      flags: EntryFlags | null | undefined,
+    ) => editor.handleSave(input, patch, autotype ?? null, flags ?? null)}
   />
 {/if}
 

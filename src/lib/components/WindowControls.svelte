@@ -8,9 +8,12 @@
     /** "toolbar": bordered compact buttons matching .icon-action;
      *  "chrome": flat titlebar-style buttons (welcome/lock/settings). */
     variant?: "toolbar" | "chrome";
+    showMinimize?: boolean;
+    showMaximize?: boolean;
+    showClose?: boolean;
   }
 
-  let { variant = "chrome" }: Props = $props();
+  let { variant = "chrome", showMinimize = true, showMaximize = true, showClose = true }: Props = $props();
 
   const appWindow = isTauriRuntime() ? getCurrentWindow() : null;
   let maximized = $state(false);
@@ -55,20 +58,26 @@
     role="group"
     aria-label="窗口控制"
   >
-    <button class="wc-btn" onclick={minimize} title="最小化" aria-label="最小化">
-      <AppIcon name="minimize" size={13} />
-    </button>
-    <button
-      class="wc-btn"
-      onclick={toggleMaximize}
-      title={maximized ? "还原" : "最大化"}
-      aria-label={maximized ? "还原" : "最大化"}
-    >
-      <AppIcon name={maximized ? "restore" : "maximize"} size={12} />
-    </button>
-    <button class="wc-btn wc-close" onclick={close} title="关闭" aria-label="关闭">
-      <AppIcon name="x" size={13} />
-    </button>
+    {#if showMinimize}
+      <button class="wc-btn" onclick={minimize} title="最小化" aria-label="最小化">
+        <AppIcon name="minimize" size={13} />
+      </button>
+    {/if}
+    {#if showMaximize}
+      <button
+        class="wc-btn"
+        onclick={toggleMaximize}
+        title={maximized ? "还原" : "最大化"}
+        aria-label={maximized ? "还原" : "最大化"}
+      >
+        <AppIcon name={maximized ? "restore" : "maximize"} size={12} />
+      </button>
+    {/if}
+    {#if showClose}
+      <button class="wc-btn wc-close" onclick={close} title="关闭" aria-label="关闭">
+        <AppIcon name="x" size={13} />
+      </button>
+    {/if}
   </div>
 {/if}
 

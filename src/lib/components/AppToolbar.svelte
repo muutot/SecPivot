@@ -1,12 +1,13 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
+  import type { ToolbarItemVisibility } from "$lib/types/settings";
 
   interface Props {
     /** Two-way bound search text. */
     search?: string;
     iconOnlyButtons: boolean;
-    toolbarOverflowMenu: boolean;
+    toolbarItems: ToolbarItemVisibility;
     showWindowControls: boolean;
     busy: boolean;
     dirty: boolean;
@@ -27,12 +28,18 @@
     onexportcsv: () => void;
     onsettings: () => void;
     ontogglemenu: (event: MouseEvent) => void;
+    onsimilar?: () => void;
+    onhibp?: () => void;
+    onexpired?: () => void;
+    onclearhistory?: () => void;
+    ondbsettings?: () => void;
+    onimportcsv?: () => void;
   }
 
   let {
     search = $bindable(""),
     iconOnlyButtons,
-    toolbarOverflowMenu,
+    toolbarItems,
     showWindowControls,
     busy,
     dirty,
@@ -53,7 +60,27 @@
     onexportcsv,
     onsettings,
     ontogglemenu,
+    onsimilar,
+    onhibp,
+    onexpired,
+    onclearhistory,
+    ondbsettings,
+    onimportcsv,
   }: Props = $props();
+
+  const hasOverflow = $derived(
+    !toolbarItems.saveAs ||
+      !toolbarItems.toggleDetail ||
+      !toolbarItems.securityReport ||
+      !toolbarItems.similarPasswords ||
+      !toolbarItems.hibpCheck ||
+      !toolbarItems.importMenu ||
+      !toolbarItems.exportMenu ||
+      !toolbarItems.expiredEntries ||
+      !toolbarItems.clearHistory ||
+      !toolbarItems.dbSettings ||
+      !toolbarItems.appSettings,
+  );
 
   let searchInputEl = $state<HTMLInputElement | null>(null);
 
@@ -94,7 +121,7 @@
       <AppIcon name="save" size={14} />
       {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
     </button>
-    {#if !toolbarOverflowMenu}
+    {#if toolbarItems.saveAs}
       <button
         class="tool-button"
         class:icon-only={iconOnlyButtons}
@@ -150,7 +177,62 @@
     {#if dirty}
       <span class="dirty-badge">未保存</span>
     {/if}
-    {#if toolbarOverflowMenu}
+    {#if toolbarItems.toggleDetail}
+      <button
+        class="icon-action"
+        onclick={ontoggledetail}
+        title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
+        aria-pressed={detailVisible}
+      >
+        <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.securityReport}
+      <button class="icon-action" onclick={onreport} title="安全报告">
+        <AppIcon name="shield" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.similarPasswords}
+      <button class="icon-action" onclick={() => onsimilar?.()} title="相似密码检查">
+        <AppIcon name="shield" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.hibpCheck}
+      <button class="icon-action" onclick={() => onhibp?.()} title="HIBP 泄露检查">
+        <AppIcon name="globe" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.expiredEntries}
+      <button class="icon-action" onclick={() => onexpired?.()} title="过期条目">
+        <AppIcon name="clock" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.clearHistory}
+      <button class="icon-action" onclick={() => onclearhistory?.()} title="清理全部历史">
+        <AppIcon name="trash" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.importMenu}
+      <button class="icon-action" onclick={() => onimportcsv?.()} title="导入">
+        <AppIcon name="upload" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.exportMenu}
+      <button class="icon-action" onclick={onexportcsv} title="导出 CSV">
+        <AppIcon name="download" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.dbSettings}
+      <button class="icon-action" onclick={() => ondbsettings?.()} title="数据库设置">
+        <AppIcon name="database" size={15} />
+      </button>
+    {/if}
+    {#if toolbarItems.appSettings}
+      <button class="icon-action" onclick={onsettings} title="设置">
+        <AppIcon name="settings" size={16} />
+      </button>
+    {/if}
+    {#if hasOverflow}
       <button
         class="icon-action"
         class:active={toolbarMenuOpen}
@@ -162,28 +244,15 @@
       >
         <AppIcon name="more-horizontal" size={16} />
       </button>
-    {:else}
-      <button
-        class="icon-action"
-        onclick={ontoggledetail}
-        title={detailVisible ? "隐藏详情面板" : "显示详情面板"}
-        aria-pressed={detailVisible}
-      >
-        <AppIcon name={detailVisible ? "chevron-right" : "chevron-left"} size={15} />
-      </button>
-      <button class="icon-action" onclick={onreport} title="安全报告">
-        <AppIcon name="shield" size={15} />
-      </button>
-      <button class="icon-action" onclick={onexportcsv} title="导出 CSV">
-        <AppIcon name="download" size={15} />
-      </button>
-      <button class="icon-action" onclick={onsettings} title="设置">
-        <AppIcon name="settings" size={16} />
-      </button>
     {/if}
     {#if showWindowControls}
       <span class="toolbar-divider" aria-hidden="true"></span>
-      <WindowControls variant="toolbar" />
+      <WindowControls
+        variant="toolbar"
+        showMinimize={toolbarItems.windowMinimize}
+        showMaximize={toolbarItems.windowMaximize}
+        showClose={toolbarItems.windowClose}
+      />
     {/if}
   </div>
 </div>

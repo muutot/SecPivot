@@ -657,6 +657,8 @@
   ariaLabel={mode === "create" ? "新建条目" : "编辑条目"}
   size="large"
   scrollable
+  closeOnEscape
+  onclose={onclose}
 >
   {#snippet icon()}
     {#if customIconSelected && customIconUrl}
@@ -664,6 +666,28 @@
     {:else}
       <AppIcon name={headerIconName} size={18} />
     {/if}
+  {/snippet}
+  {#snippet headerActions()}
+    <button
+      class="icon-btn"
+      type="button"
+      onclick={onclose}
+      aria-label="取消"
+      title="取消"
+      disabled={saving}
+    >
+      <AppIcon name="x" size={15} />
+    </button>
+    <button
+      class="icon-btn primary"
+      type="button"
+      onclick={submit}
+      aria-label="保存"
+      title="保存"
+      disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
+    >
+      <AppIcon name="check" size={15} />
+    </button>
   {/snippet}
   {#snippet children()}
     <div class="editor-tabs" role="tablist" aria-label="条目字段分组">
@@ -1312,18 +1336,8 @@
       </div>
     {/if}
   {/snippet}
-  {#snippet actions()}
-    <Button onclick={onclose} disabled={saving}>取消</Button>
-    <Button
-      variant="primary"
-      onclick={submit}
-      disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
-      title={!multi && (!passwordReady || !totpReady || !protectedFieldsReady)
-        ? "正在载入敏感字段…"
-        : undefined}>保存</Button
-    >
-  {/snippet}
 </ModalShell>
+
 
 <style>
   .modal-icon-img {

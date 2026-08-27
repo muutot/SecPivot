@@ -8,7 +8,7 @@
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
-  type Section = "appearance" | "display" | "compact" | "network";
+  type Section = "appearance" | "display" | "compact" | "toolbar" | "network";
 
   interface Props {
     onclose: () => void;
@@ -374,14 +374,6 @@
       onchange={(checked) => change("compactMode", checked)}
     />
 
-    <SettingToggleCard
-      icon="menu"
-      label="次要操作收纳菜单"
-      description="将另存为、详情、安全报告、导出和设置集中到“更多”菜单；移动端默认开启"
-      checked={general.toolbarOverflowMenu}
-      onchange={(checked) => change("toolbarOverflowMenu", checked)}
-    />
-
     {#each densitySliders as slider (slider.key)}
       <SettingRangeCard
         icon="sliders"
@@ -413,6 +405,38 @@
             ...s.general.fontSizes,
             [slider.key]: value,
           })}
+      />
+    {/each}
+  {/if}
+
+  {#if section === "toolbar"}
+    <p class="settings-note" style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);">逐项控制是否在主界面直接显示；关闭则收纳到「更多」菜单（窗口按钮关闭则隐藏）。</p>
+    {#each [
+      { key: 'saveAs', label: '另存为', desc: '工具栏左侧“另存为”按钮', icon: 'copy' },
+      { key: 'toggleDetail', label: '详情面板切换', desc: '工具栏“显示/隐藏详情”按钮', icon: 'eye' },
+      { key: 'securityReport', label: '安全报告', desc: '工具栏“安全报告”按钮', icon: 'shield' },
+      { key: 'similarPasswords', label: '相似密码检查', desc: '收纳菜单中的“相似密码检查”', icon: 'shield' },
+      { key: 'hibpCheck', label: 'HIBP 泄露检查', desc: '收纳菜单中的“HIBP 泄露检查”', icon: 'globe' },
+      { key: 'importMenu', label: '导入', desc: '收纳菜单中的“导入”子菜单（CSV/XML/Bitwarden/1Password）', icon: 'upload' },
+      { key: 'exportMenu', label: '导出', desc: '工具栏/收纳菜单中的“导出”', icon: 'download' },
+      { key: 'expiredEntries', label: '过期条目', desc: '收纳菜单中的“过期条目”', icon: 'clock' },
+      { key: 'clearHistory', label: '清理全部历史', desc: '收纳菜单中的“清理全部历史”', icon: 'trash' },
+      { key: 'dbSettings', label: '数据库设置', desc: '收纳菜单中的“数据库设置”', icon: 'settings' },
+      { key: 'appSettings', label: '设置', desc: '工具栏“设置”按钮', icon: 'settings' },
+      { key: 'windowMinimize', label: '窗口：最小化 —', desc: '主窗口标题栏/工具栏“最小化”按钮', icon: 'minimize' },
+      { key: 'windowMaximize', label: '窗口：最大化/还原 □', desc: '主窗口“最大化/还原”按钮', icon: 'maximize' },
+      { key: 'windowClose', label: '窗口：关闭 ×', desc: '主窗口“关闭”按钮', icon: 'x' },
+    ] as item (item.key)}
+      <SettingToggleCard
+        icon={item.icon as never}
+        label={item.label}
+        description={item.desc}
+        checked={(s.general.toolbarItems as unknown as Record<string, boolean>)[item.key]}
+        onchange={(checked) =>
+          change("toolbarItems", {
+            ...s.general.toolbarItems,
+            [item.key]: checked,
+          } as never)}
       />
     {/each}
   {/if}

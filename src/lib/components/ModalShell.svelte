@@ -17,6 +17,10 @@
     closeOnEscape?: boolean;
     onclose?: () => void;
     icon?: Snippet;
+    /** Extra header-end actions (icon buttons); rendered between the heading
+     *  and the close button so callers can promote dialog actions to the
+     *  title bar. */
+    headerActions?: Snippet;
     children?: Snippet;
     actions?: Snippet;
   }
@@ -33,6 +37,7 @@
     closeOnEscape = false,
     onclose,
     icon,
+    headerActions,
     children,
     actions,
   }: Props = $props();
@@ -107,6 +112,7 @@
         <strong>{title}</strong>
         {#if description}<p>{description}</p>{/if}
       </div>
+      {#if headerActions}<div class="modal-shell__header-actions">{@render headerActions()}</div>{/if}
       {#if showClose && onclose}
         <button
           class="modal-shell__close"
@@ -211,6 +217,13 @@
     margin: 2px 0 0;
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
+  }
+
+  .modal-shell__header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
   }
 
   .modal-shell__body {
