@@ -37,6 +37,37 @@
     openSubmenu = null;
     onaction(id);
   }
+
+  /** Flip a submenu to the left side of its anchor when it would otherwise
+   *  be clipped by the window's right edge. */
+  function submenuFlip(node: HTMLDivElement): { destroy(): void } {
+    const flip = (): void => {
+      node.style.left = "calc(100% + 4px)";
+      node.style.right = "auto";
+      const rect = node.getBoundingClientRect();
+      if (rect.right > window.innerWidth - 8) {
+        node.style.left = "auto";
+        node.style.right = "calc(100% + 4px)";
+      }
+      // Vertical clamp: keep the whole submenu inside the viewport.
+      const clamped = node.getBoundingClientRect();
+      if (clamped.bottom > window.innerHeight - 8) {
+        const anchor = node.parentElement as HTMLElement | null;
+        const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+        node.style.top = `${Math.min(-4, window.innerHeight - 8 - (clamped.height + anchorTop))}px`;
+      }
+    };
+    flip();
+    const ro = new ResizeObserver(flip);
+    ro.observe(node);
+    window.addEventListener("resize", flip);
+    return {
+      destroy() {
+        ro.disconnect();
+        window.removeEventListener("resize", flip);
+      },
+    };
+  }
 </script>
 
 <ViewportMenuShell {x} {y} onclose={close} ariaLabel="上下文菜单">
@@ -67,7 +98,7 @@
           {/if}
         </MenuItem>
         {#if hasChildren && openSubmenu === item.id}
-          <div class="submenu">
+          <div class="submenu" use:submenuFlip>
             {#each item.children as child (child.id)}
               <MenuItem
                 label={child.label}
