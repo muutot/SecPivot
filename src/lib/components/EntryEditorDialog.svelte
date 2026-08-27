@@ -669,16 +669,6 @@
   {/snippet}
   {#snippet headerActions()}
     <button
-      class="icon-btn"
-      type="button"
-      onclick={onclose}
-      aria-label="取消"
-      title="取消"
-      disabled={saving}
-    >
-      <AppIcon name="x" size={15} />
-    </button>
-    <button
       class="icon-btn primary"
       type="button"
       onclick={submit}
@@ -687,6 +677,16 @@
       disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
     >
       <AppIcon name="check" size={15} />
+    </button>
+    <button
+      class="icon-btn"
+      type="button"
+      onclick={onclose}
+      aria-label="取消"
+      title="取消"
+      disabled={saving}
+    >
+      <AppIcon name="x" size={15} />
     </button>
   {/snippet}
   {#snippet children()}
