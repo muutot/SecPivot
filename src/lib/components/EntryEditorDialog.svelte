@@ -658,7 +658,7 @@
   size="large"
   scrollable
   closeOnEscape
-  onclose={onclose}
+  {onclose}
 >
   {#snippet icon()}
     {#if customIconSelected && customIconUrl}
@@ -996,25 +996,14 @@
             />
           </label>
 
-          <label class="field full">
-            <span>
-              质量检查
-              <span class="field-help" title="禁用后条目不参与弱密码安全检查">
-                <AppIcon name="info" size={12} />
-              </span>
-            </span>
-            <div class="flag-row">
-              <button
-                type="button"
-                class="flag-toggle"
-                class:active={qualityCheck}
-                onclick={() => (qualityCheck = !qualityCheck)}
-                aria-pressed={qualityCheck}
-              >
-                {qualityCheck ? "已启用" : "已禁用"}
-              </button>
-            </div>
-          </label>
+          <div class="autotype-row">
+            <span class="autotype-label"
+              >质量检查 <span class="field-help" title="禁用后条目不参与弱密码安全检查"
+                ><AppIcon name="info" size={12} /></span
+              ></span
+            >
+            <Toggle bind:checked={qualityCheck} ariaLabel="质量检查" />
+          </div>
 
           <section class="field full">
             <span class="section-title">前景色（文字）</span>
@@ -1337,7 +1326,6 @@
     {/if}
   {/snippet}
 </ModalShell>
-
 
 <style>
   .modal-icon-img {
@@ -1841,32 +1829,5 @@
     border-radius: var(--settings-control-radius, 6px);
     background: var(--input-bg);
     cursor: pointer;
-  }
-
-  .flag-row {
-    display: flex;
-    align-items: center;
-  }
-
-  .flag-toggle {
-    height: 28px;
-    padding: 0 12px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-muted);
-    background: var(--input-bg);
-    font-size: var(--font-size-secondary, 11px);
-    cursor: pointer;
-  }
-
-  .flag-toggle:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .flag-toggle.active {
-    color: var(--selection-color);
-    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
-    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 </style>
