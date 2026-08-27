@@ -108,6 +108,21 @@ export function defaultToolbarItems(): import("$lib/types/settings").ToolbarItem
   };
 }
 
+export const DEFAULT_TOOLBAR_ORDER: import("$lib/types/settings").ToolbarRightId[] = [
+  "toggleDetail",
+  "securityReport",
+  "similarPasswords",
+  "hibpCheck",
+  "expiredEntries",
+  "clearHistory",
+  "importMenu",
+  "exportMenu",
+  "dbSettings",
+  "appSettings",
+];
+
+export const DEFAULT_TOOLBAR_SEPARATORS: import("$lib/types/settings").ToolbarRightId[] = [];
+
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   language: "zh-CN",
   theme: "dark",
@@ -135,6 +150,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   mobileColumns: false,
   toolbarOverflowMenu: isMobile(),
   toolbarItems: defaultToolbarItems(),
+  toolbarOrder: [...DEFAULT_TOOLBAR_ORDER],
+  toolbarSeparators: [...DEFAULT_TOOLBAR_SEPARATORS],
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
 };
@@ -531,6 +548,42 @@ function normalizeToolbarItems(
   return { ...fallback };
 }
 
+const TOOLBAR_ORDER_IDS = new Set<string>(DEFAULT_TOOLBAR_ORDER as unknown as string[]);
+function normalizeToolbarOrder(
+  source: unknown,
+  fallback: import("$lib/types/settings").ToolbarRightId[],
+): import("$lib/types/settings").ToolbarRightId[] {
+  if (!Array.isArray(source) || source.length === 0) return [...fallback];
+  const seen = new Set<string>();
+  const out: import("$lib/types/settings").ToolbarRightId[] = [];
+  for (const v of source) {
+    const id = String(v);
+    if (!TOOLBAR_ORDER_IDS.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id as import("$lib/types/settings").ToolbarRightId);
+  }
+  for (const id of fallback) if (!seen.has(id as unknown as string)) out.push(id);
+  return out;
+}
+function normalizeToolbarSeparators(
+  source: unknown,
+  order: import("$lib/types/settings").ToolbarRightId[],
+): import("$lib/types/settings").ToolbarRightId[] {
+  if (!Array.isArray(source)) return [];
+  const orderSet = new Set<string>(order as unknown as string[]);
+  const seen = new Set<string>();
+  const out: import("$lib/types/settings").ToolbarRightId[] = [];
+  for (const v of source) {
+    const id = String(v);
+    if (!orderSet.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id as import("$lib/types/settings").ToolbarRightId);
+  }
+  return out;
+}
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -628,6 +681,17 @@ export function normalizeSettings(
       (g as unknown as Record<string, unknown>).toolbarItems,
       typeof g.toolbarOverflowMenu === "boolean" ? g.toolbarOverflowMenu : undefined,
       fallback.general.toolbarItems,
+    ),
+    toolbarOrder: normalizeToolbarOrder(
+      (g as unknown as Record<string, unknown>).toolbarOrder,
+      fallback.general.toolbarOrder,
+    ),
+    toolbarSeparators: normalizeToolbarSeparators(
+      (g as unknown as Record<string, unknown>).toolbarSeparators,
+      normalizeToolbarOrder(
+        (g as unknown as Record<string, unknown>).toolbarOrder,
+        fallback.general.toolbarOrder,
+      ),
     ),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),

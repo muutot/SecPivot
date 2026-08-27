@@ -392,22 +392,12 @@
       }).then((stop) => (unlistenAutotypePick = stop));
     }
     void vault.refresh();
-    const rememberWindowSize = (): void => {
-      if (!currentVault) return;
-      if (windowResizeTimer) clearTimeout(windowResizeTimer);
-      windowResizeTimer = setTimeout(() => {
-        appSettings.updateGeneral("windowWidth", window.innerWidth);
-        appSettings.updateGeneral("windowHeight", window.innerHeight);
-      }, 300);
-    };
-    window.addEventListener("resize", rememberWindowSize);
     return () => {
       unsubscribe();
       unsubRemembered();
       unsubActive();
       void unlistenVaultChanged?.();
       void unlistenAutotypePick?.();
-      window.removeEventListener("resize", rememberWindowSize);
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
       sessionView.activate(null);
     };
@@ -432,6 +422,8 @@
   const groupDensity = $derived(settings.general.density);
   const iconOnlyButtons = $derived(settings.general.iconOnlyButtons);
   const toolbarItems = $derived(settings.general.toolbarItems);
+  const toolbarOrder = $derived(settings.general.toolbarOrder);
+  const toolbarSeparators = $derived(settings.general.toolbarSeparators);
   const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
@@ -1436,6 +1428,7 @@
         dbSettings: toolbarItems.dbSettings,
         appSettings: toolbarItems.appSettings,
       },
+      toolbarOrder,
     }),
   );
 
@@ -1562,7 +1555,9 @@
       <AppToolbar
         bind:search
         {iconOnlyButtons}
-        toolbarItems={toolbarItems}
+        {toolbarItems}
+        {toolbarOrder}
+        {toolbarSeparators}
         {showWindowControls}
         {busy}
         dirty={currentVault.dirty}

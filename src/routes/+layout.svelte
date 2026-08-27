@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import "../app.css";
   import { appSettings } from "$lib/services/settings";
+  import { vault } from "$lib/services/vault";
   import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { installAutoLock, installFocusLock, lockVault } from "$lib/services/security";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -44,9 +45,29 @@
         stopTrayLock = fn;
       });
     }
+    // Window-size persistence must survive navigation to /settings — the main
+    // page unmounts there and its resize listener would otherwise miss drags
+    // performed while the settings view is open, causing a snap-back on return.
+    let hasVault = false;
+    const unsubVault = vault.subscribe((v) => {
+      hasVault = !!v;
+    });
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const rememberWindowSize = (): void => {
+      if (!hasVault || isTcatoOverlay) return;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        appSettings.updateGeneral("windowWidth", window.innerWidth);
+        appSettings.updateGeneral("windowHeight", window.innerHeight);
+      }, 300);
+    };
+    window.addEventListener("resize", rememberWindowSize);
     return () => {
       unsubscribe();
+      unsubVault();
       document.removeEventListener("mousedown", onMiddleDown, true);
+      window.removeEventListener("resize", rememberWindowSize);
+      if (resizeTimer) clearTimeout(resizeTimer);
       stopFocusLock();
       stopAutoLock();
       stopTrayLock?.();

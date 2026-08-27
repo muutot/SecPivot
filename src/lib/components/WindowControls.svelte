@@ -13,7 +13,12 @@
     showClose?: boolean;
   }
 
-  let { variant = "chrome", showMinimize = true, showMaximize = true, showClose = true }: Props = $props();
+  let {
+    variant = "chrome",
+    showMinimize = true,
+    showMaximize = true,
+    showClose = true,
+  }: Props = $props();
 
   const appWindow = isTauriRuntime() ? getCurrentWindow() : null;
   let maximized = $state(false);

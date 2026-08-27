@@ -149,6 +149,19 @@ export interface ToolbarItemVisibility {
   windowClose: boolean;
 }
 
+/** Ordered toolbar ids for the configurable right side (saveAs stays left, window controls stay far right). */
+export type ToolbarRightId =
+  | "toggleDetail"
+  | "securityReport"
+  | "similarPasswords"
+  | "hibpCheck"
+  | "expiredEntries"
+  | "clearHistory"
+  | "importMenu"
+  | "exportMenu"
+  | "dbSettings"
+  | "appSettings";
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
@@ -177,6 +190,10 @@ export interface GeneralSettings {
   toolbarOverflowMenu: boolean;
   /** Per-item visibility for secondary actions (toolbar + window controls). */
   toolbarItems: ToolbarItemVisibility;
+  /** Ordered ids for the right toolbar group; controls sort order on the main toolbar. */
+  toolbarOrder: ToolbarRightId[];
+  /** Ids after which a vertical divider is rendered on the toolbar. */
+  toolbarSeparators: ToolbarRightId[];
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

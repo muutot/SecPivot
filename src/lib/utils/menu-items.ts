@@ -121,6 +121,8 @@ export type ToolbarMenuInput = {
     dbSettings: boolean;
     appSettings: boolean;
   };
+  /** Optional order for the right toolbar group; overflow items that are still hidden follow this order. */
+  toolbarOrder?: string[];
 };
 
 /** Import sources as a cascade child list of the toolbar ⋯ menu. */
@@ -145,6 +147,7 @@ export function buildToolbarMenuItems({
   detailVisible,
   busy,
   toolbarItems,
+  toolbarOrder,
 }: ToolbarMenuInput): ContextMenuItem[] {
   const all: ContextMenuItem[] = [
     { id: "save-as", label: "另存为…", icon: "copy" },
@@ -178,9 +181,45 @@ export function buildToolbarMenuItems({
     "db-settings": "dbSettings",
     settings: "appSettings",
   };
-  return all.filter((item) => {
+  const filtered = all.filter((item) => {
     const key = map[item.id];
     if (!key) return true;
     return !toolbarItems[key];
+  });
+  if (!toolbarOrder || toolbarOrder.length === 0) return filtered;
+  const orderMap = new Map<string, number>();
+  toolbarOrder.forEach((id, idx) => {
+    const menuId =
+      id === "toggleDetail"
+        ? "toggle-detail"
+        : id === "securityReport"
+          ? "security-report"
+          : id === "similarPasswords"
+            ? "similar-passwords"
+            : id === "hibpCheck"
+              ? "hibp-check"
+              : id === "importMenu"
+                ? "import"
+                : id === "exportMenu"
+                  ? "export"
+                  : id === "expiredEntries"
+                    ? "expired-entries"
+                    : id === "clearHistory"
+                      ? "clear-history"
+                      : id === "dbSettings"
+                        ? "db-settings"
+                        : id === "appSettings"
+                          ? "settings"
+                          : id;
+    orderMap.set(menuId, idx);
+  });
+  const anchor = new Map<string, number>([
+    ["save-as", -1],
+    ["lock", 100],
+  ]);
+  return [...filtered].sort((a, b) => {
+    const ai = anchor.has(a.id) ? anchor.get(a.id)! : (orderMap.get(a.id) ?? 50);
+    const bi = anchor.has(b.id) ? anchor.get(b.id)! : (orderMap.get(b.id) ?? 50);
+    return ai - bi;
   });
 }

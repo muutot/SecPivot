@@ -112,7 +112,9 @@
         <strong>{title}</strong>
         {#if description}<p>{description}</p>{/if}
       </div>
-      {#if headerActions}<div class="modal-shell__header-actions">{@render headerActions()}</div>{/if}
+      {#if headerActions}<div class="modal-shell__header-actions">
+          {@render headerActions()}
+        </div>{/if}
       {#if showClose && onclose}
         <button
           class="modal-shell__close"

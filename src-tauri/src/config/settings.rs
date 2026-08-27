@@ -193,6 +193,21 @@ pub fn default_entry_columns() -> Vec<EntryColumnState> {
     ]
 }
 
+pub fn default_toolbar_order() -> Vec<String> {
+    vec![
+        "toggleDetail".into(),
+        "securityReport".into(),
+        "similarPasswords".into(),
+        "hibpCheck".into(),
+        "expiredEntries".into(),
+        "clearHistory".into(),
+        "importMenu".into(),
+        "exportMenu".into(),
+        "dbSettings".into(),
+        "appSettings".into(),
+    ]
+}
+
 /// One named advanced-search query (mirrors `AdvancedSearchQuery` in
 /// `src/lib/utils/entry-search.ts`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +245,50 @@ pub struct SavedSearch {
     pub query: AdvancedSearchQuery,
 }
 
+/// Per-item visibility for secondary toolbar/window actions.
+/// `true` = show directly on the main toolbar (or window chrome);
+/// `false` = inside the More menu (or hidden for window buttons).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ToolbarItemVisibility {
+    pub save_as: bool,
+    pub toggle_detail: bool,
+    pub security_report: bool,
+    pub similar_passwords: bool,
+    pub hibp_check: bool,
+    pub import_menu: bool,
+    pub export_menu: bool,
+    pub expired_entries: bool,
+    pub clear_history: bool,
+    pub db_settings: bool,
+    pub app_settings: bool,
+    pub window_minimize: bool,
+    pub window_maximize: bool,
+    pub window_close: bool,
+}
+
+impl Default for ToolbarItemVisibility {
+    fn default() -> Self {
+        let base = !cfg!(any(target_os = "android", target_os = "ios"));
+        Self {
+            save_as: base,
+            toggle_detail: base,
+            security_report: base,
+            similar_passwords: false,
+            hibp_check: false,
+            import_menu: false,
+            export_menu: base,
+            expired_entries: false,
+            clear_history: false,
+            db_settings: false,
+            app_settings: base,
+            window_minimize: true,
+            window_maximize: true,
+            window_close: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct GeneralSettings {
@@ -253,8 +312,19 @@ pub struct GeneralSettings {
     pub panel_widths: PanelWidths,
     /// Toolbar control buttons show icons only (labels on hover tooltips).
     pub icon_only_buttons: bool,
-    /// Collect lower-frequency toolbar actions in a shared More menu.
+    /// Collect lower-frequency toolbar actions in a shared More menu (legacy, kept for migration).
     pub toolbar_overflow_menu: bool,
+    /// Per-item visibility for secondary actions (toolbar + window controls).
+    /// `None` on old configs that predate the field — `normalize_config`
+    /// derives the initial values from `toolbar_overflow_menu`.
+    #[serde(default)]
+    pub toolbar_items: Option<ToolbarItemVisibility>,
+    /// Ordered ids for the right toolbar group; controls sort order.
+    #[serde(default)]
+    pub toolbar_order: Vec<String>,
+    /// Ids after which a vertical divider is rendered on the toolbar.
+    #[serde(default)]
+    pub toolbar_separators: Vec<String>,
     /// Render the full entry-table column grid on narrow screens too.
     pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
@@ -311,6 +381,9 @@ impl Default for GeneralSettings {
             icon_only_buttons: false,
             mobile_columns: false,
             toolbar_overflow_menu: cfg!(any(target_os = "android", target_os = "ios")),
+            toolbar_items: Some(ToolbarItemVisibility::default()),
+            toolbar_order: default_toolbar_order(),
+            toolbar_separators: Vec::new(),
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
             saved_searches: Vec::new(),
@@ -667,6 +740,30 @@ fn normalize_entry_columns(columns: Vec<EntryColumnState>) -> Vec<EntryColumnSta
         .collect()
 }
 
+fn normalize_toolbar_order(order: Vec<String>) -> Vec<String> {
+    let defaults = default_toolbar_order();
+    let allowed: HashSet<String> = defaults.iter().cloned().collect();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for id in order {
+        if !allowed.contains(&id) { continue; }
+        if seen.insert(id.clone()) { out.push(id); }
+    }
+    if out.is_empty() { return defaults; }
+    for id in defaults { if seen.insert(id.clone()) { out.push(id); } }
+    out
+}
+fn normalize_toolbar_separators(separators: Vec<String>, order: &[String]) -> Vec<String> {
+    let order_set: HashSet<String> = order.iter().cloned().collect();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for id in separators {
+        if !order_set.contains(&id) { continue; }
+        if seen.insert(id.clone()) { out.push(id); }
+    }
+    out
+}
+
 fn valid_hex(value: &str, fallback: &str) -> String {
     // An empty string is kept as-is so cleared custom-color inputs stay clear
     // while the user types a replacement (mirrors `validHex` in settings.ts);
@@ -907,6 +1004,31 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
             std::mem::take(&mut config.general.global_auto_type_shortcut);
     }
     config.general.global_auto_type_shortcut.clear();
+
+    // Migrate old configs without `toolbarItems`: derive initial per-item
+    // visibility from the legacy `toolbarOverflowMenu` flag.
+    if config.general.toolbar_items.is_none() {
+        let base = !config.general.toolbar_overflow_menu;
+        config.general.toolbar_items = Some(ToolbarItemVisibility {
+            save_as: base,
+            toggle_detail: base,
+            security_report: base,
+            similar_passwords: false,
+            hibp_check: false,
+            import_menu: false,
+            export_menu: base,
+            expired_entries: false,
+            clear_history: false,
+            db_settings: false,
+            app_settings: base,
+            window_minimize: true,
+            window_maximize: true,
+            window_close: true,
+        });
+    }
+
+    config.general.toolbar_order = normalize_toolbar_order(std::mem::take(&mut config.general.toolbar_order));
+    config.general.toolbar_separators = normalize_toolbar_separators(std::mem::take(&mut config.general.toolbar_separators), &config.general.toolbar_order);
 
     config
 }

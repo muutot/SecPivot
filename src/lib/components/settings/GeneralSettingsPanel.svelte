@@ -6,6 +6,8 @@
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
+  import Toggle from "$lib/components/templates/form/Toggle.svelte";
+  import Button from "$lib/components/templates/action/Button.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
   type Section = "appearance" | "display" | "compact" | "toolbar" | "network";
@@ -27,6 +29,8 @@
   });
 
   const general = $derived(s.general);
+
+  let draggedId: string | null = $state(null);
 
   function change<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]): void {
     appSettings.updateGeneral(key, value);
@@ -410,23 +414,148 @@
   {/if}
 
   {#if section === "toolbar"}
-    <p class="settings-note" style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);">逐项控制是否在主界面直接显示；关闭则收纳到「更多」菜单（窗口按钮关闭则隐藏）。</p>
-    {#each [
-      { key: 'saveAs', label: '另存为', desc: '工具栏左侧“另存为”按钮', icon: 'copy' },
-      { key: 'toggleDetail', label: '详情面板切换', desc: '工具栏“显示/隐藏详情”按钮', icon: 'eye' },
-      { key: 'securityReport', label: '安全报告', desc: '工具栏“安全报告”按钮', icon: 'shield' },
-      { key: 'similarPasswords', label: '相似密码检查', desc: '收纳菜单中的“相似密码检查”', icon: 'shield' },
-      { key: 'hibpCheck', label: 'HIBP 泄露检查', desc: '收纳菜单中的“HIBP 泄露检查”', icon: 'globe' },
-      { key: 'importMenu', label: '导入', desc: '收纳菜单中的“导入”子菜单（CSV/XML/Bitwarden/1Password）', icon: 'upload' },
-      { key: 'exportMenu', label: '导出', desc: '工具栏/收纳菜单中的“导出”', icon: 'download' },
-      { key: 'expiredEntries', label: '过期条目', desc: '收纳菜单中的“过期条目”', icon: 'clock' },
-      { key: 'clearHistory', label: '清理全部历史', desc: '收纳菜单中的“清理全部历史”', icon: 'trash' },
-      { key: 'dbSettings', label: '数据库设置', desc: '收纳菜单中的“数据库设置”', icon: 'settings' },
-      { key: 'appSettings', label: '设置', desc: '工具栏“设置”按钮', icon: 'settings' },
-      { key: 'windowMinimize', label: '窗口：最小化 —', desc: '主窗口标题栏/工具栏“最小化”按钮', icon: 'minimize' },
-      { key: 'windowMaximize', label: '窗口：最大化/还原 □', desc: '主窗口“最大化/还原”按钮', icon: 'maximize' },
-      { key: 'windowClose', label: '窗口：关闭 ×', desc: '主窗口“关闭”按钮', icon: 'x' },
-    ] as item (item.key)}
+    <p
+      class="settings-note"
+      style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);"
+    >
+      逐项控制是否在主界面直接显示；关闭则收纳到「更多」菜单（窗口按钮关闭则隐藏）。下方可拖拽或用上下按钮排序右侧工具栏，并为任意项后添加分割线。
+    </p>
+    <SettingToggleCard
+      icon="copy"
+      label="另存为"
+      description="工具栏左侧“另存为”按钮（不参与右侧排序）"
+      checked={s.general.toolbarItems.saveAs}
+      onchange={(checked) =>
+        change("toolbarItems", { ...s.general.toolbarItems, saveAs: checked } as never)}
+    />
+    {@const rightMeta: Record<string, { label: string; desc: string; icon: string }> = {
+      toggleDetail: { label: '详情面板切换', desc: '显示/隐藏详情', icon: 'eye' },
+      securityReport: { label: '安全报告', desc: '安全报告', icon: 'shield' },
+      similarPasswords: { label: '相似密码检查', desc: '相似密码检查', icon: 'shield' },
+      hibpCheck: { label: 'HIBP 泄露检查', desc: 'HIBP 泄露检查', icon: 'globe' },
+      expiredEntries: { label: '过期条目', desc: '过期条目', icon: 'clock' },
+      clearHistory: { label: '清理全部历史', desc: '清理全部历史', icon: 'trash' },
+      importMenu: { label: '导入', desc: '导入子菜单', icon: 'upload' },
+      exportMenu: { label: '导出', desc: '导出', icon: 'download' },
+      dbSettings: { label: '数据库设置', desc: '数据库设置', icon: 'settings' },
+      appSettings: { label: '设置', desc: '设置', icon: 'settings' },
+    }}
+    {@const order: string[] = s.general.toolbarOrder ?? []}
+    {@const separators: string[] = s.general.toolbarSeparators ?? []}
+    <section class="setting-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
+        <div>
+          <strong>右侧工具栏排序与分隔</strong>
+          <p>拖拽整行或用 ↑↓ 调整顺序；“|”开关为该项后添加垂直分割线</p>
+        </div>
+      </div>
+      <div class="toolbar-order-list" role="list">
+        {#each order as id, idx (id)}
+          {@const meta = rightMeta[id] ?? { label: id, desc: "", icon: "settings" }}
+          {@const visible = (s.general.toolbarItems as unknown as Record<string, boolean>)[id]}
+          {@const hasSep = separators.includes(id)}
+          <div
+            class="toolbar-order-item"
+            class:dragging={draggedId === id}
+            draggable="true"
+            role="listitem"
+            ondragstart={(e) => {
+              draggedId = id;
+              e.dataTransfer?.setData("text/plain", id);
+            }}
+            ondragend={() => {
+              draggedId = null;
+            }}
+            ondragover={(e) => e.preventDefault()}
+            ondrop={(e) => {
+              e.preventDefault();
+              const from = draggedId;
+              if (!from || from === id) return;
+              const next = [...order];
+              const fi = next.indexOf(from);
+              const ti = next.indexOf(id);
+              if (fi === -1 || ti === -1) return;
+              next.splice(fi, 1);
+              next.splice(ti, 0, from);
+              draggedId = null;
+              change("toolbarOrder", next as never);
+            }}
+          >
+            <span class="drag-handle" title="拖拽排序"><AppIcon name="menu" size={12} /></span>
+            <span class="setting-icon small"><AppIcon name={meta.icon as never} size={14} /></span>
+            <div class="order-text">
+              <strong>{meta.label}</strong>
+              <p>{meta.desc}</p>
+            </div>
+            <div class="order-actions">
+              <span class="order-action-label">显示</span>
+              <Toggle
+                checked={!!visible}
+                ariaLabel={meta.label}
+                onchange={(c) =>
+                  change("toolbarItems", { ...s.general.toolbarItems, [id]: c } as never)}
+              />
+              <span class="order-sep-label" title="在该项后显示分割线">|</span>
+              <Toggle
+                checked={hasSep}
+                ariaLabel="分割线"
+                onchange={(c) => {
+                  const next = c ? [...separators, id] : separators.filter((x) => x !== id);
+                  change("toolbarSeparators", next as never);
+                }}
+              />
+              <div class="order-move">
+                <button
+                  class="order-move-btn"
+                  disabled={idx === 0}
+                  onclick={() => {
+                    if (idx === 0) return;
+                    const next = [...order];
+                    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                    change("toolbarOrder", next as never);
+                  }}
+                  aria-label="上移">↑</button
+                >
+                <button
+                  class="order-move-btn"
+                  disabled={idx === order.length - 1}
+                  onclick={() => {
+                    if (idx === order.length - 1) return;
+                    const next = [...order];
+                    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                    change("toolbarOrder", next as never);
+                  }}
+                  aria-label="下移">↓</button
+                >
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+      <div class="toolbar-order-footer">
+        <Button
+          variant="plain"
+          onclick={() =>
+            change("toolbarOrder", [
+              "toggleDetail",
+              "securityReport",
+              "similarPasswords",
+              "hibpCheck",
+              "expiredEntries",
+              "clearHistory",
+              "importMenu",
+              "exportMenu",
+              "dbSettings",
+              "appSettings",
+            ] as never)}>重置排序</Button
+        >
+        <Button variant="plain" onclick={() => change("toolbarSeparators", [] as never)}
+          >清除全部分割线</Button
+        >
+      </div>
+    </section>
+    {#each [{ key: "windowMinimize", label: "窗口：最小化 —", desc: "主窗口标题栏/工具栏“最小化”按钮", icon: "minimize" }, { key: "windowMaximize", label: "窗口：最大化/还原 □", desc: "主窗口“最大化/还原”按钮", icon: "maximize" }, { key: "windowClose", label: "窗口：关闭 ×", desc: "主窗口“关闭”按钮", icon: "x" }] as item (item.key)}
       <SettingToggleCard
         icon={item.icon as never}
         label={item.label}
@@ -557,5 +686,97 @@
   .preset-button:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .toolbar-order-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .toolbar-order-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--card-bg);
+  }
+  .toolbar-order-item.dragging {
+    opacity: 0.5;
+  }
+  .drag-handle {
+    display: inline-flex;
+    cursor: grab;
+    color: var(--text-faint);
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  .setting-icon.small {
+    width: 22px;
+    height: 22px;
+  }
+  .order-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .order-text strong {
+    display: block;
+    font-size: var(--settings-control-size);
+    color: var(--text-primary);
+  }
+  .order-text p {
+    margin: 1px 0 0;
+    font-size: var(--settings-note-size);
+    color: var(--text-muted);
+  }
+  .order-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .order-action-label,
+  .order-sep-label {
+    font-size: var(--settings-note-size);
+    color: var(--text-muted);
+  }
+  .order-sep-label {
+    margin-left: 4px;
+    font-weight: 700;
+  }
+  .order-move {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 4px;
+  }
+  .order-move-btn {
+    width: 22px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .order-move-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .order-move-btn:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+  .toolbar-order-footer {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
   }
 </style>
