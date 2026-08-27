@@ -14,6 +14,10 @@
     onclick?: () => void;
     /** Leading slot (icon / check mark). */
     leading?: Snippet;
+    /** Trailing slot (chevron / shortcut hint). */
+    trailing?: Snippet;
+    /** Optional nested content (cascade submenu). */
+    children?: Snippet;
   }
 
   let {
@@ -25,6 +29,8 @@
     title = undefined,
     onclick,
     leading,
+    trailing,
+    children,
   }: Props = $props();
 </script>
 
@@ -41,7 +47,9 @@
 >
   {#if leading}<span class="leading">{@render leading()}</span>{/if}
   <span class="label">{label}</span>
+  {#if trailing}<span class="trailing">{@render trailing()}</span>{/if}
 </button>
+{#if children}{@render children()}{/if}
 
 <style>
   .item {
@@ -84,6 +92,13 @@
     align-items: center;
     justify-content: center;
     width: 18px;
+    flex-shrink: 0;
+  }
+
+  .trailing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
 

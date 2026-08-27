@@ -64,11 +64,13 @@ describe("buildBlankMenuItems", () => {
     assert.equal(byId2.save.disabled, true);
   });
 
-  it("offers every import source exactly once", () => {
-    const items = buildBlankMenuItems({ hasVisibleEntries: true, canSave: false });
-    const importIds = items.map((item) => item.id).filter((id) => id.startsWith("import-"));
-    assert.deepEqual([...new Set(importIds)], importIds);
-    assert.equal(importIds.length, 4);
+  it("keeps import/export out of the blank menu (they live in the toolbar)", () => {
+    const ids = buildBlankMenuItems({ hasVisibleEntries: true, canSave: false }).map(
+      (item) => item.id,
+    );
+    assert.ok(!ids.some((id) => id.startsWith("import-")));
+    assert.ok(!ids.some((id) => id.startsWith("export-")));
+    assert.ok(!ids.includes("lock"));
   });
 });
 
@@ -85,5 +87,18 @@ describe("buildToolbarMenuItems", () => {
   it("disables the security report while busy", () => {
     const items = buildToolbarMenuItems({ detailVisible: true, busy: true });
     assert.equal(items.find((item) => item.id === "security-report").disabled, true);
+  });
+
+  it("offers import and export as cascades with every source exactly once", () => {
+    const items = buildToolbarMenuItems({ detailVisible: true, busy: false });
+    const byId = Object.fromEntries(items.map((item) => [item.id, item]));
+
+    const importIds = byId["import"].children.map((child) => child.id);
+    assert.equal(importIds.length, 4);
+    assert.deepEqual([...new Set(importIds)], importIds);
+
+    const exportIds = byId["export"].children.map((child) => child.id);
+    assert.equal(exportIds.length, 3);
+    assert.deepEqual([...new Set(exportIds)], exportIds);
   });
 });

@@ -77,8 +77,8 @@ export type BlankMenuInput = {
   canSave: boolean;
 };
 
-/** Right-click on blank list space: creation, import, maintenance and export
- *  actions over the whole database. */
+/** Right-click on blank list space: creation and quick database actions.
+ *  Import/export and maintenance live in the toolbar ⋯ menu. */
 export function buildBlankMenuItems({
   hasVisibleEntries,
   canSave,
@@ -86,10 +86,6 @@ export function buildBlankMenuItems({
   return [
     { id: "new-entry", label: "新建条目", icon: "plus" },
     { id: "new-group", label: "新建分组", icon: "folder-plus" },
-    { id: "import-csv", label: "导入 CSV", icon: "upload" },
-    { id: "import-xml", label: "导入 XML", icon: "upload" },
-    { id: "import-bitwarden", label: "导入 Bitwarden", icon: "upload" },
-    { id: "import-1password", label: "导入 1Password (1PIF)", icon: "upload" },
     { id: "select-all", label: "全选条目", icon: "check", disabled: !hasVisibleEntries },
     {
       id: "save",
@@ -98,16 +94,9 @@ export function buildBlankMenuItems({
       disabled: !canSave,
     },
     { id: "save-as", label: "另存为…", icon: "copy" },
-    { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
-    { id: "expired-entries", label: "过期条目", icon: "clock" },
     { id: "change-timeline", label: "变更时间线", icon: "undo" },
     { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
-    { id: "clear-history", label: "清理全部历史", icon: "trash" },
-    { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "refresh", label: "刷新", icon: "refresh" },
-    { id: "export-csv", label: "导出 CSV", icon: "download" },
-    { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
-    { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
   ];
 }
@@ -120,8 +109,23 @@ export type ToolbarMenuInput = {
   busy: boolean;
 };
 
-/** Toolbar overflow menu (⋯): report/export/settings shortcuts plus the
- *  detail-panel visibility toggle. */
+/** Import sources as a cascade child list of the toolbar ⋯ menu. */
+const IMPORT_ITEMS: ContextMenuItem[] = [
+  { id: "import-csv", label: "导入 CSV", icon: "upload" },
+  { id: "import-xml", label: "导入 XML", icon: "upload" },
+  { id: "import-bitwarden", label: "导入 Bitwarden", icon: "upload" },
+  { id: "import-1password", label: "导入 1Password (1PIF)", icon: "upload" },
+];
+
+/** Export targets as a cascade child list of the toolbar ⋯ menu. */
+const EXPORT_ITEMS: ContextMenuItem[] = [
+  { id: "export-csv", label: "导出 CSV", icon: "download" },
+  { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
+  { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
+];
+
+/** Toolbar overflow menu (⋯): detail toggle, report, import/export cascades,
+ *  maintenance and settings. */
 export function buildToolbarMenuItems({
   detailVisible,
   busy,
@@ -136,9 +140,11 @@ export function buildToolbarMenuItems({
     { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
     { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
     { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
-    { id: "export-csv", label: "导出 CSV", icon: "download" },
-    { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
-    { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
+    { id: "import", label: "导入", icon: "upload", children: IMPORT_ITEMS },
+    { id: "export", label: "导出", icon: "download", children: EXPORT_ITEMS },
+    { id: "expired-entries", label: "过期条目", icon: "clock" },
+    { id: "clear-history", label: "清理全部历史", icon: "trash" },
+    { id: "lock", label: "锁定数据库", icon: "lock" },
     { id: "db-settings", label: "数据库设置", icon: "settings" },
     { id: "settings", label: "设置", icon: "settings" },
   ];

@@ -1507,9 +1507,16 @@
     else if (id === "security-report") void handleOpenReport();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "hibp-check") hibpOpen = true;
+    else if (id === "import-csv") void handleImportCsv();
+    else if (id === "import-xml") void handleImportXml();
+    else if (id === "import-bitwarden") void handleImportBitwarden();
+    else if (id === "import-1password") void handleImportOnePassword();
     else if (id === "export-csv") void handleExportCsv();
     else if (id === "export-xml") void handleExportXml();
     else if (id === "export-emergency") emergencyExportOpen = true;
+    else if (id === "expired-entries") expiredOpen = true;
+    else if (id === "clear-history") void handleClearHistory();
+    else if (id === "lock") void handleLock();
     else if (id === "db-settings") dbSettingsOpen = true;
     else if (id === "settings") openSettings();
   }
