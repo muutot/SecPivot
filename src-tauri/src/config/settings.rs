@@ -101,6 +101,22 @@ impl Default for ThemeColors {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+pub struct CustomTheme {
+    pub name: String,
+    pub colors: ThemeColors,
+}
+
+impl Default for CustomTheme {
+    fn default() -> Self {
+        Self {
+            name: "自定义 1".into(),
+            colors: ThemeColors::dark(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct FontSizes {
     pub base: i32,
     pub secondary: i32,
@@ -207,6 +223,53 @@ pub fn default_toolbar_order() -> Vec<String> {
         "appSettings".into(),
     ]
 }
+pub fn default_toolbar_full_order() -> Vec<String> {
+    vec![
+        "newEntry".into(),
+        "save".into(),
+        "saveAs".into(),
+        "lock".into(),
+        "toggleDetail".into(),
+        "securityReport".into(),
+        "similarPasswords".into(),
+        "hibpCheck".into(),
+        "expiredEntries".into(),
+        "clearHistory".into(),
+        "importMenu".into(),
+        "exportMenu".into(),
+        "dbSettings".into(),
+        "appSettings".into(),
+        "moreMenu".into(),
+        "windowMinimize".into(),
+        "windowMaximize".into(),
+        "windowClose".into(),
+    ]
+}
+pub fn default_toolbar_sides() -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    for id in ["newEntry", "save", "saveAs", "lock"] {
+        m.insert(id.into(), "left".into());
+    }
+    for id in [
+        "toggleDetail",
+        "securityReport",
+        "similarPasswords",
+        "hibpCheck",
+        "expiredEntries",
+        "clearHistory",
+        "importMenu",
+        "exportMenu",
+        "dbSettings",
+        "appSettings",
+        "moreMenu",
+        "windowMinimize",
+        "windowMaximize",
+        "windowClose",
+    ] {
+        m.insert(id.into(), "right".into());
+    }
+    m
+}
 
 /// One named advanced-search query (mirrors `AdvancedSearchQuery` in
 /// `src/lib/utils/entry-search.ts`).
@@ -251,7 +314,10 @@ pub struct SavedSearch {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ToolbarItemVisibility {
+    pub new_entry: bool,
+    pub save: bool,
     pub save_as: bool,
+    pub lock: bool,
     pub toggle_detail: bool,
     pub security_report: bool,
     pub similar_passwords: bool,
@@ -271,7 +337,10 @@ impl Default for ToolbarItemVisibility {
     fn default() -> Self {
         let base = !cfg!(any(target_os = "android", target_os = "ios"));
         Self {
+            new_entry: true,
+            save: true,
             save_as: base,
+            lock: true,
             toggle_detail: base,
             security_report: base,
             similar_passwords: false,
@@ -296,6 +365,7 @@ pub struct GeneralSettings {
     pub theme: String,
     pub theme_colors: ThemeColors,
     pub custom_presets: Vec<ThemeColors>,
+    pub custom_themes: Vec<CustomTheme>,
     pub compact_mode: bool,
     pub density: DensitySettings,
     pub show_descriptions: bool,
@@ -325,6 +395,18 @@ pub struct GeneralSettings {
     /// Ids after which a vertical divider is rendered on the toolbar.
     #[serde(default)]
     pub toolbar_separators: Vec<String>,
+    /// Global ordered ids for all toolbar buttons (including left group and moreMenu).
+    #[serde(default)]
+    pub toolbar_full_order: Vec<String>,
+    /// Per-button side assignment: "left" or "right".
+    #[serde(default)]
+    pub toolbar_sides: HashMap<String, String>,
+    /// Global separators: ids after which a vertical divider is rendered.
+    #[serde(default)]
+    pub toolbar_full_separators: Vec<String>,
+    /// Whether clicking an entry automatically shows the detail panel.
+    #[serde(default = "default_true")]
+    pub show_detail_on_select: bool,
     /// Render the full entry-table column grid on narrow screens too.
     pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
@@ -367,6 +449,7 @@ impl Default for GeneralSettings {
             theme: "dark".into(),
             theme_colors: ThemeColors::dark(),
             custom_presets: Vec::new(),
+            custom_themes: Vec::new(),
             compact_mode: false,
             density: DensitySettings::default(),
             show_descriptions: true,
@@ -384,6 +467,10 @@ impl Default for GeneralSettings {
             toolbar_items: Some(ToolbarItemVisibility::default()),
             toolbar_order: default_toolbar_order(),
             toolbar_separators: Vec::new(),
+            toolbar_full_order: default_toolbar_full_order(),
+            toolbar_sides: default_toolbar_sides(),
+            toolbar_full_separators: vec!["saveAs".into()],
+            show_detail_on_select: true,
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
             saved_searches: Vec::new(),
@@ -746,11 +833,21 @@ fn normalize_toolbar_order(order: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for id in order {
-        if !allowed.contains(&id) { continue; }
-        if seen.insert(id.clone()) { out.push(id); }
+        if !allowed.contains(&id) {
+            continue;
+        }
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
     }
-    if out.is_empty() { return defaults; }
-    for id in defaults { if seen.insert(id.clone()) { out.push(id); } }
+    if out.is_empty() {
+        return defaults;
+    }
+    for id in defaults {
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
+    }
     out
 }
 fn normalize_toolbar_separators(separators: Vec<String>, order: &[String]) -> Vec<String> {
@@ -758,10 +855,126 @@ fn normalize_toolbar_separators(separators: Vec<String>, order: &[String]) -> Ve
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for id in separators {
-        if !order_set.contains(&id) { continue; }
-        if seen.insert(id.clone()) { out.push(id); }
+        if !order_set.contains(&id) {
+            continue;
+        }
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
     }
     out
+}
+fn normalize_toolbar_full_order(order: Vec<String>) -> Vec<String> {
+    let defaults = default_toolbar_full_order();
+    let allowed: HashSet<String> = defaults.iter().cloned().collect();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for id in order {
+        if !allowed.contains(&id) {
+            continue;
+        }
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
+    }
+    if out.is_empty() {
+        return defaults;
+    }
+    for id in defaults {
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
+    }
+    out
+}
+fn normalize_toolbar_full_separators(separators: Vec<String>, order: &[String]) -> Vec<String> {
+    let order_set: HashSet<String> = order.iter().cloned().collect();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for id in separators {
+        if !order_set.contains(&id) {
+            continue;
+        }
+        if seen.insert(id.clone()) {
+            out.push(id);
+        }
+    }
+    out
+}
+fn normalize_toolbar_sides(
+    mut sides: HashMap<String, String>,
+    order: &[String],
+) -> HashMap<String, String> {
+    let defaults = default_toolbar_sides();
+    for id in order {
+        let v = sides.get(id).map(|s| s.as_str());
+        if v != Some("left") && v != Some("right") {
+            if let Some(def) = defaults.get(id) {
+                sides.insert(id.clone(), def.clone());
+            }
+        } else if let Some(val) = v {
+            if val != "left" && val != "right" {
+                if let Some(def) = defaults.get(id) {
+                    sides.insert(id.clone(), def.clone());
+                }
+            }
+        }
+    }
+    for (k, v) in defaults {
+        sides.entry(k).or_insert(v);
+    }
+    // sanitize values
+    for (_, val) in sides.iter_mut() {
+        if val.as_str() != "left" && val.as_str() != "right" {
+            *val = "right".into();
+        }
+    }
+    sides
+}
+
+fn normalize_custom_themes(
+    themes: Vec<CustomTheme>,
+    presets: Vec<ThemeColors>,
+) -> Vec<CustomTheme> {
+    if !themes.is_empty() {
+        let mut seen = HashSet::new();
+        let mut out = Vec::new();
+        for mut t in themes {
+            let base = t.name.trim().to_string();
+            let base = if base.is_empty() {
+                format!("自定义 {}", out.len() + 1)
+            } else {
+                base
+            };
+            let mut name = base.clone();
+            let mut n = 2;
+            while !seen.insert(name.clone()) {
+                name = format!("{} {}", base, n);
+                n += 1;
+            }
+            t.name = name;
+            t.colors = normalize_colors(t.colors);
+            out.push(t);
+        }
+        return out;
+    }
+    if !presets.is_empty() {
+        let mut seen = HashSet::new();
+        let mut out = Vec::new();
+        for (idx, preset) in presets.into_iter().enumerate() {
+            let colors = normalize_colors(preset);
+            let base = format!("自定义 {}", idx + 1);
+            let mut name = base.clone();
+            let mut n = 2;
+            while !seen.insert(name.clone()) {
+                name = format!("{} {}", base, n);
+                n += 1;
+            }
+            out.push(CustomTheme { name, colors });
+        }
+        return out;
+    }
+    Vec::new()
 }
 
 fn valid_hex(value: &str, fallback: &str) -> String {
@@ -1010,7 +1223,10 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     if config.general.toolbar_items.is_none() {
         let base = !config.general.toolbar_overflow_menu;
         config.general.toolbar_items = Some(ToolbarItemVisibility {
+            new_entry: true,
+            save: true,
             save_as: base,
+            lock: true,
             toggle_detail: base,
             security_report: base,
             similar_passwords: false,
@@ -1027,8 +1243,28 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         });
     }
 
-    config.general.toolbar_order = normalize_toolbar_order(std::mem::take(&mut config.general.toolbar_order));
-    config.general.toolbar_separators = normalize_toolbar_separators(std::mem::take(&mut config.general.toolbar_separators), &config.general.toolbar_order);
+    config.general.toolbar_order =
+        normalize_toolbar_order(std::mem::take(&mut config.general.toolbar_order));
+    config.general.toolbar_separators = normalize_toolbar_separators(
+        std::mem::take(&mut config.general.toolbar_separators),
+        &config.general.toolbar_order,
+    );
+    config.general.toolbar_full_order =
+        normalize_toolbar_full_order(std::mem::take(&mut config.general.toolbar_full_order));
+    config.general.toolbar_sides = normalize_toolbar_sides(
+        std::mem::take(&mut config.general.toolbar_sides),
+        &config.general.toolbar_full_order,
+    );
+    config.general.toolbar_full_separators = normalize_toolbar_full_separators(
+        std::mem::take(&mut config.general.toolbar_full_separators),
+        &config.general.toolbar_full_order,
+    );
+    for preset in &mut config.general.custom_presets {
+        *preset = normalize_colors(std::mem::take(preset));
+    }
+    let themes = std::mem::take(&mut config.general.custom_themes);
+    let presets_clone = config.general.custom_presets.clone();
+    config.general.custom_themes = normalize_custom_themes(themes, presets_clone);
 
     config
 }

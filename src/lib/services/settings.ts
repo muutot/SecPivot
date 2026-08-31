@@ -91,7 +91,10 @@ export function normalizeEntryColumns(
 export function defaultToolbarItems(): import("$lib/types/settings").ToolbarItemVisibility {
   const base = !isMobile();
   return {
+    newEntry: true,
+    save: true,
     saveAs: base,
+    lock: true,
     toggleDetail: base,
     securityReport: base,
     similarPasswords: false,
@@ -123,11 +126,61 @@ export const DEFAULT_TOOLBAR_ORDER: import("$lib/types/settings").ToolbarRightId
 
 export const DEFAULT_TOOLBAR_SEPARATORS: import("$lib/types/settings").ToolbarRightId[] = [];
 
+export const DEFAULT_TOOLBAR_FULL_ORDER: import("$lib/types/settings").ToolbarButtonId[] = [
+  "newEntry",
+  "save",
+  "saveAs",
+  "lock",
+  "toggleDetail",
+  "securityReport",
+  "similarPasswords",
+  "hibpCheck",
+  "expiredEntries",
+  "clearHistory",
+  "importMenu",
+  "exportMenu",
+  "dbSettings",
+  "appSettings",
+  "moreMenu",
+  "windowMinimize",
+  "windowMaximize",
+  "windowClose",
+];
+
+export const DEFAULT_TOOLBAR_SIDES: Record<
+  import("$lib/types/settings").ToolbarButtonId,
+  "left" | "right"
+> = {
+  newEntry: "left",
+  save: "left",
+  saveAs: "left",
+  lock: "left",
+  toggleDetail: "right",
+  securityReport: "right",
+  similarPasswords: "right",
+  hibpCheck: "right",
+  expiredEntries: "right",
+  clearHistory: "right",
+  importMenu: "right",
+  exportMenu: "right",
+  dbSettings: "right",
+  appSettings: "right",
+  moreMenu: "right",
+  windowMinimize: "right",
+  windowMaximize: "right",
+  windowClose: "right",
+};
+
+export const DEFAULT_TOOLBAR_FULL_SEPARATORS: import("$lib/types/settings").ToolbarButtonId[] = [
+  "saveAs",
+];
+
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   language: "zh-CN",
   theme: "dark",
   themeColors: { ...DARK_THEME_COLORS },
   customPresets: [],
+  customThemes: [],
   compactMode: false,
   density: {
     groupGap: 2,
@@ -152,6 +205,10 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   toolbarItems: defaultToolbarItems(),
   toolbarOrder: [...DEFAULT_TOOLBAR_ORDER],
   toolbarSeparators: [...DEFAULT_TOOLBAR_SEPARATORS],
+  toolbarFullOrder: [...DEFAULT_TOOLBAR_FULL_ORDER],
+  toolbarSides: { ...DEFAULT_TOOLBAR_SIDES },
+  toolbarFullSeparators: [...DEFAULT_TOOLBAR_FULL_SEPARATORS],
+  showDetailOnSelect: true,
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
 };
@@ -510,7 +567,10 @@ function normalizeToolbarItems(
     const b = (key: string, def: boolean): boolean =>
       typeof s[key] === "boolean" ? (s[key] as boolean) : def;
     return {
+      newEntry: b("newEntry", (fallback as unknown as Record<string, boolean>).newEntry ?? true),
+      save: b("save", (fallback as unknown as Record<string, boolean>).save ?? true),
       saveAs: b("saveAs", fallback.saveAs),
+      lock: b("lock", (fallback as unknown as Record<string, boolean>).lock ?? true),
       toggleDetail: b("toggleDetail", fallback.toggleDetail),
       securityReport: b("securityReport", fallback.securityReport),
       similarPasswords: b("similarPasswords", fallback.similarPasswords),
@@ -529,7 +589,10 @@ function normalizeToolbarItems(
   if (typeof overflow === "boolean") {
     const base = !overflow;
     return {
+      newEntry: true,
+      save: true,
       saveAs: base,
+      lock: true,
       toggleDetail: base,
       securityReport: base,
       similarPasswords: false,
@@ -584,6 +647,109 @@ function normalizeToolbarSeparators(
   return out;
 }
 
+const TOOLBAR_FULL_ORDER_IDS = new Set<string>(DEFAULT_TOOLBAR_FULL_ORDER as unknown as string[]);
+function normalizeToolbarFullOrder(
+  source: unknown,
+  fallback: import("$lib/types/settings").ToolbarButtonId[],
+): import("$lib/types/settings").ToolbarButtonId[] {
+  if (!Array.isArray(source) || source.length === 0) return [...fallback];
+  const seen = new Set<string>();
+  const out: import("$lib/types/settings").ToolbarButtonId[] = [];
+  for (const v of source) {
+    const id = String(v);
+    if (!TOOLBAR_FULL_ORDER_IDS.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id as import("$lib/types/settings").ToolbarButtonId);
+  }
+  for (const id of fallback) if (!seen.has(id as unknown as string)) out.push(id);
+  return out;
+}
+function normalizeToolbarFullSeparators(
+  source: unknown,
+  order: import("$lib/types/settings").ToolbarButtonId[],
+): import("$lib/types/settings").ToolbarButtonId[] {
+  if (!Array.isArray(source)) return [];
+  const orderSet = new Set<string>(order as unknown as string[]);
+  const seen = new Set<string>();
+  const out: import("$lib/types/settings").ToolbarButtonId[] = [];
+  for (const v of source) {
+    const id = String(v);
+    if (!orderSet.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id as import("$lib/types/settings").ToolbarButtonId);
+  }
+  return out;
+}
+function normalizeToolbarSides(
+  source: unknown,
+  fallback: Record<import("$lib/types/settings").ToolbarButtonId, "left" | "right">,
+  order: import("$lib/types/settings").ToolbarButtonId[],
+): Record<import("$lib/types/settings").ToolbarButtonId, "left" | "right"> {
+  const out: Record<string, "left" | "right"> = { ...fallback } as Record<string, "left" | "right">;
+  if (source && typeof source === "object") {
+    const s = source as Record<string, unknown>;
+    for (const id of order) {
+      const v = s[id];
+      if (v === "left" || v === "right") out[id] = v;
+    }
+    // also handle ids not in order but in source
+    for (const [k, v] of Object.entries(s)) {
+      if (!TOOLBAR_FULL_ORDER_IDS.has(k)) continue;
+      if (v === "left" || v === "right") out[k] = v;
+    }
+  }
+  return out as Record<import("$lib/types/settings").ToolbarButtonId, "left" | "right">;
+}
+
+function normalizeCustomThemes(
+  source: unknown,
+  legacyPresets: unknown,
+  fallback: import("$lib/types/settings").CustomTheme[],
+): import("$lib/types/settings").CustomTheme[] {
+  const fallbackColors = fallback;
+  if (Array.isArray(source) && source.length > 0) {
+    const seen = new Set<string>();
+    const out: import("$lib/types/settings").CustomTheme[] = [];
+    for (const item of source as unknown[]) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as Record<string, unknown>;
+      const rawName = typeof rec.name === "string" ? rec.name.trim() : "";
+      const rawColors = rec.colors ?? rec;
+      const colors = normalizeThemeColors(rawColors, DARK_THEME_COLORS);
+      let base = rawName || `自定义 ${out.length + 1}`;
+      let name = base;
+      let n = 2;
+      while (seen.has(name)) {
+        name = `${base} ${n}`;
+        n++;
+      }
+      seen.add(name);
+      out.push({ name, colors });
+    }
+    return out;
+  }
+  if (Array.isArray(legacyPresets) && legacyPresets.length > 0) {
+    const seen = new Set<string>();
+    const out: import("$lib/types/settings").CustomTheme[] = [];
+    for (const preset of legacyPresets as unknown[]) {
+      const colors = normalizeThemeColors(preset, DARK_THEME_COLORS);
+      let base = `自定义 ${out.length + 1}`;
+      let name = base;
+      let n = 2;
+      while (seen.has(name)) {
+        name = `${base} ${n}`;
+        n++;
+      }
+      seen.add(name);
+      out.push({ name, colors });
+    }
+    return out;
+  }
+  return fallback.map((t) => ({ ...t, colors: { ...t.colors } }));
+}
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -604,6 +770,11 @@ export function normalizeSettings(
     customPresets: Array.isArray(g.customPresets)
       ? g.customPresets.map((p: unknown) => normalizeThemeColors(p, DARK_THEME_COLORS))
       : [],
+    customThemes: normalizeCustomThemes(
+      (g as unknown as Record<string, unknown>).customThemes,
+      (g as unknown as Record<string, unknown>).customPresets,
+      fallback.general.customThemes,
+    ),
     savedSearches: normalizeSavedSearches(g.savedSearches),
     fontSizes: {
       ...fallback.general.fontSizes,
@@ -693,6 +864,29 @@ export function normalizeSettings(
         fallback.general.toolbarOrder,
       ),
     ),
+    toolbarFullOrder: normalizeToolbarFullOrder(
+      (g as unknown as Record<string, unknown>).toolbarFullOrder,
+      fallback.general.toolbarFullOrder,
+    ),
+    toolbarSides: normalizeToolbarSides(
+      (g as unknown as Record<string, unknown>).toolbarSides,
+      fallback.general.toolbarSides,
+      normalizeToolbarFullOrder(
+        (g as unknown as Record<string, unknown>).toolbarFullOrder,
+        fallback.general.toolbarFullOrder,
+      ),
+    ),
+    toolbarFullSeparators: normalizeToolbarFullSeparators(
+      (g as unknown as Record<string, unknown>).toolbarFullSeparators,
+      normalizeToolbarFullOrder(
+        (g as unknown as Record<string, unknown>).toolbarFullOrder,
+        fallback.general.toolbarFullOrder,
+      ),
+    ),
+    showDetailOnSelect:
+      typeof (g as unknown as Record<string, unknown>).showDetailOnSelect === "boolean"
+        ? ((g as unknown as Record<string, unknown>).showDetailOnSelect as boolean)
+        : fallback.general.showDetailOnSelect,
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:

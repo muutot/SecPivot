@@ -161,7 +161,7 @@
     ></button>
   {/if}
 
-  <div id="settings-content" class="settings-content">
+  <div id="settings-content" class="settings-content" data-tauri-drag-region>
     <section class="settings-section-header" data-tauri-drag-region>
       <div class="settings-section-heading-row" data-tauri-drag-region>
         <div class="settings-heading-main">

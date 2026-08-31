@@ -21,6 +21,8 @@ export type PanelLayoutOptions = {
   urlColWidth: () => number;
   /** Selection whose change auto-opens the detail panel. */
   selectedEntry: () => VaultEntry | null;
+  /** Monotonic version that bumps on every selection (even same uuid) to re-trigger auto-open after close. */
+  selectionVersion?: () => number;
 };
 
 export type PanelLayout = {
@@ -39,6 +41,7 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
   let groupWidth = $state(get(appSettings).general.panelWidths.group);
   let detailWidth = $state(get(appSettings).general.panelWidths.detail);
   let detailVisible = $state(false);
+  let showDetailOnSelect = $state(get(appSettings).general.showDetailOnSelect ?? true);
   /** Set before a selection change that must not auto-open the detail panel
    *  (right-click context menu). Consumed by the effect below. Deliberately
    *  non-reactive: the effect must not track it and re-run when it resets. */
@@ -52,17 +55,23 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
     const unsubscribe = appSettings.subscribe((s) => {
       groupWidth = s.general.panelWidths.group;
       detailWidth = s.general.panelWidths.detail;
+      showDetailOnSelect = s.general.showDetailOnSelect ?? true;
     });
     return unsubscribe;
   });
 
   $effect(() => {
     const entry = options.selectedEntry();
+    // also track showDetailOnSelect so toggling the setting re-evaluates
+    const autoShow = showDetailOnSelect;
+    // track version to re-open same entry after detail was closed
+    const version = options.selectionVersion?.() ?? 0;
+    void version;
     if (entry) {
       if (suppressDetailAutoOpen) {
         suppressDetailAutoOpen = false;
       } else {
-        detailVisible = true;
+        detailVisible = autoShow;
       }
     } else {
       suppressDetailAutoOpen = false;

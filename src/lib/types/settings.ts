@@ -133,7 +133,10 @@ export interface PanelWidths {
  *  `true` = show directly on the main toolbar (or window chrome);
  *  `false` = collect inside the More menu (or hidden for window buttons). */
 export interface ToolbarItemVisibility {
+  newEntry: boolean;
+  save: boolean;
   saveAs: boolean;
+  lock: boolean;
   toggleDetail: boolean;
   securityReport: boolean;
   similarPasswords: boolean;
@@ -149,7 +152,28 @@ export interface ToolbarItemVisibility {
   windowClose: boolean;
 }
 
-/** Ordered toolbar ids for the configurable right side (saveAs stays left, window controls stay far right). */
+/** All toolbar button ids that participate in global ordering (moreMenu is always visible, not in visibility map). */
+export type ToolbarButtonId =
+  | "newEntry"
+  | "save"
+  | "saveAs"
+  | "lock"
+  | "toggleDetail"
+  | "securityReport"
+  | "similarPasswords"
+  | "hibpCheck"
+  | "expiredEntries"
+  | "clearHistory"
+  | "importMenu"
+  | "exportMenu"
+  | "dbSettings"
+  | "appSettings"
+  | "moreMenu"
+  | "windowMinimize"
+  | "windowMaximize"
+  | "windowClose";
+
+/** Ordered toolbar ids for the configurable right side (legacy alias). */
 export type ToolbarRightId =
   | "toggleDetail"
   | "securityReport"
@@ -162,11 +186,17 @@ export type ToolbarRightId =
   | "dbSettings"
   | "appSettings";
 
+export interface CustomTheme {
+  name: string;
+  colors: ThemeColors;
+}
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
   themeColors: ThemeColors;
   customPresets: ThemeColors[];
+  customThemes: CustomTheme[];
   compactMode: boolean;
   density: DensitySettings;
   showDescriptions: boolean;
@@ -190,10 +220,18 @@ export interface GeneralSettings {
   toolbarOverflowMenu: boolean;
   /** Per-item visibility for secondary actions (toolbar + window controls). */
   toolbarItems: ToolbarItemVisibility;
-  /** Ordered ids for the right toolbar group; controls sort order on the main toolbar. */
+  /** Ordered ids for the right toolbar group; controls sort order on the main toolbar (legacy right-only). */
   toolbarOrder: ToolbarRightId[];
-  /** Ids after which a vertical divider is rendered on the toolbar. */
+  /** Ids after which a vertical divider is rendered on the toolbar (legacy right-only). */
   toolbarSeparators: ToolbarRightId[];
+  /** Global ordered ids for all toolbar buttons (including left group and moreMenu); controls full sort order. */
+  toolbarFullOrder: ToolbarButtonId[];
+  /** Per-button side assignment: 'left' or 'right' (moreMenu follows its position in fullOrder but still renders as More button). */
+  toolbarSides: Record<ToolbarButtonId, "left" | "right">;
+  /** Global separators: ids after which a vertical divider is rendered (applies within the same side group). */
+  toolbarFullSeparators: ToolbarButtonId[];
+  /** Whether clicking an entry automatically shows the detail panel. */
+  showDetailOnSelect: boolean;
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

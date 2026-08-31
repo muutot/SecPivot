@@ -424,6 +424,19 @@
   const toolbarItems = $derived(settings.general.toolbarItems);
   const toolbarOrder = $derived(settings.general.toolbarOrder);
   const toolbarSeparators = $derived(settings.general.toolbarSeparators);
+  const toolbarFullOrder = $derived(
+    ((settings.general as unknown as Record<string, unknown>).toolbarFullOrder as string[]) ?? [],
+  );
+  const toolbarSides = $derived(
+    ((settings.general as unknown as Record<string, unknown>).toolbarSides as Record<
+      string,
+      "left" | "right"
+    >) ?? {},
+  );
+  const toolbarFullSeparators = $derived(
+    ((settings.general as unknown as Record<string, unknown>).toolbarFullSeparators as string[]) ??
+      [],
+  );
   const showDescriptions = $derived(settings.general.showDescriptions);
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
@@ -514,13 +527,6 @@
   /** Column visibility/width/order, grid template, sort keys and cell text
    *  live in the extracted service; see `columns.svelte.ts`. */
   const columns = useEntryColumns(() => allEntries);
-  /** Panel widths, detail visibility, mobile drawer and drag-resize logic live
-   *  in the extracted composable; see `usePanelLayout.svelte.ts`. */
-  const layout = usePanelLayout({
-    entryColumns: () => columns.entryColumns,
-    urlColWidth: () => columns.colState("url").width || 200,
-    selectedEntry: () => selection.selectedEntry,
-  });
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     const col = sortCol;
@@ -541,6 +547,15 @@
    *  composable; see `useVaultSelection.svelte.ts`. */
   const selection = useVaultSelection({
     visibleUuids: () => sortedEntries.map((r) => r.entry.uuid),
+  });
+
+  /** Panel widths, detail visibility, mobile drawer and drag-resize logic live
+   *  in the extracted composable; see `usePanelLayout.svelte.ts`. */
+  const layout = usePanelLayout({
+    entryColumns: () => columns.entryColumns,
+    urlColWidth: () => columns.colState("url").width || 200,
+    selectedEntry: () => selection.selectedEntry,
+    selectionVersion: () => selection.selectionVersion,
   });
 
   function cycleSort(col: SortCol): void {
@@ -1428,7 +1443,9 @@
         dbSettings: toolbarItems.dbSettings,
         appSettings: toolbarItems.appSettings,
       },
-      toolbarOrder,
+      toolbarOrder: toolbarFullOrder.length
+        ? (toolbarFullOrder as unknown as string[])
+        : (toolbarOrder as unknown as string[]),
     }),
   );
 
@@ -1558,12 +1575,19 @@
         {toolbarItems}
         {toolbarOrder}
         {toolbarSeparators}
+        toolbarFullOrder={toolbarFullOrder as unknown as import("$lib/types/settings").ToolbarButtonId[]}
+        toolbarSides={toolbarSides as unknown as Record<
+          import("$lib/types/settings").ToolbarButtonId,
+          "left" | "right"
+        >}
+        toolbarFullSeparators={toolbarFullSeparators as unknown as import("$lib/types/settings").ToolbarButtonId[]}
         {showWindowControls}
         {busy}
         dirty={currentVault.dirty}
         readOnly={currentVault.readOnly}
         mobileNavOpen={layout.mobileNavOpen}
         detailVisible={layout.detailVisible}
+        showDetailOnSelect={settings.general.showDetailOnSelect ?? true}
         toolbarMenuOpen={toolbarMenu !== null}
         advancedFilterActive={advancedQuery !== null}
         ontogglenav={() => (layout.mobileNavOpen = !layout.mobileNavOpen)}
@@ -1573,7 +1597,8 @@
         onnewentry={editor.openCreate}
         onclearsearch={() => (search = "")}
         onadvancedsearch={() => (advancedSearchOpen = true)}
-        ontoggledetail={() => (layout.detailVisible = !layout.detailVisible)}
+        ontoggledetail={() =>
+          appSettings.updateGeneral("showDetailOnSelect", !settings.general.showDetailOnSelect)}
         onreport={() => void handleOpenReport()}
         onexportcsv={() => void handleExportCsv()}
         onsettings={openSettings}
@@ -1592,6 +1617,7 @@
       <div
         class="main-content"
         style={`--group-width: ${layout.groupWidth}px; --detail-width: ${layout.detailVisible ? layout.detailWidth : 0}px`}
+        data-tauri-drag-region
       >
         {#if layout.mobileNavOpen}
           <button

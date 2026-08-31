@@ -16,6 +16,7 @@ export type VaultSelection = {
   selectedEntry: VaultEntry | null;
   selectedUuids: Set<string>;
   selectionAnchor: string | null;
+  selectionVersion: number;
   setSingleSelection(entry: VaultEntry | null): void;
   handleRowClick(event: MouseEvent, entry: VaultEntry): void;
 };
@@ -24,11 +25,13 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
   let selectedEntry = $state<VaultEntry | null>(null);
   let selectedUuids = $state<Set<string>>(new Set());
   let selectionAnchor = $state<string | null>(null);
+  let selectionVersion = $state(0);
 
   function setSingleSelection(entry: VaultEntry | null): void {
     selectedUuids = entry ? new Set([entry.uuid]) : new Set();
     selectionAnchor = entry?.uuid ?? null;
     selectedEntry = entry;
+    selectionVersion++;
   }
 
   function handleRowClick(event: MouseEvent, entry: VaultEntry): void {
@@ -41,6 +44,7 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
         selectedUuids = new Set(uuids.slice(lo, hi + 1));
         selectionAnchor = entry.uuid;
         selectedEntry = entry;
+        selectionVersion++;
         return;
       }
     }
@@ -54,6 +58,7 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
       selectedUuids = next;
       selectionAnchor = entry.uuid;
       selectedEntry = entry;
+      selectionVersion++;
       return;
     }
     setSingleSelection(entry);
@@ -77,6 +82,12 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
     },
     set selectionAnchor(value) {
       selectionAnchor = value;
+    },
+    get selectionVersion() {
+      return selectionVersion;
+    },
+    set selectionVersion(value) {
+      selectionVersion = value;
     },
     setSingleSelection,
     handleRowClick,

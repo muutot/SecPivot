@@ -136,19 +136,26 @@
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="clock" size={17} /></span>
-      <div>
-        <strong>会话密钥超时</strong>
-        <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
+      <div class="heading-inline">
+        <div>
+          <strong>会话密钥超时</strong>
+          <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
+        </div>
+        <div style="width: 120px; flex: 0 0 auto;">
+          <TextField
+            size="control"
+            numeric
+            type="number"
+            value={String(rpc.sessionTimeoutSecs)}
+            ariaLabel="会话密钥超时秒数"
+            oninput={(e) =>
+              change(
+                "sessionTimeoutSecs",
+                Math.max(0, Math.floor(Number(e.currentTarget.value) || 0)),
+              )}
+          />
+        </div>
       </div>
-      <TextField
-        size="control"
-        numeric
-        type="number"
-        value={String(rpc.sessionTimeoutSecs)}
-        ariaLabel="会话密钥超时秒数"
-        oninput={(e) =>
-          change("sessionTimeoutSecs", Math.max(0, Math.floor(Number(e.currentTarget.value) || 0)))}
-      />
     </div>
   </section>
 

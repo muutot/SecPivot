@@ -34,7 +34,7 @@
 </script>
 
 {#if sessions.length > 1}
-  <div class="tab-bar" aria-label="打开的数据库">
+  <div class="tab-bar" data-tauri-drag-region aria-label="打开的数据库">
     {#each sessions as session (session.sessionId)}
       <div
         class="vault-tab"

@@ -31,6 +31,7 @@
   const general = $derived(s.general);
 
   let draggedId: string | null = $state(null);
+  let selectedThemeIdx: number | null = $state(null);
 
   function change<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]): void {
     appSettings.updateGeneral(key, value);
@@ -38,6 +39,67 @@
 
   function updateColor(key: keyof ThemeColors, value: string): void {
     appSettings.updateGeneral("themeColors", { ...s.general.themeColors, [key]: value });
+  }
+
+  const displayColors = $derived(
+    selectedThemeIdx !== null
+      ? (s.general.customThemes[selectedThemeIdx]?.colors ?? s.general.themeColors)
+      : s.general.themeColors,
+  );
+
+  // A saved theme edits its stored copy; the live palette only follows via 应用.
+  function updateDisplayColor(key: keyof ThemeColors, value: string): void {
+    if (selectedThemeIdx === null) {
+      updateColor(key, value);
+      return;
+    }
+    const themes = s.general.customThemes.map((t) => ({ ...t, colors: { ...t.colors } }));
+    const theme = themes[selectedThemeIdx];
+    if (!theme) return;
+    theme.colors = { ...theme.colors, [key]: value };
+    appSettings.updateGeneral("customThemes", themes);
+  }
+
+  function applyPreset(preset: ThemeColors): void {
+    if (selectedThemeIdx === null) {
+      change("themeColors", { ...preset });
+      return;
+    }
+    const themes = s.general.customThemes.map((t) => ({ ...t, colors: { ...t.colors } }));
+    const theme = themes[selectedThemeIdx];
+    if (!theme) return;
+    theme.colors = { ...preset };
+    appSettings.updateGeneral("customThemes", themes);
+  }
+
+  function saveCurrentAsTheme(): void {
+    const base = `自定义 ${s.general.customThemes.length + 1}`;
+    let name = base;
+    let n = 2;
+    const names = new Set(s.general.customThemes.map((t) => t.name));
+    while (names.has(name)) {
+      name = `${base} ${n}`;
+      n++;
+    }
+    const next = [...s.general.customThemes, { name, colors: { ...displayColors } }];
+    appSettings.updateGeneral("customThemes", next);
+    selectedThemeIdx = next.length - 1;
+  }
+
+  function applyCustomTheme(idx: number): void {
+    const t = s.general.customThemes[idx];
+    if (!t) return;
+    appSettings.updateGeneral("themeColors", { ...t.colors });
+    if (s.general.theme !== "custom") appSettings.updateGeneral("theme", "custom");
+    selectedThemeIdx = null;
+  }
+
+  function deleteCustomTheme(idx: number): void {
+    appSettings.updateGeneral(
+      "customThemes",
+      s.general.customThemes.filter((_, i) => i !== idx),
+    );
+    selectedThemeIdx = null;
   }
 
   const fontSliders: {
@@ -218,17 +280,14 @@
               <p>直接修改主题语义色，即时预览</p>
             </div>
             <div class="preset-row">
-              <button
-                class="preset-button"
-                onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>深色预设</button
+              <button class="preset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
+                >深色预设</button
               >
-              <button
-                class="preset-button"
-                onclick={() => change("themeColors", { ...LIGHT_THEME_COLORS })}>浅色预设</button
+              <button class="preset-button" onclick={() => applyPreset(LIGHT_THEME_COLORS)}
+                >浅色预设</button
               >
-              <button
-                class="reset-button"
-                onclick={() => change("themeColors", { ...DARK_THEME_COLORS })}>恢复默认</button
+              <button class="reset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
+                >恢复默认</button
               >
             </div>
           </div>
@@ -241,7 +300,7 @@
                 <div class="setting-heading">
                   <span
                     class="setting-icon color-swatch"
-                    style:background-color={s.general.themeColors[field.key]}
+                    style:background-color={displayColors[field.key]}
                   ></span>
                   <div>
                     <strong>{field.label}</strong>
@@ -252,16 +311,16 @@
                   <input
                     type="color"
                     class="color-input"
-                    value={s.general.themeColors[field.key].slice(0, 7)}
-                    oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                    value={displayColors[field.key].slice(0, 7)}
+                    oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
                   />
                   <div class="color-hex-input">
                     <TextField
                       size="control"
                       spellcheck={false}
-                      value={s.general.themeColors[field.key]}
+                      value={displayColors[field.key]}
                       placeholder="#RRGGBBAA"
-                      oninput={(e) => updateColor(field.key, e.currentTarget.value)}
+                      oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
                     />
                   </div>
                 </div>
@@ -269,6 +328,61 @@
             {/each}
           {/each}
         </div>
+        <div class="setting-heading multi-theme-heading">
+          <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
+          <div class="heading-inline">
+            <div>
+              <strong>多主题配置</strong>
+              <p>切换编辑当前配色或已保存主题；另存为保存副本，应用使所选主题生效</p>
+            </div>
+            <div class="theme-config-actions">
+              <Select
+                value={selectedThemeIdx === null ? "current" : String(selectedThemeIdx)}
+                ariaLabel="选择主题"
+                options={[
+                  { value: "current", label: "当前配色" },
+                  ...s.general.customThemes.map((t, i) => ({ value: String(i), label: t.name })),
+                ]}
+                onchange={(v) => {
+                  selectedThemeIdx = v === "current" ? null : Number(v);
+                }}
+              />
+              <Button variant="plain" onclick={saveCurrentAsTheme}>另存为</Button>
+              {#if selectedThemeIdx !== null}
+                <Button
+                  variant="plain"
+                  onclick={() => {
+                    if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
+                  }}>应用</Button
+                >
+                <Button
+                  variant="plain"
+                  onclick={() => {
+                    if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
+                  }}>删除</Button
+                >
+              {/if}
+            </div>
+          </div>
+        </div>
+        {#if selectedThemeIdx !== null}
+          <div class="theme-name-row">
+            <TextField
+              value={s.general.customThemes[selectedThemeIdx].name}
+              placeholder="主题名称"
+              oninput={(e) => {
+                const themes = s.general.customThemes.map((t) => ({
+                  ...t,
+                  colors: { ...t.colors },
+                }));
+                if (selectedThemeIdx !== null && themes[selectedThemeIdx]) {
+                  themes[selectedThemeIdx].name = e.currentTarget.value;
+                  appSettings.updateGeneral("customThemes", themes);
+                }
+              }}
+            />
+          </div>
+        {/if}
       </section>
     {:else if general.theme === "dark"}
       {@render presetPaletteCard("深色配色", "内置默认配色（只读）", DARK_THEME_COLORS)}
@@ -418,17 +532,20 @@
       class="settings-note"
       style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);"
     >
-      逐项控制是否在主界面直接显示；关闭则收纳到「更多」菜单（窗口按钮关闭则隐藏）。下方可拖拽或用上下按钮排序右侧工具栏，并为任意项后添加分割线。
+      所有按钮均可显示/隐藏（除“更多”菜单外）、排序、设置左右位置；在项后打开“|”即添加垂直分割线。
     </p>
     <SettingToggleCard
-      icon="copy"
-      label="另存为"
-      description="工具栏左侧“另存为”按钮（不参与右侧排序）"
-      checked={s.general.toolbarItems.saveAs}
-      onchange={(checked) =>
-        change("toolbarItems", { ...s.general.toolbarItems, saveAs: checked } as never)}
+      icon="eye"
+      label="点击条目显示详情"
+      description="点击条目时自动打开详情面板；关闭后需手动点击工具栏“详情”按钮打开"
+      checked={s.general.showDetailOnSelect ?? true}
+      onchange={(checked) => change("showDetailOnSelect" as never, checked as never)}
     />
-    {@const rightMeta: Record<string, { label: string; desc: string; icon: string }> = {
+    {@const fullMeta: Record<string, { label: string; desc: string; icon: string }> = {
+      newEntry: { label: '新建条目', desc: '新建条目', icon: 'plus' },
+      save: { label: '保存', desc: '保存数据库', icon: 'save' },
+      saveAs: { label: '另存为', desc: '另存为', icon: 'copy' },
+      lock: { label: '锁定', desc: '锁定数据库', icon: 'lock' },
       toggleDetail: { label: '详情面板切换', desc: '显示/隐藏详情', icon: 'eye' },
       securityReport: { label: '安全报告', desc: '安全报告', icon: 'shield' },
       similarPasswords: { label: '相似密码检查', desc: '相似密码检查', icon: 'shield' },
@@ -439,22 +556,32 @@
       exportMenu: { label: '导出', desc: '导出', icon: 'download' },
       dbSettings: { label: '数据库设置', desc: '数据库设置', icon: 'settings' },
       appSettings: { label: '设置', desc: '设置', icon: 'settings' },
+      moreMenu: { label: '更多菜单 ```', desc: '溢出菜单（不可隐藏）', icon: 'more-horizontal' },
+      windowMinimize: { label: '窗口：最小化 —', desc: '最小化按钮', icon: 'minimize' },
+      windowMaximize: { label: '窗口：最大化/还原 □', desc: '最大化/还原按钮', icon: 'maximize' },
+      windowClose: { label: '窗口：关闭 ×', desc: '关闭按钮', icon: 'x' },
     }}
-    {@const order: string[] = s.general.toolbarOrder ?? []}
-    {@const separators: string[] = s.general.toolbarSeparators ?? []}
+    {@const fullOrder: string[] = (s.general as unknown as Record<string, unknown>).toolbarFullOrder as string[] ?? []}
+    {@const fullSeparators: string[] = (s.general as unknown as Record<string, unknown>).toolbarFullSeparators as string[] ?? []}
+    {@const sides: Record<string, string> = (s.general as unknown as Record<string, unknown>).toolbarSides as Record<string, string> ?? {}}
     <section class="setting-card">
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
         <div>
-          <strong>右侧工具栏排序与分隔</strong>
-          <p>拖拽整行或用 ↑↓ 调整顺序；“|”开关为该项后添加垂直分割线</p>
+          <strong>工具栏排序、左右与分隔</strong>
+          <p>拖拽整行或用 ↑↓ 调整全局顺序；“左/右”切换所在分组；“|”为该项后添加分割线</p>
         </div>
       </div>
       <div class="toolbar-order-list" role="list">
-        {#each order as id, idx (id)}
-          {@const meta = rightMeta[id] ?? { label: id, desc: "", icon: "settings" }}
-          {@const visible = (s.general.toolbarItems as unknown as Record<string, boolean>)[id]}
-          {@const hasSep = separators.includes(id)}
+        {#each fullOrder as id, idx (id)}
+          {@const meta = fullMeta[id] ?? { label: id, desc: "", icon: "settings" }}
+          {@const isMore = id === "moreMenu"}
+          {@const visible = isMore
+            ? true
+            : ((s.general.toolbarItems as unknown as Record<string, boolean>)[id] ?? true)}
+          {@const hasSep = fullSeparators.includes(id)}
+          {@const side =
+            sides[id] ?? (["newEntry", "save", "saveAs", "lock"].includes(id) ? "left" : "right")}
           <div
             class="toolbar-order-item"
             class:dragging={draggedId === id}
@@ -472,59 +599,100 @@
               e.preventDefault();
               const from = draggedId;
               if (!from || from === id) return;
-              const next = [...order];
+              const next = [...fullOrder];
               const fi = next.indexOf(from);
               const ti = next.indexOf(id);
               if (fi === -1 || ti === -1) return;
               next.splice(fi, 1);
               next.splice(ti, 0, from);
               draggedId = null;
-              change("toolbarOrder", next as never);
+              change("toolbarFullOrder" as never, next as never);
             }}
           >
             <span class="drag-handle" title="拖拽排序"><AppIcon name="menu" size={12} /></span>
             <span class="setting-icon small"><AppIcon name={meta.icon as never} size={14} /></span>
             <div class="order-text">
               <strong>{meta.label}</strong>
-              <p>{meta.desc}</p>
+              <p>{meta.desc} · {side === "left" ? "左侧" : "右侧"}</p>
             </div>
             <div class="order-actions">
-              <span class="order-action-label">显示</span>
-              <Toggle
-                checked={!!visible}
-                ariaLabel={meta.label}
-                onchange={(c) =>
-                  change("toolbarItems", { ...s.general.toolbarItems, [id]: c } as never)}
-              />
+              {#if !isMore}
+                <span class="order-action-label">显示</span>
+                <Toggle
+                  checked={!!visible}
+                  ariaLabel={meta.label}
+                  onchange={(c) =>
+                    change(
+                      "toolbarItems" as never,
+                      { ...s.general.toolbarItems, [id]: c } as never,
+                    )}
+                />
+              {:else}
+                <span class="order-action-label" style="opacity:0.6">固定</span>
+                <Toggle checked={true} disabled={true} ariaLabel={meta.label} />
+              {/if}
               <span class="order-sep-label" title="在该项后显示分割线">|</span>
               <Toggle
                 checked={hasSep}
                 ariaLabel="分割线"
                 onchange={(c) => {
-                  const next = c ? [...separators, id] : separators.filter((x) => x !== id);
-                  change("toolbarSeparators", next as never);
+                  const next = c ? [...fullSeparators, id] : fullSeparators.filter((x) => x !== id);
+                  change("toolbarFullSeparators" as never, next as never);
                 }}
               />
+              <span class="order-sep-label" title="所在侧">侧</span>
+              <button
+                class="order-side-btn"
+                class:active={side === "left"}
+                onclick={() => {
+                  const next = {
+                    ...((s.general as unknown as Record<string, unknown>).toolbarSides as Record<
+                      string,
+                      string
+                    >),
+                    [id]: "left",
+                  };
+                  change("toolbarSides" as never, next as never);
+                }}
+                title="移至左侧"
+                aria-label="左侧">左</button
+              >
+              <button
+                class="order-side-btn"
+                class:active={side === "right"}
+                onclick={() => {
+                  const next = {
+                    ...((s.general as unknown as Record<string, unknown>).toolbarSides as Record<
+                      string,
+                      string
+                    >),
+                    [id]: "right",
+                  };
+                  change("toolbarSides" as never, next as never);
+                }}
+                title="移至右侧"
+                aria-label="右侧">右</button
+              >
               <div class="order-move">
                 <button
                   class="order-move-btn"
                   disabled={idx === 0}
                   onclick={() => {
                     if (idx === 0) return;
-                    const next = [...order];
+                    const next = [...fullOrder];
                     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-                    change("toolbarOrder", next as never);
+                    change("toolbarFullOrder" as never, next as never);
                   }}
                   aria-label="上移">↑</button
                 >
                 <button
                   class="order-move-btn"
-                  disabled={idx === order.length - 1}
+                  disabled={idx === fullOrder.length - 1}
                   onclick={() => {
-                    if (idx === order.length - 1) return;
-                    const next = [...order];
+                    if (idx === fullOrder.length - 1) return;
+                    const next = [...fullOrder];
                     [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-                    change("toolbarOrder", next as never);
+                    change("toolbarFullOrder" as never, next as never);
                   }}
                   aria-label="下移">↓</button
                 >
@@ -536,38 +704,64 @@
       <div class="toolbar-order-footer">
         <Button
           variant="plain"
-          onclick={() =>
-            change("toolbarOrder", [
-              "toggleDetail",
-              "securityReport",
-              "similarPasswords",
-              "hibpCheck",
-              "expiredEntries",
-              "clearHistory",
-              "importMenu",
-              "exportMenu",
-              "dbSettings",
-              "appSettings",
-            ] as never)}>重置排序</Button
+          onclick={() => {
+            change(
+              "toolbarFullOrder" as never,
+              [
+                ...([
+                  "newEntry",
+                  "save",
+                  "saveAs",
+                  "lock",
+                  "toggleDetail",
+                  "securityReport",
+                  "similarPasswords",
+                  "hibpCheck",
+                  "expiredEntries",
+                  "clearHistory",
+                  "importMenu",
+                  "exportMenu",
+                  "dbSettings",
+                  "appSettings",
+                  "moreMenu",
+                  "windowMinimize",
+                  "windowMaximize",
+                  "windowClose",
+                ] as unknown as string[]),
+              ] as never,
+            );
+            change(
+              "toolbarSides" as never,
+              {
+                newEntry: "left",
+                save: "left",
+                saveAs: "left",
+                lock: "left",
+                toggleDetail: "right",
+                securityReport: "right",
+                similarPasswords: "right",
+                hibpCheck: "right",
+                expiredEntries: "right",
+                clearHistory: "right",
+                importMenu: "right",
+                exportMenu: "right",
+                dbSettings: "right",
+                appSettings: "right",
+                moreMenu: "right",
+                windowMinimize: "right",
+                windowMaximize: "right",
+                windowClose: "right",
+              } as never,
+            );
+          }}>重置排序与左右</Button
         >
-        <Button variant="plain" onclick={() => change("toolbarSeparators", [] as never)}
+        <Button
+          variant="plain"
+          onclick={() => change("toolbarFullSeparators" as never, [] as never)}
           >清除全部分割线</Button
         >
       </div>
     </section>
-    {#each [{ key: "windowMinimize", label: "窗口：最小化 —", desc: "主窗口标题栏/工具栏“最小化”按钮", icon: "minimize" }, { key: "windowMaximize", label: "窗口：最大化/还原 □", desc: "主窗口“最大化/还原”按钮", icon: "maximize" }, { key: "windowClose", label: "窗口：关闭 ×", desc: "主窗口“关闭”按钮", icon: "x" }] as item (item.key)}
-      <SettingToggleCard
-        icon={item.icon as never}
-        label={item.label}
-        description={item.desc}
-        checked={(s.general.toolbarItems as unknown as Record<string, boolean>)[item.key]}
-        onchange={(checked) =>
-          change("toolbarItems", {
-            ...s.general.toolbarItems,
-            [item.key]: checked,
-          } as never)}
-      />
-    {/each}
   {/if}
 
   {#if section === "network"}
@@ -669,6 +863,21 @@
   .heading-inline .preset-row {
     flex-shrink: 0;
     margin-top: 0;
+  }
+
+  .multi-theme-heading {
+    margin-top: 14px;
+  }
+
+  .theme-config-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .theme-name-row {
+    margin-top: 8px;
   }
 
   .reset-button,
@@ -778,5 +987,25 @@
     display: flex;
     gap: 8px;
     margin-top: 10px;
+  }
+  .order-side-btn {
+    min-width: 22px;
+    height: 20px;
+    padding: 0 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .order-side-btn.active {
+    border-color: var(--selection-color);
+    color: var(--selection-color);
+    background: color-mix(in srgb, var(--selection-color) 15%, var(--input-bg));
+  }
+  .order-side-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
   }
 </style>
