@@ -1,5 +1,89 @@
 # Changelog
 
+## 1.4.1 (2026-08-31)
+
+### ✨ Features
+
+- **settings**: custom themes, full toolbar customization, detail auto-show, drag regions (2d64d198)
+- **credentials**: unify welcome/lock via shared shell and credential form (ac56ffd4)
+- **toolbar**: configurable toolbar order and separators (411adbeb)
+- **menu**: move imports and exports to toolbar cascades and slim the blank menu (e5b21847)
+- **mobile**: long-press context menus and opt-in column grid on narrow screens (d44c2b22)
+- **detail**: add an in-panel hide button for the detail pane (0b3e8faf)
+- **theme**: make light inputs white by default and gray on hover (8f8aaeef)
+- **theme**: default the light preset hover background to white (f7add074)
+- **settings**: show read-only default palettes for dark and light presets (c05cf78a)
+- **remote**: precondition remote saves on the observed ETag to reject lost races (674b7a04)
+- **deps**: align RustCrypto and quick-xml with keepass to dedupe lockfile (eef7a766)
+
+### 🐛 Bug Fixes
+
+- **menu**: flip cascades when they overflow the window edge (424ca857)
+- **menu**: unbreak fixed positioning inside the drawer and enforce menu owner symmetry (a9cd128a)
+- **menu**: close the column menu when opening the entry or blank menu (9e034f41)
+- **table**: pin the vertical scrollbar to the panel edge with a shared scroller (afd60834)
+- **ui**: show not-allowed cursor for empty-input unlock and busy only while working (cef89a37)
+- **welcome**: restore modal action row spacing on the welcome surface (0fa89be7)
+- **settings**: restore fixed-width row inputs in the remote panel (c61d4256)
+- **vault**: skip bin creation when recycling is disabled and align size-trim indices (b2579d99)
+- **settings**: salvage corrupt config files and align TS/Rust normalization (ec2b67d5)
+- **vault**: exclude the recycle bin from the security report (398dac4f)
+- **vault**: enforce the historyMaxSize byte budget when trimming snapshots (8e3dc675)
+- **vault**: restore the whole record in restore_entry_version (63d84f42)
+- **vault**: honor recyclebin_enabled=false with permanent deletes and wording (b07a2c83)
+- **vault**: inherit EnableSearching from parent groups per KeePass semantics (05eaeb74)
+- **vault**: blank protected custom-field values in history snapshots (72a519d7)
+- **vault**: keep unwinding in release so dangling attachment refs stay recoverable (0c1f382d)
+- **settings**: keep cleared custom colors empty across the persist round-trip (817c27d6)
+- **vault**: trim custom-field history after the tracking scope with cap test (9eec6a8b)
+- **selection**: prune stale multi-selection after move and group delete (ea80ada8)
+- **vault**: strip protected custom-field values from browser persistence (35dbb992)
+- **select**: keep listbox open while its own list scrolls (e81849b7)
+- **groups**: raise busy flags in extracted group flows and drop debug instrumentation (5cdfd60c)
+- **columns**: restore reactivity of column service derived values (2f0b54a6)
+- **filter**: make page filteredEntries reactive to composable derived (d4141908)
+- **filter**: restore reactivity of entry filter after extraction (734c3414)
+- **vault**: show non-searchable groups when browsing and clear search on vault switch (0baba447)
+
+### ♻️ Refactoring
+
+- **detail**: replace the mobile back button with the in-panel collapse button (d489d220)
+- **ui**: migrate settings panels to TextField/Button/Feedback templates (05679eb0)
+- **ui**: templateize menu items and retire viewport/modal shared stylesheets (7b290625)
+- **ui**: retire text-input and modal-button classes from feature components (cceca37f)
+- **ui**: migrate every modal-button usage to the Button template (057340d7)
+- **ui**: introduce templates layer with Toggle/TextField/Button and migrate dialogs (c1ed0e24)
+
+### 🎨 Styling
+
+- **editor**: use Toggle for the quality-check flag (017eaf41)
+- **editor**: swap header save and cancel icons (dfe11665)
+- **editor**: move save/cancel to header icons and drop duplicate close (8c5add7a)
+- **toolbar**: rest the primary entry button and keep the mobile group drawer open (ab9b9437)
+- **theme**: rest icon chips and secondary buttons on card background (c83d16bf)
+- **welcome**: default the welcome window to 550x730 (b8a75763)
+- **ui**: restore missing toggle knobs in editor and db-settings dialogs (f1ace25f)
+- **config**: apply cargo fmt to new test (d6280837)
+- **ui**: adopt shared primitives and harden small interaction details (466a25b7)
+- **theme**: fix undefined tokens, db-meta shared inputs and mono stack (4ae6ab1a)
+- **theme**: replace undefined accent/primary variable spellings with selection token (5169902c)
+- **theme**: replace hardcoded mono font stacks with --font-mono token (7dc9b830)
+
+### 📝 Documentation
+
+- **skill**: rewrite css-theming ownership for the templates layer and expand retired-class guard (94981850)
+- **deps**: document that rxing forces the exact image pin (dc681bff)
+
+### ✅ Testing
+
+- **ui**: guard toggle-switch knob completeness (b067e98b)
+
+### 🔧 Chores
+
+- **debug**: log useEntryFilter subtree details (4d1bf706)
+- **debug**: expose vault filter counts in status bar and console (0c149a8d)
+- **deps**: update frontend dependencies to latest patch releases (065dc1f4)
+
 ## 1.4.0 (2026-08-25)
 
 ### ✨ Features
