@@ -138,7 +138,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding: 18px;
+    padding: 20px;
     border: 1px solid var(--border-color);
     border-radius: 13px;
     background: var(--surface-bg);
@@ -230,6 +230,13 @@
 
   .modal-shell__body {
     min-width: 0;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
   }
 
   .modal-shell__close {

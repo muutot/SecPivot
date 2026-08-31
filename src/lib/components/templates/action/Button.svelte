@@ -48,9 +48,15 @@
 
 <style>
   .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
     font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
     cursor: pointer;
   }
 

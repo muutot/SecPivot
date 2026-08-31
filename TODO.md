@@ -79,8 +79,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] 批量分组展开/折叠：新增单次 IPC 的批量命令，一次事务写入所有目标分组的 `isExpanded`，前端「全部展开/全部折叠」不得再为每个分组接收一份完整 `VaultState`；补后端原子性/未知 UUID 测试与前端 browser fallback 等价行为
 - [x] 条目列表窗口化：提取 `EntryTable`/表格状态逻辑，仅挂载可视区及缓冲行；保持固定列宽、横向滚动、列排序/拖拽/缩放、多选、Ctrl+A、键盘导航、条目拖拽和移动端摘要布局语义
-- [~] 统一弹窗基础设施：通用业务对话框已迁移到 `ModalShell`（header/body/actions、size/tone）+ `modal-shared.css`（`.text-input`/`.modal-actions`/`.modal-button` primary/danger），包括 EntryEditor/GroupMeta/附件预览/相似密码/HIBP/过期条目等；`VaultWelcome` 的凭据弹窗仍保留独立表面与同名局部样式，受「VaultWelcome/LockScreen 不动」约束暂缓统一
-- [ ] 统一凭据表单：`ViewportMenuShell` 已供右键菜单/列配置复用（ContextMenu、ColumnConfigMenu）；欢迎页与锁屏共用的 `StandaloneVaultShell`/`VaultCredentialFields` 抽取受「VaultWelcome/LockScreen 不动」约束，暂缓
+- [x] 统一弹窗基础设施：通用业务对话框已迁移到 `ModalShell`（header/body/actions、size/tone）+ `modal-shared.css`（`Button`/`TextField`/`Toggle` 模板）、`VaultWelcome` 的打开/新建/远程凭据弹窗已统一为 `ModalShell`（`small/medium`）+ `VaultCredentialFields`，`LockScreen` 复用同一表单
+- [x] 统一凭据表单：`ViewportMenuShell` 已供右键菜单/列配置复用（ContextMenu、ColumnConfigMenu）；欢迎页与锁屏已抽取共用的 `StandaloneVaultShell`（外层欢迎/锁定壳，`icon/title/subtitle/logoSrc`）与 `VaultCredentialFields`（主密码/确认/密钥文件/显示切换/错误，`bind:` 双向）并经 `ModalShell` 统一弹窗，约束已解除并补回归验证
 - [x] 低风险性能批次：复用单例 `Intl.Collator` 并预计算当前排序列 key；`GroupPicker` 改用一次性 entry-count map；导入路径建立 group-path 索引；favicon 每次命令复用一个 `reqwest::Client`/连接池
 - [x] mutation 自定义图标拆分缓存：后端 mutation 快照省略 `customIcons` 图像负载（`Option::None`），前端 `vault.ts` 维护图标缓存并在权威快照/轻量结果间合并；favorite/展开/CRUD 不再跨 IPC 重传全部 favicon，附 `light_mutation_snapshots_omit_custom_icons` 测试
 - [x] `VaultState.revision`：后端在每次 mutation 递增并随快照（含轻量 mutation 结果）返回，前端类型/浏览器回退同步，测试断言 `mutated.revision > full.revision`

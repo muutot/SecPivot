@@ -18,6 +18,9 @@
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
+  import StandaloneVaultShell from "$lib/components/StandaloneVaultShell.svelte";
+  import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import { formatBytes } from "$lib/utils/format";
 
   interface Props {
@@ -26,9 +29,6 @@
 
   let { onopened }: Props = $props();
 
-  /** Reactive mirror of the settings store. `$derived(get(appSettings))` would
-   * evaluate once and freeze (get() is untracked in Svelte 5); subscribing to
-   * a $state mirror keeps every derived below fresh. */
   let settings = $state(get(appSettings));
   $effect(() => {
     const unsubscribe = appSettings.subscribe((value) => {
@@ -41,19 +41,16 @@
 
   const activeProfile = $derived(activeRemoteProfile(settings));
   const activeRemoteName = $derived(activeProfile.name);
-  /** The mirror folder actually created for "本地镜像" mode. */
   const remoteMirrorDir = $derived(remoteMirrorPath(activeProfile));
   const activeKindProfiles = $derived(
     remoteProfilesForKind(settings.remoteProfiles, activeProfile.settings.kind),
   );
-  /** True while the 配置名称 field holds a duplicate of another profile's name. */
   const remoteNameConflict = $derived(
     activeRemoteName.trim() !== "" &&
       activeKindProfiles.filter((profile) => profile.name.trim() === activeRemoteName.trim())
         .length > 1,
   );
 
-  /** Opt-in screen-capture guard: excludes the main window from screenshots/recordings while a vault is open (Windows only). */
   const guardEnabled = $derived(settings.security.screenCaptureGuard);
 
   type Modal = "none" | "open" | "create" | "remote";
@@ -83,8 +80,7 @@
       : Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
   );
 
-  /** True when the active profile's transport has the minimum required fields. */
-  function isRemoteConfigured(r: import("$lib/types/settings").RemoteSettings): boolean {
+  function isRemoteConfigured(r: RemoteSettings): boolean {
     return r.kind === "webdav"
       ? Boolean(r.endpoint)
       : Boolean(r.endpoint && r.bucket && r.accessKey && r.secretKey);
@@ -97,9 +93,6 @@
     appSettings.updateRemote(settings.activeRemote, key, value);
   }
 
-  /** Kind switch from the modal-head picker: reset the stale object list and
-   *  reload for the new transport. On the 打开 tab, an unconfigured new kind
-   *  drops into 配置 instead of showing another transport's files. */
   async function changeRemoteKind(v: string): Promise<void> {
     const kind = v as RemoteKind;
     if (kind === remote.kind) return;
@@ -335,508 +328,350 @@
   }
 </script>
 
-<div class="welcome">
-  <div class="welcome-inner">
-    <div class="welcome-header">
-      <div class="welcome-logo">
-        <img class="welcome-logo-img" src="/app-icon.png" alt="SecPivot" />
-      </div>
-      <div class="welcome-heading">
-        <h1 class="welcome-title">SecPivot</h1>
-        <p class="welcome-subtitle">本地优先的 KeePass 密码管理器</p>
-      </div>
-    </div>
-
-    <div class="welcome-actions">
-      <button class="welcome-button primary" class:busy onclick={handleOpen} disabled={busy}>
-        <AppIcon name="open" size={16} />打开数据库
-      </button>
-      <button class="welcome-button" class:busy onclick={handleCreate} disabled={busy}>
-        <AppIcon name="plus" size={16} />新建数据库
-      </button>
-      {#if isTauriRuntime()}
-        <button class="welcome-button" onclick={handleRemoteOpen} disabled={busy}>
-          <AppIcon name="cloud" size={16} />远程数据库
-        </button>
-      {/if}
-    </div>
-
-    <p class="welcome-hint">主密码只在你本地使用；远程库仅上传加密后的数据库</p>
-
-    {#if recentFiles.length > 0}
-      <div class="recent-section">
-        <p class="recent-label">最近打开</p>
-        {#each recentFiles as file (file)}
-          <button class="recent-item" onclick={() => openRecent(file)} title={file}>
-            <AppIcon name="clock" size={12} />
-            <span class="recent-name">{file.split(/[\\/]/).pop() || file}</span>
-          </button>
-        {/each}
-      </div>
-    {/if}
-
+<StandaloneVaultShell
+  title="SecPivot"
+  subtitle="本地优先的 KeePass 密码管理器"
+  logoSrc="/app-icon.png"
+>
+  <div class="welcome-actions">
+    <Button variant="primary" onclick={handleOpen} disabled={busy} {busy}>
+      <AppIcon name="open" size={14} />打开数据库
+    </Button>
+    <Button onclick={handleCreate} disabled={busy} {busy}>
+      <AppIcon name="plus" size={14} />新建数据库
+    </Button>
     {#if isTauriRuntime()}
-      <div class="welcome-guard">
-        <div class="guard-info">
-          <span class="guard-title">防截屏守卫</span>
-          <span class="guard-desc">库打开期间窗口不出现在截屏/录屏中</span>
-        </div>
-        <Toggle
-          checked={guardEnabled}
-          ariaLabel="防截屏守卫"
-          onchange={(next) => {
-            appSettings.updateSecurity("screenCaptureGuard", next);
-            void appSettings.flush();
-          }}
-        />
-      </div>
+      <Button onclick={handleRemoteOpen} disabled={busy}>
+        <AppIcon name="cloud" size={14} />远程数据库
+      </Button>
     {/if}
   </div>
-</div>
 
-{#if modal !== "none"}
-  <div class="modal-backdrop" role="presentation">
-    <div
-      class="password-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label={modal === "open"
-        ? "解锁数据库"
-        : modal === "create"
-          ? "新建数据库"
-          : "远程数据库"}
-    >
-      <div class="modal-head">
-        <span class="modal-icon"
-          ><AppIcon
-            name={modal === "open" ? "lock" : modal === "create" ? "folder-plus" : "cloud"}
-            size={18}
-          /></span
+  <p class="welcome-hint">主密码只在你本地使用；远程库仅上传加密后的数据库</p>
+
+  {#if recentFiles.length > 0}
+    <div class="recent-section">
+      <p class="recent-label">最近打开</p>
+      {#each recentFiles as file (file)}
+        <button class="recent-item" onclick={() => openRecent(file)} title={file}>
+          <AppIcon name="clock" size={12} />
+          <span class="recent-name">{file.split(/[\\/]/).pop() || file}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
+
+  {#if isTauriRuntime()}
+    <div class="welcome-guard">
+      <div class="guard-info">
+        <span class="guard-title">防截屏守卫</span>
+        <span class="guard-desc">库打开期间窗口不出现在截屏/录屏中</span>
+      </div>
+      <Toggle
+        checked={guardEnabled}
+        ariaLabel="防截屏守卫"
+        onchange={(next) => {
+          appSettings.updateSecurity("screenCaptureGuard", next);
+          void appSettings.flush();
+        }}
+      />
+    </div>
+  {/if}
+</StandaloneVaultShell>
+
+{#if modal === "open"}
+  <ModalShell
+    title={isDemo ? "打开演示数据库" : "解锁数据库"}
+    description={path}
+    size="small"
+    closeOnEscape
+    onclose={() => (modal = "none")}
+  >
+    {#snippet icon()}<AppIcon name="lock" size={18} />{/snippet}
+    {#snippet children()}
+      <VaultCredentialFields
+        bind:password
+        bind:keyfilePath
+        bind:showPassword
+        {busy}
+        {error}
+        isCreate={false}
+        {isDemo}
+        onPickKeyfile={pickKeyfile}
+      />
+    {/snippet}
+    {#snippet actions()}
+      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
+      <Button variant="primary" onclick={confirmOpen} disabled={busy} {busy}>解锁</Button>
+    {/snippet}
+  </ModalShell>
+{:else if modal === "create"}
+  <ModalShell
+    title="新建数据库"
+    description="选择一个位置并设置主密码"
+    size="small"
+    closeOnEscape
+    onclose={() => (modal = "none")}
+  >
+    {#snippet icon()}<AppIcon name="folder-plus" size={18} />{/snippet}
+    {#snippet children()}
+      <VaultCredentialFields
+        bind:password
+        bind:confirm
+        bind:keyfilePath
+        bind:showPassword
+        bind:path
+        {busy}
+        {error}
+        isCreate={true}
+        showPathField={true}
+        onPickKeyfile={pickKeyfile}
+        onPickCreatePath={pickCreatePath}
+      />
+    {/snippet}
+    {#snippet actions()}
+      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
+      <Button variant="primary" onclick={confirmCreate} disabled={busy} {busy}>创建</Button>
+    {/snippet}
+  </ModalShell>
+{:else if modal === "remote"}
+  <ModalShell
+    title={`远程数据库 (${remoteKindLabel})`}
+    description={`从 ${remoteKindLabel} 打开或创建数据库`}
+    size="medium"
+    scrollable
+    closeOnEscape
+    onclose={() => (modal = "none")}
+  >
+    {#snippet icon()}<AppIcon name="cloud" size={18} />{/snippet}
+    {#snippet headerActions()}
+      <Select
+        className="remote-kind-picker"
+        value={remote.kind}
+        ariaLabel="传输类型"
+        options={[
+          { value: "webdav", label: "WebDAV" },
+          { value: "s3", label: "S3" },
+        ]}
+        onchange={changeRemoteKind}
+      />
+    {/snippet}
+    {#snippet children()}
+      <div class="remote-tabs" role="tablist" aria-label="远程操作">
+        <button
+          class="remote-tab"
+          class:active={remoteTab === "open"}
+          onclick={() => switchRemoteTab("open")}>打开</button
         >
-        <div>
-          <strong
-            >{modal === "open"
-              ? isDemo
-                ? "打开演示数据库"
-                : "解锁数据库"
-              : modal === "create"
-                ? "新建数据库"
-                : `远程数据库 (${remoteKindLabel})`}</strong
-          >
-          <p>
-            {modal === "open"
-              ? path
-              : modal === "create"
-                ? "选择一个位置并设置主密码"
-                : `从 ${remoteKindLabel} 打开或创建数据库`}
-          </p>
-        </div>
-        {#if modal === "remote"}
-          <Select
-            className="remote-kind-picker"
-            value={remote.kind}
-            ariaLabel="传输类型"
-            options={[
-              { value: "webdav", label: "WebDAV" },
-              { value: "s3", label: "S3" },
-            ]}
-            onchange={changeRemoteKind}
-          />
-        {/if}
+        <button
+          class="remote-tab"
+          class:active={remoteTab === "create"}
+          onclick={() => switchRemoteTab("create")}>新建</button
+        >
+        <button
+          class="remote-tab"
+          class:active={remoteTab === "config"}
+          onclick={() => switchRemoteTab("config")}>配置</button
+        >
       </div>
 
-      {#if modal === "create"}
-        <label class="field">
-          <span>保存路径</span>
-          <div class="path-row">
-            <TextField
-              bind:value={path}
-              placeholder={isTauriRuntime() ? "点击右侧选择文件" : "默认保存到浏览器演示存储"}
-              disabled={!isTauriRuntime()}
+      {#if remoteTab === "config"}
+        <div class="field">
+          <span>远程配置</span>
+          <div class="profile-bar">
+            <Select
+              className="profile-select"
+              value={settings.activeRemote}
+              ariaLabel="远程配置"
+              options={activeKindProfiles.map((profile) => ({
+                value: remoteProfilePath(profile),
+                label: profile.name,
+              }))}
+              onchange={(path) => appSettings.setActiveRemote(path as RemoteProfilePath)}
             />
-            {#if isTauriRuntime()}
-              <button class="browse-button" onclick={pickCreatePath} title="选择保存位置">
-                <AppIcon name="folder" size={15} />
-              </button>
+            <Button onclick={() => appSettings.addRemoteProfile(remote.kind, "")}>添加</Button>
+            <Button
+              disabled={activeKindProfiles.length <= 1}
+              onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}>删除</Button
+            >
+          </div>
+        </div>
+        <div class="field">
+          <span>配置名称</span>
+          <TextField
+            invalid={remoteNameConflict}
+            value={activeRemoteName}
+            placeholder="config_1"
+            spellcheck={false}
+            oninput={(e) =>
+              appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
+          />
+          {#if remoteNameConflict}<p class="modal-error">同一协议下的配置名不允许重复</p>{/if}
+        </div>
+        <div class="field">
+          <span>配置路径</span>
+          <code class="remote-profile-path">{settings.activeRemote}</code>
+        </div>
+        <div class="field">
+          <span>服务地址</span>
+          <TextField
+            value={remote.endpoint}
+            placeholder={remote.kind === "webdav"
+              ? "https://dav.example.com/dav"
+              : "https://s3.amazonaws.com"}
+            spellcheck={false}
+            oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
+          />
+        </div>
+        {#if remote.kind !== "webdav"}
+          <div class="remote-config-grid">
+            <div class="field">
+              <span>区域</span>
+              <TextField
+                value={remote.region}
+                placeholder="us-east-1"
+                spellcheck={false}
+                oninput={(e) => changeRemote("region", e.currentTarget.value)}
+              />
+            </div>
+            <div class="field">
+              <span>存储桶</span>
+              <TextField
+                value={remote.bucket}
+                placeholder="my-bucket"
+                spellcheck={false}
+                oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
+              />
+            </div>
+          </div>
+        {/if}
+        <div class="field">
+          <span>{remote.kind === "webdav" ? "用户名" : "Access Key"}</span>
+          <TextField
+            value={remote.accessKey}
+            placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
+            autocomplete="off"
+            spellcheck={false}
+            oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
+          />
+        </div>
+        <div class="field">
+          <span>{remote.kind === "webdav" ? "密码" : "Secret Key"}</span>
+          <TextField
+            type="password"
+            value={remote.secretKey}
+            placeholder="••••••••"
+            autocomplete="off"
+            spellcheck={false}
+            oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
+          />
+        </div>
+        <p class="remote-config-note">
+          凭据以 DPAPI 加密后保存在
+          config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
+        </p>
+      {:else if remoteTab === "open"}
+        <div class="field">
+          <span>选择远程文件</span>
+          <div class="remote-list">
+            {#if remoteLoading && remoteObjects.length === 0}
+              <p class="remote-empty">正在加载…</p>
+            {:else if remoteObjects.length === 0}
+              <p class="remote-empty">暂无文件</p>
+            {:else}
+              {#each remoteObjects as obj (obj.key)}
+                <button
+                  class="remote-item"
+                  class:active={remoteKey === obj.key}
+                  onclick={() => (remoteKey = obj.key)}
+                >
+                  <AppIcon name="file" size={13} />
+                  <span class="remote-item-name" title={obj.key}>{obj.key}</span>
+                  <span class="remote-item-size">{formatBytes(obj.size)}</span>
+                </button>
+              {/each}
             {/if}
           </div>
-        </label>
-      {/if}
-
-      {#if modal === "remote"}
-        <div class="remote-tabs" role="tablist" aria-label="远程操作">
           <button
-            class="remote-tab"
-            class:active={remoteTab === "open"}
-            onclick={() => switchRemoteTab("open")}
+            class="remote-refresh"
+            onclick={loadRemoteObjects}
+            disabled={remoteLoading || busy}
           >
-            打开
-          </button>
-          <button
-            class="remote-tab"
-            class:active={remoteTab === "create"}
-            onclick={() => switchRemoteTab("create")}
-          >
-            新建
-          </button>
-          <button
-            class="remote-tab"
-            class:active={remoteTab === "config"}
-            onclick={() => switchRemoteTab("config")}
-          >
-            配置
+            <AppIcon name="refresh" size={13} />刷新列表
           </button>
         </div>
+      {:else}
+        <label class="field">
+          <span>远程对象键</span>
+          <TextField bind:value={remoteKey} placeholder="vaults/new.kdbx" spellcheck={false} />
+        </label>
+      {/if}
 
-        {#if remoteTab === "config"}
-          <div class="field">
-            <span>远程配置</span>
-            <div class="profile-bar">
-              <Select
-                className="profile-select"
-                value={settings.activeRemote}
-                ariaLabel="远程配置"
-                options={activeKindProfiles.map((profile) => ({
-                  value: remoteProfilePath(profile),
-                  label: profile.name,
-                }))}
-                onchange={(path) => appSettings.setActiveRemote(path as RemoteProfilePath)}
-              />
-              <button
-                class="welcome-button"
-                type="button"
-                onclick={() => appSettings.addRemoteProfile(remote.kind, "")}
-              >
-                添加
-              </button>
-              <button
-                class="welcome-button"
-                type="button"
-                disabled={activeKindProfiles.length <= 1}
-                onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}
-              >
-                删除
-              </button>
-            </div>
-          </div>
-          <div class="field">
-            <span>配置名称</span>
-            <TextField
-              invalid={remoteNameConflict}
-              value={activeRemoteName}
-              placeholder="config_1"
-              spellcheck={false}
-              oninput={(e) =>
-                appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
-            />
-            {#if remoteNameConflict}
-              <p class="modal-error">同一协议下的配置名不允许重复</p>
-            {/if}
-          </div>
-          <div class="field">
-            <span>配置路径</span>
-            <code class="remote-profile-path">{settings.activeRemote}</code>
-          </div>
-          <div class="field">
-            <span>服务地址</span>
-            <TextField
-              value={remote.endpoint}
-              placeholder={remote.kind === "webdav"
-                ? "https://dav.example.com/dav"
-                : "https://s3.amazonaws.com"}
-              spellcheck={false}
-              oninput={(e) => changeRemote("endpoint", e.currentTarget.value)}
-            />
-          </div>
-          {#if remote.kind !== "webdav"}
-            <div class="remote-config-grid">
-              <div class="field">
-                <span>区域</span>
-                <TextField
-                  value={remote.region}
-                  placeholder="us-east-1"
-                  spellcheck={false}
-                  oninput={(e) => changeRemote("region", e.currentTarget.value)}
-                />
-              </div>
-              <div class="field">
-                <span>存储桶</span>
-                <TextField
-                  value={remote.bucket}
-                  placeholder="my-bucket"
-                  spellcheck={false}
-                  oninput={(e) => changeRemote("bucket", e.currentTarget.value)}
-                />
-              </div>
-            </div>
-          {/if}
-          <div class="field">
-            <span>{remote.kind === "webdav" ? "用户名" : "Access Key"}</span>
-            <TextField
-              value={remote.accessKey}
-              placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
-              autocomplete="off"
-              spellcheck={false}
-              oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
-            />
-          </div>
-          <div class="field">
-            <span>{remote.kind === "webdav" ? "密码" : "Secret Key"}</span>
-            <TextField
-              type="password"
-              value={remote.secretKey}
-              placeholder="••••••••"
-              autocomplete="off"
-              spellcheck={false}
-              oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
-            />
-          </div>
-          <p class="remote-config-note">
-            凭据以 DPAPI 加密后保存在
-            config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
-          </p>
-        {:else if remoteTab === "open"}
-          <div class="field">
-            <span>选择远程文件</span>
-            <div class="remote-list">
-              {#if remoteLoading && remoteObjects.length === 0}
-                <p class="remote-empty">正在加载…</p>
-              {:else if remoteObjects.length === 0}
-                <p class="remote-empty">暂无文件</p>
-              {:else}
-                {#each remoteObjects as obj (obj.key)}
-                  <button
-                    class="remote-item"
-                    class:active={remoteKey === obj.key}
-                    onclick={() => (remoteKey = obj.key)}
-                  >
-                    <AppIcon name="file" size={13} />
-                    <span class="remote-item-name" title={obj.key}>{obj.key}</span>
-                    <span class="remote-item-size">{formatBytes(obj.size)}</span>
-                  </button>
-                {/each}
-              {/if}
-            </div>
+      {#if remoteTab !== "config"}
+        <div class="field">
+          <span>保存方式</span>
+          <div class="remote-mode" role="radiogroup" aria-label="保存方式">
             <button
-              class="remote-refresh"
-              onclick={loadRemoteObjects}
-              disabled={remoteLoading || busy}
+              class="remote-mode-option"
+              class:active={remoteMode === "memory"}
+              onclick={() => (remoteMode = "memory")}
             >
-              <AppIcon name="refresh" size={13} />刷新列表
+              <strong>仅在内存</strong><small>保存时只上传回远程存储</small>
             </button>
-          </div>
-        {:else}
-          <label class="field">
-            <span>远程对象键</span>
-            <TextField bind:value={remoteKey} placeholder="vaults/new.kdbx" spellcheck={false} />
-          </label>
-        {/if}
-
-        {#if remoteTab !== "config"}
-          <div class="field">
-            <span>保存方式</span>
-            <div class="remote-mode" role="radiogroup" aria-label="保存方式">
-              <button
-                class="remote-mode-option"
-                class:active={remoteMode === "memory"}
-                onclick={() => (remoteMode = "memory")}
-              >
-                <strong>仅在内存</strong>
-                <small>保存时只上传回远程存储</small>
-              </button>
-              <button
-                class="remote-mode-option"
-                class:active={remoteMode === "local"}
-                onclick={() => (remoteMode = "local")}
-              >
-                <strong>本地镜像</strong>
-                <small>保存时上传回远程并镜像到 Storage/remote/{remoteMirrorDir}</small>
-              </button>
-            </div>
-          </div>
-        {/if}
-      {/if}
-
-      {#if !(modal === "remote" && remoteTab === "config")}
-        <label class="field">
-          <span>主密码</span>
-          <div class="path-row">
-            <TextField
-              type={showPassword ? "text" : "password"}
-              bind:value={password}
-              placeholder={isDemo ? "演示模式可留空" : "必填"}
-            />
             <button
-              class="browse-button"
-              onclick={() => (showPassword = !showPassword)}
-              title="显示密码"
+              class="remote-mode-option"
+              class:active={remoteMode === "local"}
+              onclick={() => (remoteMode = "local")}
             >
-              <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
+              <strong>本地镜像</strong><small
+                >保存时上传回远程并镜像到 Storage/remote/{remoteMirrorDir}</small
+              >
             </button>
           </div>
-        </label>
+        </div>
+        <VaultCredentialFields
+          bind:password
+          bind:keyfilePath
+          bind:showPassword
+          {busy}
+          {error}
+          isCreate={false}
+          onPickKeyfile={pickKeyfile}
+        />
       {/if}
-
-      {#if modal === "create"}
-        <label class="field">
-          <span>确认主密码</span>
-          <div class="path-row">
-            <TextField type="password" bind:value={confirm} />
-          </div>
-        </label>
-      {/if}
-
-      {#if isTauriRuntime() && !(modal === "remote" && remoteTab === "config")}
-        <label class="field">
-          <span>密钥文件(可选)</span>
-          <div class="path-row">
-            <TextField bind:value={keyfilePath} placeholder="点击右侧选择密钥文件" readonly />
-            <button class="browse-button" onclick={pickKeyfile} title="选择密钥文件">
-              <AppIcon name="folder" size={15} />
-            </button>
-          </div>
-        </label>
-      {/if}
-
-      {#if error}
+      {#if remoteTab === "config" && error}
         <p class="modal-error">{error}</p>
       {/if}
-
-      <div class="modal-actions">
-        <Button {busy} onclick={() => (modal = "none")} disabled={busy}>取消</Button>
-        {#if !(modal === "remote" && remoteTab === "config")}
-          <Button
-            variant="primary"
-            onclick={modal === "open"
-              ? confirmOpen
-              : modal === "create"
-                ? confirmCreate
-                : remoteTab === "open"
-                  ? confirmRemoteOpen
-                  : confirmRemoteCreate}
-            disabled={busy}
-          >
-            {busy
-              ? "处理中…"
-              : modal === "open"
-                ? "解锁"
-                : modal === "create"
-                  ? "创建"
-                  : remoteTab === "open"
-                    ? "解锁"
-                    : "创建"}
-          </Button>
-        {/if}
-      </div>
-    </div>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
+      {#if remoteTab !== "config"}
+        <Button
+          variant="primary"
+          onclick={remoteTab === "open" ? confirmRemoteOpen : confirmRemoteCreate}
+          disabled={busy}
+          {busy}
+        >
+          {remoteTab === "open" ? "解锁" : "创建"}
+        </Button>
+      {/if}
+    {/snippet}
+  </ModalShell>
 {/if}
 
 <style>
-  .welcome {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-  }
-
-  .welcome-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 380px;
-    padding: 24px;
-    text-align: center;
-    transform: translateY(10vh);
-  }
-
-  .welcome-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .welcome-logo {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
-    flex: 0 0 auto;
-    overflow: hidden;
-  }
-
-  .welcome-logo-img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .welcome-heading {
-    min-width: 0;
-    text-align: left;
-  }
-
-  .welcome-title {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 590;
-    letter-spacing: 0.01em;
-  }
-
-  .welcome-subtitle {
-    margin: 4px 0 0;
-    color: var(--text-muted);
-    font-size: 12px;
-  }
-
   .welcome-actions {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
     margin-top: 28px;
   }
 
-  .welcome-button {
-    display: inline-flex;
-    align-items: center;
-    white-space: nowrap;
-    gap: 6px;
-    height: 34px;
-    padding: 0 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--card-bg);
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .welcome-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .welcome-button.primary {
-    border-color: var(--selection-color);
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
-  }
-
-  .welcome-button.primary:hover {
-    background: color-mix(in srgb, var(--selection-color) 26%, var(--card-bg));
-  }
-
-  .welcome-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
-  .welcome-button.busy {
-    cursor: wait;
+  .welcome-actions :global(.app-icon) {
+    flex: 0 0 auto;
   }
 
   .welcome-hint {
@@ -880,11 +715,6 @@
     background: var(--hover-bg);
   }
 
-  .recent-item:disabled {
-    cursor: wait;
-    opacity: 0.6;
-  }
-
   .recent-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -922,112 +752,9 @@
     font-size: var(--font-size-tiny, 10px);
   }
 
-  .password-modal {
-    width: min(380px, calc(100% - 40px));
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .modal-head > div {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
   :global(.remote-kind-picker) {
     flex: 0 0 auto;
     width: 110px;
-  }
-
-  .modal-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-icon-radius, 7px);
-    color: var(--selection-color);
-    background: var(--card-bg);
-  }
-
-  .modal-head strong {
-    display: block;
-    font-size: 13px;
-    font-weight: 560;
-  }
-
-  .modal-head p {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    word-break: break-all;
-  }
-
-  .field {
-    display: block;
-    margin-top: 10px;
-  }
-
-  .field > span {
-    display: block;
-    margin-bottom: 5px;
-    color: var(--text-muted);
-    font-size: var(--font-size-secondary, 11px);
-  }
-
-  .path-row {
-    display: flex;
-    gap: 6px;
-  }
-
-  /* .text-input / .modal-actions / .modal-button come from the shared
-   * modal primitives (modal-shared.css via app.css); only this surface's
-   * unique layout lives here. */
-
-  .browse-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 auto;
-    padding: 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-muted);
-    background: var(--input-bg);
-    cursor: pointer;
-  }
-
-  .browse-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .modal-error {
-    margin: 10px 0 0;
-    color: var(--danger-color);
-    font-size: var(--font-size-secondary, 11px);
-  }
-
-  /* This welcome surface is the documented exception that owns its own modal
-   * layout (ModalShell's `.modal-actions` footer does not apply here). */
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
   }
 
   .remote-tabs {
@@ -1214,5 +941,23 @@
     color: var(--text-faint);
     font-size: var(--font-size-tiny, 10px);
     line-height: 1.5;
+  }
+
+  .field {
+    display: block;
+    margin-top: 10px;
+  }
+
+  .field > span {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .modal-error {
+    margin: 10px 0 0;
+    color: var(--danger-color);
+    font-size: var(--font-size-secondary, 11px);
   }
 </style>
