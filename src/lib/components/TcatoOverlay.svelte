@@ -5,6 +5,7 @@
 
   let title = $state("");
   let hasPassword = $state(false);
+  let hasUsername = $state(false);
   let feedback = $state("");
   let error = $state("");
 
@@ -14,6 +15,7 @@
         title: string;
         username: string;
         hasPassword: boolean;
+        hasUsername: boolean;
       } | null>("tcato_state");
       if (!info) {
         error = "数据库未打开或条目不可用";
@@ -21,6 +23,7 @@
       }
       title = info.title;
       hasPassword = info.hasPassword;
+      hasUsername = info.hasUsername;
     } catch (e) {
       error = `读取条目失败：${e}`;
     }
@@ -62,6 +65,7 @@
       class="channel-button"
       onmousedown={(e) => e.preventDefault()}
       onclick={() => send("username")}
+      disabled={!hasUsername}
     >
       <AppIcon name="user" size={13} />注入用户名
     </button>

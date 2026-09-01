@@ -17,10 +17,12 @@ pub(crate) struct TcatoTarget(pub(crate) Mutex<Option<(String, String)>>);
 /// Lightweight info shown in the TCATO overlay; secrets never leave the
 /// backend, so the password itself is only reported as a boolean.
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct TcatoInfo {
     title: String,
     username: String,
     has_password: bool,
+    has_username: bool,
 }
 
 pub(crate) const TCATO_WINDOW_LABEL: &str = "tcato";
@@ -110,9 +112,10 @@ pub(crate) fn tcato_state(
         |target| target.autotype_context(&uuid),
     )?;
     Ok(Some(TcatoInfo {
-        title: ctx.title,
-        username: ctx.username,
+        title: ctx.title.clone(),
+        username: ctx.username.clone(),
         has_password: !ctx.password.is_empty(),
+        has_username: !ctx.username.is_empty(),
     }))
 }
 
@@ -141,6 +144,13 @@ pub(crate) fn tcato_send(
         "password" => ctx.password,
         _ => return Err("无效的 TCATO 通道".to_owned()),
     };
+    if text.is_empty() {
+        return Err(if channel == "username" {
+            "用户名为空，无法注入".to_owned()
+        } else {
+            "密码为空，无法注入".to_owned()
+        });
+    }
     focus::send_text_to_foreground(&text)
 }
 
