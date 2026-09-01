@@ -1501,11 +1501,9 @@
       await invoke("open_tcato_overlay", { sessionId: view.sessionId, uuid: entry.uuid });
       focusLockLease.confirm();
     } catch (e) {
-      if (!tcatoOperations.isCurrent(operation)) {
-        // stale operation, suppress
-      } else if (!view) {
+      if (view && sessionView.isCurrent(view) && tcatoOperations.isCurrent(operation)) {
         flash(`TCATO 覆盖层打开失败：${e}`);
-      } else if (sessionView.isCurrent(view)) {
+      } else if (!view && tcatoOperations.isCurrent(operation)) {
         flash(`TCATO 覆盖层打开失败：${e}`);
       }
     } finally {
