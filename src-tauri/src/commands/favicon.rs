@@ -322,7 +322,7 @@ pub(crate) async fn download_favicons(
     }
     let mut fetched: Vec<vault::FaviconFetch> = Vec::new();
     let mut cancelled = false;
-    while set.len() > 0 {
+    while !set.is_empty() {
         tokio::select! {
             result = set.join_next() => {
                 let Some(result) = result else { break; };
@@ -344,7 +344,7 @@ pub(crate) async fn download_favicons(
                 set.abort_all();
                 cancelled = true;
                 // Drain aborted tasks so JoinSet is empty.
-                while let Some(_) = set.join_next().await {}
+                while set.join_next().await.is_some() {}
                 break;
             }
         }

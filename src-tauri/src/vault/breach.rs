@@ -25,12 +25,14 @@ pub struct BreachFinding {
 }
 
 /// First 5 hex chars of the password's SHA-1 (the k-anonymity prefix).
+#[allow(dead_code)]
 pub(crate) fn prefix_of(password: &str) -> String {
     hex(&sha1_bytes(password.as_bytes()))[..5].to_uppercase()
 }
 
 /// Parse an HIBP range response body: `SUFFIX:COUNT` per line (suffixes are
 /// uppercase; keys are normalized).
+#[allow(dead_code)]
 fn parse_range(body: &str) -> HashMap<String, usize> {
     body.lines()
         .filter_map(|line| {
@@ -46,6 +48,7 @@ fn parse_range(body: &str) -> HashMap<String, usize> {
 /// Run the k-anonymity check for the given `(uuid, title, username, password)`
 /// rows. Passwords are compared only by full SHA-1 locally; the network only
 /// ever sees the 5-char prefix.
+#[allow(dead_code)]
 pub(crate) fn check_hibp(
     entries: &[(String, String, String, String)],
     client: &reqwest::blocking::Client,

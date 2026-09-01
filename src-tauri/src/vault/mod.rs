@@ -118,7 +118,7 @@ pub use self::dto::{
 };
 
 pub use self::breach::BreachFinding;
-pub(crate) use self::breach::{check_hibp, HIBP_RANGE_URL};
+pub(crate) use self::breach::HIBP_RANGE_URL;
 pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::AttachmentTempStore;

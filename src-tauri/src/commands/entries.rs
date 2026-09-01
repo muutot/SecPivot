@@ -217,10 +217,9 @@ pub(crate) async fn check_hibp(
     }
 
     let total = by_prefix.len();
-    let mut done = 0usize;
     let mut findings: Vec<crate::vault::BreachFinding> = Vec::new();
 
-    for (prefix, indices) in by_prefix {
+    for (done_idx, (prefix, indices)) in by_prefix.into_iter().enumerate() {
         if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
             break;
         }
@@ -275,7 +274,7 @@ pub(crate) async fn check_hibp(
                 });
             }
         }
-        done += 1;
+        let done = done_idx + 1;
         let _ = app.emit(
             "hibp-progress",
             crate::vault::HibpProgress {
