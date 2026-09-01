@@ -144,9 +144,19 @@ pub(crate) fn tcato_send(
     focus::send_text_to_foreground(&text)
 }
 
+/// Clear the in-memory TCATO target (session + entry) without touching the window.
+pub(crate) fn clear_tcato_target(app: &tauri::AppHandle) {
+    if let Some(target) = app.try_state::<TcatoTarget>() {
+        if let Ok(mut slot) = target.0.lock() {
+            *slot = None;
+        }
+    }
+}
+
 /// Close the TCATO overlay.
 #[tauri::command]
 pub(crate) fn close_tcato_overlay(app: tauri::AppHandle) {
+    clear_tcato_target(&app);
     if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
         let _ = window.close();
     }

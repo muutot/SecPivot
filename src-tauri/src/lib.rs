@@ -290,8 +290,10 @@ pub fn run() {
     let builder = builder.on_window_event(|window, event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
             // The TCATO overlay can be dismissed directly (Alt+F4); tell
-            // the main window so its focus-loss lock re-arms.
+            // the main window so its focus-loss lock re-arms and clear the
+            // in-memory target so a later reopen does not reuse a stale entry.
             if window.label() == commands::tcato::TCATO_WINDOW_LABEL {
+                commands::tcato::clear_tcato_target(window.app_handle());
                 let _ = window
                     .app_handle()
                     .emit(commands::tcato::TCATO_CLOSE_EVENT, ());

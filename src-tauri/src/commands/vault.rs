@@ -13,7 +13,7 @@ use crate::vault::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use zeroize::Zeroize;
 
 /// Fallback sequence when an entry resolves no explicit Auto-Type sequence
@@ -154,9 +154,32 @@ pub(crate) fn close_vault(
     }
     // Filesystem cleanup must not run while the vault-session mutex is held.
     store.discard_session(&closed_session_id);
+    #[cfg(desktop)]
+    {
+        let should_clear = if !any_open {
+            true
+        } else if let Some(target) = app.try_state::<crate::commands::tcato::TcatoTarget>() {
+            if let Ok(slot) = target.0.lock() {
+                slot.as_ref()
+                    .is_some_and(|(sid, _)| sid == &closed_session_id)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if should_clear {
+            crate::commands::tcato::clear_tcato_target(&app);
+            if let Some(window) =
+                app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
+            {
+                let _ = window.close();
+            }
+            let _ = app.emit(crate::commands::tcato::TCATO_CLOSE_EVENT, ());
+        }
+    }
     Ok(())
 }
-
 /// Close every open session (active + parked) and zeroize secrets. The lock
 /// path (toolbar lock, idle auto-lock, lock-after-action) uses this so locking
 /// never leaves other tabs decrypted in memory.
@@ -176,6 +199,14 @@ pub(crate) fn close_all_vaults(
     // Locking wipes extracted temp attachments (external viewers may still
     // hold the files open; failed removals stay registered for later retry).
     store.discard_all();
+    #[cfg(desktop)]
+    {
+        crate::commands::tcato::clear_tcato_target(&app);
+        if let Some(window) = app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL) {
+            let _ = window.close();
+        }
+        let _ = app.emit(crate::commands::tcato::TCATO_CLOSE_EVENT, ());
+    }
     Ok(())
 }
 
