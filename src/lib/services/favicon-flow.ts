@@ -94,3 +94,7 @@ export async function runFaviconDownload(
       host.setBusy(false);
   }
 }
+
+export async function cancelFaviconDownload(): Promise<void> {
+  await vault.cancelFavicons();
+}

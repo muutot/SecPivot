@@ -122,6 +122,7 @@ interface VaultStore {
   changeTimeline: () => Promise<ChangeTimelineEvent[]>;
   checkHibp: (uuids?: string[]) => Promise<BreachFinding[]>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
+  cancelFavicons: () => Promise<void>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
@@ -1169,6 +1170,15 @@ export const vault: VaultStore = {
     if (captureSessionEpoch(sessionId) === epoch) await refreshInternal(sessionId);
     await refreshTabs();
     return report;
+  },
+
+  async cancelFavicons(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    try {
+      await backendInvoke<void>("cancel_favicons", {});
+    } catch {
+      // No active download or already finished — safe to ignore.
+    }
   },
 
   async toggleFavorite(uuid: string): Promise<VaultState> {

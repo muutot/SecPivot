@@ -265,6 +265,7 @@ pub fn run() {
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(VaultSessions::default());
             app.manage(vault::AttachmentTempStore::default());
+            app.manage(commands::FaviconCancel::default());
             #[cfg(desktop)]
             app.manage(commands::TcatoTarget(Mutex::new(None)));
             #[cfg(desktop)]
@@ -376,6 +377,7 @@ pub fn run() {
             commands::export_xml,
             commands::export_emergency_sheet,
             commands::download_favicons,
+            commands::cancel_favicons,
             #[cfg(desktop)]
             commands::capture_screen_png,
             #[cfg(desktop)]

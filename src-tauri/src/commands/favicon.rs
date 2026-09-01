@@ -7,6 +7,32 @@ use crate::vault;
 use crate::vault::{VaultSession, VaultSessions};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
+use tokio::sync::Notify;
+
+/// Cooperative cancel signal for the in-flight `download_favicons` run.
+/// `flag` persists the cancel request so tasks spawned after the `Notify`
+/// wake still observe it; `notify` wakes tasks already awaiting.
+pub(crate) struct FaviconCancel {
+    pub notify: Arc<Notify>,
+    pub flag: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Default for FaviconCancel {
+    fn default() -> Self {
+        Self {
+            notify: Arc::new(Notify::new()),
+            flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+#[tauri::command]
+pub(crate) fn cancel_favicons(cancel: tauri::State<'_, FaviconCancel>) -> Result<(), String> {
+    cancel.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    cancel.notify.notify_waiters();
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Download Favicons (KeePass-style: fetch per host, store as custom icons)
 // ---------------------------------------------------------------------------
@@ -139,14 +165,33 @@ fn wininet_https_proxy() -> Option<String> {
 /// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
 /// every failure reason is logged to stderr (full error chain) so server-side
 /// diagnosis is possible without changing the renderer contract.
-async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> {
+/// `cancel` is the cooperative signal from `cancel_favicons`; every await is
+/// wrapped in `select!` so "结束等待" aborts without waiting for the timeout.
+async fn fetch_favicon(
+    client: &reqwest::Client,
+    host: &str,
+    cancel: Arc<Notify>,
+    flag: Arc<std::sync::atomic::AtomicBool>,
+) -> Option<Vec<u8>> {
+    if flag.load(std::sync::atomic::Ordering::SeqCst) {
+        return None;
+    }
     'paths: for path in ["/favicon.ico", "/favicon.png"] {
+        if flag.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
         let url = format!("https://{host}{path}");
-        let mut response = match client.get(&url).send().await {
-            Ok(response) => response,
-            Err(e) => {
-                eprintln!("[favicon] 请求 {url} 失败: {e:#}");
-                continue;
+        let mut response = tokio::select! {
+            res = client.get(&url).send() => match res {
+                Ok(response) => response,
+                Err(e) => {
+                    eprintln!("[favicon] 请求 {url} 失败: {e:#}");
+                    continue;
+                }
+            },
+            _ = cancel.notified() => {
+                eprintln!("[favicon] 已取消 {host} {path}");
+                return None;
             }
         };
         if !response.status().is_success() {
@@ -159,12 +204,18 @@ async fn fetch_favicon(client: &reqwest::Client, host: &str) -> Option<Vec<u8>> 
         let mut body = Vec::new();
         let mut total = 0usize;
         loop {
-            let chunk = match response.chunk().await {
-                Ok(Some(chunk)) => chunk,
-                Ok(None) => break,
-                Err(e) => {
-                    eprintln!("[favicon] 读取 {url} 响应失败: {e}");
-                    continue 'paths;
+            let chunk = tokio::select! {
+                res = response.chunk() => match res {
+                    Ok(Some(chunk)) => chunk,
+                    Ok(None) => break,
+                    Err(e) => {
+                        eprintln!("[favicon] 读取 {url} 响应失败: {e}");
+                        continue 'paths;
+                    }
+                },
+                _ = cancel.notified() => {
+                    eprintln!("[favicon] 已取消 {host} 读取 {path}");
+                    return None;
                 }
             };
             total += chunk.len();
@@ -199,6 +250,7 @@ pub(crate) async fn download_favicons(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     config: tauri::State<'_, ConfigStore>,
+    cancel_state: tauri::State<'_, FaviconCancel>,
     session_id: Option<String>,
     uuids: Option<Vec<String>>,
 ) -> Result<vault::FaviconReport, String> {
@@ -233,19 +285,33 @@ pub(crate) async fn download_favicons(
     // One client per command keeps a single connection pool for every host.
     // `reqwest::Client::clone` is cheap (Arc-backed), while rebuilding it per
     // host discards warm TLS/proxy connections and repeats proxy setup.
+    // Reset cancel flag for this run; previous run's cancel must not poison the next.
+    cancel_state
+        .flag
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel = cancel_state.notify.clone();
+    let cancel_flag = cancel_state.flag.clone();
     let client = build_favicon_client();
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();
         let semaphore = semaphore.clone();
         let client = client.clone();
+        let cancel = cancel.clone();
+        let cancel_flag = cancel_flag.clone();
         set.spawn(async move {
             let host = host;
-            // A closed semaphore (only on shutdown) degrades to unlimited
-            // concurrency instead of failing the download.
-            let _permit = semaphore.acquire_owned().await.ok();
+            // Cooperative cancel: semaphore wait also abortable so queued jobs
+            // do not block "结束等待".
+            let _permit = tokio::select! {
+                p = semaphore.acquire_owned() => p.ok(),
+                _ = cancel.notified() => None,
+            };
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                return (host, None);
+            }
             let bytes = match client.as_ref() {
-                Some(client) => fetch_favicon(client, &host).await,
+                Some(client) => fetch_favicon(client, &host, cancel, cancel_flag).await,
                 None => {
                     eprintln!("[favicon] 构建 HTTP 客户端失败 ({host})");
                     None
@@ -255,11 +321,35 @@ pub(crate) async fn download_favicons(
         });
     }
     let mut fetched: Vec<vault::FaviconFetch> = Vec::new();
-    while let Some(result) = set.join_next().await {
-        if let Ok((host, Some(bytes))) = result {
-            fetched.push(vault::FaviconFetch { host, bytes });
+    let mut cancelled = false;
+    while set.len() > 0 {
+        tokio::select! {
+            result = set.join_next() => {
+                let Some(result) = result else { break; };
+                if let Ok((host, Some(bytes))) = result {
+                    fetched.push(vault::FaviconFetch { host, bytes });
+                }
+                done += 1;
+                let _ = app.emit(
+                    "favicon-progress",
+                    vault::FaviconProgress {
+                        session_id: session_id.clone(),
+                        done,
+                        total,
+                    },
+                );
+            }
+            _ = cancel.notified() => {
+                eprintln!("[favicon] 收到取消信号，中止剩余下载");
+                set.abort_all();
+                cancelled = true;
+                // Drain aborted tasks so JoinSet is empty.
+                while let Some(_) = set.join_next().await {}
+                break;
+            }
         }
-        done += 1;
+    }
+    if cancelled {
         let _ = app.emit(
             "favicon-progress",
             vault::FaviconProgress {

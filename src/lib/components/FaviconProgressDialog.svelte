@@ -12,9 +12,10 @@
       error: boolean;
     };
     onclose: () => void;
+    oncancel?: () => void;
   }
 
-  let { dialog, onclose }: Props = $props();
+  let { dialog, onclose, oncancel }: Props = $props();
 
   const progressPct = $derived(
     dialog.progress.total > 0
@@ -46,7 +47,9 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    {#if dialog.phase !== "working"}
+    {#if dialog.phase === "working"}
+      <Button onclick={() => oncancel?.()}>结束等待</Button>
+    {:else}
       <Button variant="primary" onclick={onclose}>关闭</Button>
     {/if}
   {/snippet}

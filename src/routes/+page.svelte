@@ -20,7 +20,11 @@
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
-  import { runFaviconDownload, type FaviconFlowHost } from "$lib/services/favicon-flow";
+  import {
+  cancelFaviconDownload,
+  runFaviconDownload,
+  type FaviconFlowHost,
+} from "$lib/services/favicon-flow";
   import {
     changeGroupIconFlow,
     confirmDeleteGroupFlow,
@@ -2139,7 +2143,11 @@
 {/if}
 
 {#if faviconDialog}
-  <FaviconProgressDialog dialog={faviconDialog} onclose={() => (faviconDialog = null)} />
+  <FaviconProgressDialog
+    dialog={faviconDialog}
+    onclose={() => (faviconDialog = null)}
+    oncancel={() => void cancelFaviconDownload()}
+  />
 {/if}
 
 <style>
