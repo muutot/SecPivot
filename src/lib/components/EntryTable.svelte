@@ -184,14 +184,14 @@
       narrow = media.matches;
     };
     const resizeObserver = new ResizeObserver(([entry]) => {
-      viewportHeight = entryListEl?.clientHeight ?? entry.contentRect.height;
+      viewportHeight = entryTableEl?.clientHeight ?? entry.contentRect.height;
     });
 
     updateNarrow();
     media.addEventListener("change", updateNarrow);
-    if (entryListEl) {
-      viewportHeight = entryListEl.clientHeight;
-      resizeObserver.observe(entryListEl);
+    if (entryTableEl) {
+      viewportHeight = entryTableEl.clientHeight;
+      resizeObserver.observe(entryTableEl);
     }
 
     return () => {
@@ -201,11 +201,11 @@
   });
 
   $effect(() => {
-    const list = entryListEl;
+    const table = entryTableEl;
     const maxScrollTop = Math.max(0, rows.length * rowHeight - viewportHeight);
-    if (!list) return;
-    const nextScrollTop = Math.min(list.scrollTop, maxScrollTop);
-    if (list.scrollTop !== nextScrollTop) list.scrollTop = nextScrollTop;
+    if (!table) return;
+    const nextScrollTop = Math.min(table.scrollTop, maxScrollTop);
+    if (table.scrollTop !== nextScrollTop) table.scrollTop = nextScrollTop;
     scrollTop = nextScrollTop;
   });
 
@@ -310,13 +310,13 @@
   }
 
   function handleListScroll(event: Event): void {
-    const list = event.currentTarget as HTMLDivElement;
-    const nextScrollTop = list.scrollTop;
+    const container = event.currentTarget as HTMLDivElement;
+    const nextScrollTop = container.scrollTop;
     const nextRange = computeVirtualRange({
       itemCount: rows.length,
       itemHeight: rowHeight,
       scrollTop: nextScrollTop,
-      viewportHeight: viewportHeight || list.clientHeight,
+      viewportHeight: viewportHeight || container.clientHeight,
       overscan: VIRTUAL_OVERSCAN,
     });
     const active = document.activeElement as HTMLElement | null;
@@ -330,29 +330,29 @@
         rows.length - 1,
         Math.max(0, Math.floor(nextScrollTop / rowHeight)),
       );
-      list.focus({ preventScroll: true });
+      entryListEl?.focus({ preventScroll: true });
     }
     scrollTop = nextScrollTop;
   }
 
   async function focusRowAt(index: number): Promise<void> {
-    if (rows.length === 0 || !entryListEl) return;
+    if (rows.length === 0 || !entryTableEl) return;
     const targetIndex = Math.max(0, Math.min(rows.length - 1, index));
     const itemTop = targetIndex * rowHeight;
     const itemBottom = itemTop + rowHeight;
-    const visibleHeight = viewportHeight || entryListEl.clientHeight;
-    let nextScrollTop = entryListEl.scrollTop;
+    const visibleHeight = viewportHeight || entryTableEl.clientHeight;
+    let nextScrollTop = entryTableEl.scrollTop;
     if (itemTop < nextScrollTop) {
       nextScrollTop = itemTop;
     } else if (itemBottom > nextScrollTop + visibleHeight) {
       nextScrollTop = itemBottom - visibleHeight;
     }
 
-    entryListEl.scrollTop = nextScrollTop;
+    entryTableEl.scrollTop = nextScrollTop;
     scrollTop = nextScrollTop;
     lastFocusedIndex = targetIndex;
     await tick();
-    entryListEl
+    entryTableEl
       ?.querySelector<HTMLElement>(`[data-entry-index="${targetIndex}"]`)
       ?.focus({ preventScroll: true });
   }
@@ -409,6 +409,7 @@
   class:show-cols={mobileColumns}
   style={`--entry-cols: ${entryGridCols}`}
   bind:this={entryTableEl}
+  onscroll={handleListScroll}
 >
   <div
     class="entry-table-head"
@@ -470,7 +471,6 @@
     onpointermove={movePress}
     onpointerup={clearPress}
     onpointercancel={clearPress}
-    onscroll={handleListScroll}
     onkeydown={handleListKeydown}
   >
     {#if rows.length === 0}
@@ -789,13 +789,11 @@
   }
 
   .entry-list {
-    flex: 1;
-    min-height: 0;
+    flex: 0 0 auto;
     width: max-content;
     /* At least the full table width, so a narrow column set stretches to
      * the panel edge while a wide one overflows into the shared scroller. */
     min-width: 100%;
-    width: max-content;
     overflow-anchor: none;
     padding: 0 0 16px;
   }
