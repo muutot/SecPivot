@@ -292,42 +292,6 @@
             </div>
           </div>
         </div>
-        <div class="color-list">
-          {#each customColorGroups as group (group.label)}
-            <div class="color-group-label">{group.label}</div>
-            {#each group.fields as field (field.key)}
-              <div class="setting-row">
-                <div class="setting-heading">
-                  <span
-                    class="setting-icon color-swatch"
-                    style:background-color={displayColors[field.key]}
-                  ></span>
-                  <div>
-                    <strong>{field.label}</strong>
-                    <p>{field.description}</p>
-                  </div>
-                </div>
-                <div class="color-control">
-                  <input
-                    type="color"
-                    class="color-input"
-                    value={displayColors[field.key].slice(0, 7)}
-                    oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
-                  />
-                  <div class="color-hex-input">
-                    <TextField
-                      size="control"
-                      spellcheck={false}
-                      value={displayColors[field.key]}
-                      placeholder="#RRGGBBAA"
-                      oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            {/each}
-          {/each}
-        </div>
         <div class="setting-heading multi-theme-heading">
           <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
           <div class="heading-inline">
@@ -383,6 +347,42 @@
             />
           </div>
         {/if}
+        <div class="color-list">
+          {#each customColorGroups as group (group.label)}
+            <div class="color-group-label">{group.label}</div>
+            {#each group.fields as field (field.key)}
+              <div class="setting-row">
+                <div class="setting-heading">
+                  <span
+                    class="setting-icon color-swatch"
+                    style:background-color={displayColors[field.key]}
+                  ></span>
+                  <div>
+                    <strong>{field.label}</strong>
+                    <p>{field.description}</p>
+                  </div>
+                </div>
+                <div class="color-control">
+                  <input
+                    type="color"
+                    class="color-input"
+                    value={displayColors[field.key].slice(0, 7)}
+                    oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
+                  />
+                  <div class="color-hex-input">
+                    <TextField
+                      size="control"
+                      spellcheck={false}
+                      value={displayColors[field.key]}
+                      placeholder="#RRGGBBAA"
+                      oninput={(e) => updateDisplayColor(field.key, e.currentTarget.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            {/each}
+          {/each}
+        </div>
       </section>
     {:else if general.theme === "dark"}
       {@render presetPaletteCard("深色配色", "内置默认配色（只读）", DARK_THEME_COLORS)}
@@ -866,7 +866,9 @@
   }
 
   .multi-theme-heading {
-    margin-top: 14px;
+    margin-top: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   .theme-config-actions {
@@ -877,7 +879,12 @@
   }
 
   .theme-name-row {
-    margin-top: 8px;
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+
+  .color-list {
+    margin-top: 6px;
   }
 
   .reset-button,
