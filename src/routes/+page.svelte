@@ -21,10 +21,10 @@
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import {
-  cancelFaviconDownload,
-  runFaviconDownload,
-  type FaviconFlowHost,
-} from "$lib/services/favicon-flow";
+    cancelFaviconDownload,
+    runFaviconDownload,
+    type FaviconFlowHost,
+  } from "$lib/services/favicon-flow";
   import {
     changeGroupIconFlow,
     confirmDeleteGroupFlow,
