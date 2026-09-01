@@ -234,21 +234,19 @@ pub(crate) fn set_active_session(
     };
     #[cfg(desktop)]
     {
-        let should_close = if let Some(target) =
-            app.try_state::<crate::commands::tcato::TcatoTarget>()
-        {
-            if let Ok(slot) = target.0.lock() {
-                slot.as_ref().is_some_and(|(sid, _)| sid != &session_id)
+        let should_close =
+            if let Some(target) = app.try_state::<crate::commands::tcato::TcatoTarget>() {
+                if let Ok(slot) = target.0.lock() {
+                    slot.as_ref().is_some_and(|(sid, _)| sid != &session_id)
+                } else {
+                    false
+                }
             } else {
                 false
-            }
-        } else {
-            false
-        };
+            };
         if should_close {
             crate::commands::tcato::clear_tcato_target(&app);
-            if let Some(window) =
-                app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
+            if let Some(window) = app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
             {
                 let _ = window.close();
             }
