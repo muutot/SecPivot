@@ -540,17 +540,20 @@
     return editing !== null && editing.kind === target.kind && editing.name === target.name;
   }
 
-  /** The notes region hugs its content up to ~45% of the detail body; taller
-   *  content scrolls inside the region so the fields keep the remaining space. */
+  /** Notes fills the remaining space of the fields tab; the region itself
+   *  is the editor surface so the textarea/view stretches to the container
+   *  edges instead of being an inset card. */
   function resizeNotes(): void {
-    const layout = fieldsLayoutEl;
+    // Flex layout stretches the notes region; textarea/view are flex:1
+    // so no JS height is required. Keep a micro-tick to ensure the
+    // textarea reflows after content changes.
     const active = notesTextareaEl ?? notesViewEl;
-    if (!layout || !active) return;
-    const cap = Math.max(64, Math.round(layout.clientHeight * 0.45));
-    active.style.maxHeight = `${cap}px`;
+    if (!active) return;
     if (notesTextareaEl) {
       notesTextareaEl.style.height = "auto";
-      notesTextareaEl.style.height = `${Math.min(notesTextareaEl.scrollHeight, cap)}px`;
+      // Let flex control the height; keep scrollHeight as fallback for
+      // very short content so the area never collapses below the flex min.
+      void notesTextareaEl.scrollHeight;
     }
   }
 
@@ -1486,10 +1489,11 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    gap: 0;
   }
 
   .fields-scroll {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1500,9 +1504,14 @@
   .notes-section {
     display: flex;
     flex-direction: column;
-    flex: 0 1 auto;
-    min-height: 0;
-    padding-top: 12px;
+    flex: 1 1 0;
+    min-height: 140px;
+    min-width: 0;
+    margin-top: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    overflow: hidden;
   }
 
   .notes-divider {
@@ -1510,27 +1519,26 @@
     align-items: center;
     gap: 10px;
     flex: 0 0 auto;
-    margin-bottom: 8px;
+    padding: 8px 12px 7px;
+    border-bottom: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 560;
     letter-spacing: 0.08em;
+    background: var(--card-bg);
   }
 
-  .notes-divider::before,
-  .notes-divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--border-subtle);
+  .notes-divider span {
+    flex: 0 0 auto;
   }
 
   .notes-textarea {
-    min-height: 64px;
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
     background: var(--input-bg);
     color: var(--text-primary);
     font-family: inherit;
@@ -1548,15 +1556,15 @@
 
   .notes-textarea:focus {
     outline: none;
-    border-color: var(--selection-color);
   }
 
   .notes-view {
-    min-height: 64px;
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
     background: var(--input-bg);
     color: var(--text-primary);
     font-size: 12px;
@@ -1571,7 +1579,6 @@
 
   .notes-view:focus {
     outline: none;
-    border-color: var(--selection-color);
   }
 
   .notes-placeholder {
