@@ -2,6 +2,7 @@
   import { appSettings } from "$lib/services/settings";
   import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import ModalShell from "$lib/components/ModalShell.svelte";
   import Select from "$lib/components/Select.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
@@ -32,6 +33,9 @@
 
   let draggedId: string | null = $state(null);
   let selectedThemeIdx: number | null = $state(null);
+  let themeDialogMode: "create" | "rename" | null = $state(null);
+  let themeDialogName = $state("");
+  let themeDialogError = $state("");
 
   function change<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]): void {
     appSettings.updateGeneral(key, value);
@@ -72,7 +76,7 @@
     appSettings.updateGeneral("customThemes", themes);
   }
 
-  function saveCurrentAsTheme(): void {
+  function openSaveThemeDialog(): void {
     const base = `自定义 ${s.general.customThemes.length + 1}`;
     let name = base;
     let n = 2;
@@ -81,9 +85,59 @@
       name = `${base} ${n}`;
       n++;
     }
-    const next = [...s.general.customThemes, { name, colors: { ...displayColors } }];
-    appSettings.updateGeneral("customThemes", next);
-    selectedThemeIdx = next.length - 1;
+    themeDialogName = name;
+    themeDialogError = "";
+    themeDialogMode = "create";
+  }
+
+  function openRenameThemeDialog(): void {
+    if (selectedThemeIdx === null) return;
+    const cur = s.general.customThemes[selectedThemeIdx];
+    if (!cur) return;
+    themeDialogName = cur.name;
+    themeDialogError = "";
+    themeDialogMode = "rename";
+  }
+
+  function confirmThemeDialog(): void {
+    const raw = themeDialogName.trim();
+    if (themeDialogMode === "create") {
+      const base = raw || `自定义 ${s.general.customThemes.length + 1}`;
+      let name = base;
+      let n = 2;
+      const names = new Set(s.general.customThemes.map((t) => t.name));
+      while (names.has(name)) {
+        name = `${base} ${n}`;
+        n++;
+      }
+      const next = [...s.general.customThemes, { name, colors: { ...displayColors } }];
+      appSettings.updateGeneral("customThemes", next);
+      selectedThemeIdx = next.length - 1;
+      themeDialogMode = null;
+      return;
+    }
+    if (themeDialogMode === "rename") {
+      if (selectedThemeIdx === null) return;
+      if (!raw) {
+        themeDialogError = "名称不能为空";
+        return;
+      }
+      const themes = s.general.customThemes.map((t) => ({ ...t, colors: { ...t.colors } }));
+      const target = themes[selectedThemeIdx];
+      if (!target) return;
+      let name = raw;
+      let n = 2;
+      const otherNames = new Set(
+        themes.filter((_, i) => i !== selectedThemeIdx).map((t) => t.name),
+      );
+      while (otherNames.has(name)) {
+        name = `${raw} ${n}`;
+        n++;
+      }
+      target.name = name;
+      appSettings.updateGeneral("customThemes", themes);
+      themeDialogMode = null;
+    }
   }
 
   function applyCustomTheme(idx: number): void {
@@ -311,8 +365,9 @@
                   selectedThemeIdx = v === "current" ? null : Number(v);
                 }}
               />
-              <Button variant="plain" onclick={saveCurrentAsTheme}>另存为</Button>
+              <Button variant="plain" onclick={openSaveThemeDialog}>另存为</Button>
               {#if selectedThemeIdx !== null}
+                <Button variant="plain" onclick={openRenameThemeDialog}>修改名称</Button>
                 <Button
                   variant="plain"
                   onclick={() => {
@@ -329,24 +384,6 @@
             </div>
           </div>
         </div>
-        {#if selectedThemeIdx !== null}
-          <div class="theme-name-row">
-            <TextField
-              value={s.general.customThemes[selectedThemeIdx].name}
-              placeholder="主题名称"
-              oninput={(e) => {
-                const themes = s.general.customThemes.map((t) => ({
-                  ...t,
-                  colors: { ...t.colors },
-                }));
-                if (selectedThemeIdx !== null && themes[selectedThemeIdx]) {
-                  themes[selectedThemeIdx].name = e.currentTarget.value;
-                  appSettings.updateGeneral("customThemes", themes);
-                }
-              }}
-            />
-          </div>
-        {/if}
         <div class="color-list">
           {#each customColorGroups as group (group.label)}
             <div class="color-group-label">{group.label}</div>
@@ -384,6 +421,49 @@
           {/each}
         </div>
       </section>
+      {#if themeDialogMode !== null}
+        <ModalShell
+          title={themeDialogMode === "create" ? "另存为配色方案" : "修改方案名称"}
+          description={themeDialogMode === "create"
+            ? "为当前配色创建副本"
+            : (s.general.customThemes[selectedThemeIdx ?? -1]?.name ?? "")}
+          size="small"
+          closeOnEscape
+          onclose={() => {
+            themeDialogMode = null;
+            themeDialogError = "";
+          }}
+        >
+          {#snippet children()}
+            <div class="theme-dialog-body">
+              <TextField
+                bind:value={themeDialogName}
+                placeholder="配色方案名称"
+                autofocus
+                oninput={() => {
+                  themeDialogError = "";
+                }}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") confirmThemeDialog();
+                }}
+              />
+              {#if themeDialogError}<p class="theme-dialog-error">{themeDialogError}</p>{/if}
+            </div>
+          {/snippet}
+          {#snippet actions()}
+            <Button
+              variant="plain"
+              onclick={() => {
+                themeDialogMode = null;
+                themeDialogError = "";
+              }}>取消</Button
+            >
+            <Button variant="primary" onclick={confirmThemeDialog}
+              >{themeDialogMode === "create" ? "添加" : "保存"}</Button
+            >
+          {/snippet}
+        </ModalShell>
+      {/if}
     {:else if general.theme === "dark"}
       {@render presetPaletteCard("深色配色", "内置默认配色（只读）", DARK_THEME_COLORS)}
     {:else if general.theme === "light"}
@@ -878,13 +958,20 @@
     flex-shrink: 0;
   }
 
-  .theme-name-row {
-    margin-top: 10px;
-    margin-bottom: 4px;
-  }
-
   .color-list {
     margin-top: 6px;
+  }
+
+  .theme-dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .theme-dialog-error {
+    margin: 0;
+    color: var(--danger-color);
+    font-size: var(--font-size-secondary, 11px);
   }
 
   .reset-button,
