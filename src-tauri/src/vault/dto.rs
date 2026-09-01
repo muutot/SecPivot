@@ -735,3 +735,12 @@ pub struct FaviconProgress {
     /// Distinct hosts to process.
     pub total: usize,
 }
+
+/// Progress of a HIBP breach check, emitted after each distinct prefix finishes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HibpProgress {
+    pub session_id: String,
+    pub done: usize,
+    pub total: usize,
+}

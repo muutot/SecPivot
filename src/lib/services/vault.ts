@@ -121,6 +121,7 @@ interface VaultStore {
   expiredEntries: () => Promise<ExpiredEntry[]>;
   changeTimeline: () => Promise<ChangeTimelineEvent[]>;
   checkHibp: (uuids?: string[]) => Promise<BreachFinding[]>;
+  cancelHibp: () => Promise<void>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
   cancelFavicons: () => Promise<void>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
@@ -1155,6 +1156,15 @@ export const vault: VaultStore = {
     return invokeSession<BreachFinding[]>("check_hibp", {
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
+  },
+
+  async cancelHibp(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    try {
+      await backendInvoke<void>("cancel_hibp", {});
+    } catch {
+      // No active check — safe to ignore.
+    }
   },
 
   /** Fetch site icons for all (or the given) entries; state is refreshed only

@@ -266,6 +266,7 @@ pub fn run() {
             app.manage(VaultSessions::default());
             app.manage(vault::AttachmentTempStore::default());
             app.manage(commands::FaviconCancel::default());
+            app.manage(commands::HibpCancel::default());
             #[cfg(desktop)]
             app.manage(commands::TcatoTarget(Mutex::new(None)));
             #[cfg(desktop)]
@@ -373,6 +374,7 @@ pub fn run() {
             commands::expired_entries,
             commands::change_timeline,
             commands::check_hibp,
+            commands::cancel_hibp,
             commands::export_csv,
             commands::export_xml,
             commands::export_emergency_sheet,

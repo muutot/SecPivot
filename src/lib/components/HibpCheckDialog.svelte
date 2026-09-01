@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { BreachFinding } from "$lib/types/vault";
+  import { listen } from "@tauri-apps/api/event";
+  import type { BreachFinding, HibpProgress } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
@@ -18,13 +19,26 @@
   let running = $state(false);
   let findings = $state<BreachFinding[]>([]);
   let error = $state("");
+  let progress = $state<HibpProgress | null>(null);
   const sessionId = vault.getActiveSessionId();
+
+  const progressPct = $derived(
+    progress && progress.total > 0
+      ? `${Math.round((progress.done / progress.total) * 100)}%`
+      : "0%",
+  );
 
   async function start(): Promise<void> {
     if (running || !sessionId) return;
     running = true;
     error = "";
     started = true;
+    progress = { sessionId, done: 0, total: 0 };
+    const unlisten = await listen<HibpProgress>("hibp-progress", (e) => {
+      if (e.payload.sessionId !== sessionId) return;
+      if (vault.getActiveSessionId() !== sessionId) return;
+      progress = e.payload;
+    });
     try {
       const value = await vault.callInSession(sessionId, () =>
         vault.checkHibp(uuids.length > 0 ? uuids : undefined),
@@ -35,8 +49,13 @@
       if (vault.getActiveSessionId() !== sessionId) return;
       error = String(e);
     } finally {
+      unlisten();
       running = false;
     }
+  }
+
+  function cancel(): void {
+    void vault.cancelHibp();
   }
 </script>
 
@@ -45,7 +64,7 @@
   description="检查密码是否出现在已知数据泄露中"
   size="medium"
   scrollable
-  closeOnEscape
+  closeOnEscape={!running}
   {onclose}
 >
   {#snippet children()}
@@ -59,7 +78,18 @@
         </ul>
       </div>
     {:else if running}
-      <p class="note">正在检查…</p>
+      <p class="note">
+        {progress && progress.total > 0
+          ? `正在检查，已完成 ${progress.done}/${progress.total}`
+          : "正在检查…"}
+      </p>
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          class:indeterminate={!progress || progress.total === 0}
+          style:--progress-pct={progressPct}
+        ></div>
+      </div>
     {:else if error}
       <p class="note error">{error}</p>
     {:else if findings.length === 0}
@@ -89,6 +119,9 @@
     {#if !started}
       <Button onclick={onclose}>取消</Button>
       <Button variant="primary" onclick={() => void start()}>开始检查</Button>
+    {:else if running}
+      <Button onclick={cancel}>结束等待</Button>
+      <Button variant="primary" onclick={onclose}>关闭</Button>
     {:else}
       <Button variant="primary" onclick={onclose}>关闭</Button>
     {/if}
@@ -179,5 +212,45 @@
     flex: none;
     color: var(--danger-color);
     font-size: var(--font-size-tiny, 10px);
+  }
+
+  .progress-track {
+    height: 6px;
+    margin-top: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: var(--input-bg);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    width: var(--progress-pct, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--selection-color);
+    transition: width 0.2s ease;
+  }
+
+  .progress-fill.indeterminate {
+    width: 40%;
+    animation: progress-slide 1.1s ease-in-out infinite alternate;
+  }
+
+  @keyframes progress-slide {
+    from {
+      transform: translateX(-110%);
+    }
+    to {
+      transform: translateX(260%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill {
+      transition: none;
+    }
+    .progress-fill.indeterminate {
+      animation: none;
+    }
   }
 </style>

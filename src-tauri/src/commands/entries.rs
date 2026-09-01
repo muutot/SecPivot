@@ -6,8 +6,31 @@ use super::with_vault_session;
 use crate::vault;
 use crate::vault::{EntryStorage, SecurityReport, VaultSession, VaultSessions};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tauri::Emitter;
+use tokio::sync::Notify;
 use zeroize::Zeroize;
+
+pub(crate) struct HibpCancel {
+    pub notify: Arc<Notify>,
+    pub flag: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Default for HibpCancel {
+    fn default() -> Self {
+        Self {
+            notify: Arc::new(Notify::new()),
+            flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+#[tauri::command]
+pub(crate) fn cancel_hibp(cancel: tauri::State<'_, HibpCancel>) -> Result<(), String> {
+    cancel.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    cancel.notify.notify_waiters();
+    Ok(())
+}
 
 /// CSV/XML import cap (8 MiB): guards the read-text command against oversized
 /// files; the `.csv`/`.xml` extension whitelist stops arbitrary file
@@ -145,36 +168,132 @@ pub(crate) fn change_timeline(
 
 /// Check the selected (or every) entry's passwords against HIBP using
 /// k-anonymity: only the first 5 hex chars of each SHA-1 leave the machine.
-/// Strictly opt-in; network I/O runs off the async runtime.
+/// Strictly opt-in; network I/O runs off the async runtime with per-prefix
+/// 15 s timeout, `hibp-progress` events, and cooperative cancel via
+/// `cancel_hibp` (mirrors `cancel_favicons`).
 #[tauri::command]
 pub(crate) async fn check_hibp(
+    app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
+    cancel_state: tauri::State<'_, HibpCancel>,
     session_id: Option<String>,
     uuids: Option<Vec<String>>,
 ) -> Result<Vec<crate::vault::BreachFinding>, String> {
-    let entries = with_vault_session(
-        vaults.inner(),
-        session.inner(),
-        session_id.as_deref(),
-        |target| target.hibp_entries(uuids.as_deref()),
-    )?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
-            .build()
-            .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
-        let result = crate::vault::check_hibp(&entries, &client, crate::vault::HIBP_RANGE_URL);
-        // The plaintext password copies collected for the check follow the
-        // project-wide secret-hygiene rule: zeroize before drop.
-        for (_, _, _, mut password) in entries {
-            password.zeroize();
+    let (resolved_id, entries) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let (id, rows) =
+            vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+                target.hibp_entries(uuids.as_deref())
+            })?;
+        (id, rows)
+    };
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Reset cancel flag for this run.
+    cancel_state
+        .flag
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel = cancel_state.notify.clone();
+    let cancel_flag = cancel_state.flag.clone();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
+        .build()
+        .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
+
+    // Group by 5-char prefix to avoid duplicate range fetches (same as breach::check_hibp).
+    let mut by_prefix: std::collections::HashMap<String, Vec<usize>> =
+        std::collections::HashMap::new();
+    for (index, (_, _, _, password)) in entries.iter().enumerate() {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
         }
-        result
-    })
-    .await
-    .map_err(|e| format!("HIBP 任务异常: {e}"))?
+        let prefix =
+            crate::crypto::hex(&crate::crypto::sha1_bytes(password.as_bytes()))[..5].to_uppercase();
+        by_prefix.entry(prefix).or_default().push(index);
+    }
+
+    let total = by_prefix.len();
+    let mut done = 0usize;
+    let mut findings: Vec<crate::vault::BreachFinding> = Vec::new();
+
+    for (prefix, indices) in by_prefix {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+        let url = format!("{}{prefix}", crate::vault::HIBP_RANGE_URL);
+        let body = tokio::select! {
+            res = async {
+                let resp = client.get(&url).send().await
+                    .map_err(|e| format!("HIBP 查询失败: {e}"))?;
+                let resp = resp.error_for_status()
+                    .map_err(|e| format!("HIBP 返回错误: {e}"))?;
+                resp.text().await
+                    .map_err(|e| format!("读取 HIBP 响应失败: {e}"))
+            } => match res {
+                Ok(b) => b,
+                Err(e) => {
+                    // Single prefix failure aborts the whole check (matches old blocking behavior).
+                    for (_, _, _, mut password) in entries {
+                        password.zeroize();
+                    }
+                    return Err(e);
+                }
+            },
+            _ = cancel.notified() => {
+                eprintln!("[hibp] 已取消 {prefix}");
+                break;
+            }
+        };
+
+        // Local suffix matching (same as breach::parse_range + full-hash compare).
+        let suffixes = {
+            let mut map = std::collections::HashMap::new();
+            for line in body.lines() {
+                if let Some((suffix, count)) = line.trim().split_once(':') {
+                    if let Ok(n) = count.trim().parse::<usize>() {
+                        map.insert(suffix.trim().to_uppercase(), n);
+                    }
+                }
+            }
+            map
+        };
+        for index in indices {
+            let (uuid, title, username, password) = &entries[index];
+            let digest =
+                crate::crypto::hex(&crate::crypto::sha1_bytes(password.as_bytes())).to_uppercase();
+            let suffix = &digest[5..];
+            if let Some(&count) = suffixes.get(suffix) {
+                findings.push(crate::vault::BreachFinding {
+                    uuid: uuid.clone(),
+                    title: title.clone(),
+                    username: username.clone(),
+                    count,
+                });
+            }
+        }
+        done += 1;
+        let _ = app.emit(
+            "hibp-progress",
+            crate::vault::HibpProgress {
+                session_id: resolved_id.clone(),
+                done,
+                total,
+            },
+        );
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+    }
+
+    findings.sort_by_key(|f| std::cmp::Reverse(f.count));
+    for (_, _, _, mut password) in entries {
+        password.zeroize();
+    }
+    Ok(findings)
 }
 
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).

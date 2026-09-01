@@ -294,6 +294,12 @@ export interface FaviconProgress {
   total: number;
 }
 
+export interface HibpProgress {
+  sessionId: string;
+  done: number;
+  total: number;
+}
+
 export interface EntryInput {
   groupUuid: string;
   title: string;
