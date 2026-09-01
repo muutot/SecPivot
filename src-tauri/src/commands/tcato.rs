@@ -51,7 +51,10 @@ pub(crate) fn open_tcato_overlay(
         vaults.inner(),
         session.inner(),
         Some(&session_id),
-        |target| target.autotype_context(&uuid).map(|_| ()),
+        |target| {
+            target.ensure_tcato_allowed(&uuid)?;
+            target.autotype_context(&uuid).map(|_| ())
+        },
     )?;
     let mut slot = target.0.lock().map_err(|_| "覆盖层状态已损坏".to_owned())?;
     *slot = Some((session_id, uuid));
@@ -109,7 +112,10 @@ pub(crate) fn tcato_state(
         vaults.inner(),
         session.inner(),
         Some(&session_id),
-        |target| target.autotype_context(&uuid),
+        |target| {
+            target.ensure_tcato_allowed(&uuid)?;
+            target.autotype_context(&uuid)
+        },
     )?;
     Ok(Some(TcatoInfo {
         title: ctx.title.clone(),
@@ -137,7 +143,10 @@ pub(crate) fn tcato_send(
         vaults.inner(),
         session.inner(),
         Some(&session_id),
-        |target| target.autotype_context(&uuid),
+        |target| {
+            target.ensure_tcato_allowed(&uuid)?;
+            target.autotype_context(&uuid)
+        },
     )?;
     let text = match channel.as_str() {
         "username" => ctx.username,

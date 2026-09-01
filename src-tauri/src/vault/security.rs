@@ -264,6 +264,21 @@ impl VaultSession {
         })
     }
 
+    /// TCATO may not target entries inside the recycle bin (matching auto-type
+    /// and bridge/RPC semantics where the bin is excluded).
+    pub fn ensure_tcato_allowed(&self, uuid: &str) -> Result<(), String> {
+        let db = self.require_db()?;
+        let id = super::helpers::parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        if let Some(bin) = super::helpers::recycle_bin_id(db) {
+            let group_id = entry.parent().id();
+            if super::helpers::group_contains(db, bin, group_id) {
+                return Err("回收站中的条目不可填充".to_owned());
+            }
+        }
+        Ok(())
+    }
+
     /// Expand `{REF:...}` field references in an auto-type sequence against
     /// the database. Entries inside the recycle bin are not referenceable.
     pub fn expand_autotype_sequence(&self, sequence: &str) -> Result<String, String> {
