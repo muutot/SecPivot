@@ -375,6 +375,7 @@
       advancedSearchOpen = false;
       layout.mobileNavOpen = false;
       emergencyIncludePasswords = false;
+      if (isTauriRuntime()) void invoke("close_tcato_overlay").catch(() => {});
     });
     // Browser-extension writes land straight in the backend session; refresh
     // so the entry list and dirty tab state update without a reopen.
@@ -1500,7 +1501,11 @@
       await invoke("open_tcato_overlay", { sessionId: view.sessionId, uuid: entry.uuid });
       focusLockLease.confirm();
     } catch (e) {
-      if (view && sessionView.isCurrent(view) && tcatoOperations.isCurrent(operation)) {
+      if (!tcatoOperations.isCurrent(operation)) {
+        // stale operation, suppress
+      } else if (!view) {
+        flash(`TCATO 覆盖层打开失败：${e}`);
+      } else if (sessionView.isCurrent(view)) {
         flash(`TCATO 覆盖层打开失败：${e}`);
       }
     } finally {

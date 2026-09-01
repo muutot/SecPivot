@@ -170,8 +170,7 @@ pub(crate) fn close_vault(
         };
         if should_clear {
             crate::commands::tcato::clear_tcato_target(&app);
-            if let Some(window) =
-                app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
+            if let Some(window) = app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
             {
                 let _ = window.close();
             }
@@ -224,12 +223,39 @@ pub(crate) fn get_vault_state(
 /// the newly active state; every subsequent command targets it.
 #[tauri::command]
 pub(crate) fn set_active_session(
+    app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: String,
 ) -> Result<VaultState, String> {
-    let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-    vaults.switch_active(&mut active, &session_id)
+    let state = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        vaults.switch_active(&mut active, &session_id)?
+    };
+    #[cfg(desktop)]
+    {
+        let should_close = if let Some(target) =
+            app.try_state::<crate::commands::tcato::TcatoTarget>()
+        {
+            if let Ok(slot) = target.0.lock() {
+                slot.as_ref().is_some_and(|(sid, _)| sid != &session_id)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if should_close {
+            crate::commands::tcato::clear_tcato_target(&app);
+            if let Some(window) =
+                app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL)
+            {
+                let _ = window.close();
+            }
+            let _ = app.emit(crate::commands::tcato::TCATO_CLOSE_EVENT, ());
+        }
+    }
+    Ok(state)
 }
 
 /// Open sessions for the tab bar: active first, then parked in park order.
