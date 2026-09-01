@@ -1509,8 +1509,6 @@
     min-width: 0;
     margin: 12px -14px -16px;
     border: 0;
-    border-top: 1px solid var(--border-subtle);
-    border-radius: 0;
     background: var(--input-bg);
     overflow: hidden;
   }
@@ -1520,24 +1518,26 @@
     align-items: center;
     gap: 10px;
     flex: 0 0 auto;
-    padding: 8px 12px 7px;
-    border-bottom: 1px solid var(--border-subtle);
+    margin: 0 14px 3px;
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 560;
     letter-spacing: 0.08em;
-    background: var(--card-bg);
   }
 
-  .notes-divider span {
-    flex: 0 0 auto;
+  .notes-divider::before,
+  .notes-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
   }
 
   .notes-textarea {
     flex: 1;
     min-height: 0;
     width: 100%;
-    padding: 10px 12px;
+    padding: 0 12px 10px;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -1545,8 +1545,10 @@
     font-family: inherit;
     font-size: 12px;
     line-height: 1.6;
-    resize: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     word-break: break-word;
+    resize: none;
     scrollbar-width: none;
     -ms-overflow-style: none;
     overflow-y: auto;
@@ -1570,14 +1572,16 @@
     flex: 1;
     min-height: 0;
     width: 100%;
-    padding: 10px 12px;
+    padding: 0 12px 10px;
     border: 0;
     border-radius: 0;
     background: transparent;
     color: var(--text-primary);
+    font-family: inherit;
     font-size: 12px;
     line-height: 1.6;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     word-break: break-word;
     overflow-y: auto;
     cursor: text;
@@ -1607,7 +1611,8 @@
     color: var(--link-color);
     cursor: pointer;
     text-align: left;
-    word-break: break-all;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .notes-link:hover {
