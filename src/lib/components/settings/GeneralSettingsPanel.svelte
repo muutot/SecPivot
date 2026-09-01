@@ -328,32 +328,12 @@
       <section class="setting-card">
         <div class="setting-heading">
           <span class="setting-icon"><AppIcon name="settings" size={17} /></span>
-          <div class="heading-inline">
+          <div class="heading-inline custom-heading">
             <div>
               <strong>自定义配色</strong>
-              <p>直接修改主题语义色，即时预览</p>
+              <p>直接修改主题语义色，即时预览；切换编辑当前配色或已保存主题</p>
             </div>
-            <div class="preset-row">
-              <button class="preset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
-                >深色预设</button
-              >
-              <button class="preset-button" onclick={() => applyPreset(LIGHT_THEME_COLORS)}
-                >浅色预设</button
-              >
-              <button class="reset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
-                >恢复默认</button
-              >
-            </div>
-          </div>
-        </div>
-        <div class="setting-heading multi-theme-heading">
-          <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
-          <div class="heading-inline">
-            <div>
-              <strong>多主题配置</strong>
-              <p>切换编辑当前配色或已保存主题；另存为保存副本，应用使所选主题生效</p>
-            </div>
-            <div class="theme-config-actions">
+            <div class="custom-actions">
               <Select
                 value={selectedThemeIdx === null ? "current" : String(selectedThemeIdx)}
                 ariaLabel="选择主题"
@@ -365,22 +345,33 @@
                   selectedThemeIdx = v === "current" ? null : Number(v);
                 }}
               />
-              <Button variant="plain" onclick={openSaveThemeDialog}>另存为</Button>
-              {#if selectedThemeIdx !== null}
-                <Button variant="plain" onclick={openRenameThemeDialog}>修改名称</Button>
-                <Button
-                  variant="plain"
-                  onclick={() => {
-                    if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
-                  }}>应用</Button
+              <div class="preset-row">
+                <button class="preset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
+                  >深色预设</button
                 >
-                <Button
-                  variant="plain"
-                  onclick={() => {
-                    if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
-                  }}>删除</Button
+                <button class="preset-button" onclick={() => applyPreset(LIGHT_THEME_COLORS)}
+                  >浅色预设</button
                 >
-              {/if}
+                <button class="reset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
+                  >恢复默认</button
+                >
+                <Button variant="plain" onclick={openSaveThemeDialog}>另存为</Button>
+                {#if selectedThemeIdx !== null}
+                  <Button variant="plain" onclick={openRenameThemeDialog}>修改名称</Button>
+                  <Button
+                    variant="plain"
+                    onclick={() => {
+                      if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
+                    }}>应用</Button
+                  >
+                  <Button
+                    variant="plain"
+                    onclick={() => {
+                      if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
+                    }}>删除</Button
+                  >
+                {/if}
+              </div>
             </div>
           </div>
         </div>
@@ -945,21 +936,30 @@
     margin-top: 0;
   }
 
-  .multi-theme-heading {
-    margin-top: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border-subtle);
+  .custom-heading {
+    align-items: flex-start;
   }
 
-  .theme-config-actions {
+  .custom-actions {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
     gap: 6px;
     flex-shrink: 0;
   }
 
+  .custom-actions .preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 0;
+  }
+
   .color-list {
-    margin-top: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
   }
 
   .theme-dialog-body {
