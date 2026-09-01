@@ -128,19 +128,24 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
   }
 
   function saveLayout(): void {
-    // Write entryColumns first: mirroring settings back into the page's
-    // columns state resets that state to whatever is currently in the store.
-    // If we wrote panelWidths first, the store's stale column widths would
-    // clobber the freshly dragged widths before this line reads them,
-    // reverting the resize on release.
-    appSettings.updateGeneral(
-      "entryColumns",
-      options.entryColumns().map((c) => ({ ...c })),
-    );
+    // Capture fresh values before any store write: the `appSettings`
+    // subscription that mirrors `panelWidths`/`entryColumns` back into
+    // local `$state` runs synchronously on each `updateGeneral`.
+    // Writing `entryColumns` first would reset `groupWidth`/`detailWidth`
+    // to the stale in-store `panelWidths` before the second write reads
+    // them, reverting a panel drag on release (see PITFALLS).
+    const freshColumns = options.entryColumns().map((c) => ({ ...c }));
+    const freshGroup = groupWidth;
+    const freshDetail = detailWidth;
+    const freshUrlCol = options.urlColWidth();
+    // Order still matches the column-drag hazard: entryColumns first so the
+    // column mirror cannot clobber freshly dragged widths before they are
+    // persisted; panel data uses the captured snapshot.
+    appSettings.updateGeneral("entryColumns", freshColumns);
     appSettings.updateGeneral("panelWidths", {
-      group: groupWidth,
-      detail: detailWidth,
-      urlCol: options.urlColWidth(),
+      group: freshGroup,
+      detail: freshDetail,
+      urlCol: freshUrlCol,
     });
   }
 
