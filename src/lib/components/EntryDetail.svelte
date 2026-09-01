@@ -1507,9 +1507,10 @@
     flex: 1 1 0;
     min-height: 140px;
     min-width: 0;
-    margin-top: 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
+    margin: 12px -14px -16px;
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
     background: var(--input-bg);
     overflow: hidden;
   }
@@ -1539,15 +1540,22 @@
     padding: 10px 12px;
     border: 0;
     border-radius: 0;
-    background: var(--input-bg);
+    background: transparent;
     color: var(--text-primary);
     font-family: inherit;
     font-size: 12px;
     line-height: 1.6;
     resize: none;
     word-break: break-word;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overflow-y: auto;
+  }
+
+  .notes-textarea::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   .notes-textarea::placeholder {
@@ -1565,7 +1573,7 @@
     padding: 10px 12px;
     border: 0;
     border-radius: 0;
-    background: var(--input-bg);
+    background: transparent;
     color: var(--text-primary);
     font-size: 12px;
     line-height: 1.6;
@@ -1573,8 +1581,14 @@
     word-break: break-word;
     overflow-y: auto;
     cursor: text;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-color) transparent;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .notes-view::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   .notes-view:focus {
