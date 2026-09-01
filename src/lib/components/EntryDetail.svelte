@@ -1099,16 +1099,16 @@
             >
               {#if notesDraft}
                 {#each linkifyContacts(notesDraft) as token, i (i)}
-                  {#if token.kind === "text"}
-                    <span>{token.value}</span>
-                  {:else}
+                  {#if token.kind === "url"}
                     <button
                       class="notes-link"
                       type="button"
                       onclick={(e) => onNotesLinkClick(e, token.kind, token.value)}
                       onkeydown={(e) => onNotesLinkKeydown(e, token.kind, token.value)}
-                      title={token.kind === "url" ? "打开链接" : "点击复制"}>{token.value}</button
+                      title="打开链接">{token.value}</button
                     >
+                  {:else}
+                    <span>{token.value}</span>
                   {/if}
                 {/each}
               {:else}
