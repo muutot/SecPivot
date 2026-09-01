@@ -937,21 +937,23 @@
   }
 
   .custom-heading {
-    align-items: flex-start;
+    align-items: center;
   }
 
   .custom-actions {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-direction: row;
+    align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    flex-wrap: nowrap;
   }
 
   .custom-actions .preset-row {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
     gap: 6px;
     margin-top: 0;
   }
