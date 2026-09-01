@@ -59,10 +59,11 @@ pub(crate) fn open_tcato_overlay(
         if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
             let _ = window.show();
             let _ = window.set_focus();
+            focus::apply_tcato_no_activate(&window);
             let _ = app.emit(TCATO_OPEN_EVENT, ());
             return Ok(());
         }
-        tauri::WebviewWindowBuilder::new(
+        let window = tauri::WebviewWindowBuilder::new(
             &app,
             TCATO_WINDOW_LABEL,
             tauri::WebviewUrl::App("index.html".into()),
@@ -76,6 +77,7 @@ pub(crate) fn open_tcato_overlay(
         .initialization_script("window.location.hash = '#/tcato';")
         .build()
         .map_err(|e| format!("无法打开 TCATO 窗口: {e}"))?;
+        focus::apply_tcato_no_activate(&window);
         let _ = app.emit(TCATO_OPEN_EVENT, ());
         Ok(())
     }

@@ -58,10 +58,19 @@
   <p class="hint">请先将焦点移到目标窗口，再点击要注入的内容；密码不经过键盘钩子。</p>
 
   <div class="actions">
-    <button class="channel-button" onclick={() => send("username")}>
+    <button
+      class="channel-button"
+      onmousedown={(e) => e.preventDefault()}
+      onclick={() => send("username")}
+    >
       <AppIcon name="user" size={13} />注入用户名
     </button>
-    <button class="channel-button primary" onclick={() => send("password")} disabled={!hasPassword}>
+    <button
+      class="channel-button primary"
+      onmousedown={(e) => e.preventDefault()}
+      onclick={() => send("password")}
+      disabled={!hasPassword}
+    >
       <AppIcon name="key" size={13} />注入密码
     </button>
   </div>
