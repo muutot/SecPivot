@@ -143,31 +143,33 @@
       <span class="label">标签（空格或逗号分隔，需全部命中）</span>
       <TextField bind:value={tags} placeholder="work dev" />
     </div>
-    <div class="toggles">
-      <button
-        type="button"
-        class="toggle"
-        class:active={onlyExpired}
-        onclick={() => (onlyExpired = !onlyExpired)}
-      >
-        仅过期
-      </button>
-      <button
-        type="button"
-        class="toggle"
-        class:active={onlyFavorites}
-        onclick={() => (onlyFavorites = !onlyFavorites)}
-      >
-        仅收藏
-      </button>
-      <button
-        type="button"
-        class="toggle"
-        class:active={requireQualityCheck}
-        onclick={() => (requireQualityCheck = !requireQualityCheck)}
-      >
-        质量检查开启
-      </button>
+    <div class="block">
+      <div class="toggles">
+        <button
+          type="button"
+          class="toggle"
+          class:active={onlyExpired}
+          onclick={() => (onlyExpired = !onlyExpired)}
+        >
+          仅过期
+        </button>
+        <button
+          type="button"
+          class="toggle"
+          class:active={onlyFavorites}
+          onclick={() => (onlyFavorites = !onlyFavorites)}
+        >
+          仅收藏
+        </button>
+        <button
+          type="button"
+          class="toggle"
+          class:active={requireQualityCheck}
+          onclick={() => (requireQualityCheck = !requireQualityCheck)}
+        >
+          质量检查开启
+        </button>
+      </div>
     </div>
     <div class="block">
       <span class="label">已保存搜索</span>
@@ -190,13 +192,15 @@
         <p class="saved-empty">尚无已保存的搜索</p>
       {/if}
       <div class="save-row">
-        <TextField
-          bind:value={saveName}
-          placeholder="搜索名称"
-          onkeydown={(event) => {
-            if (event.key === "Enter") saveSearch();
-          }}
-        />
+        <div class="save-field">
+          <TextField
+            bind:value={saveName}
+            placeholder="搜索名称"
+            onkeydown={(event) => {
+              if (event.key === "Enter") saveSearch();
+            }}
+          />
+        </div>
         <button type="button" class="saved-action primary" onclick={saveSearch}>
           保存当前条件
         </button>
@@ -317,7 +321,18 @@
 
   .save-row {
     display: flex;
+    align-items: center;
     gap: 6px;
     margin-top: 8px;
+  }
+
+  .save-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .save-row .saved-action {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 </style>
