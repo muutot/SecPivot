@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { appSettings } from "$lib/services/settings";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GeneralSettingsPanel from "$lib/components/settings/GeneralSettingsPanel.svelte";
   import SecuritySettingsPanel from "$lib/components/settings/SecuritySettingsPanel.svelte";
@@ -18,10 +19,22 @@
 
   interface Props {
     onclose: () => void;
-    appVersion?: string;
   }
 
-  let { onclose, appVersion = "0.1.0" }: Props = $props();
+  let { onclose }: Props = $props();
+
+  let appVersion = $state("0.1.0");
+
+  $effect(() => {
+    void (async () => {
+      if (!isTauriRuntime()) return;
+      try {
+        appVersion = await getVersion();
+      } catch {
+        /* keep fallback */
+      }
+    })();
+  });
 
   let active: Section = $state("general");
   let generalTab: GeneralTab = $state("appearance");
