@@ -938,6 +938,7 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 6px;
+    min-width: 0;
   }
 
   .color-group-label {
@@ -963,6 +964,7 @@
   .custom-heading {
     align-items: center;
     flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .custom-heading > div:first-child {
