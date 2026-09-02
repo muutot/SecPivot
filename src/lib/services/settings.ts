@@ -1141,14 +1141,7 @@ export const appSettings: AppSettingsStore = {
   },
 
   updateGeneral(key, value): void {
-    settings.update((s) => {
-      const next = { ...s, general: { ...s.general, [key]: value } };
-      if (key === "theme" && value !== "custom") {
-        next.general.themeColors =
-          value === "light" ? { ...LIGHT_THEME_COLORS } : { ...DARK_THEME_COLORS };
-      }
-      return next;
-    });
+    settings.update((s) => ({ ...s, general: { ...s.general, [key]: value } }));
     schedulePersist();
   },
 
