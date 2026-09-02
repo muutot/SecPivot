@@ -935,7 +935,8 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
   }
 
@@ -961,6 +962,12 @@
 
   .custom-heading {
     align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .custom-heading > div:first-child {
+    flex: 1 1 180px;
+    min-width: 140px;
   }
 
   .custom-actions {
@@ -968,8 +975,10 @@
     flex-direction: row;
     align-items: center;
     gap: 6px;
-    flex-shrink: 0;
-    flex-wrap: nowrap;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
   }
 
   .color-list {
