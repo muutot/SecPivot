@@ -334,6 +334,59 @@
               <p>直接修改主题语义色，即时预览；切换编辑当前配色或已保存主题</p>
             </div>
             <div class="custom-actions">
+              <div class="preset-row">
+                <Button
+                  variant="action"
+                  title="深色预设"
+                  ariaLabel="深色预设"
+                  onclick={() => applyPreset(DARK_THEME_COLORS)}
+                  ><AppIcon name="moon" size={15} /></Button
+                >
+                <Button
+                  variant="action"
+                  title="浅色预设"
+                  ariaLabel="浅色预设"
+                  onclick={() => applyPreset(LIGHT_THEME_COLORS)}
+                  ><AppIcon name="sun" size={15} /></Button
+                >
+                <Button
+                  variant="action"
+                  title="恢复默认配色"
+                  ariaLabel="恢复默认配色"
+                  onclick={() => applyPreset(LIGHT_THEME_COLORS)}
+                  ><AppIcon name="undo" size={15} /></Button
+                >
+                <Button
+                  variant="action"
+                  title="另存为配色方案"
+                  ariaLabel="另存为配色方案"
+                  onclick={openSaveThemeDialog}><AppIcon name="save" size={15} /></Button
+                >
+                {#if selectedThemeIdx !== null}
+                  <Button
+                    variant="action"
+                    title="修改方案名称"
+                    ariaLabel="修改方案名称"
+                    onclick={openRenameThemeDialog}><AppIcon name="edit" size={15} /></Button
+                  >
+                  <Button
+                    variant="action"
+                    title="应用所选主题"
+                    ariaLabel="应用所选主题"
+                    onclick={() => {
+                      if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
+                    }}><AppIcon name="check" size={15} /></Button
+                  >
+                  <Button
+                    variant="action"
+                    title="删除所选主题"
+                    ariaLabel="删除所选主题"
+                    onclick={() => {
+                      if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
+                    }}><AppIcon name="trash" size={15} /></Button
+                  >
+                {/if}
+              </div>
               <Select
                 value={selectedThemeIdx === null ? "current" : String(selectedThemeIdx)}
                 ariaLabel="选择主题"
@@ -345,33 +398,6 @@
                   selectedThemeIdx = v === "current" ? null : Number(v);
                 }}
               />
-              <div class="preset-row">
-                <button class="preset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
-                  >深色预设</button
-                >
-                <button class="preset-button" onclick={() => applyPreset(LIGHT_THEME_COLORS)}
-                  >浅色预设</button
-                >
-                <button class="reset-button" onclick={() => applyPreset(DARK_THEME_COLORS)}
-                  >恢复默认</button
-                >
-                <Button variant="plain" onclick={openSaveThemeDialog}>另存为</Button>
-                {#if selectedThemeIdx !== null}
-                  <Button variant="plain" onclick={openRenameThemeDialog}>修改名称</Button>
-                  <Button
-                    variant="plain"
-                    onclick={() => {
-                      if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
-                    }}>应用</Button
-                  >
-                  <Button
-                    variant="plain"
-                    onclick={() => {
-                      if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
-                    }}>删除</Button
-                  >
-                {/if}
-              </div>
             </div>
           </div>
         </div>
@@ -907,8 +933,10 @@
 
   .preset-row {
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
     gap: 6px;
-    margin-top: 10px;
   }
 
   .color-group-label {
@@ -931,11 +959,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .heading-inline .preset-row {
-    flex-shrink: 0;
-    margin-top: 0;
-  }
-
   .custom-heading {
     align-items: center;
   }
@@ -947,15 +970,6 @@
     gap: 6px;
     flex-shrink: 0;
     flex-wrap: nowrap;
-  }
-
-  .custom-actions .preset-row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 6px;
-    margin-top: 0;
   }
 
   .color-list {
@@ -974,23 +988,6 @@
     margin: 0;
     color: var(--danger-color);
     font-size: var(--font-size-secondary, 11px);
-  }
-
-  .reset-button,
-  .preset-button {
-    padding: 4px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-secondary);
-    background: var(--input-bg);
-    font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
-    cursor: pointer;
-  }
-
-  .reset-button:hover,
-  .preset-button:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
   }
 
   .toolbar-order-list {
