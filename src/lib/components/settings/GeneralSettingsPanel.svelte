@@ -36,6 +36,26 @@
   let themeDialogMode: "create" | "rename" | null = $state(null);
   let themeDialogName = $state("");
   let themeDialogError = $state("");
+  let headingEl = $state<HTMLDivElement | null>(null);
+  let titleEl = $state<HTMLDivElement | null>(null);
+  let actionsEl = $state<HTMLDivElement | null>(null);
+  let actionsWrapped = $state(false);
+
+  $effect(() => {
+    const heading = headingEl;
+    const title = titleEl;
+    const actions = actionsEl;
+    if (!heading || !title || !actions) return;
+    const measure = () => {
+      actionsWrapped =
+        actions.getBoundingClientRect().top > title.getBoundingClientRect().bottom + 2;
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(heading);
+    ro.observe(actions);
+    return () => ro.disconnect();
+  });
 
   function change<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]): void {
     appSettings.updateGeneral(key, value);
@@ -328,8 +348,12 @@
       <section class="setting-card">
         <div class="setting-heading">
           <span class="setting-icon"><AppIcon name="settings" size={17} /></span>
-          <div class="heading-inline custom-heading">
-            <div>
+          <div
+            class="heading-inline custom-heading"
+            class:wrapped={actionsWrapped}
+            bind:this={headingEl}
+          >
+            <div bind:this={titleEl}>
               <strong>自定义配色</strong>
               <p>直接修改主题语义色，即时预览；切换编辑当前配色或已保存主题</p>
             </div>
@@ -970,6 +994,16 @@
   .custom-heading > div:first-child {
     flex: 1 1 180px;
     min-width: 140px;
+  }
+
+  .custom-heading.wrapped > div:first-child {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-right: auto;
+  }
+
+  .custom-heading.wrapped > div:first-child p {
+    display: none;
   }
 
   .custom-actions {
