@@ -11,7 +11,7 @@
   import Button from "$lib/components/templates/action/Button.svelte";
   import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 
-  type Section = "appearance" | "display" | "compact" | "toolbar" | "network";
+  type Section = "appearance" | "display" | "layout" | "toolbar" | "network";
 
   interface Props {
     onclose: () => void;
@@ -189,12 +189,19 @@
   ];
 
   const densitySliders: {
-    key: "groupGap" | "groupPaddingY" | "groupIndent" | "groupRadius";
+    key: "entryRowHeight" | "groupGap" | "groupPaddingY" | "groupIndent" | "groupRadius";
     label: string;
     description: string;
     min: number;
     max: number;
   }[] = [
+    {
+      key: "entryRowHeight",
+      label: "条目行高",
+      description: "条目表格每行高度；窄屏自动不小于 36px",
+      min: 24,
+      max: 72,
+    },
     { key: "groupGap", label: "分组间距", description: "分组之间的垂直间距", min: 0, max: 16 },
     {
       key: "groupPaddingY",
@@ -604,14 +611,13 @@
     />
   {/if}
 
-  {#if section === "compact"}
-    <SettingToggleCard
-      icon="grid"
-      label="紧凑模式"
-      description="缩小间距，提高单屏信息密度"
-      checked={general.compactMode}
-      onchange={(checked) => change("compactMode", checked)}
-    />
+  {#if section === "layout"}
+    <p
+      class="settings-note"
+      style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);"
+    >
+      布局密度常开，直接作用于分组树间距与条目表格行高，调整即时生效。
+    </p>
 
     {#each densitySliders as slider (slider.key)}
       <SettingRangeCard

@@ -13,6 +13,7 @@ fn defaults_round_trip_and_persist() {
     assert_eq!(defaults.database.kdf, "Argon2id");
     assert_eq!(defaults.general.font_sizes.base, 14);
     assert_eq!(defaults.general.density.group_gap, 2);
+    assert_eq!(defaults.general.density.entry_row_height, 30);
     assert_eq!(defaults.general.density.group_radius, 6);
     assert_eq!(
         defaults.general.toolbar_overflow_menu,
@@ -55,8 +56,8 @@ fn old_config_without_density_loads_with_defaults() {
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let config = store.get().unwrap();
     assert_eq!(config.general.theme, "light");
-    assert!(config.general.compact_mode);
     assert_eq!(config.general.density.group_gap, 2);
+    assert_eq!(config.general.density.entry_row_height, 30);
     assert!(config.general.density.show_group_icon);
     assert_eq!(
         config.general.toolbar_overflow_menu,
@@ -673,6 +674,7 @@ fn density_survives_deserialize_write_reload() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
+    config.general.density.entry_row_height = 40;
     config.general.density.group_gap = 8;
     config.general.density.group_padding_y = 6;
     config.general.density.group_indent = 20;
@@ -686,6 +688,7 @@ fn density_survives_deserialize_write_reload() {
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let again = reloaded.get().unwrap();
+    assert_eq!(again.general.density.entry_row_height, 40);
     assert_eq!(again.general.density.group_gap, 8);
     assert_eq!(again.general.density.group_indent, 20);
     assert!(!again.general.density.show_group_chevron);
@@ -817,6 +820,7 @@ fn normalization_clamps_and_fixes_enums() {
     config.general.theme_colors.accent = "not-a-color".into();
     config.general.density.group_gap = 99;
     config.general.density.group_indent = 0;
+    config.general.density.entry_row_height = 5;
 
     let normalized = normalize_config(config);
     assert_eq!(normalized.general.theme, "dark");
@@ -836,6 +840,7 @@ fn normalization_clamps_and_fixes_enums() {
     assert_eq!(normalize_config(cleared).general.theme_colors.accent, "");
     assert_eq!(normalized.general.density.group_gap, 2);
     assert_eq!(normalized.general.density.group_indent, 12);
+    assert_eq!(normalized.general.density.entry_row_height, 30);
 }
 
 #[test]
@@ -925,7 +930,7 @@ fn favicon_config_without_auto_save_field_loads_with_default_off() {
 #[test]
 fn normalization_is_idempotent() {
     let mut config = AppConfig::default();
-    config.general.compact_mode = true;
+    config.general.density.entry_row_height = 50;
     let once = normalize_config(config);
     let twice = normalize_config(once.clone());
     assert_eq!(

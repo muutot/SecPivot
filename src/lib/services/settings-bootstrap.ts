@@ -24,8 +24,3 @@ export function applySettingsToDocument(): void {
     document.body.style.background = "";
   }
 }
-
-export function syncCompactShellClass(compact: boolean): void {
-  const shell = document.querySelector(".app-shell");
-  if (shell) shell.classList.toggle("compact", compact);
-}

@@ -181,8 +181,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   themeColors: { ...DARK_THEME_COLORS },
   customPresets: [],
   customThemes: [],
-  compactMode: false,
   density: {
+    entryRowHeight: 30,
     groupGap: 2,
     groupPaddingY: 3,
     groupIndent: 12,
@@ -802,6 +802,12 @@ export function normalizeSettings(
     density: {
       ...fallback.general.density,
       ...(g.density ?? {}),
+      entryRowHeight: clampInt(
+        g.density?.entryRowHeight ?? fallback.general.density.entryRowHeight,
+        24,
+        72,
+        30,
+      ),
       groupGap: clampInt(g.density?.groupGap ?? fallback.general.density.groupGap, 0, 16, 2),
       groupPaddingY: clampInt(
         g.density?.groupPaddingY ?? fallback.general.density.groupPaddingY,

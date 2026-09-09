@@ -13,7 +13,7 @@
 
   type Section =
     "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
-  type GeneralTab = "appearance" | "display" | "compact" | "toolbar" | "network";
+  type GeneralTab = "appearance" | "display" | "layout" | "toolbar" | "network";
   type RemoteTab = "s3" | "webdav";
   type IntegrationsTab = "http" | "rpc";
 
@@ -69,7 +69,7 @@
       tabs: [
         { id: "appearance", label: "外观" },
         { id: "display", label: "显示" },
-        { id: "compact", label: "紧凑" },
+        { id: "layout", label: "布局" },
         { id: "toolbar", label: "工具栏" },
         { id: "network", label: "网络" },
       ],

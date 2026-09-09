@@ -138,6 +138,9 @@ impl Default for FontSizes {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DensitySettings {
+    /// Entry-table row height in px, applied via `--entry-row-height` so the
+    /// CSS renders exactly what the setting says (narrow rows floor at 36px).
+    pub entry_row_height: i32,
     pub group_gap: i32,
     pub group_padding_y: i32,
     pub group_indent: i32,
@@ -149,6 +152,7 @@ pub struct DensitySettings {
 impl Default for DensitySettings {
     fn default() -> Self {
         Self {
+            entry_row_height: 30,
             group_gap: 2,
             group_padding_y: 3,
             group_indent: 12,
@@ -366,7 +370,6 @@ pub struct GeneralSettings {
     pub theme_colors: ThemeColors,
     pub custom_presets: Vec<ThemeColors>,
     pub custom_themes: Vec<CustomTheme>,
-    pub compact_mode: bool,
     pub density: DensitySettings,
     pub show_descriptions: bool,
     pub font_sizes: FontSizes,
@@ -450,7 +453,6 @@ impl Default for GeneralSettings {
             theme_colors: ThemeColors::dark(),
             custom_presets: Vec::new(),
             custom_themes: Vec::new(),
-            compact_mode: false,
             density: DensitySettings::default(),
             show_descriptions: true,
             font_sizes: FontSizes::default(),
@@ -1113,6 +1115,8 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         clamp_i32(config.general.panel_widths.detail, 260, 640, 300);
     config.general.panel_widths.url_col =
         clamp_i32(config.general.panel_widths.url_col, 30, 400, 200);
+    config.general.density.entry_row_height =
+        clamp_i32(config.general.density.entry_row_height, 24, 72, 30);
     config.general.density.group_gap = clamp_i32(config.general.density.group_gap, 0, 16, 2);
     config.general.density.group_padding_y =
         clamp_i32(config.general.density.group_padding_y, 0, 16, 3);

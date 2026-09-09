@@ -13,7 +13,6 @@
     type ColumnMenuSection,
   } from "$lib/components/ColumnConfigMenu.svelte";
   import { dispatchShortcut, effectiveShortcuts } from "$lib/services/keyboard";
-  import { syncCompactShellClass } from "$lib/services/settings-bootstrap";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
@@ -423,7 +422,6 @@
     return unsubscribe;
   });
 
-  const compactMode = $derived(settings.general.compactMode);
   const groupDensity = $derived(settings.general.density);
   const iconOnlyButtons = $derived(settings.general.iconOnlyButtons);
   const toolbarItems = $derived(settings.general.toolbarItems);
@@ -446,9 +444,6 @@
   const showLockScreen = $derived(
     !currentVault && rememberedPath !== null && settings.general.rememberLastDatabase,
   );
-  $effect(() => {
-    syncCompactShellClass(compactMode);
-  });
 
   const WELCOME_WINDOW_SIZE = { width: 550, height: 730 };
   let lastAppliedSize = $state("");
@@ -1565,14 +1560,13 @@
   <TcatoOverlay />
 {:else}
   <main
-    class="app-shell"
-    class:compact={compactMode}
+    class="app-shell compact"
     class:standalone={!currentVault}
     class:mobile-nav-open={layout.mobileNavOpen}
-    style:--group-gap={compactMode ? `${groupDensity.groupGap}px` : undefined}
-    style:--group-pad-y={compactMode ? `${groupDensity.groupPaddingY}px` : undefined}
-    style:--group-indent={compactMode ? `${groupDensity.groupIndent}px` : undefined}
-    style:--group-radius={compactMode ? `${groupDensity.groupRadius}px` : undefined}
+    style:--group-gap={`${groupDensity.groupGap}px`}
+    style:--group-pad-y={`${groupDensity.groupPaddingY}px`}
+    style:--group-indent={`${groupDensity.groupIndent}px`}
+    style:--group-radius={`${groupDensity.groupRadius}px`}
     oncontextmenu={(e) => e.preventDefault()}
   >
     {#if currentVault}
@@ -1684,7 +1678,7 @@
             {sortDir}
             selectedUuids={selection.selectedUuids}
             {showDescriptions}
-            compact={compactMode}
+            entryRowHeight={groupDensity.entryRowHeight}
             searchActive={Boolean(search)}
             mobileColumns={settings.general.mobileColumns}
             {customIconUrl}

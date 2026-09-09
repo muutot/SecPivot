@@ -3,7 +3,7 @@
   import "../app.css";
   import { appSettings } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
-  import { applySettingsToDocument, syncCompactShellClass } from "$lib/services/settings-bootstrap";
+  import { applySettingsToDocument } from "$lib/services/settings-bootstrap";
   import { installAutoLock, installFocusLock, lockVault } from "$lib/services/security";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
@@ -25,7 +25,6 @@
   onMount(() => {
     const unsubscribe = appSettings.subscribe((s) => {
       applySettingsToDocument();
-      syncCompactShellClass(s.general.compactMode);
     });
     // Kill middle-button autoscroll globally: WebView2/Chromium engages it on
     // mousedown, so a capture-phase preventDefault here beats any element

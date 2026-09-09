@@ -100,6 +100,9 @@ export interface SecuritySettings {
 }
 
 export interface DensitySettings {
+  /** Entry-table row height in px; applied via `--entry-row-height` so CSS
+   *  renders exactly the set value (narrow rows floor at 36px). */
+  entryRowHeight: number;
   groupGap: number;
   groupPaddingY: number;
   groupIndent: number;
@@ -197,7 +200,6 @@ export interface GeneralSettings {
   themeColors: ThemeColors;
   customPresets: ThemeColors[];
   customThemes: CustomTheme[];
-  compactMode: boolean;
   density: DensitySettings;
   showDescriptions: boolean;
   fontSizes: {

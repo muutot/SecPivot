@@ -26,7 +26,10 @@
     sortDir: "asc" | "desc";
     selectedUuids: Set<string>;
     showDescriptions: boolean;
-    compact: boolean;
+    /** Entry-row height in px from `density.entryRowHeight`; drives both the
+     *  virtualization math and the `--entry-row-height` CSS so they stay in
+     *  sync (narrow rows floor at 36px). */
+    entryRowHeight: number;
     searchActive: boolean;
     /** Render the full column grid on narrow screens too (user opt-in). */
     mobileColumns?: boolean;
@@ -60,7 +63,7 @@
     sortDir,
     selectedUuids,
     showDescriptions,
-    compact,
+    entryRowHeight,
     searchActive,
     mobileColumns = false,
     customIconUrl,
@@ -84,9 +87,7 @@
 
   const COL_WIDTH_MIN = 30;
   const COL_WIDTH_MAX = 400;
-  const ROW_HEIGHT = 30;
-  const COMPACT_ROW_HEIGHT = 34;
-  const NARROW_ROW_HEIGHT = 48;
+  const NARROW_ROW_HEIGHT = 36;
   const VIRTUAL_OVERSCAN = 6;
   /** How long an in-place revealed password stays visible before the cell
    * re-masks itself (also re-masked on second click, mouse leave, unmount). */
@@ -162,9 +163,7 @@
   let narrow = $state(false);
   let lastFocusedIndex = $state(0);
 
-  const rowHeight = $derived(
-    narrow ? NARROW_ROW_HEIGHT : compact ? COMPACT_ROW_HEIGHT : ROW_HEIGHT,
-  );
+  const rowHeight = $derived(narrow ? Math.max(NARROW_ROW_HEIGHT, entryRowHeight) : entryRowHeight);
   const virtualRange = $derived(
     computeVirtualRange({
       itemCount: rows.length,
@@ -405,9 +404,9 @@
 
 <div
   class="entry-table"
-  class:compact
   class:show-cols={mobileColumns}
-  style={`--entry-cols: ${entryGridCols}`}
+  style:--entry-cols={entryGridCols}
+  style:--entry-row-height={`${rowHeight}px`}
   bind:this={entryTableEl}
   onscroll={handleListScroll}
 >
@@ -810,7 +809,7 @@
     grid-template-columns: var(--entry-cols);
     align-items: center;
     gap: 0;
-    height: 30px;
+    height: var(--entry-row-height, 30px);
     padding: 0;
     cursor: pointer;
     color: var(--row-fg, var(--text-primary));
@@ -1042,11 +1041,6 @@
       width: max-content;
     }
 
-    .entry-table.show-cols .entry-row,
-    .entry-table.show-cols.compact .entry-row {
-      height: 48px;
-    }
-
     .entry-table:not(.show-cols) {
       overflow-x: hidden;
     }
@@ -1060,12 +1054,10 @@
       overflow-x: hidden;
     }
 
-    .entry-table:not(.show-cols) .entry-row,
-    .entry-table:not(.show-cols).compact .entry-row {
+    .entry-table:not(.show-cols) .entry-row {
       grid-template-columns: 44px minmax(0, 1fr) 100px;
       width: 100%;
       min-width: 0;
-      height: 48px;
       border-bottom: 1px solid var(--border-subtle);
     }
 
