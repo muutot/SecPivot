@@ -2656,9 +2656,7 @@ fn ensure_tcato_allowed_rejects_recycle_bin_entries() {
     assert!(session.ensure_tcato_allowed(&uuid).is_ok());
 
     // Once deleted into the recycle bin it is rejected (uuids survive the move).
-    let binned = session
-        .delete_entries(std::slice::from_ref(&uuid))
-        .unwrap();
+    let binned = session.delete_entries(std::slice::from_ref(&uuid)).unwrap();
     let bin = binned
         .root
         .children
