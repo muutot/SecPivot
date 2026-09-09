@@ -71,3 +71,22 @@ export function pageDownTargetIndex(
   const start = Math.min(rows.length - 1, index + pageStep);
   return findNearestEntryIndex(rows, start, 1) ?? findNextEntryIndex(rows, start, -1);
 }
+
+/** 1-based position of each entry row among entry rows only (separators
+ *  skipped), for `aria-posinset`. Keyed by a caller-supplied stable id
+ *  (`uuid` for real rows). */
+export function entryPositions<T extends NavigableRow>(
+  rows: ReadonlyArray<T>,
+  idOf: (row: T) => string | null | undefined,
+): Map<string, number> {
+  const positions = new Map<string, number>();
+  let count = 0;
+  for (const row of rows) {
+    if (row.kind !== "entry") continue;
+    count += 1;
+    const id = idOf(row);
+    if (id === null || id === undefined) continue;
+    positions.set(id, count);
+  }
+  return positions;
+}

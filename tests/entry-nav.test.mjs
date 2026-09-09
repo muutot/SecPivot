@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  entryPositions,
   findNearestEntryIndex,
   findNextEntryIndex,
   pageDownTargetIndex,
@@ -74,5 +75,30 @@ describe("pageDownTargetIndex", () => {
 
   it("returns null only when no entry exists", () => {
     assert.equal(pageDownTargetIndex([], 0, 3), null);
+  });
+});
+
+describe("entryPositions", () => {
+  const idOf = (row) => (row.kind === "entry" ? row.uuid : null);
+
+  it("numbers entries 1-based while skipping separators", () => {
+    const rows = [group("g1"), entry("e1"), entry("e2"), group("g2"), entry("e3")];
+    const positions = entryPositions(rows, idOf);
+    assert.equal(positions.get("e1"), 1);
+    assert.equal(positions.get("e2"), 2);
+    assert.equal(positions.get("e3"), 3);
+    assert.equal(positions.size, 3);
+  });
+
+  it("is empty when no entries exist", () => {
+    assert.equal(entryPositions([], idOf).size, 0);
+    assert.equal(entryPositions([group("g1")], idOf).size, 0);
+  });
+
+  it("skips rows without an id", () => {
+    const rows = [entry("e1"), { kind: "entry" }];
+    const positions = entryPositions(rows, idOf);
+    assert.equal(positions.get("e1"), 1);
+    assert.equal(positions.size, 1);
   });
 });

@@ -6,6 +6,7 @@
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
   import {
+    entryPositions,
     findNearestEntryIndex,
     findNextEntryIndex,
     pageDownTargetIndex,
@@ -189,6 +190,11 @@
   const virtualRows = $derived(rows.slice(virtualRange.start, virtualRange.end));
   const topSpacerHeight = $derived(virtualRange.start * rowHeight);
   const entryCount = $derived(rows.filter((r) => (r as { kind: string }).kind === "entry").length);
+  /** Entry-only ordinals for `aria-posinset`: separators are visual, so the
+   *  announced position counts focusable options, not physical rows. */
+  const entryOrdinals = $derived(
+    entryPositions(rows, (row) => (row.kind === "entry" ? row.entry.uuid : null)),
+  );
   const bottomSpacerHeight = $derived((rows.length - virtualRange.end) * rowHeight);
 
   onMount(() => {
@@ -521,9 +527,8 @@
         {#if row.kind === "group"}
           <div
             class="group-separator"
-            role="separator"
+            aria-hidden="true"
             data-group-index={rowIndex}
-            aria-label={row.label}
             style:color={separatorColor || undefined}
           >
             <span class="group-separator-label">{row.label}</span>
@@ -543,8 +548,8 @@
             data-entry-index={rowIndex}
             role="option"
             aria-selected={selectedUuids.has(row.entry.uuid)}
-            aria-posinset={rowIndex + 1}
-            aria-setsize={rows.length}
+            aria-posinset={entryOrdinals.get(row.entry.uuid) ?? rowIndex + 1}
+            aria-setsize={entryCount}
             tabindex="0"
             draggable="true"
             onfocus={() => (lastFocusedIndex = rowIndex)}
