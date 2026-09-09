@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { describe, it } from "node:test";
 
-import { matchesAdvancedSearch } from "../src/lib/utils/entry-search.ts";
+import { matchesAdvancedSearch, prepareAdvancedSearch } from "../src/lib/utils/entry-search.ts";
 
 function entry(overrides = {}) {
   return {
@@ -96,4 +96,43 @@ test("tag filters accept comma, Chinese comma, and whitespace separators and req
   assert.equal(matchesAdvancedSearch(target, query({ tags: "Work DevOps，Critical" })), true);
   assert.equal(matchesAdvancedSearch(target, query({ tags: "Work,Missing" })), false);
   assert.equal(matchesAdvancedSearch(target, query({ tags: "  " })), true);
+});
+
+describe("prepareAdvancedSearch", () => {
+  const cases = [
+    query({ text: "github" }),
+    query({ text: "^GITHUB PRODUCTION$", regex: true }),
+    query({ text: "[", regex: true }),
+    query({ text: "[", regex: true, exclude: true }),
+    query({ text: "github", exclude: true }),
+    query({ text: "", exclude: true }),
+    query({ tags: "Work,Missing" }),
+    query({ text: "zx-42", field: "custom" }),
+    query({ text: "ALICE.DEV", field: "username" }),
+    query({ onlyExpired: true, onlyFavorites: true, requireQualityCheck: true }),
+  ];
+  const targets = [
+    entry(),
+    entry({ favorite: false }),
+    entry({ expired: false }),
+    entry({ qualityCheck: false }),
+    entry({ qualityCheck: undefined }),
+  ];
+
+  it("agrees with matchesAdvancedSearch on every case and entry", () => {
+    for (const q of cases) {
+      const prepared = prepareAdvancedSearch(q);
+      for (const target of targets) {
+        assert.equal(prepared.test(target), matchesAdvancedSearch(target, q), JSON.stringify(q));
+      }
+    }
+  });
+
+  it("treats invalid regex as never-match (inverted by exclude)", () => {
+    assert.equal(prepareAdvancedSearch(query({ text: "[", regex: true })).test(entry()), false);
+    assert.equal(
+      prepareAdvancedSearch(query({ text: "[", regex: true, exclude: true })).test(entry()),
+      true,
+    );
+  });
 });

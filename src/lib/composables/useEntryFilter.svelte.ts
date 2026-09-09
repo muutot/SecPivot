@@ -8,7 +8,7 @@
 //! tracks the page's runes. Extracted from `+page.svelte`.
 
 import type { AdvancedSearchQuery } from "$lib/utils/entry-search";
-import { matchesAdvancedSearch } from "$lib/utils/entry-search";
+import { prepareAdvancedSearch } from "$lib/utils/entry-search";
 import type { VaultEntry, VaultGroup, VaultState } from "$lib/types/vault";
 
 export type EntryFilterOptions = {
@@ -69,11 +69,13 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
       effectiveSearchable = resolved;
     }
     const result: { entry: VaultEntry }[] = [];
+    // Compile the advanced query once per derivation, not once per entry.
+    const preparedAdvanced = advancedQuery ? prepareAdvancedSearch(advancedQuery) : null;
     for (const group of subtree) {
       if (effectiveSearchable?.get(group.uuid) === false) continue;
       for (const entry of group.entries) {
         if (query && !searchTextFor(entry).includes(query)) continue;
-        if (advancedQuery && !matchesAdvancedSearch(entry, advancedQuery)) continue;
+        if (preparedAdvanced && !preparedAdvanced.test(entry)) continue;
         result.push({ entry });
       }
     }

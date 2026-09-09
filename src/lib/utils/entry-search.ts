@@ -21,30 +21,51 @@ export interface AdvancedSearchQuery {
 }
 
 export function matchesAdvancedSearch(entry: VaultEntry, query: AdvancedSearchQuery): boolean {
-  if (query.onlyExpired && !entry.expired) return false;
-  if (query.onlyFavorites && !entry.favorite) return false;
-  if (query.requireQualityCheck && entry.qualityCheck === false) return false;
+  return prepareAdvancedSearch(query).test(entry);
+}
 
+/** Pre-compiled form of an advanced-search query: compile once, test many
+ *  entries. `regex` compiles a single case-insensitive pattern (an invalid
+ *  pattern matches nothing); tag lists and the lowered text are prepared up
+ *  front so per-entry work stays proportional to the entry, not the query.
+ *  Without this, every search keystroke recompiles the pattern once per
+ *  entry — the dominant cost on large vaults now that sort keys and search
+ *  text are both memoized. */
+export interface PreparedAdvancedSearch {
+  test(entry: VaultEntry): boolean;
+}
+
+export function prepareAdvancedSearch(query: AdvancedSearchQuery): PreparedAdvancedSearch {
   const requiredTags = splitTags(query.tags);
-  if (requiredTags.length > 0) {
-    const entryTags = splitTags(entry.tags ?? "");
-    if (!requiredTags.every((tag) => entryTags.includes(tag))) return false;
-  }
-
   const text = query.text.trim();
-  if (text.length === 0) return true;
-  const fieldValue = entryFieldText(entry, query.field);
-  let matched: boolean;
-  if (query.regex) {
+  let pattern: RegExp | null = null;
+  let patternInvalid = false;
+  if (query.regex && text.length > 0) {
     try {
-      matched = new RegExp(text, "i").test(fieldValue);
+      pattern = new RegExp(text, "i");
     } catch {
-      matched = false;
+      patternInvalid = true;
     }
-  } else {
-    matched = fieldValue.toLowerCase().includes(text.toLowerCase());
   }
-  return query.exclude ? !matched : matched;
+  const loweredText = text.toLowerCase();
+  return {
+    test(entry: VaultEntry): boolean {
+      if (query.onlyExpired && !entry.expired) return false;
+      if (query.onlyFavorites && !entry.favorite) return false;
+      if (query.requireQualityCheck && entry.qualityCheck === false) return false;
+      if (requiredTags.length > 0) {
+        const entryTags = splitTags(entry.tags ?? "");
+        if (!requiredTags.every((tag) => entryTags.includes(tag))) return false;
+      }
+      if (text.length === 0) return true;
+      if (patternInvalid) return query.exclude;
+      const fieldValue = entryFieldText(entry, query.field);
+      const matched = pattern
+        ? pattern.test(fieldValue)
+        : fieldValue.toLowerCase().includes(loweredText);
+      return query.exclude ? !matched : matched;
+    },
+  };
 }
 
 function entryFieldText(entry: VaultEntry, scope: SearchFieldScope): string {
