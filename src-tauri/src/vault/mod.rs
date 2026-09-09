@@ -205,4 +205,8 @@ pub struct VaultSession {
     /// Window title captured by a global-hotkey multi-match request; consumed
     /// by `autotype_pick` when the user chooses an entry from the picker.
     pub(crate) pending_autotype_window: Option<String>,
+    /// Last foreground window each entry was TCATO-injected into
+    /// (entry uuid → window title). In-memory only, wiped on close with the
+    /// session; shown in the overlay so repeat fills need no guessing.
+    pub(crate) tcato_last_window: HashMap<String, String>,
 }

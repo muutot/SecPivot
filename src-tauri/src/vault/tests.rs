@@ -2721,6 +2721,29 @@ fn entry_has_totp_reflects_otp_seed_presence() {
 }
 
 #[test]
+fn tcato_last_window_records_and_reads_per_entry() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    assert_eq!(session.tcato_last_window("uuid-1"), None);
+    session.note_tcato_window("uuid-1", "Login - Chrome");
+    session.note_tcato_window("uuid-2", "Terminal");
+    assert_eq!(
+        session.tcato_last_window("uuid-1"),
+        Some("Login - Chrome".to_owned())
+    );
+    assert_eq!(
+        session.tcato_last_window("uuid-2"),
+        Some("Terminal".to_owned())
+    );
+    // Re-targeting the same entry overwrites, never duplicates.
+    session.note_tcato_window("uuid-1", "Login - Edge");
+    assert_eq!(
+        session.tcato_last_window("uuid-1"),
+        Some("Login - Edge".to_owned())
+    );
+}
+
+#[test]
 fn update_entries_applies_patch_to_all_uuids_and_skips_absent_fields() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

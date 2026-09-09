@@ -272,6 +272,17 @@ impl VaultSession {
         Ok(super::helpers::entry_has_otp(&entry))
     }
 
+    /// Record the foreground window a TCATO inject just targeted.
+    pub fn note_tcato_window(&mut self, uuid: &str, window_title: &str) {
+        self.tcato_last_window
+            .insert(uuid.to_owned(), window_title.to_owned());
+    }
+
+    /// Last foreground window this entry was TCATO-injected into, if any.
+    pub fn tcato_last_window(&self, uuid: &str) -> Option<String> {
+        self.tcato_last_window.get(uuid).cloned()
+    }
+
     /// TCATO may not target entries inside the recycle bin (matching auto-type
     /// and bridge/RPC semantics where the bin is excluded).
     pub fn ensure_tcato_allowed(&self, uuid: &str) -> Result<(), String> {

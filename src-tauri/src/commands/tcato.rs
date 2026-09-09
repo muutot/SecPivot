@@ -24,6 +24,7 @@ pub(crate) struct TcatoInfo {
     has_password: bool,
     has_username: bool,
     has_totp: bool,
+    last_window: Option<String>,
 }
 
 pub(crate) const TCATO_WINDOW_LABEL: &str = "tcato";
@@ -126,7 +127,7 @@ pub(crate) fn tcato_state(
     let Some((session_id, uuid)) = target_ref else {
         return Ok(None);
     };
-    let (ctx, has_totp) = with_vault_session(
+    let (ctx, has_totp, last_window) = with_vault_session(
         vaults.inner(),
         session.inner(),
         Some(&session_id),
@@ -134,7 +135,8 @@ pub(crate) fn tcato_state(
             target.ensure_tcato_allowed(&uuid)?;
             let ctx = target.autotype_context(&uuid)?;
             let has_totp = target.entry_has_totp(&uuid)?;
-            Ok((ctx, has_totp))
+            let last_window = target.tcato_last_window(&uuid);
+            Ok((ctx, has_totp, last_window))
         },
     )?;
     Ok(Some(TcatoInfo {
@@ -143,6 +145,7 @@ pub(crate) fn tcato_state(
         has_password: !ctx.password.is_empty(),
         has_username: !ctx.username.is_empty(),
         has_totp,
+        last_window,
     }))
 }
 
@@ -199,6 +202,17 @@ pub(crate) fn tcato_send(
         )?,
         _ => return Err("无效的 TCATO 通道".to_owned()),
     };
+    if let Some(window_title) = focus::foreground_window_title() {
+        let _ = with_vault_session(
+            vaults.inner(),
+            session.inner(),
+            Some(&session_id),
+            |target| {
+                target.note_tcato_window(&uuid, &window_title);
+                Ok::<(), String>(())
+            },
+        );
+    }
     focus::send_text_to_foreground(&text)
 }
 

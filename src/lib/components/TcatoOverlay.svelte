@@ -7,6 +7,7 @@
   let hasPassword = $state(false);
   let hasUsername = $state(false);
   let hasTotp = $state(false);
+  let lastWindow = $state<string | null>(null);
   let feedback = $state("");
   let error = $state("");
 
@@ -18,6 +19,7 @@
         hasPassword: boolean;
         hasUsername: boolean;
         hasTotp: boolean;
+        lastWindow: string | null;
       } | null>("tcato_state");
       if (!info) {
         error = "数据库未打开或条目不可用";
@@ -27,6 +29,7 @@
       hasPassword = info.hasPassword;
       hasUsername = info.hasUsername;
       hasTotp = info.hasTotp ?? false;
+      lastWindow = info.lastWindow ?? null;
     } catch (e) {
       error = `读取条目失败：${e}`;
     }
@@ -67,6 +70,9 @@
   </header>
 
   <p class="hint">请先将焦点移到目标窗口，再点击要注入的内容；密码不经过键盘钩子。</p>
+  {#if lastWindow}
+    <p class="hint">上次填充目标：{lastWindow}</p>
+  {/if}
 
   <div class="actions">
     <button
