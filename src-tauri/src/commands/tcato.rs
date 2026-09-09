@@ -50,15 +50,31 @@ pub(crate) fn open_tcato_overlay(
     session_id: String,
     uuid: String,
 ) -> Result<(), String> {
-    with_vault_session(
+    open_tcato_overlay_for(
+        &app,
         vaults.inner(),
         session.inner(),
-        Some(&session_id),
-        |target| {
-            target.ensure_tcato_allowed(&uuid)?;
-            target.autotype_context(&uuid).map(|_| ())
-        },
-    )?;
+        target.inner(),
+        session_id,
+        uuid,
+    )
+}
+
+/// Shared backend for `open_tcato_overlay` and the global summon hotkey:
+/// validates the target against the addressed session, records it, and shows
+/// (or creates) the overlay window.
+pub(crate) fn open_tcato_overlay_for(
+    app: &tauri::AppHandle,
+    vaults: &VaultSessions,
+    session: &Mutex<VaultSession>,
+    target: &TcatoTarget,
+    session_id: String,
+    uuid: String,
+) -> Result<(), String> {
+    with_vault_session(vaults, session, Some(&session_id), |target| {
+        target.ensure_tcato_allowed(&uuid)?;
+        target.autotype_context(&uuid).map(|_| ())
+    })?;
     let mut slot = target.0.lock().map_err(|_| "覆盖层状态已损坏".to_owned())?;
     *slot = Some((session_id, uuid));
     drop(slot);
@@ -71,7 +87,7 @@ pub(crate) fn open_tcato_overlay(
             return Ok(());
         }
         let window = tauri::WebviewWindowBuilder::new(
-            &app,
+            app,
             TCATO_WINDOW_LABEL,
             tauri::WebviewUrl::App("index.html".into()),
         )

@@ -750,9 +750,11 @@ fn keyboard_auto_type_global_round_trips_and_defaults_empty() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert_eq!(store.get().unwrap().keyboard.auto_type_global, "");
+    assert_eq!(store.get().unwrap().keyboard.tcato_summon_global, "");
 
     let mut config = AppConfig::default();
     config.keyboard.auto_type_global = "Ctrl+Shift+A".into();
+    config.keyboard.tcato_summon_global = "Ctrl+Shift+T".into();
     config
         .keyboard
         .shortcuts
@@ -761,11 +763,13 @@ fn keyboard_auto_type_global_round_trips_and_defaults_empty() {
 
     let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
     assert!(text.contains("\"autoTypeGlobal\": \"Ctrl+Shift+A\""));
+    assert!(text.contains("\"tcatoSummonGlobal\": \"Ctrl+Shift+T\""));
     assert!(text.contains("\"save\": \"Ctrl+S\""));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let again = reloaded.get().unwrap();
     assert_eq!(again.keyboard.auto_type_global, "Ctrl+Shift+A");
+    assert_eq!(again.keyboard.tcato_summon_global, "Ctrl+Shift+T");
     assert_eq!(
         again.keyboard.shortcuts.get("save"),
         Some(&"Ctrl+S".to_string())

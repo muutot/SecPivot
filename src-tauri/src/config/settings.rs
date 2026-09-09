@@ -497,6 +497,9 @@ pub struct KeyboardSettings {
     /// Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A").
     /// Empty means the hotkey is disabled.
     pub auto_type_global: String,
+    /// Global TCATO summon hotkey: opens the overlay for the entry uniquely
+    /// matching the foreground window. Empty means the hotkey is disabled.
+    pub tcato_summon_global: String,
     /// App-window shortcuts: action id → accelerator. An absent key or empty
     /// value means the action is unbound.
     pub shortcuts: HashMap<String, String>,

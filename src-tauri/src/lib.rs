@@ -48,26 +48,39 @@ const TRAY_LOCK_EVENT: &str = "tray-lock";
 // Global auto-type hotkey
 // ---------------------------------------------------------------------------
 
-/// Register (or replace) the global hotkey from `shortcut`; empty disables it.
+/// Register (or replace) the global hotkeys from `auto_type` (classic
+/// auto-type) and `tcato` (TCATO overlay summon); empty disables each.
 /// Failure to register is logged, never fatal: the app stays usable.
 #[cfg(desktop)]
-pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, shortcut: &str) {
+pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, auto_type: &str, tcato: &str) {
     let global = app.global_shortcut();
     if let Err(e) = global.unregister_all() {
         eprintln!("failed to unregister global shortcuts: {e}");
         return;
     }
-    let shortcut = shortcut.trim();
-    if shortcut.is_empty() {
-        return;
-    }
-    let result = global.on_shortcut(shortcut, |app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            handle_global_hotkey(app);
+    for (shortcut, is_tcato) in [(auto_type, false), (tcato, true)] {
+        let shortcut = shortcut.trim();
+        if shortcut.is_empty() {
+            continue;
         }
-    });
-    if let Err(e) = result {
-        eprintln!("failed to register global auto-type hotkey `{shortcut}`: {e}");
+        let kind = if is_tcato {
+            "tcato-summon"
+        } else {
+            "auto-type"
+        };
+        let handler: fn(&tauri::AppHandle) = if is_tcato {
+            handle_tcato_summon_hotkey
+        } else {
+            handle_global_hotkey
+        };
+        let result = global.on_shortcut(shortcut, move |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                handler(app);
+            }
+        });
+        if let Err(e) = result {
+            eprintln!("failed to register global {kind} hotkey `{shortcut}`: {e}");
+        }
     }
 }
 
@@ -106,6 +119,10 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
         };
         for candidate in &mut candidates {
             candidate.session_id.clone_from(&session_id);
+        }
+        if candidates.is_empty() {
+            eprintln!("global auto-type: no entry matches the foreground window");
+            return;
         }
         if candidates.len() > 1 {
             session.set_pending_autotype_window(Some(window_title.clone()));
@@ -162,6 +179,59 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
                 }
             });
         }
+    }
+}
+
+/// Open the TCATO overlay for the entry uniquely matching the focused
+/// window. Runs on the hotkey thread; failures are logged only. Zero or
+/// several matches summon nothing: the overlay needs one unambiguous target.
+#[cfg(desktop)]
+fn handle_tcato_summon_hotkey(app: &tauri::AppHandle) {
+    let Some(window_title) = platform::focus::foreground_window_title() else {
+        return;
+    };
+    let Some(session) = app.try_state::<Mutex<VaultSession>>() else {
+        return;
+    };
+    let Some(vaults) = app.try_state::<VaultSessions>() else {
+        return;
+    };
+    let Some(target) = app.try_state::<commands::TcatoTarget>() else {
+        return;
+    };
+    let (session_id, uuid) = {
+        let guard = match session.lock() {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let Some(session_id) = vaults.active_id() else {
+            return;
+        };
+        let candidates = match guard.autotype_match_candidates(&window_title) {
+            Ok(candidates) => candidates,
+            Err(e) => {
+                eprintln!("tcato summon: {e}");
+                return;
+            }
+        };
+        if candidates.len() != 1 {
+            eprintln!(
+                "tcato summon: need exactly one match, got {}",
+                candidates.len()
+            );
+            return;
+        }
+        (session_id, candidates[0].uuid.clone())
+    };
+    if let Err(e) = commands::tcato::open_tcato_overlay_for(
+        app,
+        vaults.inner(),
+        session.inner(),
+        target.inner(),
+        session_id,
+        uuid,
+    ) {
+        eprintln!("tcato summon: {e}");
     }
 }
 
@@ -258,7 +328,11 @@ pub fn run() {
             let store = ConfigStore::load_with_mode(project_dir, portable)?;
             let config = store.get()?;
             #[cfg(desktop)]
-            register_global_hotkey(app.handle(), &config.keyboard.auto_type_global);
+            register_global_hotkey(
+                app.handle(),
+                &config.keyboard.auto_type_global,
+                &config.keyboard.tcato_summon_global,
+            );
             #[cfg(desktop)]
             setup_tray(app.handle())?;
             app.manage(store);

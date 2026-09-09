@@ -285,6 +285,7 @@ export const DEFAULT_RPC_SETTINGS: RpcSettings = {
  *  accelerator until the user records a binding. */
 export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
   autoTypeGlobal: "",
+  tcatoSummonGlobal: "",
   shortcuts: {},
 };
 
@@ -974,6 +975,10 @@ export function normalizeSettings(
         : typeof legacyGlobal === "string" && legacyGlobal.trim()
           ? legacyGlobal.trim()
           : (fallback.keyboard?.autoTypeGlobal ?? ""),
+    tcatoSummonGlobal:
+      typeof k?.tcatoSummonGlobal === "string" && k.tcatoSummonGlobal.trim()
+        ? k.tcatoSummonGlobal.trim()
+        : (fallback.keyboard?.tcatoSummonGlobal ?? ""),
     shortcuts: {},
   };
   if (k && typeof k.shortcuts === "object" && k.shortcuts !== null) {

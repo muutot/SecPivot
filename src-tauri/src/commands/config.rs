@@ -55,7 +55,11 @@ pub(crate) fn set_config(
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
     #[cfg(desktop)]
-    register_global_hotkey(&app, &saved.keyboard.auto_type_global);
+    register_global_hotkey(
+        &app,
+        &saved.keyboard.auto_type_global,
+        &saved.keyboard.tcato_summon_global,
+    );
     sync_vault_matching(&app, &saved);
     #[cfg(desktop)]
     sync_bridge(&app, &saved);

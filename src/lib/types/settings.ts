@@ -251,6 +251,8 @@ export interface GeneralSettings {
 export interface KeyboardSettings {
   /** Global auto-type hotkey (accelerator syntax, e.g. "Ctrl+Shift+A"); empty disables it. */
   autoTypeGlobal: string;
+  /** Global TCATO summon hotkey: opens the overlay for the entry uniquely matching the foreground window; empty disables it. */
+  tcatoSummonGlobal: string;
   /** App-window shortcuts: action id → accelerator. An absent key or empty value means unbound. */
   shortcuts: Record<string, string>;
 }

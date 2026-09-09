@@ -37,7 +37,7 @@
     change("shortcuts", shortcuts);
   }
 
-  type RecordingTarget = "global" | string;
+  type RecordingTarget = "autoType" | "tcato" | string;
   let recordingTarget = $state<RecordingTarget | "">("");
   let recordingTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
@@ -90,7 +90,8 @@
     stopRecording();
     if (!target) return;
     const shortcut = pressed.join("+");
-    if (target === "global") change("autoTypeGlobal", shortcut);
+    if (target === "autoType") change("autoTypeGlobal", shortcut);
+    else if (target === "tcato") change("tcatoSummonGlobal", shortcut);
     else setBinding(target, shortcut);
   }
 
@@ -123,7 +124,7 @@
       </div>
     </div>
     <div class="shortcut-bindings">
-      {#if recordingTarget === "global"}
+      {#if recordingTarget === "autoType"}
         <div class="binding-chip recording">
           <kbd>按下快捷键…</kbd>
           <button
@@ -146,7 +147,7 @@
         <button
           type="button"
           class="binding-add"
-          onclick={() => startRecording("global")}
+          onclick={() => startRecording("autoType")}
           aria-label="重新录制">+</button
         >
       {:else}
@@ -154,7 +155,56 @@
         <button
           type="button"
           class="binding-add"
-          onclick={() => startRecording("global")}
+          onclick={() => startRecording("autoType")}
+          aria-label="录制快捷键">+</button
+        >
+      {/if}
+    </div>
+  </section>
+
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
+      <div>
+        <strong>全局 TCATO 呼出热键</strong>
+        <p>
+          按下快捷键时，为唯一匹配前台窗口的条目打开两通道填充覆盖层；无匹配或多匹配时不打开。未绑定时禁用。
+        </p>
+      </div>
+    </div>
+    <div class="shortcut-bindings">
+      {#if recordingTarget === "tcato"}
+        <div class="binding-chip recording">
+          <kbd>按下快捷键…</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={stopRecording}
+            aria-label="取消录制">&times;</button
+          >
+        </div>
+      {:else if keyboard.tcatoSummonGlobal}
+        <div class="binding-chip">
+          <kbd>{keyboard.tcatoSummonGlobal}</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={() => change("tcatoSummonGlobal", "")}
+            aria-label="移除绑定">&minus;</button
+          >
+        </div>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("tcato")}
+          aria-label="重新录制">+</button
+        >
+      {:else}
+        <span class="binding-disabled">未绑定</span>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("tcato")}
           aria-label="录制快捷键">+</button
         >
       {/if}
