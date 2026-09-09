@@ -370,9 +370,6 @@
     {#if readOnly}
       <span class="readonly-badge" title="连续保存失败，数据库已进入只读模式">只读</span>
     {/if}
-    {#if dirty}
-      <span class="dirty-badge">未保存</span>
-    {/if}
     {#if useFull}
       {#each fullOrder.filter((id) => (sidesMap[id] ?? (["newEntry", "save", "saveAs", "lock"].includes(id) ? "left" : "right")) === "right") as id (id)}
         {#if isVisible(id)}
@@ -766,14 +763,6 @@
     padding: 0;
   }
 
-  .dirty-badge {
-    padding: 2px 7px;
-    border: 1px solid color-mix(in srgb, var(--warning-color) 45%, transparent);
-    border-radius: 10px;
-    color: var(--warning-color);
-    font-size: var(--font-size-tiny, 10px);
-  }
-
   .readonly-badge {
     padding: 2px 7px;
     border: 1px solid color-mix(in srgb, var(--danger-color) 45%, transparent);
@@ -864,8 +853,7 @@
       justify-self: end;
     }
 
-    .toolbar-divider,
-    .dirty-badge {
+    .toolbar-divider {
       display: none;
     }
 
