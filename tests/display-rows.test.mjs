@@ -86,4 +86,15 @@ describe("buildDisplayRows", () => {
     assert.equal(separator.label, "gx");
     assert.equal(built.entryCount, 2);
   });
+
+  it("emits unique separator ids for DFS-blocked input", () => {
+    const built = buildDisplayRows(
+      [entry("e1", "g1"), entry("e2", "g2"), entry("e3", "g2")],
+      treeIndex(),
+      true,
+    );
+    const ids = built.rows.filter((r) => r.kind === "group").map((r) => r.id);
+    assert.deepEqual(ids, ["g1", "g2"]);
+    assert.equal(new Set(ids).size, ids.length);
+  });
 });

@@ -522,7 +522,7 @@
         role="presentation"
         aria-hidden="true"
       ></div>
-      {#each virtualRows as row, virtualIndex (row.kind === "group" ? `g-${row.id}-${virtualRange.start + virtualIndex}` : row.entry.uuid)}
+      {#each virtualRows as row, virtualIndex (row.kind === "group" ? `g-${row.id}` : row.entry.uuid)}
         {@const rowIndex = virtualRange.start + virtualIndex}
         {#if row.kind === "group"}
           <div

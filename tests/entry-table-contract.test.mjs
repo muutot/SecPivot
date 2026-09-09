@@ -5,9 +5,10 @@ import path from "node:path";
 
 // EntryTable prop contract: the always-on compact density removed the
 // `compact` toggle in favor of `entryRowHeight`, and `DisplayRow` has a
-// single source of truth in `utils/display-rows.ts`. These static guards
-// fail if either invariant regresses. (Separator key stability is covered
-// alongside the key fix; see the P3 performance batch.)
+// single source of truth in `utils/display-rows.ts`. Separator rows are keyed
+// by their stable group id (`g-${id}`) with no positional suffix, so DOM
+// nodes survive virtualization shifts. These static guards fail if any
+// invariant regresses.
 const root = new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const tablePath = path.join(root, "lib", "components", "EntryTable.svelte");
 
@@ -34,5 +35,16 @@ test("EntryTable reuses the shared DisplayRow type", async () => {
   assert.ok(
     text.includes("entryCount: number"),
     "EntryTable must take entryCount from the caller instead of re-filtering rows",
+  );
+});
+
+test("EntryTable keys separators by stable group id", async () => {
+  const text = await readFile(tablePath, "utf8");
+  const eachLine = text.split("\n").find((line) => line.includes("{#each virtualRows"));
+  assert.ok(eachLine, "EntryTable must render virtualRows with {#each}");
+  assert.ok(eachLine.includes("`g-${row.id}`"), "separator keys must use the stable group id");
+  assert.ok(
+    !eachLine.includes("virtualRange"),
+    "separator keys must not carry a positional suffix",
   );
 });

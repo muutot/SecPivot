@@ -20,7 +20,12 @@ export interface BuiltDisplayRows {
 /** Build the entry-list rows from page-sorted entries: flat entry rows unless
  *  several groups are present and separators are enabled, in which case each
  *  contiguous group block is preceded by a separator header labeled with the
- *  group's display path. Pure: reads only its arguments. */
+ *  group's display path. Pure: reads only its arguments.
+ *
+ *  Key contract: a separator's `id` is its group uuid, used verbatim as the
+ *  keyed-`each` key (`g-${id}`), so callers must pass DFS-blocked rows with
+ *  one block per group — the page's per-group sort guarantees this, keeping
+ *  separator keys both unique and stable across virtualization shifts. */
 export function buildDisplayRows(
   sortedEntries: ReadonlyArray<SortedEntryRow>,
   treeIndex: VaultTreeIndex | null | undefined,
