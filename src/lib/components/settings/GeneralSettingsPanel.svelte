@@ -353,7 +353,7 @@
 
     {#if general.theme === "custom"}
       <section class="setting-card">
-        <div class="setting-heading">
+        <div class="setting-heading" class:wrapped-heading={actionsWrapped}>
           <span class="setting-icon"><AppIcon name="settings" size={17} /></span>
           <div
             class="heading-inline custom-heading"
@@ -1055,6 +1055,10 @@
 
   .custom-heading.wrapped > div:first-child p {
     display: none;
+  }
+
+  .setting-heading.wrapped-heading {
+    align-items: flex-start;
   }
 
   .custom-actions {
