@@ -36,8 +36,10 @@ pub(crate) const TCATO_CLOSE_EVENT: &str = "tcato-overlay-close";
 #[cfg(desktop)]
 pub(crate) const TCATO_OPEN_EVENT: &str = "tcato-overlay-open";
 
-/// Open (or focus) the small always-on-top overlay that sends one channel of
-/// credentials to the window in focus without simulated key presses.
+/// Open (or re-show) the small always-on-top overlay that sends one channel of
+/// credentials to the window in focus without simulated key presses. Reopening
+/// never takes focus: the existing window is only shown, so the target
+/// application keeps keyboard focus (the overlay is `WS_EX_NOACTIVATE`).
 #[tauri::command]
 pub(crate) fn open_tcato_overlay(
     app: tauri::AppHandle,
@@ -63,7 +65,6 @@ pub(crate) fn open_tcato_overlay(
     {
         if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
             let _ = window.show();
-            let _ = window.set_focus();
             focus::apply_tcato_no_activate(&window);
             let _ = app.emit(TCATO_OPEN_EVENT, ());
             return Ok(());
