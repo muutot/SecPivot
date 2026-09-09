@@ -78,6 +78,40 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
   - **Worse when the panic unwinds through a held `MutexGuard<VaultSession>`: the mutex is poisoned** and every later command fails with "数据库锁已损坏" until restart. `download_favicons` did exactly this on remote vaults (`session.save()` under the lock at the end of an async command → remote `put` → `block_on` panic), reported as "图标下载失败：数据库锁已损坏". Any save inside an async command must use the `prepare_save` → `spawn_blocking(persist_save)` → `complete_save` split that `save_vault` uses; never call `session.save()`/`refresh_remote()` from an async command body.
 - **There is exactly one shared reqwest blocking client per process** (`shared_blocking_client` in `remote/mod.rs`, used by both S3 and WebDAV). It owns a tokio runtime that must never be torn down from an async context; keeping the original alive forever means per-storage clones never drop it.
 
+## Regression checklist
+
+Run `npm run regression`: it executes `npm run verify` first, then prints
+every `(manual)` item below for the operator to walk through. Keep this list
+as the single source of truth — the script parses this section, so edit the
+list here, not in the script.
+
+### Automated (covered by `npm run verify`)
+
+- [ ] (auto) Entry-list keyboard navigation skips separators and clamps page steps — `tests/entry-nav.test.mjs`
+- [ ] (auto) Group-separator rows, labels, and flat fallbacks — `tests/display-rows.test.mjs`
+- [ ] (auto) Virtual-window range math, clamps, and overscan — `tests/virtual-list.test.mjs`
+- [ ] (auto) EntryTable prop contract (`entryRowHeight`, no `compact`, shared `DisplayRow`) — `tests/entry-table-contract.test.mjs`
+- [ ] (auto) HIBP dialog states, never clean-after-cancel — `tests/hibp.test.mjs`
+- [ ] (auto) HIBP/favicons cancel flag, reset, waiter wake, mid-flight abort — `src-tauri/src/commands/tests.rs`
+- [ ] (auto) TCATO rejects recycle-bin entries — `src-tauri/src/vault/tests.rs`
+- [ ] (auto) Advanced-search predicate isolation and composition — `tests/entry-search.test.mjs`
+- [ ] (auto) Shortcut matching and dispatch — `tests/keyboard.test.mjs`
+- [ ] (auto) Session/view-epoch gating for stale async completions — `tests/session-state.test.mjs`
+- [ ] (auto) Context-menu builders and component contracts — `tests/menu-items.test.mjs`, `tests/component-contracts.test.mjs`
+- [ ] (auto) Settings round-trip and normalization parity (TS + Rust) — `tests/settings-persistence.test.mjs`, `src-tauri/src/config/tests.rs`
+- [ ] (auto) Rust vault engine: CRUD, sessions, merge, attachments, bridge/RPC — `cargo test` (see `src-tauri/src/vault/tests.rs`)
+
+### Manual (no automated coverage; verify by hand)
+
+- [ ] (manual) Rendered dark / light / custom theme check on the touched surface
+- [ ] (manual) Narrow-window check at 720px (and 420px for toolbar changes)
+- [ ] (manual) Lock flows: explicit lock, idle timeout, focus-loss, lock-after-action, clipboard cleared
+- [ ] (manual) Real-window TCATO: reopen keeps target focus, inject lands in the target app
+- [ ] (manual) HIBP cancel on a large vault: partial findings labeled, no false-clean message
+- [ ] (manual) Live S3 round-trip on MinIO when the transport or signing changed (mock-only green is not provider evidence)
+- [ ] (manual) Screen-capture guard on a real screen when the shield path changed (never `WDA_MONITOR`)
+- [ ] (manual) Draft-release artifact check after tagging: NSIS installer, portable ZIP, per-ABI APKs all present
+
 ## KeePassRPC write path (keepass crate)
 
 - **Group/entry lookups must be downward-only recursion.** `GroupRef` borrows the `Database`, so walking `parent()` chains back toward the root produces E0597/E0515 lifetime errors. Find groups/entries by descending the tree (see `find_rpc_group_id` / `find_rpc_entry_urls` in `vault.rs`); the root group itself is reachable via `db.root()` / `root_mut()`.
