@@ -195,7 +195,9 @@ const PAGE_CAP: usize = 512 * 1024;
 /// `None`. `cancel`/`flag` are the cooperative signal from `cancel_favicons`,
 /// checked before and across every await so "结束等待" aborts without waiting
 /// for the timeout.
-async fn fetch_bytes(
+///
+/// `pub(crate)` for the abort-path tests in `commands::tests`.
+pub(crate) async fn fetch_bytes(
     client: &reqwest::Client,
     url: &str,
     cap: usize,

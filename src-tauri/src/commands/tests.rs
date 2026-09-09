@@ -333,3 +333,105 @@ async fn hibp_range_check_aborts_promptly_on_cancel() {
         .unwrap();
     assert!(findings.is_empty());
 }
+
+/// Minimal byte server: serves one request with `body` after `delay`.
+fn spawn_bytes_server(
+    delay: std::time::Duration,
+    body: &'static [u8],
+) -> (String, std::thread::JoinHandle<()>) {
+    use std::io::Read;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut head = String::new();
+        let mut buf = [0u8; 1];
+        while !head.ends_with("\r\n\r\n") {
+            if stream.read(&mut buf).unwrap_or(0) == 0 {
+                break;
+            }
+            head.push(buf[0] as char);
+        }
+        std::thread::sleep(delay);
+        let _ = write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len(),
+        );
+        let _ = std::io::Write::write_all(&mut stream, body);
+    });
+    (format!("http://{addr}/icon.png"), handle)
+}
+
+const TEST_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01, 0x02, 0x03,
+];
+
+fn favicon_test_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn favicon_fetch_bytes_returns_none_when_precancelled() {
+    let cancel = FaviconCancel::default();
+    cancel.cancel();
+    let out = fetch_bytes(
+        &favicon_test_client(),
+        "http://127.0.0.1:9/unused.png",
+        512 * 1024,
+        cancel.notify.clone(),
+        cancel.flag.clone(),
+    )
+    .await;
+    assert!(out.is_none());
+}
+
+#[tokio::test]
+async fn favicon_fetch_bytes_returns_body_on_fast_response() {
+    let (url, handle) = spawn_bytes_server(std::time::Duration::from_millis(0), TEST_PNG);
+    let cancel = FaviconCancel::default();
+    let out = fetch_bytes(
+        &favicon_test_client(),
+        &url,
+        512 * 1024,
+        cancel.notify.clone(),
+        cancel.flag.clone(),
+    )
+    .await;
+    assert_eq!(out.unwrap(), TEST_PNG);
+    handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn favicon_fetch_bytes_aborts_slow_response_on_cancel() {
+    // The server never answers in time: the fetch must abort via cancel,
+    // not via the client timeout.
+    let (url, _server) = spawn_bytes_server(std::time::Duration::from_secs(30), TEST_PNG);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let cancel = FaviconCancel::default();
+    let run = fetch_bytes(
+        &client,
+        &url,
+        512 * 1024,
+        cancel.notify.clone(),
+        cancel.flag.clone(),
+    );
+    tokio::pin!(run);
+    // Let the request go out, then cancel mid-flight.
+    tokio::select! {
+        _ = &mut run => panic!("fetch must not finish before cancel"),
+        _ = tokio::time::sleep(std::time::Duration::from_millis(300)) => {
+            cancel.cancel();
+        }
+    }
+    let out = tokio::time::timeout(std::time::Duration::from_secs(10), run)
+        .await
+        .expect("cancelled fetch must abort promptly");
+    assert!(out.is_none());
+}
