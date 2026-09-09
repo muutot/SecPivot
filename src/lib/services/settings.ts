@@ -307,6 +307,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 
 const hexColor = /^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/;
 
+/** Full `#RRGGBB` / `#RRGGBBAA` hex (also mirrored by the Rust `valid_hex`). */
+export function isHexColor(value: string): boolean {
+  return hexColor.test(value);
+}
+
 function clampInt(value: number, min: number, max: number, fallback: number): number {
   if (typeof value !== "number" || Number.isNaN(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -315,7 +320,7 @@ function clampInt(value: number, min: number, max: number, fallback: number): nu
 function validHex(value: string, fallback: string): string {
   // An empty string is kept as-is so cleared inputs stay clear while the
   // user types a replacement (only non-empty invalid values fall back).
-  return typeof value === "string" && (value === "" || hexColor.test(value)) ? value : fallback;
+  return typeof value === "string" && (value === "" || isHexColor(value)) ? value : fallback;
 }
 
 /** Trim, dedup (keep first occurrence), and cap the recent-files list. */

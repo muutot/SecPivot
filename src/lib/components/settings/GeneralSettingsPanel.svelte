@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appSettings } from "$lib/services/settings";
+  import { appSettings, isHexColor } from "$lib/services/settings";
   import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -59,6 +59,29 @@
 
   function change<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]): void {
     appSettings.updateGeneral(key, value);
+  }
+
+  /** Hex draft for the separator color field: invalid text stays visible with
+   *  a warning but never reaches the store, so a partial `#ab` can neither
+   *  persist nor silently reset on restart. */
+  let separatorColorDraft = $state<string | null>(null);
+  /** Text shown in the hex field: the draft while editing, else the stored value. */
+  const separatorColorShown = $derived(separatorColorDraft ?? general.groupSeparatorColor ?? "");
+  const separatorColorInvalid = $derived(
+    separatorColorDraft !== null && separatorColorDraft !== "" && !isHexColor(separatorColorDraft),
+  );
+
+  /** Keep invalid text in the field but persist only empty/valid values. */
+  function commitSeparatorColor(raw: string): void {
+    separatorColorDraft = raw;
+    if (raw === "" || isHexColor(raw)) {
+      change("groupSeparatorColor", raw);
+    }
+  }
+
+  function clearSeparatorColor(): void {
+    separatorColorDraft = null;
+    change("groupSeparatorColor", "");
   }
 
   function updateColor(key: keyof ThemeColors, value: string): void {
@@ -532,25 +555,37 @@
             <input
               type="color"
               class="color-input"
-              value={(general.groupSeparatorColor && general.groupSeparatorColor.length >= 7
+              aria-label="分隔线字体颜色"
+              title="分隔线字体颜色"
+              value={general.groupSeparatorColor && general.groupSeparatorColor.length >= 7
                 ? general.groupSeparatorColor.slice(0, 7)
-                : "#999999")}
-              oninput={(e) => change("groupSeparatorColor" as never, e.currentTarget.value as never)}
+                : "#999999"}
+              oninput={(e) => commitSeparatorColor(e.currentTarget.value)}
             />
             <div class="color-hex-input">
               <TextField
                 size="control"
                 spellcheck={false}
-                value={general.groupSeparatorColor ?? ""}
+                value={separatorColorShown}
                 placeholder="留空默认"
-                oninput={(e) => change("groupSeparatorColor" as never, e.currentTarget.value as never)}
+                ariaLabel="分隔线字体颜色"
+                invalid={separatorColorInvalid}
+                oninput={(e) => commitSeparatorColor(e.currentTarget.value)}
               />
             </div>
             {#if general.groupSeparatorColor}
-              <Button variant="action" title="清除自定义颜色" ariaLabel="清除" onclick={() => change("groupSeparatorColor" as never, "" as never)}>清除</Button>
+              <Button
+                variant="action"
+                title="清除自定义颜色"
+                ariaLabel="清除"
+                onclick={clearSeparatorColor}>清除</Button
+              >
             {/if}
           </div>
         </div>
+        {#if separatorColorInvalid}
+          <p class="settings-note warn">颜色格式应为 #RRGGBB 或 #RRGGBBAA（未保存）。</p>
+        {/if}
       </section>
     {/if}
   {/if}
