@@ -616,8 +616,7 @@
   });
 
   type DisplayRow =
-    | { kind: "group"; id: string; label: string }
-    | { kind: "entry"; entry: VaultEntry };
+    { kind: "group"; id: string; label: string } | { kind: "entry"; entry: VaultEntry };
 
   const displayRows = $derived.by((): DisplayRow[] => {
     if (sortedEntries.length === 0 || !treeIndex) {

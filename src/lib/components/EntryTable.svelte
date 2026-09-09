@@ -26,8 +26,7 @@
   }
 
   export type DisplayRow =
-    | { kind: "group"; id: string; label: string }
-    | { kind: "entry"; entry: VaultEntry };
+    { kind: "group"; id: string; label: string } | { kind: "entry"; entry: VaultEntry };
 
   interface Props {
     rows: DisplayRow[];
@@ -535,7 +534,9 @@
             <span
               class="group-separator-line"
               aria-hidden="true"
-              style:background={separatorColor ? `color-mix(in srgb, ${separatorColor} 35%, transparent)` : undefined}
+              style:background={separatorColor
+                ? `color-mix(in srgb, ${separatorColor} 35%, transparent)`
+                : undefined}
             ></span>
           </div>
         {:else}
@@ -568,133 +569,133 @@
             oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
             onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
           >
-          {#if row.entry.color}
-            <span class="entry-row-color-bar" aria-hidden="true"></span>
-          {/if}
-          <span class="entry-row-icon-cell">
-            <span class="entry-row-icon"
-              >{#if customIconUrl(row.entry)}
-                <img
-                  class="entry-row-img"
-                  src={customIconUrl(row.entry)}
-                  alt=""
-                  draggable="false"
-                />
-              {:else}
-                <AppIcon name={entryIconName(row.entry)} size={16} />
-              {/if}</span
-            >
-          </span>
-          <span class="mobile-entry-summary">
-            <span class="entry-row-main">
-              <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                  <span class="expired-flag">已过期</span>
+            {#if row.entry.color}
+              <span class="entry-row-color-bar" aria-hidden="true"></span>
+            {/if}
+            <span class="entry-row-icon-cell">
+              <span class="entry-row-icon"
+                >{#if customIconUrl(row.entry)}
+                  <img
+                    class="entry-row-img"
+                    src={customIconUrl(row.entry)}
+                    alt=""
+                    draggable="false"
+                  />
+                {:else}
+                  <AppIcon name={entryIconName(row.entry)} size={16} />
                 {/if}</span
               >
-              {#if showDescriptions}
-                {@const description = formatEntryDescription(row.entry)}
-                {#if description}
-                  <span class="entry-row-sub">{description}</span>
-                {/if}
-              {/if}
             </span>
-          </span>
-          {#each visibleCols as col (col.id)}
-            {#if col.id === "title"}
-              <span class="entry-row-col col-title">
-                <div class="entry-row-main">
-                  <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                    >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                      <span class="expired-flag">已过期</span>
-                    {/if}</span
-                  >
-                  {#if showDescriptions}
-                    {@const description = formatEntryDescription(row.entry)}
-                    {#if description}
-                      <span class="entry-row-sub">{description}</span>
-                    {/if}
+            <span class="mobile-entry-summary">
+              <span class="entry-row-main">
+                <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
+                  >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                    <span class="expired-flag">已过期</span>
+                  {/if}</span
+                >
+                {#if showDescriptions}
+                  {@const description = formatEntryDescription(row.entry)}
+                  {#if description}
+                    <span class="entry-row-sub">{description}</span>
                   {/if}
-                </div>
-              </span>
-            {:else if col.id === "totp"}
-              <span class="entry-row-col col-totp">
-                {#if row.entry.hasTotp}
-                  <EntryTotpBadge entryUuid={row.entry.uuid} />
                 {/if}
               </span>
-            {:else if col.id === "password"}
-              {@const revealed = revealedPassword?.uuid === row.entry.uuid}
-              <span
-                class="entry-row-col col-password"
-                class:col-revealable={row.entry.hasPassword || row.entry.password}
-                class:col-revealed={revealed}
-                role="button"
-                tabindex="0"
-                title={revealed ? "点击隐藏" : "点击显示密码"}
+            </span>
+            {#each visibleCols as col (col.id)}
+              {#if col.id === "title"}
+                <span class="entry-row-col col-title">
+                  <div class="entry-row-main">
+                    <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
+                      >{row.entry.title || "未命名条目"}{#if row.entry.expired}
+                        <span class="expired-flag">已过期</span>
+                      {/if}</span
+                    >
+                    {#if showDescriptions}
+                      {@const description = formatEntryDescription(row.entry)}
+                      {#if description}
+                        <span class="entry-row-sub">{description}</span>
+                      {/if}
+                    {/if}
+                  </div>
+                </span>
+              {:else if col.id === "totp"}
+                <span class="entry-row-col col-totp">
+                  {#if row.entry.hasTotp}
+                    <EntryTotpBadge entryUuid={row.entry.uuid} />
+                  {/if}
+                </span>
+              {:else if col.id === "password"}
+                {@const revealed = revealedPassword?.uuid === row.entry.uuid}
+                <span
+                  class="entry-row-col col-password"
+                  class:col-revealable={row.entry.hasPassword || row.entry.password}
+                  class:col-revealed={revealed}
+                  role="button"
+                  tabindex="0"
+                  title={revealed ? "点击隐藏" : "点击显示密码"}
+                  onclick={(event) => {
+                    event.stopPropagation();
+                    void toggleRevealPassword(row.entry);
+                  }}
+                  onkeydown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void toggleRevealPassword(row.entry);
+                  }}
+                  onmouseleave={() => {
+                    if (revealed) hideRevealedPassword();
+                  }}
+                >
+                  <span class="entry-row-col-text">
+                    {revealed
+                      ? revealedPassword?.value
+                      : row.entry.hasPassword || row.entry.password
+                        ? "••••••"
+                        : ""}
+                  </span>
+                </span>
+              {:else}
+                {@const text = colText(row.entry, col.id)}
+                <span class="entry-row-col" title={text || undefined}>
+                  <span class="entry-row-col-text">{text}</span>
+                </span>
+              {/if}
+            {/each}
+            <div class="entry-row-actions">
+              <button
+                class="row-btn"
+                class:star-active={row.entry.favorite}
+                title={row.entry.favorite ? "取消收藏" : "收藏条目"}
                 onclick={(event) => {
                   event.stopPropagation();
-                  void toggleRevealPassword(row.entry);
-                }}
-                onkeydown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  void toggleRevealPassword(row.entry);
-                }}
-                onmouseleave={() => {
-                  if (revealed) hideRevealedPassword();
+                  onfavorite(row.entry);
                 }}
               >
-                <span class="entry-row-col-text">
-                  {revealed
-                    ? revealedPassword?.value
-                    : row.entry.hasPassword || row.entry.password
-                      ? "••••••"
-                      : ""}
-                </span>
-              </span>
-            {:else}
-              {@const text = colText(row.entry, col.id)}
-              <span class="entry-row-col" title={text || undefined}>
-                <span class="entry-row-col-text">{text}</span>
-              </span>
-            {/if}
-          {/each}
-          <div class="entry-row-actions">
-            <button
-              class="row-btn"
-              class:star-active={row.entry.favorite}
-              title={row.entry.favorite ? "取消收藏" : "收藏条目"}
-              onclick={(event) => {
-                event.stopPropagation();
-                onfavorite(row.entry);
-              }}
-            >
-              <AppIcon name="star" size={12} />
-            </button>
-            <button
-              class="row-btn"
-              title="复制用户名"
-              onclick={(event) => {
-                event.stopPropagation();
-                oncopyusername(row.entry);
-              }}
-            >
-              <AppIcon name="user" size={12} />
-            </button>
-            <button
-              class="row-btn"
-              title="复制密码"
-              onclick={(event) => {
-                event.stopPropagation();
-                oncopypassword(row.entry);
-              }}
-            >
-              <AppIcon name="copy" size={12} />
-            </button>
+                <AppIcon name="star" size={12} />
+              </button>
+              <button
+                class="row-btn"
+                title="复制用户名"
+                onclick={(event) => {
+                  event.stopPropagation();
+                  oncopyusername(row.entry);
+                }}
+              >
+                <AppIcon name="user" size={12} />
+              </button>
+              <button
+                class="row-btn"
+                title="复制密码"
+                onclick={(event) => {
+                  event.stopPropagation();
+                  oncopypassword(row.entry);
+                }}
+              >
+                <AppIcon name="copy" size={12} />
+              </button>
+            </div>
           </div>
-        </div>
         {/if}
       {/each}
       <div
