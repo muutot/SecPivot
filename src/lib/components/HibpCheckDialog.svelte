@@ -2,6 +2,7 @@
   import { listen } from "@tauri-apps/api/event";
   import type { BreachFinding, HibpProgress } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
+  import { hibpResultState } from "$lib/utils/hibp";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
   import Button from "$lib/components/templates/action/Button.svelte";
@@ -20,7 +21,20 @@
   let findings = $state<BreachFinding[]>([]);
   let error = $state("");
   let progress = $state<HibpProgress | null>(null);
+  /** Set when the user clicks 结束等待: the resolved findings are partial, so
+   *  the dialog must not present the run as a completed clean check. */
+  let cancelled = $state(false);
   const sessionId = vault.getActiveSessionId();
+
+  const resultState = $derived(
+    hibpResultState({
+      started,
+      running,
+      failed: error !== "",
+      findingCount: findings.length,
+      cancelled,
+    }),
+  );
 
   const progressPct = $derived(
     progress && progress.total > 0
@@ -33,6 +47,7 @@
     running = true;
     error = "";
     started = true;
+    cancelled = false;
     progress = { sessionId, done: 0, total: 0 };
     const unlisten = await listen<HibpProgress>("hibp-progress", (e) => {
       if (e.payload.sessionId !== sessionId) return;
@@ -55,6 +70,7 @@
   }
 
   function cancel(): void {
+    cancelled = true;
     void vault.cancelHibp();
   }
 </script>
@@ -90,12 +106,18 @@
           style:--progress-pct={progressPct}
         ></div>
       </div>
-    {:else if error}
+    {:else if resultState === "error"}
       <p class="note error">{error}</p>
-    {:else if findings.length === 0}
+    {:else if resultState === "cancelled-clean"}
+      <p class="note">已取消检查：结果不完整，不能作为无泄露结论。</p>
+    {:else if resultState === "clean"}
       <p class="note success">未发现密码出现在已知泄露数据中。</p>
     {:else}
-      <p class="note">发现 {findings.length} 个密码出现在已知泄露中（按出现次数排序）：</p>
+      {#if resultState === "cancelled-hits"}
+        <p class="note">已取消检查：以下为已收集到的部分结果。</p>
+      {:else}
+        <p class="note">发现 {findings.length} 个密码出现在已知泄露中（按出现次数排序）：</p>
+      {/if}
       <ul class="list">
         {#each findings as finding (finding.uuid)}
           <li class="row">
