@@ -517,6 +517,42 @@
     {:else if general.theme === "light"}
       {@render presetPaletteCard("浅色配色", "内置默认配色（只读）", LIGHT_THEME_COLORS)}
     {/if}
+
+    {#if general.showGroupSeparators ?? true}
+      <section class="setting-card">
+        <div class="setting-row">
+          <div class="setting-heading">
+            <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
+            <div>
+              <strong>分隔线字体颜色</strong>
+              <p>自定义子分组标题的文字颜色，留空使用默认弱化文本色</p>
+            </div>
+          </div>
+          <div class="color-control">
+            <input
+              type="color"
+              class="color-input"
+              value={(general.groupSeparatorColor && general.groupSeparatorColor.length >= 7
+                ? general.groupSeparatorColor.slice(0, 7)
+                : "#999999")}
+              oninput={(e) => change("groupSeparatorColor" as never, e.currentTarget.value as never)}
+            />
+            <div class="color-hex-input">
+              <TextField
+                size="control"
+                spellcheck={false}
+                value={general.groupSeparatorColor ?? ""}
+                placeholder="留空默认"
+                oninput={(e) => change("groupSeparatorColor" as never, e.currentTarget.value as never)}
+              />
+            </div>
+            {#if general.groupSeparatorColor}
+              <Button variant="action" title="清除自定义颜色" ariaLabel="清除" onclick={() => change("groupSeparatorColor" as never, "" as never)}>清除</Button>
+            {/if}
+          </div>
+        </div>
+      </section>
+    {/if}
   {/if}
 
   {#if section === "display"}
@@ -568,6 +604,15 @@
       checked={s.general.mobileColumns}
       ariaLabel="移动端显示列"
       onchange={(checked) => change("mobileColumns", checked)}
+    />
+
+    <SettingToggleCard
+      icon="grid"
+      label="显示子分组分隔线"
+      description="在条目列表中为每个子分组添加分隔标题，排序仅在组内进行"
+      checked={general.showGroupSeparators ?? true}
+      ariaLabel="显示子分组分隔线"
+      onchange={(checked) => change("showGroupSeparators" as never, checked as never)}
     />
 
     <SettingRangeCard

@@ -240,6 +240,10 @@ export interface GeneralSettings {
   entryColumns: EntryColumnState[];
   /** Named advanced-search queries. */
   savedSearches: SavedSearch[];
+  /** KeepPass-style subgroup separator line above each group's entries (default on). */
+  showGroupSeparators: boolean;
+  /** Font color for the subgroup separator line (hex, empty = --text-muted). */
+  groupSeparatorColor: string;
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

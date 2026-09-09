@@ -211,6 +211,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   showDetailOnSelect: true,
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
+  showGroupSeparators: true,
+  groupSeparatorColor: "",
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -893,6 +895,18 @@ export function normalizeSettings(
       typeof (g as unknown as Record<string, unknown>).showDetailOnSelect === "boolean"
         ? ((g as unknown as Record<string, unknown>).showDetailOnSelect as boolean)
         : fallback.general.showDetailOnSelect,
+    showGroupSeparators:
+      typeof (g as unknown as Record<string, unknown>).showGroupSeparators === "boolean"
+        ? ((g as unknown as Record<string, unknown>).showGroupSeparators as boolean)
+        : (fallback.general.showGroupSeparators ?? true),
+    groupSeparatorColor: validHex(
+      String(
+        (g as unknown as Record<string, unknown>).groupSeparatorColor ??
+          fallback.general.groupSeparatorColor ??
+          "",
+      ),
+      fallback.general.groupSeparatorColor ?? "",
+    ),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles: normalizeRecentFiles(g.recentFiles),
     language:

@@ -530,17 +530,121 @@
   const sortedEntries = $derived.by(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     const col = sortCol;
-    const keyedEntries = filteredEntries.map((row) => ({
-      row,
-      favorite: Number(row.entry.favorite),
-      key: columns.sortKeyFor(row.entry, col),
-    }));
-    keyedEntries.sort((a, b) => {
-      const fav = b.favorite - a.favorite;
-      if (fav !== 0) return fav;
-      return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
-    });
-    return keyedEntries.map(({ row }) => row);
+    if (filteredEntries.length === 0) return [];
+    // When group separators are disabled, fall back to global flat sorting.
+    const grouped = settings.general.showGroupSeparators ?? true;
+    if (!grouped) {
+      const keyed = filteredEntries.map((row) => ({
+        row,
+        favorite: Number(row.entry.favorite),
+        key: columns.sortKeyFor(row.entry, col),
+      }));
+      keyed.sort((a, b) => {
+        const fav = b.favorite - a.favorite;
+        if (fav !== 0) return fav;
+        return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
+      });
+      return keyed.map(({ row }) => row);
+    }
+    // KeePass-style per-group sorting: entries are grouped by their direct group and sorted only within that group, preserving group DFS order.
+    if (!treeIndex || selectedSubtree.length === 0) {
+      const keyed = filteredEntries.map((row) => ({
+        row,
+        favorite: Number(row.entry.favorite),
+        key: columns.sortKeyFor(row.entry, col),
+      }));
+      keyed.sort((a, b) => {
+        const fav = b.favorite - a.favorite;
+        if (fav !== 0) return fav;
+        return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
+      });
+      return keyed.map(({ row }) => row);
+    }
+    const byGroup = new Map<string, typeof filteredEntries>();
+    for (const r of filteredEntries) {
+      const g = r.entry.groupUuid;
+      const arr = byGroup.get(g);
+      if (arr) arr.push(r);
+      else byGroup.set(g, [r]);
+    }
+    if (byGroup.size <= 1) {
+      const keyed = filteredEntries.map((row) => ({
+        row,
+        favorite: Number(row.entry.favorite),
+        key: columns.sortKeyFor(row.entry, col),
+      }));
+      keyed.sort((a, b) => {
+        const fav = b.favorite - a.favorite;
+        if (fav !== 0) return fav;
+        return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
+      });
+      return keyed.map(({ row }) => row);
+    }
+    const out: typeof filteredEntries = [];
+    const seen = new Set<string>();
+    for (const g of selectedSubtree) {
+      const entries = byGroup.get(g.uuid);
+      if (!entries) continue;
+      seen.add(g.uuid);
+      const keyed = entries.map((row) => ({
+        row,
+        favorite: Number(row.entry.favorite),
+        key: columns.sortKeyFor(row.entry, col),
+      }));
+      keyed.sort((a, b) => {
+        const fav = b.favorite - a.favorite;
+        if (fav !== 0) return fav;
+        return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
+      });
+      for (const k of keyed) out.push(k.row);
+    }
+    for (const [g, entries] of byGroup) {
+      if (seen.has(g)) continue;
+      const keyed = entries.map((row) => ({
+        row,
+        favorite: Number(row.entry.favorite),
+        key: columns.sortKeyFor(row.entry, col),
+      }));
+      keyed.sort((a, b) => {
+        const fav = b.favorite - a.favorite;
+        if (fav !== 0) return fav;
+        return ENTRY_SORT_COLLATOR.compare(a.key, b.key) * dir;
+      });
+      for (const k of keyed) out.push(k.row);
+    }
+    return out;
+  });
+
+  type DisplayRow =
+    | { kind: "group"; id: string; label: string }
+    | { kind: "entry"; entry: VaultEntry };
+
+  const displayRows = $derived.by((): DisplayRow[] => {
+    if (sortedEntries.length === 0 || !treeIndex) {
+      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
+    }
+    if (!(settings.general.showGroupSeparators ?? true)) {
+      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
+    }
+    const distinct = new Set(sortedEntries.map((r) => r.entry.groupUuid));
+    if (distinct.size <= 1) {
+      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
+    }
+    const rows: DisplayRow[] = [];
+    let cur: string | null = null;
+    for (const row of sortedEntries) {
+      const g = row.entry.groupUuid;
+      if (g !== cur) {
+        cur = g;
+        const grp = treeIndex.groupByUuid.get(g);
+        const path = treeIndex.pathByGroupUuid.get(g) ?? grp?.name ?? g;
+        const raw = path || grp?.name || g;
+        const label = raw.replaceAll(" / ", " → ");
+        rows.push({ kind: "group", id: g, label });
+      }
+      rows.push({ kind: "entry", entry: row.entry });
+    }
+    return rows;
   });
 
   /** Selection model (single/shift-range/ctrl-toggle) lives in the extracted
@@ -1671,7 +1775,7 @@
 
         <section class="entry-panel">
           <EntryTable
-            rows={sortedEntries}
+            rows={displayRows}
             visibleCols={columns.visibleCols}
             entryGridCols={columns.entryGridCols}
             {sortCol}
@@ -1681,6 +1785,7 @@
             entryRowHeight={groupDensity.entryRowHeight}
             searchActive={Boolean(search)}
             mobileColumns={settings.general.mobileColumns}
+            separatorColor={settings.general.groupSeparatorColor ?? ""}
             {customIconUrl}
             {entryIconName}
             colText={columns.columnText}

@@ -18,8 +18,12 @@
     entry: VaultEntry;
   }
 
+  export type DisplayRow =
+    | { kind: "group"; id: string; label: string }
+    | { kind: "entry"; entry: VaultEntry };
+
   interface Props {
-    rows: EntryTableRow[];
+    rows: DisplayRow[];
     visibleCols: EntryTableColumn[];
     entryGridCols: string;
     sortCol: string;
@@ -33,6 +37,8 @@
     searchActive: boolean;
     /** Render the full column grid on narrow screens too (user opt-in). */
     mobileColumns?: boolean;
+    /** Custom font color for group separator lines (hex, empty = theme default). */
+    separatorColor?: string;
     customIconUrl: (entry: VaultEntry) => string | undefined;
     entryIconName: (entry: VaultEntry) => IconName;
     colText: (entry: VaultEntry, colId: string) => string;
@@ -66,6 +72,7 @@
     entryRowHeight,
     searchActive,
     mobileColumns = false,
+    separatorColor = "",
     customIconUrl,
     entryIconName,
     colText,
@@ -175,6 +182,7 @@
   );
   const virtualRows = $derived(rows.slice(virtualRange.start, virtualRange.end));
   const topSpacerHeight = $derived(virtualRange.start * rowHeight);
+  const entryCount = $derived(rows.filter((r) => (r as { kind: string }).kind === "entry").length);
   const bottomSpacerHeight = $derived((rows.length - virtualRange.end) * rowHeight);
 
   onMount(() => {
@@ -308,6 +316,38 @@
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   }
 
+  function isGroupRow(row: (typeof rows)[number] | undefined): boolean {
+    return !!row && (row as { kind: string }).kind === "group";
+  }
+
+  function findNextEntryIndex(from: number, step: number): number | null {
+    let idx = from;
+    while (idx >= 0 && idx < rows.length) {
+      const row = rows[idx];
+      if (row && (row as { kind: string }).kind === "entry") return idx;
+      idx += step;
+    }
+    return null;
+  }
+
+  function findNearestEntryIndex(target: number, direction: 1 | -1): number | null {
+    if (target < 0 || target >= rows.length) return null;
+    const row = rows[target];
+    if (row && (row as { kind: string }).kind === "entry") return target;
+    // header: scan in direction, fallback to opposite
+    let idx = target + direction;
+    while (idx >= 0 && idx < rows.length) {
+      if ((rows[idx] as { kind: string }).kind === "entry") return idx;
+      idx += direction;
+    }
+    idx = target - direction;
+    while (idx >= 0 && idx < rows.length) {
+      if ((rows[idx] as { kind: string }).kind === "entry") return idx;
+      idx -= direction;
+    }
+    return null;
+  }
+
   function handleListScroll(event: Event): void {
     const container = event.currentTarget as HTMLDivElement;
     const nextScrollTop = container.scrollTop;
@@ -325,18 +365,22 @@
       Number.isInteger(activeIndex) &&
       (activeIndex < nextRange.start || activeIndex >= nextRange.end)
     ) {
-      lastFocusedIndex = Math.min(
-        rows.length - 1,
-        Math.max(0, Math.floor(nextScrollTop / rowHeight)),
+      const fallback = findNearestEntryIndex(
+        Math.min(rows.length - 1, Math.max(0, Math.floor(nextScrollTop / rowHeight))),
+        1,
       );
+      lastFocusedIndex = fallback ?? activeIndex;
       entryListEl?.focus({ preventScroll: true });
     }
     scrollTop = nextScrollTop;
   }
 
-  async function focusRowAt(index: number): Promise<void> {
+  async function focusRowAt(index: number, direction: 1 | -1 = 1): Promise<void> {
     if (rows.length === 0 || !entryTableEl) return;
-    const targetIndex = Math.max(0, Math.min(rows.length - 1, index));
+    let targetIndex = Math.max(0, Math.min(rows.length - 1, index));
+    const resolved = findNearestEntryIndex(targetIndex, direction);
+    if (resolved === null) return;
+    targetIndex = resolved;
     const itemTop = targetIndex * rowHeight;
     const itemBottom = itemTop + rowHeight;
     const visibleHeight = viewportHeight || entryTableEl.clientHeight;
@@ -366,16 +410,20 @@
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      void focusRowAt(Math.min(rows.length - 1, lastFocusedIndex + 1));
+      const next = findNextEntryIndex(lastFocusedIndex + 1, 1);
+      if (next !== null) void focusRowAt(next, 1);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      void focusRowAt(Math.max(0, lastFocusedIndex - 1));
+      const prev = findNextEntryIndex(lastFocusedIndex - 1, -1);
+      if (prev !== null) void focusRowAt(prev, -1);
     } else if (event.key === "Home") {
       event.preventDefault();
-      void focusRowAt(0);
+      const first = findNextEntryIndex(0, 1);
+      if (first !== null) void focusRowAt(first, 1);
     } else if (event.key === "End") {
       event.preventDefault();
-      void focusRowAt(rows.length - 1);
+      const last = findNextEntryIndex(rows.length - 1, -1);
+      if (last !== null) void focusRowAt(last, -1);
     }
   }
 
@@ -387,17 +435,27 @@
 
     const pageStep = Math.max(1, Math.floor(viewportHeight / rowHeight) - 1);
     let targetIndex: number | null = null;
-    if (event.key === "ArrowDown") targetIndex = index + 1;
-    else if (event.key === "ArrowUp") targetIndex = index - 1;
-    else if (event.key === "Home") targetIndex = 0;
-    else if (event.key === "End") targetIndex = rows.length - 1;
-    else if (event.key === "PageDown") targetIndex = index + pageStep;
-    else if (event.key === "PageUp") targetIndex = index - pageStep;
+    if (event.key === "ArrowDown") {
+      targetIndex = findNextEntryIndex(index + 1, 1);
+    } else if (event.key === "ArrowUp") {
+      targetIndex = findNextEntryIndex(index - 1, -1);
+    } else if (event.key === "Home") {
+      targetIndex = findNextEntryIndex(0, 1);
+    } else if (event.key === "End") {
+      targetIndex = findNextEntryIndex(rows.length - 1, -1);
+    } else if (event.key === "PageDown") {
+      // page step is in rows, but we need to land on an entry
+      const approx = index + pageStep;
+      targetIndex = findNearestEntryIndex(Math.min(rows.length - 1, approx), 1) ?? findNextEntryIndex(approx, -1);
+    } else if (event.key === "PageUp") {
+      const approx = index - pageStep;
+      targetIndex = findNearestEntryIndex(Math.max(0, approx), -1) ?? findNextEntryIndex(approx, 1);
+    }
 
     if (targetIndex !== null) {
       event.preventDefault();
       event.stopPropagation();
-      void focusRowAt(targetIndex);
+      void focusRowAt(targetIndex, targetIndex > index ? 1 : -1);
     }
   }
 </script>
@@ -472,7 +530,7 @@
     onpointercancel={clearPress}
     onkeydown={handleListKeydown}
   >
-    {#if rows.length === 0}
+    {#if entryCount === 0}
       <div class="empty-state">
         <span class="empty-icon"><AppIcon name="key" size={20} /></span>
         <strong>{searchActive ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
@@ -485,37 +543,53 @@
         role="presentation"
         aria-hidden="true"
       ></div>
-      {#each virtualRows as row, virtualIndex (row.entry.uuid)}
+      {#each virtualRows as row, virtualIndex (row.kind === "group" ? `g-${row.id}-${virtualRange.start + virtualIndex}` : row.entry.uuid)}
         {@const rowIndex = virtualRange.start + virtualIndex}
-        <div
-          class="entry-row"
-          class:selected={selectedUuids.has(row.entry.uuid)}
-          class:expired-row={row.entry.expired}
-          style:--row-color={row.entry.color ?? "transparent"}
-          style:--row-fg={row.entry.foregroundColor}
-          data-entry-index={rowIndex}
-          role="option"
-          aria-selected={selectedUuids.has(row.entry.uuid)}
-          aria-posinset={rowIndex + 1}
-          aria-setsize={rows.length}
-          tabindex="0"
-          draggable="true"
-          onfocus={() => (lastFocusedIndex = rowIndex)}
-          ondragstart={(event) => startEntryDrag(event, row.entry)}
-          onpointerdown={(e) => startPress(e, (ev) => onentrycontextmenu(ev, row.entry))}
-          onpointermove={movePress}
-          onpointerup={clearPress}
-          onpointercancel={clearPress}
-          onclick={(event) => {
-            if (suppressClick) {
-              suppressClick = false;
-              return;
-            }
-            onrowclick(event, row.entry);
-          }}
-          oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
-          onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
-        >
+        {#if row.kind === "group"}
+          <div
+            class="group-separator"
+            role="separator"
+            data-group-index={rowIndex}
+            aria-label={row.label}
+            style:color={separatorColor || undefined}
+          >
+            <span class="group-separator-label">{row.label}</span>
+            <span
+              class="group-separator-line"
+              aria-hidden="true"
+              style:background={separatorColor ? `color-mix(in srgb, ${separatorColor} 35%, transparent)` : undefined}
+            ></span>
+          </div>
+        {:else}
+          <div
+            class="entry-row"
+            class:selected={selectedUuids.has(row.entry.uuid)}
+            class:expired-row={row.entry.expired}
+            style:--row-color={row.entry.color ?? "transparent"}
+            style:--row-fg={row.entry.foregroundColor}
+            data-entry-index={rowIndex}
+            role="option"
+            aria-selected={selectedUuids.has(row.entry.uuid)}
+            aria-posinset={rowIndex + 1}
+            aria-setsize={rows.length}
+            tabindex="0"
+            draggable="true"
+            onfocus={() => (lastFocusedIndex = rowIndex)}
+            ondragstart={(event) => startEntryDrag(event, row.entry)}
+            onpointerdown={(e) => startPress(e, (ev) => onentrycontextmenu(ev, row.entry))}
+            onpointermove={movePress}
+            onpointerup={clearPress}
+            onpointercancel={clearPress}
+            onclick={(event) => {
+              if (suppressClick) {
+                suppressClick = false;
+                return;
+              }
+              onrowclick(event, row.entry);
+            }}
+            oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
+            onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
+          >
           {#if row.entry.color}
             <span class="entry-row-color-bar" aria-hidden="true"></span>
           {/if}
@@ -643,6 +717,7 @@
             </button>
           </div>
         </div>
+        {/if}
       {/each}
       <div
         class="virtual-spacer"
@@ -825,8 +900,35 @@
     background: var(--row-color);
   }
 
-  .entry-table.compact .entry-row {
-    height: 34px;
+  .group-separator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--entry-row-height, 30px);
+    width: max-content;
+    min-width: 100%;
+    padding: 0 10px 0 8px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--surface-bg) 85%, transparent);
+    font-size: var(--font-size-tiny, 10px);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .group-separator-label {
+    flex: 0 0 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .group-separator-line {
+    flex: 1 1 auto;
+    height: 1px;
+    min-width: 24px;
+    background: var(--border-subtle);
   }
 
   .entry-row:hover {

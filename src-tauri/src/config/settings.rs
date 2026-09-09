@@ -410,6 +410,12 @@ pub struct GeneralSettings {
     /// Whether clicking an entry automatically shows the detail panel.
     #[serde(default = "default_true")]
     pub show_detail_on_select: bool,
+    /// KeepPass-style subgroup separator line above each group's entries (default on).
+    #[serde(default = "default_true")]
+    pub show_group_separators: bool,
+    /// Font color for the subgroup separator line (hex, empty = --text-muted).
+    #[serde(default)]
+    pub group_separator_color: String,
     /// Render the full entry-table column grid on narrow screens too.
     pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
@@ -473,6 +479,8 @@ impl Default for GeneralSettings {
             toolbar_sides: default_toolbar_sides(),
             toolbar_full_separators: vec!["saveAs".into()],
             show_detail_on_select: true,
+            show_group_separators: true,
+            group_separator_color: String::new(),
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
             saved_searches: Vec::new(),
@@ -1125,6 +1133,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
 
     config.general.entry_columns = normalize_entry_columns(config.general.entry_columns);
     config.general.saved_searches = normalize_saved_searches(config.general.saved_searches);
+    config.general.group_separator_color = valid_hex(&config.general.group_separator_color, "");
 
     let recent = std::mem::take(&mut config.general.recent_files);
     let mut seen = std::collections::HashSet::new();
