@@ -5,9 +5,11 @@
 use crate::config::ConfigStore;
 use crate::vault;
 use crate::vault::{VaultSession, VaultSessions};
-use std::sync::{Arc, Mutex};
+use regex::Regex;
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Emitter;
 use tokio::sync::Notify;
+use url::Url;
 
 /// Cooperative cancel signal for the in-flight `download_favicons` run.
 /// `flag` persists the cancel request so tasks spawned after the `Notify`
@@ -41,17 +43,24 @@ pub(crate) fn cancel_favicons(cancel: tauri::State<'_, FaviconCancel>) -> Result
 /// (`ProxyEnable`/`ProxyServer` in the Internet Settings registry hive, the
 /// same source .NET/KeePass uses); reqwest's `system-proxy` feature only
 /// reads environment variables, which is why KeePass can reach hosts that
-/// SecPivot could not. Other platforms rely on the env-var proxy instead.
+/// SecPivot could not. The proxy is applied to both https targets (the fast
+/// path) and the http fallback (sites without TLS), matching WinINET's
+/// default proxy behavior; a scheme-less `host:port` proxy thus serves both.
+/// Other platforms rely on the env-var proxy instead.
 ///
 /// The timeout is generous (20 s) on purpose: the first TLS handshake
 /// through a proxy frequently takes ~5-10 s, and a tight timeout kills the
-/// first request while the retry on the warm connection succeeds.
+/// first request while the retry on the warm connection succeeds. The
+/// User-Agent is a bare browser-compatible token so WAFs that reject
+/// unknown/client bot agents still serve the icon.
 fn build_favicon_client() -> Option<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
-        .user_agent("SecPivot/0.1");
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
     if let Some(proxy) = wininet_https_proxy() {
-        if let Ok(proxy) = reqwest::Proxy::https(proxy) {
+        if let Ok(proxy) = reqwest::Proxy::all(&proxy) {
+            builder = builder.proxy(proxy);
+        } else if let Ok(proxy) = reqwest::Proxy::https(proxy) {
             builder = builder.proxy(proxy);
         }
     }
@@ -161,12 +170,184 @@ fn wininet_https_proxy() -> Option<String> {
     None
 }
 
-/// Fetch `https://{host}/favicon.ico` (then `/favicon.png`), with a 20-second
-/// timeout and a 512 KiB size cap. Returns `None` when nothing is served;
-/// every failure reason is logged to stderr (full error chain) so server-side
-/// diagnosis is possible without changing the renderer contract.
-/// `cancel` is the cooperative signal from `cancel_favicons`; every await is
-/// wrapped in `select!` so "结束等待" aborts without waiting for the timeout.
+/// Size cap for a downloaded icon (ICO/PNG/SVG body).
+const ICON_CAP: usize = 512 * 1024;
+/// Size cap for a site's HTML page read to locate `<link rel="icon">`.
+const PAGE_CAP: usize = 512 * 1024;
+
+/// Stream a URL body with a byte cap, aborting oversized or endless responses
+/// without buffering them fully (and skipping the transfer immediately when
+/// the announced `Content-Length` already exceeds the cap). Returns the body
+/// of a 2xx, non-empty response; every other outcome is logged and returns
+/// `None`. `cancel`/`flag` are the cooperative signal from `cancel_favicons`,
+/// checked before and across every await so "结束等待" aborts without waiting
+/// for the timeout.
+async fn fetch_bytes(
+    client: &reqwest::Client,
+    url: &str,
+    cap: usize,
+    cancel: Arc<Notify>,
+    flag: Arc<std::sync::atomic::AtomicBool>,
+) -> Option<Vec<u8>> {
+    if flag.load(std::sync::atomic::Ordering::SeqCst) {
+        return None;
+    }
+    let mut response = tokio::select! {
+        res = client.get(url).send() => match res {
+            Ok(response) => response,
+            Err(e) => {
+                eprintln!("[favicon] 请求 {url} 失败: {e:#}");
+                return None;
+            }
+        },
+        _ = cancel.notified() => {
+            eprintln!("[favicon] 已取消 {url}");
+            return None;
+        }
+    };
+    if !response.status().is_success() {
+        eprintln!("[favicon] {url} 返回 {}", response.status());
+        return None;
+    }
+    if let Some(len) = response.content_length() {
+        if len > cap as u64 {
+            eprintln!("[favicon] {url} 超过 {cap} 字节上限 (Content-Length {len})");
+            return None;
+        }
+    }
+    let mut body = Vec::new();
+    let mut total = 0usize;
+    loop {
+        let chunk = tokio::select! {
+            res = response.chunk() => match res {
+                Ok(Some(chunk)) => chunk,
+                Ok(None) => break,
+                Err(e) => {
+                    eprintln!("[favicon] 读取 {url} 响应失败: {e}");
+                    return None;
+                }
+            },
+            _ = cancel.notified() => {
+                eprintln!("[favicon] 已取消 {url} 读取");
+                return None;
+            }
+        };
+        total += chunk.len();
+        if total >= cap {
+            eprintln!("[favicon] {url} 超过 {cap} 字节上限 (已读取 {total} 字节)");
+            return None;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    if body.is_empty() {
+        eprintln!("[favicon] {url} 返回空内容");
+        return None;
+    }
+    Some(body)
+}
+
+/// Sniff the response body as a real image (ICO/CUR, PNG, JPEG, GIF, BMP,
+/// RIFF/WebP, SVG) so a 200-with-HTML soft-404 is rejected instead of being
+/// stored as a garbage "icon", and the next candidate is tried. Mirrors the
+/// media-type sniffing the renderer uses to build icon data URLs
+/// (`icon_to_data_url` in `vault/serialize.rs`).
+pub(crate) fn looks_like_image(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x00, 0x00, 0x01, 0x00]) // ICO
+        || bytes.starts_with(&[0x00, 0x00, 0x02, 0x00]) // CUR
+        || bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) // PNG
+        || bytes.starts_with(&[0xFF, 0xD8, 0xFF]) // JPEG
+        || bytes.starts_with(b"GIF8") // GIF
+        || bytes.starts_with(b"BM") // BMP
+        // WebP: `RIFF....WEBP`
+        || (bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP")
+        || bytes.starts_with(b"<svg") // SVG
+        || bytes.starts_with(b"\xEF\xBB\xBF<svg") // UTF-8 BOM SVG
+        || bytes.starts_with(b"<?xml") // SVG with XML prolog
+}
+
+/// Cheap guess whether a fetched body is HTML text worth scanning for
+/// `<link rel="icon">`; binary payloads (or a soft-404 image in place of the
+/// page) are rejected without a regex pass.
+fn is_html_page(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(1024)];
+    let head = String::from_utf8_lossy(head);
+    let lower = head.trim_start().to_ascii_lowercase();
+    lower.starts_with("<!doctype html")
+        || lower.starts_with("<html")
+        || lower.starts_with("<head")
+        || lower.contains("<link")
+}
+
+/// Extract an attribute like `rel="icon"`, `href='/a.png'` or `href=/a.png`
+/// (double-quoted, single-quoted, or unquoted) from a tag string.
+fn attr_value(tag: &str, name: &str) -> Option<String> {
+    let pattern = regex::escape(name);
+    let re = Regex::new(&format!(
+        r#"(?i)\b{pattern}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))"#
+    ))
+    .ok()?;
+    let caps = re.captures(tag)?;
+    caps.get(1)
+        .or_else(|| caps.get(2))
+        .or_else(|| caps.get(3))
+        .map(|m| m.as_str().to_owned())
+}
+
+/// Collect the favicon URLs an HTML page declares via `<link rel="icon">`
+/// (including `shortcut icon`, `apple-touch-icon`, `mask-icon`), in priority
+/// order: plain favicon links first, Apple-touch-icons last. Each href is
+/// resolved against `base_url` (absolute, scheme-relative, root-relative and
+/// bare relative forms); non-http(s) (e.g. `data:`) and unresolvable hrefs
+/// are dropped. This mirrors how the built-in KeePass downloader finds icons,
+/// which is where most real sites declare them (`/favicon.ico` at the root is
+/// the exception these days).
+pub(crate) fn favicon_link_urls(html: &str, base_url: &str) -> Vec<String> {
+    static TAGS: OnceLock<Regex> = OnceLock::new();
+    let tags = TAGS.get_or_init(|| Regex::new(r#"(?is)<link\b[^>]*>"#).unwrap());
+    if !is_html_page(html.as_bytes()) {
+        return Vec::new();
+    }
+    let Ok(base) = Url::parse(base_url) else {
+        return Vec::new();
+    };
+    let mut direct = Vec::new();
+    let mut apple = Vec::new();
+    for m in tags.find_iter(html) {
+        let tag = m.as_str();
+        let Some(rel) = attr_value(tag, "rel") else {
+            continue;
+        };
+        let rel = rel.to_ascii_lowercase();
+        let is_apple = rel
+            .split_whitespace()
+            .any(|token| token.starts_with("apple-touch-icon"));
+        if !is_apple && !rel.split_whitespace().any(|token| token.contains("icon")) {
+            continue;
+        }
+        let Some(href) = attr_value(tag, "href") else {
+            continue;
+        };
+        let Ok(resolved) = base.join(href.trim()) else {
+            continue;
+        };
+        match resolved.scheme() {
+            "http" | "https" => {}
+            _ => continue,
+        }
+        (if is_apple { &mut apple } else { &mut direct }).push(resolved.into());
+    }
+    direct.extend(apple);
+    direct
+}
+
+/// Fetch a favicon for `host`, trying in order: the well-known root paths
+/// (`/favicon.ico`, `/favicon.png`) over https, then the site's https page
+/// (`https://{host}/`) for the `<link rel="icon">` it declares, then the same
+/// two passes over http for sites without TLS. Each candidate must return
+/// actual image bytes (magic-sniffed) so a soft-404 HTML page or a replaced
+/// placeholder is skipped; every failure reason is logged to stderr (full
+/// error chain) so server-side diagnosis is possible without changing the
+/// renderer contract. Returns `None` when no candidate yields an image.
 async fn fetch_favicon(
     client: &reqwest::Client,
     host: &str,
@@ -176,60 +357,36 @@ async fn fetch_favicon(
     if flag.load(std::sync::atomic::Ordering::SeqCst) {
         return None;
     }
-    'paths: for path in ["/favicon.ico", "/favicon.png"] {
-        if flag.load(std::sync::atomic::Ordering::SeqCst) {
-            return None;
-        }
-        let url = format!("https://{host}{path}");
-        let mut response = tokio::select! {
-            res = client.get(&url).send() => match res {
-                Ok(response) => response,
-                Err(e) => {
-                    eprintln!("[favicon] 请求 {url} 失败: {e:#}");
-                    continue;
+    for scheme in ["https", "http"] {
+        let base = format!("{scheme}://{host}/");
+        let mut tried: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for path in ["favicon.ico", "favicon.png"] {
+            let url = format!("{base}{path}");
+            tried.insert(url.clone());
+            if let Some(bytes) =
+                fetch_bytes(client, &url, ICON_CAP, cancel.clone(), flag.clone()).await
+            {
+                if looks_like_image(&bytes) {
+                    return Some(bytes);
                 }
-            },
-            _ = cancel.notified() => {
-                eprintln!("[favicon] 已取消 {host} {path}");
-                return None;
+                eprintln!("[favicon] {url} 不是图片内容，尝试下一个候选");
             }
-        };
-        if !response.status().is_success() {
-            eprintln!("[favicon] {url} 返回 {}", response.status());
-            continue;
         }
-        // Stream the body and abort as soon as the cumulative size reaches the
-        // cap, so a server that never ends (or sends an oversized payload) is
-        // rejected without buffering the whole body into memory first.
-        let mut body = Vec::new();
-        let mut total = 0usize;
-        loop {
-            let chunk = tokio::select! {
-                res = response.chunk() => match res {
-                    Ok(Some(chunk)) => chunk,
-                    Ok(None) => break,
-                    Err(e) => {
-                        eprintln!("[favicon] 读取 {url} 响应失败: {e}");
-                        continue 'paths;
+        if let Some(page) = fetch_bytes(client, &base, PAGE_CAP, cancel.clone(), flag.clone()).await
+        {
+            for url in favicon_link_urls(&String::from_utf8_lossy(&page), &base) {
+                if tried.insert(url.clone()) {
+                    if let Some(bytes) =
+                        fetch_bytes(client, &url, ICON_CAP, cancel.clone(), flag.clone()).await
+                    {
+                        if looks_like_image(&bytes) {
+                            return Some(bytes);
+                        }
+                        eprintln!("[favicon] {url} 不是图片内容，尝试下一个候选");
                     }
-                },
-                _ = cancel.notified() => {
-                    eprintln!("[favicon] 已取消 {host} 读取 {path}");
-                    return None;
                 }
-            };
-            total += chunk.len();
-            if total >= 512 * 1024 {
-                eprintln!("[favicon] {url} 超过 512 KiB 上限 (已读取 {total} 字节)");
-                continue 'paths;
             }
-            body.extend_from_slice(&chunk);
         }
-        if body.is_empty() {
-            eprintln!("[favicon] {url} 返回空内容");
-            continue;
-        }
-        return Some(body);
     }
     None
 }

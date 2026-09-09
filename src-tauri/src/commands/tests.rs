@@ -70,3 +70,97 @@ fn parse_proxy_server_handles_wininet_forms() {
     assert_eq!(parse_proxy_server("").as_deref(), None);
     assert_eq!(parse_proxy_server("ftp=ftp.local:21").as_deref(), None);
 }
+
+#[test]
+fn looks_like_image_sniffs_common_formats() {
+    assert!(looks_like_image(&[0x00, 0x00, 0x01, 0x00])); // ICO
+    assert!(looks_like_image(&[0x00, 0x00, 0x02, 0x00])); // CUR
+    assert!(looks_like_image(&[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+    ])); // PNG
+    assert!(looks_like_image(&[0xFF, 0xD8, 0xFF, 0xE0])); // JPEG
+    assert!(looks_like_image(b"GIF89a"));
+    assert!(looks_like_image(b"BM\x36\x00\x00\x00")); // BMP
+    assert!(looks_like_image(b"RIFF\x00\x00\x00\x00WEBPVP8 ")); // WebP
+    assert!(looks_like_image(
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\">"
+    ));
+    assert!(looks_like_image(b"\xEF\xBB\xBF<svg"));
+    assert!(looks_like_image(b"<?xml version=\"1.0\"?><svg/>"));
+    // A 200-with-HTML soft-404 must not be accepted as an icon.
+    assert!(!looks_like_image(
+        b"<!DOCTYPE html><html><head><title>404</title>"
+    ));
+    assert!(!looks_like_image(b"not an image at all"));
+}
+
+#[test]
+fn favicon_link_urls_resolves_and_orders_link_tags() {
+    let html = r#"<!DOCTYPE html>
+<html><head>
+<link rel="shortcut icon" href="/static/favicon.ico">
+<link REL="ICON" HREF='https://cdn.example.com/favicon-32.png'>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="favicon.svg">
+<link rel="icon" href="data:image/x-icon;base64,AAAA">
+<link rel="stylesheet" href="/style.css">
+<link href="/no-rel.png">
+</head></html>"#;
+    let urls = favicon_link_urls(html, "https://example.com/");
+    assert_eq!(
+        urls,
+        vec![
+            "https://example.com/static/favicon.ico",
+            "https://cdn.example.com/favicon-32.png",
+            "https://example.com/favicon.svg",
+            "https://example.com/apple-touch-icon.png",
+        ]
+    );
+}
+
+#[test]
+fn favicon_link_urls_resolves_scheme_relative_hrefs_against_base() {
+    let html = r#"<html><head>
+<link rel="icon" href="//cdn.example.org/i.png">
+<link rel="icon" href="icon.svg">
+<link rel="icon" href="../up.png">
+<link rel="icon" href="javascript:void(0)">
+</head></html>"#;
+    let urls = favicon_link_urls(html, "https://example.com/sub/");
+    assert_eq!(
+        urls,
+        vec![
+            "https://cdn.example.org/i.png",
+            "https://example.com/sub/icon.svg",
+            "https://example.com/up.png",
+        ]
+    );
+    // Over http the scheme-relative href inherits http.
+    let urls = favicon_link_urls(html, "http://example.com/");
+    assert_eq!(
+        urls,
+        vec![
+            "http://cdn.example.org/i.png",
+            "http://example.com/icon.svg",
+            "http://example.com/up.png",
+        ]
+    );
+}
+
+#[test]
+fn favicon_link_urls_reads_rel_after_href_and_unquoted_attrs() {
+    let html = "<html><head><link href=/a.png rel=icon><LINK href=/b.ico REL='shortcut icon'></head></html>";
+    assert_eq!(
+        favicon_link_urls(html, "http://ex.com/"),
+        vec!["http://ex.com/a.png", "http://ex.com/b.ico"]
+    );
+}
+
+#[test]
+fn favicon_link_urls_rejects_binary_body() {
+    let body = [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01, 0x02, 0x03,
+    ];
+    let text = String::from_utf8_lossy(&body);
+    assert!(favicon_link_urls(&text, "https://e.com/").is_empty());
+}
