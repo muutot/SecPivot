@@ -28,6 +28,9 @@
 
   interface Props {
     rows: DisplayRow[];
+    /** Entry-only total supplied by the caller (counted in the display-rows
+     *  build pass, so the table never re-filters `rows` itself). */
+    entryCount: number;
     visibleCols: EntryTableColumn[];
     entryGridCols: string;
     sortCol: string;
@@ -67,6 +70,7 @@
 
   let {
     rows,
+    entryCount,
     visibleCols,
     entryGridCols,
     sortCol,
@@ -186,7 +190,6 @@
   );
   const virtualRows = $derived(rows.slice(virtualRange.start, virtualRange.end));
   const topSpacerHeight = $derived(virtualRange.start * rowHeight);
-  const entryCount = $derived(rows.filter((r) => (r as { kind: string }).kind === "entry").length);
   /** Entry-only ordinals for `aria-posinset`: separators are visual, so the
    *  announced position counts focusable options, not physical rows. */
   const entryOrdinals = $derived(

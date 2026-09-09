@@ -31,4 +31,8 @@ test("EntryTable reuses the shared DisplayRow type", async () => {
     "EntryTable must not declare its own DisplayRow",
   );
   assert.ok(text.includes("rows: DisplayRow[]"), "EntryTable rows prop must be DisplayRow[]");
+  assert.ok(
+    text.includes("entryCount: number"),
+    "EntryTable must take entryCount from the caller instead of re-filtering rows",
+  );
 });

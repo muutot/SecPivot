@@ -616,9 +616,12 @@
     return out;
   });
 
-  const displayRows = $derived.by((): DisplayRow[] =>
+  const displayRowsBuilt = $derived(
     buildDisplayRows(sortedEntries, treeIndex, settings.general.showGroupSeparators ?? true),
   );
+  const displayRows = $derived(displayRowsBuilt.rows);
+  /** Entry-only total counted inside the single display-rows build pass. */
+  const displayEntryCount = $derived(displayRowsBuilt.entryCount);
 
   /** Selection model (single/shift-range/ctrl-toggle) lives in the extracted
    *  composable; see `useVaultSelection.svelte.ts`. */
@@ -1749,6 +1752,7 @@
         <section class="entry-panel">
           <EntryTable
             rows={displayRows}
+            entryCount={displayEntryCount}
             visibleCols={columns.visibleCols}
             entryGridCols={columns.entryGridCols}
             {sortCol}

@@ -10,6 +10,13 @@ export interface SortedEntryRow {
   entry: VaultEntry;
 }
 
+/** Result of {@link buildDisplayRows}: the rendered rows plus the entry-only
+ *  total, counted in the same single pass (no extra filter over `rows`). */
+export interface BuiltDisplayRows {
+  rows: DisplayRow[];
+  entryCount: number;
+}
+
 /** Build the entry-list rows from page-sorted entries: flat entry rows unless
  *  several groups are present and separators are enabled, in which case each
  *  contiguous group block is preceded by a separator header labeled with the
@@ -18,18 +25,22 @@ export function buildDisplayRows(
   sortedEntries: ReadonlyArray<SortedEntryRow>,
   treeIndex: VaultTreeIndex | null | undefined,
   showGroupSeparators: boolean,
-): DisplayRow[] {
-  if (sortedEntries.length === 0 || !treeIndex) {
-    return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
-  }
-  if (!showGroupSeparators) {
-    return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
+): BuiltDisplayRows {
+  if (sortedEntries.length === 0 || !treeIndex || !showGroupSeparators) {
+    return {
+      rows: sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry })),
+      entryCount: sortedEntries.length,
+    };
   }
   const distinct = new Set(sortedEntries.map((r) => r.entry.groupUuid));
   if (distinct.size <= 1) {
-    return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
+    return {
+      rows: sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry })),
+      entryCount: sortedEntries.length,
+    };
   }
   const rows: DisplayRow[] = [];
+  let entryCount = 0;
   let cur: string | null = null;
   for (const row of sortedEntries) {
     const g = row.entry.groupUuid;
@@ -42,6 +53,7 @@ export function buildDisplayRows(
       rows.push({ kind: "group", id: g, label });
     }
     rows.push({ kind: "entry", entry: row.entry });
+    entryCount += 1;
   }
-  return rows;
+  return { rows, entryCount };
 }
