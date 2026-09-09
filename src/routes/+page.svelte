@@ -18,6 +18,7 @@
   import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
+  import { buildDisplayRows, type DisplayRow } from "$lib/utils/display-rows";
   import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
   import {
     cancelFaviconDownload,
@@ -615,36 +616,9 @@
     return out;
   });
 
-  type DisplayRow =
-    { kind: "group"; id: string; label: string } | { kind: "entry"; entry: VaultEntry };
-
-  const displayRows = $derived.by((): DisplayRow[] => {
-    if (sortedEntries.length === 0 || !treeIndex) {
-      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
-    }
-    if (!(settings.general.showGroupSeparators ?? true)) {
-      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
-    }
-    const distinct = new Set(sortedEntries.map((r) => r.entry.groupUuid));
-    if (distinct.size <= 1) {
-      return sortedEntries.map((r) => ({ kind: "entry" as const, entry: r.entry }));
-    }
-    const rows: DisplayRow[] = [];
-    let cur: string | null = null;
-    for (const row of sortedEntries) {
-      const g = row.entry.groupUuid;
-      if (g !== cur) {
-        cur = g;
-        const grp = treeIndex.groupByUuid.get(g);
-        const path = treeIndex.pathByGroupUuid.get(g) ?? grp?.name ?? g;
-        const raw = path || grp?.name || g;
-        const label = raw.replaceAll(" / ", " → ");
-        rows.push({ kind: "group", id: g, label });
-      }
-      rows.push({ kind: "entry", entry: row.entry });
-    }
-    return rows;
-  });
+  const displayRows = $derived.by((): DisplayRow[] =>
+    buildDisplayRows(sortedEntries, treeIndex, settings.general.showGroupSeparators ?? true),
+  );
 
   /** Selection model (single/shift-range/ctrl-toggle) lives in the extracted
    *  composable; see `useVaultSelection.svelte.ts`. */

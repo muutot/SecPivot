@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import type { DisplayRow } from "$lib/utils/display-rows";
   import {
     entryPositions,
     findNearestEntryIndex,
@@ -24,9 +25,6 @@
   export interface EntryTableRow {
     entry: VaultEntry;
   }
-
-  export type DisplayRow =
-    { kind: "group"; id: string; label: string } | { kind: "entry"; entry: VaultEntry };
 
   interface Props {
     rows: DisplayRow[];
