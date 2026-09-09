@@ -36,10 +36,6 @@ impl FaviconCancel {
         self.notify.notify_waiters();
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
-        self.flag.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
     /// Clear a previous run's cancel so it cannot poison the next run.
     pub(crate) fn reset(&self) {
         self.flag.store(false, std::sync::atomic::Ordering::SeqCst);

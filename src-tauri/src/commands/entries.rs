@@ -184,46 +184,24 @@ pub(crate) fn change_timeline(
 }
 
 /// Check the selected (or every) entry's passwords against HIBP using
-/// k-anonymity: only the first 5 hex chars of each SHA-1 leave the machine.
-/// Strictly opt-in; network I/O runs off the async runtime with per-prefix
-/// 15 s timeout, `hibp-progress` events, and cooperative cancel via
-/// `cancel_hibp` (mirrors `cancel_favicons`).
-#[tauri::command]
-pub(crate) async fn check_hibp(
-    app: tauri::AppHandle,
-    vaults: tauri::State<'_, VaultSessions>,
-    session: tauri::State<'_, Mutex<VaultSession>>,
-    cancel_state: tauri::State<'_, HibpCancel>,
-    session_id: Option<String>,
-    uuids: Option<Vec<String>>,
+/// Testable core of the HIBP k-anonymity range check, extracted from
+/// `check_hibp`: groups entries by 5-char SHA-1 prefix, fetches each distinct
+/// range from `base_url`, matches suffixes locally, honors cooperative cancel
+/// (flag checks plus `Notify` wake), and reports progress through
+/// `on_progress`. Owns `entries` and zeroizes every password on all return
+/// paths, mirroring the old blocking `breach::check_hibp`.
+pub(crate) async fn check_hibp_entries(
+    entries: Vec<(String, String, String, String)>,
+    client: &reqwest::Client,
+    base_url: &str,
+    cancel: &HibpCancel,
+    mut on_progress: impl FnMut(usize, usize),
 ) -> Result<Vec<crate::vault::BreachFinding>, String> {
-    let (resolved_id, entries) = {
-        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        let (id, rows) =
-            vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
-                target.hibp_entries(uuids.as_deref())
-            })?;
-        (id, rows)
-    };
-    if entries.is_empty() {
-        return Ok(Vec::new());
-    }
-    // Reset cancel flag for this run.
-    cancel_state.reset();
-    let cancel = cancel_state.notify.clone();
-    let cancel_flag = cancel_state.flag.clone();
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
-        .build()
-        .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
-
     // Group by 5-char prefix to avoid duplicate range fetches (same as breach::check_hibp).
     let mut by_prefix: std::collections::HashMap<String, Vec<usize>> =
         std::collections::HashMap::new();
     for (index, (_, _, _, password)) in entries.iter().enumerate() {
-        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             break;
         }
         let prefix =
@@ -235,10 +213,10 @@ pub(crate) async fn check_hibp(
     let mut findings: Vec<crate::vault::BreachFinding> = Vec::new();
 
     for (done_idx, (prefix, indices)) in by_prefix.into_iter().enumerate() {
-        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             break;
         }
-        let url = format!("{}{prefix}", crate::vault::HIBP_RANGE_URL);
+        let url = format!("{base_url}{prefix}");
         let body = tokio::select! {
             res = async {
                 let resp = client.get(&url).send().await
@@ -257,7 +235,7 @@ pub(crate) async fn check_hibp(
                     return Err(e);
                 }
             },
-            _ = cancel.notified() => {
+            _ = cancel.notify.notified() => {
                 eprintln!("[hibp] 已取消 {prefix}");
                 break;
             }
@@ -290,15 +268,8 @@ pub(crate) async fn check_hibp(
             }
         }
         let done = done_idx + 1;
-        let _ = app.emit(
-            "hibp-progress",
-            crate::vault::HibpProgress {
-                session_id: resolved_id.clone(),
-                done,
-                total,
-            },
-        );
-        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+        on_progress(done, total);
+        if cancel.is_cancelled() {
             break;
         }
     }
@@ -308,6 +279,58 @@ pub(crate) async fn check_hibp(
         password.zeroize();
     }
     Ok(findings)
+}
+
+/// k-anonymity: only the first 5 hex chars of each SHA-1 leave the machine.
+/// Strictly opt-in; network I/O runs off the async runtime with per-prefix
+/// 15 s timeout, `hibp-progress` events, and cooperative cancel via
+/// `cancel_hibp` (mirrors `cancel_favicons`).
+#[tauri::command]
+pub(crate) async fn check_hibp(
+    app: tauri::AppHandle,
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    cancel_state: tauri::State<'_, HibpCancel>,
+    session_id: Option<String>,
+    uuids: Option<Vec<String>>,
+) -> Result<Vec<crate::vault::BreachFinding>, String> {
+    let (resolved_id, entries) = {
+        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let (id, rows) =
+            vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+                target.hibp_entries(uuids.as_deref())
+            })?;
+        (id, rows)
+    };
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Reset cancel flag for this run.
+    cancel_state.reset();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
+        .build()
+        .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
+
+    check_hibp_entries(
+        entries,
+        &client,
+        crate::vault::HIBP_RANGE_URL,
+        &cancel_state,
+        |done, total| {
+            let _ = app.emit(
+                "hibp-progress",
+                crate::vault::HibpProgress {
+                    session_id: resolved_id.clone(),
+                    done,
+                    total,
+                },
+            );
+        },
+    )
+    .await
 }
 
 /// Byte-size breakdown of an entry's stored data (fields, attachments, history).

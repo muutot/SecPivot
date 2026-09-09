@@ -178,12 +178,13 @@ fn hibp_cancel_sets_flag_and_reset_clears_it() {
 
 #[test]
 fn favicon_cancel_sets_flag_and_reset_clears_it() {
+    use std::sync::atomic::Ordering;
     let cancel = FaviconCancel::default();
-    assert!(!cancel.is_cancelled());
+    assert!(!cancel.flag.load(Ordering::SeqCst));
     cancel.cancel();
-    assert!(cancel.is_cancelled());
+    assert!(cancel.flag.load(Ordering::SeqCst));
     cancel.reset();
-    assert!(!cancel.is_cancelled());
+    assert!(!cancel.flag.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
@@ -215,4 +216,120 @@ async fn favicon_cancel_wakes_a_parked_waiter() {
         .await
         .expect("cancel must wake parked waiter")
         .unwrap();
+}
+
+/// Minimal HIBP mock: serves one request, optionally asserting the path
+/// carries only the 5-char prefix, then (after `delay`) answers `body`.
+fn spawn_hibp_mock(
+    delay: std::time::Duration,
+    body: &'static str,
+    expected_path: Option<&'static str>,
+) -> (String, std::thread::JoinHandle<()>) {
+    use std::io::Read;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut head = String::new();
+        let mut buf = [0u8; 1];
+        while !head.ends_with("\r\n\r\n") {
+            if stream.read(&mut buf).unwrap_or(0) == 0 {
+                break;
+            }
+            head.push(buf[0] as char);
+        }
+        if let Some(expected) = expected_path {
+            let path = head
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or("");
+            assert_eq!(path, expected, "full hash must never leave the client");
+        }
+        std::thread::sleep(delay);
+        let _ = write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+    });
+    (format!("http://{addr}/range/"), handle)
+}
+
+fn hibp_test_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap()
+}
+
+fn hibp_test_entries() -> Vec<(String, String, String, String)> {
+    // SHA-1("password") = 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8
+    vec![(
+        "uuid-1".to_owned(),
+        "GitHub".to_owned(),
+        "octocat".to_owned(),
+        "password".to_owned(),
+    )]
+}
+
+#[tokio::test]
+async fn hibp_range_check_matches_locally_and_reports_progress() {
+    let (base, handle) = spawn_hibp_mock(
+        std::time::Duration::from_millis(0),
+        "1E4C9B93F3F0682250B6CF8331B7EE68FD8:42\n",
+        Some("/range/5BAA6"),
+    );
+    let client = hibp_test_client();
+    let cancel = HibpCancel::default();
+    let progress = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let progress_task = progress.clone();
+    let findings = check_hibp_entries(
+        hibp_test_entries(),
+        &client,
+        &base,
+        &cancel,
+        move |done, total| {
+            progress_task.lock().unwrap().push((done, total));
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].uuid, "uuid-1");
+    assert_eq!(findings[0].title, "GitHub");
+    assert_eq!(findings[0].count, 42);
+    assert_eq!(*progress.lock().unwrap(), vec![(1, 1)]);
+    handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn hibp_range_check_aborts_promptly_on_cancel() {
+    // The server never answers in time: the run must abort via cancel,
+    // not via the client timeout.
+    let (base, _server) = spawn_hibp_mock(
+        std::time::Duration::from_secs(30),
+        "1E4C9B93F3F0682250B6CF8331B7EE68FD8:42\n",
+        None,
+    );
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let cancel = HibpCancel::default();
+    let run = check_hibp_entries(hibp_test_entries(), &client, &base, &cancel, |_, _| {});
+    tokio::pin!(run);
+    // Let the request go out, then cancel mid-flight.
+    tokio::select! {
+        _ = &mut run => panic!("run must not finish before cancel"),
+        _ = tokio::time::sleep(std::time::Duration::from_millis(300)) => {
+            cancel.cancel();
+        }
+    }
+    let findings = tokio::time::timeout(std::time::Duration::from_secs(10), run)
+        .await
+        .expect("cancelled run must abort promptly")
+        .unwrap();
+    assert!(findings.is_empty());
 }
