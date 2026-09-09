@@ -14,8 +14,13 @@ fn entry_for(path: &str) -> Result<Entry, String> {
 }
 
 /// Store the master password for `path` in the OS credential store.
+/// Refuses empty passwords: unlocking with one always fails, so storing it
+/// would only create a confusing saved-credential state.
 pub fn remember(path: &str, password: &str) -> Result<(), String> {
     let entry = entry_for(path)?;
+    if password.is_empty() {
+        return Err("主密码为空".to_owned());
+    }
     entry
         .set_password(password)
         .map_err(|e| format!("保存凭据失败: {e}"))
@@ -31,12 +36,16 @@ pub fn get(path: &str) -> Result<Option<String>, String> {
     }
 }
 
-/// Remove the stored master password for `path` (no-op when absent).
+/// Remove the stored master password for `path`. Idempotent: clearing an
+/// absent entry succeeds so disabling the remember-password switch never
+/// surfaces a spurious error.
 pub fn forget(path: &str) -> Result<(), String> {
     let entry = entry_for(path)?;
-    entry
-        .delete_credential()
-        .map_err(|e| format!("清除凭据失败: {e}"))
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("清除凭据失败: {e}")),
+    }
 }
 
 #[cfg(test)]
@@ -58,6 +67,30 @@ mod tests {
             Err(e) => {
                 eprintln!("credential store unavailable, skipping: {e}");
             }
+        }
+    }
+
+    #[test]
+    fn forget_is_idempotent_and_remember_rejects_empty_password() {
+        // Empty path is rejected before touching the store.
+        assert!(remember("", "s3cret").is_err());
+        assert!(get("").is_err());
+        assert!(forget("").is_err());
+
+        let path = "secpivot-test://credential-guards";
+        let _ = forget(path);
+        // Refusing an empty password must not create an entry.
+        assert!(remember(path, "").is_err());
+        match get(path) {
+            Ok(None) => {}
+            Ok(Some(_)) => panic!("empty password must not be stored"),
+            Err(e) => eprintln!("credential store unavailable, skipping: {e}"),
+        }
+        // Clearing an absent entry succeeds (idempotent disable path).
+        if get(path).is_ok() {
+            forget(path).unwrap();
+            forget(path).unwrap();
+            assert_eq!(get(path).unwrap(), None);
         }
     }
 }
