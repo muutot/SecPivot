@@ -2668,11 +2668,9 @@ fn ensure_tcato_allowed_rejects_recycle_bin_entries() {
     assert!(err.contains("回收站"), "unexpected error: {err}");
 
     // Unknown uuids are rejected as missing, not as recycled.
-    assert!(
-        session
-            .ensure_tcato_allowed("00000000-0000-0000-0000-000000000000")
-            .is_err()
-    );
+    assert!(session
+        .ensure_tcato_allowed("00000000-0000-0000-0000-000000000000")
+        .is_err());
 }
 
 #[test]
