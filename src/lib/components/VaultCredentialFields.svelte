@@ -118,6 +118,7 @@
     margin-bottom: 5px;
     color: var(--text-muted);
     font-size: var(--font-size-secondary, 11px);
+    text-align: left;
   }
 
   .path-row {

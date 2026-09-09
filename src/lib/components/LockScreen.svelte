@@ -87,10 +87,6 @@
 </script>
 
 <StandaloneVaultShell icon="lock" title="数据库已锁定" subtitle={remembered?.fileName ?? ""}>
-  {#if remembered}
-    <p class="lock-path" title={remembered.path}>{remembered.path}</p>
-  {/if}
-
   <div class="lock-fields">
     <VaultCredentialFields
       bind:password
@@ -119,27 +115,68 @@
       {busy ? "解锁中…" : "解锁"}
     </Button>
   </div>
+
+  {#if remembered}
+    <div class="lock-path" title={remembered.path}>
+      <AppIcon name="file" size={11} />
+      <span class="lock-path__text">{remembered.path}</span>
+    </div>
+  {/if}
 </StandaloneVaultShell>
 
 <style>
-  .lock-path {
-    margin: 3px 0 0;
-    max-width: 100%;
-    overflow: hidden;
-    color: var(--text-faint);
-    font-size: var(--font-size-tiny, 10px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .lock-fields {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 22px;
+    text-align: left;
+  }
+
+  .lock-fields :global(.field > span) {
+    text-align: left;
   }
 
   .unlock-actions {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    width: 100%;
+    margin-top: 20px;
+  }
+
+  .unlock-actions :global(.btn) {
+    flex: 0 0 auto;
+  }
+
+  .lock-path {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
     margin-top: 18px;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--settings-control-radius, 6px);
+    background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+    color: var(--text-faint);
+    font-size: var(--font-size-tiny, 10px);
+  }
+
+  .lock-path__text {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lock-path :global(.app-icon) {
+    flex: 0 0 auto;
+    opacity: 0.75;
   }
 </style>

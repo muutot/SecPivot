@@ -2273,6 +2273,15 @@
   /* Welcome / lock views render in the smaller standalone window. */
   .app-shell.standalone {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 100vh;
+    height: 100vh;
+    padding-top: 30px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .standalone-bar {

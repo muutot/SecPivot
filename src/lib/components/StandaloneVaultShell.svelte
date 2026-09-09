@@ -39,17 +39,18 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 100%;
+    min-height: 100%;
+    padding: 32px 16px;
+    box-sizing: border-box;
   }
 
   .standalone-shell__inner {
     display: flex;
     flex-direction: column;
     align-items: center;
-    max-width: 380px;
-    padding: 24px;
+    width: 100%;
+    max-width: 360px;
     text-align: center;
-    transform: translateY(10vh);
   }
 
   .standalone-shell__header {
