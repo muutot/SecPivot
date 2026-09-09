@@ -131,12 +131,11 @@
   /** Subtree entry counts per group, computed once per `root` change (a
    *  bottom-up walk) instead of re-walking the tree for every rendered node. */
   const counts = $derived(buildEntryCounts(root));
-  const total = $derived(
-    root.children.reduce(
-      (sum, child) => sum + (child.isRecycleBin ? 0 : (counts.get(child.uuid) ?? 0)),
-      0,
-    ),
-  );
+  const total = $derived.by(() => {
+    const bin = root.children.find((c) => c.isRecycleBin);
+    const binCount = bin ? (counts.get(bin.uuid) ?? 0) : 0;
+    return (counts.get(root.uuid) ?? 0) - binCount;
+  });
 
   /** Ancestor chain (excluding the target itself, root-adjacent last) of a uuid. */
   function ancestorsOf(uuid: string): string[] {
