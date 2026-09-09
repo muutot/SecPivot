@@ -264,6 +264,14 @@ impl VaultSession {
         })
     }
 
+    /// Whether the entry carries an OTP seed (for the TCATO TOTP channel).
+    pub fn entry_has_totp(&self, uuid: &str) -> Result<bool, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(super::helpers::entry_has_otp(&entry))
+    }
+
     /// TCATO may not target entries inside the recycle bin (matching auto-type
     /// and bridge/RPC semantics where the bin is excluded).
     pub fn ensure_tcato_allowed(&self, uuid: &str) -> Result<(), String> {

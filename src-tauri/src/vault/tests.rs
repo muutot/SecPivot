@@ -2674,6 +2674,53 @@ fn ensure_tcato_allowed_rejects_recycle_bin_entries() {
 }
 
 #[test]
+fn entry_has_totp_reflects_otp_seed_presence() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let with_totp = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "2FA".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: String::new(),
+            totp: Some("JBSWY3DPEHPK3PXP".into()),
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let plain = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Plain".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: "".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let totp_uuid = with_totp.root.entries.last().unwrap().uuid.clone();
+    let plain_uuid = plain.root.entries.last().unwrap().uuid.clone();
+    assert!(session.entry_has_totp(&totp_uuid).unwrap());
+    assert!(!session.entry_has_totp(&plain_uuid).unwrap());
+    assert!(session
+        .entry_has_totp("00000000-0000-0000-0000-000000000000")
+        .is_err());
+}
+
+#[test]
 fn update_entries_applies_patch_to_all_uuids_and_skips_absent_fields() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

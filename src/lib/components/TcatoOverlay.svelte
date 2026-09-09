@@ -6,6 +6,7 @@
   let title = $state("");
   let hasPassword = $state(false);
   let hasUsername = $state(false);
+  let hasTotp = $state(false);
   let feedback = $state("");
   let error = $state("");
 
@@ -16,6 +17,7 @@
         username: string;
         hasPassword: boolean;
         hasUsername: boolean;
+        hasTotp: boolean;
       } | null>("tcato_state");
       if (!info) {
         error = "数据库未打开或条目不可用";
@@ -24,17 +26,23 @@
       title = info.title;
       hasPassword = info.hasPassword;
       hasUsername = info.hasUsername;
+      hasTotp = info.hasTotp ?? false;
     } catch (e) {
       error = `读取条目失败：${e}`;
     }
   });
 
-  async function send(channel: "username" | "password"): Promise<void> {
+  async function send(channel: "username" | "password" | "totp"): Promise<void> {
     feedback = "";
     error = "";
     try {
       await invoke("tcato_send", { channel });
-      feedback = channel === "username" ? "已注入用户名" : "已注入密码";
+      feedback =
+        channel === "username"
+          ? "已注入用户名"
+          : channel === "password"
+            ? "已注入密码"
+            : "已注入动态码";
     } catch (e) {
       error = `${e}`;
     }
@@ -67,7 +75,7 @@
       onclick={() => send("username")}
       disabled={!hasUsername}
     >
-      <AppIcon name="user" size={13} />注入用户名
+      <AppIcon name="user" size={13} />用户名
     </button>
     <button
       class="channel-button primary"
@@ -75,7 +83,16 @@
       onclick={() => send("password")}
       disabled={!hasPassword}
     >
-      <AppIcon name="key" size={13} />注入密码
+      <AppIcon name="key" size={13} />密码
+    </button>
+    <button
+      class="channel-button"
+      onmousedown={(e) => e.preventDefault()}
+      onclick={() => send("totp")}
+      disabled={!hasTotp}
+      title="注入当前动态验证码"
+    >
+      <AppIcon name="clock" size={13} />动态码
     </button>
   </div>
 
@@ -161,7 +178,7 @@
 
   .actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 

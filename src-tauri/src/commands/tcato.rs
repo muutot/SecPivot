@@ -23,6 +23,7 @@ pub(crate) struct TcatoInfo {
     username: String,
     has_password: bool,
     has_username: bool,
+    has_totp: bool,
 }
 
 pub(crate) const TCATO_WINDOW_LABEL: &str = "tcato";
@@ -109,13 +110,15 @@ pub(crate) fn tcato_state(
     let Some((session_id, uuid)) = target_ref else {
         return Ok(None);
     };
-    let ctx = with_vault_session(
+    let (ctx, has_totp) = with_vault_session(
         vaults.inner(),
         session.inner(),
         Some(&session_id),
         |target| {
             target.ensure_tcato_allowed(&uuid)?;
-            target.autotype_context(&uuid)
+            let ctx = target.autotype_context(&uuid)?;
+            let has_totp = target.entry_has_totp(&uuid)?;
+            Ok((ctx, has_totp))
         },
     )?;
     Ok(Some(TcatoInfo {
@@ -123,10 +126,11 @@ pub(crate) fn tcato_state(
         username: ctx.username.clone(),
         has_password: !ctx.password.is_empty(),
         has_username: !ctx.username.is_empty(),
+        has_totp,
     }))
 }
 
-/// Send one channel (`username` or `password`) to the window in focus.
+/// Send one channel (`username`, `password`, or `totp`) to the window in focus.
 #[tauri::command]
 pub(crate) fn tcato_send(
     vaults: tauri::State<'_, VaultSessions>,
@@ -140,27 +144,45 @@ pub(crate) fn tcato_send(
         .map_err(|_| "覆盖层状态已损坏".to_owned())?
         .clone()
         .ok_or_else(|| "TCATO 覆盖层尚未指定条目".to_owned())?;
-    let ctx = with_vault_session(
-        vaults.inner(),
-        session.inner(),
-        Some(&session_id),
-        |target| {
-            target.ensure_tcato_allowed(&uuid)?;
-            target.autotype_context(&uuid)
-        },
-    )?;
     let text = match channel.as_str() {
-        "username" => ctx.username,
-        "password" => ctx.password,
+        "username" | "password" => {
+            let ctx = with_vault_session(
+                vaults.inner(),
+                session.inner(),
+                Some(&session_id),
+                |target| {
+                    target.ensure_tcato_allowed(&uuid)?;
+                    target.autotype_context(&uuid)
+                },
+            )?;
+            let text = if channel == "username" {
+                ctx.username
+            } else {
+                ctx.password
+            };
+            if text.is_empty() {
+                return Err(if channel == "username" {
+                    "用户名为空，无法注入".to_owned()
+                } else {
+                    "密码为空，无法注入".to_owned()
+                });
+            }
+            text
+        }
+        "totp" => with_vault_session(
+            vaults.inner(),
+            session.inner(),
+            Some(&session_id),
+            |target| {
+                target.ensure_tcato_allowed(&uuid)?;
+                // HOTP counters advance here with the same semantics as the
+                // detail widget; the vault is marked dirty so the next
+                // explicit save persists them.
+                target.totp_code(&uuid).map(|code| code.code)
+            },
+        )?,
         _ => return Err("无效的 TCATO 通道".to_owned()),
     };
-    if text.is_empty() {
-        return Err(if channel == "username" {
-            "用户名为空，无法注入".to_owned()
-        } else {
-            "密码为空，无法注入".to_owned()
-        });
-    }
     focus::send_text_to_foreground(&text)
 }
 
