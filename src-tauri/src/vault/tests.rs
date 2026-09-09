@@ -2630,6 +2630,52 @@ fn delete_entries_moves_all_to_recycle_bin() {
 }
 
 #[test]
+fn ensure_tcato_allowed_rejects_recycle_bin_entries() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    let state = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Fill me".into(),
+            username: "u".into(),
+            password: "p".into(),
+            url: "".into(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+
+    // A live entry is fillable.
+    assert!(session.ensure_tcato_allowed(&uuid).is_ok());
+
+    // Once deleted into the recycle bin it is rejected (uuids survive the move).
+    let binned = session.delete_entries(&[uuid.clone()]).unwrap();
+    let bin = binned
+        .root
+        .children
+        .iter()
+        .find(|g| g.is_recycle_bin)
+        .unwrap();
+    assert_eq!(bin.entries.last().unwrap().uuid, uuid);
+    let err = session.ensure_tcato_allowed(&uuid).unwrap_err();
+    assert!(err.contains("回收站"), "unexpected error: {err}");
+
+    // Unknown uuids are rejected as missing, not as recycled.
+    assert!(
+        session
+            .ensure_tcato_allowed("00000000-0000-0000-0000-000000000000")
+            .is_err()
+    );
+}
+
+#[test]
 fn update_entries_applies_patch_to_all_uuids_and_skips_absent_fields() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);
