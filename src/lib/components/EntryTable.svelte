@@ -5,6 +5,12 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import {
+    findNearestEntryIndex,
+    findNextEntryIndex,
+    pageDownTargetIndex,
+    pageUpTargetIndex,
+  } from "$lib/utils/entry-nav";
   import { formatEntryDescription } from "$lib/utils/format";
 
   export interface EntryTableColumn {
@@ -316,38 +322,6 @@
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   }
 
-  function isGroupRow(row: (typeof rows)[number] | undefined): boolean {
-    return !!row && (row as { kind: string }).kind === "group";
-  }
-
-  function findNextEntryIndex(from: number, step: number): number | null {
-    let idx = from;
-    while (idx >= 0 && idx < rows.length) {
-      const row = rows[idx];
-      if (row && (row as { kind: string }).kind === "entry") return idx;
-      idx += step;
-    }
-    return null;
-  }
-
-  function findNearestEntryIndex(target: number, direction: 1 | -1): number | null {
-    if (target < 0 || target >= rows.length) return null;
-    const row = rows[target];
-    if (row && (row as { kind: string }).kind === "entry") return target;
-    // header: scan in direction, fallback to opposite
-    let idx = target + direction;
-    while (idx >= 0 && idx < rows.length) {
-      if ((rows[idx] as { kind: string }).kind === "entry") return idx;
-      idx += direction;
-    }
-    idx = target - direction;
-    while (idx >= 0 && idx < rows.length) {
-      if ((rows[idx] as { kind: string }).kind === "entry") return idx;
-      idx -= direction;
-    }
-    return null;
-  }
-
   function handleListScroll(event: Event): void {
     const container = event.currentTarget as HTMLDivElement;
     const nextScrollTop = container.scrollTop;
@@ -366,6 +340,7 @@
       (activeIndex < nextRange.start || activeIndex >= nextRange.end)
     ) {
       const fallback = findNearestEntryIndex(
+        rows,
         Math.min(rows.length - 1, Math.max(0, Math.floor(nextScrollTop / rowHeight))),
         1,
       );
@@ -378,7 +353,7 @@
   async function focusRowAt(index: number, direction: 1 | -1 = 1): Promise<void> {
     if (rows.length === 0 || !entryTableEl) return;
     let targetIndex = Math.max(0, Math.min(rows.length - 1, index));
-    const resolved = findNearestEntryIndex(targetIndex, direction);
+    const resolved = findNearestEntryIndex(rows, targetIndex, direction);
     if (resolved === null) return;
     targetIndex = resolved;
     const itemTop = targetIndex * rowHeight;
@@ -410,19 +385,19 @@
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = findNextEntryIndex(lastFocusedIndex + 1, 1);
+      const next = findNextEntryIndex(rows, lastFocusedIndex + 1, 1);
       if (next !== null) void focusRowAt(next, 1);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      const prev = findNextEntryIndex(lastFocusedIndex - 1, -1);
+      const prev = findNextEntryIndex(rows, lastFocusedIndex - 1, -1);
       if (prev !== null) void focusRowAt(prev, -1);
     } else if (event.key === "Home") {
       event.preventDefault();
-      const first = findNextEntryIndex(0, 1);
+      const first = findNextEntryIndex(rows, 0, 1);
       if (first !== null) void focusRowAt(first, 1);
     } else if (event.key === "End") {
       event.preventDefault();
-      const last = findNextEntryIndex(rows.length - 1, -1);
+      const last = findNextEntryIndex(rows, rows.length - 1, -1);
       if (last !== null) void focusRowAt(last, -1);
     }
   }
@@ -436,20 +411,18 @@
     const pageStep = Math.max(1, Math.floor(viewportHeight / rowHeight) - 1);
     let targetIndex: number | null = null;
     if (event.key === "ArrowDown") {
-      targetIndex = findNextEntryIndex(index + 1, 1);
+      targetIndex = findNextEntryIndex(rows, index + 1, 1);
     } else if (event.key === "ArrowUp") {
-      targetIndex = findNextEntryIndex(index - 1, -1);
+      targetIndex = findNextEntryIndex(rows, index - 1, -1);
     } else if (event.key === "Home") {
-      targetIndex = findNextEntryIndex(0, 1);
+      targetIndex = findNextEntryIndex(rows, 0, 1);
     } else if (event.key === "End") {
-      targetIndex = findNextEntryIndex(rows.length - 1, -1);
+      targetIndex = findNextEntryIndex(rows, rows.length - 1, -1);
     } else if (event.key === "PageDown") {
       // page step is in rows, but we need to land on an entry
-      const approx = index + pageStep;
-      targetIndex = findNearestEntryIndex(Math.min(rows.length - 1, approx), 1) ?? findNextEntryIndex(approx, -1);
+      targetIndex = pageDownTargetIndex(rows, index, pageStep);
     } else if (event.key === "PageUp") {
-      const approx = index - pageStep;
-      targetIndex = findNearestEntryIndex(Math.max(0, approx), -1) ?? findNextEntryIndex(approx, 1);
+      targetIndex = pageUpTargetIndex(rows, index, pageStep);
     }
 
     if (targetIndex !== null) {
