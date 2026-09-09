@@ -515,6 +515,10 @@ pub(crate) async fn download_favicons(
                 cancelled = true;
                 // Drain aborted tasks so JoinSet is empty.
                 while set.join_next().await.is_some() {}
+                // Release the connection pool now instead of at the end of
+                // the command: the apply/save phase below can be slow, and
+                // idle keep-alive sockets must not linger until then.
+                drop(client);
                 break;
             }
         }
