@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.5.0 (2026-09-09)
+
+### ✨ Features
+
+- **layout**: KeePass-style group separator lines with per-group sort order (83cd2cf7)
+- **layout**: configurable entry-row height with always-on compact density (bbdc4549)
+- **detail**: only linkify urls in notes (da259b96)
+- **hibp**: add cancel and progress to breach check mirroring favicon (6d0c59b5)
+- **favicon**: allow cancelling favicon download with end-waiting button (ae5a23ff)
+
+### 🐛 Bug Fixes
+
+- **entry-table**: hide group separators from listbox semantics (ba6b3d90)
+- **settings**: validate separator color before persisting (45d875d5)
+- **hibp**: mark cancelled runs instead of clean results (70a1b9bf)
+- **tcato**: keep target focus when reopening overlay (73d1be29)
+- **entry-table**: clamp page-up search past leading group headers (3d1cc438)
+- **group**: entry total = root count minus recycle bin (84337140)
+- **favicon**: parse site link tags and fall back to http (b74117f9)
+- **settings**: preserve custom palette when switching theme modes (34b2312b)
+- **tcato**: surface open errors when view is absent and keep contract (c87518b9)
+- **tcato**: auto-close overlay on tab switch and surface stale open errors (a1b395a5)
+- **tcato**: reject recycle-bin entries for two-channel fill (4f4515e0)
+- **tcato**: reject empty channel injection and disable empty buttons (7b381858)
+- **tcato**: clear stale target on close and vault lock (a3190750)
+- **tcato**: prevent overlay from stealing focus and injecting into itself (a7be76dc)
+- **layout**: capture panel widths before store write to prevent drag revert (7143c525)
+- **entry-table**: measure scroll from table container to restore virtualization (01a28e65)
+- **search**: fix advanced search dialog layout overflow and block spacing (4d45d0a5)
+- **settings**: resolve app version from Tauri instead of hardcoded 0.1.0 (3de15ec8)
+
+### 🎨 Styling
+
+- apply prettier formatting to unformatted files (3d687fe1)
+- **settings**: apply wrapped-heading on custom palette (ecf36fc5)
+- **toolbar**: remove unsaved dirty badge (3a3b50c4)
+- **standalone**: center lock/welcome shell, card-ize lock path (dc932298)
+- **settings**: hide custom palette subtitle when actions wrap (b199c1bf)
+- **settings**: right-align custom palette actions after wrap (ad61864f)
+- **settings**: fix custom palette heading crush on narrow width (5e1d36f6)
+- **settings**: use icon-only theme actions and keep theme select last (dd3e70a7)
+- **settings**: keep custom color actions on single line (37f90c88)
+- **settings**: merge multi-theme actions into custom color card and remove separate heading (37f6c5ff)
+- **settings**: use ModalShell dialogs for save/rename theme and remove inline name field (57beeaf0)
+- format vault tcato switch block (2b848ad9)
+- **settings**: move multi-theme config to first row below custom palette header (1600515d)
+- format data-contracts and +page (693bd07e)
+- **detail**: restore notes divider lines, unify edit/read display, tighten spacing (0175b451)
+- **detail**: remove notes side gaps and hide scrollbar while keeping scroll (d6357044)
+- **detail**: make notes fill whole region instead of inset textarea (fa81d17e)
+
+### 📝 Documentation
+
+- **tcato**: document no-activate overlay, empty-channel and recycle-bin guards (686904ee)
+
+### 🔧 Chores
+
+- **lint**: fix clippy warnings for HIBP and favicon loops (2c8777cd)
+- **deps**: pin keepass to =0.13.22 to avoid aes 0.8 conflict (1e4f77f1)
+
 ## 1.4.1 (2026-08-31)
 
 ### ✨ Features
