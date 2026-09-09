@@ -25,10 +25,27 @@ impl Default for HibpCancel {
     }
 }
 
+impl HibpCancel {
+    /// Request cancellation: persisting the flag (for tasks spawned after
+    /// the wake) plus waking tasks already awaiting on `notify`.
+    pub(crate) fn cancel(&self) {
+        self.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Clear a previous run's cancel so it cannot poison the next run.
+    pub(crate) fn reset(&self) {
+        self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[tauri::command]
 pub(crate) fn cancel_hibp(cancel: tauri::State<'_, HibpCancel>) -> Result<(), String> {
-    cancel.flag.store(true, std::sync::atomic::Ordering::SeqCst);
-    cancel.notify.notify_waiters();
+    cancel.cancel();
     Ok(())
 }
 
@@ -192,9 +209,7 @@ pub(crate) async fn check_hibp(
         return Ok(Vec::new());
     }
     // Reset cancel flag for this run.
-    cancel_state
-        .flag
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+    cancel_state.reset();
     let cancel = cancel_state.notify.clone();
     let cancel_flag = cancel_state.flag.clone();
 

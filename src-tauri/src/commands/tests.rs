@@ -164,3 +164,55 @@ fn favicon_link_urls_rejects_binary_body() {
     let text = String::from_utf8_lossy(&body);
     assert!(favicon_link_urls(&text, "https://e.com/").is_empty());
 }
+
+#[test]
+fn hibp_cancel_sets_flag_and_reset_clears_it() {
+    let cancel = HibpCancel::default();
+    assert!(!cancel.is_cancelled());
+    cancel.cancel();
+    assert!(cancel.is_cancelled());
+    // A new run resets the flag so a previous cancel cannot poison it.
+    cancel.reset();
+    assert!(!cancel.is_cancelled());
+}
+
+#[test]
+fn favicon_cancel_sets_flag_and_reset_clears_it() {
+    let cancel = FaviconCancel::default();
+    assert!(!cancel.is_cancelled());
+    cancel.cancel();
+    assert!(cancel.is_cancelled());
+    cancel.reset();
+    assert!(!cancel.is_cancelled());
+}
+
+#[tokio::test]
+async fn hibp_cancel_wakes_a_parked_waiter() {
+    let cancel = HibpCancel::default();
+    let notify = cancel.notify.clone();
+    let waiter = tokio::spawn(async move {
+        notify.notified().await;
+    });
+    // Give the waiter a chance to park before firing cancel.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    cancel.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+        .await
+        .expect("cancel must wake parked waiter")
+        .unwrap();
+}
+
+#[tokio::test]
+async fn favicon_cancel_wakes_a_parked_waiter() {
+    let cancel = FaviconCancel::default();
+    let notify = cancel.notify.clone();
+    let waiter = tokio::spawn(async move {
+        notify.notified().await;
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    cancel.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+        .await
+        .expect("cancel must wake parked waiter")
+        .unwrap();
+}

@@ -28,10 +28,27 @@ impl Default for FaviconCancel {
     }
 }
 
+impl FaviconCancel {
+    /// Request cancellation: persisting the flag (for tasks spawned after
+    /// the wake) plus waking tasks already awaiting on `notify`.
+    pub(crate) fn cancel(&self) {
+        self.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Clear a previous run's cancel so it cannot poison the next run.
+    pub(crate) fn reset(&self) {
+        self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[tauri::command]
 pub(crate) fn cancel_favicons(cancel: tauri::State<'_, FaviconCancel>) -> Result<(), String> {
-    cancel.flag.store(true, std::sync::atomic::Ordering::SeqCst);
-    cancel.notify.notify_waiters();
+    cancel.cancel();
     Ok(())
 }
 
@@ -443,9 +460,7 @@ pub(crate) async fn download_favicons(
     // `reqwest::Client::clone` is cheap (Arc-backed), while rebuilding it per
     // host discards warm TLS/proxy connections and repeats proxy setup.
     // Reset cancel flag for this run; previous run's cancel must not poison the next.
-    cancel_state
-        .flag
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+    cancel_state.reset();
     let cancel = cancel_state.notify.clone();
     let cancel_flag = cancel_state.flag.clone();
     let client = build_favicon_client();
