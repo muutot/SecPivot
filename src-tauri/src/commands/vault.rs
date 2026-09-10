@@ -159,12 +159,9 @@ pub(crate) fn close_vault(
         let should_clear = if !any_open {
             true
         } else if let Some(target) = app.try_state::<crate::commands::tcato::TcatoTarget>() {
-            if let Ok(slot) = target.0.lock() {
-                slot.as_ref()
-                    .is_some_and(|(sid, _)| sid == &closed_session_id)
-            } else {
-                false
-            }
+            target
+                .target_session()
+                .is_some_and(|sid| sid == closed_session_id)
         } else {
             false
         };
@@ -236,11 +233,7 @@ pub(crate) fn set_active_session(
     {
         let should_close =
             if let Some(target) = app.try_state::<crate::commands::tcato::TcatoTarget>() {
-                if let Ok(slot) = target.0.lock() {
-                    slot.as_ref().is_some_and(|(sid, _)| sid != &session_id)
-                } else {
-                    false
-                }
+                target.target_session().is_some_and(|sid| sid != session_id)
             } else {
                 false
             };

@@ -183,8 +183,8 @@ fn handle_global_hotkey(app: &tauri::AppHandle) {
 }
 
 /// Open the TCATO overlay for the entry uniquely matching the focused
-/// window. Runs on the hotkey thread; failures are logged only. Zero or
-/// several matches summon nothing: the overlay needs one unambiguous target.
+/// window; several matches open the overlay in pick mode instead.
+/// Runs on the hotkey thread; failures are logged only.
 #[cfg(desktop)]
 fn handle_tcato_summon_hotkey(app: &tauri::AppHandle) {
     let Some(window_title) = platform::focus::foreground_window_title() else {
@@ -199,7 +199,11 @@ fn handle_tcato_summon_hotkey(app: &tauri::AppHandle) {
     let Some(target) = app.try_state::<commands::TcatoTarget>() else {
         return;
     };
-    let (session_id, uuid) = {
+    enum Summon {
+        Target(String, String),
+        Pick(Vec<vault::AutotypeCandidate>),
+    }
+    let summon = {
         let guard = match session.lock() {
             Ok(s) => s,
             Err(_) => return,
@@ -207,30 +211,41 @@ fn handle_tcato_summon_hotkey(app: &tauri::AppHandle) {
         let Some(session_id) = vaults.active_id() else {
             return;
         };
-        let candidates = match guard.autotype_match_candidates(&window_title) {
+        let mut candidates = match guard.autotype_match_candidates(&window_title) {
             Ok(candidates) => candidates,
             Err(e) => {
                 eprintln!("tcato summon: {e}");
                 return;
             }
         };
-        if candidates.len() != 1 {
-            eprintln!(
-                "tcato summon: need exactly one match, got {}",
-                candidates.len()
-            );
+        if candidates.is_empty() {
+            eprintln!("tcato summon: no entry matches the foreground window");
             return;
         }
-        (session_id, candidates[0].uuid.clone())
+        if candidates.len() == 1 {
+            let uuid = candidates[0].uuid.clone();
+            Summon::Target(session_id, uuid)
+        } else {
+            for candidate in &mut candidates {
+                candidate.session_id.clone_from(&session_id);
+            }
+            Summon::Pick(candidates)
+        }
     };
-    if let Err(e) = commands::tcato::open_tcato_overlay_for(
-        app,
-        vaults.inner(),
-        session.inner(),
-        target.inner(),
-        session_id,
-        uuid,
-    ) {
+    let result = match summon {
+        Summon::Target(session_id, uuid) => commands::tcato::open_tcato_overlay_for(
+            app,
+            vaults.inner(),
+            session.inner(),
+            target.inner(),
+            session_id,
+            uuid,
+        ),
+        Summon::Pick(candidates) => {
+            commands::tcato::open_tcato_pick(app, target.inner(), candidates)
+        }
+    };
+    if let Err(e) = result {
         eprintln!("tcato summon: {e}");
     }
 }
@@ -342,7 +357,7 @@ pub fn run() {
             app.manage(commands::FaviconCancel::default());
             app.manage(commands::HibpCancel::default());
             #[cfg(desktop)]
-            app.manage(commands::TcatoTarget(Mutex::new(None)));
+            app.manage(commands::TcatoTarget::new());
             #[cfg(desktop)]
             app.manage(crate::bridge::server::BridgeState::default());
             #[cfg(desktop)]

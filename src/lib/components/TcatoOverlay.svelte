@@ -8,10 +8,13 @@
   let hasUsername = $state(false);
   let hasTotp = $state(false);
   let lastWindow = $state<string | null>(null);
+  let candidates = $state<{ sessionId: string; uuid: string; title: string; username: string }[]>(
+    [],
+  );
   let feedback = $state("");
   let error = $state("");
 
-  onMount(async () => {
+  async function loadState(): Promise<void> {
     try {
       const info = await invoke<{
         title: string;
@@ -20,6 +23,7 @@
         hasUsername: boolean;
         hasTotp: boolean;
         lastWindow: string | null;
+        pending: { sessionId: string; uuid: string; title: string; username: string }[];
       } | null>("tcato_state");
       if (!info) {
         error = "数据库未打开或条目不可用";
@@ -30,9 +34,14 @@
       hasUsername = info.hasUsername;
       hasTotp = info.hasTotp ?? false;
       lastWindow = info.lastWindow ?? null;
+      candidates = info.pending ?? [];
     } catch (e) {
       error = `读取条目失败：${e}`;
     }
+  }
+
+  onMount(() => {
+    void loadState();
   });
 
   async function send(channel: "username" | "password" | "totp"): Promise<void> {
@@ -46,6 +55,20 @@
           : channel === "password"
             ? "已注入密码"
             : "已注入动态码";
+    } catch (e) {
+      error = `${e}`;
+    }
+  }
+
+  async function pick(candidate: { sessionId: string; uuid: string }): Promise<void> {
+    feedback = "";
+    error = "";
+    try {
+      await invoke("open_tcato_overlay", {
+        sessionId: candidate.sessionId,
+        uuid: candidate.uuid,
+      });
+      await loadState();
     } catch (e) {
       error = `${e}`;
     }
@@ -74,33 +97,53 @@
     <p class="hint">上次填充目标：{lastWindow}</p>
   {/if}
 
-  <div class="actions">
-    <button
-      class="channel-button"
-      onmousedown={(e) => e.preventDefault()}
-      onclick={() => send("username")}
-      disabled={!hasUsername}
-    >
-      <AppIcon name="user" size={13} />用户名
-    </button>
-    <button
-      class="channel-button primary"
-      onmousedown={(e) => e.preventDefault()}
-      onclick={() => send("password")}
-      disabled={!hasPassword}
-    >
-      <AppIcon name="key" size={13} />密码
-    </button>
-    <button
-      class="channel-button"
-      onmousedown={(e) => e.preventDefault()}
-      onclick={() => send("totp")}
-      disabled={!hasTotp}
-      title="注入当前动态验证码"
-    >
-      <AppIcon name="clock" size={13} />动态码
-    </button>
-  </div>
+  {#if candidates.length > 0}
+    <div class="pick-list" role="listbox" aria-label="选择要填充的条目">
+      {#each candidates as candidate (candidate.uuid)}
+        <button
+          type="button"
+          class="pick-item"
+          role="option"
+          aria-selected="false"
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => pick(candidate)}
+        >
+          <span class="pick-title">{candidate.title || "未命名条目"}</span>
+          {#if candidate.username}
+            <span class="pick-username">{candidate.username}</span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {:else}
+    <div class="actions">
+      <button
+        class="channel-button"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => send("username")}
+        disabled={!hasUsername}
+      >
+        <AppIcon name="user" size={13} />用户名
+      </button>
+      <button
+        class="channel-button primary"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => send("password")}
+        disabled={!hasPassword}
+      >
+        <AppIcon name="key" size={13} />密码
+      </button>
+      <button
+        class="channel-button"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => send("totp")}
+        disabled={!hasTotp}
+        title="注入当前动态验证码"
+      >
+        <AppIcon name="clock" size={13} />动态码
+      </button>
+    </div>
+  {/if}
 
   {#if feedback}
     <p class="feedback ok">{feedback}</p>
@@ -215,6 +258,49 @@
   .channel-button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+  .pick-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .pick-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pick-item:hover {
+    background: var(--hover-bg);
+  }
+
+  .pick-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pick-username {
+    flex: 1;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .feedback {

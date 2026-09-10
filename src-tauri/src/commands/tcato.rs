@@ -12,7 +12,35 @@ use tauri::Manager;
 // ---------------------------------------------------------------------------
 
 /// Stable session + entry target of the TCATO overlay; never the password.
-pub(crate) struct TcatoTarget(pub(crate) Mutex<Option<(String, String)>>);
+/// `pending` holds multi-match summon candidates for pick mode (cleared
+/// whenever an explicit target is set or the overlay closes).
+pub(crate) struct TcatoTarget {
+    target: Mutex<Option<(String, String)>>,
+    pending: Mutex<Vec<crate::vault::AutotypeCandidate>>,
+}
+
+impl TcatoTarget {
+    /// Empty target with no pending candidates.
+    pub(crate) fn new() -> Self {
+        Self {
+            target: Mutex::new(None),
+            pending: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Session id of the overlay's current target, if any.
+    pub(crate) fn target_session(&self) -> Option<String> {
+        self.target
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone().map(|(sid, _)| sid))
+    }
+
+    /// Clone the current (session, entry) target, if any.
+    pub(crate) fn current_target(&self) -> Option<(String, String)> {
+        self.target.lock().ok().and_then(|slot| slot.clone())
+    }
+}
 
 /// Lightweight info shown in the TCATO overlay; secrets never leave the
 /// backend, so the password itself is only reported as a boolean.
@@ -25,6 +53,9 @@ pub(crate) struct TcatoInfo {
     has_username: bool,
     has_totp: bool,
     last_window: Option<String>,
+    /// Multi-match summon candidates; non-empty means the overlay renders
+    /// pick mode instead of the inject buttons.
+    pending: Vec<crate::vault::AutotypeCandidate>,
 }
 
 pub(crate) const TCATO_WINDOW_LABEL: &str = "tcato";
@@ -76,9 +107,39 @@ pub(crate) fn open_tcato_overlay_for(
         target.ensure_tcato_allowed(&uuid)?;
         target.autotype_context(&uuid).map(|_| ())
     })?;
-    let mut slot = target.0.lock().map_err(|_| "覆盖层状态已损坏".to_owned())?;
+    let mut slot = target
+        .target
+        .lock()
+        .map_err(|_| "覆盖层状态已损坏".to_owned())?;
     *slot = Some((session_id, uuid));
     drop(slot);
+    if let Ok(mut pending) = target.pending.lock() {
+        pending.clear();
+    }
+    show_tcato_window(app)
+}
+
+/// Multi-match summon path: stash the candidates for pick mode (clearing any
+/// previous target) and show the overlay; the chosen entry re-enters through
+/// `open_tcato_overlay`.
+pub(crate) fn open_tcato_pick(
+    app: &tauri::AppHandle,
+    target: &TcatoTarget,
+    candidates: Vec<crate::vault::AutotypeCandidate>,
+) -> Result<(), String> {
+    if let Ok(mut slot) = target.target.lock() {
+        *slot = None;
+    }
+    *target
+        .pending
+        .lock()
+        .map_err(|_| "覆盖层状态已损坏".to_owned())? = candidates;
+    show_tcato_window(app)
+}
+
+/// Show the overlay window without touching the target: shared by the
+/// target path and the multi-match pick path.
+fn show_tcato_window(app: &tauri::AppHandle) -> Result<(), String> {
     #[cfg(desktop)]
     {
         if let Some(window) = app.get_webview_window(TCATO_WINDOW_LABEL) {
@@ -120,12 +181,29 @@ pub(crate) fn tcato_state(
     target: tauri::State<'_, TcatoTarget>,
 ) -> Result<Option<TcatoInfo>, String> {
     let target_ref = target
-        .0
+        .target
+        .lock()
+        .map_err(|_| "覆盖层状态已损坏".to_owned())?
+        .clone();
+    let pending = target
+        .pending
         .lock()
         .map_err(|_| "覆盖层状态已损坏".to_owned())?
         .clone();
     let Some((session_id, uuid)) = target_ref else {
-        return Ok(None);
+        if pending.is_empty() {
+            return Ok(None);
+        }
+        // Pick mode: no target yet, the overlay lists the candidates.
+        return Ok(Some(TcatoInfo {
+            title: String::new(),
+            username: String::new(),
+            has_password: false,
+            has_username: false,
+            has_totp: false,
+            last_window: None,
+            pending,
+        }));
     };
     let (ctx, has_totp, last_window) = with_vault_session(
         vaults.inner(),
@@ -146,6 +224,7 @@ pub(crate) fn tcato_state(
         has_username: !ctx.username.is_empty(),
         has_totp,
         last_window,
+        pending: Vec::new(),
     }))
 }
 
@@ -158,10 +237,7 @@ pub(crate) fn tcato_send(
     channel: String,
 ) -> Result<(), String> {
     let (session_id, uuid) = target
-        .0
-        .lock()
-        .map_err(|_| "覆盖层状态已损坏".to_owned())?
-        .clone()
+        .current_target()
         .ok_or_else(|| "TCATO 覆盖层尚未指定条目".to_owned())?;
     let text = match channel.as_str() {
         "username" | "password" => {
@@ -216,11 +292,15 @@ pub(crate) fn tcato_send(
     focus::send_text_to_foreground(&text)
 }
 
-/// Clear the in-memory TCATO target (session + entry) without touching the window.
+/// Clear the in-memory TCATO target (session + entry) and any pending pick
+/// candidates, without touching the window.
 pub(crate) fn clear_tcato_target(app: &tauri::AppHandle) {
     if let Some(target) = app.try_state::<TcatoTarget>() {
-        if let Ok(mut slot) = target.0.lock() {
+        if let Ok(mut slot) = target.target.lock() {
             *slot = None;
+        }
+        if let Ok(mut pending) = target.pending.lock() {
+            pending.clear();
         }
     }
 }
