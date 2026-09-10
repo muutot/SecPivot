@@ -1,7 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let title = $state("");
   let hasPassword = $state(false);
@@ -26,7 +38,7 @@
         pending: { sessionId: string; uuid: string; title: string; username: string }[];
       } | null>("tcato_state");
       if (!info) {
-        error = "数据库未打开或条目不可用";
+        error = t(lang, "tcato.noTarget");
         return;
       }
       title = info.title;
@@ -36,7 +48,7 @@
       lastWindow = info.lastWindow ?? null;
       candidates = info.pending ?? [];
     } catch (e) {
-      error = `读取条目失败：${e}`;
+      error = t(lang, "tcato.readFailed", { error: String(e) });
     }
   }
 
@@ -51,10 +63,10 @@
       await invoke("tcato_send", { channel });
       feedback =
         channel === "username"
-          ? "已注入用户名"
+          ? t(lang, "tcato.injectedUsername")
           : channel === "password"
-            ? "已注入密码"
-            : "已注入动态码";
+            ? t(lang, "tcato.injectedPassword")
+            : t(lang, "tcato.injectedTotp");
     } catch (e) {
       error = `${e}`;
     }
@@ -86,19 +98,19 @@
   <header>
     <span class="title-icon"><AppIcon name="shield" size={15} /></span>
     <div class="heading">
-      <strong>TCATO 两通道填充</strong>
-      <p {title}>{title || "正在读取条目…"}</p>
+      <strong>{t(lang, "tcato.title")}</strong>
+      <p {title}>{title || t(lang, "tcato.loading")}</p>
     </div>
-    <button class="close-button" onclick={close} aria-label="关闭">×</button>
+    <button class="close-button" onclick={close} aria-label={t(lang, "common.close")}>×</button>
   </header>
 
-  <p class="hint">请先将焦点移到目标窗口，再点击要注入的内容；密码不经过键盘钩子。</p>
+  <p class="hint">{t(lang, "tcato.hint")}</p>
   {#if lastWindow}
-    <p class="hint">上次填充目标：{lastWindow}</p>
+    <p class="hint">{t(lang, "tcato.lastTarget", { window: lastWindow })}</p>
   {/if}
 
   {#if candidates.length > 0}
-    <div class="pick-list" role="listbox" aria-label="选择要填充的条目">
+    <div class="pick-list" role="listbox" aria-label={t(lang, "tcato.pickLabel")}>
       {#each candidates as candidate (candidate.uuid)}
         <button
           type="button"
@@ -108,7 +120,7 @@
           onmousedown={(e) => e.preventDefault()}
           onclick={() => pick(candidate)}
         >
-          <span class="pick-title">{candidate.title || "未命名条目"}</span>
+          <span class="pick-title">{candidate.title || t(lang, "tcato.untitled")}</span>
           {#if candidate.username}
             <span class="pick-username">{candidate.username}</span>
           {/if}
@@ -123,7 +135,7 @@
         onclick={() => send("username")}
         disabled={!hasUsername}
       >
-        <AppIcon name="user" size={13} />用户名
+        <AppIcon name="user" size={13} />{t(lang, "tcato.username")}
       </button>
       <button
         class="channel-button primary"
@@ -131,16 +143,16 @@
         onclick={() => send("password")}
         disabled={!hasPassword}
       >
-        <AppIcon name="key" size={13} />密码
+        <AppIcon name="key" size={13} />{t(lang, "tcato.password")}
       </button>
       <button
         class="channel-button"
         onmousedown={(e) => e.preventDefault()}
         onclick={() => send("totp")}
-        disabled={!hasTotp}
-        title="注入当前动态验证码"
-      >
-        <AppIcon name="clock" size={13} />动态码
+      disabled={!hasTotp}
+      title={t(lang, "tcato.totpTitle")}
+    >
+      <AppIcon name="clock" size={13} />{t(lang, "tcato.totp")}
       </button>
     </div>
   {/if}

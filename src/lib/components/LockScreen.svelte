@@ -3,7 +3,8 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { rememberCredential } from "$lib/services/security";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import StandaloneVaultShell from "$lib/components/StandaloneVaultShell.svelte";
   import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -16,6 +17,16 @@
   }
 
   let { remembered, onopened, onswitch }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let password = $state("");
   let keyfilePath = $state("");
@@ -47,7 +58,7 @@
   async function unlock(): Promise<void> {
     if (!remembered) return;
     if (!password && !keyfilePath) {
-      error = "请输入主密码或选择密钥文件";
+      error = t(lang, "lock.needPassword");
       return;
     }
     busy = true;
@@ -72,7 +83,7 @@
         path: remembered.path,
       });
       if (!saved?.password) {
-        error = "没有已保存的凭据,请先在设置中启用“记住密码(Windows Hello)”";
+        error = t(lang, "lock.noSavedCredential");
         helloAvailable = false;
         return;
       }
@@ -86,7 +97,7 @@
   }
 </script>
 
-<StandaloneVaultShell icon="lock" title="数据库已锁定" subtitle={remembered?.fileName ?? ""}>
+<StandaloneVaultShell icon="lock" title={t(lang, "lock.title")} subtitle={remembered?.fileName ?? ""}>
   <div class="lock-fields">
     <VaultCredentialFields
       bind:password
@@ -100,7 +111,7 @@
   </div>
 
   <div class="unlock-actions">
-    <Button onclick={onswitch} disabled={busy}>使用其他数据库</Button>
+    <Button onclick={onswitch} disabled={busy}>{t(lang, "lock.switchDatabase")}</Button>
     {#if helloAvailable}
       <Button onclick={() => void unlockWithHello()} disabled={busy}>
         <AppIcon name="unlock" size={15} />Windows Hello
@@ -112,7 +123,7 @@
       disabled={busy || (!password && !keyfilePath)}
       {busy}
     >
-      {busy ? "解锁中…" : "解锁"}
+      {busy ? t(lang, "lock.unlocking") : t(lang, "lock.unlock")}
     </Button>
   </div>
 

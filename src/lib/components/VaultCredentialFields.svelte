@@ -1,7 +1,8 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     password?: string;
@@ -32,22 +33,34 @@
     onPickKeyfile,
     onPickCreatePath,
   }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 </script>
 
 {#if showPathField}
   <label class="field">
-    <span>保存路径</span>
+    <span>{t(lang, "vault.path")}</span>
     <div class="path-row">
       <TextField
         bind:value={path}
-        placeholder={isTauriRuntime() ? "点击右侧选择文件" : "默认保存到浏览器演示存储"}
+        placeholder={
+          isTauriRuntime() ? t(lang, "vault.pickFile") : t(lang, "vault.demoStorage")
+        }
         disabled={!isTauriRuntime()}
       />
       {#if isTauriRuntime() && onPickCreatePath}
         <button
           class="browse-button"
           onclick={onPickCreatePath}
-          title="选择保存位置"
+          title={t(lang, "vault.pickPathTitle")}
           disabled={busy}
         >
           <AppIcon name="folder" size={15} />
@@ -58,18 +71,18 @@
 {/if}
 
 <label class="field">
-  <span>主密码</span>
+  <span>{t(lang, "vault.masterPassword")}</span>
   <div class="path-row">
     <TextField
       type={showPassword ? "text" : "password"}
       bind:value={password}
-      placeholder={isDemo ? "演示模式可留空" : isCreate ? "必填" : "必填"}
+      placeholder={isDemo ? t(lang, "vault.demoBlank") : t(lang, "vault.required")}
       disabled={busy}
     />
     <button
       class="browse-button"
       onclick={() => (showPassword = !showPassword)}
-      title="显示密码"
+      title={t(lang, "vault.showPassword")}
       disabled={busy}
     >
       <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
@@ -79,7 +92,7 @@
 
 {#if isCreate}
   <label class="field">
-    <span>确认主密码</span>
+    <span>{t(lang, "vault.confirmPassword")}</span>
     <div class="path-row">
       <TextField type="password" bind:value={confirm} disabled={busy} />
     </div>
@@ -88,15 +101,20 @@
 
 {#if isTauriRuntime()}
   <label class="field">
-    <span>密钥文件(可选)</span>
+    <span>{t(lang, "vault.keyfile")}</span>
     <div class="path-row">
       <TextField
         bind:value={keyfilePath}
-        placeholder="点击右侧选择密钥文件"
+        placeholder={t(lang, "vault.pickKeyfile")}
         readonly
         disabled={busy}
       />
-      <button class="browse-button" onclick={onPickKeyfile} title="选择密钥文件" disabled={busy}>
+      <button
+        class="browse-button"
+        onclick={onPickKeyfile}
+        title={t(lang, "vault.pickKeyfileTitle")}
+        disabled={busy}
+      >
         <AppIcon name="folder" size={15} />
       </button>
     </div>

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
   interface Props {
@@ -22,6 +23,16 @@
 
   const appWindow = isTauriRuntime() ? getCurrentWindow() : null;
   let maximized = $state(false);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   onMount(() => {
     if (!appWindow) return;
@@ -61,10 +72,15 @@
     class="window-controls"
     class:chrome={variant === "chrome"}
     role="group"
-    aria-label="窗口控制"
+    aria-label={t(lang, "window.controls")}
   >
     {#if showMinimize}
-      <button class="wc-btn" onclick={minimize} title="最小化" aria-label="最小化">
+      <button
+        class="wc-btn"
+        onclick={minimize}
+        title={t(lang, "window.minimize")}
+        aria-label={t(lang, "window.minimize")}
+      >
         <AppIcon name="minimize" size={13} />
       </button>
     {/if}
@@ -72,14 +88,19 @@
       <button
         class="wc-btn"
         onclick={toggleMaximize}
-        title={maximized ? "还原" : "最大化"}
-        aria-label={maximized ? "还原" : "最大化"}
+        title={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
+        aria-label={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
       >
         <AppIcon name={maximized ? "restore" : "maximize"} size={12} />
       </button>
     {/if}
     {#if showClose}
-      <button class="wc-btn wc-close" onclick={close} title="关闭" aria-label="关闭">
+      <button
+        class="wc-btn wc-close"
+        onclick={close}
+        title={t(lang, "common.close")}
+        aria-label={t(lang, "common.close")}
+      >
         <AppIcon name="x" size={13} />
       </button>
     {/if}
