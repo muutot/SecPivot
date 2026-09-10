@@ -12,5 +12,17 @@ export async function resolve(specifier, context, next) {
     }
     return next(base.href, context);
   }
+  // Same extensionless fallback for relative imports between source modules
+  // (e.g. `../i18n/index.ts` importing `./en`); only applies when the
+  // importer is a TypeScript source file.
+  if (
+    (specifier.startsWith("./") || specifier.startsWith("../")) &&
+    context.parentURL?.endsWith(".ts")
+  ) {
+    const base = new URL(specifier, context.parentURL);
+    for (const candidate of [`${base.href}.ts`, `${base.href}/index.ts`]) {
+      if (existsSync(new URL(candidate))) return next(candidate, context);
+    }
+  }
   return next(specifier, context);
 }
