@@ -1,5 +1,6 @@
 <script lang="ts">
   import { appSettings, isHexColor } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -30,6 +31,7 @@
   });
 
   const general = $derived(s.general);
+  const lang = $derived(s.general.language);
 
   let draggedId: string | null = $state(null);
   let selectedThemeIdx: number | null = $state(null);
@@ -370,6 +372,34 @@
           onclick={() => change("theme", "custom")}
         >
           <span class="swatch swatch-custom"></span>自定义
+        </button>
+      </div>
+    </section>
+
+    <section class="setting-card">
+      <div class="setting-heading">
+        <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
+        <div class="heading-inline">
+          <div>
+            <strong>{t(lang, "settings.language.title")}</strong>
+            <p>{t(lang, "settings.language.description")}</p>
+          </div>
+        </div>
+      </div>
+      <div class="theme-segmented" role="group" aria-label={t(lang, "settings.language.title")}>
+        <button
+          class="theme-segment"
+          class:active={general.language === "zh-CN"}
+          onclick={() => change("language", "zh-CN")}
+        >
+          {t(lang, "settings.language.zh")}
+        </button>
+        <button
+          class="theme-segment"
+          class:active={general.language === "en"}
+          onclick={() => change("language", "en")}
+        >
+          {t(lang, "settings.language.en")}
         </button>
       </div>
     </section>

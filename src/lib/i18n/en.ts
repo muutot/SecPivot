@@ -13,4 +13,8 @@ export const en: Record<I18nKey, string> = {
   "common.retry": "Retry",
   "common.confirm": "Confirm",
   "common.back": "Back",
+  "settings.language.title": "Language",
+  "settings.language.description": "Takes effect immediately",
+  "settings.language.zh": "中文",
+  "settings.language.en": "English",
 };

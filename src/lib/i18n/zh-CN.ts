@@ -11,6 +11,10 @@ export const zhCN = {
   "common.retry": "重试",
   "common.confirm": "确认",
   "common.back": "返回",
+  "settings.language.title": "界面语言",
+  "settings.language.description": "切换后即时生效",
+  "settings.language.zh": "中文",
+  "settings.language.en": "English",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;
