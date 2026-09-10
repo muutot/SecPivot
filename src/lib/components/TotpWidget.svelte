@@ -1,12 +1,24 @@
 <script lang="ts">
   import { useTotpCode } from "$lib/composables/useTotpCode.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     entryUuid: string;
   }
 
   let { entryUuid }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   const totp = useTotpCode(() => entryUuid);
 </script>
@@ -15,7 +27,7 @@
   <div class="totp-code-row">
     <span class="totp-code mono">{totp.code || "••••••"}</span>
     {#if totp.code}
-      <button class="totp-copy" onclick={() => void totp.copy()} title="复制验证码">
+      <button class="totp-copy" onclick={() => void totp.copy()} title={t(lang, "totp.copyTitle")}>
         <AppIcon name={totp.copied ? "check" : "copy"} size={13} />
       </button>
     {/if}
@@ -27,13 +39,13 @@
   {/if}
   <div class="totp-meta">
     {#if totp.error}
-      <span class="totp-error">无法生成验证码</span>
+      <span class="totp-error">{t(lang, "totp.genError")}</span>
     {:else if totp.isHotp}
-      <span>HOTP · 第 {totp.counter ?? 0} 次</span>
+      <span>{t(lang, "totp.hotp", { n: totp.counter ?? 0 })}</span>
     {:else if totp.kind === "steam"}
-      <span>Steam · {totp.remaining}s 后刷新</span>
+      <span>{t(lang, "totp.steam", { s: totp.remaining })}</span>
     {:else}
-      <span>{totp.remaining}s 后刷新</span>
+      <span>{t(lang, "totp.refresh", { s: totp.remaining })}</span>
     {/if}
   </div>
 </div>

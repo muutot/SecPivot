@@ -1,6 +1,8 @@
 <script lang="ts">
   import { useTotpCode } from "$lib/composables/useTotpCode.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     entryUuid: string;
@@ -8,12 +10,22 @@
 
   let { entryUuid }: Props = $props();
 
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
   const totp = useTotpCode(() => entryUuid);
 </script>
 
 <button
   class="totp-badge"
-  title={totp.code ? "点击复制验证码" : "无法生成验证码"}
+  title={totp.code ? t(lang, "totp.clickCopy") : t(lang, "totp.genError")}
   onclick={() => void totp.copy()}
   disabled={!totp.code}
 >

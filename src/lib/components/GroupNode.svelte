@@ -10,6 +10,8 @@
     closeContextMenu,
     openContextMenu,
   } from "$lib/stores/activeContextMenu.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     group: VaultGroup;
@@ -119,6 +121,16 @@
 
   const groupName = $derived(group.name);
 
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
   $effect(() => {
     nameInput = groupName;
   });
@@ -134,20 +146,37 @@
   const menuItems: ContextMenuItem[] = $derived(
     isBin
       ? count > 0
-        ? [{ id: "empty-bin", label: "清空回收站", icon: "trash", destructive: true }]
+        ? [
+            {
+              id: "empty-bin",
+              label: t(lang, "groupnode.emptyBin"),
+              icon: "trash",
+              destructive: true,
+            },
+          ]
         : []
       : inRecycleBin
         ? [
-            { id: "restore", label: "恢复分组", icon: "undo" },
-            { id: "delete", label: "永久删除", icon: "trash", destructive: true },
+            { id: "restore", label: t(lang, "groupnode.restore"), icon: "undo" },
+            {
+              id: "delete",
+              label: t(lang, "groupnode.deletePerm"),
+              icon: "trash",
+              destructive: true,
+            },
           ]
         : [
-            { id: "add-subgroup", label: "新建子分组", icon: "folder-plus" },
-            { id: "rename", label: "重命名", icon: "edit" },
-            { id: "change-icon", label: "设置图标", icon: "palette" },
-            { id: "autotype", label: "自动填充设置", icon: "keyboard" },
-            { id: "meta", label: "属性", icon: "sliders" },
-            { id: "delete", label: "删除分组", icon: "trash", destructive: true },
+            { id: "add-subgroup", label: t(lang, "groupnode.addSubgroup"), icon: "folder-plus" },
+            { id: "rename", label: t(lang, "groupnode.rename"), icon: "edit" },
+            { id: "change-icon", label: t(lang, "groupnode.changeIcon"), icon: "palette" },
+            { id: "autotype", label: t(lang, "groupnode.autotype"), icon: "keyboard" },
+            { id: "meta", label: t(lang, "groupnode.meta"), icon: "sliders" },
+            {
+              id: "delete",
+              label: t(lang, "groupnode.deleteGroup"),
+              icon: "trash",
+              destructive: true,
+            },
           ],
   );
 
@@ -220,7 +249,11 @@
         onblur={commitRename}
         bind:this={inputEl}
       />
-      <button class="mini-btn" onclick={() => (renaming = false)} aria-label="取消">
+      <button
+        class="mini-btn"
+        onclick={() => (renaming = false)}
+        aria-label={t(lang, "common.cancel")}
+      >
         <AppIcon name="x" size={13} />
       </button>
     </div>

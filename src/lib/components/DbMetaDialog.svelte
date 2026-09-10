@@ -6,6 +6,8 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     name: string;
@@ -14,6 +16,16 @@
   }
 
   let { name, description, onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   // The dialog is mounted per open (dbMetaOpen), so the meta props never
   // change during an instance's lifetime; capturing them once is intentional.
@@ -58,8 +70,8 @@
 <svelte:window onkeydown={onKeydown} />
 
 <ModalShell
-  title="数据库属性"
-  description="库名称与描述写入 KDBX 元数据"
+  title={t(lang, "dbmeta.title")}
+  description={t(lang, "dbmeta.desc")}
   size="small"
   showClose={!saving}
   closeOnEscape={!saving}
@@ -68,11 +80,11 @@
   {#snippet icon()}<AppIcon name="database" size={18} />{/snippet}
   {#snippet children()}
     <div class="field-row">
-      <label for="db-name">库名称</label>
+      <label for="db-name">{t(lang, "dbmeta.nameLabel")}</label>
       <TextField
         id="db-name"
         bind:value={dbName}
-        placeholder="留空则清除"
+        placeholder={t(lang, "dbmeta.namePh")}
         maxlength={128}
         onkeydown={(e) => {
           if (e.key === "Enter") void save();
@@ -81,13 +93,13 @@
     </div>
 
     <div class="field-row">
-      <label for="db-description">描述</label>
+      <label for="db-description">{t(lang, "dbmeta.descLabel")}</label>
       <TextField
         id="db-description"
         multiline
         rows={4}
         bind:value={dbDescription}
-        placeholder="留空则清除"
+        placeholder={t(lang, "dbmeta.descPh")}
         maxlength={1024}
       />
     </div>
@@ -95,9 +107,9 @@
     {#if error}<p class="error-msg">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button onclick={onclose} disabled={saving}>{t(lang, "common.cancel")}</Button>
     <Button variant="primary" onclick={() => void save()} disabled={saving}>
-      {saving ? "保存中…" : "保存"}
+      {saving ? t(lang, "dbmeta.saving") : t(lang, "common.save")}
     </Button>
   {/snippet}
 </ModalShell>

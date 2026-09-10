@@ -3,6 +3,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ViewportMenuShell from "$lib/components/ViewportMenuShell.svelte";
   import MenuItem from "$lib/components/templates/menu/MenuItem.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   export interface ContextMenuItem {
     id: string;
@@ -27,6 +29,16 @@
 
   /** id of the currently expanded cascade submenu. */
   let openSubmenu = $state<string | null>(null);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   function close(): void {
     openSubmenu = null;
@@ -70,7 +82,7 @@
   }
 </script>
 
-<ViewportMenuShell {x} {y} onclose={close} ariaLabel="上下文菜单">
+<ViewportMenuShell {x} {y} onclose={close} ariaLabel={t(lang, "menu.contextMenu")}>
   {#snippet children()}
     {#each items as item}
       {@const hasChildren = Boolean(item.children?.length)}

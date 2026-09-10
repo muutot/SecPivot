@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   export type ModalSize = "small" | "confirm" | "medium" | "large" | "report";
   export type ModalTone = "default" | "danger";
@@ -43,6 +45,16 @@
   }: Props = $props();
 
   let dialogRef = $state<HTMLDivElement>();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   /** Focusable descendants kept inside the dialog while it is open. */
   const FOCUSABLE_SELECTOR =
@@ -120,8 +132,8 @@
           class="modal-shell__close"
           type="button"
           onclick={onclose}
-          title="关闭"
-          aria-label="关闭"
+          title={t(lang, "common.close")}
+          aria-label={t(lang, "common.close")}
         >
           <AppIcon name="x" size={14} />
         </button>

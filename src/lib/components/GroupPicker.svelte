@@ -3,6 +3,8 @@
   import { buildEntryCounts } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassGroupIconName } from "$lib/utils/keepass-icons";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     groups: VaultGroup[];
@@ -18,6 +20,16 @@
   let pickerEl = $state<HTMLDivElement>();
 
   const root = $derived(groups[0] ?? null);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
   const counts = $derived(root ? buildEntryCounts(root) : new Map<string, number>());
 
   /** Path from root to the browsed/committed group (top-down). */
@@ -108,7 +120,12 @@
   </button>
 
   {#if open && current}
-    <div class="picker-panel" role="listbox" aria-label="选择分组" tabindex="-1">
+    <div
+      class="picker-panel"
+      role="listbox"
+      aria-label={t(lang, "grouppicker.label")}
+      tabindex="-1"
+    >
       <!-- Breadcrumb: click to browse upward; the last crumb is the browsed group. -->
       <div class="crumb-current">
         {#each chain as crumb, i (crumb.uuid)}
@@ -140,7 +157,7 @@
 
       <!-- Child groups: a click only browses into the children, never commits. -->
       {#if current.children.length === 0}
-        <div class="picker-empty">该分组下没有子分组</div>
+        <div class="picker-empty">{t(lang, "grouppicker.empty")}</div>
       {:else}
         {#each current.children as child (child.uuid)}
           <button
@@ -172,7 +189,7 @@
       <!-- Explicit commit: whole row acts as the confirm target // anything else stays browse-only. -->
       <button type="button" class="picker-confirm" onclick={() => commit(current.uuid)}>
         <AppIcon name="check" size={13} />
-        <span>确认</span>
+        <span>{t(lang, "common.confirm")}</span>
       </button>
     </div>
   {/if}

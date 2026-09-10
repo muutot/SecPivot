@@ -1,10 +1,21 @@
 <script lang="ts">
   import { vault } from "$lib/services/vault";
   import type { SessionInfo } from "$lib/types/vault";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   let sessions = $state<SessionInfo[]>([]);
   let activeIdValue = $state<string | null>(null);
   let currentDirty = $state(false);
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
   $effect(() => {
     const unsubTabs = vault.tabs.subscribe((value) => {
       sessions = value;
@@ -34,7 +45,7 @@
 </script>
 
 {#if sessions.length > 1}
-  <div class="tab-bar" data-tauri-drag-region aria-label="打开的数据库">
+  <div class="tab-bar" data-tauri-drag-region aria-label={t(lang, "tabs.bar")}>
     {#each sessions as session (session.sessionId)}
       <div
         class="vault-tab"
@@ -45,18 +56,18 @@
           type="button"
           class="tab-main"
           onclick={() => void switchTo(session.sessionId)}
-          aria-label={`切换到 ${session.fileName}`}
+          aria-label={t(lang, "tabs.switchTo", { name: session.fileName })}
         >
           <span class="tab-name">{session.fileName}</span>
           {#if session.sessionId === activeIdValue ? currentDirty : session.dirty}
-            <span class="tab-dirty" aria-label="有未保存的更改"></span>
+            <span class="tab-dirty" aria-label={t(lang, "tabs.dirty")}></span>
           {/if}
         </button>
         <button
           type="button"
           class="tab-close"
           onclick={() => void vault.closeTab(session.sessionId)}
-          aria-label={`关闭 ${session.fileName}`}
+          aria-label={t(lang, "tabs.closeTab", { name: session.fileName })}
         >
           ×
         </button>
