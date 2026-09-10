@@ -231,6 +231,15 @@ jobs:
         run: npx tauri android init --ci --skip-targets-install
         working-directory: src-tauri
 
+      - name: Patch Android Gradle repositories
+        # The generated buildSrc project resolves the Kotlin Gradle plugin
+        # from plugins.gradle.org only; when that mirror is out of sync
+        # (plugin POM present, parent BOM missing) the whole build fails in
+        # `:buildSrc` configuration. Ensure google()/mavenCentral() fallbacks
+        # before any gradlew invocation. See scripts/patch-android-gradle-repos.ps1.
+        shell: pwsh
+        run: ./scripts/patch-android-gradle-repos.ps1
+
       - name: Configure Android NDK tools
         shell: bash
         run: |
