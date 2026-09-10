@@ -1,5 +1,6 @@
 <script lang="ts">
   import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import type { Cipher, Compression, Kdf, PasswordGeneratorSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
@@ -21,6 +22,7 @@
   });
 
   const gen = $derived(s.database.generator);
+  const lang = $derived(s.general.language);
 
   function setKdf(kdf: Kdf): void {
     appSettings.updateDatabase("kdf", kdf);
@@ -98,11 +100,11 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 数据库</span>
-      <h2>数据库</h2>
-      <p>新建数据库的加密默认值与密码生成规则。</p>
+      <span class="eyebrow">Settings · {t(lang, "database.title")}</span>
+      <h2>{t(lang, "database.title")}</h2>
+      <p>{t(lang, "database.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
@@ -111,8 +113,8 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
       <div>
-        <strong>密钥派生函数</strong>
-        <p>新建数据库默认 KDF，影响抗暴力破解强度</p>
+        <strong>{t(lang, "database.kdf")}</strong>
+        <p>{t(lang, "database.kdfDesc")}</p>
       </div>
     </div>
     <div class="kdf-segmented" role="group" aria-label="KDF">
@@ -133,8 +135,8 @@
       <span class="setting-icon"><AppIcon name="database" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>加密算法</strong>
-          <p>数据库对称加密标准</p>
+          <strong>{t(lang, "database.cipher")}</strong>
+          <p>{t(lang, "database.cipherDesc")}</p>
         </div>
         <Select
           value={s.database.cipher}
@@ -153,13 +155,13 @@
       <span class="setting-icon"><AppIcon name="file" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>压缩</strong>
-          <p>数据库内容压缩方式</p>
+          <strong>{t(lang, "database.compression")}</strong>
+          <p>{t(lang, "database.compressionDesc")}</p>
         </div>
         <Select
           value={s.database.compression}
           options={[
-            { value: "None", label: "不压缩" },
+            { value: "None", label: t(lang, "database.noCompression") },
             { value: "Gzip", label: "Gzip" },
           ]}
           onchange={(v) => appSettings.updateDatabase("compression", v as Compression)}
@@ -173,8 +175,8 @@
       <span class="setting-icon"><AppIcon name="save" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>文件后缀</strong>
-          <p>另存为的默认文件后缀；备份文件无后缀时也使用它</p>
+          <strong>{t(lang, "database.fileExtension")}</strong>
+          <p>{t(lang, "database.fileExtensionDesc")}</p>
         </div>
         <input
           class="extension-input"
@@ -189,10 +191,10 @@
 
   <SettingRangeCard
     icon="key"
-    label="默认密码长度"
-    description="生成器默认生成的密码长度"
+    label={t(lang, "database.passwordLength")}
+    description={t(lang, "database.passwordLengthDesc")}
     value={s.database.generator.length}
-    valueLabel={`${s.database.generator.length} 位`}
+    valueLabel={t(lang, "database.lengthUnit", { count: s.database.generator.length })}
     min={8}
     max={64}
     onchange={(value) => appSettings.updateDatabase("generator", { ...gen, length: value })}
@@ -202,8 +204,8 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
       <div>
-        <strong>字符集</strong>
-        <p>密码生成器启用的字符类别</p>
+        <strong>{t(lang, "database.charsets")}</strong>
+        <p>{t(lang, "database.charsetsDesc")}</p>
       </div>
     </div>
     <div class="charset-grid">
@@ -240,14 +242,14 @@
         class:active={gen.excludeSimilar}
         onclick={() => toggleGenerator("excludeSimilar")}
       >
-        排除相似
+        {t(lang, "database.excludeSimilar")}
       </button>
       <button
         class="charset-chip"
         class:active={gen.excludeAmbiguous}
         onclick={() => toggleGenerator("excludeAmbiguous")}
       >
-        排除易混
+        {t(lang, "database.excludeAmbiguous")}
       </button>
     </div>
   </section>
@@ -256,35 +258,41 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
       <div>
-        <strong>密码配置档</strong>
-        <p>命名规则可复用于新条目；「设为默认」作为新建条目的生成规则</p>
+        <strong>{t(lang, "database.profiles")}</strong>
+        <p>{t(lang, "database.profilesDesc")}</p>
       </div>
     </div>
     {#each profiles as profile, index}
       <div class="profile-row">
         <span class="profile-name">
           {profile.name}
-          {#if isDefault(profile)}<span class="profile-default">默认</span>{/if}
+          {#if isDefault(profile)}<span class="profile-default"
+              >{t(lang, "database.isDefault")}</span
+            >{/if}
         </span>
-        <span class="profile-length">{profile.length} 位</span>
+        <span class="profile-length"
+          >{t(lang, "database.lengthUnit", { count: profile.length })}</span
+        >
         <button type="button" class="profile-action" onclick={() => setDefault(profile)}>
-          设为默认
+          {t(lang, "database.setDefault")}
         </button>
-        <button type="button" class="profile-action" onclick={() => startEdit(index)}>编辑</button>
+        <button type="button" class="profile-action" onclick={() => startEdit(index)}
+          >{t(lang, "database.editProfile")}</button
+        >
         <button
           type="button"
           class="profile-action destructive"
           onclick={() => removeProfile(index)}
         >
-          删除
+          {t(lang, "common.delete")}
         </button>
       </div>
     {/each}
     {#if profiles.length === 0}
-      <p class="profile-empty">尚无自定义配置档</p>
+      <p class="profile-empty">{t(lang, "database.noProfiles")}</p>
     {/if}
     <button type="button" class="profile-add" onclick={startAdd}>
-      <AppIcon name="plus" size={12} />新建配置档
+      <AppIcon name="plus" size={12} />{t(lang, "database.newProfile")}
     </button>
   </section>
 
@@ -293,8 +301,12 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="key" size={17} /></span>
         <div>
-          <strong>{editingIndex === -1 ? "新建配置档" : "编辑配置档"}</strong>
-          <p>命名规则；留空的必含/排除/自定义字符集与 pattern 视为未启用</p>
+          <strong
+            >{editingIndex === -1
+              ? t(lang, "database.newProfile")
+              : t(lang, "database.editProfileTitle")}</strong
+          >
+          <p>{t(lang, "database.profileDesc")}</p>
         </div>
       </div>
       <div class="profile-form">
@@ -302,7 +314,7 @@
           class="profile-name-input"
           type="text"
           value={draft.name ?? ""}
-          placeholder="配置名称"
+          placeholder={t(lang, "database.profileName")}
           oninput={(e) => updateDraft("name", e.currentTarget.value)}
         />
         <input
@@ -337,40 +349,42 @@
           <button
             class="charset-chip"
             class:active={draft.excludeSimilar}
-            onclick={() => toggleDraft("excludeSimilar")}>排除相似</button
+            onclick={() => toggleDraft("excludeSimilar")}
+            >{t(lang, "database.excludeSimilar")}</button
           >
           <button
             class="charset-chip"
             class:active={draft.excludeAmbiguous}
-            onclick={() => toggleDraft("excludeAmbiguous")}>排除易混</button
+            onclick={() => toggleDraft("excludeAmbiguous")}
+            >{t(lang, "database.excludeAmbiguous")}</button
           >
         </div>
         <input
           class="profile-text"
           type="text"
           value={draft.customCharset ?? ""}
-          placeholder="自定义字符集（整体替换类别）"
+          placeholder={t(lang, "database.customCharsetPh")}
           oninput={(e) => updateDraft("customCharset", e.currentTarget.value)}
         />
         <input
           class="profile-text"
           type="text"
           value={draft.excludeChars ?? ""}
-          placeholder="排除字符"
+          placeholder={t(lang, "database.excludeCharsPh")}
           oninput={(e) => updateDraft("excludeChars", e.currentTarget.value)}
         />
         <input
           class="profile-text"
           type="text"
           value={draft.requiredChars ?? ""}
-          placeholder="必含字符"
+          placeholder={t(lang, "database.requireCharsPh")}
           oninput={(e) => updateDraft("requiredChars", e.currentTarget.value)}
         />
         <input
           class="profile-text mono"
           type="text"
           value={draft.pattern ?? ""}
-          placeholder="pattern（u/l/d/s/a，其他为字面量）"
+          placeholder={t(lang, "database.patternPh")}
           oninput={(e) => updateDraft("pattern", e.currentTarget.value)}
         />
         <div class="profile-actions">
@@ -379,17 +393,17 @@
             class="profile-action"
             onclick={() => ((draft = null), (editingIndex = null))}
           >
-            取消
+            {t(lang, "common.cancel")}
           </button>
           <button type="button" class="profile-action primary" onclick={saveDraft}>
-            保存配置档
+            {t(lang, "database.saveProfile")}
           </button>
         </div>
       </div>
     </section>
   {/if}
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>

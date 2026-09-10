@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import { appSettings } from "$lib/services/settings";
   import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
+  import { t } from "$lib/i18n";
   import type { KeyboardSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
 
@@ -21,6 +22,7 @@
   });
 
   const keyboard: KeyboardSettings = $derived(s.keyboard);
+  const lang = $derived(s.general.language);
 
   function change<K extends keyof KeyboardSettings>(key: K, value: KeyboardSettings[K]): void {
     appSettings.updateKeyboard(key, value);
@@ -104,11 +106,11 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 快捷键</span>
-      <h2>快捷键</h2>
-      <p>全局自动填充热键与常用操作的窗口内快捷键。</p>
+      <span class="eyebrow">Settings · {t(lang, "keyboard.title")}</span>
+      <h2>{t(lang, "keyboard.title")}</h2>
+      <p>{t(lang, "keyboard.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
@@ -117,21 +119,21 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
       <div>
-        <strong>全局自动填充热键</strong>
+        <strong>{t(lang, "keyboard.autoType")}</strong>
         <p>
-          按下快捷键时，把匹配前台窗口的条目自动键入；按窗口标题匹配条目的网址域名或标题，回收站内条目不参与。未绑定时禁用。
+          {t(lang, "keyboard.autoTypeDesc")}
         </p>
       </div>
     </div>
     <div class="shortcut-bindings">
       {#if recordingTarget === "autoType"}
         <div class="binding-chip recording">
-          <kbd>按下快捷键…</kbd>
+          <kbd>{t(lang, "keyboard.recording")}</kbd>
           <button
             type="button"
             class="binding-chip-close"
             onclick={stopRecording}
-            aria-label="取消录制">&times;</button
+            aria-label={t(lang, "keyboard.cancelRecording")}>&times;</button
           >
         </div>
       {:else if keyboard.autoTypeGlobal}
@@ -141,22 +143,22 @@
             type="button"
             class="binding-chip-close"
             onclick={() => change("autoTypeGlobal", "")}
-            aria-label="移除绑定">&minus;</button
+            aria-label={t(lang, "keyboard.removeBinding")}>&minus;</button
           >
         </div>
         <button
           type="button"
           class="binding-add"
           onclick={() => startRecording("autoType")}
-          aria-label="重新录制">+</button
+          aria-label={t(lang, "keyboard.rerecord")}>+</button
         >
       {:else}
-        <span class="binding-disabled">未绑定</span>
+        <span class="binding-disabled">{t(lang, "keyboard.unbound")}</span>
         <button
           type="button"
           class="binding-add"
           onclick={() => startRecording("autoType")}
-          aria-label="录制快捷键">+</button
+          aria-label={t(lang, "keyboard.record")}>+</button
         >
       {/if}
     </div>
@@ -166,21 +168,21 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
       <div>
-        <strong>全局 TCATO 呼出热键</strong>
+        <strong>{t(lang, "keyboard.tcato")}</strong>
         <p>
-          按下快捷键时，为唯一匹配前台窗口的条目打开两通道填充覆盖层；无匹配或多匹配时不打开。未绑定时禁用。
+          {t(lang, "keyboard.tcatoDesc")}
         </p>
       </div>
     </div>
     <div class="shortcut-bindings">
       {#if recordingTarget === "tcato"}
         <div class="binding-chip recording">
-          <kbd>按下快捷键…</kbd>
+          <kbd>{t(lang, "keyboard.recording")}</kbd>
           <button
             type="button"
             class="binding-chip-close"
             onclick={stopRecording}
-            aria-label="取消录制">&times;</button
+            aria-label={t(lang, "keyboard.cancelRecording")}>&times;</button
           >
         </div>
       {:else if keyboard.tcatoSummonGlobal}
@@ -190,22 +192,22 @@
             type="button"
             class="binding-chip-close"
             onclick={() => change("tcatoSummonGlobal", "")}
-            aria-label="移除绑定">&minus;</button
+            aria-label={t(lang, "keyboard.removeBinding")}>&minus;</button
           >
         </div>
         <button
           type="button"
           class="binding-add"
           onclick={() => startRecording("tcato")}
-          aria-label="重新录制">+</button
+          aria-label={t(lang, "keyboard.rerecord")}>+</button
         >
       {:else}
-        <span class="binding-disabled">未绑定</span>
+        <span class="binding-disabled">{t(lang, "keyboard.unbound")}</span>
         <button
           type="button"
           class="binding-add"
           onclick={() => startRecording("tcato")}
-          aria-label="录制快捷键">+</button
+          aria-label={t(lang, "keyboard.record")}>+</button
         >
       {/if}
     </div>
@@ -216,19 +218,19 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name={action.icon} size={17} /></span>
         <div>
-          <strong>{action.label}</strong>
-          <p>{action.description}</p>
+          <strong>{t(lang, action.label)}</strong>
+          <p>{t(lang, action.description)}</p>
         </div>
       </div>
       <div class="shortcut-bindings">
         {#if recordingTarget === action.id}
           <div class="binding-chip recording">
-            <kbd>按下快捷键…</kbd>
+            <kbd>{t(lang, "keyboard.recording")}</kbd>
             <button
               type="button"
               class="binding-chip-close"
               onclick={stopRecording}
-              aria-label="取消录制">&times;</button
+              aria-label={t(lang, "keyboard.cancelRecording")}>&times;</button
             >
           </div>
         {:else if bindingFor(action.id)}
@@ -238,14 +240,14 @@
               type="button"
               class="binding-chip-close"
               onclick={() => setBinding(action.id, "")}
-              aria-label="移除绑定">&minus;</button
+              aria-label={t(lang, "keyboard.removeBinding")}>&minus;</button
             >
           </div>
           <button
             type="button"
             class="binding-add"
             onclick={() => startRecording(action.id)}
-            aria-label="重新录制">+</button
+            aria-label={t(lang, "keyboard.rerecord")}>+</button
           >
         {:else}
           <div class="binding-chip default">
@@ -255,7 +257,7 @@
             type="button"
             class="binding-add"
             onclick={() => startRecording(action.id)}
-            aria-label="录制快捷键">+</button
+            aria-label={t(lang, "keyboard.record")}>+</button
           >
         {/if}
       </div>
@@ -263,9 +265,9 @@
   {/each}
 
   <p class="settings-note">
-    点击 ＋ 录制新快捷键；录制后通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。
+    {t(lang, "keyboard.footer")}
   </p>
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>

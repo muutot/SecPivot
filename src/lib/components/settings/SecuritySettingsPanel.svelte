@@ -11,6 +11,7 @@
   import Button from "$lib/components/templates/action/Button.svelte";
   import Feedback from "$lib/components/templates/form/Feedback.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     onclose: () => void;
@@ -28,6 +29,7 @@
   });
 
   const security = $derived(s.security);
+  const lang = $derived(s.general.language);
 
   function change<K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]): void {
     appSettings.updateSecurity(key, value);
@@ -53,18 +55,18 @@
   async function submitMasterKeyChange(): Promise<void> {
     feedback = null;
     if (newPassword.length > 0 && newPassword !== confirmPassword) {
-      feedback = { ok: false, message: "两次输入的新主密码不一致" };
+      feedback = { ok: false, message: t(lang, "security.mismatch") };
       return;
     }
     if (newPassword.length === 0 && !newKeyfile) {
-      feedback = { ok: false, message: "请输入新主密码或选择新的密钥文件" };
+      feedback = { ok: false, message: t(lang, "security.needKey") };
       return;
     }
     busy = true;
     const sessionId = vault.getActiveSessionId();
     if (!sessionId) {
       busy = false;
-      feedback = { ok: false, message: "数据库未打开" };
+      feedback = { ok: false, message: t(lang, "security.noVault") };
       return;
     }
     try {
@@ -78,7 +80,7 @@
       newPassword = "";
       confirmPassword = "";
       newKeyfile = null;
-      feedback = { ok: true, message: "主密钥已更改并保存,新密钥立即生效" };
+      feedback = { ok: true, message: t(lang, "security.changed") };
     } catch (err) {
       if (vault.getActiveSessionId() !== sessionId) return;
       feedback = { ok: false, message: String(err) };
@@ -91,21 +93,23 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 安全</span>
-      <h2>安全</h2>
-      <p>锁定策略与剪贴板清理设置。</p>
+      <span class="eyebrow">Settings · {t(lang, "security.title")}</span>
+      <h2>{t(lang, "security.title")}</h2>
+      <p>{t(lang, "security.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
 <div class="settings-scroll">
   <SettingRangeCard
     icon="lock"
-    label="自动锁定"
-    description="无操作达到时长后锁定数据库"
+    label={t(lang, "security.autoLock")}
+    description={t(lang, "security.autoLockDesc")}
     value={s.security.autoLockMinutes}
-    valueLabel={s.security.autoLockMinutes > 0 ? `${s.security.autoLockMinutes} 分钟` : "关闭"}
+    valueLabel={s.security.autoLockMinutes > 0
+      ? t(lang, "security.minutes", { count: s.security.autoLockMinutes })
+      : t(lang, "settings.effectOff")}
     min={0}
     max={60}
     onchange={(value) => change("autoLockMinutes", value)}
@@ -113,12 +117,12 @@
 
   <SettingRangeCard
     icon="clock"
-    label="剪贴板自动清理"
-    description="复制密码后定时清空剪贴板"
+    label={t(lang, "security.clipboardClear")}
+    description={t(lang, "security.clipboardClearDesc")}
     value={s.security.clipboardClearSeconds}
     valueLabel={s.security.clipboardClearSeconds > 0
-      ? `${s.security.clipboardClearSeconds} 秒`
-      : "关闭"}
+      ? t(lang, "security.seconds", { count: s.security.clipboardClearSeconds })
+      : t(lang, "settings.effectOff")}
     min={0}
     max={120}
     step={5}
@@ -127,42 +131,42 @@
 
   <SettingToggleCard
     icon="copy"
-    label="锁定后清空剪贴板"
-    description="锁定数据库时立即清除剪贴板中的密码"
+    label={t(lang, "security.clearOnLock")}
+    description={t(lang, "security.clearOnLockDesc")}
     checked={security.clearOnLock}
     onchange={(checked) => change("clearOnLock", checked)}
   />
 
   <SettingToggleCard
     icon="shield"
-    label="关闭窗口时最小化到托盘"
-    description="点击关闭按钮转入系统托盘而非退出"
+    label={t(lang, "security.minimizeTray")}
+    description={t(lang, "security.minimizeTrayDesc")}
     checked={security.minimizeToTray}
     onchange={(checked) => change("minimizeToTray", checked)}
   />
 
   <SettingToggleCard
     icon="eye-off"
-    label="复制后自动锁定"
-    description="复制密码后立即锁定数据库"
+    label={t(lang, "security.lockAfterAction")}
+    description={t(lang, "security.lockAfterActionDesc")}
     checked={security.lockAfterAction}
     onchange={(checked) => change("lockAfterAction", checked)}
   />
 
   <SettingToggleCard
     icon="unlock"
-    label="失去焦点时锁定"
-    description="切换窗口或最小化时立即锁定数据库"
+    label={t(lang, "security.lockOnFocusLoss")}
+    description={t(lang, "security.lockOnFocusLossDesc")}
     checked={security.lockOnFocusLoss}
     onchange={(checked) => change("lockOnFocusLoss", checked)}
   />
 
   <SettingToggleCard
     icon="key"
-    label="记住密码(Windows Hello)"
-    description="将主密码保存到系统凭据管理器,锁定后可用 Windows Hello 快速解锁"
+    label={t(lang, "security.rememberPassword")}
+    description={t(lang, "security.rememberPasswordDesc")}
     checked={security.rememberPassword}
-    ariaLabel="记住密码"
+    ariaLabel={t(lang, "security.rememberPasswordAria")}
     onchange={(checked) => change("rememberPassword", checked)}
   />
 
@@ -171,38 +175,44 @@
       <span class="setting-icon"><AppIcon name="unlock" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>更改主密钥</strong>
-          <p>重新加密数据库,新的主密码或密钥文件立即生效</p>
+          <strong>{t(lang, "security.changeKey")}</strong>
+          <p>{t(lang, "security.changeKeyDesc")}</p>
         </div>
       </div>
     </div>
-    <label class="settings-label" for="mk-new-password">新主密码(留空则仅使用密钥文件)</label>
+    <label class="settings-label" for="mk-new-password"
+      >{t(lang, "security.newPasswordLabel")}</label
+    >
     <TextField
       id="mk-new-password"
       size="control"
       type="password"
-      placeholder="新主密码"
+      placeholder={t(lang, "security.newPasswordPh")}
       bind:value={newPassword}
       autocomplete="new-password"
     />
-    <label class="settings-label" for="mk-confirm-password">确认新主密码</label>
+    <label class="settings-label" for="mk-confirm-password"
+      >{t(lang, "security.confirmPasswordLabel")}</label
+    >
     <TextField
       id="mk-confirm-password"
       size="control"
       type="password"
-      placeholder="再次输入新主密码"
+      placeholder={t(lang, "security.confirmPasswordPh")}
       bind:value={confirmPassword}
       autocomplete="new-password"
     />
     <div class="setting-row mk-keyfile-row">
       <span class="mk-keyfile-name" class:mk-empty={!newKeyfile}>
-        {newKeyfile ?? "未选择密钥文件(可选)"}
+        {newKeyfile ?? t(lang, "security.noKeyfile")}
       </span>
       <Button variant="field" onclick={pickKeyfile} disabled={!isTauriRuntime()}>
-        选择密钥文件
+        {t(lang, "vault.pickKeyfileTitle")}
       </Button>
       {#if newKeyfile}
-        <Button variant="field" onclick={() => (newKeyfile = null)}>清除</Button>
+        <Button variant="field" onclick={() => (newKeyfile = null)}
+          >{t(lang, "common.clear")}</Button
+        >
       {/if}
     </div>
     <div class="mk-submit-row">
@@ -212,7 +222,7 @@
         onclick={submitMasterKeyChange}
         disabled={busy}
       >
-        {busy ? "正在更改…" : "更改主密钥并保存"}
+        {busy ? t(lang, "security.changing") : t(lang, "security.changeAndSave")}
       </button>
     </div>
     {#if feedback}
@@ -220,7 +230,7 @@
     {/if}
   </section>
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>
