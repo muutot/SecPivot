@@ -1078,6 +1078,7 @@ export const zhCN = {
   "browser.featSaveAs": "另存为",
   "browser.featBitwardenImport": "Bitwarden 导入",
   "browser.feat1pImport": "1Password 导入",
+  "page.settingsTitle": "SecPivot · 设置",
   "browser.unsupported": "浏览器预览不支持{feature}",
   "browser.modeUnsupported": "浏览器模式不支持{feature}",
   "browser.featDbSettings": "数据库设置修改",

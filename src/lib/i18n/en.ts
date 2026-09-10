@@ -1113,6 +1113,7 @@ export const en: Record<I18nKey, string> = {
   "browser.featSaveAs": "save-as",
   "browser.featBitwardenImport": "Bitwarden import",
   "browser.feat1pImport": "1Password import",
+  "page.settingsTitle": "SecPivot · Settings",
   "browser.unsupported": "Browser preview doesn't support {feature}",
   "browser.modeUnsupported": "Browser mode doesn't support {feature}",
   "browser.featDbSettings": "database settings changes",
