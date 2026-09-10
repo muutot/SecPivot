@@ -6,6 +6,8 @@
 
 import type { ContextMenuItem } from "$lib/components/ContextMenu.svelte";
 import type { VaultEntry } from "$lib/types/vault";
+import type { Language } from "$lib/types/settings";
+import { t } from "$lib/i18n";
 
 /** Options for {@link buildEntryMenuItems}. */
 export type EntryMenuInput = {
@@ -14,6 +16,8 @@ export type EntryMenuInput = {
   selectedCount: number;
   /** Whether the real desktop backend is available (Tauri runtime). */
   isDesktop: boolean;
+  /** UI locale for labels. */
+  locale: Language;
 };
 
 /** Right-click on an entry row: multi-select actions first when several rows
@@ -22,6 +26,7 @@ export function buildEntryMenuItems({
   entry,
   selectedCount,
   isDesktop,
+  locale,
 }: EntryMenuInput): ContextMenuItem[] {
   const multi = selectedCount > 1;
   const items: ContextMenuItem[] = [
@@ -29,42 +34,53 @@ export function buildEntryMenuItems({
       ? [
           {
             id: "edit-selected",
-            label: `编辑所选条目 (${selectedCount})`,
+            label: t(locale, "menu.editSelected", { count: selectedCount }),
             icon: "edit" as const,
           },
           {
             id: "delete-selected",
-            label: `删除所选条目 (${selectedCount})`,
+            label: t(locale, "menu.deleteSelected", { count: selectedCount }),
             icon: "trash" as const,
             destructive: true,
           },
         ]
       : []),
-    { id: "edit", label: "编辑条目", icon: "edit" },
-    { id: "copy-username", label: "复制用户名", icon: "user", disabled: !entry.username },
+    { id: "edit", label: t(locale, "menu.editEntry"), icon: "edit" },
+    {
+      id: "copy-username",
+      label: t(locale, "menu.copyUsername"),
+      icon: "user",
+      disabled: !entry.username,
+    },
     {
       id: "copy-password",
-      label: "复制密码",
+      label: t(locale, "menu.copyPassword"),
       icon: "copy",
       disabled: !isDesktop && !entry.password,
     },
-    { id: "copy-url", label: "复制网址", icon: "link", disabled: !entry.url },
-    { id: "autotype", label: "自动填充", icon: "keyboard" },
-    { id: "autotype-password", label: "自动填充密码", icon: "key" },
+    { id: "copy-url", label: t(locale, "menu.copyUrl"), icon: "link", disabled: !entry.url },
+    { id: "autotype", label: t(locale, "menu.autotype"), icon: "keyboard" },
+    { id: "autotype-password", label: t(locale, "menu.autotypePassword"), icon: "key" },
     {
       id: "download-favicon",
-      label: multi ? `下载所选条目图标 (${selectedCount})` : "下载网址图标",
+      label: multi
+        ? t(locale, "menu.downloadFaviconSelected", { count: selectedCount })
+        : t(locale, "menu.downloadFavicon"),
       icon: "globe",
       disabled: !isDesktop || (!multi && !entry.url),
     },
     {
       id: "tcato",
-      label: "TCATO 覆盖层填充",
+      label: t(locale, "menu.tcato"),
       icon: "shield",
       disabled: !isDesktop,
     },
-    { id: "favorite", label: entry.favorite ? "取消收藏" : "收藏条目", icon: "star" },
-    { id: "delete", label: "删除条目", icon: "trash", destructive: true },
+    {
+      id: "favorite",
+      label: entry.favorite ? t(locale, "menu.unfavorite") : t(locale, "menu.favorite"),
+      icon: "star",
+    },
+    { id: "delete", label: t(locale, "menu.deleteEntry"), icon: "trash", destructive: true },
   ];
   return items;
 }
@@ -75,6 +91,8 @@ export type BlankMenuInput = {
   hasVisibleEntries: boolean;
   /** Current vault dirty/read-only flags gate the save action. */
   canSave: boolean;
+  /** UI locale for labels. */
+  locale: Language;
 };
 
 /** Right-click on blank list space: creation and quick database actions.
@@ -82,22 +100,28 @@ export type BlankMenuInput = {
 export function buildBlankMenuItems({
   hasVisibleEntries,
   canSave,
+  locale,
 }: BlankMenuInput): ContextMenuItem[] {
   return [
-    { id: "new-entry", label: "新建条目", icon: "plus" },
-    { id: "new-group", label: "新建分组", icon: "folder-plus" },
-    { id: "select-all", label: "全选条目", icon: "check", disabled: !hasVisibleEntries },
+    { id: "new-entry", label: t(locale, "menu.newEntry"), icon: "plus" },
+    { id: "new-group", label: t(locale, "menu.newGroup"), icon: "folder-plus" },
+    {
+      id: "select-all",
+      label: t(locale, "menu.selectAll"),
+      icon: "check",
+      disabled: !hasVisibleEntries,
+    },
     {
       id: "save",
-      label: "保存数据库",
+      label: t(locale, "menu.save"),
       icon: "save",
       disabled: !canSave,
     },
-    { id: "save-as", label: "另存为…", icon: "copy" },
-    { id: "change-timeline", label: "变更时间线", icon: "undo" },
-    { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
-    { id: "refresh", label: "刷新", icon: "refresh" },
-    { id: "db-settings", label: "数据库设置", icon: "settings" },
+    { id: "save-as", label: t(locale, "menu.saveAs"), icon: "copy" },
+    { id: "change-timeline", label: t(locale, "menu.timeline"), icon: "undo" },
+    { id: "hibp-check", label: t(locale, "menu.hibp"), icon: "globe" },
+    { id: "refresh", label: t(locale, "menu.refresh"), icon: "refresh" },
+    { id: "db-settings", label: t(locale, "menu.dbSettings"), icon: "settings" },
   ];
 }
 
@@ -107,6 +131,8 @@ export type ToolbarMenuInput = {
   detailVisible: boolean;
   /** Whether a long operation is running (disables the security report). */
   busy: boolean;
+  /** UI locale for labels. */
+  locale: Language;
   /** Per-item visibility: when an item is pinned to the toolbar, hide it from the overflow menu. */
   toolbarItems?: {
     saveAs: boolean;
@@ -126,19 +152,23 @@ export type ToolbarMenuInput = {
 };
 
 /** Import sources as a cascade child list of the toolbar ⋯ menu. */
-const IMPORT_ITEMS: ContextMenuItem[] = [
-  { id: "import-csv", label: "导入 CSV", icon: "upload" },
-  { id: "import-xml", label: "导入 XML", icon: "upload" },
-  { id: "import-bitwarden", label: "导入 Bitwarden", icon: "upload" },
-  { id: "import-1password", label: "导入 1Password (1PIF)", icon: "upload" },
-];
+function importItems(locale: Language): ContextMenuItem[] {
+  return [
+    { id: "import-csv", label: t(locale, "menu.importCsv"), icon: "upload" },
+    { id: "import-xml", label: t(locale, "menu.importXml"), icon: "upload" },
+    { id: "import-bitwarden", label: t(locale, "menu.importBitwarden"), icon: "upload" },
+    { id: "import-1password", label: t(locale, "menu.import1password"), icon: "upload" },
+  ];
+}
 
 /** Export targets as a cascade child list of the toolbar ⋯ menu. */
-const EXPORT_ITEMS: ContextMenuItem[] = [
-  { id: "export-csv", label: "导出 CSV", icon: "download" },
-  { id: "export-xml", label: "导出 KeePass XML", icon: "download" },
-  { id: "export-emergency", label: "导出 HTML 应急表", icon: "download" },
-];
+function exportItems(locale: Language): ContextMenuItem[] {
+  return [
+    { id: "export-csv", label: t(locale, "menu.exportCsv"), icon: "download" },
+    { id: "export-xml", label: t(locale, "menu.exportXml"), icon: "download" },
+    { id: "export-emergency", label: t(locale, "menu.exportEmergency"), icon: "download" },
+  ];
+}
 
 /** Toolbar overflow menu (⋯): detail toggle, report, import/export cascades,
  *  maintenance and settings. When `toolbarItems` is provided, items pinned
@@ -146,26 +176,42 @@ const EXPORT_ITEMS: ContextMenuItem[] = [
 export function buildToolbarMenuItems({
   detailVisible,
   busy,
+  locale,
   toolbarItems,
   toolbarOrder,
 }: ToolbarMenuInput): ContextMenuItem[] {
   const all: ContextMenuItem[] = [
-    { id: "save-as", label: "另存为…", icon: "copy" },
+    { id: "save-as", label: t(locale, "menu.saveAs"), icon: "copy" },
     {
       id: "toggle-detail",
-      label: detailVisible ? "隐藏详情面板" : "显示详情面板",
+      label: detailVisible ? t(locale, "menu.hideDetail") : t(locale, "menu.showDetail"),
       icon: detailVisible ? ("eye-off" as const) : ("eye" as const),
     },
-    { id: "security-report", label: "安全报告", icon: "shield", disabled: busy },
-    { id: "similar-passwords", label: "相似密码检查", icon: "shield" },
-    { id: "hibp-check", label: "HIBP 泄露检查", icon: "globe" },
-    { id: "import", label: "导入", icon: "upload", children: IMPORT_ITEMS },
-    { id: "export", label: "导出", icon: "download", children: EXPORT_ITEMS },
-    { id: "expired-entries", label: "过期条目", icon: "clock" },
-    { id: "clear-history", label: "清理全部历史", icon: "trash" },
-    { id: "lock", label: "锁定数据库", icon: "lock" },
-    { id: "db-settings", label: "数据库设置", icon: "settings" },
-    { id: "settings", label: "设置", icon: "settings" },
+    {
+      id: "security-report",
+      label: t(locale, "menu.securityReport"),
+      icon: "shield",
+      disabled: busy,
+    },
+    { id: "similar-passwords", label: t(locale, "menu.similarPasswords"), icon: "shield" },
+    { id: "hibp-check", label: t(locale, "menu.hibp"), icon: "globe" },
+    {
+      id: "import",
+      label: t(locale, "menu.import"),
+      icon: "upload",
+      children: importItems(locale),
+    },
+    {
+      id: "export",
+      label: t(locale, "menu.export"),
+      icon: "download",
+      children: exportItems(locale),
+    },
+    { id: "expired-entries", label: t(locale, "menu.expired"), icon: "clock" },
+    { id: "clear-history", label: t(locale, "menu.clearHistory"), icon: "trash" },
+    { id: "lock", label: t(locale, "menu.lock"), icon: "lock" },
+    { id: "db-settings", label: t(locale, "menu.dbSettings"), icon: "settings" },
+    { id: "settings", label: t(locale, "menu.settings"), icon: "settings" },
   ];
   if (!toolbarItems) return all;
   const map: Record<string, keyof NonNullable<ToolbarMenuInput["toolbarItems"]>> = {

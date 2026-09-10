@@ -2,13 +2,21 @@
 // plain `node --test` can execute service modules directly (registered from
 // tests that need it via `node:module#register`; see vault-service.test.mjs).
 // SvelteKit resolves extensionless imports; Node needs the explicit `.ts`.
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
+
+function isFile(url) {
+  try {
+    return statSync(new URL(url)).isFile();
+  } catch {
+    return false;
+  }
+}
 
 export async function resolve(specifier, context, next) {
   if (specifier.startsWith("$lib/")) {
     const base = new URL(`../../src/lib/${specifier.slice("$lib/".length)}`, import.meta.url);
     for (const candidate of [base.href, `${base.href}.ts`, `${base.href}/index.ts`]) {
-      if (existsSync(new URL(candidate))) return next(candidate, context);
+      if (isFile(candidate)) return next(candidate, context);
     }
     return next(base.href, context);
   }
@@ -21,7 +29,7 @@ export async function resolve(specifier, context, next) {
   ) {
     const base = new URL(specifier, context.parentURL);
     for (const candidate of [`${base.href}.ts`, `${base.href}/index.ts`]) {
-      if (existsSync(new URL(candidate))) return next(candidate, context);
+      if (isFile(candidate)) return next(candidate, context);
     }
   }
   return next(specifier, context);

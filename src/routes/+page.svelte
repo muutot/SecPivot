@@ -1496,6 +1496,7 @@
       entry,
       selectedCount: selection.selectedUuids.size,
       isDesktop: isTauriRuntime(),
+      locale: settings.general.language,
     });
   }
 
@@ -1503,6 +1504,7 @@
     buildBlankMenuItems({
       hasVisibleEntries: sortedEntries.length > 0,
       canSave: Boolean(currentVault?.dirty) && !currentVault?.readOnly,
+      locale: settings.general.language,
     }),
   );
 
@@ -1510,6 +1512,7 @@
     buildToolbarMenuItems({
       detailVisible: layout.detailVisible,
       busy,
+      locale: settings.general.language,
       toolbarItems: {
         saveAs: toolbarItems.saveAs,
         toggleDetail: toolbarItems.toggleDetail,
