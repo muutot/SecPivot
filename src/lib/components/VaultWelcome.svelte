@@ -19,6 +19,7 @@
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import { t } from "$lib/i18n";
   import StandaloneVaultShell from "$lib/components/StandaloneVaultShell.svelte";
   import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import { formatBytes } from "$lib/utils/format";
@@ -38,6 +39,7 @@
   });
 
   const recentFiles = $derived(settings.general.recentFiles);
+  const lang = $derived(settings.general.language);
 
   const activeProfile = $derived(activeRemoteProfile(settings));
   const activeRemoteName = $derived(activeProfile.name);
@@ -130,8 +132,7 @@
     try {
       remoteObjects = await vault.listRemoteObjects();
       if (remoteObjects.length === 0) {
-        error =
-          "远程目录连接成功，但该目录下没有数据库文件（.kdbx）。请确认对象前缀指向包含数据库文件的目录，或切换到“新建”在此目录创建数据库";
+        error = t(lang, "welcome.noRemoteDb");
       }
     } catch (e) {
       error = String(e);
@@ -151,11 +152,11 @@
 
   async function confirmRemoteOpen(): Promise<void> {
     if (!remoteKey) {
-      error = "请选择远程数据库文件";
+      error = t(lang, "welcome.pickRemoteFile");
       return;
     }
     if (!password) {
-      error = "请输入主密码";
+      error = t(lang, "welcome.needPassword");
       return;
     }
     busy = true;
@@ -173,11 +174,11 @@
 
   async function confirmRemoteCreate(): Promise<void> {
     if (!remoteKey) {
-      error = "请输入远程对象键";
+      error = t(lang, "welcome.remoteKeyRequired");
       return;
     }
     if (!password) {
-      error = "请输入主密码";
+      error = t(lang, "welcome.needPassword");
       return;
     }
     busy = true;
@@ -207,8 +208,8 @@
       const selected = await open({
         multiple: false,
         filters: [
-          { name: "KeePass 数据库", extensions: ["kdbx"] },
-          { name: "所有文件", extensions: ["*"] },
+          { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+          { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
         ],
       });
       if (!selected) return;
@@ -231,11 +232,11 @@
 
   async function confirmOpen(): Promise<void> {
     if (!isDemo && !path) {
-      error = "请选择数据库文件";
+      error = t(lang, "welcome.pickDbFile");
       return;
     }
     if (!password) {
-      error = "请输入主密码";
+      error = t(lang, "welcome.needPassword");
       return;
     }
     busy = true;
@@ -273,8 +274,8 @@
     const selected = await save({
       defaultPath: "new-vault.kdbx",
       filters: [
-        { name: "KeePass 数据库", extensions: ["kdbx"] },
-        { name: "所有文件", extensions: ["*"] },
+        { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+        { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
       ],
     });
     if (selected) path = String(selected);
@@ -282,11 +283,11 @@
 
   async function confirmCreate(): Promise<void> {
     if (!password) {
-      error = "请输入主密码";
+      error = t(lang, "welcome.needPassword");
       return;
     }
     if (password !== confirm) {
-      error = "两次输入的密码不一致";
+      error = t(lang, "welcome.passwordMismatch");
       return;
     }
     busy = true;
@@ -297,10 +298,10 @@
         if (isTauriRuntime()) {
           const selected = await save({
             defaultPath: "new-vault.kdbx",
-            filters: [
-              { name: "KeePass 数据库", extensions: ["kdbx"] },
-              { name: "所有文件", extensions: ["*"] },
-            ],
+          filters: [
+            { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+            { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
+          ],
           });
           if (!selected) return;
           target = String(selected);
@@ -330,28 +331,28 @@
 
 <StandaloneVaultShell
   title="SecPivot"
-  subtitle="本地优先的 KeePass 密码管理器"
+  subtitle={t(lang, "welcome.tagline")}
   logoSrc="/app-icon.png"
 >
   <div class="welcome-actions">
     <Button variant="primary" onclick={handleOpen} disabled={busy} {busy}>
-      <AppIcon name="open" size={14} />打开数据库
+      <AppIcon name="open" size={14} />{t(lang, "welcome.openDb")}
     </Button>
     <Button onclick={handleCreate} disabled={busy} {busy}>
-      <AppIcon name="plus" size={14} />新建数据库
+      <AppIcon name="plus" size={14} />{t(lang, "welcome.newDb")}
     </Button>
     {#if isTauriRuntime()}
       <Button onclick={handleRemoteOpen} disabled={busy}>
-        <AppIcon name="cloud" size={14} />远程数据库
+        <AppIcon name="cloud" size={14} />{t(lang, "welcome.remoteDb")}
       </Button>
     {/if}
   </div>
 
-  <p class="welcome-hint">主密码只在你本地使用；远程库仅上传加密后的数据库</p>
+  <p class="welcome-hint">{t(lang, "welcome.hint")}</p>
 
   {#if recentFiles.length > 0}
     <div class="recent-section">
-      <p class="recent-label">最近打开</p>
+      <p class="recent-label">{t(lang, "welcome.recent")}</p>
       {#each recentFiles as file (file)}
         <button class="recent-item" onclick={() => openRecent(file)} title={file}>
           <AppIcon name="clock" size={12} />
@@ -364,12 +365,12 @@
   {#if isTauriRuntime()}
     <div class="welcome-guard">
       <div class="guard-info">
-        <span class="guard-title">防截屏守卫</span>
-        <span class="guard-desc">库打开期间窗口不出现在截屏/录屏中</span>
+        <span class="guard-title">{t(lang, "welcome.guardTitle")}</span>
+        <span class="guard-desc">{t(lang, "welcome.guardDesc")}</span>
       </div>
       <Toggle
         checked={guardEnabled}
-        ariaLabel="防截屏守卫"
+        ariaLabel={t(lang, "welcome.guardTitle")}
         onchange={(next) => {
           appSettings.updateSecurity("screenCaptureGuard", next);
           void appSettings.flush();
@@ -381,7 +382,7 @@
 
 {#if modal === "open"}
   <ModalShell
-    title={isDemo ? "打开演示数据库" : "解锁数据库"}
+    title={isDemo ? t(lang, "welcome.unlockTitle") : t(lang, "welcome.openTitle")}
     description={path}
     size="small"
     closeOnEscape
@@ -401,14 +402,16 @@
       />
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
-      <Button variant="primary" onclick={confirmOpen} disabled={busy} {busy}>解锁</Button>
+      <Button onclick={() => (modal = "none")} disabled={busy}>{t(lang, "common.cancel")}</Button>
+      <Button variant="primary" onclick={confirmOpen} disabled={busy} {busy}
+        >{t(lang, "welcome.unlock")}</Button
+      >
     {/snippet}
   </ModalShell>
 {:else if modal === "create"}
   <ModalShell
-    title="新建数据库"
-    description="选择一个位置并设置主密码"
+    title={t(lang, "welcome.createTitle")}
+    description={t(lang, "welcome.createDesc")}
     size="small"
     closeOnEscape
     onclose={() => (modal = "none")}
@@ -430,14 +433,16 @@
       />
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
-      <Button variant="primary" onclick={confirmCreate} disabled={busy} {busy}>创建</Button>
+      <Button onclick={() => (modal = "none")} disabled={busy}>{t(lang, "common.cancel")}</Button>
+      <Button variant="primary" onclick={confirmCreate} disabled={busy} {busy}
+        >{t(lang, "welcome.create")}</Button
+      >
     {/snippet}
   </ModalShell>
 {:else if modal === "remote"}
   <ModalShell
-    title={`远程数据库 (${remoteKindLabel})`}
-    description={`从 ${remoteKindLabel} 打开或创建数据库`}
+    title={t(lang, "welcome.remoteTitle", { kind: remoteKindLabel })}
+    description={t(lang, "welcome.remoteDesc", { kind: remoteKindLabel })}
     size="medium"
     scrollable
     closeOnEscape
@@ -448,7 +453,7 @@
       <Select
         className="remote-kind-picker"
         value={remote.kind}
-        ariaLabel="传输类型"
+        ariaLabel={t(lang, "welcome.transportType")}
         options={[
           { value: "webdav", label: "WebDAV" },
           { value: "s3", label: "S3" },
@@ -457,47 +462,50 @@
       />
     {/snippet}
     {#snippet children()}
-      <div class="remote-tabs" role="tablist" aria-label="远程操作">
+      <div class="remote-tabs" role="tablist" aria-label={t(lang, "welcome.remoteOps")}>
         <button
           class="remote-tab"
           class:active={remoteTab === "open"}
-          onclick={() => switchRemoteTab("open")}>打开</button
+          onclick={() => switchRemoteTab("open")}>{t(lang, "welcome.tabOpen")}</button
         >
         <button
           class="remote-tab"
           class:active={remoteTab === "create"}
-          onclick={() => switchRemoteTab("create")}>新建</button
+          onclick={() => switchRemoteTab("create")}>{t(lang, "welcome.tabCreate")}</button
         >
         <button
           class="remote-tab"
           class:active={remoteTab === "config"}
-          onclick={() => switchRemoteTab("config")}>配置</button
+          onclick={() => switchRemoteTab("config")}>{t(lang, "welcome.tabConfig")}</button
         >
       </div>
 
       {#if remoteTab === "config"}
         <div class="field">
-          <span>远程配置</span>
+          <span>{t(lang, "welcome.remoteConfig")}</span>
           <div class="profile-bar">
             <Select
               className="profile-select"
               value={settings.activeRemote}
-              ariaLabel="远程配置"
+              ariaLabel={t(lang, "welcome.remoteConfig")}
               options={activeKindProfiles.map((profile) => ({
                 value: remoteProfilePath(profile),
                 label: profile.name,
               }))}
               onchange={(path) => appSettings.setActiveRemote(path as RemoteProfilePath)}
             />
-            <Button onclick={() => appSettings.addRemoteProfile(remote.kind, "")}>添加</Button>
+            <Button onclick={() => appSettings.addRemoteProfile(remote.kind, "")}
+              >{t(lang, "welcome.addProfile")}</Button
+            >
             <Button
               disabled={activeKindProfiles.length <= 1}
-              onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}>删除</Button
+              onclick={() => appSettings.removeRemoteProfile(settings.activeRemote)}
+              >{t(lang, "welcome.deleteProfile")}</Button
             >
           </div>
         </div>
         <div class="field">
-          <span>配置名称</span>
+          <span>{t(lang, "welcome.configName")}</span>
           <TextField
             invalid={remoteNameConflict}
             value={activeRemoteName}
@@ -506,14 +514,14 @@
             oninput={(e) =>
               appSettings.renameRemoteProfile(settings.activeRemote, e.currentTarget.value)}
           />
-          {#if remoteNameConflict}<p class="modal-error">同一协议下的配置名不允许重复</p>{/if}
+          {#if remoteNameConflict}<p class="modal-error">{t(lang, "welcome.nameConflict")}</p>{/if}
         </div>
         <div class="field">
-          <span>配置路径</span>
+          <span>{t(lang, "welcome.configPath")}</span>
           <code class="remote-profile-path">{settings.activeRemote}</code>
         </div>
         <div class="field">
-          <span>服务地址</span>
+          <span>{t(lang, "welcome.endpoint")}</span>
           <TextField
             value={remote.endpoint}
             placeholder={remote.kind === "webdav"
@@ -526,7 +534,7 @@
         {#if remote.kind !== "webdav"}
           <div class="remote-config-grid">
             <div class="field">
-              <span>区域</span>
+              <span>{t(lang, "welcome.region")}</span>
               <TextField
                 value={remote.region}
                 placeholder="us-east-1"
@@ -535,7 +543,7 @@
               />
             </div>
             <div class="field">
-              <span>存储桶</span>
+              <span>{t(lang, "welcome.bucket")}</span>
               <TextField
                 value={remote.bucket}
                 placeholder="my-bucket"
@@ -546,7 +554,9 @@
           </div>
         {/if}
         <div class="field">
-          <span>{remote.kind === "webdav" ? "用户名" : "Access Key"}</span>
+          <span
+            >{remote.kind === "webdav" ? t(lang, "welcome.accessKey") : t(lang, "welcome.accessKeyS3")}</span
+          >
           <TextField
             value={remote.accessKey}
             placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
@@ -556,7 +566,7 @@
           />
         </div>
         <div class="field">
-          <span>{remote.kind === "webdav" ? "密码" : "Secret Key"}</span>
+          <span>{remote.kind === "webdav" ? t(lang, "welcome.secret") : t(lang, "welcome.secretS3")}</span>
           <TextField
             type="password"
             value={remote.secretKey}
@@ -567,17 +577,16 @@
           />
         </div>
         <p class="remote-config-note">
-          凭据以 DPAPI 加密后保存在
-          config.json，仅用于访问远程存储；配置完成后切到「打开」标签查看远程文件。
+          {t(lang, "welcome.dpapiNote")}
         </p>
       {:else if remoteTab === "open"}
         <div class="field">
-          <span>选择远程文件</span>
+          <span>{t(lang, "welcome.pickRemoteFileTitle")}</span>
           <div class="remote-list">
             {#if remoteLoading && remoteObjects.length === 0}
-              <p class="remote-empty">正在加载…</p>
+              <p class="remote-empty">{t(lang, "welcome.loading")}</p>
             {:else if remoteObjects.length === 0}
-              <p class="remote-empty">暂无文件</p>
+              <p class="remote-empty">{t(lang, "welcome.noFiles")}</p>
             {:else}
               {#each remoteObjects as obj (obj.key)}
                 <button
@@ -597,34 +606,35 @@
             onclick={loadRemoteObjects}
             disabled={remoteLoading || busy}
           >
-            <AppIcon name="refresh" size={13} />刷新列表
+            <AppIcon name="refresh" size={13} />{t(lang, "welcome.refresh")}
           </button>
         </div>
       {:else}
         <label class="field">
-          <span>远程对象键</span>
+          <span>{t(lang, "welcome.remoteKey")}</span>
           <TextField bind:value={remoteKey} placeholder="vaults/new.kdbx" spellcheck={false} />
         </label>
       {/if}
 
       {#if remoteTab !== "config"}
         <div class="field">
-          <span>保存方式</span>
-          <div class="remote-mode" role="radiogroup" aria-label="保存方式">
+          <span>{t(lang, "welcome.saveMode")}</span>
+          <div class="remote-mode" role="radiogroup" aria-label={t(lang, "welcome.saveMode")}>
             <button
               class="remote-mode-option"
               class:active={remoteMode === "memory"}
               onclick={() => (remoteMode = "memory")}
             >
-              <strong>仅在内存</strong><small>保存时只上传回远程存储</small>
+              <strong>{t(lang, "welcome.memoryOnly")}</strong
+              ><small>{t(lang, "welcome.memoryOnlyDesc")}</small>
             </button>
             <button
               class="remote-mode-option"
               class:active={remoteMode === "local"}
               onclick={() => (remoteMode = "local")}
             >
-              <strong>本地镜像</strong><small
-                >保存时上传回远程并镜像到 Storage/remote/{remoteMirrorDir}</small
+              <strong>{t(lang, "welcome.mirror")}</strong><small
+                >{t(lang, "welcome.mirrorDesc", { dir: remoteMirrorDir })}</small
               >
             </button>
           </div>
@@ -644,7 +654,7 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (modal = "none")} disabled={busy}>取消</Button>
+      <Button onclick={() => (modal = "none")} disabled={busy}>{t(lang, "common.cancel")}</Button>
       {#if remoteTab !== "config"}
         <Button
           variant="primary"
@@ -652,7 +662,7 @@
           disabled={busy}
           {busy}
         >
-          {remoteTab === "open" ? "解锁" : "创建"}
+          {remoteTab === "open" ? t(lang, "welcome.unlock") : t(lang, "welcome.create")}
         </Button>
       {/if}
     {/snippet}

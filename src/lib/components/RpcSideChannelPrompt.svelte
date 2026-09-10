@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import { copyText } from "$lib/utils/clipboard";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -15,6 +16,16 @@
   let pending = $state<SideChannelRequest | null>(null);
   let remaining = $state(0);
   let copied = $state(false);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let unlisten: UnlistenFn | null = null;
   let tick: ReturnType<typeof setInterval> | null = null;
@@ -84,9 +95,9 @@
 {#if pending}
   {@const request = pending}
   <ModalShell
-    title="Kee 请求连接"
-    description="在 Kee 的对话框中输入以下一次性密码完成认证"
-    ariaLabel="KeePassRPC 旁路密码"
+    title={t(lang, "rpcprompt.title")}
+    description={t(lang, "rpcprompt.desc")}
+    ariaLabel={t(lang, "rpcprompt.aria")}
     size="medium"
     prompt
   >
@@ -100,24 +111,24 @@
           onclick={() => void copyPassword()}
           disabled={copied || expired}
         >
-          {copied ? "已复制" : "复制"}
+          {copied ? t(lang, "rpcprompt.copied") : t(lang, "rpcprompt.copy")}
         </button>
       </div>
 
       <p class="approval-note">
-        密码剩余
+        {t(lang, "rpcprompt.remaining")}
         <strong class="countdown" class:countdown-urgent={!expired && remaining <= 10}
           >{timeText}</strong
         >
-        有效，仅本次连接可用；锁定数据库会立即终止连接。过期后请在 Kee 中重新连接。
+        {t(lang, "rpcprompt.note")}
       </p>
 
       {#if expired}
-        <p class="outcome outcome-expired" aria-live="polite">旁路密码已过期，连接已关闭</p>
+        <p class="outcome outcome-expired" aria-live="polite">{t(lang, "rpcprompt.expired")}</p>
       {/if}
     {/snippet}
     {#snippet actions()}
-      <Button onclick={close}>关闭</Button>
+      <Button onclick={close}>{t(lang, "common.close")}</Button>
     {/snippet}
   </ModalShell>
 {/if}

@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { invoke } from "@tauri-apps/api/core";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
@@ -16,6 +17,16 @@
   let busy = $state(false);
   let outcome = $state<"ok" | "expired" | "error" | null>(null);
   let outcomeMsg = $state("");
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let unlisten: UnlistenFn | null = null;
   let dismissTimer: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +66,7 @@
     try {
       await invoke("bridge_approve", { token: pending.token, allowed });
       outcome = "ok";
-      outcomeMsg = allowed ? "已授权该客户端" : "已拒绝该客户端";
+      outcomeMsg = allowed ? t(lang, "approval.allowed") : t(lang, "approval.denied");
     } catch (e) {
       outcome = "expired";
       outcomeMsg = String(e);
@@ -73,22 +84,22 @@
 
 {#if pending}
   {@const request = pending}
-  <ModalShell
-    title="浏览器请求关联"
-    description="浏览器客户端请求读取当前数据库凭据"
-    ariaLabel="浏览器关联授权"
+<ModalShell
+  title={t(lang, "approval.title")}
+  description={t(lang, "approval.desc")}
+  ariaLabel={t(lang, "approval.aria")}
     size="medium"
     prompt
   >
     {#snippet icon()}<AppIcon name="plug" size={18} />{/snippet}
     {#snippet children()}
       <div class="client-card">
-        <span class="client-label">客户端 ID</span>
+        <span class="client-label">{t(lang, "approval.clientId")}</span>
         <code class="client-id">{request.id}</code>
       </div>
 
       <p class="approval-note">
-        批准后将允许该客户端获取此数据库中的用户名与密码；密钥仅在本次会话内有效，锁定数据库即失效。
+        {t(lang, "approval.note")}
       </p>
 
       {#if outcome}
@@ -98,13 +109,15 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => void decide(false)} disabled={busy || outcome !== null}>拒绝</Button>
+      <Button onclick={() => void decide(false)} disabled={busy || outcome !== null}
+        >{t(lang, "approval.deny")}</Button
+      >
       <Button
         variant="primary"
         onclick={() => void decide(true)}
         disabled={busy || outcome !== null}
       >
-        允许</Button
+        {t(lang, "approval.allow")}</Button
       >
     {/snippet}
   </ModalShell>

@@ -3,6 +3,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     /** Called with the decoded payload (otpauth URI or Base32 seed). */
@@ -10,6 +12,16 @@
   }
 
   let { onpick }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let busy = $state(false);
   let error = $state("");
@@ -50,7 +62,7 @@
 
   function handleResults(found: string[]): void {
     if (found.length === 0) {
-      error = "未识别到二维码";
+      error = t(lang, "totpqr.noCode");
       closeOverlay();
       return;
     }
@@ -149,7 +161,7 @@
     rect = null;
     void run(async () => {
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
-      if (!blob) throw new Error("区域裁剪失败");
+      if (!blob) throw new Error(t(lang, "totpqr.cropFailed"));
       handleResults(await decode(new Uint8Array(await blob.arrayBuffer())));
     });
   }
@@ -160,8 +172,8 @@
     type="button"
     class="totp-qr-btn"
     disabled={busy}
-    title="截图选取：截图并框选二维码"
-    aria-label="截图选取"
+    title={t(lang, "totpqr.regionTitle")}
+    aria-label={t(lang, "totpqr.region")}
     onclick={startRegion}
   >
     <AppIcon name="crop" size={13} />
@@ -170,8 +182,8 @@
     type="button"
     class="totp-qr-btn"
     disabled={busy}
-    title="屏幕识别：识别当前屏幕中的二维码"
-    aria-label="屏幕识别"
+    title={t(lang, "totpqr.scanTitle")}
+    aria-label={t(lang, "totpqr.scan")}
     onclick={startScreen}
   >
     <AppIcon name="scan" size={13} />
@@ -183,13 +195,13 @@
     class="qr-shot-overlay"
     role="dialog"
     tabindex="-1"
-    aria-label="框选二维码"
+    aria-label={t(lang, "totpqr.selectRegion")}
     onmousedown={onDown}
     onmousemove={onMove}
     onmouseup={onUp}
   >
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <img class="qr-shot-img" src={shotUrl} alt="屏幕截图" draggable="false" />
+    <img class="qr-shot-img" src={shotUrl} alt={t(lang, "totpqr.shotAlt")} draggable="false" />
     {#if rect}
       <div
         class="qr-shot-rect"
@@ -199,14 +211,14 @@
         style:height="{rect.h}px"
       ></div>
     {/if}
-    <span class="qr-shot-hint">拖动框选二维码区域，Esc 取消</span>
+    <span class="qr-shot-hint">{t(lang, "totpqr.shotHint")}</span>
   </div>
 {/if}
 
 {#if results.length > 0}
   <ModalShell
-    title={`识别到 ${results.length} 个码`}
-    description="请选择要使用的一项"
+    title={t(lang, "totpqr.found", { count: results.length })}
+    description={t(lang, "totpqr.chooseOne")}
     size="small"
     closeOnEscape
     onclose={() => (results = [])}
@@ -223,7 +235,7 @@
       </ul>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (results = [])}>取消</Button>
+      <Button onclick={() => (results = [])}>{t(lang, "common.cancel")}</Button>
     {/snippet}
   </ModalShell>
 {/if}
