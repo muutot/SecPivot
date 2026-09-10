@@ -298,10 +298,10 @@
         if (isTauriRuntime()) {
           const selected = await save({
             defaultPath: "new-vault.kdbx",
-          filters: [
-            { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
-            { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
-          ],
+            filters: [
+              { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+              { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
+            ],
           });
           if (!selected) return;
           target = String(selected);
@@ -555,7 +555,9 @@
         {/if}
         <div class="field">
           <span
-            >{remote.kind === "webdav" ? t(lang, "welcome.accessKey") : t(lang, "welcome.accessKeyS3")}</span
+            >{remote.kind === "webdav"
+              ? t(lang, "welcome.accessKey")
+              : t(lang, "welcome.accessKeyS3")}</span
           >
           <TextField
             value={remote.accessKey}
@@ -566,7 +568,11 @@
           />
         </div>
         <div class="field">
-          <span>{remote.kind === "webdav" ? t(lang, "welcome.secret") : t(lang, "welcome.secretS3")}</span>
+          <span
+            >{remote.kind === "webdav"
+              ? t(lang, "welcome.secret")
+              : t(lang, "welcome.secretS3")}</span
+          >
           <TextField
             type="password"
             value={remote.secretKey}
@@ -625,8 +631,9 @@
               class:active={remoteMode === "memory"}
               onclick={() => (remoteMode = "memory")}
             >
-              <strong>{t(lang, "welcome.memoryOnly")}</strong
-              ><small>{t(lang, "welcome.memoryOnlyDesc")}</small>
+              <strong>{t(lang, "welcome.memoryOnly")}</strong><small
+                >{t(lang, "welcome.memoryOnlyDesc")}</small
+              >
             </button>
             <button
               class="remote-mode-option"

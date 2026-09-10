@@ -94,7 +94,7 @@ export async function runFaviconDownload(
     host.setDialog({
       phase: "done",
       progress: { sessionId, done: 0, total: 0 },
-        result: t(lang(), "favicon.dlFailed", { e: String(e) }),
+      result: t(lang(), "favicon.dlFailed", { e: String(e) }),
       error: true,
     });
   } finally {

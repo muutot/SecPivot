@@ -84,10 +84,10 @@
 
 {#if pending}
   {@const request = pending}
-<ModalShell
-  title={t(lang, "approval.title")}
-  description={t(lang, "approval.desc")}
-  ariaLabel={t(lang, "approval.aria")}
+  <ModalShell
+    title={t(lang, "approval.title")}
+    description={t(lang, "approval.desc")}
+    ariaLabel={t(lang, "approval.aria")}
     size="medium"
     prompt
   >
