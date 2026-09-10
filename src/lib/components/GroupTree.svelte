@@ -2,6 +2,8 @@
   import type { VaultGroup } from "$lib/types/vault";
   import { untrack } from "svelte";
   import { buildEntryCounts, findBinGroup, totalExcludingBin } from "$lib/utils/tree";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
 
@@ -71,6 +73,16 @@
   })();
 
   let expanded = $state<Set<string>>(initialExpanded);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let knownUuids = new Set(initialExpanded);
 
@@ -193,13 +205,13 @@
 
 <div class="group-tree">
   <div class="tree-head">
-    <span class="tree-label">分组</span>
+    <span class="tree-label">{t(lang, "toolbar.groups")}</span>
     <div class="tree-tools">
       {#if onclose}
         <button
           class="tool-btn drawer-close"
-          title="关闭分组面板"
-          aria-label="关闭分组面板"
+          title={t(lang, "group.closePanel")}
+          aria-label={t(lang, "group.closePanel")}
           onclick={onclose}
         >
           <AppIcon name="x" size={13} />
@@ -207,16 +219,16 @@
       {/if}
       <button
         class="tool-btn"
-        title="新建分组"
-        aria-label="在当前分组下新建分组"
+        title={t(lang, "menu.newGroup")}
+        aria-label={t(lang, "group.newUnder")}
         onclick={() => onaddsubgroup(selected)}
       >
         <AppIcon name="folder-plus" size={13} />
       </button>
       <button
         class="tool-btn"
-        title={allExpanded ? "全部折叠" : "全部展开"}
-        aria-label={allExpanded ? "全部折叠" : "全部展开"}
+        title={allExpanded ? t(lang, "group.collapseAll") : t(lang, "group.expandAll")}
+        aria-label={allExpanded ? t(lang, "group.collapseAll") : t(lang, "group.expandAll")}
         onclick={toggleExpandAll}
       >
         <AppIcon name={allExpanded ? "chevrons-right" : "chevrons-down"} size={13} />
@@ -227,7 +239,7 @@
   <div class="tree-list">
     <button class="all-row" class:selected={selected === null} onclick={() => onselect(null)}>
       <AppIcon name="grid" size={13} />
-      <span class="all-name">全部条目</span>
+      <span class="all-name">{t(lang, "group.allEntries")}</span>
       <span class="all-count">{total}</span>
     </button>
     {#each root.children as child (child.uuid)}

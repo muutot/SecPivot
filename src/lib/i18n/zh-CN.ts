@@ -120,6 +120,23 @@ export const zhCN = {
   "toolbar.advancedSearch": "高级搜索",
   "toolbar.readonly": "只读",
   "toolbar.readonlyTitle": "连续保存失败，数据库已进入只读模式",
+  "common.untitled": "未命名条目",
+  "table.sortCycle": "点击排序,按住拖动调整顺序",
+  "table.reorderOnly": "按住拖动调整顺序",
+  "table.resizeColumn": "调整列宽",
+  "table.listLabel": "条目列表",
+  "table.noMatch": "没有匹配的条目",
+  "table.emptyGroup": "这个分组还没有条目",
+  "table.adjustSearch": "尝试调整搜索关键词",
+  "table.createEntryHint": "点击右上角「条目」新建一条",
+  "table.expired": "已过期",
+  "table.hidePassword": "点击隐藏",
+  "table.showPassword": "点击显示密码",
+  "group.closePanel": "关闭分组面板",
+  "group.newUnder": "在当前分组下新建分组",
+  "group.collapseAll": "全部折叠",
+  "group.expandAll": "全部展开",
+  "group.allEntries": "全部条目",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;

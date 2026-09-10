@@ -5,6 +5,8 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import type { DisplayRow } from "$lib/utils/display-rows";
   import {
     entryPositions,
@@ -177,6 +179,16 @@
   let viewportHeight = $state(0);
   let narrow = $state(false);
   let lastFocusedIndex = $state(0);
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   const rowHeight = $derived(narrow ? Math.max(NARROW_ROW_HEIGHT, entryRowHeight) : entryRowHeight);
   const virtualRange = $derived(
@@ -476,7 +488,7 @@
             if (suppressColumnSort) return;
             if (col.sortable) oncyclesort(col.id);
           }}
-          title={col.sortable ? "点击排序,按住拖动调整顺序" : "按住拖动调整顺序"}
+          title={col.sortable ? t(lang, "table.sortCycle") : t(lang, "table.reorderOnly")}
         >
           <span class="head-label">{col.label}</span>
           {#if sortCol === col.id}
@@ -487,7 +499,7 @@
           class="resize-handle"
           role="separator"
           aria-orientation="vertical"
-          title="调整列宽"
+          title={t(lang, "table.resizeColumn")}
           onpointerdown={(event) => startColResize(event, col.id)}
         ></span>
       </div>
@@ -498,7 +510,7 @@
   <div
     class="entry-list"
     role="listbox"
-    aria-label="条目列表"
+    aria-label={t(lang, "table.listLabel")}
     aria-multiselectable="true"
     tabindex="-1"
     bind:this={entryListEl}
@@ -512,8 +524,8 @@
     {#if entryCount === 0}
       <div class="empty-state">
         <span class="empty-icon"><AppIcon name="key" size={20} /></span>
-        <strong>{searchActive ? "没有匹配的条目" : "这个分组还没有条目"}</strong>
-        <p>{searchActive ? "尝试调整搜索关键词" : "点击右上角「条目」新建一条"}</p>
+        <strong>{searchActive ? t(lang, "table.noMatch") : t(lang, "table.emptyGroup")}</strong>
+        <p>{searchActive ? t(lang, "table.adjustSearch") : t(lang, "table.createEntryHint")}</p>
       </div>
     {:else}
       <div
@@ -589,9 +601,11 @@
             </span>
             <span class="mobile-entry-summary">
               <span class="entry-row-main">
-                <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                  >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                    <span class="expired-flag">已过期</span>
+                <span
+                  class="entry-row-title"
+                  title={row.entry.expired ? t(lang, "table.expired") : undefined}
+                  >{row.entry.title || t(lang, "common.untitled")}{#if row.entry.expired}
+                    <span class="expired-flag">{t(lang, "table.expired")}</span>
                   {/if}</span
                 >
                 {#if showDescriptions}
@@ -606,9 +620,11 @@
               {#if col.id === "title"}
                 <span class="entry-row-col col-title">
                   <div class="entry-row-main">
-                    <span class="entry-row-title" title={row.entry.expired ? "已过期" : undefined}
-                      >{row.entry.title || "未命名条目"}{#if row.entry.expired}
-                        <span class="expired-flag">已过期</span>
+                    <span
+                      class="entry-row-title"
+                      title={row.entry.expired ? t(lang, "table.expired") : undefined}
+                      >{row.entry.title || t(lang, "common.untitled")}{#if row.entry.expired}
+                        <span class="expired-flag">{t(lang, "table.expired")}</span>
                       {/if}</span
                     >
                     {#if showDescriptions}
@@ -633,7 +649,7 @@
                   class:col-revealed={revealed}
                   role="button"
                   tabindex="0"
-                  title={revealed ? "点击隐藏" : "点击显示密码"}
+                  title={revealed ? t(lang, "table.hidePassword") : t(lang, "table.showPassword")}
                   onclick={(event) => {
                     event.stopPropagation();
                     void toggleRevealPassword(row.entry);
@@ -667,7 +683,7 @@
               <button
                 class="row-btn"
                 class:star-active={row.entry.favorite}
-                title={row.entry.favorite ? "取消收藏" : "收藏条目"}
+                title={row.entry.favorite ? t(lang, "menu.unfavorite") : t(lang, "menu.favorite")}
                 onclick={(event) => {
                   event.stopPropagation();
                   onfavorite(row.entry);
@@ -677,7 +693,7 @@
               </button>
               <button
                 class="row-btn"
-                title="复制用户名"
+                title={t(lang, "menu.copyUsername")}
                 onclick={(event) => {
                   event.stopPropagation();
                   oncopyusername(row.entry);
@@ -687,7 +703,7 @@
               </button>
               <button
                 class="row-btn"
-                title="复制密码"
+                title={t(lang, "menu.copyPassword")}
                 onclick={(event) => {
                   event.stopPropagation();
                   oncopypassword(row.entry);
