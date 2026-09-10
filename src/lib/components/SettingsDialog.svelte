@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getVersion } from "@tauri-apps/api/app";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GeneralSettingsPanel from "$lib/components/settings/GeneralSettingsPanel.svelte";
   import SecuritySettingsPanel from "$lib/components/settings/SecuritySettingsPanel.svelte";
@@ -22,6 +23,16 @@
   }
 
   let { onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let appVersion = $state("0.1.0");
 
@@ -59,48 +70,48 @@
     description: string;
     tabs?: { id: string; label: string }[];
     title: string;
-  }[] = [
+  }[] = $derived([
     {
       id: "general",
-      label: "通用",
+      label: t(lang, "nav.general.label"),
       icon: "sliders",
-      title: "通用",
-      description: "外观、字体与界面密度设置，修改即时生效。",
+      title: t(lang, "nav.general.title"),
+      description: t(lang, "nav.general.description"),
       tabs: [
-        { id: "appearance", label: "外观" },
-        { id: "display", label: "显示" },
-        { id: "layout", label: "布局" },
-        { id: "toolbar", label: "工具栏" },
-        { id: "network", label: "网络" },
+        { id: "appearance", label: t(lang, "nav.general.appearance") },
+        { id: "display", label: t(lang, "nav.general.display") },
+        { id: "layout", label: t(lang, "nav.general.layout") },
+        { id: "toolbar", label: t(lang, "nav.general.toolbar") },
+        { id: "network", label: t(lang, "nav.general.network") },
       ],
     },
     {
       id: "security",
-      label: "安全",
+      label: t(lang, "nav.security.label"),
       icon: "shield",
-      title: "安全",
-      description: "自动锁定、剪贴板清理与托盘行为。",
+      title: t(lang, "nav.security.title"),
+      description: t(lang, "nav.security.description"),
     },
     {
       id: "keyboard",
-      label: "快捷键",
+      label: t(lang, "nav.keyboard.label"),
       icon: "keyboard",
-      title: "快捷键",
-      description: "全局自动填充热键与常用操作的窗口内快捷键。",
+      title: t(lang, "nav.keyboard.title"),
+      description: t(lang, "nav.keyboard.description"),
     },
     {
       id: "database",
-      label: "数据库",
+      label: t(lang, "nav.database.label"),
       icon: "database",
-      title: "数据库",
-      description: "新建数据库的加密默认值与密码生成规则。",
+      title: t(lang, "nav.database.title"),
+      description: t(lang, "nav.database.description"),
     },
     {
       id: "remote",
-      label: "远程",
+      label: t(lang, "nav.remote.label"),
       icon: "cloud",
-      title: "远程",
-      description: "按协议分组管理远程连接、凭据与本地镜像设置。",
+      title: t(lang, "nav.remote.title"),
+      description: t(lang, "nav.remote.description"),
       tabs: [
         { id: "s3", label: "S3" },
         { id: "webdav", label: "WebDAV" },
@@ -108,10 +119,10 @@
     },
     {
       id: "integrations",
-      label: "集成",
+      label: t(lang, "nav.integrations.label"),
       icon: "plug",
-      title: "集成",
-      description: "浏览器桥接（KeePassHttp 与 KeePassRPC 兼容）与授权客户端管理。",
+      title: t(lang, "nav.integrations.title"),
+      description: t(lang, "nav.integrations.description"),
       tabs: [
         { id: "http", label: "KeePassHttp" },
         { id: "rpc", label: "KeePassRPC" },
@@ -119,12 +130,12 @@
     },
     {
       id: "about",
-      label: "关于",
+      label: t(lang, "nav.about.label"),
       icon: "info",
-      title: "关于",
-      description: "版本、技术栈与许可证信息。",
+      title: t(lang, "nav.about.title"),
+      description: t(lang, "nav.about.description"),
     },
-  ];
+  ]);
 
   const activeSection = $derived(sections.find((s) => s.id === active) ?? sections[0]);
 </script>
@@ -133,7 +144,7 @@
   class="settings-dialog settings-dialog--standalone"
   class:mobile-nav-open={mobileNavOpen}
   role="dialog"
-  aria-label="设置"
+  aria-label={t(lang, "nav.settings")}
 >
   <aside class="settings-sidebar" data-tauri-drag-region>
     <div class="settings-brand">
@@ -143,7 +154,11 @@
         <small>v{appVersion}</small>
       </div>
     </div>
-    <nav id="settings-primary-nav" class="settings-primary-nav" aria-label="设置分类">
+    <nav
+      id="settings-primary-nav"
+      class="settings-primary-nav"
+      aria-label={t(lang, "nav.categories")}
+    >
       {#each sections as section (section.id)}
         <button
           class="settings-nav-item"
@@ -162,14 +177,14 @@
       {/each}
     </nav>
     <div class="sidebar-foot">
-      <p class="sidebar-hint">本地加密存储 · 远程同步可选</p>
+      <p class="sidebar-hint">{t(lang, "nav.hint")}</p>
     </div>
   </aside>
 
   {#if mobileNavOpen}
     <button
       class="settings-drawer-backdrop"
-      aria-label="关闭设置分类"
+      aria-label={t(lang, "nav.closeNav")}
       onclick={() => (mobileNavOpen = false)}
     ></button>
   {/if}
@@ -182,8 +197,8 @@
             class="settings-nav-toggle"
             class:active={mobileNavOpen}
             onclick={() => (mobileNavOpen = !mobileNavOpen)}
-            title="设置分类"
-            aria-label="切换设置分类"
+            title={t(lang, "nav.categories")}
+            aria-label={t(lang, "nav.toggleNav")}
             aria-controls="settings-primary-nav"
             aria-expanded={mobileNavOpen}
           >
@@ -193,16 +208,26 @@
         </div>
         <div class="settings-section-actions">
           <span class="settings-count"
-            >{activeSection.tabs?.length ? `${activeSection.tabs.length} 组` : "1 页"}</span
+            >{activeSection.tabs?.length
+              ? t(lang, "nav.groups", { count: activeSection.tabs.length })
+              : t(lang, "nav.page")}</span
           >
-          <button class="close-button" onclick={onclose} title="返回主界面" aria-label="返回主界面">
+          <button
+            class="close-button"
+            onclick={onclose}
+            title={t(lang, "nav.backHome")}
+            aria-label={t(lang, "nav.backHome")}
+          >
             <AppIcon name="chevron-left" size={15} />
           </button>
         </div>
       </div>
 
       {#if activeSection.tabs}
-        <nav class="settings-subnav" aria-label="{activeSection.title}子分类">
+        <nav
+          class="settings-subnav"
+          aria-label={t(lang, "nav.subCategories", { title: activeSection.title })}
+        >
           {#each activeSection.tabs as tab (tab.id)}
             <button
               class="settings-subnav-item"

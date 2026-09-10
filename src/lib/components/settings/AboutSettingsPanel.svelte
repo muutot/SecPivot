@@ -1,7 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import AppIcon from "$lib/components/AppIcon.svelte";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     onclose: () => void;
@@ -10,6 +11,16 @@
   }
 
   let { onclose, showHeader = true, appVersion = "0.1.0" }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   interface AppInfo {
     portable: boolean;
@@ -34,11 +45,11 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 关于</span>
-      <h2>关于</h2>
-      <p>版本与技术信息。</p>
+      <span class="eyebrow">Settings · {t(lang, "about.title")}</span>
+      <h2>{t(lang, "about.title")}</h2>
+      <p>{t(lang, "about.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
@@ -49,40 +60,40 @@
       <div>
         <strong class="about-name">SecPivot</strong>
         <p class="about-version">v{appVersion}</p>
-        <p class="about-tagline">专业、紧凑、高密度的开源 KeePass 客户端</p>
+        <p class="about-tagline">{t(lang, "about.tagline")}</p>
       </div>
     </div>
     <dl class="about-grid">
       <div class="about-item">
-        <dt>技术栈</dt>
+        <dt>{t(lang, "about.stack")}</dt>
         <dd>Svelte 5 · Tauri 2 · Rust</dd>
       </div>
       <div class="about-item">
-        <dt>格式</dt>
-        <dd>KDBX 4.0（兼容 KeePass 2.x）</dd>
+        <dt>{t(lang, "about.format")}</dt>
+        <dd>{t(lang, "about.formatValue")}</dd>
       </div>
       <div class="about-item">
-        <dt>加密</dt>
+        <dt>{t(lang, "about.crypto")}</dt>
         <dd>AES-256 / ChaCha20 · Argon2id</dd>
       </div>
       <div class="about-item">
-        <dt>许可证</dt>
+        <dt>{t(lang, "about.license")}</dt>
         <dd>MIT</dd>
       </div>
       {#if info}
         <div class="about-item">
-          <dt>运行模式</dt>
-          <dd>{info.portable ? "便携版（配置随行）" : "标准安装"}</dd>
+          <dt>{t(lang, "about.mode")}</dt>
+          <dd>{info.portable ? t(lang, "about.portable") : t(lang, "about.installed")}</dd>
         </div>
         <div class="about-item about-item-wide">
-          <dt>数据目录</dt>
+          <dt>{t(lang, "about.dataDir")}</dt>
           <dd class="mono" title={info.dataDir}>{info.dataDir}</dd>
         </div>
       {/if}
     </dl>
   </section>
 
-  <p class="auto-save-note">数据仅保存在本地数据库文件中</p>
+  <p class="auto-save-note">{t(lang, "about.localOnly")}</p>
 </div>
 
 <style>

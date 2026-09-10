@@ -12,6 +12,7 @@
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     onclose: () => void;
@@ -46,6 +47,7 @@
   );
   const mirrorPath = $derived(remoteMirrorPath(activeProfile));
   const kindLabel = $derived(kind === "webdav" ? "WebDAV" : "S3");
+  const lang = $derived(s.general.language);
 
   $effect(() => {
     if (s.activeRemote !== activePath) appSettings.setActiveRemote(activePath);
@@ -62,11 +64,11 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 远程 · {kindLabel}</span>
+      <span class="eyebrow">{t(lang, "remote.header", { kind: kindLabel })}</span>
       <h2>{kindLabel}</h2>
-      <p>管理 {kindLabel} 远程数据库配置；每条配置只属于当前协议。</p>
+      <p>{t(lang, "remote.headerDesc", { kind: kindLabel })}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
@@ -76,15 +78,15 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="cloud" size={17} /></span>
         <div>
-          <strong>{kindLabel} 配置</strong>
-          <p>配置路径按“协议/配置名”区分，可在同一协议下维护多套连接</p>
+          <strong>{t(lang, "remote.profilesTitle", { kind: kindLabel })}</strong>
+          <p>{t(lang, "remote.profilesDesc")}</p>
         </div>
       </div>
       <Select
         id="remote-profile-select"
         className="setting-row-input"
         value={activePath}
-        ariaLabel={`${kindLabel} 配置`}
+        ariaLabel={t(lang, "remote.profilesTitle", { kind: kindLabel })}
         options={profiles.map((profile) => ({
           value: remoteProfilePath(profile),
           label: profile.name,
@@ -96,8 +98,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="edit" size={17} /></span>
         <div>
-          <strong>配置名称</strong>
-          <p>名称会作为配置路径和本地镜像目录的最后一级</p>
+          <strong>{t(lang, "remote.nameTitle")}</strong>
+          <p>{t(lang, "remote.nameDesc")}</p>
         </div>
       </div>
       <div class="setting-row-input">
@@ -117,18 +119,18 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
         <div>
-          <strong>配置路径</strong>
-          <p>S3 与 WebDAV 使用独立命名空间</p>
+          <strong>{t(lang, "remote.pathTitle")}</strong>
+          <p>{t(lang, "remote.pathDesc")}</p>
         </div>
       </div>
       <code class="mirror-dir">{activePath}</code>
     </div>
     {#if nameConflict}
-      <p class="settings-note input-error">同一协议下的配置名称不允许重复</p>
+      <p class="settings-note input-error">{t(lang, "remote.nameConflict")}</p>
     {/if}
     <div class="profile-actions">
       <Button variant="action" onclick={() => appSettings.addRemoteProfile(kind, "")} type="button">
-        添加配置</Button
+        {t(lang, "remote.addProfile")}</Button
       >
       <Button
         variant="action"
@@ -136,7 +138,7 @@
         onclick={() => appSettings.removeRemoteProfile(activePath)}
         type="button"
       >
-        删除当前配置</Button
+        {t(lang, "remote.deleteProfile")}</Button
       >
     </div>
   </section>
@@ -146,11 +148,15 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
         <div>
-          <strong>{kind === "webdav" ? "WebDAV 服务地址" : "服务地址"}</strong>
+          <strong
+            >{kind === "webdav"
+              ? t(lang, "remote.endpointWebdav")
+              : t(lang, "remote.endpointS3")}</strong
+          >
           <p>
             {kind === "webdav"
-              ? "基地址（如 https://dav.example.com/remote.php/dav/files/user）"
-              : "兼容 AWS S3、MinIO 等 S3 API 服务"}
+              ? t(lang, "remote.endpointWebdavDesc")
+              : t(lang, "remote.endpointS3Desc")}
           </p>
         </div>
       </div>
@@ -173,8 +179,8 @@
         <div class="setting-heading">
           <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
           <div>
-            <strong>区域</strong>
-            <p>存储桶所在的地域</p>
+            <strong>{t(lang, "remote.region")}</strong>
+            <p>{t(lang, "remote.regionDesc")}</p>
           </div>
         </div>
         <div class="setting-row-input">
@@ -191,8 +197,8 @@
         <div class="setting-heading">
           <span class="setting-icon"><AppIcon name="folder" size={17} /></span>
           <div>
-            <strong>存储桶</strong>
-            <p>对象存储的桶名称</p>
+            <strong>{t(lang, "remote.bucket")}</strong>
+            <p>{t(lang, "remote.bucketDesc")}</p>
           </div>
         </div>
         <div class="setting-row-input">
@@ -211,8 +217,16 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="key" size={17} /></span>
         <div>
-          <strong>{kind === "webdav" ? "用户名" : "Access Key"}</strong>
-          <p>{kind === "webdav" ? "WebDAV 登录用户名" : "远程存储的访问密钥 ID"}</p>
+          <strong
+            >{kind === "webdav"
+              ? t(lang, "remote.accessKeyWebdav")
+              : t(lang, "remote.accessKeyS3")}</strong
+          >
+          <p>
+            {kind === "webdav"
+              ? t(lang, "remote.accessKeyWebdavDesc")
+              : t(lang, "remote.accessKeyS3Desc")}
+          </p>
         </div>
       </div>
       <div class="setting-row-input">
@@ -231,8 +245,16 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="lock" size={17} /></span>
         <div>
-          <strong>{kind === "webdav" ? "密码" : "Secret Key"}</strong>
-          <p>{kind === "webdav" ? "WebDAV 登录密码" : "与 Access Key 配对的私钥"}</p>
+          <strong
+            >{kind === "webdav"
+              ? t(lang, "remote.secretWebdav")
+              : t(lang, "remote.secretS3")}</strong
+          >
+          <p>
+            {kind === "webdav"
+              ? t(lang, "remote.secretWebdavDesc")
+              : t(lang, "remote.secretS3Desc")}
+          </p>
         </div>
       </div>
       <div class="setting-row-input">
@@ -250,8 +272,7 @@
   </section>
 
   <p class="settings-note warn">
-    风险提示：凭据以 DPAPI 加密后写入
-    config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。
+    {t(lang, "remote.dpapiNote")}
   </p>
 
   <section class="setting-card">
@@ -259,8 +280,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="filter" size={17} /></span>
         <div>
-          <strong>对象前缀</strong>
-          <p>远程文件列表的前缀过滤（可选）</p>
+          <strong>{t(lang, "remote.prefix")}</strong>
+          <p>{t(lang, "remote.prefixDesc")}</p>
         </div>
       </div>
       <div class="setting-row-input">
@@ -278,21 +299,21 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="download" size={17} /></span>
         <div>
-          <strong>本地镜像目录</strong>
-          <p>“本地镜像”模式按协议和配置名分层落盘</p>
+          <strong>{t(lang, "remote.mirrorDir")}</strong>
+          <p>{t(lang, "remote.mirrorDirDesc")}</p>
         </div>
       </div>
       <code class="mirror-dir">{mirrorPath}</code>
     </div>
-    <p class="settings-note">本地副本保存在 Storage/remote/{mirrorPath}/ 下。</p>
+    <p class="settings-note">{t(lang, "remote.mirrorNote", { path: mirrorPath })}</p>
   </section>
 
   <SettingRangeCard
     icon="clock"
-    label="本地备份数量"
-    description="每次保存时保留的带时间戳备份份数，0 表示不保留"
+    label={t(lang, "remote.backupCount")}
+    description={t(lang, "remote.backupCountDesc")}
     value={remote.backupCount}
-    valueLabel={`${remote.backupCount} 份`}
+    valueLabel={t(lang, "remote.backupUnit", { count: remote.backupCount })}
     min={0}
     max={10}
     onchange={(value) => change("backupCount", value)}
@@ -303,8 +324,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="file" size={17} /></span>
         <div>
-          <strong>备份文件名模板</strong>
-          <p>时间戳备份的命名规则</p>
+          <strong>{t(lang, "remote.templateTitle")}</strong>
+          <p>{t(lang, "remote.templateDesc")}</p>
         </div>
       </div>
       <div class="setting-row-input">
@@ -320,11 +341,11 @@
       </div>
     </div>
     <p class="settings-note">
-      占位符：{"{name}"} 文件主名、{"{timestamp}"} 时间戳、{"{ext}"} 原扩展名
+      {t(lang, "remote.templatePlaceholders")}
     </p>
   </section>
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>

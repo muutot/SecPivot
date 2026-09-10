@@ -5,6 +5,7 @@
   import type { BridgeSettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
+  import { t } from "$lib/i18n";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
@@ -23,6 +24,7 @@
   });
 
   const bridge = $derived(s.bridge);
+  const lang = $derived(s.general.language);
 
   interface BridgeStatus {
     running: boolean;
@@ -57,7 +59,7 @@
       clientNote = "";
     } catch {
       clients = [];
-      clientNote = "解锁数据库后显示已授权的浏览器客户端";
+      clientNote = t(lang, "bridge.clientNoteLocked");
     }
   }
 
@@ -80,21 +82,21 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 集成</span>
-      <h2>集成</h2>
-      <p>浏览器桥接（KeePassHttp 兼容）设置。</p>
+      <span class="eyebrow">Settings · {t(lang, "bridge.title")}</span>
+      <h2>{t(lang, "bridge.title")}</h2>
+      <p>{t(lang, "bridge.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
 <div class="settings-scroll">
   <SettingToggleCard
     icon="plug"
-    label="浏览器桥接"
-    description="在 127.0.0.1:19455 启用 KeePassHttp 兼容服务（仅本机回环）"
+    label={t(lang, "bridge.toggle")}
+    description={t(lang, "bridge.toggleDesc")}
     checked={bridge.enabled}
-    ariaLabel="启用浏览器桥接"
+    ariaLabel={t(lang, "bridge.toggleAria")}
     onchange={(enabled) => {
       change("enabled", enabled);
       if (enabled) void refreshClients();
@@ -106,15 +108,15 @@
       <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>服务状态</strong>
-          <p>监听地址 127.0.0.1:19455，浏览器扩展直接连接本机服务</p>
+          <strong>{t(lang, "bridge.status")}</strong>
+          <p>{t(lang, "bridge.statusDesc")}</p>
         </div>
         <span class="value-label" class:status-off={!bridge.enabled}
           >{bridge.enabled
             ? status?.running
-              ? `运行中 :${status.port}`
-              : (status?.error ?? "启动中…")
-            : "已停用"}</span
+              ? t(lang, "bridge.running", { port: status.port })
+              : (status?.error ?? t(lang, "bridge.starting"))
+            : t(lang, "bridge.stopped")}</span
         >
       </div>
     </div>
@@ -125,15 +127,15 @@
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>已授权客户端</strong>
-          <p>浏览器首次连接需经你批准，密钥仅存于本次会话</p>
+          <strong>{t(lang, "bridge.clients")}</strong>
+          <p>{t(lang, "bridge.clientsDesc")}</p>
         </div>
         <Button
           variant="action"
           onclick={() => void refreshClients()}
           disabled={!bridge.enabled || !isTauriRuntime()}
         >
-          刷新
+          {t(lang, "bridge.refresh")}
         </Button>
       </div>
     </div>
@@ -141,7 +143,7 @@
       <p class="settings-note">{clientNote}</p>
     {/if}
     {#if clients.length === 0 && !clientNote}
-      <p class="settings-note">暂无已授权客户端</p>
+      <p class="settings-note">{t(lang, "bridge.noClients")}</p>
     {:else if clients.length > 0}
       <ul class="client-list">
         {#each clients as id (id)}
@@ -151,9 +153,9 @@
             <Button
               variant="action"
               onclick={() => void removeClient(id)}
-              ariaLabel={`移除客户端 ${id}`}
+              ariaLabel={t(lang, "bridge.removeClient", { id })}
             >
-              移除
+              {t(lang, "bridge.remove")}
             </Button>
           </li>
         {/each}
@@ -162,10 +164,10 @@
   </section>
 
   <p class="settings-note">
-    授权密钥保存在内存中，锁定或关闭数据库时自动清除；服务不监听外部地址，其他设备无法访问。
+    {t(lang, "bridge.keyNote")}
   </p>
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>

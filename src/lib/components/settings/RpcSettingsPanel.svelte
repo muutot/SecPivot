@@ -8,6 +8,7 @@
 
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { t } from "$lib/i18n";
   interface Props {
     onclose: () => void;
     showHeader?: boolean;
@@ -24,6 +25,7 @@
   });
 
   const rpc = $derived(s.rpc);
+  const lang = $derived(s.general.language);
 
   interface RpcStatus {
     running: boolean;
@@ -87,21 +89,21 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 集成</span>
-      <h2>KeePassRPC</h2>
-      <p>KeePassRPC（Kee 4.x 扩展）兼容桥接设置。</p>
+      <span class="eyebrow">Settings · {t(lang, "bridge.title")}</span>
+      <h2>{t(lang, "rpc.title")}</h2>
+      <p>{t(lang, "rpc.desc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
 <div class="settings-scroll">
   <SettingToggleCard
     icon="link"
-    label="KeePassRPC 桥接"
-    description="在 127.0.0.1:12546 启用 KeePassRPC 兼容服务（仅本机回环）"
+    label={t(lang, "rpc.toggle")}
+    description={t(lang, "rpc.toggleDesc")}
     checked={rpc.enabled}
-    ariaLabel="启用 KeePassRPC 桥接"
+    ariaLabel={t(lang, "rpc.toggleAria")}
     onchange={(enabled) => change("enabled", enabled)}
   />
 
@@ -110,15 +112,15 @@
       <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>服务状态</strong>
-          <p>监听地址 127.0.0.1:12546，Kee 浏览器扩展直接连接本机服务</p>
+          <strong>{t(lang, "rpc.status")}</strong>
+          <p>{t(lang, "rpc.statusDesc")}</p>
         </div>
         <span class="value-label" class:status-off={!rpc.enabled}
           >{rpc.enabled
             ? status?.running
-              ? `运行中 :${status.port}`
-              : (status?.error ?? "启动中…")
-            : "已停用"}</span
+              ? t(lang, "bridge.running", { port: status.port })
+              : (status?.error ?? t(lang, "bridge.starting"))
+            : t(lang, "bridge.stopped")}</span
         >
       </div>
     </div>
@@ -126,10 +128,10 @@
 
   <SettingToggleCard
     icon="lock"
-    label="锁库后保留会话密钥"
-    description="锁定数据库时保留 SRP 会话密钥，解锁后 Kee 扩展无需重新输入旁路密码（与官方 KeePassRPC 一致）。锁库期间扩展仍无法获取任何凭据"
+    label={t(lang, "rpc.keepKeys")}
+    description={t(lang, "rpc.keepKeysDesc")}
     checked={rpc.keepSessionAfterLock}
-    ariaLabel="锁库后保留 RPC 会话密钥"
+    ariaLabel={t(lang, "rpc.keepKeysAria")}
     onchange={(checked) => change("keepSessionAfterLock", checked)}
   />
 
@@ -138,8 +140,8 @@
       <span class="setting-icon"><AppIcon name="clock" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>会话密钥超时</strong>
-          <p>SRP 会话密钥的最长保留时间（秒），每次解锁数据库都会重新计时；0 表示永不过期</p>
+          <strong>{t(lang, "rpc.keyTimeout")}</strong>
+          <p>{t(lang, "rpc.keyTimeoutDesc")}</p>
         </div>
         <div style="width: 120px; flex: 0 0 auto;">
           <TextField
@@ -147,7 +149,7 @@
             numeric
             type="number"
             value={String(rpc.sessionTimeoutSecs)}
-            ariaLabel="会话密钥超时秒数"
+            ariaLabel={t(lang, "rpc.keyTimeoutAria")}
             oninput={(e) =>
               change(
                 "sessionTimeoutSecs",
@@ -161,10 +163,10 @@
 
   <SettingToggleCard
     icon="shield"
-    label="按注册域匹配（KeePassRPC 兼容）"
-    description="开启后「域名」匹配按注册域判定（公共后缀表），同一域名下的兄弟子域都会命中——例如 account.aliyun.com 与 passport.aliyun.com 同属 aliyun.com 均可匹配。关闭则仅按 host 或子域严格匹配"
+    label={t(lang, "rpc.matchDomain")}
+    description={t(lang, "rpc.matchDomainDesc")}
     checked={rpc.matchByRegistrableDomain}
-    ariaLabel="按注册域匹配"
+    ariaLabel={t(lang, "rpc.matchDomainAria")}
     onchange={(checked) => change("matchByRegistrableDomain", checked)}
   />
 
@@ -173,11 +175,13 @@
       <span class="setting-icon"><AppIcon name="globe" size={17} /></span>
       <div class="heading-inline">
         <div>
-          <strong>已连接会话</strong>
-          <p>当前与 Kee 扩展保持连接的浏览器会话，可手动断开任意一个</p>
+          <strong>{t(lang, "rpc.sessions")}</strong>
+          <p>{t(lang, "rpc.sessionsDesc")}</p>
         </div>
         <span class="value-label"
-          >{sessions.length > 0 ? `${sessions.length} 个连接` : "无连接"}</span
+          >{sessions.length > 0
+            ? t(lang, "rpc.connections", { count: sessions.length })
+            : t(lang, "rpc.noConnections")}</span
         >
       </div>
     </div>
@@ -187,18 +191,22 @@
           <li class="session-item">
             <span class="session-identity">
               <span class="session-name" class:unauth={!session.authenticated}>
-                {session.authenticated ? (session.username ?? "已认证客户端") : "握手中…"}
+                {session.authenticated
+                  ? (session.username ?? t(lang, "rpc.authenticated"))
+                  : t(lang, "rpc.handshaking")}
               </span>
               <span class="session-meta"
                 >{session.peer} · {formatConnectedAt(session.connectedAtMs)}</span
               >
             </span>
-            <Button variant="action" onclick={() => void closeSession(session.id)}>断开</Button>
+            <Button variant="action" onclick={() => void closeSession(session.id)}
+              >{t(lang, "rpc.disconnect")}</Button
+            >
           </li>
         {/each}
       </ul>
     {:else}
-      <p class="settings-note">暂无已连接会话；在 Kee 扩展中发起连接后显示在这里</p>
+      <p class="settings-note">{t(lang, "rpc.noSessions")}</p>
     {/if}
   </section>
 
@@ -206,22 +214,19 @@
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>
       <div>
-        <strong>连接方式</strong>
+        <strong>{t(lang, "rpc.howtoTitle")}</strong>
         <p>
-          Kee 扩展连接时，若数据库已解锁，App 会弹出一次性旁路密码；在 Kee 的对话框中输入该密码完成
-          SRP 握手认证
+          {t(lang, "rpc.howto")}
         </p>
       </div>
     </div>
   </section>
 
   <p class="settings-note">
-    旁路密码约 2 分钟有效且仅显示一次；SRP
-    密钥保存在内存中。关闭「锁库后保留会话密钥」后，锁定或关闭数据库时会清除 SRP
-    密钥，扩展需重新授权；否则密钥在锁库期间仍保留，供解锁后直接复用。数据库未解锁时，扩展无法获取任何凭据。
+    {t(lang, "rpc.sideNote")}
   </p>
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>
