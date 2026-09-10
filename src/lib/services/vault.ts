@@ -51,6 +51,24 @@ import {
   SessionSwitchQueue,
   switchSession,
 } from "$lib/utils/session-state";
+import { t, type I18nKey } from "$lib/i18n";
+
+/** Current UI locale for user-facing service errors (read lazily: the
+ *  language can change at runtime via settings). */
+function lang() {
+  return get(appSettings).general.language;
+}
+
+/** Browser-preview guard: every feature-gated throw renders through one
+ *  template so locales only translate the feature names. */
+function browserUnsupported(featureKey: I18nKey): Error {
+  return new Error(t(lang(), "browser.unsupported", { feature: t(lang(), featureKey) }));
+}
+
+/** Same template for the browser-mode history guards. */
+function browserModeUnsupported(featureKey: I18nKey): Error {
+  return new Error(t(lang(), "browser.modeUnsupported", { feature: t(lang(), featureKey) }));
+}
 
 interface VaultStore {
   subscribe: typeof state.subscribe;
@@ -211,7 +229,7 @@ function applyBackendState(result: VaultState, sessionId?: string | null): Vault
 
 function captureSessionId(): string {
   const sessionId = invocationSessionId ?? activeSessionId;
-  if (!sessionId) throw new Error("数据库未打开");
+  if (!sessionId) throw new Error(t(lang(), "error.noOpenDb"));
   return sessionId;
 }
 
@@ -324,7 +342,7 @@ function ensureBinGroup(root: VaultGroup): VaultGroup {
   const bin: VaultGroup = {
     uuid: newUuid(),
     parentUuid: root.uuid,
-    name: "回收站",
+    name: "Recycle Bin",
     isRecycleBin: true,
     enableSearching: true,
     isExpanded: true,
@@ -474,11 +492,11 @@ async function invokeSessionDelta(
   const delta = await invokeSession<MutationDelta>(command, args, sessionId);
   if (captureSessionEpoch(sessionId) !== epoch) {
     const current = sessionStates.get(sessionId);
-    if (!current) throw new Error("数据库未打开");
+    if (!current) throw new Error(t(lang(), "error.noOpenDb"));
     return current;
   }
   const result = applyBackendDelta(sessionId, delta);
-  if (!result) throw new Error("数据库未打开");
+  if (!result) throw new Error(t(lang(), "error.noOpenDb"));
   return result;
 }
 
@@ -602,7 +620,7 @@ export const vault: VaultStore = {
       });
       return commitSessionStateAtEpoch(sessionId, epoch, result);
     }
-    throw new Error("浏览器预览不支持数据库设置修改");
+    throw browserUnsupported("browser.featDbSettings");
   },
 
   remembered: remembered.subscribe,
@@ -748,7 +766,7 @@ export const vault: VaultStore = {
    *  first, key descending). Flushes pending settings so a just-added profile
    *  is visible to the backend. */
   async listRemoteObjects(): Promise<RemoteObject[]> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featRemote");
     await appSettings.flush();
     return backendInvoke<RemoteObject[]>("s3_list_objects", {
       profile: get(appSettings).activeRemote,
@@ -759,7 +777,7 @@ export const vault: VaultStore = {
    *  or `"local"` (mirror under Storage/remote/…); clears the remembered local
    *  path since a remote session cannot be reopened from the lock screen. */
   async openRemote(key, password, keyfile, mode): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featRemote");
     return topologyQueue.enqueue(async () => {
       await appSettings.flush();
       const result = await backendInvoke<VaultOpenResult>("open_remote_vault", {
@@ -784,7 +802,7 @@ export const vault: VaultStore = {
   /** Create a fresh remote vault and open it with the same mode semantics as
    *  `openRemote`. */
   async createRemote(key, password, kdf, cipher, compression, keyfile, mode): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程库");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featRemote");
     return topologyQueue.enqueue(async () => {
       await appSettings.flush();
       const result = await backendInvoke<VaultOpenResult>("create_remote_vault", {
@@ -832,7 +850,7 @@ export const vault: VaultStore = {
   /** Re-download the remote bytes and replace session state, discarding local
    *  unsaved edits (the caller confirms that first). */
   async refreshRemote(): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程刷新");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featRemoteRefresh");
     const sessionId = captureSessionId();
     const result = await invokeSession<VaultState>("refresh_remote_vault", {}, sessionId);
     const replaced = replaceSessionState(sessionId, result);
@@ -843,7 +861,7 @@ export const vault: VaultStore = {
   /** Merge the remote vault's latest bytes into the session by entry/group
    *  UUID + last-modified, persisting the merged result back. Remote only. */
   async mergeRemote(): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持远程合并");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featRemoteMerge");
     const result = await invokeSessionState("merge_remote_vault");
     await refreshTabs();
     return result;
@@ -1052,7 +1070,7 @@ export const vault: VaultStore = {
     const current = browserState ?? (await ensureBrowserLoaded());
     const entry = findEntry(current.root, uuid);
     if (!entry) throw new Error("entry not found");
-    if (!entry.totp) throw new Error("该条目没有 TOTP 种子");
+    if (!entry.totp) throw new Error(t(lang(), "error.noTotpSeed"));
     return computeTotp(entry.totp);
   },
 
@@ -1126,12 +1144,12 @@ export const vault: VaultStore = {
 
   /** Edit-distance clusters of similar passwords (values stay backend-side). */
   async similarPasswords(): Promise<SimilarPasswordGroup[]> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持相似密码检查");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featSimilar");
     return invokeSession<SimilarPasswordGroup[]>("similar_passwords");
   },
 
   async clearAllHistory(): Promise<number> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持历史清理");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featHistoryPurge");
     const sessionId = captureSessionId();
     const epoch = captureSessionEpoch(sessionId);
     const result = await invokeSession<HistoryCleanResult>("clear_all_history", {}, sessionId);
@@ -1140,19 +1158,19 @@ export const vault: VaultStore = {
   },
 
   async expiredEntries(): Promise<ExpiredEntry[]> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持过期维护");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featExpiry");
     return invokeSession<ExpiredEntry[]>("expired_entries");
   },
 
   async changeTimeline(): Promise<ChangeTimelineEvent[]> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持变更时间线");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featTimeline");
     return invokeSession<ChangeTimelineEvent[]>("change_timeline");
   },
 
   /** Opt-in k-anonymity breach check; `uuids` narrows the run to selected
    *  entries. Only SHA-1 prefixes leave the machine. */
   async checkHibp(uuids?: string[]): Promise<BreachFinding[]> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持 HIBP 检查");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featHibp");
     return invokeSession<BreachFinding[]>("check_hibp", {
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
@@ -1170,7 +1188,7 @@ export const vault: VaultStore = {
   /** Fetch site icons for all (or the given) entries; state is refreshed only
    *  when no user edit landed during the network run. */
   async downloadFavicons(uuids?: string[]): Promise<FaviconReport> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持下载图标");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featFavicon");
     const sessionId = captureSessionId();
     const epoch = captureSessionEpoch(sessionId);
     const report = await backendInvoke<FaviconReport>("download_favicons", {
@@ -1205,7 +1223,7 @@ export const vault: VaultStore = {
   },
 
   async autoType(uuid: string, sequence: string): Promise<void> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持自动填充");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featAutotype");
     await invokeSession<void>("auto_type", { uuid, sequence });
   },
 
@@ -1214,12 +1232,12 @@ export const vault: VaultStore = {
   },
 
   async previewAttachment(uuid: string, name: string): Promise<AttachmentPreview> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件预览");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featAttachPreview");
     return invokeSession<AttachmentPreview>("preview_attachment", { uuid, name });
   },
 
   async openAttachmentTemp(uuid: string, name: string): Promise<TempAttachmentRef> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持外部打开附件");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featAttachOpen");
     const ref = await invokeSession<TempAttachmentRef>("open_attachment_temp", { uuid, name });
     tempAttachmentTokens.set(ref.token, ref.sessionId);
     return ref;
@@ -1243,9 +1261,9 @@ export const vault: VaultStore = {
   /** Import a previously extracted attachment back into the entry from its
    *  temp token (session-bound), then clean the token up. */
   async importAttachmentFromTemp(uuid: string, name: string, token: string): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持附件导入");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featAttachImport");
     const sessionId = tempAttachmentTokens.get(token);
-    if (!sessionId) throw new Error("临时附件已清理或不存在");
+    if (!sessionId) throw new Error(t(lang(), "error.attachmentGone"));
     const epoch = captureSessionEpoch(sessionId);
     const result = await invokeSession<VaultState>(
       "import_attachment_from_temp",
@@ -1529,7 +1547,7 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       return invokeSessionState("delete_entry_history", { uuid, index });
     }
-    throw new Error("浏览器模式不支持删除历史版本");
+    throw browserModeUnsupported("browser.featHistoryDelete");
   },
 
   async getEntryStorage(uuid: string): Promise<EntryStorage> {
@@ -1543,7 +1561,7 @@ export const vault: VaultStore = {
     if (isTauriRuntime()) {
       return invokeSessionState("restore_entry_version", { uuid, index });
     }
-    throw new Error("浏览器模式不支持历史版本恢复");
+    throw browserModeUnsupported("browser.featHistoryRestore");
   },
 
   async deleteGroup(uuid: string): Promise<VaultState> {
@@ -1623,7 +1641,7 @@ export const vault: VaultStore = {
    *  backend-active session, epoch-guarding the commit so a failed load never
    *  leaves renderer and backend pointing at different sessions. */
   async setActiveSession(sessionId: string): Promise<VaultState> {
-    if (!isTauriRuntime()) throw new Error("浏览器预览不支持多库标签");
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featTabs");
     if (sessionId === activeSessionId) {
       const current = sessionStates.get(sessionId);
       if (current) return current;
