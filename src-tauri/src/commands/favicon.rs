@@ -311,12 +311,32 @@ fn is_html_page(bytes: &[u8]) -> bool {
 
 /// Extract an attribute like `rel="icon"`, `href='/a.png'` or `href=/a.png`
 /// (double-quoted, single-quoted, or unquoted) from a tag string.
+/// Compiled patterns are cached per attribute name: `favicon_link_urls`
+/// calls this for every `<link>` tag on a page.
 fn attr_value(tag: &str, name: &str) -> Option<String> {
-    let pattern = regex::escape(name);
-    let re = Regex::new(&format!(
-        r#"(?i)\b{pattern}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))"#
-    ))
-    .ok()?;
+    static CACHE: OnceLock<Mutex<std::collections::HashMap<String, Regex>>> = OnceLock::new();
+    let cached = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .get(name)
+        .cloned();
+    let re = match cached {
+        Some(re) => re,
+        None => {
+            let pattern = regex::escape(name);
+            let re = Regex::new(&format!(
+                r#"(?i)\b{pattern}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))"#
+            ))
+            .ok()?;
+            CACHE
+                .get_or_init(Default::default)
+                .lock()
+                .unwrap()
+                .insert(name.to_owned(), re.clone());
+            re
+        }
+    };
     let caps = re.captures(tag)?;
     caps.get(1)
         .or_else(|| caps.get(2))
