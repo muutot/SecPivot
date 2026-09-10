@@ -2,6 +2,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import type { FaviconProgress } from "$lib/types/vault";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
@@ -17,6 +19,16 @@
 
   let { dialog, onclose, oncancel }: Props = $props();
 
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
   const progressPct = $derived(
     dialog.progress.total > 0
       ? `${Math.round((dialog.progress.done / dialog.progress.total) * 100)}%`
@@ -25,7 +37,7 @@
 </script>
 
 <ModalShell
-  title={dialog.error ? "下载图标失败" : "下载网址图标"}
+  title={dialog.error ? t(lang, "favicon.failedTitle") : t(lang, "favicon.title")}
   description={dialog.result}
   size="small"
   tone={dialog.error ? "danger" : "default"}
@@ -48,9 +60,9 @@
   {/snippet}
   {#snippet actions()}
     {#if dialog.phase === "working"}
-      <Button onclick={() => oncancel?.()}>结束等待</Button>
+      <Button onclick={() => oncancel?.()}>{t(lang, "common.cancelWait")}</Button>
     {:else}
-      <Button variant="primary" onclick={onclose}>关闭</Button>
+      <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
     {/if}
   {/snippet}
 </ModalShell>

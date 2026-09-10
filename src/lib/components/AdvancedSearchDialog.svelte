@@ -3,6 +3,7 @@
   import type { AdvancedSearchQuery, SearchFieldScope } from "$lib/utils/entry-search";
   import type { SavedSearch } from "$lib/types/settings";
   import { appSettings } from "$lib/services/settings";
+  import { t, type I18nKey } from "$lib/i18n";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
@@ -35,6 +36,7 @@
     });
     return unsubscribe;
   });
+  const lang = $derived(settings.general.language);
   const savedSearches = $derived(settings.general.savedSearches);
   let saveName = $state("");
 
@@ -73,14 +75,14 @@
     );
   }
 
-  const FIELD_OPTIONS: { value: SearchFieldScope; label: string }[] = [
-    { value: "all", label: "全部字段" },
-    { value: "title", label: "标题" },
-    { value: "username", label: "用户名" },
-    { value: "url", label: "网址" },
-    { value: "notes", label: "备注" },
-    { value: "tags", label: "标签" },
-    { value: "custom", label: "自定义字段" },
+  const FIELD_OPTIONS: { value: SearchFieldScope; labelKey: I18nKey }[] = [
+    { value: "all", labelKey: "search.fieldAll" },
+    { value: "title", labelKey: "search.fieldTitle" },
+    { value: "username", labelKey: "search.fieldUsername" },
+    { value: "url", labelKey: "search.fieldUrl" },
+    { value: "notes", labelKey: "search.fieldNotes" },
+    { value: "tags", labelKey: "search.fieldTags" },
+    { value: "custom", labelKey: "search.fieldCustom" },
   ];
 
   function apply(): void {
@@ -99,8 +101,8 @@
 </script>
 
 <ModalShell
-  title="高级搜索"
-  description="组合条件过滤当前视图；正则非法时视为不匹配"
+  title={t(lang, "search.title")}
+  description={t(lang, "search.desc")}
   size="medium"
   scrollable
   closeOnEscape
@@ -108,8 +110,8 @@
 >
   {#snippet children()}
     <div class="block">
-      <span class="label">字段范围</span>
-      <div class="chips" role="radiogroup" aria-label="字段范围">
+      <span class="label">{t(lang, "search.scope")}</span>
+      <div class="chips" role="radiogroup" aria-label={t(lang, "search.scope")}>
         {#each FIELD_OPTIONS as option (option.value)}
           <button
             type="button"
@@ -117,17 +119,17 @@
             class:active={field === option.value}
             onclick={() => (field = option.value)}
           >
-            {option.label}
+            {t(lang, option.labelKey)}
           </button>
         {/each}
       </div>
     </div>
     <div class="block">
-      <span class="label">关键词</span>
-      <TextField mono bind:value={text} placeholder="留空则只用下方条件" />
+      <span class="label">{t(lang, "search.keyword")}</span>
+      <TextField mono bind:value={text} placeholder={t(lang, "search.keywordPh")} />
       <div class="toggles">
         <button type="button" class="toggle" class:active={regex} onclick={() => (regex = !regex)}>
-          正则
+          {t(lang, "search.regex")}
         </button>
         <button
           type="button"
@@ -135,12 +137,12 @@
           class:active={exclude}
           onclick={() => (exclude = !exclude)}
         >
-          排除匹配
+          {t(lang, "search.exclude")}
         </button>
       </div>
     </div>
     <div class="block">
-      <span class="label">标签（空格或逗号分隔，需全部命中）</span>
+      <span class="label">{t(lang, "search.tagsLabel")}</span>
       <TextField bind:value={tags} placeholder="work dev" />
     </div>
     <div class="block">
@@ -151,7 +153,7 @@
           class:active={onlyExpired}
           onclick={() => (onlyExpired = !onlyExpired)}
         >
-          仅过期
+          {t(lang, "search.onlyExpired")}
         </button>
         <button
           type="button"
@@ -159,7 +161,7 @@
           class:active={onlyFavorites}
           onclick={() => (onlyFavorites = !onlyFavorites)}
         >
-          仅收藏
+          {t(lang, "search.onlyFavorites")}
         </button>
         <button
           type="button"
@@ -167,42 +169,42 @@
           class:active={requireQualityCheck}
           onclick={() => (requireQualityCheck = !requireQualityCheck)}
         >
-          质量检查开启
+          {t(lang, "search.qualityCheck")}
         </button>
       </div>
     </div>
     <div class="block">
-      <span class="label">已保存搜索</span>
+      <span class="label">{t(lang, "search.savedTitle")}</span>
       {#each savedSearches as search (search.name)}
         <div class="saved-row">
           <span class="saved-name">{search.name}</span>
           <button type="button" class="saved-action" onclick={() => loadSearch(search)}>
-            载入
+            {t(lang, "search.load")}
           </button>
           <button
             type="button"
             class="saved-action destructive"
             onclick={() => deleteSearch(search.name)}
           >
-            删除
+            {t(lang, "search.delete")}
           </button>
         </div>
       {/each}
       {#if savedSearches.length === 0}
-        <p class="saved-empty">尚无已保存的搜索</p>
+        <p class="saved-empty">{t(lang, "search.noSaved")}</p>
       {/if}
       <div class="save-row">
         <div class="save-field">
           <TextField
             bind:value={saveName}
-            placeholder="搜索名称"
+            placeholder={t(lang, "search.namePh")}
             onkeydown={(event) => {
               if (event.key === "Enter") saveSearch();
             }}
           />
         </div>
         <button type="button" class="saved-action primary" onclick={saveSearch}>
-          保存当前条件
+          {t(lang, "search.saveCurrent")}
         </button>
       </div>
     </div>
@@ -214,10 +216,10 @@
         onclose();
       }}
     >
-      清除筛选
+      {t(lang, "search.clear")}
     </Button>
-    <Button onclick={onclose}>取消</Button>
-    <Button variant="primary" onclick={apply}>应用</Button>
+    <Button onclick={onclose}>{t(lang, "common.cancel")}</Button>
+    <Button variant="primary" onclick={apply}>{t(lang, "search.apply")}</Button>
   {/snippet}
 </ModalShell>
 

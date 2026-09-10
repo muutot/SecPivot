@@ -3,6 +3,8 @@
   import type { BreachFinding, HibpProgress } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
   import { hibpResultState } from "$lib/utils/hibp";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
   import Button from "$lib/components/templates/action/Button.svelte";
@@ -14,15 +16,26 @@
 
   let { uuids = [], onclose, onselect }: Props = $props();
 
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
   // Strict opt-in: the check only runs after the user explicitly clicks
-  // "开始检查" on the privacy screen.
+  // the start button on the privacy screen.
   let started = $state(false);
   let running = $state(false);
   let findings = $state<BreachFinding[]>([]);
   let error = $state("");
   let progress = $state<HibpProgress | null>(null);
-  /** Set when the user clicks 结束等待: the resolved findings are partial, so
-   *  the dialog must not present the run as a completed clean check. */
+  /** Set when the user clicks the stop-waiting button: the resolved findings
+   *  are partial, so the dialog must not present the run as a completed
+   *  clean check. */
   let cancelled = $state(false);
   const sessionId = vault.getActiveSessionId();
 
@@ -76,8 +89,8 @@
 </script>
 
 <ModalShell
-  title="HIBP 泄露检查"
-  description="检查密码是否出现在已知数据泄露中"
+  title={t(lang, "hibp.title")}
+  description={t(lang, "hibp.desc")}
   size="medium"
   scrollable
   closeOnEscape={!running}
@@ -86,18 +99,18 @@
   {#snippet children()}
     {#if !started}
       <div class="privacy">
-        <p>本功能连接 Have I Been Pwned（api.pwnedpasswords.com）进行 k-anonymity 前缀查询：</p>
+        <p>{t(lang, "hibp.privacyIntro")}</p>
         <ul>
-          <li>密码与完整 SHA-1 散列绝不会离开本机；只发送散列前 5 位十六进制字符。</li>
-          <li>仅在你点击「开始检查」时执行一次，不会自动或后台运行。</li>
-          <li>需要网络连接；无网络时检查会失败并提示。</li>
+          <li>{t(lang, "hibp.privacyLocal")}</li>
+          <li>{t(lang, "hibp.privacyOnce")}</li>
+          <li>{t(lang, "hibp.privacyNetwork")}</li>
         </ul>
       </div>
     {:else if running}
       <p class="note">
         {progress && progress.total > 0
-          ? `正在检查，已完成 ${progress.done}/${progress.total}`
-          : "正在检查…"}
+          ? t(lang, "hibp.progress", { done: progress.done, total: progress.total })
+          : t(lang, "hibp.checking")}
       </p>
       <div class="progress-track">
         <div
@@ -109,14 +122,14 @@
     {:else if resultState === "error"}
       <p class="note error">{error}</p>
     {:else if resultState === "cancelled-clean"}
-      <p class="note">已取消检查：结果不完整，不能作为无泄露结论。</p>
+      <p class="note">{t(lang, "hibp.cancelledClean")}</p>
     {:else if resultState === "clean"}
-      <p class="note success">未发现密码出现在已知泄露数据中。</p>
+      <p class="note success">{t(lang, "hibp.clean")}</p>
     {:else}
       {#if resultState === "cancelled-hits"}
-        <p class="note">已取消检查：以下为已收集到的部分结果。</p>
+        <p class="note">{t(lang, "hibp.cancelledPartial")}</p>
       {:else}
-        <p class="note">发现 {findings.length} 个密码出现在已知泄露中（按出现次数排序）：</p>
+        <p class="note">{t(lang, "hibp.hits", { count: findings.length })}</p>
       {/if}
       <ul class="list">
         {#each findings as finding (finding.uuid)}
@@ -125,27 +138,27 @@
               type="button"
               class="main"
               onclick={() => onselect?.(finding.uuid)}
-              title="定位条目"
+              title={t(lang, "hibp.locateEntry")}
             >
               <span class="title">{finding.title}</span>
               <span class="sub">{finding.username}</span>
             </button>
-            <span class="count">泄露 {finding.count} 次</span>
+            <span class="count">{t(lang, "hibp.countTimes", { count: finding.count })}</span>
           </li>
         {/each}
       </ul>
-      <p class="note">建议立即为这些条目更换密码。</p>
+      <p class="note">{t(lang, "hibp.advice")}</p>
     {/if}
   {/snippet}
   {#snippet actions()}
     {#if !started}
-      <Button onclick={onclose}>取消</Button>
-      <Button variant="primary" onclick={() => void start()}>开始检查</Button>
+      <Button onclick={onclose}>{t(lang, "common.cancel")}</Button>
+      <Button variant="primary" onclick={() => void start()}>{t(lang, "hibp.start")}</Button>
     {:else if running}
-      <Button onclick={cancel}>结束等待</Button>
-      <Button variant="primary" onclick={onclose}>关闭</Button>
+      <Button onclick={cancel}>{t(lang, "common.cancelWait")}</Button>
+      <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
     {:else}
-      <Button variant="primary" onclick={onclose}>关闭</Button>
+      <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
     {/if}
   {/snippet}
 </ModalShell>
