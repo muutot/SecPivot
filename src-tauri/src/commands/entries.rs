@@ -227,7 +227,7 @@ pub(crate) async fn check_hibp_entries(
     let total = by_prefix.len();
     let mut findings: Vec<crate::vault::BreachFinding> = Vec::new();
 
-    for (done_idx, (prefix, indices)) in by_prefix.into_iter().enumerate() {
+    for (done_idx, (mut prefix, indices)) in by_prefix.into_iter().enumerate() {
         if cancel.should_stop(epoch) {
             break;
         }
@@ -255,6 +255,9 @@ pub(crate) async fn check_hibp_entries(
                 break;
             }
         };
+        // Derived digests are wiped once used; only full-hash comparisons
+        // happen above, so nothing below needs the prefix again.
+        prefix.zeroize();
 
         // Local suffix matching (same as breach::parse_range + full-hash compare).
         let suffixes = {
@@ -270,7 +273,7 @@ pub(crate) async fn check_hibp_entries(
         };
         for index in indices {
             let (uuid, title, username, password) = &entries[index];
-            let digest =
+            let mut digest =
                 crate::crypto::hex(&crate::crypto::sha1_bytes(password.as_bytes())).to_uppercase();
             let suffix = &digest[5..];
             if let Some(&count) = suffixes.get(suffix) {
@@ -281,6 +284,7 @@ pub(crate) async fn check_hibp_entries(
                     count,
                 });
             }
+            digest.zeroize();
         }
         let done = done_idx + 1;
         on_progress(done, total);
