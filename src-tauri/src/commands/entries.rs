@@ -14,6 +14,11 @@ use zeroize::Zeroize;
 pub(crate) struct HibpCancel {
     pub notify: Arc<Notify>,
     pub flag: Arc<std::sync::atomic::AtomicBool>,
+    /// Run generation, bumped by every `reset`. A run that observes a newer
+    /// epoch must stop even when the flag was cleared: otherwise a second
+    /// run's reset would erase the first run's cancel and let it finish
+    /// stale work (and stale network requests) instead of aborting.
+    pub epoch: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Default for HibpCancel {
@@ -21,6 +26,7 @@ impl Default for HibpCancel {
         Self {
             notify: Arc::new(Notify::new()),
             flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            epoch: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 }
@@ -33,13 +39,21 @@ impl HibpCancel {
         self.notify.notify_waiters();
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
-        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    /// Start a new run generation: clears any previous cancel, wakes tasks
+    /// parked by the previous run so they observe the epoch change, and
+    /// returns the new epoch for `should_stop`.
+    pub(crate) fn reset(&self) -> u64 {
+        let epoch = self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+        epoch
     }
 
-    /// Clear a previous run's cancel so it cannot poison the next run.
-    pub(crate) fn reset(&self) {
-        self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    /// Whether the run started at `epoch` must stop: cancelled inside its own
+    /// generation, or superseded by a newer `reset`.
+    pub(crate) fn should_stop(&self, epoch: u64) -> bool {
+        self.epoch.load(std::sync::atomic::Ordering::SeqCst) != epoch
+            || self.flag.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -195,13 +209,14 @@ pub(crate) async fn check_hibp_entries(
     client: &reqwest::Client,
     base_url: &str,
     cancel: &HibpCancel,
+    epoch: u64,
     mut on_progress: impl FnMut(usize, usize),
 ) -> Result<Vec<crate::vault::BreachFinding>, String> {
     // Group by 5-char prefix to avoid duplicate range fetches (same as breach::check_hibp).
     let mut by_prefix: std::collections::HashMap<String, Vec<usize>> =
         std::collections::HashMap::new();
     for (index, (_, _, _, password)) in entries.iter().enumerate() {
-        if cancel.is_cancelled() {
+        if cancel.should_stop(epoch) {
             break;
         }
         let prefix =
@@ -213,7 +228,7 @@ pub(crate) async fn check_hibp_entries(
     let mut findings: Vec<crate::vault::BreachFinding> = Vec::new();
 
     for (done_idx, (prefix, indices)) in by_prefix.into_iter().enumerate() {
-        if cancel.is_cancelled() {
+        if cancel.should_stop(epoch) {
             break;
         }
         let url = format!("{base_url}{prefix}");
@@ -269,7 +284,7 @@ pub(crate) async fn check_hibp_entries(
         }
         let done = done_idx + 1;
         on_progress(done, total);
-        if cancel.is_cancelled() {
+        if cancel.should_stop(epoch) {
             break;
         }
     }
@@ -306,7 +321,7 @@ pub(crate) async fn check_hibp(
         return Ok(Vec::new());
     }
     // Reset cancel flag for this run.
-    cancel_state.reset();
+    let epoch = cancel_state.reset();
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -319,6 +334,7 @@ pub(crate) async fn check_hibp(
         &client,
         crate::vault::HIBP_RANGE_URL,
         &cancel_state,
+        epoch,
         |done, total| {
             let _ = app.emit(
                 "hibp-progress",

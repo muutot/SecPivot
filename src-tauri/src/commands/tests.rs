@@ -166,25 +166,35 @@ fn favicon_link_urls_rejects_binary_body() {
 }
 
 #[test]
-fn hibp_cancel_sets_flag_and_reset_clears_it() {
+fn hibp_superseded_run_stops_even_after_reset_clears_flag() {
     let cancel = HibpCancel::default();
-    assert!(!cancel.is_cancelled());
+    let first = cancel.reset();
+    assert!(!cancel.should_stop(first));
     cancel.cancel();
-    assert!(cancel.is_cancelled());
-    // A new run resets the flag so a previous cancel cannot poison it.
-    cancel.reset();
-    assert!(!cancel.is_cancelled());
+    assert!(cancel.should_stop(first));
+    // A second run bumps the epoch and clears the flag: the stale first run
+    // must still stop instead of finishing late work.
+    let second = cancel.reset();
+    assert_ne!(first, second);
+    assert!(cancel.should_stop(first));
+    assert!(!cancel.should_stop(second));
+    cancel.cancel();
+    assert!(cancel.should_stop(second));
 }
 
 #[test]
-fn favicon_cancel_sets_flag_and_reset_clears_it() {
-    use std::sync::atomic::Ordering;
+fn favicon_superseded_run_stops_even_after_reset_clears_flag() {
     let cancel = FaviconCancel::default();
-    assert!(!cancel.flag.load(Ordering::SeqCst));
+    let first = cancel.reset();
+    assert!(!cancel.should_stop(first));
     cancel.cancel();
-    assert!(cancel.flag.load(Ordering::SeqCst));
-    cancel.reset();
-    assert!(!cancel.flag.load(Ordering::SeqCst));
+    assert!(cancel.should_stop(first));
+    let second = cancel.reset();
+    assert_ne!(first, second);
+    assert!(cancel.should_stop(first));
+    assert!(!cancel.should_stop(second));
+    cancel.cancel();
+    assert!(cancel.should_stop(second));
 }
 
 #[tokio::test]
@@ -283,6 +293,7 @@ async fn hibp_range_check_matches_locally_and_reports_progress() {
     );
     let client = hibp_test_client();
     let cancel = HibpCancel::default();
+    let epoch = cancel.reset();
     let progress = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let progress_task = progress.clone();
     let findings = check_hibp_entries(
@@ -290,6 +301,7 @@ async fn hibp_range_check_matches_locally_and_reports_progress() {
         &client,
         &base,
         &cancel,
+        epoch,
         move |done, total| {
             progress_task.lock().unwrap().push((done, total));
         },
@@ -318,7 +330,15 @@ async fn hibp_range_check_aborts_promptly_on_cancel() {
         .build()
         .unwrap();
     let cancel = HibpCancel::default();
-    let run = check_hibp_entries(hibp_test_entries(), &client, &base, &cancel, |_, _| {});
+    let epoch = cancel.reset();
+    let run = check_hibp_entries(
+        hibp_test_entries(),
+        &client,
+        &base,
+        &cancel,
+        epoch,
+        |_, _| {},
+    );
     tokio::pin!(run);
     // Let the request go out, then cancel mid-flight.
     tokio::select! {
@@ -377,13 +397,14 @@ fn favicon_test_client() -> reqwest::Client {
 #[tokio::test]
 async fn favicon_fetch_bytes_returns_none_when_precancelled() {
     let cancel = FaviconCancel::default();
+    let epoch = cancel.reset();
     cancel.cancel();
     let out = fetch_bytes(
         &favicon_test_client(),
         "http://127.0.0.1:9/unused.png",
         512 * 1024,
-        cancel.notify.clone(),
-        cancel.flag.clone(),
+        &cancel,
+        epoch,
     )
     .await;
     assert!(out.is_none());
@@ -393,14 +414,8 @@ async fn favicon_fetch_bytes_returns_none_when_precancelled() {
 async fn favicon_fetch_bytes_returns_body_on_fast_response() {
     let (url, handle) = spawn_bytes_server(std::time::Duration::from_millis(0), TEST_PNG);
     let cancel = FaviconCancel::default();
-    let out = fetch_bytes(
-        &favicon_test_client(),
-        &url,
-        512 * 1024,
-        cancel.notify.clone(),
-        cancel.flag.clone(),
-    )
-    .await;
+    let epoch = cancel.reset();
+    let out = fetch_bytes(&favicon_test_client(), &url, 512 * 1024, &cancel, epoch).await;
     assert_eq!(out.unwrap(), TEST_PNG);
     handle.join().unwrap();
 }
@@ -415,13 +430,8 @@ async fn favicon_fetch_bytes_aborts_slow_response_on_cancel() {
         .build()
         .unwrap();
     let cancel = FaviconCancel::default();
-    let run = fetch_bytes(
-        &client,
-        &url,
-        512 * 1024,
-        cancel.notify.clone(),
-        cancel.flag.clone(),
-    );
+    let epoch = cancel.reset();
+    let run = fetch_bytes(&client, &url, 512 * 1024, &cancel, epoch);
     tokio::pin!(run);
     // Let the request go out, then cancel mid-flight.
     tokio::select! {

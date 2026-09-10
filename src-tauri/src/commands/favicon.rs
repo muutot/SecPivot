@@ -14,9 +14,12 @@ use url::Url;
 /// Cooperative cancel signal for the in-flight `download_favicons` run.
 /// `flag` persists the cancel request so tasks spawned after the `Notify`
 /// wake still observe it; `notify` wakes tasks already awaiting.
+#[derive(Clone)]
 pub(crate) struct FaviconCancel {
     pub notify: Arc<Notify>,
     pub flag: Arc<std::sync::atomic::AtomicBool>,
+    /// Run generation, bumped by every `reset` (see `HibpCancel::epoch`).
+    pub epoch: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Default for FaviconCancel {
@@ -24,6 +27,7 @@ impl Default for FaviconCancel {
         Self {
             notify: Arc::new(Notify::new()),
             flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            epoch: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 }
@@ -36,9 +40,21 @@ impl FaviconCancel {
         self.notify.notify_waiters();
     }
 
-    /// Clear a previous run's cancel so it cannot poison the next run.
-    pub(crate) fn reset(&self) {
+    /// Start a new run generation: clears any previous cancel, wakes tasks
+    /// parked by the previous run so they observe the epoch change, and
+    /// returns the new epoch for `should_stop`.
+    pub(crate) fn reset(&self) -> u64 {
+        let epoch = self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_waiters();
+        epoch
+    }
+
+    /// Whether the run started at `epoch` must stop: cancelled inside its own
+    /// generation, or superseded by a newer `reset`.
+    pub(crate) fn should_stop(&self, epoch: u64) -> bool {
+        self.epoch.load(std::sync::atomic::Ordering::SeqCst) != epoch
+            || self.flag.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -201,10 +217,10 @@ pub(crate) async fn fetch_bytes(
     client: &reqwest::Client,
     url: &str,
     cap: usize,
-    cancel: Arc<Notify>,
-    flag: Arc<std::sync::atomic::AtomicBool>,
+    cancel: &FaviconCancel,
+    epoch: u64,
 ) -> Option<Vec<u8>> {
-    if flag.load(std::sync::atomic::Ordering::SeqCst) {
+    if cancel.should_stop(epoch) {
         return None;
     }
     let mut response = tokio::select! {
@@ -215,7 +231,7 @@ pub(crate) async fn fetch_bytes(
                 return None;
             }
         },
-        _ = cancel.notified() => {
+        _ = cancel.notify.notified() => {
             eprintln!("[favicon] 已取消 {url}");
             return None;
         }
@@ -242,7 +258,7 @@ pub(crate) async fn fetch_bytes(
                     return None;
                 }
             },
-            _ = cancel.notified() => {
+            _ = cancel.notify.notified() => {
                 eprintln!("[favicon] 已取消 {url} 读取");
                 return None;
             }
@@ -366,10 +382,10 @@ pub(crate) fn favicon_link_urls(html: &str, base_url: &str) -> Vec<String> {
 async fn fetch_favicon(
     client: &reqwest::Client,
     host: &str,
-    cancel: Arc<Notify>,
-    flag: Arc<std::sync::atomic::AtomicBool>,
+    cancel: &FaviconCancel,
+    epoch: u64,
 ) -> Option<Vec<u8>> {
-    if flag.load(std::sync::atomic::Ordering::SeqCst) {
+    if cancel.should_stop(epoch) {
         return None;
     }
     for scheme in ["https", "http"] {
@@ -378,22 +394,17 @@ async fn fetch_favicon(
         for path in ["favicon.ico", "favicon.png"] {
             let url = format!("{base}{path}");
             tried.insert(url.clone());
-            if let Some(bytes) =
-                fetch_bytes(client, &url, ICON_CAP, cancel.clone(), flag.clone()).await
-            {
+            if let Some(bytes) = fetch_bytes(client, &url, ICON_CAP, cancel, epoch).await {
                 if looks_like_image(&bytes) {
                     return Some(bytes);
                 }
                 eprintln!("[favicon] {url} 不是图片内容，尝试下一个候选");
             }
         }
-        if let Some(page) = fetch_bytes(client, &base, PAGE_CAP, cancel.clone(), flag.clone()).await
-        {
+        if let Some(page) = fetch_bytes(client, &base, PAGE_CAP, cancel, epoch).await {
             for url in favicon_link_urls(&String::from_utf8_lossy(&page), &base) {
                 if tried.insert(url.clone()) {
-                    if let Some(bytes) =
-                        fetch_bytes(client, &url, ICON_CAP, cancel.clone(), flag.clone()).await
-                    {
+                    if let Some(bytes) = fetch_bytes(client, &url, ICON_CAP, cancel, epoch).await {
                         if looks_like_image(&bytes) {
                             return Some(bytes);
                         }
@@ -458,30 +469,27 @@ pub(crate) async fn download_favicons(
     // `reqwest::Client::clone` is cheap (Arc-backed), while rebuilding it per
     // host discards warm TLS/proxy connections and repeats proxy setup.
     // Reset cancel flag for this run; previous run's cancel must not poison the next.
-    cancel_state.reset();
-    let cancel = cancel_state.notify.clone();
-    let cancel_flag = cancel_state.flag.clone();
+    let epoch = cancel_state.reset();
     let client = build_favicon_client();
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {
         let host = job.host.clone();
         let semaphore = semaphore.clone();
         let client = client.clone();
-        let cancel = cancel.clone();
-        let cancel_flag = cancel_flag.clone();
+        let cancel = (*cancel_state).clone();
         set.spawn(async move {
             let host = host;
             // Cooperative cancel: semaphore wait also abortable so queued jobs
             // do not block "结束等待".
             let _permit = tokio::select! {
                 p = semaphore.acquire_owned() => p.ok(),
-                _ = cancel.notified() => None,
+                _ = cancel.notify.notified() => None,
             };
-            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            if cancel.should_stop(epoch) {
                 return (host, None);
             }
             let bytes = match client.as_ref() {
-                Some(client) => fetch_favicon(client, &host, cancel, cancel_flag).await,
+                Some(client) => fetch_favicon(client, &host, &cancel, epoch).await,
                 None => {
                     eprintln!("[favicon] 构建 HTTP 客户端失败 ({host})");
                     None
@@ -509,7 +517,7 @@ pub(crate) async fn download_favicons(
                     },
                 );
             }
-            _ = cancel.notified() => {
+            _ = cancel_state.notify.notified() => {
                 eprintln!("[favicon] 收到取消信号，中止剩余下载");
                 set.abort_all();
                 cancelled = true;
