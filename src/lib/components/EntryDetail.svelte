@@ -9,7 +9,7 @@
   import { showTip } from "$lib/services/tips";
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
-  import { classifyContact, linkifyContacts, type ContactKind } from "$lib/utils/contact";
+  import { classifyContact, linkifyContacts } from "$lib/utils/contact";
   import { isTauriRuntime } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import {
@@ -596,20 +596,19 @@
     }
   }
 
-  /** Inline note contact: URLs open externally, emails/phones copy. The click
-   *  is stopped from reaching the surrounding view, which would start editing. */
-  function onNotesLinkClick(event: MouseEvent, kind: ContactKind, value: string): void {
+  /** Inline note link: only URLs render as buttons (emails/phones are plain
+   *  text), so the handlers only ever open externally. The click is stopped
+   *  from reaching the surrounding view, which would start editing. */
+  function onNotesLinkClick(event: MouseEvent, value: string): void {
     event.stopPropagation();
-    if (kind === "url") openExternalUrl(value);
-    else void handleCopy(value, kind);
+    openExternalUrl(value);
   }
 
-  function onNotesLinkKeydown(event: KeyboardEvent, kind: ContactKind, value: string): void {
+  function onNotesLinkKeydown(event: KeyboardEvent, value: string): void {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       event.stopPropagation();
-      if (kind === "url") openExternalUrl(value);
-      else void handleCopy(value, kind);
+      openExternalUrl(value);
     }
   }
 
@@ -1103,8 +1102,8 @@
                     <button
                       class="notes-link"
                       type="button"
-                      onclick={(e) => onNotesLinkClick(e, token.kind, token.value)}
-                      onkeydown={(e) => onNotesLinkKeydown(e, token.kind, token.value)}
+                      onclick={(e) => onNotesLinkClick(e, token.value)}
+                      onkeydown={(e) => onNotesLinkKeydown(e, token.value)}
                       title="打开链接">{token.value}</button
                     >
                   {:else}
