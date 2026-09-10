@@ -1028,7 +1028,7 @@
       { name: "CSV 文件", extensions: ["csv"] },
     ]);
     if (text === null) return;
-    const entries: ImportEntry[] = xmlToImportEntries(text);
+    const entries: ImportEntry[] = xmlToImportEntries(text, settings.general.language);
     if (entries.length === 0) {
       flash("XML 中没有可导入的条目");
       return;

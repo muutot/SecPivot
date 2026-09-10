@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { register } from "node:module";
 
-import { buildKeePassXml } from "../src/lib/utils/kdbx-xml.ts";
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
+
+const { buildKeePassXml } = await import("../src/lib/utils/kdbx-xml.ts");
 
 test("buildKeePassXml nests groups from A / B paths and escapes text", () => {
   const xml = buildKeePassXml([

@@ -1,3 +1,6 @@
+import type { Language } from "$lib/types/settings";
+import { t } from "$lib/i18n";
+
 export interface ImportGroupResolver<TState> {
   state: TState;
   baseUuid: string;
@@ -10,6 +13,7 @@ export interface ImportGroupResolver<TState> {
 export async function resolveImportGroupPath<TState>(options: {
   path: string;
   sessionId: string;
+  lang: Language;
   resolver: ImportGroupResolver<TState>;
   createGroup: (sessionId: string, parentUuid: string, name: string) => Promise<TState>;
   findCreatedUuid: (state: TState, parentUuid: string, name: string) => string | null;
@@ -28,7 +32,7 @@ export async function resolveImportGroupPath<TState>(options: {
 
     options.resolver.state = await options.createGroup(options.sessionId, parentUuid, name);
     const createdUuid = options.findCreatedUuid(options.resolver.state, parentUuid, name);
-    if (!createdUuid) throw new Error("创建分组失败");
+    if (!createdUuid) throw new Error(t(options.lang, "error.createGroupFailed"));
 
     let children = options.resolver.groups.get(parentUuid);
     if (!children) {

@@ -3,6 +3,8 @@
  * revision. Late IPC responses from the same session must never roll the
  * renderer back after a newer mutation has already completed.
  */
+import type { Language } from "$lib/types/settings";
+import { t } from "$lib/i18n";
 export function commitNewestSessionState<T extends { revision: number }>(
   states: Map<string, T>,
   sessionId: string,
@@ -228,6 +230,7 @@ export class SessionSwitchQueue {
 export async function switchSession<T>(options: {
   queue: SessionSwitchQueue;
   cached: T | undefined;
+  lang: Language;
   load: () => Promise<T | null>;
   activate: () => Promise<T>;
   commit: (incoming: T) => T;
@@ -237,7 +240,7 @@ export async function switchSession<T>(options: {
     let resolved = options.cached;
     if (!resolved) {
       const snapshot = await options.load();
-      if (!snapshot) throw new Error("数据库会话未打开");
+      if (!snapshot) throw new Error(t(options.lang, "error.sessionNotOpen"));
       resolved = options.commit(snapshot);
     }
     resolved = options.commit(await options.activate());

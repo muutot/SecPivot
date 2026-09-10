@@ -1654,6 +1654,7 @@ export const vault: VaultStore = {
     const resolved = await switchSession({
       queue: topologyQueue,
       cached: sessionStates.get(sessionId),
+      lang: lang(),
       load: async () =>
         backendInvoke<VaultState | null>("get_vault_state", {
           sessionId,

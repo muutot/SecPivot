@@ -18,6 +18,7 @@ import {
 } from "$lib/utils/session-state";
 import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
 import type { EntryInput, ImportRow, VaultState } from "$lib/types/vault";
+import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
 import { isTauriRuntime, appSettings } from "$lib/services/settings";
 import { t } from "$lib/i18n";
@@ -114,8 +115,8 @@ export function csvToImportEntries(text: string): ImportEntry[] {
   return parseCsvRows(parseCsv(text)).map((row) => ({ ...row, customFields: [] }));
 }
 
-export function xmlToImportEntries(text: string): ImportEntry[] {
-  return parseKdbxXml(text);
+export function xmlToImportEntries(text: string, lang: Language): ImportEntry[] {
+  return parseKdbxXml(text, lang);
 }
 
 /** Shared row mapping for the JSON-based importers (Bitwarden, 1Password). */
@@ -208,6 +209,7 @@ export async function importEntries(
         const groupUuid = await resolveImportGroupPath({
           path: entry.group,
           sessionId,
+          lang: lang(),
           resolver,
           createGroup: (ownerId, parentUuid, name) =>
             vault.callInSession(ownerId, () => vault.addGroup({ parentUuid, name })),

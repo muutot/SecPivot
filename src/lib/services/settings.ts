@@ -518,7 +518,7 @@ function normalizeGeneratorProfiles(
 ): PasswordGeneratorSettings[] {
   const seen = new Set<string>();
   return (profiles ?? []).map((profile, index) => {
-    const base = profile.name?.trim() || `配置 ${index + 1}`;
+    const base = profile.name?.trim() || `Profile ${index + 1}`;
     let name = base;
     let suffix = 2;
     while (seen.has(name)) {
@@ -540,10 +540,10 @@ function normalizeSavedSearches(searches: SavedSearch[] | undefined): SavedSearc
   const seen = new Set<string>();
   return (searches ?? []).map((search) => {
     const base = search.name.trim();
-    let name = base || "未命名搜索";
+    let name = base || "Unnamed search";
     let suffix = 2;
     while (seen.has(name)) {
-      name = `${base || "未命名搜索"} ${suffix}`;
+      name = `${base || "Unnamed search"} ${suffix}`;
       suffix += 1;
     }
     seen.add(name);
@@ -726,7 +726,7 @@ function normalizeCustomThemes(
       const rawName = typeof rec.name === "string" ? rec.name.trim() : "";
       const rawColors = rec.colors ?? rec;
       const colors = normalizeThemeColors(rawColors, DARK_THEME_COLORS);
-      let base = rawName || `自定义 ${out.length + 1}`;
+      let base = rawName || `Custom ${out.length + 1}`;
       let name = base;
       let n = 2;
       while (seen.has(name)) {
@@ -743,7 +743,7 @@ function normalizeCustomThemes(
     const out: import("$lib/types/settings").CustomTheme[] = [];
     for (const preset of legacyPresets as unknown[]) {
       const colors = normalizeThemeColors(preset, DARK_THEME_COLORS);
-      let base = `自定义 ${out.length + 1}`;
+      let base = `Custom ${out.length + 1}`;
       let name = base;
       let n = 2;
       while (seen.has(name)) {

@@ -1,4 +1,5 @@
-import type { PasswordGeneratorSettings } from "$lib/types/settings";
+import type { Language, PasswordGeneratorSettings } from "$lib/types/settings";
+import { t } from "$lib/i18n";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
@@ -7,51 +8,51 @@ const SYMBOLS = "!@#$%^&*()-_=+[]{};:,.<>?";
 const SIMILAR = "Il1O0";
 const AMBIGUOUS = "{}[]()/\\'\"`~,;:.<>";
 
-export function generatePassword(settings: PasswordGeneratorSettings): string {
+export function generatePassword(settings: PasswordGeneratorSettings, lang: Language): string {
   const required = uniqueChars(settings.requiredChars ?? "");
 
   if (settings.pattern) {
-    return generatePatternPassword(settings.pattern, settings, required);
+    return generatePatternPassword(settings.pattern, settings, required, lang);
   }
 
   if (!Number.isInteger(settings.length) || settings.length <= 0) {
-    throw new Error("密码长度必须是正整数");
+    throw new Error(t(lang, "pw.lengthPositive"));
   }
 
-  const pool = buildPool(settings);
+  const pool = buildPool(settings, lang);
   for (const char of required) {
     if (!pool.includes(char)) {
-      throw new Error(`必含字符 ${char} 不在字符池中`);
+      throw new Error(t(lang, "pw.charNotInPool", { char }));
     }
   }
 
   const mandatory = [...required];
   const categories: { label: string; source: string; enabled: boolean }[] = [
-    { label: "大写字母", source: UPPER, enabled: settings.includeUpper },
-    { label: "小写字母", source: LOWER, enabled: settings.includeLower },
-    { label: "数字", source: DIGITS, enabled: settings.includeDigits },
-    { label: "符号", source: SYMBOLS, enabled: settings.includeSymbols },
+    { label: t(lang, "pw.upper"), source: UPPER, enabled: settings.includeUpper },
+    { label: t(lang, "pw.lower"), source: LOWER, enabled: settings.includeLower },
+    { label: t(lang, "pw.digits"), source: DIGITS, enabled: settings.includeDigits },
+    { label: t(lang, "pw.symbols"), source: SYMBOLS, enabled: settings.includeSymbols },
   ];
   if (!usesCustomCharset(settings)) {
     for (const { label, source, enabled } of categories) {
       if (!enabled) continue;
       const category = categoryPool(source, settings);
       if (category.length === 0) {
-        throw new Error(`${label}字符池为空`);
+        throw new Error(t(lang, "pw.poolEmpty", { label }));
       }
       if (!mandatory.some((char) => category.includes(char))) {
-        mandatory.push(randomPick(category));
+        mandatory.push(randomPick(category, lang));
       }
     }
   }
 
   if (mandatory.length > settings.length) {
-    throw new Error(`密码长度 ${settings.length} 无法容纳 ${mandatory.length} 个必需字符或类别`);
+    throw new Error(t(lang, "pw.tooShort", { len: settings.length, n: mandatory.length }));
   }
 
   const chars = [...mandatory];
-  while (chars.length < settings.length) chars.push(randomPick(pool));
-  shuffle(chars);
+  while (chars.length < settings.length) chars.push(randomPick(pool, lang));
+  shuffle(chars, lang);
   return chars.join("");
 }
 
@@ -61,17 +62,18 @@ function generatePatternPassword(
   pattern: string,
   settings: PasswordGeneratorSettings,
   required: string[],
+  lang: Language,
 ): string {
   let generalPool: string[] | null = null;
   const slots: PatternSlot[] = [...pattern].map((code) => {
     if (code === "u" || code === "l" || code === "d" || code === "s") {
       const source = code === "u" ? UPPER : code === "l" ? LOWER : code === "d" ? DIGITS : SYMBOLS;
       const pool = categoryPool(source, settings);
-      if (pool.length === 0) throw new Error(`pattern 类别 ${code} 的字符池为空`);
+      if (pool.length === 0) throw new Error(t(lang, "pw.patternPoolEmpty", { code }));
       return { pool };
     }
     if (code === "a") {
-      generalPool ??= buildPool(settings);
+      generalPool ??= buildPool(settings, lang);
       return { pool: generalPool };
     }
     return { literal: code };
@@ -98,7 +100,7 @@ function generatePatternPassword(
 
   for (let index = 0; index < missing.length; index++) {
     if (!assign(index, new Set())) {
-      throw new Error(`pattern 无法容纳必含字符 ${missing[index]}`);
+      throw new Error(t(lang, "pw.patternNoFit", { char: missing[index] }));
     }
   }
 
@@ -106,7 +108,7 @@ function generatePatternPassword(
     .map((slot, position) => {
       if ("literal" in slot) return slot.literal;
       const requiredIndex = positionAssignments.get(position);
-      return requiredIndex === undefined ? randomPick(slot.pool) : missing[requiredIndex];
+      return requiredIndex === undefined ? randomPick(slot.pool, lang) : missing[requiredIndex];
     })
     .join("");
 }
@@ -115,7 +117,7 @@ function usesCustomCharset(settings: PasswordGeneratorSettings): boolean {
   return [...(settings.customCharset ?? "")].length > 0;
 }
 
-function buildPool(settings: PasswordGeneratorSettings): string[] {
+function buildPool(settings: PasswordGeneratorSettings, lang: Language): string[] {
   let pool: string[] = usesCustomCharset(settings) ? [...(settings.customCharset ?? "")] : [];
   if (pool.length === 0) {
     if (settings.includeUpper) pool.push(...UPPER);
@@ -134,7 +136,7 @@ function buildPool(settings: PasswordGeneratorSettings): string[] {
     pool = pool.filter((char) => !excluded.has(char));
   }
   pool = uniqueChars(pool.join(""));
-  if (pool.length === 0) throw new Error("密码生成字符池为空");
+  if (pool.length === 0) throw new Error(t(lang, "pw.genPoolEmpty"));
   return pool;
 }
 
@@ -157,16 +159,16 @@ function uniqueChars(value: string): string[] {
   return [...value].filter((c, index, all) => all.indexOf(c) === index);
 }
 
-function shuffle<T>(values: T[]): void {
+function shuffle<T>(values: T[], lang: Language): void {
   for (let i = values.length - 1; i > 0; i--) {
-    const j = randomIndex(i + 1);
+    const j = randomIndex(i + 1, lang);
     [values[i], values[j]] = [values[j], values[i]];
   }
 }
 
-function randomIndex(bound: number): number {
+function randomIndex(bound: number, lang: Language): number {
   if (!Number.isSafeInteger(bound) || bound <= 0 || bound > 0x1_0000_0000) {
-    throw new Error("随机字符池大小无效");
+    throw new Error(t(lang, "pw.badBound"));
   }
   const range = 0x1_0000_0000;
   const limit = range - (range % bound);
@@ -177,8 +179,8 @@ function randomIndex(bound: number): number {
   return sample[0] % bound;
 }
 
-function randomPick(pool: string[]): string {
-  return pool[randomIndex(pool.length)];
+function randomPick(pool: string[], lang: Language): string {
+  return pool[randomIndex(pool.length, lang)];
 }
 
 /** Entropy estimate in bits. Mirror of the Rust `estimate_entropy` in

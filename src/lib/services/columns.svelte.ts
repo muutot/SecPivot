@@ -16,19 +16,21 @@ import { t, type I18nKey } from "$lib/i18n";
 /** Title column width when `width` is `0` (auto sentinel, see settings.ts). */
 export const COL_TITLE_DEFAULT = 200;
 
-/** Built-in entry-table columns, in default display order. */
+/** Built-in entry-table columns, in default display order. `label` is a
+ *  last-resort fallback (render paths resolve `columnLabel` first); English
+ *  keeps the fallback readable in every locale. */
 export const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[] = [
-  { id: "title", label: "标题" },
-  { id: "username", label: "用户名" },
-  { id: "password", label: "密码", sortable: false },
-  { id: "url", label: "网址" },
-  { id: "totp", label: "验证码", sortable: false },
-  { id: "notes", label: "备注" },
-  { id: "tags", label: "标签" },
-  { id: "created", label: "创建时间" },
-  { id: "modified", label: "修改时间" },
-  { id: "expires", label: "过期时间" },
-  { id: "size", label: "大小" },
+  { id: "title", label: "Title" },
+  { id: "username", label: "Username" },
+  { id: "password", label: "Password", sortable: false },
+  { id: "url", label: "URL" },
+  { id: "totp", label: "Verification code", sortable: false },
+  { id: "notes", label: "Notes" },
+  { id: "tags", label: "Tags" },
+  { id: "created", label: "Created" },
+  { id: "modified", label: "Modified" },
+  { id: "expires", label: "Expires" },
+  { id: "size", label: "Size" },
 ];
 
 /** i18n keys for built-in column headers by column id. Custom-field columns

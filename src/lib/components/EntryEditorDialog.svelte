@@ -317,7 +317,7 @@
     const settings = get(appSettings);
     generatorError = "";
     try {
-      password = generatePassword(settings.database.generator);
+      password = generatePassword(settings.database.generator, lang);
       showPassword = true;
       markTouched("password");
     } catch (error) {

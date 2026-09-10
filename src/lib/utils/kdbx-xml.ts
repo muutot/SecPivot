@@ -3,6 +3,8 @@
  *  each entry's `String` fields to the fixed columns (Title/UserName/Password/
  *  URL/Notes) plus a TOTP seed (the `otp`/`TimeOtp`/`HmacOtp`/`SteamOtp` keys)
  *  and any remaining non-standard `String`s as custom fields. */
+import type { Language } from "$lib/types/settings";
+import { t } from "$lib/i18n";
 
 export interface XmlImportEntry {
   group: string;
@@ -88,15 +90,15 @@ function parseEntry(entry: Element, group: string): XmlImportEntry {
 /** Parse a KeePass 2.x XML import file into entries with `A / B` group paths
  *  relative to the import target. Throws when the document is not a KeePass
  *  XML (or the XML is malformed). */
-export function parseKdbxXml(xmlText: string): XmlImportEntry[] {
+export function parseKdbxXml(xmlText: string, lang: Language): XmlImportEntry[] {
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
   const parseError = doc.querySelector("parsererror");
   if (parseError) {
-    throw new Error("文件不是有效的 XML");
+    throw new Error(t(lang, "error.invalidXml"));
   }
   const root = doc.querySelector("KeePassFile > Root > Group");
   if (!root) {
-    throw new Error("不是有效的 KeePass XML 文件（缺少 KeePassFile/Root/Group）");
+    throw new Error(t(lang, "error.notKeepassXml"));
   }
   const entries: XmlImportEntry[] = [];
   const groupOf = (group: Element, parts: string[]) => {
@@ -108,7 +110,7 @@ export function parseKdbxXml(xmlText: string): XmlImportEntry[] {
     for (const sub of childElements(group)) {
       if (sub.tagName !== "Group") continue;
       const name = textOf(childElements(sub).find((e) => e.tagName === "Name"));
-      groupOf(sub, [...parts, name || "未命名"]);
+      groupOf(sub, [...parts, name || "Unnamed"]);
     }
   };
   groupOf(root, []);
@@ -160,7 +162,7 @@ export function buildKeePassXml(rows: XmlExportRow[]): string {
       for (const part of row.group.split(" / ")) {
         let child = node.children.get(part);
         if (!child) {
-          child = { name: part || "未命名", entries: [], children: new Map() };
+          child = { name: part || "Unnamed", entries: [], children: new Map() };
           node.children.set(part, child);
         }
         node = child;

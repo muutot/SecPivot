@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { register } from "node:module";
 
-import { resolveImportGroupPath } from "../src/lib/utils/import-groups.ts";
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
+
+const { resolveImportGroupPath } = await import("../src/lib/utils/import-groups.ts");
 
 test("every async group creation keeps the import's captured session", async () => {
   const owners = [];
@@ -15,6 +18,7 @@ test("every async group creation keeps the import's captured session", async () 
   const resolved = await resolveImportGroupPath({
     path: "Parent / Child",
     sessionId: "A",
+    lang: "zh-CN",
     resolver,
     createGroup: async (sessionId, parentUuid, name) => {
       owners.push(sessionId);
@@ -47,6 +51,7 @@ test("existing path segments are reused without duplicate creates", async () => 
   const resolved = await resolveImportGroupPath({
     path: "Parent / Child",
     sessionId: "A",
+    lang: "zh-CN",
     resolver,
     createGroup: async () => {
       creates += 1;

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { register } from "node:module";
 
-import {
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
+
+const {
   ActivityLeaseGuard,
   awaitCurrentView,
   canToggleSecretReveal,
@@ -16,7 +19,7 @@ import {
   SessionStateCache,
   SessionSwitchQueue,
   switchSession,
-} from "../src/lib/utils/session-state.ts";
+} = await import("../src/lib/utils/session-state.ts");
 
 function deferred() {
   let resolve;
@@ -34,6 +37,7 @@ test("the real switch orchestration validates an uncached tab before swapping", 
   const toB = switchSession({
     queue,
     cached: undefined,
+    lang: "zh-CN",
     load: async () => {
       order.push("B:snapshot:start");
       await snapshotGate.promise;
@@ -50,6 +54,7 @@ test("the real switch orchestration validates an uncached tab before swapping", 
   const toA = switchSession({
     queue,
     cached: { revision: 1, value: "A cached" },
+    lang: "zh-CN",
     load: async () => null,
     activate: async () => {
       order.push("A:switch");
@@ -82,6 +87,7 @@ test("a failed uncached snapshot never performs its backend switch", async () =>
   const toB = switchSession({
     queue,
     cached: undefined,
+    lang: "zh-CN",
     load: async () => {
       order.push("B:snapshot");
       throw new Error("session missing");
@@ -96,6 +102,7 @@ test("a failed uncached snapshot never performs its backend switch", async () =>
   const toA = switchSession({
     queue,
     cached: { revision: 1, value: "A cached" },
+    lang: "zh-CN",
     load: async () => null,
     activate: async () => {
       order.push("A:switch");
@@ -118,6 +125,7 @@ test("topology changes and tab switches complete in invocation order", async () 
   const switching = switchSession({
     queue,
     cached: { revision: 1, value: "A cached" },
+    lang: "zh-CN",
     load: async () => null,
     activate: async () => {
       order.push("switch:backend");
