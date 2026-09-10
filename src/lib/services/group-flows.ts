@@ -5,6 +5,9 @@
 //! `resetSelectedGroup`, …). Do not reorder staleness checks: they decide
 //! whether a toast is shown and whether a dialog closes.
 
+import { get } from "svelte/store";
+import { appSettings } from "$lib/services/settings";
+import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
 import {
   LatestOperationGuard,
@@ -22,6 +25,12 @@ export type GroupFlowHost = {
   /** Register a confirmation dialog; `onconfirm` runs only on approval. */
   ask: (message: string, onconfirm: () => Promise<void>) => void;
 };
+
+/** Current UI locale for toasts/confirmations (read lazily: the language
+ *  can change at runtime via settings). */
+function lang() {
+  return get(appSettings).general.language;
+}
 
 /** Create a group inside the create-group dialog flow.
  *
@@ -57,9 +66,10 @@ export async function createGroupFlow(
     );
     if (!host.sessionView.isCurrent(view)) return;
     params.closeModal();
-    host.notify("已创建分组");
+    host.notify(t(lang(), "groupflow.created"));
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`创建失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.createFailed", { e: String(e) }));
   } finally {
     if (host.sessionView.isCurrent(view) && host.createOperations.isCurrent(operation)) {
       params.resetBusy();
@@ -76,9 +86,10 @@ export async function renameGroupFlow(
   try {
     await vault.callInSession(sessionId, () => vault.renameGroup(uuid, name));
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify("已重命名分组");
+    host.notify(t(lang(), "groupflow.renamed"));
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`重命名失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.renameFailed", { e: String(e) }));
   }
 }
 
@@ -101,10 +112,11 @@ export async function saveGroupMetaFlow(
   try {
     await vault.callInSession(sessionId, () => vault.updateGroupMeta(uuid, meta));
     if (!host.sessionView.isCurrent(view) || !params.stillTarget()) return false;
-    host.notify("已保存分组属性");
+    host.notify(t(lang(), "groupflow.metaSaved"));
     return true;
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`保存分组属性失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.metaFailed", { e: String(e) }));
     return false;
   }
 }
@@ -130,9 +142,10 @@ export async function changeGroupIconFlow(
     await vault.callInSession(sessionId, () => vault.setGroupIcon(params.uuid, params.pick));
     if (!host.sessionView.isCurrent(view)) return;
     params.closeModal();
-    host.notify("已更新分组图标");
+    host.notify(t(lang(), "groupflow.iconUpdated"));
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`更新图标失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.iconFailed", { e: String(e) }));
   } finally {
     if (host.sessionView.isCurrent(view) && host.iconOperations.isCurrent(operation)) {
       params.resetBusy();
@@ -157,22 +170,18 @@ export function confirmDeleteGroupFlow(
 ): void {
   const { view, sessionId, uuid, inBin } = params;
   const permanent = inBin || (params.permanent ?? false);
-  host.ask(
-    permanent
-      ? "永久删除该分组及其全部内容？此操作无法撤销。"
-      : "删除该分组？其下条目将移动到回收站。",
-    async () => {
+  host.ask(t(lang(), permanent ? "groupflow.deletePermAsk" : "groupflow.deleteAsk"), async () => {
+    if (!host.sessionView.isCurrent(view)) return;
+    try {
+      await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
       if (!host.sessionView.isCurrent(view)) return;
-      try {
-        await vault.callInSession(sessionId, () => vault.deleteGroup(uuid));
-        if (!host.sessionView.isCurrent(view)) return;
-        params.resetSelectedGroup();
-        host.notify(permanent ? "已永久删除分组" : "已移入回收站");
-      } catch (e) {
-        if (host.sessionView.isCurrent(view)) host.notify(`删除失败：${e}`);
-      }
-    },
-  );
+      params.resetSelectedGroup();
+      host.notify(t(lang(), permanent ? "groupflow.deletedPerm" : "groupflow.deletedBin"));
+    } catch (e) {
+      if (host.sessionView.isCurrent(view))
+        host.notify(t(lang(), "groupflow.deleteFailed", { e: String(e) }));
+    }
+  });
 }
 
 /** Register the empty-recycle-bin confirmation. */
@@ -181,14 +190,15 @@ export function confirmEmptyRecycleBinFlow(
   params: { view: SessionViewToken; sessionId: string },
 ): void {
   const { view, sessionId } = params;
-  host.ask("清空回收站？其中的条目和分组将被永久删除，此操作无法撤销。", async () => {
+  host.ask(t(lang(), "groupflow.emptyAsk"), async () => {
     if (!host.sessionView.isCurrent(view)) return;
     try {
       await vault.callInSession(sessionId, () => vault.emptyRecycleBin());
       if (!host.sessionView.isCurrent(view)) return;
-      host.notify("已清空回收站");
+      host.notify(t(lang(), "groupflow.emptied"));
     } catch (e) {
-      if (host.sessionView.isCurrent(view)) host.notify(`清空失败：${e}`);
+      if (host.sessionView.isCurrent(view))
+        host.notify(t(lang(), "groupflow.emptyFailed", { e: String(e) }));
     }
   });
 }
@@ -202,9 +212,10 @@ export async function restoreGroupFlow(
   try {
     await vault.callInSession(sessionId, () => vault.restoreGroup(uuid));
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify("已恢复分组");
+    host.notify(t(lang(), "groupflow.restored"));
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`恢复失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.restoreFailed", { e: String(e) }));
   }
 }
 
@@ -220,9 +231,10 @@ export async function moveEntriesFlow(
       await vault.callInSession(sessionId, () => vault.moveEntry(uuid, groupUuid));
     }
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify(`已移动 ${uuids.length} 个条目`);
+    host.notify(t(lang(), "groupflow.moved", { n: uuids.length }));
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`移动失败：${e}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.moveFailed", { e: String(e) }));
   }
 }
 
@@ -235,7 +247,8 @@ export async function setGroupExpandedFlow(
   try {
     await vault.callInSession(sessionId, () => vault.setGroupExpanded(uuid, expanded));
   } catch (error) {
-    if (host.sessionView.isCurrent(view)) host.notify(`展开分组失败：${error}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }));
   }
 }
 
@@ -248,6 +261,7 @@ export async function setGroupsExpandedFlow(
   try {
     await vault.callInSession(sessionId, () => vault.setGroupsExpanded(uuids, expanded));
   } catch (error) {
-    if (host.sessionView.isCurrent(view)) host.notify(`展开分组失败：${error}`);
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }));
   }
 }

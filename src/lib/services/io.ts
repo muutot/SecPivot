@@ -18,8 +18,16 @@ import {
 } from "$lib/utils/session-state";
 import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
 import type { EntryInput, ImportRow, VaultState } from "$lib/types/vault";
-import { isTauriRuntime } from "$lib/services/settings";
+import { get } from "svelte/store";
+import { isTauriRuntime, appSettings } from "$lib/services/settings";
+import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
+
+/** Current UI locale for toasts (read lazily: the language can change at
+ *  runtime via settings). */
+function lang() {
+  return get(appSettings).general.language;
+}
 
 /** Component hooks the IO flows need; see `IoHost` docs per method. */
 export type IoHost = {
@@ -167,7 +175,7 @@ export async function pickImportFile(
     });
     return result.current ? result.value : null;
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(`读取文件失败：${e}`);
+    if (host.sessionView.isCurrent(view)) host.notify(t(lang(), "io.readFailed", { e: String(e) }));
     return null;
   }
 }
@@ -224,10 +232,10 @@ export async function importEntries(
     }));
     await vault.callInSession(sessionId, () => vault.addEntries(inputs));
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify(`已导入 ${entries.length} 个条目`);
+    host.notify(t(lang(), "io.imported", { n: entries.length }));
   } catch (e) {
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify(`导入失败：${e}`);
+    host.notify(t(lang(), "io.importFailed", { e: String(e) }));
   } finally {
     if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
       host.setBusy(false);

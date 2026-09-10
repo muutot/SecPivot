@@ -3,6 +3,9 @@
 //! keeps selection ownership and lookup helpers, injected here as closures so
 //! every staleness branch and toast behaves exactly as before.
 
+import { get } from "svelte/store";
+import { appSettings } from "$lib/services/settings";
+import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
 import type {
   EntryAutoTypeConfig,
@@ -12,6 +15,12 @@ import type {
   VaultEntry,
   VaultState,
 } from "$lib/types/vault";
+
+/** Current UI locale for toasts (read lazily: the language can change at
+ *  runtime via settings). */
+function lang() {
+  return get(appSettings).general.language;
+}
 import { SessionViewGuard } from "$lib/utils/session-state";
 
 export type EntryEditorOptions = {
@@ -118,7 +127,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         if (!options.sessionView.isCurrent(view)) return;
         options.setSingleSelection(options.findEntry(state, created?.uuid ?? null));
         editorOpen = false;
-        options.notify("已创建条目");
+        options.notify(t(lang(), "editor.createdEntry"));
       } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
         const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
@@ -129,7 +138,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
           options.findEntry(state, options.getSelectedEntry()?.uuid ?? null),
         );
         editorOpen = false;
-        options.notify(`已更新 ${uuids.length} 个条目`);
+        options.notify(t(lang(), "editor.updatedEntries", { n: uuids.length }));
       } else if (mode === "edit" && input && targetEntry) {
         const uuid = targetEntry.uuid;
         let state = await vault.callInSession(sessionId, () => vault.updateEntry(uuid, input));
@@ -144,10 +153,11 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         if (!options.sessionView.isCurrent(view)) return;
         options.setSingleSelection(options.findEntry(state, uuid));
         editorOpen = false;
-        options.notify("已保存修改");
+        options.notify(t(lang(), "editor.savedChanges"));
       }
     } catch (e) {
-      if (options.sessionView.isCurrent(view)) options.notify(`操作失败：${e}`);
+      if (options.sessionView.isCurrent(view))
+        options.notify(t(lang(), "editor.opFailed", { e: String(e) }));
     }
   }
 

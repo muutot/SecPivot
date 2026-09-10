@@ -5,13 +5,21 @@
 //! before this was extracted from `+page.svelte`.
 
 import { listen } from "@tauri-apps/api/event";
-import { isTauriRuntime } from "$lib/services/settings";
+import { get } from "svelte/store";
+import { isTauriRuntime, appSettings } from "$lib/services/settings";
+import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
 import {
   LatestOperationGuard,
   SessionViewGuard,
   type SessionViewToken,
 } from "$lib/utils/session-state";
+
+/** Current UI locale for toasts/dialog text (read lazily: the language can
+ *  change at runtime via settings). */
+function lang() {
+  return get(appSettings).general.language;
+}
 import type { FaviconProgress } from "$lib/types/vault";
 
 export type FaviconDialogState = {
@@ -42,7 +50,7 @@ export async function runFaviconDownload(
 ): Promise<void> {
   if (host.isBusy()) return;
   if (!isTauriRuntime()) {
-    host.notify("浏览器预览不支持下载图标");
+    host.notify(t(lang(), "browser.unsupported", { feature: t(lang(), "browser.featFavicon") }));
     return;
   }
   const view: SessionViewToken | null = host.sessionView.capture();
@@ -53,7 +61,7 @@ export async function runFaviconDownload(
   host.setDialog({
     phase: "working",
     progress: { sessionId, done: 0, total: 0 },
-    result: "正在连接站点…",
+    result: t(lang(), "favicon.dlConnecting"),
     error: false,
   });
   try {
@@ -62,7 +70,7 @@ export async function runFaviconDownload(
       host.setDialog({
         phase: "working",
         progress: e.payload,
-        result: `正在下载，已完成 ${e.payload.done}/${e.payload.total}`,
+        result: t(lang(), "favicon.dlProgress", { done: e.payload.done, total: e.payload.total }),
         error: false,
       });
     });
@@ -75,7 +83,7 @@ export async function runFaviconDownload(
         result:
           report.attempted === 0
             ? noneMessage
-            : `已下载 ${report.downloaded}/${report.attempted} 个网址图标`,
+            : t(lang(), "favicon.dlDone", { done: report.downloaded, total: report.attempted }),
         error: false,
       });
     } finally {
@@ -86,7 +94,7 @@ export async function runFaviconDownload(
     host.setDialog({
       phase: "done",
       progress: { sessionId, done: 0, total: 0 },
-      result: `图标下载失败：${e}`,
+        result: t(lang(), "favicon.dlFailed", { e: String(e) }),
       error: true,
     });
   } finally {
