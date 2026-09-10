@@ -322,7 +322,9 @@ test("remaining async dialogs reset or unmount with their owning view", async ()
   const sessionSwitch = page.match(
     /const unsubActive = vault\.activeId\.subscribe\(\(value\) => \{([\s\S]*?)\n    \}\);/,
   );
-  const detailReset = detail.match(/\$effect\(\(\) => \{([\s\S]*?)\n  \}\);/);
+  const detailReset = [...detail.matchAll(/\$effect\(\(\) => \{([\s\S]*?)\n  \}\);/g)]
+    .map((m) => m[1])
+    .find((body) => body.includes("passwordLoading"));
 
   assert.ok(sessionSwitch, "page active-session reset must exist");
   for (const state of ["similarOpen", "expiredOpen", "hibpOpen"]) {
@@ -339,7 +341,7 @@ test("remaining async dialogs reset or unmount with their owning view", async ()
     "previewAttachmentName",
     "attachmentDragActive",
   ]) {
-    assert.match(detailReset[1], new RegExp(`${state} = (?:false|\\{\\}|null)`));
+    assert.match(detailReset, new RegExp(`${state} = (?:false|\\{\\}|null)`));
   }
 });
 
