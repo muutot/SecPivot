@@ -11,12 +11,24 @@
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     onclose: () => void;
   }
 
   let { onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let settings = $state<DatabaseSettings | null>(null);
   let loading = $state(true);
@@ -38,7 +50,7 @@
 
   onMount(() => {
     if (!sessionId) {
-      error = "数据库未打开";
+      error = t(lang, "dbsettings.noVault");
       loading = false;
       return;
     }
@@ -49,7 +61,7 @@
       .then((value) => {
         if (!dialogView.isCurrent(view)) return;
         if (!value) {
-          error = "浏览器预览不支持数据库设置";
+          error = t(lang, "dbsettings.browserUnsupported");
           return;
         }
         settings = value;
@@ -117,8 +129,8 @@
 </script>
 
 <ModalShell
-  title="数据库设置"
-  description="存储算法与历史策略修改会重写数据库文件"
+  title={t(lang, "dbsettings.title")}
+  description={t(lang, "dbsettings.desc")}
   size="medium"
   scrollable
   closeOnEscape={!saving}
@@ -126,11 +138,11 @@
 >
   {#snippet children()}
     {#if loading}
-      <p class="dialog-hint">正在读取数据库设置…</p>
+      <p class="dialog-hint">{t(lang, "dbsettings.loading")}</p>
     {:else if settings}
       <div class="setting-block">
-        <span class="setting-label">密钥派生 (KDF)</span>
-        <div class="choice-row" role="radiogroup" aria-label="密钥派生算法">
+        <span class="setting-label">{t(lang, "database.kdf")}</span>
+        <div class="choice-row" role="radiogroup" aria-label={t(lang, "dbsettings.kdfAria")}>
           {#each ["Aes", "Argon2", "Argon2id"] as const as value (value)}
             <button
               type="button"
@@ -144,13 +156,13 @@
         </div>
       </div>
       <div class="setting-block">
-        <span class="setting-label">加密算法</span>
+        <span class="setting-label">{t(lang, "database.cipher")}</span>
         {#if settings.cipher === "Twofish"}
           <span class="setting-label">
-            Twofish 仅兼容已有数据库；选择 AES-256 或 ChaCha20 会迁移存储算法。
+            {t(lang, "dbsettings.twofishNote")}
           </span>
         {/if}
-        <div class="choice-row" role="radiogroup" aria-label="加密算法">
+        <div class="choice-row" role="radiogroup" aria-label={t(lang, "dbsettings.cipherAria")}>
           {#if settings.cipher === "Twofish"}
             <button
               type="button"
@@ -158,7 +170,7 @@
               class:active={cipher === null}
               onclick={() => (cipher = null)}
             >
-              保留 Twofish
+              {t(lang, "dbsettings.keepTwofish")}
             </button>
           {/if}
           {#each ["Aes256", "ChaCha20"] as const as value (value)}
@@ -174,8 +186,12 @@
         </div>
       </div>
       <div class="setting-block">
-        <span class="setting-label">压缩</span>
-        <div class="choice-row" role="radiogroup" aria-label="压缩算法">
+        <span class="setting-label">{t(lang, "database.compression")}</span>
+        <div
+          class="choice-row"
+          role="radiogroup"
+          aria-label={t(lang, "dbsettings.compressionAria")}
+        >
           {#each ["None", "Gzip"] as const as value (value)}
             <button
               type="button"
@@ -189,30 +205,44 @@
         </div>
       </div>
       <div class="setting-block">
-        <span class="setting-label">历史版本上限（留空为默认）</span>
-        <TextField numeric type="number" bind:value={historyInput} placeholder="默认" />
+        <span class="setting-label">{t(lang, "dbsettings.historyMax")}</span>
+        <TextField
+          numeric
+          type="number"
+          bind:value={historyInput}
+          placeholder={t(lang, "dbsettings.default")}
+        />
       </div>
       <div class="setting-block">
-        <span class="setting-label">历史总大小上限（字节，留空为默认）</span>
-        <TextField numeric type="number" bind:value={historySizeInput} placeholder="默认" />
+        <span class="setting-label">{t(lang, "dbsettings.historySize")}</span>
+        <TextField
+          numeric
+          type="number"
+          bind:value={historySizeInput}
+          placeholder={t(lang, "dbsettings.default")}
+        />
       </div>
       <div class="setting-block">
-        <span class="setting-label">模板分组 UUID（留空清除）</span>
-        <TextField mono bind:value={templateGroupInput} placeholder="分组 UUID" />
+        <span class="setting-label">{t(lang, "dbsettings.templateGroup")}</span>
+        <TextField
+          mono
+          bind:value={templateGroupInput}
+          placeholder={t(lang, "dbsettings.templateGroupPh")}
+        />
       </div>
       <div class="setting-block setting-row">
-        <span class="setting-label">启用回收站</span>
-        <Toggle bind:checked={recycleEnabled} ariaLabel="启用回收站" />
+        <span class="setting-label">{t(lang, "dbsettings.recycleBin")}</span>
+        <Toggle bind:checked={recycleEnabled} ariaLabel={t(lang, "dbsettings.recycleBin")} />
       </div>
     {:else}
-      <p class="dialog-hint">{error || "无法读取数据库设置"}</p>
+      <p class="dialog-hint">{error || t(lang, "dbsettings.unreadable")}</p>
     {/if}
     {#if error && settings}<p class="dialog-error">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button onclick={onclose} disabled={saving}>{t(lang, "common.cancel")}</Button>
     <Button variant="primary" onclick={() => void save()} disabled={saving || !settings || !dirty}>
-      {saving ? "保存中…" : "保存"}
+      {saving ? t(lang, "dbsettings.saving") : t(lang, "common.save")}
     </Button>
   {/snippet}
 </ModalShell>

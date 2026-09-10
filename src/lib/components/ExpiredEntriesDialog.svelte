@@ -3,6 +3,8 @@
   import { vault } from "$lib/services/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatLocalDate } from "$lib/utils/date";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
@@ -11,6 +13,17 @@
   }
 
   let { onclose, onselect }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+  const dateLocale = $derived(lang === "en" ? "en-US" : "zh-CN");
 
   let entries = $state<ExpiredEntry[]>([]);
   let loading = $state(true);
@@ -60,7 +73,7 @@
 
   async function remove(uuids: string[]): Promise<void> {
     if (busyAction || uuids.length === 0) return;
-    if (!window.confirm(`将 ${uuids.length} 个过期条目移入回收站？`)) return;
+    if (!window.confirm(t(lang, "expired.confirmDelete", { count: uuids.length }))) return;
     busyAction = true;
     error = "";
     try {
@@ -77,8 +90,8 @@
 </script>
 
 <ModalShell
-  title="过期条目"
-  description="集中处理已过期的条目（延期 30 天或移入回收站）"
+  title={t(lang, "expired.title")}
+  description={t(lang, "expired.desc")}
   size="large"
   scrollable
   closeOnEscape
@@ -86,13 +99,13 @@
 >
   {#snippet children()}
     {#if loading}
-      <p class="note">正在加载…</p>
+      <p class="note">{t(lang, "timeline.loading")}</p>
     {:else if error}
       <p class="note error">{error}</p>
     {:else if entries.length === 0}
-      <p class="note">没有过期条目。</p>
+      <p class="note">{t(lang, "expired.empty")}</p>
     {:else}
-      <p class="note">共 {entries.length} 个过期条目：</p>
+      <p class="note">{t(lang, "expired.count", { count: entries.length })}</p>
       <ul class="list">
         {#each entries as entry (entry.uuid)}
           <li class="row">
@@ -100,18 +113,18 @@
               type="button"
               class="main"
               onclick={() => onselect?.(entry.uuid)}
-              title="定位条目"
+              title={t(lang, "hibp.locateEntry")}
             >
               <span class="title">{entry.title}</span>
               <span class="sub">{entry.username}{entry.url ? ` · ${entry.url}` : ""}</span>
-              <span class="when">{formatLocalDate(entry.expires)}</span>
+              <span class="when">{formatLocalDate(entry.expires, dateLocale)}</span>
             </button>
             <div class="actions">
               <button type="button" class="mini" onclick={() => void extend([entry.uuid])}>
-                延期 30 天
+                {t(lang, "expired.extend")}
               </button>
               <button type="button" class="mini danger" onclick={() => void remove([entry.uuid])}>
-                删除
+                {t(lang, "common.delete")}
               </button>
             </div>
           </li>
@@ -122,17 +135,17 @@
   {#snippet actions()}
     {#if entries.length > 0}
       <Button disabled={busyAction} onclick={() => void extend(entries.map((e) => e.uuid))}>
-        全部延期 30 天</Button
+        {t(lang, "expired.extendAll")}</Button
       >
       <Button
         variant="danger"
         disabled={busyAction}
         onclick={() => void remove(entries.map((e) => e.uuid))}
       >
-        全部删除</Button
+        {t(lang, "expired.deleteAll")}</Button
       >
     {/if}
-    <Button variant="primary" onclick={onclose}>关闭</Button>
+    <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
   {/snippet}
 </ModalShell>
 

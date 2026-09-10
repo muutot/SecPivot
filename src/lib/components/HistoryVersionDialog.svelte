@@ -9,6 +9,8 @@
   import { formatLocalDate } from "$lib/utils/date";
   import { formatBytes } from "$lib/utils/format";
   import { vault } from "$lib/services/vault";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
 
@@ -20,6 +22,17 @@
   }
 
   let { entry, version, onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+  const dateLocale = $derived(lang === "en" ? "en-US" : "zh-CN");
 
   let revealedFields = $state<Record<string, boolean>>({});
   let fetchedValues = $state<Record<string, string>>({});
@@ -162,7 +175,9 @@
    * with the backend's per-key change flags. */
   const customDataRows = $derived.by<CustomDataRow[]>(() => {
     const label = (item: { value?: string; binary?: string; modified?: string }) =>
-      item.binary !== undefined ? `二进制 ${item.binary.length} 字节` : (item.value ?? "—");
+      item.binary !== undefined
+        ? t(lang, "history.binaryBytes", { bytes: item.binary.length })
+        : (item.value ?? "—");
     const currentByName = new Map((entry.customData ?? []).map((item) => [item.key, label(item)]));
     const versionByName = new Map(
       (version.customData ?? []).map((item) => [item.key, label(item)]),
@@ -208,23 +223,27 @@
   );
 
   function badgeLabel(change: FieldChange): string | null {
-    if (change === "added") return "新增";
-    if (change === "removed") return "已删除";
-    if (change === "modified") return "已修改";
+    if (change === "added") return t(lang, "history.added");
+    if (change === "removed") return t(lang, "history.removed");
+    if (change === "modified") return t(lang, "history.changed");
     return null;
   }
 
   function fmtDate(value: string | null | undefined): string {
-    return value ? formatLocalDate(value) : "无";
+    return value ? formatLocalDate(value, dateLocale) : t(lang, "history.none");
   }
 
   function fieldTipValue(value: string | undefined, isProtected: boolean | undefined): string {
-    if (isProtected) return "（受保护）";
+    if (isProtected) return t(lang, "history.protected");
     return value || "—";
   }
 
   function iconLabel(e: { icon?: number; customIcon?: string }): string {
-    return e.icon !== undefined ? `图标#${e.icon}` : e.customIcon ? "自定义图标" : "默认图标";
+    return e.icon !== undefined
+      ? t(lang, "history.iconBuiltin", { icon: e.icon })
+      : e.customIcon
+        ? t(lang, "history.iconCustom")
+        : t(lang, "history.iconDefault");
   }
 
   async function toggleReveal(row: CustomFieldRow): Promise<void> {
@@ -249,8 +268,8 @@
 </script>
 
 <ModalShell
-  title="历史版本"
-  description={`${version.modified ? formatLocalDate(version.modified) : "未知时间"}${totalDiffs > 0 ? ` · ${totalDiffs} 处差异` : ""}`}
+  title={t(lang, "history.title")}
+  description={`${version.modified ? formatLocalDate(version.modified, dateLocale) : t(lang, "detail.unknownTime")}${totalDiffs > 0 ? ` · ${t(lang, "history.diffs", { count: totalDiffs })}` : ""}`}
   size="large"
   scrollable
   closeOnEscape
@@ -258,7 +277,7 @@
 >
   {#snippet icon()}<AppIcon name="clock" size={18} />{/snippet}
   {#snippet children()}
-    <div class="editor-tabs" role="tablist" aria-label="历史版本字段分组">
+    <div class="editor-tabs" role="tablist" aria-label={t(lang, "history.tabs")}>
       <button
         type="button"
         role="tab"
@@ -267,7 +286,10 @@
         aria-selected={activeTab === "fields"}
         onclick={() => (activeTab = "fields")}
       >
-        字段{#if fieldsGroupDiff}<span class="tab-dot" title="包含变更项"></span>{/if}
+        {t(lang, "detail.tabFields")}{#if fieldsGroupDiff}<span
+            class="tab-dot"
+            title={t(lang, "history.hasChanges")}
+          ></span>{/if}
       </button>
       <button
         type="button"
@@ -277,7 +299,10 @@
         aria-selected={activeTab === "meta"}
         onclick={() => (activeTab = "meta")}
       >
-        元属性{#if metaGroupDiff}<span class="tab-dot" title="包含变更项"></span>{/if}
+        {t(lang, "detail.tabMeta")}{#if metaGroupDiff}<span
+            class="tab-dot"
+            title={t(lang, "history.hasChanges")}
+          ></span>{/if}
       </button>
       <button
         type="button"
@@ -287,9 +312,12 @@
         aria-selected={activeTab === "custom"}
         onclick={() => (activeTab = "custom")}
       >
-        自定义字段{#if customFieldRows.length}({customFieldRows.length}){/if}{#if customFieldChangedCount > 0}<span
+        {t(
+          lang,
+          "editor.customFields",
+        )}{#if customFieldRows.length}({customFieldRows.length}){/if}{#if customFieldChangedCount > 0}<span
             class="tab-dot"
-            title="包含变更项"
+            title={t(lang, "history.hasChanges")}
           ></span>{/if}
       </button>
       <button
@@ -300,9 +328,12 @@
         aria-selected={activeTab === "data"}
         onclick={() => (activeTab = "data")}
       >
-        自定义数据{#if customDataRows.length}({customDataRows.length}){/if}{#if customDataChangedCount > 0}<span
+        {t(
+          lang,
+          "history.tabCustomData",
+        )}{#if customDataRows.length}({customDataRows.length}){/if}{#if customDataChangedCount > 0}<span
             class="tab-dot"
-            title="包含变更项"
+            title={t(lang, "history.hasChanges")}
           ></span>{/if}
       </button>
       <button
@@ -313,9 +344,12 @@
         aria-selected={activeTab === "attachments"}
         onclick={() => (activeTab = "attachments")}
       >
-        附件{#if attachmentRows.length}({attachmentRows.length}){/if}{#if attachmentChangedCount > 0}<span
+        {t(
+          lang,
+          "detail.tabAttachments",
+        )}{#if attachmentRows.length}({attachmentRows.length}){/if}{#if attachmentChangedCount > 0}<span
             class="tab-dot"
-            title="包含变更项"
+            title={t(lang, "history.hasChanges")}
           ></span>{/if}
       </button>
     </div>
@@ -323,20 +357,21 @@
     {#if activeTab === "fields"}
       <div role="tabpanel">
         <div class="field">
-          <span class="field-label">标题</span>
+          <span class="field-label">{t(lang, "editor.title")}</span>
           <div class="read-value" class:changed={titleDiff}>
-            {#if titleDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if titleDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <span class="read-text"
-              >{(showCurrent.title ? entry.title : version.title) || "未命名条目"}</span
+              >{(showCurrent.title ? entry.title : version.title) ||
+                t(lang, "common.untitled")}</span
             >
             {#if titleDiff}{@render swapBtn("title")}{/if}
           </div>
         </div>
 
         <div class="field">
-          <span class="field-label">密码</span>
+          <span class="field-label">{t(lang, "tcato.password")}</span>
           <div class="read-value" class:changed={passwordDiff}>
-            {#if passwordDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if passwordDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <AppIcon name="lock" size={12} />
             <span class="read-text mono">••••••••</span>
           </div>
@@ -344,9 +379,9 @@
 
         <div class="form-grid">
           <div class="field">
-            <span class="field-label">用户名</span>
+            <span class="field-label">{t(lang, "tcato.username")}</span>
             <div class="read-value" class:changed={usernameDiff}>
-              {#if usernameDiff}<span class="diff-badge">已变更</span>{/if}
+              {#if usernameDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
               <span class="read-text"
                 >{(showCurrent.username ? entry.username : version.username) || "—"}</span
               >
@@ -354,9 +389,9 @@
             </div>
           </div>
           <div class="field">
-            <span class="field-label">过期时间</span>
+            <span class="field-label">{t(lang, "detail.expires")}</span>
             <div class="read-value" class:changed={expiresDiff}>
-              {#if expiresDiff}<span class="diff-badge">已变更</span>{/if}
+              {#if expiresDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
               <span class="read-text"
                 >{fmtDate(showCurrent.expires ? entry.expires : version.expires)}</span
               >
@@ -366,18 +401,18 @@
         </div>
 
         <div class="field">
-          <span class="field-label">网址</span>
+          <span class="field-label">{t(lang, "detail.url")}</span>
           <div class="read-value" class:changed={urlDiff}>
-            {#if urlDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if urlDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <span class="read-text link">{(showCurrent.url ? entry.url : version.url) || "—"}</span>
             {#if urlDiff}{@render swapBtn("url")}{/if}
           </div>
         </div>
 
         <div class="field">
-          <span class="field-label">备注</span>
+          <span class="field-label">{t(lang, "detail.notes")}</span>
           <div class="read-value read-area" class:changed={notesDiff}>
-            {#if notesDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if notesDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <span class="read-text read-pre"
               >{(showCurrent.notes ? entry.notes : version.notes) || "—"}</span
             >
@@ -386,9 +421,9 @@
         </div>
 
         <div class="field">
-          <span class="field-label">标签</span>
+          <span class="field-label">{t(lang, "detail.tags")}</span>
           <div class="read-value" class:changed={tagsDiff}>
-            {#if tagsDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if tagsDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <span class="read-text">{(showCurrent.tags ? entry.tags : version.tags) || "—"}</span>
             {#if tagsDiff}{@render swapBtn("tags")}{/if}
           </div>
@@ -397,45 +432,48 @@
     {:else if activeTab === "meta"}
       <div class="meta-grid" role="tabpanel">
         <div class="read-value" class:changed={hasTotpDiff}>
-          {#if hasTotpDiff}<span class="diff-badge">已变更</span>{/if}
+          {#if hasTotpDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="key" size={12} />
           <span class="read-text"
-            >{(showCurrent.totp ? entry.hasTotp : version.hasTotp) ? "含 TOTP" : "无 TOTP"}</span
+            >{(showCurrent.totp ? entry.hasTotp : version.hasTotp)
+              ? t(lang, "history.hasTotp")
+              : t(lang, "history.noTotp")}</span
           >
           {#if hasTotpDiff}{@render swapBtn("totp")}{/if}
         </div>
         <div class="read-value" class:changed={iconDiff}>
-          {#if iconDiff}<span class="diff-badge">已变更</span>{/if}
+          {#if iconDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="grid" size={12} />
           <span class="read-text">{showCurrent.icon ? iconLabel(entry) : iconLabel(version)}</span>
           {#if iconDiff}{@render swapBtn("icon")}{/if}
         </div>
         <div class="read-value" class:changed={favoriteDiff}>
-          {#if favoriteDiff}<span class="diff-badge">已变更</span>{/if}
+          {#if favoriteDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="star" size={12} filled={version.favorite} />
           <span class="read-text"
             >{(showCurrent.favorite ? entry.favorite : version.favorite)
-              ? "已收藏"
-              : "未收藏"}</span
+              ? t(lang, "detail.favorited")
+              : t(lang, "detail.notFavorited")}</span
           >
           {#if favoriteDiff}{@render swapBtn("favorite")}{/if}
         </div>
         <div class="read-value" class:changed={qualityCheckDiff}>
-          {#if qualityCheckDiff}<span class="diff-badge">已变更</span>{/if}
+          {#if qualityCheckDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="shield" size={12} />
           <span class="read-text"
             >{(showCurrent.qualityCheck ? entry.qualityCheck : version.qualityCheck)
-              ? "密码质量检查开启"
-              : "密码质量检查关闭"}</span
+              ? t(lang, "history.qualityOn")
+              : t(lang, "history.qualityOff")}</span
           >
           {#if qualityCheckDiff}{@render swapBtn("qualityCheck")}{/if}
         </div>
         {#if colorDiff || version.color}
           <div class="read-value" class:changed={colorDiff}>
-            {#if colorDiff}<span class="diff-badge">已变更</span>{/if}
+            {#if colorDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
             <span class="color-swatch" style:--swatch={version.color ?? "transparent"}></span>
             <span class="read-text"
-              >{(showCurrent.color ? entry.color : version.color) ?? "无背景色"}</span
+              >{(showCurrent.color ? entry.color : version.color) ??
+                t(lang, "history.noColor")}</span
             >
             {#if colorDiff}{@render swapBtn("color")}{/if}
           </div>
@@ -444,14 +482,16 @@
     {:else if activeTab === "custom"}
       <div role="tabpanel">
         {#if customFieldRows.length === 0}
-          <div class="read-value"><span class="read-text faint">无</span></div>
+          <div class="read-value">
+            <span class="read-text faint">{t(lang, "history.none")}</span>
+          </div>
         {:else}
           {#each customFieldRows as row (row.name)}
             <div class="custom-row">
               <span class="custom-name">
                 {row.name}
                 {#if row.change === "modified"}
-                  <span class="diff-badge modified">已修改</span>
+                  <span class="diff-badge modified">{t(lang, "history.modified")}</span>
                 {:else if row.change !== "unchanged"}
                   <span
                     class="diff-badge"
@@ -485,7 +525,9 @@
                   <button
                     class="copy-btn"
                     onclick={() => toggleReveal(row)}
-                    title={revealedFields[row.name] ? "隐藏" : "显示"}
+                    title={revealedFields[row.name]
+                      ? t(lang, "history.hide")
+                      : t(lang, "history.show")}
                   >
                     <AppIcon name={revealedFields[row.name] ? "eye-off" : "eye"} size={12} />
                   </button>
@@ -499,14 +541,16 @@
     {:else if activeTab === "data"}
       <div role="tabpanel">
         {#if customDataRows.length === 0}
-          <div class="read-value"><span class="read-text faint">无</span></div>
+          <div class="read-value">
+            <span class="read-text faint">{t(lang, "history.none")}</span>
+          </div>
         {:else}
           {#each customDataRows as row (row.key)}
             <div class="custom-row">
               <span class="custom-name">
                 {row.key}
                 {#if row.change === "modified"}
-                  <span class="diff-badge modified">已修改</span>
+                  <span class="diff-badge modified">{t(lang, "history.modified")}</span>
                 {:else if row.change !== "unchanged"}
                   <span
                     class="diff-badge"
@@ -533,14 +577,16 @@
     {:else}
       <div role="tabpanel">
         {#if attachmentRows.length === 0}
-          <div class="read-value"><span class="read-text faint">无</span></div>
+          <div class="read-value">
+            <span class="read-text faint">{t(lang, "history.none")}</span>
+          </div>
         {:else}
           {#each attachmentRows as row (row.name)}
             <div class="custom-row">
               <span class="custom-name">
                 {row.name}
                 {#if row.change === "modified"}
-                  <span class="diff-badge modified">已修改</span>
+                  <span class="diff-badge modified">{t(lang, "history.modified")}</span>
                 {:else if row.change !== "unchanged"}
                   <span
                     class="diff-badge"
@@ -570,7 +616,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button variant="primary" onclick={onclose}>关闭</Button>
+    <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
   {/snippet}
 </ModalShell>
 
@@ -579,11 +625,9 @@
     class="swap-btn"
     class:active={showCurrent[key]}
     onclick={() => toggleValue(key)}
-    title={showCurrent[key]
-      ? "当前显示：现在条目的值。点击查看该历史版本的值"
-      : "当前显示：该历史版本的值。点击查看现在条目的值"}
+    title={showCurrent[key] ? t(lang, "history.showCurrent") : t(lang, "history.showVersion")}
   >
-    {showCurrent[key] ? "当前值" : "历史值"}
+    {showCurrent[key] ? t(lang, "history.currentValue") : t(lang, "history.historyValue")}
   </button>
 {/snippet}
 

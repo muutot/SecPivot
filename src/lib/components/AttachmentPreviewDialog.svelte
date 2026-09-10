@@ -10,6 +10,8 @@
   import { formatBytes } from "$lib/utils/format";
 
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   interface Props {
     entryUuid: string;
     attachment: AttachmentInfo;
@@ -18,6 +20,16 @@
   }
 
   let { entryUuid, attachment, onclose, onsaved }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let preview = $state<AttachmentPreview | null>(null);
   let loading = $state(true);
@@ -61,7 +73,7 @@
     replaceTempRef(null);
     preview = null;
     loading = key !== null;
-    error = key === null ? "数据库会话已切换" : "";
+    error = key === null ? t(lang, "attachment.sessionChanged") : "";
     confirmExternal = false;
     opening = false;
     importing = false;
@@ -178,7 +190,7 @@
 
 <ModalShell
   title={attachment.name}
-  description={`${formatBytes(attachment.size)}${preview?.truncated ? " · 预览已截断" : ""}`}
+  description={`${formatBytes(attachment.size)}${preview?.truncated ? t(lang, "attachment.truncatedSuffix") : ""}`}
   size="medium"
   scrollable
   closeOnEscape={!importing}
@@ -186,7 +198,7 @@
 >
   {#snippet children()}
     {#if loading}
-      <p class="preview-note">正在加载预览…</p>
+      <p class="preview-note">{t(lang, "attachment.loading")}</p>
     {:else if error}
       <p class="preview-note error">{error}</p>
     {:else if preview?.kind === "image"}
@@ -195,39 +207,43 @@
       <pre class="preview-text">{preview.data}</pre>
     {:else}
       <p class="preview-note">
-        该附件为二进制文件，无法在内存中预览；可保存到本地后用外部程序打开。
+        {t(lang, "attachment.binary")}
       </p>
     {/if}
     {#if externalError}
-      <p class="preview-note error">外部打开失败：{externalError}</p>
+      <p class="preview-note error">{t(lang, "attachment.openFailed", { error: externalError })}</p>
     {/if}
     {#if tempRef}
       <p class="preview-note">
-        已在外部程序打开；临时文件位于系统临时目录，关闭对话框或锁定后自动清理。
+        {t(lang, "attachment.openedNote")}
       </p>
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button onclick={close} disabled={importing}>关闭</Button>
+    <Button onclick={close} disabled={importing}>{t(lang, "common.close")}</Button>
     {#if tempRef}
       <Button onclick={() => void importChanges()} disabled={importing}>
-        {importing ? "正在导入…" : "导入修改"}</Button
+        {importing ? t(lang, "attachment.importing") : t(lang, "attachment.importChanges")}</Button
       >
-      <Button onclick={discardTemp} disabled={importing}>丢弃修改</Button>
+      <Button onclick={discardTemp} disabled={importing}>{t(lang, "attachment.discard")}</Button>
     {/if}
     <Button
       variant={!tempRef ? "primary" : "plain"}
       onclick={() => void openExternal()}
       disabled={opening || importing}
     >
-      {confirmExternal ? "再次点击确认在外部打开" : tempRef ? "重新打开" : "外部打开…"}</Button
+      {confirmExternal
+        ? t(lang, "attachment.confirmExternal")
+        : tempRef
+          ? t(lang, "attachment.reopen")
+          : t(lang, "attachment.openExternal")}</Button
     >
     <Button
       variant="primary"
       onclick={() => void saveToDisk()}
       disabled={opening || importing || savingToDisk}
     >
-      {savingToDisk ? "保存中…" : "保存到…"}</Button
+      {savingToDisk ? t(lang, "attachment.saving") : t(lang, "attachment.saveTo")}</Button
     >
   {/snippet}
 </ModalShell>

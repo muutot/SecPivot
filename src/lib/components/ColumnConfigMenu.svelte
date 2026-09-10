@@ -2,6 +2,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ViewportMenuShell from "$lib/components/ViewportMenuShell.svelte";
   import MenuItem from "$lib/components/templates/menu/MenuItem.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   export interface ColumnMenuSection {
     label: string;
@@ -17,9 +19,25 @@
   }
 
   let { x, y, sections, onclose, ontoggle }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 </script>
 
-<ViewportMenuShell {x} {y} {onclose} ariaLabel="列配置" modifier="column-config">
+<ViewportMenuShell
+  {x}
+  {y}
+  {onclose}
+  ariaLabel={t(lang, "colconfig.label")}
+  modifier="column-config"
+>
   {#snippet children()}
     {#each sections as section}
       <div class="ccm-section-title">{section.label}</div>
@@ -35,7 +53,7 @@
         </MenuItem>
       {/each}
     {/each}
-    <div class="ccm-footer">右键列标题可快速显隐列</div>
+    <div class="ccm-footer">{t(lang, "colconfig.hint")}</div>
   {/snippet}
 </ViewportMenuShell>
 

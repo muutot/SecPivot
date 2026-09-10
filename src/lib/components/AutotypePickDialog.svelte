@@ -2,6 +2,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import type { AutotypeCandidate } from "$lib/types/vault";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     candidates: AutotypeCandidate[];
@@ -12,26 +14,36 @@
 
   let { candidates, onclose, onerror }: Props = $props();
 
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
   function pick(candidate: AutotypeCandidate): void {
     // Close the picker immediately (responsive UX) but surface a failed pick
     // instead of leaving the user with nothing typed and no feedback.
     void invoke("autotype_pick", {
       sessionId: candidate.sessionId,
       uuid: candidate.uuid,
-    }).catch((e) => onerror(`自动键入失败：${e}`));
+    }).catch((e) => onerror(t(lang, "pick.failed", { error: String(e) })));
     onclose();
   }
 </script>
 
 <ModalShell
-  title="选择要自动填充的条目"
-  description="多个条目匹配当前窗口，请选择其一"
+  title={t(lang, "pick.title")}
+  description={t(lang, "pick.desc")}
   size="small"
   closeOnEscape
   {onclose}
 >
   {#snippet children()}
-    <div class="autotype-pick-list" role="listbox" aria-label="自动填充候选">
+    <div class="autotype-pick-list" role="listbox" aria-label={t(lang, "pick.list")}>
       {#each candidates as candidate (candidate.uuid)}
         <button
           type="button"
@@ -40,7 +52,7 @@
           aria-selected="false"
           onclick={() => pick(candidate)}
         >
-          <span class="autotype-pick-title">{candidate.title || "未命名条目"}</span>
+          <span class="autotype-pick-title">{candidate.title || t(lang, "common.untitled")}</span>
           {#if candidate.username}
             <span class="autotype-pick-username">{candidate.username}</span>
           {/if}

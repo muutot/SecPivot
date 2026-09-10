@@ -20,10 +20,11 @@ export function toDateTimeInput(iso: string): string {
   )}:${pad2(d.getMinutes())}`;
 }
 
-/** Localized long date (`zh-CN`) for a timestamp; `—` for absent/unparseable. */
-export function formatLocalDate(value: string | undefined): string {
+/** Localized long date for a timestamp; `—` for absent/unparseable.
+/// `locales` follows the UI language (BCP 47, e.g. `"en-US"`). */
+export function formatLocalDate(value: string | undefined, locales = "zh-CN"): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return d.toLocaleDateString(locales, { year: "numeric", month: "2-digit", day: "2-digit" });
 }

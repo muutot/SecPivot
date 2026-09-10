@@ -3,6 +3,8 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     group: VaultGroup;
@@ -15,6 +17,16 @@
   }
 
   let { group, onclose, onsaved }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   // The dialog is mounted per open, so capturing the initial group is intended.
   // svelte-ignore state_referenced_locally
@@ -38,7 +50,7 @@
 </script>
 
 <ModalShell
-  title="分组属性"
+  title={t(lang, "groupmeta.title")}
   description={group.name}
   size="small"
   closeOnEscape={!saving}
@@ -46,15 +58,15 @@
 >
   {#snippet children()}
     <div class="block">
-      <span class="label">备注</span>
-      <TextField multiline rows={3} bind:value={notes} placeholder="分组备注" />
+      <span class="label">{t(lang, "groupmeta.notes")}</span>
+      <TextField multiline rows={3} bind:value={notes} placeholder={t(lang, "groupmeta.notesPh")} />
     </div>
     <div class="block">
-      <span class="label">标签（逗号分隔）</span>
+      <span class="label">{t(lang, "groupmeta.tags")}</span>
       <TextField bind:value={tags} placeholder="work, dev" />
     </div>
     <div class="block">
-      <span class="label">搜索参与</span>
+      <span class="label">{t(lang, "groupmeta.search")}</span>
       <button
         type="button"
         class="toggle"
@@ -62,15 +74,15 @@
         onclick={() => (enableSearching = !enableSearching)}
         aria-pressed={enableSearching}
       >
-        {enableSearching ? "参与搜索" : "排除于搜索"}
+        {enableSearching ? t(lang, "groupmeta.searchOn") : t(lang, "groupmeta.searchOff")}
       </button>
-      <p class="hint">关闭后该分组的条目不参与搜索、自动填充与字段引用（REF）解析</p>
+      <p class="hint">{t(lang, "groupmeta.hint")}</p>
     </div>
   {/snippet}
   {#snippet actions()}
-    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button onclick={onclose} disabled={saving}>{t(lang, "common.cancel")}</Button>
     <Button variant="primary" onclick={() => void submit()} disabled={saving}>
-      {saving ? "保存中…" : "保存"}
+      {saving ? t(lang, "groupautotype.saving") : t(lang, "common.save")}
     </Button>
   {/snippet}
 </ModalShell>

@@ -6,6 +6,8 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface Props {
     group: VaultGroup;
@@ -13,6 +15,16 @@
   }
 
   let { group, onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   type EnableChoice = "inherit" | "on" | "off";
   // The dialog is mounted per open, so the group config is captured once.
@@ -64,21 +76,21 @@
 </script>
 
 <ModalShell
-  title="自动填充设置"
+  title={t(lang, "groupautotype.title")}
   description={group.name}
   size="small"
   closeOnEscape={!saving}
   {onclose}
 >
   {#snippet children()}
-    <div class="choice-row" role="radiogroup" aria-label="自动填充启用状态">
+    <div class="choice-row" role="radiogroup" aria-label={t(lang, "groupautotype.status")}>
       <button
         type="button"
         class="choice-option"
         class:active={enableChoice === "inherit"}
         onclick={() => (enableChoice = "inherit")}
       >
-        继承
+        {t(lang, "groupautotype.inherit")}
       </button>
       <button
         type="button"
@@ -86,7 +98,7 @@
         class:active={enableChoice === "on"}
         onclick={() => (enableChoice = "on")}
       >
-        启用
+        {t(lang, "groupautotype.enable")}
       </button>
       <button
         type="button"
@@ -94,19 +106,19 @@
         class:active={enableChoice === "off"}
         onclick={() => (enableChoice = "off")}
       >
-        禁用
+        {t(lang, "groupautotype.disable")}
       </button>
     </div>
     <label class="field">
-      <span>默认序列</span>
+      <span>{t(lang, "editor.defaultSequence")}</span>
       <TextField mono bind:value={defaultSeq} placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"} />
     </label>
     {#if error}<p class="dialog-error">{error}</p>{/if}
   {/snippet}
   {#snippet actions()}
-    <Button onclick={onclose} disabled={saving}>取消</Button>
+    <Button onclick={onclose} disabled={saving}>{t(lang, "common.cancel")}</Button>
     <Button variant="primary" onclick={() => void save()} disabled={saving}>
-      {saving ? "保存中…" : "保存"}
+      {saving ? t(lang, "groupautotype.saving") : t(lang, "common.save")}
     </Button>
   {/snippet}
 </ModalShell>

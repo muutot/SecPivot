@@ -19,7 +19,8 @@
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { buildDisplayRows, type DisplayRow } from "$lib/utils/display-rows";
-  import { BUILTIN_COLUMNS, useEntryColumns } from "$lib/services/columns.svelte";
+  import { t } from "$lib/i18n";
+  import { BUILTIN_COLUMNS, columnLabel, useEntryColumns } from "$lib/services/columns.svelte";
   import {
     cancelFaviconDownload,
     runFaviconDownload,
@@ -652,17 +653,17 @@
   const columnMenuSections = $derived.by(() => {
     const sections: ColumnMenuSection[] = [
       {
-        label: "内置条目",
+        label: t(settings.general.language, "columns.builtin"),
         items: BUILTIN_COLUMNS.map((def) => ({
           id: def.id,
-          label: def.label,
+          label: columnLabel(settings.general.language, def.id, def.label),
           visible: columns.colState(def.id).visible,
         })),
       },
     ];
     if (columns.customColumnNames.length > 0) {
       sections.push({
-        label: "自定义条目",
+        label: t(settings.general.language, "columns.custom"),
         items: columns.customColumnNames.map((name) => {
           const id = `custom:${name}`;
           return { id, label: name, visible: columns.colState(id).visible };

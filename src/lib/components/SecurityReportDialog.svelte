@@ -48,7 +48,7 @@
   });
 
   function titleOf(uuid: string): string {
-    return byUuid.get(uuid)?.entry.title || "未命名条目";
+    return byUuid.get(uuid)?.entry.title || t(lang, "common.untitled");
   }
 
   function pathOf(uuid: string): string {
@@ -57,8 +57,8 @@
 </script>
 
 <ModalShell
-  title="安全报告"
-  description="基于当前数据库的服务端分析，不发送任何数据"
+  title={t(lang, "report.title")}
+  description={t(lang, "report.desc")}
   size="report"
   showClose
   closeOnEscape
@@ -67,19 +67,25 @@
   {#snippet icon()}<AppIcon name="shield" size={18} />{/snippet}
   {#snippet children()}
     <div class="summary-row">
-      <span class="summary-chip"><b>{totals.entries}</b>总条目</span>
-      <span class="summary-chip" class:issue={totals.empty > 0}><b>{totals.empty}</b>空密码</span>
-      <span class="summary-chip" class:issue={totals.dupes > 0}><b>{totals.dupes}</b>重复密码</span>
-      <span class="summary-chip" class:issue={totals.weak > 0}><b>{totals.weak}</b>弱密码</span>
+      <span class="summary-chip"><b>{totals.entries}</b>{t(lang, "report.totalNoun")}</span>
+      <span class="summary-chip" class:issue={totals.empty > 0}
+        ><b>{totals.empty}</b>{t(lang, "report.emptyNoun")}</span
+      >
+      <span class="summary-chip" class:issue={totals.dupes > 0}
+        ><b>{totals.dupes}</b>{t(lang, "report.dupeNoun")}</span
+      >
+      <span class="summary-chip" class:issue={totals.weak > 0}
+        ><b>{totals.weak}</b>{t(lang, "report.weakNoun")}</span
+      >
     </div>
 
     {#if totals.empty === 0 && totals.dupes === 0 && totals.weak === 0}
-      <p class="all-clear">未发现安全问题</p>
+      <p class="all-clear">{t(lang, "report.allClear")}</p>
     {/if}
 
     {#if report.empty.length > 0}
       <section class="report-section">
-        <h2 class="section-title">空密码</h2>
+        <h2 class="section-title">{t(lang, "report.emptyTitle")}</h2>
         <ul class="issue-list">
           {#each report.empty as uuid (uuid)}
             <li class="issue-row">
@@ -94,13 +100,14 @@
 
     {#if report.duplicates.length > 0}
       <section class="report-section">
-        <h2 class="section-title">重复密码</h2>
+        <h2 class="section-title">{t(lang, "report.dupeTitle")}</h2>
         <ul class="issue-list">
           {#each report.duplicates as dup (dup.uuids.join("-"))}
             <li class="issue-row">
               <AppIcon name="copy" size={12} />
               <span class="issue-title">{dup.uuids.map(titleOf).join("、")}</span>
-              <span class="issue-count">{dup.count} 个条目</span>
+              <span class="issue-count">{t(lang, "report.entriesCount", { count: dup.count })}</span
+              >
             </li>
           {/each}
         </ul>
@@ -109,7 +116,7 @@
 
     {#if report.weak.length > 0}
       <section class="report-section">
-        <h2 class="section-title">弱密码</h2>
+        <h2 class="section-title">{t(lang, "report.weakTitle")}</h2>
         <ul class="issue-list">
           {#each report.weak as item (item.uuid)}
             <li class="issue-row">

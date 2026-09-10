@@ -3,6 +3,8 @@
   import { vault } from "$lib/services/vault";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { formatLocalDate } from "$lib/utils/date";
+  import { appSettings } from "$lib/services/settings";
+  import { t, type I18nKey } from "$lib/i18n";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
@@ -11,6 +13,17 @@
   }
 
   let { onclose, onselect }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+  const dateLocale = $derived(lang === "en" ? "en-US" : "zh-CN");
 
   let events = $state<ChangeTimelineEvent[]>([]);
   let loading = $state(true);
@@ -37,35 +50,51 @@
 
   const FIELD_LABELS: Record<
     keyof Omit<HistoryDiff, "customFields" | "customData" | "attachments">,
-    string
+    I18nKey
   > = {
-    title: "标题",
-    username: "用户名",
-    password: "密码",
-    url: "网址",
-    notes: "笔记",
-    expires: "过期",
-    hasTotp: "TOTP",
-    icon: "图标",
-    color: "颜色",
-    tags: "标签",
-    favorite: "收藏",
-    qualityCheck: "质量检查",
+    title: "editor.title",
+    username: "tcato.username",
+    password: "tcato.password",
+    url: "detail.url",
+    notes: "detail.notes",
+    expires: "history.expired",
+    hasTotp: "timeline.totp",
+    icon: "editor.iconSection",
+    color: "history.color",
+    tags: "detail.tags",
+    favorite: "history.favorite",
+    qualityCheck: "editor.qualityCheck",
   };
 
   function diffChips(event: ChangeTimelineEvent): string[] {
     const chips: string[] = [];
-    for (const [key, label] of Object.entries(FIELD_LABELS)) {
-      if (event.diff[key as keyof HistoryDiff] === true) chips.push(label);
+    for (const [key, labelKey] of Object.entries(FIELD_LABELS)) {
+      if (event.diff[key as keyof HistoryDiff] === true) chips.push(t(lang, labelKey));
     }
     for (const item of event.diff.customFields) {
       chips.push(
-        `字段 ${item.name}${item.change === "added" ? " 新增" : item.change === "removed" ? " 移除" : " 修改"}`,
+        t(lang, "timeline.fieldChange", {
+          name: item.name,
+          change:
+            item.change === "added"
+              ? t(lang, "timeline.added")
+              : item.change === "removed"
+                ? t(lang, "timeline.removed")
+                : t(lang, "timeline.modified"),
+        }),
       );
     }
     for (const item of event.diff.attachments) {
       chips.push(
-        `附件 ${item.name}${item.change === "added" ? " 新增" : item.change === "removed" ? " 移除" : " 修改"}`,
+        t(lang, "timeline.attachmentChange", {
+          name: item.name,
+          change:
+            item.change === "added"
+              ? t(lang, "timeline.added")
+              : item.change === "removed"
+                ? t(lang, "timeline.removed")
+                : t(lang, "timeline.modified"),
+        }),
       );
     }
     return chips;
@@ -85,7 +114,7 @@
   const dayGroups = $derived.by<DayGroup[]>(() => {
     const groups: DayGroup[] = [];
     for (const event of events) {
-      const day = formatLocalDate(event.time);
+      const day = formatLocalDate(event.time, dateLocale);
       const last = groups[groups.length - 1];
       if (last && last.day === day) last.items.push(event);
       else groups.push({ day, items: [event] });
@@ -95,8 +124,8 @@
 </script>
 
 <ModalShell
-  title="变更时间线"
-  description="全库修改历史（按时间倒序，回收站条目不参与）"
+  title={t(lang, "timeline.title")}
+  description={t(lang, "timeline.desc")}
   size="large"
   scrollable
   closeOnEscape
@@ -104,13 +133,13 @@
 >
   {#snippet children()}
     {#if loading}
-      <p class="note">正在加载…</p>
+      <p class="note">{t(lang, "timeline.loading")}</p>
     {:else if error}
       <p class="note error">{error}</p>
     {:else if events.length === 0}
-      <p class="note">暂无变更记录。</p>
+      <p class="note">{t(lang, "timeline.empty")}</p>
     {:else}
-      <p class="note">共 {events.length} 条变更：</p>
+      <p class="note">{t(lang, "timeline.count", { count: events.length })}</p>
       {#each dayGroups as group (group.day)}
         <div class="day-label">{group.day}</div>
         <ul class="list">
@@ -120,7 +149,7 @@
                 type="button"
                 class="main"
                 onclick={() => onselect?.(event.uuid)}
-                title="定位条目"
+                title={t(lang, "hibp.locateEntry")}
               >
                 <span class="when">{timeOfDay(event.time)}</span>
                 <span class="body">
@@ -140,7 +169,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button variant="primary" onclick={onclose}>关闭</Button>
+    <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
   {/snippet}
 </ModalShell>
 

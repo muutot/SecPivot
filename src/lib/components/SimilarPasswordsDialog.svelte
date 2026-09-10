@@ -4,12 +4,24 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
 
   import Button from "$lib/components/templates/action/Button.svelte";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   interface Props {
     onclose: () => void;
     onselect?: (uuid: string) => void;
   }
 
   let { onclose, onselect }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
 
   let groups = $state<SimilarPasswordGroup[]>([]);
   let loading = $state(true);
@@ -34,8 +46,8 @@
 </script>
 
 <ModalShell
-  title="相似密码"
-  description="编辑距离 ≤ 2 的密码分组（密码不会离开本机）"
+  title={t(lang, "similar.title")}
+  description={t(lang, "similar.desc")}
   size="large"
   scrollable
   closeOnEscape
@@ -43,16 +55,18 @@
 >
   {#snippet children()}
     {#if loading}
-      <p class="note">正在分析…</p>
+      <p class="note">{t(lang, "similar.analyzing")}</p>
     {:else if error}
       <p class="note error">{error}</p>
     {:else if groups.length === 0}
-      <p class="note">未发现相似密码。</p>
+      <p class="note">{t(lang, "similar.empty")}</p>
     {:else}
-      <p class="note">共 {groups.length} 组：</p>
+      <p class="note">{t(lang, "similar.count", { count: groups.length })}</p>
       {#each groups as group, gi (gi)}
         <section class="group">
-          <h3 class="group-title">组 {gi + 1}（{group.entries.length} 个条目）</h3>
+          <h3 class="group-title">
+            {t(lang, "similar.groupTitle", { index: gi + 1, count: group.entries.length })}
+          </h3>
           <ul class="members">
             {#each group.entries as member (member.uuid)}
               <li>
@@ -60,7 +74,7 @@
                   type="button"
                   class="member"
                   onclick={() => onselect?.(member.uuid)}
-                  title="定位条目"
+                  title={t(lang, "hibp.locateEntry")}
                 >
                   <span class="member-title">{member.title}</span>
                   <span class="member-user">{member.username}</span>
@@ -73,7 +87,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button onclick={onclose}>关闭</Button>
+    <Button onclick={onclose}>{t(lang, "common.close")}</Button>
   {/snippet}
 </ModalShell>
 

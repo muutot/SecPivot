@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
   import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import { columnLabel } from "$lib/services/columns.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
   import type { DisplayRow } from "$lib/utils/display-rows";
@@ -490,7 +491,7 @@
           }}
           title={col.sortable ? t(lang, "table.sortCycle") : t(lang, "table.reorderOnly")}
         >
-          <span class="head-label">{col.label}</span>
+          <span class="head-label">{columnLabel(lang, col.id, col.label)}</span>
           {#if sortCol === col.id}
             <span class="sort-arrow" aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>
           {/if}

@@ -6,11 +6,12 @@
 
 import { get } from "svelte/store";
 import { appSettings } from "$lib/services/settings";
-import type { EntryColumnState } from "$lib/types/settings";
+import type { EntryColumnState, Language } from "$lib/types/settings";
 import type { EntryTableColumn } from "$lib/components/EntryTable.svelte";
 import { formatDateOnly } from "$lib/utils/date";
 import { formatKeePassSize } from "$lib/utils/format";
 import type { VaultEntry } from "$lib/types/vault";
+import { t, type I18nKey } from "$lib/i18n";
 
 /** Title column width when `width` is `0` (auto sentinel, see settings.ts). */
 export const COL_TITLE_DEFAULT = 200;
@@ -29,6 +30,28 @@ export const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[
   { id: "expires", label: "过期时间" },
   { id: "size", label: "大小" },
 ];
+
+/** i18n keys for built-in column headers by column id. Custom-field columns
+ *  fall back to their stored name. */
+const COLUMN_LABEL_KEYS: Record<string, I18nKey> = {
+  title: "columns.title",
+  username: "columns.username",
+  password: "columns.password",
+  url: "columns.url",
+  totp: "columns.totp",
+  notes: "columns.notes",
+  tags: "columns.tags",
+  created: "columns.created",
+  modified: "columns.modified",
+  expires: "columns.expires",
+  size: "columns.size",
+};
+
+/** Localized header label for a column id (`fallback` for custom columns). */
+export function columnLabel(locale: Language, id: string, fallback: string): string {
+  const key = COLUMN_LABEL_KEYS[id];
+  return key === undefined ? fallback : t(locale, key);
+}
 
 export type EntryColumns = {
   /** Persisted column state array (display order; drag to reorder). */
