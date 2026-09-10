@@ -1,58 +1,56 @@
-# SecPivot Desktop v1.5.0
+# SecPivot Desktop v1.6.0
 
 > 专业、紧凑、信息密度高的 KeePass 桌面客户端，本地优先、无同步上传
 >
-> Released: 2026-09-09
+> Released: 2026-09-10
 
 ---
 
-## 条目列表：分组分隔线与行高
+## 中英文双语界面
 
-- **KeePass 式分组分隔线** — 子分组标题行、组内排序、分隔线字体颜色（空=默认弱化文本色），PageUp/PageDown 跨分隔行导航钳制，分隔行对辅助技术隐藏、无障碍序号只计条目 | [`83cd2cf`](https://github.com/muutot/SecPivot/commit/83cd2cf) · [`3d1cc43`](https://github.com/muutot/SecPivot/commit/3d1cc43) · [`ba6b3d9`](https://github.com/muutot/SecPivot/commit/ba6b3d9) · [`45d875d`](https://github.com/muutot/SecPivot/commit/45d875d)
-- **可配置条目行高** — 紧凑密度默认常开，行高设置驱动虚拟化数学与 CSS（桌面下限 24px、窄屏下限 36px）| [`bbdc454`](https://github.com/muutot/SecPivot/commit/bbdc454)
-- **分组计数修正** — 全部条目 = 根计数减回收站 | [`8433714`](https://github.com/muutot/SecPivot/commit/8433714)
-- **虚拟化与面板修复** — 从表格容器测量滚动恢复虚拟化，拖拽前快照面板宽度防止回弹 | [`01a28e6`](https://github.com/muutot/SecPivot/commit/01a28e6) · [`7143c52`](https://github.com/muutot/SecPivot/commit/7143c52)
-
-## HIBP 泄露检查
-
-- **取消与进度** — 泄露检查对标 favicon 流程：结束等待取消、按前缀进度 | [`6d0c59b`](https://github.com/muutot/SecPivot/commit/6d0c59b)
-- **取消不再误报干净** — 取消的检查显示“结果不完整”，收集到的为部分结果 | [`70a1b9b`](https://github.com/muutot/SecPivot/commit/70a1b9b)
-
-## Favicon
-
-- **可取消下载** — 结束等待按钮中止 favicon 抓取 | [`ae5a23f`](https://github.com/muutot/SecPivot/commit/ae5a23f)
-- **站点 link 解析** — 解析页面 link 标签并 http 回退 | [`b74117f`](https://github.com/muutot/SecPivot/commit/b74117f)
+- **字典基建与语言选择** — `zh-CN` 为源、`en` 编译期对等校验，通用语只读 `general.language`，中文硬编码废止 | [`7695604`](https://github.com/muutot/SecPivot/commit/7695604) · [`58e21c4`](https://github.com/muutot/SecPivot/commit/58e21c4) · [`f879728`](https://github.com/muutot/SecPivot/commit/f879728)
+- **工具栏/菜单/表格/树** — 工具栏、右键菜单、条目表头、分组树（含右键菜单与重命名）| [`9a6546f`](https://github.com/muutot/SecPivot/commit/9a6546f) · [`b93d0df`](https://github.com/muutot/SecPivot/commit/b93d0df) · [`2a36814`](https://github.com/muutot/SecPivot/commit/2a36814)
+- **详情/编辑器/设置面板** — 条目详情、条目编辑器、通用/键盘/安全/数据库设置 | [`7a87f6c`](https://github.com/muutot/SecPivot/commit/7a87f6c) · [`004d675`](https://github.com/muutot/SecPivot/commit/004d675) · [`826b9d2`](https://github.com/muutot/SecPivot/commit/826b9d2) · [`8ac9a04`](https://github.com/muutot/SecPivot/commit/8ac9a04)
+- **远程/桥接/关于/维护对话框** — 远程库、桥接审批、RPC 通道、关于、HIBP/favicon/高级搜索、历史/过期/相似/分组/附件/列配置/安全报告 | [`e57ab23`](https://github.com/muutot/SecPivot/commit/e57ab23) · [`5b0595c`](https://github.com/muutot/SecPivot/commit/5b0595c) · [`4c7d24b`](https://github.com/muutot/SecPivot/commit/4c7d24b)
+- **欢迎页/树/标签页/TOTP/壳** — 数据库属性、分组选择、标签页、验证码组件、弹窗壳与右键菜单壳 | [`bd68235`](https://github.com/muutot/SecPivot/commit/bd68235) · [`85a12aa`](https://github.com/muutot/SecPivot/commit/85a12aa) · [`8ed1a43`](https://github.com/muutot/SecPivot/commit/8ed1a43)
+- **服务错误参数化** — vault 浏览器守卫收敛为 `browser.unsupported + {feature}` 单模板，回收站等持久化默认名统一英文 | [`34ff335`](https://github.com/muutot/SecPivot/commit/34ff335) · [`7729971`](https://github.com/muutot/SecPivot/commit/7729971) · [`c36913c`](https://github.com/muutot/SecPivot/commit/c36913c)
+- **主页面** — 全部 toast/确认框/导入导出/删除/复制/自动填充/对话框共 109 处 | [`4611b18`](https://github.com/muutot/SecPivot/commit/4611b18)
+- **格式** — 迁移行 prettier 对齐 | [`9f8a8fc`](https://github.com/muutot/SecPivot/commit/9f8a8fc) · [`e87ff77`](https://github.com/muutot/SecPivot/commit/e87ff77)
 
 ## TCATO 两通道填充
 
-- **焦点与目标守卫** — 覆盖层不抢焦点（重开只显示不激活）、不向自身注入，关闭/锁定/切换标签清理旧目标，空通道拒绝注入且禁用按钮，回收站条目拒绝填充 | [`a7be76d`](https://github.com/muutot/SecPivot/commit/a7be76d) · [`a319075`](https://github.com/muutot/SecPivot/commit/a319075) · [`7b38185`](https://github.com/muutot/SecPivot/commit/7b38185) · [`4f4515e`](https://github.com/muutot/SecPivot/commit/4f4515e) · [`73d1be2`](https://github.com/muutot/SecPivot/commit/73d1be2)
-- **错误可视** — 视图缺席时打开错误浮出、标签切换自动关闭并上报过期打开错误 | [`c87518b`](https://github.com/muutot/SecPivot/commit/c87518b) · [`a1b395a`](https://github.com/muutot/SecPivot/commit/a1b395a) · [`686904e`](https://github.com/muutot/SecPivot/commit/686904e)
+- **TOTP 注入通道** — 新增 totp 注入 | [`21ada52`](https://github.com/muutot/SecPivot/commit/21ada52)
+- **全局热键召唤与目标记忆** — 快捷键召唤覆盖层、按条目记住上次目标窗口 | [`59bb960`](https://github.com/muutot/SecPivot/commit/59bb960) · [`81bf1c3`](https://github.com/muutot/SecPivot/commit/81bf1c3)
+- **多匹配选择模式** — 当前窗口多条目命中时选择注入 | [`66725a0`](https://github.com/muutot/SecPivot/commit/66725a0) · [`c97f655`](https://github.com/muutot/SecPivot/commit/c97f655)
 
-## 笔记与详情
+## 性能
 
-- **仅链接化 URL** — 笔记阅读视图只把 URL 变成可点击链接（邮件/电话不再复制按钮）| [`da259b9`](https://github.com/muutot/SecPivot/commit/da259b9)
-- **笔记区排版** — 恢复分隔线、统一读写显示、收紧间距，去侧边间隙并隐藏滚动条（保持可滚），笔记填满整区 | [`0175b45`](https://github.com/muutot/SecPivot/commit/0175b45) · [`d635704`](https://github.com/muutot/SecPivot/commit/d635704) · [`fa81d17`](https://github.com/muutot/SecPivot/commit/fa81d17)
+- **favicon** — 属性正则按名缓存、取消时释放连接池 | [`5e3ca63`](https://github.com/muutot/SecPivot/commit/5e3ca63) · [`9cd0896`](https://github.com/muutot/SecPivot/commit/9cd0896)
+- **条目表** — 分隔行按稳定组 id、计数并入 display-rows 构建、display-rows 抽取 | [`bac187e`](https://github.com/muutot/SecPivot/commit/bac187e) · [`a9286de`](https://github.com/muutot/SecPivot/commit/a9286de) · [`1272e5e`](https://github.com/muutot/SecPivot/commit/1272e5e)
+- **搜索** — 高级查询每派生编译一次 | [`6c2ee94`](https://github.com/muutot/SecPivot/commit/6c2ee94)
 
-## 设置与主题
+## 安全与取消语义
 
-- **自定义配色打磨** — 主题切换保留自定义调色板，操作换行时标题不挤压、动作右对齐、副标题隐藏，主题操作图标化且选择器置末，多主题动作并入配色卡片、存档/改名走 ModalShell 对话框 | [`34b2312`](https://github.com/muutot/SecPivot/commit/34b2312) · [`b199c1b`](https://github.com/muutot/SecPivot/commit/b199c1b) · [`ad61864`](https://github.com/muutot/SecPivot/commit/ad61864) · [`5e1d36f`](https://github.com/muutot/SecPivot/commit/5e1d36f) · [`dd3e70a`](https://github.com/muutot/SecPivot/commit/dd3e70a) · [`37f90c8`](https://github.com/muutot/SecPivot/commit/37f90c8) · [`37f6c5f`](https://github.com/muutot/SecPivot/commit/37f6c5f) · [`57beeaf`](https://github.com/muutot/SecPivot/commit/57beeaf) · [`1600515`](https://github.com/muutot/SecPivot/commit/1600515) · [`ecf36fc`](https://github.com/muutot/SecPivot/commit/ecf36fc)
-- **版本号来自 Tauri** — 设置关于页不再硬编码 | [`3de15ec`](https://github.com/muutot/SecPivot/commit/3de15ec)
+- **HIBP 摘要擦除** — 匹配后擦除派生摘要 | [`fb699bb`](https://github.com/muutot/SecPivot/commit/fb699bb)
+- **凭据加固** — 保存密码守卫收紧 | [`069e666`](https://github.com/muutot/SecPivot/commit/069e666)
+- **取消信号** — 被取代的任务按 epoch 停止，命令/HIBP/favicon 取消测试覆盖 | [`9e7bb41`](https://github.com/muutot/SecPivot/commit/9e7bb41) · [`808def1`](https://github.com/muutot/SecPivot/commit/808def1) · [`b41a533`](https://github.com/muutot/SecPivot/commit/b41a533) · [`afb5989`](https://github.com/muutot/SecPivot/commit/afb5989)
 
-## 锁屏、工具栏与搜索
+## 测试与回归
 
-- **独立窗口居中** — 锁定/欢迎壳居中、锁屏路径卡片化 | [`dc93229`](https://github.com/muutot/SecPivot/commit/dc93229)
-- **移除未保存徽标** — 工具栏不再显示 dirty badge | [`3a3b50c`](https://github.com/muutot/SecPivot/commit/3a3b50c)
-- **高级搜索对话框排版** — 修复布局溢出与块间距 | [`4d45d0a`](https://github.com/muutot/SecPivot/commit/4d45d0a)
+- **条目表/契约测试** — 虚拟范围与属性契约、对话框重置断言按内容匹配 | [`0ba3bcc`](https://github.com/muutot/SecPivot/commit/0ba3bcc) · [`efc4752`](https://github.com/muutot/SecPivot/commit/efc4752)
+- **回归清单** — 陷阱清单与一键回归脚本 | [`ac6be75`](https://github.com/muutot/SecPivot/commit/ac6be75)
 
 ## 杂项
 
-- **Clippy 与依赖** — 修复 HIBP/favicon 循环 clippy 告警，keepass 钉版避开 aes 冲突 | [`2c8777c`](https://github.com/muutot/SecPivot/commit/2c8777c) · [`1e4f77f`](https://github.com/muutot/SecPivot/commit/1e4f77f)
-- **格式** — 全仓 prettier 对齐 | [`3d687fe`](https://github.com/muutot/SecPivot/commit/3d687fe) · [`2b848ad`](https://github.com/muutot/SecPivot/commit/2b848ad) · [`693bd07`](https://github.com/muutot/SecPivot/commit/693bd07)
+- **重构/文档** — 笔记复制分支删除、分组计数抽取、分隔线文档、HIBP 死代码删除 | [`70f3fa9`](https://github.com/muutot/SecPivot/commit/70f3fa9) · [`1e24df3`](https://github.com/muutot/SecPivot/commit/1e24df3) · [`2ed23c1`](https://github.com/muutot/SecPivot/commit/2ed23c1) · [`7c95d35`](https://github.com/muutot/SecPivot/commit/7c95d35) · [`dc8646a`](https://github.com/muutot/SecPivot/commit/dc8646a)
+- **杂务** — clippy 与断言格式 | [`13f58ee`](https://github.com/muutot/SecPivot/commit/13f58ee) · [`1cd34a2`](https://github.com/muutot/SecPivot/commit/1cd34a2) · [`58e330f`](https://github.com/muutot/SecPivot/commit/58e330f)
+- **Android 构建** — Gradle 仓库回退，保证 Kotlin 插件解析 | [`217ed9f`](https://github.com/muutot/SecPivot/commit/217ed9f)
+- **README** — 按 Clipboard 展示格式刷新 | [`4d0e33a`](https://github.com/muutot/SecPivot/commit/4d0e33a)
 
 ---
 
 ## 构建产物
 
-- **NSIS 安装包**: `SecPivot_1.5.0_x64-setup.exe`
-- **便携版 ZIP**: `SecPivot-1.5.0-portable.zip`（由 `scripts/package-portable.ps1` 生成，解压即用，配置存于 exe 旁 `conf/`）
+- **NSIS 安装包**: `SecPivot_1.6.0_x64-setup.exe`
+- **便携版 ZIP**: `SecPivot-1.6.0-portable.zip`（由 `scripts/package-portable.ps1` 生成，解压即用，配置存于 exe 旁 `conf/`）
 - **Android APK**: 按 64 位 ABI 拆分签名的 release APK（aarch64/x86_64，由 release 工作流 android job 在 Linux 并行构建）

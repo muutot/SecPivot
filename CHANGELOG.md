@@ -1,5 +1,84 @@
 # Changelog
 
+## 1.6.0 (2026-09-10)
+
+### ✨ Features
+
+- **i18n**: localize settings route title (8ed1a43a)
+- **i18n**: migrate main page toasts, confirms and dialogs (4611b182)
+- **i18n**: thread locale through utils and default names (c36913c9)
+- **i18n**: migrate service toasts and flow confirmations (7729971d)
+- **i18n**: parameterize vault browser guards and error strings (34ff3351)
+- **i18n**: migrate tree, tabs, totp and shell chrome (85a12aaa)
+- **i18n**: migrate dialogs, welcome and column headers (bd682359)
+- **i18n**: migrate maintenance dialogs and column headers (4c7d24b5)
+- **i18n**: migrate hibp, favicon and advanced search dialogs (5b0595c6)
+- **i18n**: migrate remote, bridge, rpc, about and shell (e57ab23f)
+- **i18n**: migrate keyboard, security and database panels (8ac9a042)
+- **i18n**: migrate general settings panel (826b9d25)
+- **i18n**: migrate entry editor dialog (004d675b)
+- **i18n**: migrate entry detail pane (7a87f6ce)
+- **i18n**: migrate entry table and group tree (2a368141)
+- **i18n**: migrate toolbar chrome (9a6546f3)
+- **i18n**: migrate context menus with locale parameter (b93d0df0)
+- **i18n**: migrate overlay, lock, credential and window chrome (c4e3cf8f)
+- **i18n**: language selector wired to dictionaries (58e21c4c)
+- **i18n**: dictionary infrastructure with parity tests (76956041)
+- **tcato**: pick mode for multi-match summon (66725a04)
+- **hibp**: wipe derived digests after matching (fb699bba)
+- **credential**: harden saved-password guards (069e666f)
+- **tcato**: remember last target window per entry (81bf1c3d)
+- **tcato**: summon overlay with a global hotkey (59bb960b)
+- **tcato**: add totp inject channel (21ada525)
+
+### 🐛 Bug Fixes
+
+- **cancel**: superseded runs stop via epoch (9e7bb414)
+
+### 🚀 Performance
+
+- **favicon**: cache attribute regexes per name (5e3ca63c)
+- **favicon**: release connection pool on cancel (9cd08960)
+- **entry-table**: key separators by stable group id (bac187ef)
+- **search**: compile advanced query once per derivation (6c2ee94d)
+- **entry-table**: count entries inside the display-rows build (a9286def)
+
+### ♻️ Refactoring
+
+- **detail**: drop unreachable notes copy branches (70f3fa98)
+- **group**: extract badge total with root-direct semantics (1e24df32)
+- **hibp**: remove dead blocking range check (dc8646a2)
+- **entry-table**: extract display-rows builder with grouping tests (1272e5ed)
+
+### 🎨 Styling
+
+- prettier reflow for regression gate (e87ff77a)
+- **i18n**: reflow migrated lines (9f8a8fc8)
+- **docs**: realign config table after separator docs (2ed23c14)
+
+### 📝 Documentation
+
+- **readme**: refresh README in Clipboard showcase format (4d0e33a5)
+- **settings**: document subgroup separator settings (7c95d35d)
+- **i18n**: record Chinese-hardcoded product language decision (f8797284)
+
+### ✅ Testing
+
+- **contracts**: match reset effect by content, not position (efc47520)
+- **entry-table**: cover virtual range and props contract (0ba3bcca)
+- **favicon**: cover fetch abort with slow mock server (afb5989d)
+- **tcato**: reject recycle-bin entries (c97f655c)
+- **hibp**: cover async range check and cancel with mock server (b41a5336)
+- **commands**: cover cancel signal semantics (808def18)
+
+### 🔧 Chores
+
+- **android**: add Gradle repository fallback for Kotlin plugin resolution (217ed9f6)
+- **regression**: pitfalls checklist plus one-click script (ac6be75e)
+- **fmt**: join tcato bin assertion (1cd34a2d)
+- **clippy**: avoid cloned ref to slice in tcato test (13f58eed)
+- **fmt**: join tcato test assertion (58e330f5)
+
 ## 1.5.0 (2026-09-09)
 
 ### ✨ Features
