@@ -3,7 +3,8 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
-  import { isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import type { ToolbarItemVisibility, ToolbarRightId, ToolbarButtonId } from "$lib/types/settings";
 
   interface Props {
@@ -96,6 +97,16 @@
 
   let maximized = $state(false);
   const appWindow = isTauriRuntime() ? getCurrentWindow() : null;
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
   onMount(() => {
     if (!appWindow || isMobile()) return;
     let unlisten: (() => void) | undefined;
@@ -153,8 +164,8 @@
       class="mobile-nav-toggle"
       class:active={mobileNavOpen}
       onclick={ontogglenav}
-      title="分组"
-      aria-label="切换分组面板"
+      title={t(lang, "toolbar.groups")}
+      aria-label={t(lang, "toolbar.toggleGroups")}
       aria-expanded={mobileNavOpen}
     >
       <AppIcon name="menu" size={15} />
@@ -167,10 +178,11 @@
               class="tool-button primary"
               class:icon-only={iconOnlyButtons}
               onclick={onnewentry}
-              title="新建条目 (Ctrl+N)"
+              title={t(lang, "toolbar.newEntry")}
             >
               <AppIcon name="plus" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">条目</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.newEntryLabel")}</span
+                >{/if}
             </button>
           {:else if id === "save"}
             <button
@@ -178,76 +190,99 @@
               class:icon-only={iconOnlyButtons}
               onclick={onsave}
               disabled={busy || !dirty || readOnly}
-              title="保存数据库 (Ctrl+S)"
+              title={t(lang, "toolbar.save")}
             >
               <AppIcon name="save" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveLabel")}</span
+                >{/if}
             </button>
           {:else if id === "saveAs"}
             <button
               class="tool-button"
               class:icon-only={iconOnlyButtons}
               onclick={onsaveas}
-              title="另存为数据库副本到新路径"
+              title={t(lang, "toolbar.saveAs")}
             >
               <AppIcon name="copy" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveAsLabel")}</span
+                >{/if}
             </button>
           {:else if id === "lock"}
             <button
               class="tool-button"
               class:icon-only={iconOnlyButtons}
               onclick={onlock}
-              title="锁定数据库"
+              title={t(lang, "toolbar.lock")}
             >
               <AppIcon name="lock" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.lockLabel")}</span
+                >{/if}
             </button>
           {:else if id === "toggleDetail"}
             <button
               class="icon-action"
               onclick={ontoggledetail}
               title={showDetailOnSelect
-                ? "点击条目显示详情（已启用）"
-                : "点击条目显示详情（已禁用）"}
+                ? t(lang, "toolbar.detailOn")
+                : t(lang, "toolbar.detailOff")}
               aria-pressed={showDetailOnSelect}
             >
               <AppIcon name={showDetailOnSelect ? "eye" : "eye-off"} size={15} />
             </button>
           {:else if id === "securityReport"}
-            <button class="icon-action" onclick={onreport} title="安全报告">
+            <button class="icon-action" onclick={onreport} title={t(lang, "toolbar.report")}>
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "similarPasswords"}
-            <button class="icon-action" onclick={() => onsimilar?.()} title="相似密码检查">
+            <button
+              class="icon-action"
+              onclick={() => onsimilar?.()}
+              title={t(lang, "toolbar.similar")}
+            >
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "hibpCheck"}
-            <button class="icon-action" onclick={() => onhibp?.()} title="HIBP 泄露检查">
+            <button class="icon-action" onclick={() => onhibp?.()} title={t(lang, "toolbar.hibp")}>
               <AppIcon name="globe" size={15} />
             </button>
           {:else if id === "expiredEntries"}
-            <button class="icon-action" onclick={() => onexpired?.()} title="过期条目">
+            <button
+              class="icon-action"
+              onclick={() => onexpired?.()}
+              title={t(lang, "toolbar.expired")}
+            >
               <AppIcon name="clock" size={15} />
             </button>
           {:else if id === "clearHistory"}
-            <button class="icon-action" onclick={() => onclearhistory?.()} title="清理全部历史">
+            <button
+              class="icon-action"
+              onclick={() => onclearhistory?.()}
+              title={t(lang, "toolbar.clearHistory")}
+            >
               <AppIcon name="trash" size={15} />
             </button>
           {:else if id === "importMenu"}
-            <button class="icon-action" onclick={() => onimportcsv?.()} title="导入">
+            <button
+              class="icon-action"
+              onclick={() => onimportcsv?.()}
+              title={t(lang, "toolbar.import")}
+            >
               <AppIcon name="upload" size={15} />
             </button>
           {:else if id === "exportMenu"}
-            <button class="icon-action" onclick={onexportcsv} title="导出 CSV">
+            <button class="icon-action" onclick={onexportcsv} title={t(lang, "toolbar.exportCsv")}>
               <AppIcon name="download" size={15} />
             </button>
           {:else if id === "dbSettings"}
-            <button class="icon-action" onclick={() => ondbsettings?.()} title="数据库设置">
+            <button
+              class="icon-action"
+              onclick={() => ondbsettings?.()}
+              title={t(lang, "toolbar.dbSettings")}
+            >
               <AppIcon name="database" size={15} />
             </button>
           {:else if id === "appSettings"}
-            <button class="icon-action" onclick={onsettings} title="设置">
+            <button class="icon-action" onclick={onsettings} title={t(lang, "toolbar.settings")}>
               <AppIcon name="settings" size={16} />
             </button>
           {:else if id === "moreMenu"}
@@ -255,8 +290,8 @@
               class="icon-action"
               class:active={toolbarMenuOpen}
               onclick={ontogglemenu}
-              title="更多操作"
-              aria-label="更多操作"
+              title={t(lang, "toolbar.more")}
+              aria-label={t(lang, "toolbar.more")}
               aria-haspopup="menu"
               aria-expanded={toolbarMenuOpen}
             >
@@ -264,7 +299,12 @@
             </button>
           {:else if id === "windowMinimize"}
             {#if showWindowControls}
-              <button class="icon-action" onclick={winMinimize} title="最小化" aria-label="最小化">
+              <button
+                class="icon-action"
+                onclick={winMinimize}
+                title={t(lang, "window.minimize")}
+                aria-label={t(lang, "window.minimize")}
+              >
                 <AppIcon name="minimize" size={13} />
               </button>
             {/if}
@@ -273,8 +313,8 @@
               <button
                 class="icon-action"
                 onclick={winToggleMaximize}
-                title={maximized ? "还原" : "最大化"}
-                aria-label={maximized ? "还原" : "最大化"}
+                title={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
+                aria-label={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
               >
                 <AppIcon name={maximized ? "restore" : "maximize"} size={12} />
               </button>
@@ -284,8 +324,8 @@
               <button
                 class="icon-action wc-close"
                 onclick={winClose}
-                title="关闭"
-                aria-label="关闭"
+                title={t(lang, "common.close")}
+                aria-label={t(lang, "common.close")}
               >
                 <AppIcon name="x" size={13} />
               </button>
@@ -301,30 +341,30 @@
         class="tool-button primary"
         class:icon-only={iconOnlyButtons}
         onclick={onnewentry}
-        title="新建条目 (Ctrl+N)"
+        title={t(lang, "toolbar.newEntry")}
       >
         <AppIcon name="plus" size={14} />
-        {#if !iconOnlyButtons}<span class="btn-label">条目</span>{/if}
+        {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.newEntryLabel")}</span>{/if}
       </button>
       <button
         class="tool-button"
         class:icon-only={iconOnlyButtons}
         onclick={onsave}
         disabled={busy || !dirty || readOnly}
-        title="保存数据库 (Ctrl+S)"
+        title={t(lang, "toolbar.save")}
       >
         <AppIcon name="save" size={14} />
-        {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
+        {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveLabel")}</span>{/if}
       </button>
       {#if toolbarItems.saveAs}
         <button
           class="tool-button"
           class:icon-only={iconOnlyButtons}
           onclick={onsaveas}
-          title="另存为数据库副本到新路径"
+          title={t(lang, "toolbar.saveAs")}
         >
           <AppIcon name="copy" size={14} />
-          {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
+          {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveAsLabel")}</span>{/if}
         </button>
       {/if}
       <span class="toolbar-divider" aria-hidden="true"></span>
@@ -332,10 +372,10 @@
         class="tool-button"
         class:icon-only={iconOnlyButtons}
         onclick={onlock}
-        title="锁定数据库"
+        title={t(lang, "toolbar.lock")}
       >
         <AppIcon name="lock" size={14} />
-        {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
+        {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.lockLabel")}</span>{/if}
       </button>
     {/if}
   </div>
@@ -346,20 +386,24 @@
       <input
         class="search-input"
         type="search"
-        placeholder="搜索…"
+        placeholder={t(lang, "toolbar.search")}
         bind:value={search}
         bind:this={searchInputEl}
-        aria-label="搜索条目"
+        aria-label={t(lang, "toolbar.searchEntries")}
       />
       {#if search}
-        <button class="clear-button" onclick={onclearsearch} aria-label="清除搜索">×</button>
+        <button
+          class="clear-button"
+          onclick={onclearsearch}
+          aria-label={t(lang, "toolbar.clearSearch")}>×</button
+        >
       {/if}
       <button
         class="filter-button"
         class:active={advancedFilterActive}
         onclick={onadvancedsearch}
-        title="高级搜索"
-        aria-label="高级搜索"
+        title={t(lang, "toolbar.advancedSearch")}
+        aria-label={t(lang, "toolbar.advancedSearch")}
       >
         <AppIcon name="sliders" size={13} />
       </button>
@@ -368,7 +412,9 @@
 
   <div class="toolbar-right">
     {#if readOnly}
-      <span class="readonly-badge" title="连续保存失败，数据库已进入只读模式">只读</span>
+      <span class="readonly-badge" title={t(lang, "toolbar.readonlyTitle")}
+        >{t(lang, "toolbar.readonly")}</span
+      >
     {/if}
     {#if useFull}
       {#each fullOrder.filter((id) => (sidesMap[id] ?? (["newEntry", "save", "saveAs", "lock"].includes(id) ? "left" : "right")) === "right") as id (id)}
@@ -378,46 +424,66 @@
               class="icon-action"
               onclick={ontoggledetail}
               title={showDetailOnSelect
-                ? "点击条目显示详情（已启用）"
-                : "点击条目显示详情（已禁用）"}
+                ? t(lang, "toolbar.detailOn")
+                : t(lang, "toolbar.detailOff")}
               aria-pressed={showDetailOnSelect}
             >
               <AppIcon name={showDetailOnSelect ? "eye" : "eye-off"} size={15} />
             </button>
           {:else if id === "securityReport"}
-            <button class="icon-action" onclick={onreport} title="安全报告">
+            <button class="icon-action" onclick={onreport} title={t(lang, "toolbar.report")}>
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "similarPasswords"}
-            <button class="icon-action" onclick={() => onsimilar?.()} title="相似密码检查">
+            <button
+              class="icon-action"
+              onclick={() => onsimilar?.()}
+              title={t(lang, "toolbar.similar")}
+            >
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "hibpCheck"}
-            <button class="icon-action" onclick={() => onhibp?.()} title="HIBP 泄露检查">
+            <button class="icon-action" onclick={() => onhibp?.()} title={t(lang, "toolbar.hibp")}>
               <AppIcon name="globe" size={15} />
             </button>
           {:else if id === "expiredEntries"}
-            <button class="icon-action" onclick={() => onexpired?.()} title="过期条目">
+            <button
+              class="icon-action"
+              onclick={() => onexpired?.()}
+              title={t(lang, "toolbar.expired")}
+            >
               <AppIcon name="clock" size={15} />
             </button>
           {:else if id === "clearHistory"}
-            <button class="icon-action" onclick={() => onclearhistory?.()} title="清理全部历史">
+            <button
+              class="icon-action"
+              onclick={() => onclearhistory?.()}
+              title={t(lang, "toolbar.clearHistory")}
+            >
               <AppIcon name="trash" size={15} />
             </button>
           {:else if id === "importMenu"}
-            <button class="icon-action" onclick={() => onimportcsv?.()} title="导入">
+            <button
+              class="icon-action"
+              onclick={() => onimportcsv?.()}
+              title={t(lang, "toolbar.import")}
+            >
               <AppIcon name="upload" size={15} />
             </button>
           {:else if id === "exportMenu"}
-            <button class="icon-action" onclick={onexportcsv} title="导出 CSV">
+            <button class="icon-action" onclick={onexportcsv} title={t(lang, "toolbar.exportCsv")}>
               <AppIcon name="download" size={15} />
             </button>
           {:else if id === "dbSettings"}
-            <button class="icon-action" onclick={() => ondbsettings?.()} title="数据库设置">
+            <button
+              class="icon-action"
+              onclick={() => ondbsettings?.()}
+              title={t(lang, "toolbar.dbSettings")}
+            >
               <AppIcon name="database" size={15} />
             </button>
           {:else if id === "appSettings"}
-            <button class="icon-action" onclick={onsettings} title="设置">
+            <button class="icon-action" onclick={onsettings} title={t(lang, "toolbar.settings")}>
               <AppIcon name="settings" size={16} />
             </button>
           {:else if id === "moreMenu"}
@@ -425,8 +491,8 @@
               class="icon-action"
               class:active={toolbarMenuOpen}
               onclick={ontogglemenu}
-              title="更多操作"
-              aria-label="更多操作"
+              title={t(lang, "toolbar.more")}
+              aria-label={t(lang, "toolbar.more")}
               aria-haspopup="menu"
               aria-expanded={toolbarMenuOpen}
             >
@@ -434,7 +500,12 @@
             </button>
           {:else if id === "windowMinimize"}
             {#if showWindowControls}
-              <button class="icon-action" onclick={winMinimize} title="最小化" aria-label="最小化">
+              <button
+                class="icon-action"
+                onclick={winMinimize}
+                title={t(lang, "window.minimize")}
+                aria-label={t(lang, "window.minimize")}
+              >
                 <AppIcon name="minimize" size={13} />
               </button>
             {/if}
@@ -443,8 +514,8 @@
               <button
                 class="icon-action"
                 onclick={winToggleMaximize}
-                title={maximized ? "还原" : "最大化"}
-                aria-label={maximized ? "还原" : "最大化"}
+                title={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
+                aria-label={maximized ? t(lang, "window.restore") : t(lang, "window.maximize")}
               >
                 <AppIcon name={maximized ? "restore" : "maximize"} size={12} />
               </button>
@@ -454,8 +525,8 @@
               <button
                 class="icon-action wc-close"
                 onclick={winClose}
-                title="关闭"
-                aria-label="关闭"
+                title={t(lang, "common.close")}
+                aria-label={t(lang, "common.close")}
               >
                 <AppIcon name="x" size={13} />
               </button>
@@ -465,10 +536,11 @@
               class="tool-button primary"
               class:icon-only={iconOnlyButtons}
               onclick={onnewentry}
-              title="新建条目 (Ctrl+N)"
+              title={t(lang, "toolbar.newEntry")}
             >
               <AppIcon name="plus" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">条目</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.newEntryLabel")}</span
+                >{/if}
             </button>
           {:else if id === "save"}
             <button
@@ -476,30 +548,33 @@
               class:icon-only={iconOnlyButtons}
               onclick={onsave}
               disabled={busy || !dirty || readOnly}
-              title="保存数据库 (Ctrl+S)"
+              title={t(lang, "toolbar.save")}
             >
               <AppIcon name="save" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">保存</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveLabel")}</span
+                >{/if}
             </button>
           {:else if id === "saveAs"}
             <button
               class="tool-button"
               class:icon-only={iconOnlyButtons}
               onclick={onsaveas}
-              title="另存为数据库副本到新路径"
+              title={t(lang, "toolbar.saveAs")}
             >
               <AppIcon name="copy" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">另存为</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.saveAsLabel")}</span
+                >{/if}
             </button>
           {:else if id === "lock"}
             <button
               class="tool-button"
               class:icon-only={iconOnlyButtons}
               onclick={onlock}
-              title="锁定数据库"
+              title={t(lang, "toolbar.lock")}
             >
               <AppIcon name="lock" size={14} />
-              {#if !iconOnlyButtons}<span class="btn-label">锁定</span>{/if}
+              {#if !iconOnlyButtons}<span class="btn-label">{t(lang, "toolbar.lockLabel")}</span
+                >{/if}
             </button>
           {/if}
           {#if fullSeparators.has(id)}
@@ -515,46 +590,66 @@
               class="icon-action"
               onclick={ontoggledetail}
               title={showDetailOnSelect
-                ? "点击条目显示详情（已启用）"
-                : "点击条目显示详情（已禁用）"}
+                ? t(lang, "toolbar.detailOn")
+                : t(lang, "toolbar.detailOff")}
               aria-pressed={showDetailOnSelect}
             >
               <AppIcon name={showDetailOnSelect ? "eye" : "eye-off"} size={15} />
             </button>
           {:else if id === "securityReport"}
-            <button class="icon-action" onclick={onreport} title="安全报告">
+            <button class="icon-action" onclick={onreport} title={t(lang, "toolbar.report")}>
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "similarPasswords"}
-            <button class="icon-action" onclick={() => onsimilar?.()} title="相似密码检查">
+            <button
+              class="icon-action"
+              onclick={() => onsimilar?.()}
+              title={t(lang, "toolbar.similar")}
+            >
               <AppIcon name="shield" size={15} />
             </button>
           {:else if id === "hibpCheck"}
-            <button class="icon-action" onclick={() => onhibp?.()} title="HIBP 泄露检查">
+            <button class="icon-action" onclick={() => onhibp?.()} title={t(lang, "toolbar.hibp")}>
               <AppIcon name="globe" size={15} />
             </button>
           {:else if id === "expiredEntries"}
-            <button class="icon-action" onclick={() => onexpired?.()} title="过期条目">
+            <button
+              class="icon-action"
+              onclick={() => onexpired?.()}
+              title={t(lang, "toolbar.expired")}
+            >
               <AppIcon name="clock" size={15} />
             </button>
           {:else if id === "clearHistory"}
-            <button class="icon-action" onclick={() => onclearhistory?.()} title="清理全部历史">
+            <button
+              class="icon-action"
+              onclick={() => onclearhistory?.()}
+              title={t(lang, "toolbar.clearHistory")}
+            >
               <AppIcon name="trash" size={15} />
             </button>
           {:else if id === "importMenu"}
-            <button class="icon-action" onclick={() => onimportcsv?.()} title="导入">
+            <button
+              class="icon-action"
+              onclick={() => onimportcsv?.()}
+              title={t(lang, "toolbar.import")}
+            >
               <AppIcon name="upload" size={15} />
             </button>
           {:else if id === "exportMenu"}
-            <button class="icon-action" onclick={onexportcsv} title="导出 CSV">
+            <button class="icon-action" onclick={onexportcsv} title={t(lang, "toolbar.exportCsv")}>
               <AppIcon name="download" size={15} />
             </button>
           {:else if id === "dbSettings"}
-            <button class="icon-action" onclick={() => ondbsettings?.()} title="数据库设置">
+            <button
+              class="icon-action"
+              onclick={() => ondbsettings?.()}
+              title={t(lang, "toolbar.dbSettings")}
+            >
               <AppIcon name="database" size={15} />
             </button>
           {:else if id === "appSettings"}
-            <button class="icon-action" onclick={onsettings} title="设置">
+            <button class="icon-action" onclick={onsettings} title={t(lang, "toolbar.settings")}>
               <AppIcon name="settings" size={16} />
             </button>
           {/if}
@@ -568,8 +663,8 @@
           class="icon-action"
           class:active={toolbarMenuOpen}
           onclick={ontogglemenu}
-          title="更多操作"
-          aria-label="更多操作"
+          title={t(lang, "toolbar.more")}
+          aria-label={t(lang, "toolbar.more")}
           aria-haspopup="menu"
           aria-expanded={toolbarMenuOpen}
         >
