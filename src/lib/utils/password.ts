@@ -193,11 +193,16 @@ export function estimateEntropy(password: string): number {
   return Math.round(password.length * Math.log2(pool));
 }
 
+export type StrengthLevel = "weak" | "fair" | "strong";
+
+/** Strength bucket for an entropy estimate. Returns the stable `level`
+ *  (callers translate it); the human label lives in the i18n dictionaries
+ *  (`password.strength.*`) so it follows the UI locale. */
 export function entropyLabel(bits: number): {
-  label: string;
-  className: "weak" | "fair" | "strong";
+  level: StrengthLevel;
+  className: StrengthLevel;
 } {
-  if (bits < 40) return { label: "弱", className: "weak" };
-  if (bits < 72) return { label: "中等", className: "fair" };
-  return { label: "强", className: "strong" };
+  if (bits < 40) return { level: "weak", className: "weak" };
+  if (bits < 72) return { level: "fair", className: "fair" };
+  return { level: "strong", className: "strong" };
 }

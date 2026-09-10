@@ -11,6 +11,7 @@
     EntryAutoTypeConfig,
   } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import { vault } from "$lib/services/vault";
   import { generatePassword, estimateEntropy, entropyLabel } from "$lib/utils/password";
   import { formatBytes } from "$lib/utils/format";
@@ -43,6 +44,14 @@
   }
 
   let { mode, groups, groupUuid, entry, entries, onclose, onsaved }: Props = $props();
+
+  let lang = $state($appSettings.general.language);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      lang = value.general.language;
+    });
+    return unsubscribe;
+  });
 
   // The dialog is mounted per open (editorOpen), so `mode` never changes
   // during an instance's lifetime; capturing it once is intentional.
@@ -477,12 +486,12 @@
     const raw = kvIdentifyInput.trim();
     if (!raw) return;
     const result = shortestMatchable(raw, kvAccuracy);
-    if (result.startsWith("无法识别")) {
-      kvIdentifyMessage = result;
+    if (!result) {
+      kvIdentifyMessage = t(lang, "editor.unrecognizedUrl");
       kvIdentifySuggestion = "";
       return;
     }
-    kvIdentifyMessage = "建议地址:";
+    kvIdentifyMessage = t(lang, "editor.suggestUrl");
     kvIdentifySuggestion = result;
   }
 
@@ -523,7 +532,7 @@
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.onerror = () => reject(new Error(t(lang, "detail.readFileFailed")));
       reader.readAsDataURL(file);
     });
   }
@@ -648,13 +657,17 @@
 </script>
 
 <ModalShell
-  title={mode === "create" ? "新建条目" : multi ? `批量编辑 ${entries.length} 个条目` : "编辑条目"}
-  description={mode === "create"
-    ? "在当前分组创建新条目"
+  title={mode === "create"
+    ? t(lang, "editor.createTitle")
     : multi
-      ? "修改应用到所有选中条目,未修改的字段保持不变"
-      : "保存对条目的修改"}
-  ariaLabel={mode === "create" ? "新建条目" : "编辑条目"}
+      ? t(lang, "editor.batchEdit", { count: entries.length })
+      : t(lang, "editor.editTitle")}
+  description={mode === "create"
+    ? t(lang, "editor.createHint")
+    : multi
+      ? t(lang, "editor.batchHint")
+      : t(lang, "editor.editHint")}
+  ariaLabel={mode === "create" ? t(lang, "editor.createTitle") : t(lang, "editor.editTitle")}
   size="large"
   scrollable
   closeOnEscape
@@ -672,8 +685,8 @@
       class="icon-btn primary"
       type="button"
       onclick={submit}
-      aria-label="保存"
-      title="保存"
+      aria-label={t(lang, "common.save")}
+      title={t(lang, "common.save")}
       disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
     >
       <AppIcon name="check" size={15} />
@@ -682,15 +695,15 @@
       class="icon-btn"
       type="button"
       onclick={onclose}
-      aria-label="取消"
-      title="取消"
+      aria-label={t(lang, "common.cancel")}
+      title={t(lang, "common.cancel")}
       disabled={saving}
     >
       <AppIcon name="x" size={15} />
     </button>
   {/snippet}
   {#snippet children()}
-    <div class="editor-tabs" role="tablist" aria-label="条目字段分组">
+    <div class="editor-tabs" role="tablist" aria-label={t(lang, "editor.tabs")}>
       <button
         type="button"
         role="tab"
@@ -699,7 +712,7 @@
         aria-selected={activeTab === "fields"}
         onclick={() => activateTab("fields")}
       >
-        字段
+        {t(lang, "detail.tabFields")}
       </button>
       <button
         type="button"
@@ -709,7 +722,7 @@
         aria-selected={activeTab === "meta"}
         onclick={() => activateTab("meta")}
       >
-        元属性
+        {t(lang, "detail.tabMeta")}
       </button>
       {#if !multi}
         <button
@@ -720,7 +733,7 @@
           aria-selected={activeTab === "autotype"}
           onclick={() => activateTab("autotype")}
         >
-          自动填充
+          {t(lang, "menu.autotype")}
         </button>
         <button
           type="button"
@@ -740,7 +753,9 @@
           aria-selected={activeTab === "custom"}
           onclick={() => activateTab("custom")}
         >
-          自定义字段{#if visibleCustomFields.length}({visibleCustomFields.length}){/if}
+          {#if visibleCustomFields.length}{t(lang, "editor.customFieldsCount", {
+              count: visibleCustomFields.length,
+            })}{:else}{t(lang, "editor.customFields")}{/if}
         </button>
         <button
           type="button"
@@ -750,7 +765,9 @@
           aria-selected={activeTab === "attachments"}
           onclick={() => activateTab("attachments")}
         >
-          附件{#if attachments.length}({attachments.length}){/if}
+          {#if attachments.length}{t(lang, "editor.attachmentsCount", {
+              count: attachments.length,
+            })}{:else}{t(lang, "editor.attachmentsTab")}{/if}
         </button>
       {/if}
     </div>
@@ -758,17 +775,17 @@
     {#if activeTab === "fields"}
       <div class="form-grid" role="tabpanel">
         <label class="field">
-          <span>标题</span>
+          <span>{t(lang, "editor.title")}</span>
           <TextField
             bind:value={title}
-            placeholder={titleMulti ? "多个值" : "例如：GitHub"}
+            placeholder={titleMulti ? t(lang, "editor.multiValue") : t(lang, "editor.titleExample")}
             oninput={() => markTouched("title")}
           />
         </label>
 
         {#if !multi}
           <label class="field">
-            <span>分组</span>
+            <span>{t(lang, "toolbar.groups")}</span>
             <GroupPicker
               {groups}
               value={targetGroupUuid}
@@ -778,18 +795,18 @@
         {/if}
 
         <label class="field">
-          <span>用户名</span>
+          <span>{t(lang, "tcato.username")}</span>
           <TextField
             bind:value={username}
             autocomplete="off"
-            placeholder={usernameMulti ? "多个值" : undefined}
+            placeholder={usernameMulti ? t(lang, "editor.multiValue") : undefined}
             oninput={() => markTouched("username")}
           />
         </label>
 
         <label class="field">
           <span class="field-header">
-            <span>密码</span>
+            <span>{t(lang, "tcato.password")}</span>
             <span class="strength-row"
               ><span class="strength-bar"
                 ><span
@@ -800,7 +817,11 @@
                 ></span></span
               >
               <span class="strength-label {strength.className}"
-                >{strength.label} · {entropy} bits</span
+                >{strength.level === "weak"
+                  ? t(lang, "password.weak")
+                  : strength.level === "fair"
+                    ? t(lang, "password.fair")
+                    : t(lang, "password.strong")} · {entropy} bits</span
               ></span
             >
           </span>
@@ -811,19 +832,23 @@
               bind:value={password}
               autocomplete="new-password"
               disabled={passwordLoading}
-              placeholder={multi ? "多个值" : passwordLoading ? "加载中…" : ""}
+              placeholder={multi
+                ? t(lang, "editor.multiValue")
+                : passwordLoading
+                  ? t(lang, "editor.loading")
+                  : ""}
               oninput={() => {
                 generatorError = "";
                 markTouched("password");
               }}
             />
-            <button class="icon-btn" onclick={generate} title="生成密码">
+            <button class="icon-btn" onclick={generate} title={t(lang, "editor.generatePassword")}>
               <AppIcon name="refresh" size={14} />
             </button>
             <button
               class="icon-btn"
               onclick={() => (showPassword = !showPassword)}
-              title="显示密码"
+              title={t(lang, "vault.showPassword")}
             >
               <AppIcon name={showPassword ? "eye-off" : "eye"} size={14} />
             </button>
@@ -834,31 +859,31 @@
         </label>
 
         <label class="field full">
-          <span>网址</span>
+          <span>{t(lang, "detail.url")}</span>
           <TextField
             type="url"
             bind:value={url}
-            placeholder={urlMulti ? "多个值" : "https://"}
+            placeholder={urlMulti ? t(lang, "editor.multiValue") : "https://"}
             oninput={() => markTouched("url")}
           />
         </label>
 
         <label class="field full">
-          <span>备注</span>
+          <span>{t(lang, "detail.notes")}</span>
           <TextField
             multiline
             rows={4}
             bind:value={notes}
-            placeholder={notesMulti ? "多个值" : undefined}
+            placeholder={notesMulti ? t(lang, "editor.multiValue") : undefined}
             oninput={() => markTouched("notes")}
           />
         </label>
 
         <label class="field full">
-          <span>标签</span>
+          <span>{t(lang, "detail.tags")}</span>
           <TextField
             bind:value={tags}
-            placeholder={tagsMulti ? "多个值" : "逗号分隔，例如：工作, 邮箱"}
+            placeholder={tagsMulti ? t(lang, "editor.multiValue") : t(lang, "editor.tagsExample")}
             oninput={() => markTouched("tags")}
           />
         </label>
@@ -868,17 +893,17 @@
     {#if activeTab === "meta"}
       <div class="form-grid" role="tabpanel">
         <label class="field">
-          <span>TOTP 种子</span>
+          <span>{t(lang, "editor.totpSeed")}</span>
           <div class="totp-input-wrap">
             <TextField
               paddingRightPx={60}
               mono
               bind:value={totp}
               placeholder={multi
-                ? "多个值"
+                ? t(lang, "editor.multiValue")
                 : totpLoading
-                  ? "正在加载…"
-                  : "Base32 密钥或 otpauth URI"}
+                  ? t(lang, "editor.loading")
+                  : t(lang, "editor.totpExample")}
               disabled={totpLoading}
               oninput={() => markTouched("totp")}
             />
@@ -892,25 +917,25 @@
             </span>
           </div>
           {#if multi}
-            <span class="field-hint">输入新种子将替换所有选中条目的 TOTP</span>
+            <span class="field-hint">{t(lang, "editor.totpReplaceHint")}</span>
           {/if}
         </label>
 
         <label class="field">
-          <span>过期时间</span>
+          <span>{t(lang, "detail.expires")}</span>
           <TextField
             type="datetime-local"
             bind:value={expiresLocal}
-            placeholder={expiresMulti ? "多个值" : undefined}
+            placeholder={expiresMulti ? t(lang, "editor.multiValue") : undefined}
             oninput={() => markTouched("expires")}
           />
           {#if multi}
-            <span class="field-hint">清空并保存将移除所有选中条目的过期时间</span>
+            <span class="field-hint">{t(lang, "editor.expiresClearHint")}</span>
           {/if}
         </label>
 
         <section class="field full">
-          <span class="section-title">图标</span>
+          <span class="section-title">{t(lang, "editor.iconSection")}</span>
           <div class="icon-grid">
             {#if !multi && customIconUrl}
               <button
@@ -918,7 +943,7 @@
                 class="icon-option"
                 class:selected={customIconSelected}
                 onclick={pickCustomIcon}
-                title="自定义图标(网页图标)"
+                title={t(lang, "editor.customIcon")}
                 aria-pressed={customIconSelected}
               >
                 <img class="icon-option-img" src={customIconUrl} alt="" draggable="false" />
@@ -930,7 +955,9 @@
                 class="icon-option"
                 class:selected={!multi && iconIndex === index}
                 onclick={() => pickIcon(index)}
-                title={multi && iconMulti ? `多个值 → ${index}` : `内置图标 ${index}`}
+                title={multi && iconMulti
+                  ? t(lang, "editor.multiIconTarget", { index })
+                  : t(lang, "editor.builtinIcon", { index })}
                 aria-pressed={iconIndex === index}
               >
                 <AppIcon name={keepassIconName(index)} size={16} />
@@ -938,12 +965,12 @@
             {/each}
           </div>
           {#if multi}
-            <span class="field-hint">点击图标将应用到所有选中条目;未点击则保持不变</span>
+            <span class="field-hint">{t(lang, "editor.iconApplyHint")}</span>
           {/if}
         </section>
 
         <section class="field full">
-          <span class="section-title">颜色标记</span>
+          <span class="section-title">{t(lang, "editor.colorSection")}</span>
           <div class="color-row">
             {#each KEEPASS_COLORS as color (color)}
               <button
@@ -953,7 +980,7 @@
                 style:background={color}
                 onclick={() => pickColor(color)}
                 title={color}
-                aria-label={`颜色 ${color}`}
+                aria-label={t(lang, "editor.colorValue", { color })}
               ></button>
             {/each}
             <input
@@ -964,27 +991,29 @@
                 markTouched("color");
                 colorHex = e.currentTarget.value.toUpperCase();
               }}
-              title="自定义颜色"
+              title={t(lang, "editor.customColor")}
             />
             {#if colorHex}
-              <button type="button" class="icon-btn" onclick={clearColor} title="清除颜色">
+              <button
+                type="button"
+                class="icon-btn"
+                onclick={clearColor}
+                title={t(lang, "editor.clearColor")}
+              >
                 <AppIcon name="x" size={13} />
               </button>
             {/if}
           </div>
           {#if multi}
-            <span class="field-hint">选择颜色将应用到所有选中条目;未选择则保持不变</span>
+            <span class="field-hint">{t(lang, "editor.colorApplyHint")}</span>
           {/if}
         </section>
 
         {#if !multi}
           <label class="field">
             <span>
-              覆盖 URL（OverrideURL）
-              <span
-                class="field-help"
-                title="仅用于匹配（浏览器桥/RPC/自动填充），不改变显示的网址"
-              >
+              {t(lang, "editor.overrideUrl")}
+              <span class="field-help" title={t(lang, "editor.overrideUrlHint")}>
                 <AppIcon name="info" size={12} />
               </span>
             </span>
@@ -998,15 +1027,16 @@
 
           <div class="autotype-row">
             <span class="autotype-label"
-              >质量检查 <span class="field-help" title="禁用后条目不参与弱密码安全检查"
+              >{t(lang, "editor.qualityCheck")}
+              <span class="field-help" title={t(lang, "editor.qualityCheckHint")}
                 ><AppIcon name="info" size={12} /></span
               ></span
             >
-            <Toggle bind:checked={qualityCheck} ariaLabel="质量检查" />
+            <Toggle bind:checked={qualityCheck} ariaLabel={t(lang, "editor.qualityCheck")} />
           </div>
 
           <section class="field full">
-            <span class="section-title">前景色（文字）</span>
+            <span class="section-title">{t(lang, "editor.foregroundSection")}</span>
             <div class="color-row">
               {#each KEEPASS_COLORS as color (color)}
                 <button
@@ -1017,7 +1047,7 @@
                   onclick={() =>
                     (foregroundHex = foregroundHex.toUpperCase() === color ? "" : color)}
                   title={color}
-                  aria-label={`前景色 ${color}`}
+                  aria-label={t(lang, "editor.foregroundValue", { color })}
                 ></button>
               {/each}
               <input
@@ -1025,14 +1055,14 @@
                 type="color"
                 value={foregroundHex || "#000000"}
                 oninput={(e) => (foregroundHex = e.currentTarget.value.toUpperCase())}
-                title="自定义前景色"
+                title={t(lang, "editor.customForeground")}
               />
               {#if foregroundHex}
                 <button
                   type="button"
                   class="icon-btn"
                   onclick={() => (foregroundHex = "")}
-                  title="清除前景色"
+                  title={t(lang, "editor.clearForeground")}
                 >
                   <AppIcon name="x" size={13} />
                 </button>
@@ -1046,30 +1076,37 @@
     {#if !multi && activeTab === "autotype"}
       <div class="autotype-section" role="tabpanel">
         <div class="autotype-row">
-          <span class="autotype-label">启用自动填充</span>
-          <Toggle bind:checked={autoTypeEnabled} ariaLabel="启用自动填充" />
+          <span class="autotype-label">{t(lang, "editor.autotypeEnabled")}</span>
+          <Toggle bind:checked={autoTypeEnabled} ariaLabel={t(lang, "editor.autotypeEnabled")} />
         </div>
         <label class="field">
-          <span>默认序列</span>
+          <span>{t(lang, "editor.defaultSequence")}</span>
           <TextField
             mono
             bind:value={autoTypeDefaultSeq}
             placeholder={"{USERNAME}{TAB}{PASSWORD}{ENTER}"}
           />
         </label>
-        <span class="autotype-label">窗口关联</span>
+        <span class="autotype-label">{t(lang, "editor.windowAssoc")}</span>
         {#each autoTypeAssociations as association, index (index)}
           <div class="association-row">
             <div class="association-window">
-              <TextField bind:value={association.window} placeholder="窗口标题（* 通配）" />
+              <TextField
+                bind:value={association.window}
+                placeholder={t(lang, "editor.assocWindowPh")}
+              />
             </div>
             <div class="association-sequence">
-              <TextField mono bind:value={association.sequence} placeholder="序列，留空用默认" />
+              <TextField
+                mono
+                bind:value={association.sequence}
+                placeholder={t(lang, "editor.assocSequencePh")}
+              />
             </div>
             <button
               class="association-remove"
               type="button"
-              title="删除关联"
+              title={t(lang, "editor.deleteAssoc")}
               onclick={() => autoTypeAssociations.splice(index, 1)}
             >
               <AppIcon name="x" size={12} />
@@ -1082,7 +1119,7 @@
           onclick={() =>
             (autoTypeAssociations = [...autoTypeAssociations, { window: "", sequence: "" }])}
         >
-          <AppIcon name="plus" size={12} />添加窗口关联
+          <AppIcon name="plus" size={12} />{t(lang, "editor.addAssoc")}
         </button>
       </div>
     {/if}
@@ -1092,55 +1129,55 @@
         {#if kprpcProtected}
           <section class="field full">
             <p class="section-empty">
-              受保护的 `KPRPC JSON` 字段值未载入快照,为避免被清空,无法在此编辑。
+              {t(lang, "editor.kprpcLocked")}
             </p>
           </section>
         {:else}
           <section class="field full">
-            <span class="section-title">匹配精度</span>
+            <span class="section-title">{t(lang, "editor.matchPrecision")}</span>
             <div class="kv-accuracy-row">
               <button
                 type="button"
                 class="kv-accuracy-option"
                 class:active={kvAccuracy === "Domain"}
                 onclick={() => setKeyVaultAccuracy("Domain")}
-                title="域名相同即匹配(默认)"
+                title={t(lang, "editor.accuracyDomainTitle")}
               >
-                域名
+                {t(lang, "editor.accuracyDomain")}
               </button>
               <button
                 type="button"
                 class="kv-accuracy-option"
                 class:active={kvAccuracy === "Hostname"}
                 onclick={() => setKeyVaultAccuracy("Hostname")}
-                title="主机名+端口相同才匹配"
+                title={t(lang, "editor.accuracyHostTitle")}
               >
-                主机名
+                {t(lang, "editor.accuracyHost")}
               </button>
               <button
                 type="button"
                 class="kv-accuracy-option"
                 class:active={kvAccuracy === "Exact"}
                 onclick={() => setKeyVaultAccuracy("Exact")}
-                title="完整网址精确匹配"
+                title={t(lang, "editor.accuracyExactTitle")}
               >
-                精确
+                {t(lang, "editor.accuracyExact")}
               </button>
             </div>
-            <span class="field-hint">匹配精度决定一个网址需要多"像"才会命中该条目</span>
+            <span class="field-hint">{t(lang, "editor.precisionHint")}</span>
           </section>
 
           <section class="field full">
-            <span class="section-title">匹配 / 阻止 网址或正则</span>
+            <span class="section-title">{t(lang, "editor.matchRules")}</span>
             {#if kvRules.length === 0}
-              <p class="section-empty">暂无规则;匹配仅使用主「网址」字段</p>
+              <p class="section-empty">{t(lang, "editor.noRules")}</p>
             {/if}
             {#each kvRules as rule, i (i)}
               <div class="kv-rule-row">
                 <div class="kv-rule-value">
                   <TextField
                     mono
-                    placeholder="https:// 或正则表达式"
+                    placeholder={t(lang, "editor.ruleUrlPh")}
                     value={rule.value}
                     oninput={(e) => updateKeyVaultRule(i, { value: e.currentTarget.value })}
                   />
@@ -1150,7 +1187,7 @@
                   class="kv-tag"
                   class:active={rule.regex}
                   onclick={() => updateKeyVaultRule(i, { regex: !rule.regex })}
-                  title="正则表达式"
+                  title={t(lang, "editor.regex")}
                 >
                   .*
                 </button>
@@ -1160,33 +1197,33 @@
                   class:active={!rule.block}
                   class:block={rule.block}
                   onclick={() => updateKeyVaultRule(i, { block: !rule.block })}
-                  title={rule.block ? "阻止此网址匹配" : "匹配此网址"}
+                  title={rule.block ? t(lang, "editor.blockUrl") : t(lang, "editor.matchUrl")}
                 >
-                  {rule.block ? "阻止" : "匹配"}
+                  {rule.block ? t(lang, "editor.block") : t(lang, "editor.match")}
                 </button>
                 <button
                   type="button"
                   class="icon-btn"
                   onclick={() => removeKeyVaultRule(i)}
-                  aria-label="删除规则"
-                  title="删除规则"
+                  aria-label={t(lang, "editor.deleteRule")}
+                  title={t(lang, "editor.deleteRule")}
                 >
                   <AppIcon name="x" size={13} />
                 </button>
               </div>
             {/each}
             <button class="add-row-btn" onclick={addKeyVaultRule}>
-              <AppIcon name="plus" size={12} />添加网址 / 正则
+              <AppIcon name="plus" size={12} />{t(lang, "editor.addRule")}
             </button>
-            <span class="field-hint">以 KeePassRPC `KPRPC JSON` 兼容格式存储;阻止规则优先生效</span>
+            <span class="field-hint">{t(lang, "editor.kprpcHint")}</span>
           </section>
 
           <section class="field full">
-            <span class="section-title">识别最短匹配地址</span>
+            <span class="section-title">{t(lang, "editor.identifySection")}</span>
             <div class="kv-identify-row">
               <div class="kv-identify-input">
                 <TextField
-                  placeholder="粘贴浏览器里真实网址(如 Kee 日志 FindLogins urls)"
+                  placeholder={t(lang, "editor.identifyPh")}
                   value={kvIdentifyInput}
                   oninput={(e) => (kvIdentifyInput = e.currentTarget.value)}
                 />
@@ -1195,9 +1232,9 @@
                 type="button"
                 class="kv-identify-btn"
                 onclick={identifyMatchable}
-                title="按当前匹配精度算出最短仍能命中的地址"
+                title={t(lang, "editor.identifyTitle")}
               >
-                <AppIcon name="search" size={13} />识别
+                <AppIcon name="search" size={13} />{t(lang, "editor.identify")}
               </button>
             </div>
             {#if kvIdentifyMessage}
@@ -1213,9 +1250,9 @@
                     type="button"
                     class="kv-identify-btn"
                     onclick={applyIdentifySuggestion}
-                    title="把识别出的建议地址加入匹配规则"
+                    title={t(lang, "editor.applySuggestion")}
                   >
-                    <AppIcon name="check" size={12} />应用
+                    <AppIcon name="check" size={12} />{t(lang, "common.apply")}
                   </button>
                 {/if}
               </div>
@@ -1229,14 +1266,14 @@
       <div class="form-grid" role="tabpanel">
         <section class="field full">
           {#if visibleCustomFields.length === 0}
-            <p class="section-empty">暂无自定义字段</p>
+            <p class="section-empty">{t(lang, "editor.noCustomFields")}</p>
           {/if}
           {#each customFields as field, i (i)}
             {#if field.name !== KPRPC_FIELD}
               <div class="custom-field-row">
                 <div class="cf-name">
                   <TextField
-                    placeholder="字段名"
+                    placeholder={t(lang, "editor.fieldName")}
                     value={field.name}
                     oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
                   />
@@ -1245,7 +1282,7 @@
                   <TextField
                     mono
                     type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
-                    placeholder="值"
+                    placeholder={t(lang, "editor.fieldValue")}
                     value={field.value}
                     disabled={field.protected && protectedFieldsLoading}
                     oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
@@ -1255,8 +1292,12 @@
                   <button
                     class="icon-btn"
                     onclick={() => toggleCustomFieldReveal(i)}
-                    aria-label={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
-                    title={revealedCustomFields.has(i) ? "隐藏字段值" : "显示字段值"}
+                    aria-label={revealedCustomFields.has(i)
+                      ? t(lang, "detail.hideField")
+                      : t(lang, "detail.showField")}
+                    title={revealedCustomFields.has(i)
+                      ? t(lang, "detail.hideField")
+                      : t(lang, "detail.showField")}
                   >
                     <AppIcon name={revealedCustomFields.has(i) ? "eye-off" : "eye"} size={13} />
                   </button>
@@ -1265,16 +1306,20 @@
                   class="icon-btn"
                   class:active={field.protected}
                   onclick={() => toggleCustomFieldProtected(i)}
-                  aria-label={field.protected ? "取消保护此字段" : "保护此字段"}
-                  title={field.protected ? "受保护 (值不进入快照)" : "保护此字段 (值不进入快照)"}
+                  aria-label={field.protected
+                    ? t(lang, "editor.unprotectField")
+                    : t(lang, "editor.protectField")}
+                  title={field.protected
+                    ? t(lang, "editor.protectedHint")
+                    : t(lang, "editor.protectHint")}
                 >
                   <AppIcon name={field.protected ? "lock" : "unlock"} size={13} />
                 </button>
                 <button
                   class="icon-btn"
                   onclick={() => removeCustomField(i)}
-                  aria-label="删除字段"
-                  title="删除字段"
+                  aria-label={t(lang, "editor.deleteField")}
+                  title={t(lang, "editor.deleteField")}
                 >
                   <AppIcon name="x" size={13} />
                 </button>
@@ -1282,7 +1327,7 @@
             {/if}
           {/each}
           <button class="add-row-btn" onclick={addCustomField}>
-            <AppIcon name="plus" size={12} />添加字段
+            <AppIcon name="plus" size={12} />{t(lang, "editor.addField")}
           </button>
         </section>
       </div>
@@ -1292,7 +1337,7 @@
       <div class="form-grid" role="tabpanel">
         <section class="field full">
           {#if attachments.length === 0}
-            <p class="section-empty">暂无附件</p>
+            <p class="section-empty">{t(lang, "editor.noAttachments")}</p>
           {/if}
           {#each attachments as attachment, i (attachment.name + i)}
             <div class="attachment-row">
@@ -1302,15 +1347,15 @@
               <button
                 class="icon-btn"
                 onclick={() => removeAttachment(i)}
-                aria-label="移除附件"
-                title="移除附件"
+                aria-label={t(lang, "editor.removeAttachment")}
+                title={t(lang, "editor.removeAttachment")}
               >
                 <AppIcon name="x" size={13} />
               </button>
             </div>
           {/each}
           <button class="add-row-btn" onclick={pickFiles}>
-            <AppIcon name="upload" size={12} />添加附件
+            <AppIcon name="upload" size={12} />{t(lang, "editor.addAttachment")}
           </button>
           <input
             class="file-input"

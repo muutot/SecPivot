@@ -28,12 +28,13 @@ function withoutQueryFragment(url: string): string {
   return q < 0 ? url : url.slice(0, q);
 }
 
-/** Return the shortest address that still matches `url` under `accuracy`, or a
- * human message when the input is not a usable URL. */
-export function shortestMatchable(url: string, accuracy: Accuracy): string {
+/** Return the shortest address that still matches `url` under `accuracy`, or
+ *  `null` when the input is not a usable URL (the caller renders the message
+ *  so user-facing text stays in the i18n dictionaries). */
+export function shortestMatchable(url: string, accuracy: Accuracy): string | null {
   const trimmed = url.trim();
   const host = urlHost(trimmed);
-  if (!host) return "无法识别:请输入完整网址(含 https://)";
+  if (!host) return null;
   if (accuracy === "Domain" || accuracy === "Hostname") return host;
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   return withoutQueryFragment(withScheme);

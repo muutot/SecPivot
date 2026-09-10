@@ -3,6 +3,8 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import { entropyLabel } from "$lib/utils/password";
+  import { appSettings } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
 
   interface EntryRow {
     entry: VaultEntry;
@@ -16,6 +18,25 @@
   }
 
   let { report, entries, onclose }: Props = $props();
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+
+  function strengthText(bits: number): string {
+    const level = entropyLabel(bits).level;
+    return level === "weak"
+      ? t(lang, "password.weak")
+      : level === "fair"
+        ? t(lang, "password.fair")
+        : t(lang, "password.strong");
+  }
 
   const byUuid = $derived(new Map(entries.map((row) => [row.entry.uuid, row])));
 
@@ -95,7 +116,7 @@
               <AppIcon name="key" size={12} />
               <span class="issue-title">{titleOf(item.uuid)}</span>
               <span class="strength-label {entropyLabel(item.bits).className}"
-                >{entropyLabel(item.bits).label}</span
+                >{strengthText(item.bits)}</span
               >
               <span class="issue-path" title={pathOf(item.uuid)}>{pathOf(item.uuid)}</span>
             </li>
