@@ -122,7 +122,7 @@
   }
 
   function openSaveThemeDialog(): void {
-    const base = `自定义 ${s.general.customThemes.length + 1}`;
+    const base = `${t(lang, "settings.customTheme")} ${s.general.customThemes.length + 1}`;
     let name = base;
     let n = 2;
     const names = new Set(s.general.customThemes.map((t) => t.name));
@@ -147,7 +147,7 @@
   function confirmThemeDialog(): void {
     const raw = themeDialogName.trim();
     if (themeDialogMode === "create") {
-      const base = raw || `自定义 ${s.general.customThemes.length + 1}`;
+      const base = raw || `${t(lang, "settings.customTheme")} ${s.general.customThemes.length + 1}`;
       let name = base;
       let n = 2;
       const names = new Set(s.general.customThemes.map((t) => t.name));
@@ -164,7 +164,7 @@
     if (themeDialogMode === "rename") {
       if (selectedThemeIdx === null) return;
       if (!raw) {
-        themeDialogError = "名称不能为空";
+        themeDialogError = t(lang, "settings.themeNameRequired");
         return;
       }
       const themes = s.general.customThemes.map((t) => ({ ...t, colors: { ...t.colors } }));
@@ -207,11 +207,29 @@
     description: string;
     min: number;
     max: number;
-  }[] = [
-    { key: "base", label: "基础字号", description: "全局界面与正文", min: 11, max: 20 },
-    { key: "secondary", label: "次级字号", description: "描述与元数据", min: 9, max: 16 },
-    { key: "cardTitle", label: "标题字号", description: "条目标题与卡片标题", min: 11, max: 18 },
-  ];
+  }[] = $derived([
+    {
+      key: "base",
+      label: t(lang, "settings.fontBase"),
+      description: t(lang, "settings.fontBaseDesc"),
+      min: 11,
+      max: 20,
+    },
+    {
+      key: "secondary",
+      label: t(lang, "settings.fontSecondary"),
+      description: t(lang, "settings.fontSecondaryDesc"),
+      min: 9,
+      max: 16,
+    },
+    {
+      key: "cardTitle",
+      label: t(lang, "settings.fontCardTitle"),
+      description: t(lang, "settings.fontCardTitleDesc"),
+      min: 11,
+      max: 18,
+    },
+  ]);
 
   const densitySliders: {
     key: "entryRowHeight" | "groupGap" | "groupPaddingY" | "groupIndent" | "groupRadius";
@@ -219,83 +237,179 @@
     description: string;
     min: number;
     max: number;
-  }[] = [
+  }[] = $derived([
     {
       key: "entryRowHeight",
-      label: "条目行高",
-      description: "条目表格每行高度；窄屏自动不小于 36px",
+      label: t(lang, "settings.rowHeight"),
+      description: t(lang, "settings.rowHeightDesc"),
       min: 24,
       max: 72,
     },
-    { key: "groupGap", label: "分组间距", description: "分组之间的垂直间距", min: 0, max: 16 },
     {
-      key: "groupPaddingY",
-      label: "分组上下边距",
-      description: "分组文字与边框的上下间距",
+      key: "groupGap",
+      label: t(lang, "settings.groupGap"),
+      description: t(lang, "settings.groupGapDesc"),
       min: 0,
       max: 16,
     },
-    { key: "groupIndent", label: "分组缩进", description: "每级子分组的缩进距离", min: 4, max: 32 },
+    {
+      key: "groupPaddingY",
+      label: t(lang, "settings.groupPaddingY"),
+      description: t(lang, "settings.groupPaddingYDesc"),
+      min: 0,
+      max: 16,
+    },
+    {
+      key: "groupIndent",
+      label: t(lang, "settings.groupIndent"),
+      description: t(lang, "settings.groupIndentDesc"),
+      min: 4,
+      max: 32,
+    },
     {
       key: "groupRadius",
-      label: "分组选中圆角",
-      description: "分组选中背景的圆角半径",
+      label: t(lang, "settings.groupRadius"),
+      description: t(lang, "settings.groupRadiusDesc"),
       min: 0,
       max: 12,
     },
-  ];
+  ]);
 
   const customColorGroups: {
     label: string;
     fields: { key: keyof ThemeColors; label: string; description: string }[];
-  }[] = [
+  }[] = $derived([
     {
-      label: "基础",
+      label: t(lang, "settings.themeBase"),
       fields: [
-        { key: "accent", label: "强调色", description: "主按钮与高亮" },
-        { key: "selectionColor", label: "选中色", description: "选中项与焦点边框" },
-        { key: "linkColor", label: "链接色", description: "网址与可点击链接" },
+        {
+          key: "accent",
+          label: t(lang, "settings.colorAccent"),
+          description: t(lang, "settings.colorAccentDesc"),
+        },
+        {
+          key: "selectionColor",
+          label: t(lang, "settings.colorSelection"),
+          description: t(lang, "settings.colorSelectionDesc"),
+        },
+        {
+          key: "linkColor",
+          label: t(lang, "settings.colorLink"),
+          description: t(lang, "settings.colorLinkDesc"),
+        },
       ],
     },
     {
-      label: "文本",
+      label: t(lang, "settings.themeText"),
       fields: [
-        { key: "textPrimary", label: "主要文本", description: "正文与标题" },
-        { key: "textSecondary", label: "次要文本", description: "次级内容" },
-        { key: "textMuted", label: "弱化文本", description: "描述与元数据" },
-        { key: "textFaint", label: "最弱文本", description: "最低强调的文字与图标" },
-        { key: "placeholderColor", label: "占位符", description: "输入框占位文字" },
+        {
+          key: "textPrimary",
+          label: t(lang, "settings.colorTextPrimary"),
+          description: t(lang, "settings.colorTextPrimaryDesc"),
+        },
+        {
+          key: "textSecondary",
+          label: t(lang, "settings.colorTextSecondary"),
+          description: t(lang, "settings.colorTextSecondaryDesc"),
+        },
+        {
+          key: "textMuted",
+          label: t(lang, "settings.colorTextMuted"),
+          description: t(lang, "settings.colorTextMutedDesc"),
+        },
+        {
+          key: "textFaint",
+          label: t(lang, "settings.colorTextFaint"),
+          description: t(lang, "settings.colorTextFaintDesc"),
+        },
+        {
+          key: "placeholderColor",
+          label: t(lang, "settings.colorPlaceholder"),
+          description: t(lang, "settings.colorPlaceholderDesc"),
+        },
       ],
     },
     {
-      label: "表面",
+      label: t(lang, "settings.themeSurface"),
       fields: [
-        { key: "bg", label: "背景", description: "窗口与整体底色" },
-        { key: "settingsBg", label: "设置背景", description: "设置界面底色" },
-        { key: "cardBg", label: "卡片", description: "卡片与面板底色" },
-        { key: "surfaceBg", label: "浮层", description: "弹出层与面板" },
-        { key: "statusBarBg", label: "状态栏", description: "底部状态栏底色" },
-        { key: "hoverBg", label: "悬停背景", description: "悬停与静默选中表面" },
-        { key: "inputBg", label: "输入框", description: "输入框与内嵌表面" },
+        {
+          key: "bg",
+          label: t(lang, "settings.colorBg"),
+          description: t(lang, "settings.colorBgDesc"),
+        },
+        {
+          key: "settingsBg",
+          label: t(lang, "settings.colorSettingsBg"),
+          description: t(lang, "settings.colorSettingsBgDesc"),
+        },
+        {
+          key: "cardBg",
+          label: t(lang, "settings.colorCardBg"),
+          description: t(lang, "settings.colorCardBgDesc"),
+        },
+        {
+          key: "surfaceBg",
+          label: t(lang, "settings.colorSurfaceBg"),
+          description: t(lang, "settings.colorSurfaceBgDesc"),
+        },
+        {
+          key: "statusBarBg",
+          label: t(lang, "settings.colorStatusBarBg"),
+          description: t(lang, "settings.colorStatusBarBgDesc"),
+        },
+        {
+          key: "hoverBg",
+          label: t(lang, "settings.colorHoverBg"),
+          description: t(lang, "settings.colorHoverBgDesc"),
+        },
+        {
+          key: "inputBg",
+          label: t(lang, "settings.colorInputBg"),
+          description: t(lang, "settings.colorInputBgDesc"),
+        },
       ],
     },
     {
-      label: "边框",
+      label: t(lang, "settings.themeBorder"),
       fields: [
-        { key: "border", label: "边框", description: "分隔线与控件描边" },
-        { key: "borderSubtle", label: "细分隔线", description: "更安静的分割线" },
-        { key: "scrollbarColor", label: "滚动条", description: "滚动条滑块颜色" },
+        {
+          key: "border",
+          label: t(lang, "settings.colorBorder"),
+          description: t(lang, "settings.colorBorderDesc"),
+        },
+        {
+          key: "borderSubtle",
+          label: t(lang, "settings.colorBorderSubtle"),
+          description: t(lang, "settings.colorBorderSubtleDesc"),
+        },
+        {
+          key: "scrollbarColor",
+          label: t(lang, "settings.colorScrollbar"),
+          description: t(lang, "settings.colorScrollbarDesc"),
+        },
       ],
     },
     {
-      label: "状态",
+      label: t(lang, "settings.themeStatus"),
       fields: [
-        { key: "successColor", label: "成功", description: "成功状态提示" },
-        { key: "dangerColor", label: "危险", description: "删除与错误状态" },
-        { key: "warningColor", label: "警告", description: "警示与收藏强调" },
+        {
+          key: "successColor",
+          label: t(lang, "settings.colorSuccess"),
+          description: t(lang, "settings.colorSuccessDesc"),
+        },
+        {
+          key: "dangerColor",
+          label: t(lang, "settings.colorDanger"),
+          description: t(lang, "settings.colorDangerDesc"),
+        },
+        {
+          key: "warningColor",
+          label: t(lang, "settings.colorWarning"),
+          description: t(lang, "settings.colorWarningDesc"),
+        },
       ],
     },
-  ];
+  ]);
 </script>
 
 {#snippet presetPaletteCard(title: string, description: string, colors: ThemeColors)}
@@ -331,11 +445,11 @@
 {#if showHeader}
   <header>
     <div>
-      <span class="eyebrow">Settings · 通用</span>
-      <h2>通用</h2>
-      <p>外观、字体与界面密度设置。</p>
+      <span class="eyebrow">Settings · {t(lang, "settings.generalTitle")}</span>
+      <h2>{t(lang, "settings.generalTitle")}</h2>
+      <p>{t(lang, "settings.generalDesc")}</p>
     </div>
-    <button class="close-button" onclick={onclose} aria-label="关闭">×</button>
+    <button class="close-button" onclick={onclose} aria-label={t(lang, "common.close")}>×</button>
   </header>
 {/if}
 
@@ -346,32 +460,32 @@
         <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
         <div class="heading-inline">
           <div>
-            <strong>主题模式</strong>
-            <p>选择内置主题或启用自定义配色</p>
+            <strong>{t(lang, "settings.themeMode")}</strong>
+            <p>{t(lang, "settings.themeModeDesc")}</p>
           </div>
         </div>
       </div>
-      <div class="theme-segmented" role="group" aria-label="主题模式">
+      <div class="theme-segmented" role="group" aria-label={t(lang, "settings.themeMode")}>
         <button
           class="theme-segment"
           class:active={general.theme === "dark"}
           onclick={() => change("theme", "dark")}
         >
-          <span class="swatch swatch-dark"></span>深色
+          <span class="swatch swatch-dark"></span>{t(lang, "settings.themeDark")}
         </button>
         <button
           class="theme-segment"
           class:active={general.theme === "light"}
           onclick={() => change("theme", "light")}
         >
-          <span class="swatch swatch-light"></span>浅色
+          <span class="swatch swatch-light"></span>{t(lang, "settings.themeLight")}
         </button>
         <button
           class="theme-segment"
           class:active={general.theme === "custom"}
           onclick={() => change("theme", "custom")}
         >
-          <span class="swatch swatch-custom"></span>自定义
+          <span class="swatch swatch-custom"></span>{t(lang, "settings.themeCustom")}
         </button>
       </div>
     </section>
@@ -414,57 +528,57 @@
             bind:this={headingEl}
           >
             <div bind:this={titleEl}>
-              <strong>自定义配色</strong>
-              <p>直接修改主题语义色，即时预览；切换编辑当前配色或已保存主题</p>
+              <strong>{t(lang, "settings.customPalette")}</strong>
+              <p>{t(lang, "settings.customPaletteDesc")}</p>
             </div>
             <div class="custom-actions">
               <div class="preset-row">
                 <Button
                   variant="action"
-                  title="深色预设"
-                  ariaLabel="深色预设"
+                  title={t(lang, "settings.presetDark")}
+                  ariaLabel={t(lang, "settings.presetDark")}
                   onclick={() => applyPreset(DARK_THEME_COLORS)}
                   ><AppIcon name="moon" size={15} /></Button
                 >
                 <Button
                   variant="action"
-                  title="浅色预设"
-                  ariaLabel="浅色预设"
+                  title={t(lang, "settings.presetLight")}
+                  ariaLabel={t(lang, "settings.presetLight")}
                   onclick={() => applyPreset(LIGHT_THEME_COLORS)}
                   ><AppIcon name="sun" size={15} /></Button
                 >
                 <Button
                   variant="action"
-                  title="恢复默认配色"
-                  ariaLabel="恢复默认配色"
+                  title={t(lang, "settings.restoreDefaultColors")}
+                  ariaLabel={t(lang, "settings.restoreDefaultColors")}
                   onclick={() => applyPreset(LIGHT_THEME_COLORS)}
                   ><AppIcon name="undo" size={15} /></Button
                 >
                 <Button
                   variant="action"
-                  title="另存为配色方案"
-                  ariaLabel="另存为配色方案"
+                  title={t(lang, "settings.saveTheme")}
+                  ariaLabel={t(lang, "settings.saveTheme")}
                   onclick={openSaveThemeDialog}><AppIcon name="save" size={15} /></Button
                 >
                 {#if selectedThemeIdx !== null}
                   <Button
                     variant="action"
-                    title="修改方案名称"
-                    ariaLabel="修改方案名称"
+                    title={t(lang, "settings.renameTheme")}
+                    ariaLabel={t(lang, "settings.renameTheme")}
                     onclick={openRenameThemeDialog}><AppIcon name="edit" size={15} /></Button
                   >
                   <Button
                     variant="action"
-                    title="应用所选主题"
-                    ariaLabel="应用所选主题"
+                    title={t(lang, "settings.applyTheme")}
+                    ariaLabel={t(lang, "settings.applyTheme")}
                     onclick={() => {
                       if (selectedThemeIdx !== null) applyCustomTheme(selectedThemeIdx);
                     }}><AppIcon name="check" size={15} /></Button
                   >
                   <Button
                     variant="action"
-                    title="删除所选主题"
-                    ariaLabel="删除所选主题"
+                    title={t(lang, "settings.deleteTheme")}
+                    ariaLabel={t(lang, "settings.deleteTheme")}
                     onclick={() => {
                       if (selectedThemeIdx !== null) deleteCustomTheme(selectedThemeIdx);
                     }}><AppIcon name="trash" size={15} /></Button
@@ -473,9 +587,9 @@
               </div>
               <Select
                 value={selectedThemeIdx === null ? "current" : String(selectedThemeIdx)}
-                ariaLabel="选择主题"
+                ariaLabel={t(lang, "settings.selectTheme")}
                 options={[
-                  { value: "current", label: "当前配色" },
+                  { value: "current", label: t(lang, "settings.currentColors") },
                   ...s.general.customThemes.map((t, i) => ({ value: String(i), label: t.name })),
                 ]}
                 onchange={(v) => {
@@ -524,9 +638,11 @@
       </section>
       {#if themeDialogMode !== null}
         <ModalShell
-          title={themeDialogMode === "create" ? "另存为配色方案" : "修改方案名称"}
+          title={themeDialogMode === "create"
+            ? t(lang, "settings.saveTheme")
+            : t(lang, "settings.renameTheme")}
           description={themeDialogMode === "create"
-            ? "为当前配色创建副本"
+            ? t(lang, "settings.themeDialogCopyHint")
             : (s.general.customThemes[selectedThemeIdx ?? -1]?.name ?? "")}
           size="small"
           closeOnEscape
@@ -539,7 +655,7 @@
             <div class="theme-dialog-body">
               <TextField
                 bind:value={themeDialogName}
-                placeholder="配色方案名称"
+                placeholder={t(lang, "settings.themeNamePh")}
                 autofocus
                 oninput={() => {
                   themeDialogError = "";
@@ -557,18 +673,28 @@
               onclick={() => {
                 themeDialogMode = null;
                 themeDialogError = "";
-              }}>取消</Button
+              }}>{t(lang, "common.cancel")}</Button
             >
             <Button variant="primary" onclick={confirmThemeDialog}
-              >{themeDialogMode === "create" ? "添加" : "保存"}</Button
+              >{themeDialogMode === "create"
+                ? t(lang, "settings.addTheme")
+                : t(lang, "common.save")}</Button
             >
           {/snippet}
         </ModalShell>
       {/if}
     {:else if general.theme === "dark"}
-      {@render presetPaletteCard("深色配色", "内置默认配色（只读）", DARK_THEME_COLORS)}
+      {@render presetPaletteCard(
+        t(lang, "settings.darkPalette"),
+        t(lang, "settings.builtinReadonly"),
+        DARK_THEME_COLORS,
+      )}
     {:else if general.theme === "light"}
-      {@render presetPaletteCard("浅色配色", "内置默认配色（只读）", LIGHT_THEME_COLORS)}
+      {@render presetPaletteCard(
+        t(lang, "settings.lightPalette"),
+        t(lang, "settings.builtinReadonly"),
+        LIGHT_THEME_COLORS,
+      )}
     {/if}
 
     {#if general.showGroupSeparators ?? true}
@@ -577,16 +703,16 @@
           <div class="setting-heading">
             <span class="setting-icon"><AppIcon name="palette" size={17} /></span>
             <div>
-              <strong>分隔线字体颜色</strong>
-              <p>自定义子分组标题的文字颜色，留空使用默认弱化文本色</p>
+              <strong>{t(lang, "settings.separatorColor")}</strong>
+              <p>{t(lang, "settings.separatorColorDesc")}</p>
             </div>
           </div>
           <div class="color-control">
             <input
               type="color"
               class="color-input"
-              aria-label="分隔线字体颜色"
-              title="分隔线字体颜色"
+              aria-label={t(lang, "settings.separatorColor")}
+              title={t(lang, "settings.separatorColor")}
               value={general.groupSeparatorColor && general.groupSeparatorColor.length >= 7
                 ? general.groupSeparatorColor.slice(0, 7)
                 : "#999999"}
@@ -597,8 +723,8 @@
                 size="control"
                 spellcheck={false}
                 value={separatorColorShown}
-                placeholder="留空默认"
-                ariaLabel="分隔线字体颜色"
+                placeholder={t(lang, "settings.leaveDefault")}
+                ariaLabel={t(lang, "settings.separatorColor")}
                 invalid={separatorColorInvalid}
                 oninput={(e) => commitSeparatorColor(e.currentTarget.value)}
               />
@@ -606,15 +732,15 @@
             {#if general.groupSeparatorColor}
               <Button
                 variant="action"
-                title="清除自定义颜色"
-                ariaLabel="清除"
-                onclick={clearSeparatorColor}>清除</Button
+                title={t(lang, "settings.clearCustomColor")}
+                ariaLabel={t(lang, "common.clear")}
+                onclick={clearSeparatorColor}>{t(lang, "common.clear")}</Button
               >
             {/if}
           </div>
         </div>
         {#if separatorColorInvalid}
-          <p class="settings-note warn">颜色格式应为 #RRGGBB 或 #RRGGBBAA（未保存）。</p>
+          <p class="settings-note warn">{t(lang, "settings.invalidHexColor")}</p>
         {/if}
       </section>
     {/if}
@@ -623,25 +749,25 @@
   {#if section === "display"}
     <SettingToggleCard
       icon="eye"
-      label="显示条目描述"
-      description="在列表中展示去除协议后的网址信息"
+      label={t(lang, "settings.showDescriptions")}
+      description={t(lang, "settings.showDescriptionsDesc")}
       checked={general.showDescriptions}
-      ariaLabel="显示描述"
+      ariaLabel={t(lang, "settings.showDescriptionsAria")}
       onchange={(checked) => change("showDescriptions", checked)}
     />
 
     <SettingToggleCard
       icon="eye"
-      label="工具栏仅显示图标"
-      description="控制按钮只显示图标，按钮名称在鼠标悬浮时提示"
+      label={t(lang, "settings.iconOnly")}
+      description={t(lang, "settings.iconOnlyDesc")}
       checked={general.iconOnlyButtons}
       onchange={(checked) => change("iconOnlyButtons", checked)}
     />
 
     <SettingToggleCard
       icon="folder"
-      label="显示分组图标"
-      description="在分组名称前显示文件夹图标"
+      label={t(lang, "settings.showGroupIcon")}
+      description={t(lang, "settings.showGroupIconDesc")}
       checked={s.general.density.showGroupIcon}
       onchange={(checked) =>
         change("density", {
@@ -652,8 +778,8 @@
 
     <SettingToggleCard
       icon="chevron-down"
-      label="显示折叠箭头"
-      description="在可展开分组前显示折叠箭头"
+      label={t(lang, "settings.showGroupChevron")}
+      description={t(lang, "settings.showGroupChevronDesc")}
       checked={s.general.density.showGroupChevron}
       onchange={(checked) =>
         change("density", {
@@ -664,26 +790,26 @@
 
     <SettingToggleCard
       icon="grid"
-      label="移动端显示列"
-      description="窄屏下也按桌面布局渲染条目表格的完整列，可在列配置菜单中自由选择显示哪些列；关闭则使用单列摘要卡片"
+      label={t(lang, "settings.mobileColumns")}
+      description={t(lang, "settings.mobileColumnsDesc")}
       checked={s.general.mobileColumns}
-      ariaLabel="移动端显示列"
+      ariaLabel={t(lang, "settings.mobileColumns")}
       onchange={(checked) => change("mobileColumns", checked)}
     />
 
     <SettingToggleCard
       icon="grid"
-      label="显示子分组分隔线"
-      description="在条目列表中为每个子分组添加分隔标题，排序仅在组内进行"
+      label={t(lang, "settings.showSeparators")}
+      description={t(lang, "settings.showSeparatorsDesc")}
       checked={general.showGroupSeparators ?? true}
-      ariaLabel="显示子分组分隔线"
-      onchange={(checked) => change("showGroupSeparators" as never, checked as never)}
+      ariaLabel={t(lang, "settings.showSeparators")}
+      onchange={(checked) => change("showGroupSeparators", checked)}
     />
 
     <SettingRangeCard
       icon="sliders"
-      label="窗口不透明度"
-      description="调整主窗口的整体透明度"
+      label={t(lang, "settings.windowOpacity")}
+      description={t(lang, "settings.windowOpacityDesc")}
       value={s.general.windowOpacity}
       valueLabel={`${s.general.windowOpacity}%`}
       min={40}
@@ -696,15 +822,15 @@
         <span class="setting-icon"><AppIcon name="widgets" size={17} /></span>
         <div class="heading-inline">
           <div>
-            <strong>窗口效果</strong>
-            <p>Windows 平台背景材质</p>
+            <strong>{t(lang, "settings.windowEffect")}</strong>
+            <p>{t(lang, "settings.windowEffectDesc")}</p>
           </div>
           <Select
             value={general.windowEffect}
             options={[
-              { value: "off", label: "关闭" },
-              { value: "acrylic", label: "亚克力" },
-              { value: "mica", label: "云母" },
+              { value: "off", label: t(lang, "settings.effectOff") },
+              { value: "acrylic", label: t(lang, "settings.effectAcrylic") },
+              { value: "mica", label: t(lang, "settings.effectMica") },
             ]}
             onchange={(v) => change("windowEffect", v as WindowEffect)}
           />
@@ -714,8 +840,8 @@
 
     <SettingToggleCard
       icon="folder"
-      label="记住上次数据库"
-      description="启动时自动加载最近打开的数据库"
+      label={t(lang, "settings.rememberLast")}
+      description={t(lang, "settings.rememberLastDesc")}
       checked={general.rememberLastDatabase}
       onchange={(checked) => change("rememberLastDatabase", checked)}
     />
@@ -726,7 +852,7 @@
       class="settings-note"
       style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);"
     >
-      布局密度常开，直接作用于分组树间距与条目表格行高，调整即时生效。
+      {t(lang, "settings.layoutDensity")}
     </p>
 
     {#each densitySliders as slider (slider.key)}
@@ -769,34 +895,74 @@
       class="settings-note"
       style="margin: 0 0 8px; color: var(--text-muted); font-size: var(--settings-description-size);"
     >
-      所有按钮均可显示/隐藏（除“更多”菜单外）、排序、设置左右位置；在项后打开“|”即添加垂直分割线。
+      {t(lang, "settings.toolbarHelp")}
     </p>
     <SettingToggleCard
       icon="eye"
-      label="点击条目显示详情"
-      description="点击条目时自动打开详情面板；关闭后需手动点击工具栏“详情”按钮打开"
+      label={t(lang, "settings.detailToggle")}
+      description={t(lang, "settings.detailToggleDesc")}
       checked={s.general.showDetailOnSelect ?? true}
-      onchange={(checked) => change("showDetailOnSelect" as never, checked as never)}
+      onchange={(checked) => change("showDetailOnSelect", checked)}
     />
     {@const fullMeta: Record<string, { label: string; desc: string; icon: string }> = {
-      newEntry: { label: '新建条目', desc: '新建条目', icon: 'plus' },
-      save: { label: '保存', desc: '保存数据库', icon: 'save' },
-      saveAs: { label: '另存为', desc: '另存为', icon: 'copy' },
-      lock: { label: '锁定', desc: '锁定数据库', icon: 'lock' },
-      toggleDetail: { label: '详情面板切换', desc: '显示/隐藏详情', icon: 'eye' },
-      securityReport: { label: '安全报告', desc: '安全报告', icon: 'shield' },
-      similarPasswords: { label: '相似密码检查', desc: '相似密码检查', icon: 'shield' },
-      hibpCheck: { label: 'HIBP 泄露检查', desc: 'HIBP 泄露检查', icon: 'globe' },
-      expiredEntries: { label: '过期条目', desc: '过期条目', icon: 'clock' },
-      clearHistory: { label: '清理全部历史', desc: '清理全部历史', icon: 'trash' },
-      importMenu: { label: '导入', desc: '导入子菜单', icon: 'upload' },
-      exportMenu: { label: '导出', desc: '导出', icon: 'download' },
-      dbSettings: { label: '数据库设置', desc: '数据库设置', icon: 'settings' },
-      appSettings: { label: '设置', desc: '设置', icon: 'settings' },
-      moreMenu: { label: '更多菜单 ```', desc: '溢出菜单（不可隐藏）', icon: 'more-horizontal' },
-      windowMinimize: { label: '窗口：最小化 —', desc: '最小化按钮', icon: 'minimize' },
-      windowMaximize: { label: '窗口：最大化/还原 □', desc: '最大化/还原按钮', icon: 'maximize' },
-      windowClose: { label: '窗口：关闭 ×', desc: '关闭按钮', icon: 'x' },
+      newEntry: { label: t(lang, "menu.newEntry"), desc: t(lang, "menu.newEntry"), icon: "plus" },
+      save: { label: t(lang, "toolbar.saveLabel"), desc: t(lang, "toolbar.save"), icon: "save" },
+      saveAs: { label: t(lang, "toolbar.saveAsLabel"), desc: t(lang, "toolbar.saveAs"), icon: "copy" },
+      lock: { label: t(lang, "toolbar.lockLabel"), desc: t(lang, "toolbar.lock"), icon: "lock" },
+      toggleDetail: {
+        label: t(lang, "settings.toggleDetailName"),
+        desc: t(lang, "settings.toggleDetailDesc"),
+        icon: "eye",
+      },
+      securityReport: {
+        label: t(lang, "menu.securityReport"),
+        desc: t(lang, "menu.securityReport"),
+        icon: "shield",
+      },
+      similarPasswords: {
+        label: t(lang, "menu.similarPasswords"),
+        desc: t(lang, "menu.similarPasswords"),
+        icon: "shield",
+      },
+      hibpCheck: { label: t(lang, "menu.hibp"), desc: t(lang, "menu.hibp"), icon: "globe" },
+      expiredEntries: { label: t(lang, "menu.expired"), desc: t(lang, "menu.expired"), icon: "clock" },
+      clearHistory: {
+        label: t(lang, "menu.clearHistory"),
+        desc: t(lang, "menu.clearHistory"),
+        icon: "trash",
+      },
+      importMenu: {
+        label: t(lang, "menu.import"),
+        desc: t(lang, "settings.importMenuDesc"),
+        icon: "upload",
+      },
+      exportMenu: { label: t(lang, "menu.export"), desc: t(lang, "menu.export"), icon: "download" },
+      dbSettings: {
+        label: t(lang, "menu.dbSettings"),
+        desc: t(lang, "menu.dbSettings"),
+        icon: "settings",
+      },
+      appSettings: { label: t(lang, "menu.settings"), desc: t(lang, "menu.settings"), icon: "settings" },
+      moreMenu: {
+        label: t(lang, "settings.moreMenuName"),
+        desc: t(lang, "settings.moreMenuDesc"),
+        icon: "more-horizontal",
+      },
+      windowMinimize: {
+        label: t(lang, "settings.winMinimize"),
+        desc: t(lang, "settings.winMinimizeDesc"),
+        icon: "minimize",
+      },
+      windowMaximize: {
+        label: t(lang, "settings.winMaximize"),
+        desc: t(lang, "settings.winMaximizeDesc"),
+        icon: "maximize",
+      },
+      windowClose: {
+        label: t(lang, "settings.winClose"),
+        desc: t(lang, "settings.winCloseDesc"),
+        icon: "x",
+      },
     }}
     {@const fullOrder: string[] = (s.general as unknown as Record<string, unknown>).toolbarFullOrder as string[] ?? []}
     {@const fullSeparators: string[] = (s.general as unknown as Record<string, unknown>).toolbarFullSeparators as string[] ?? []}
@@ -805,8 +971,8 @@
       <div class="setting-heading">
         <span class="setting-icon"><AppIcon name="sliders" size={17} /></span>
         <div>
-          <strong>工具栏排序、左右与分隔</strong>
-          <p>拖拽整行或用 ↑↓ 调整全局顺序；“左/右”切换所在分组；“|”为该项后添加分割线</p>
+          <strong>{t(lang, "settings.toolbarOrder")}</strong>
+          <p>{t(lang, "settings.toolbarOrderDesc")}</p>
         </div>
       </div>
       <div class="toolbar-order-list" role="list">
@@ -846,15 +1012,21 @@
               change("toolbarFullOrder" as never, next as never);
             }}
           >
-            <span class="drag-handle" title="拖拽排序"><AppIcon name="menu" size={12} /></span>
+            <span class="drag-handle" title={t(lang, "settings.dragToSort")}
+              ><AppIcon name="menu" size={12} /></span
+            >
             <span class="setting-icon small"><AppIcon name={meta.icon as never} size={14} /></span>
             <div class="order-text">
               <strong>{meta.label}</strong>
-              <p>{meta.desc} · {side === "left" ? "左侧" : "右侧"}</p>
+              <p>
+                {meta.desc} · {side === "left"
+                  ? t(lang, "settings.sideLeft")
+                  : t(lang, "settings.sideRight")}
+              </p>
             </div>
             <div class="order-actions">
               {#if !isMore}
-                <span class="order-action-label">显示</span>
+                <span class="order-action-label">{t(lang, "settings.shown")}</span>
                 <Toggle
                   checked={!!visible}
                   ariaLabel={meta.label}
@@ -865,19 +1037,23 @@
                     )}
                 />
               {:else}
-                <span class="order-action-label" style="opacity:0.6">固定</span>
+                <span class="order-action-label" style="opacity:0.6"
+                  >{t(lang, "settings.pinned")}</span
+                >
                 <Toggle checked={true} disabled={true} ariaLabel={meta.label} />
               {/if}
-              <span class="order-sep-label" title="在该项后显示分割线">|</span>
+              <span class="order-sep-label" title={t(lang, "settings.dividerAfter")}>|</span>
               <Toggle
                 checked={hasSep}
-                ariaLabel="分割线"
+                ariaLabel={t(lang, "settings.divider")}
                 onchange={(c) => {
                   const next = c ? [...fullSeparators, id] : fullSeparators.filter((x) => x !== id);
                   change("toolbarFullSeparators" as never, next as never);
                 }}
               />
-              <span class="order-sep-label" title="所在侧">侧</span>
+              <span class="order-sep-label" title={t(lang, "settings.sideTitle")}
+                >{t(lang, "settings.sideAbbr")}</span
+              >
               <button
                 class="order-side-btn"
                 class:active={side === "left"}
@@ -891,8 +1067,8 @@
                   };
                   change("toolbarSides" as never, next as never);
                 }}
-                title="移至左侧"
-                aria-label="左侧">左</button
+                title={t(lang, "settings.moveLeft")}
+                aria-label={t(lang, "settings.left")}>{t(lang, "settings.left")}</button
               >
               <button
                 class="order-side-btn"
@@ -907,8 +1083,8 @@
                   };
                   change("toolbarSides" as never, next as never);
                 }}
-                title="移至右侧"
-                aria-label="右侧">右</button
+                title={t(lang, "settings.moveRight")}
+                aria-label={t(lang, "settings.right")}>{t(lang, "settings.right")}</button
               >
               <div class="order-move">
                 <button
@@ -920,7 +1096,7 @@
                     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                     change("toolbarFullOrder" as never, next as never);
                   }}
-                  aria-label="上移">↑</button
+                  aria-label={t(lang, "settings.moveUp")}>↑</button
                 >
                 <button
                   class="order-move-btn"
@@ -931,7 +1107,7 @@
                     [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
                     change("toolbarFullOrder" as never, next as never);
                   }}
-                  aria-label="下移">↓</button
+                  aria-label={t(lang, "settings.moveDown")}>↓</button
                 >
               </div>
             </div>
@@ -990,12 +1166,12 @@
                 windowClose: "right",
               } as never,
             );
-          }}>重置排序与左右</Button
+          }}>{t(lang, "settings.resetOrder")}</Button
         >
         <Button
           variant="plain"
           onclick={() => change("toolbarFullSeparators" as never, [] as never)}
-          >清除全部分割线</Button
+          >{t(lang, "settings.clearDividers")}</Button
         >
       </div>
     </section>
@@ -1004,24 +1180,24 @@
   {#if section === "network"}
     <SettingToggleCard
       icon="save"
-      label="下载图标后自动保存"
-      description="关闭时图标仅应用到当前会话并标记未保存，需手动保存；开启则下载完成后立即写入数据库"
+      label={t(lang, "settings.faviconAutosave")}
+      description={t(lang, "settings.faviconAutosaveDesc")}
       checked={s.favicon.autoSave}
       onchange={(checked) => appSettings.updateFavicon("autoSave", checked)}
     />
     <SettingRangeCard
       icon="globe"
-      label="图标下载并发数"
-      description="下载条目网址图标时同时进行的请求数，默认 8"
+      label={t(lang, "settings.faviconConcurrency")}
+      description={t(lang, "settings.faviconConcurrencyDesc")}
       value={s.favicon.concurrency}
-      valueLabel={`${s.favicon.concurrency} 个`}
+      valueLabel={t(lang, "settings.countItems", { count: s.favicon.concurrency })}
       min={1}
       max={16}
       onchange={(value) => appSettings.updateFavicon("concurrency", value)}
     />
   {/if}
 
-  <p class="auto-save-note">修改即时生效并自动保存</p>
+  <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
 
 <style>
