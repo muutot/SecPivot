@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
   import { untrack } from "svelte";
-  import { buildEntryCounts } from "$lib/utils/tree";
+  import { buildEntryCounts, findBinGroup, totalExcludingBin } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
 
@@ -132,9 +132,8 @@
    *  bottom-up walk) instead of re-walking the tree for every rendered node. */
   const counts = $derived(buildEntryCounts(root));
   const total = $derived.by(() => {
-    const bin = root.children.find((c) => c.isRecycleBin);
-    const binCount = bin ? (counts.get(bin.uuid) ?? 0) : 0;
-    return (counts.get(root.uuid) ?? 0) - binCount;
+    const bin = findBinGroup(root);
+    return totalExcludingBin(counts, root.uuid, bin?.uuid ?? null);
   });
 
   /** Ancestor chain (excluding the target itself, root-adjacent last) of a uuid. */

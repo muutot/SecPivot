@@ -173,3 +173,15 @@ export function buildEntryCounts(root: VaultGroup): Map<string, number> {
   visit(root);
   return counts;
 }
+
+/** "全部条目" badge total: the root subtree count minus the recycle bin.
+ *  Root-direct entries are included — they are real entries outside the bin.
+ *  Clamped at zero so inconsistent snapshots can never render a negative badge. */
+export function totalExcludingBin(
+  counts: Map<string, number>,
+  rootUuid: string,
+  binUuid: string | null,
+): number {
+  const binCount = binUuid ? (counts.get(binUuid) ?? 0) : 0;
+  return Math.max(0, (counts.get(rootUuid) ?? 0) - binCount);
+}
