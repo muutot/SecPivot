@@ -263,7 +263,7 @@
     markExpiredNotified(notificationKey);
 
     const expired = countExpiredEntries(currentVault.root);
-    if (expired > 0) flash(`有 ${expired} 个条目已过期,请及时更新密码`);
+    if (expired > 0) flash(t(settings.general.language, "page.expiredFlash", { n: expired }));
   }
 
   function entryIconName(entry: VaultEntry): IconName {
@@ -725,17 +725,18 @@
         selection.selectedEntry = findEntryByUuid(saved, entry.uuid);
       }
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`收藏失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.favFailed", { e: String(e) }));
     }
   }
 
   async function handleSave(): Promise<void> {
     if (!currentVault || !currentVault.dirty) {
-      flash("没有需要保存的修改");
+      flash(t(settings.general.language, "page.nothingToSave"));
       return;
     }
     if (currentVault.readOnly) {
-      flash("数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续");
+      flash(t(settings.general.language, "page.readonlyMode"));
       return;
     }
     const view = sessionView.capture();
@@ -747,14 +748,14 @@
       const saved = await vault.callInSession(sessionId, () => vault.save());
       if (!sessionView.isCurrent(view)) return;
       selection.selectedEntry = findEntryByUuid(saved, selection.selectedEntry?.uuid ?? null);
-      flash("已保存到数据库");
+      flash(t(settings.general.language, "page.saved"));
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
       const message = String(e);
       if (message.startsWith("REMOTE_CHANGED")) {
         remoteConflict = message.replace("REMOTE_CHANGED\n", "");
       } else {
-        flash(`保存失败：${message}`);
+        flash(t(settings.general.language, "page.saveFailed", { e: message }));
       }
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
@@ -770,7 +771,7 @@
     const { sessionId } = view;
     if (
       action === "download" &&
-      !window.confirm("下载远程版本将丢弃当前未保存的本地修改，继续？")
+      !window.confirm(t(settings.general.language, "page.remoteDownloadConfirm"))
     ) {
       if (sessionView.isCurrent(view)) remoteConflict = message;
       return;
@@ -782,21 +783,21 @@
         const merged = await vault.callInSession(sessionId, () => vault.mergeRemote());
         if (!sessionView.isCurrent(view)) return;
         selection.selectedEntry = findEntryByUuid(merged, selection.selectedEntry?.uuid ?? null);
-        flash("已合并本地与远程版本");
+        flash(t(settings.general.language, "page.merged"));
       } else if (action === "overwrite") {
         const saved = await vault.callInSession(sessionId, () => vault.save(true));
         if (!sessionView.isCurrent(view)) return;
         selection.selectedEntry = findEntryByUuid(saved, selection.selectedEntry?.uuid ?? null);
-        flash("已覆盖远程版本");
+        flash(t(settings.general.language, "page.remoteOverwritten"));
       } else {
         const refreshed = await vault.callInSession(sessionId, () => vault.refreshRemote());
         if (!sessionView.isCurrent(view)) return;
         selection.selectedEntry = findEntryByUuid(refreshed, selection.selectedEntry?.uuid ?? null);
-        flash("已下载远程版本");
+        flash(t(settings.general.language, "page.remoteDownloaded"));
       }
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
-      flash(`操作失败：${e}`);
+      flash(t(settings.general.language, "editor.opFailed", { e: String(e) }));
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
@@ -806,7 +807,11 @@
   async function handleSaveAs(): Promise<void> {
     if (!currentVault) return;
     if (!isTauriRuntime()) {
-      flash("浏览器预览不支持另存为");
+      flash(
+        t(settings.general.language, "browser.unsupported", {
+          feature: t(settings.general.language, "browser.featSaveAs"),
+        }),
+      );
       return;
     }
     const view = sessionView.capture();
@@ -819,21 +824,24 @@
       const picked = await awaitCurrentView(sessionView, view, () =>
         save({
           defaultPath: baseName,
-          filters: [{ name: "KeePass 数据库", extensions: [ext] }],
+          filters: [
+            { name: t(settings.general.language, "welcome.filterKdbx"), extensions: [ext] },
+          ],
         }),
       );
       if (!picked.current || !picked.value) return;
       await vault.callInSession(sessionId, () => vault.saveAs(String(picked.value)));
       if (!sessionView.isCurrent(view)) return;
-      flash("已另存为数据库");
+      flash(t(settings.general.language, "page.savedAsFile"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`另存为失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.saveAsFailed", { e: String(e) }));
     }
   }
 
   async function handleExportCsv(): Promise<void> {
     if (!currentVault) return;
-    if (!window.confirm("导出的 CSV 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
+    if (!window.confirm(t(settings.general.language, "page.exportCsvConfirm"))) return;
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;
@@ -843,7 +851,9 @@
         const picked = await awaitCurrentView(sessionView, view, () =>
           save({
             defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".csv",
-            filters: [{ name: "CSV 文件", extensions: ["csv"] }],
+            filters: [
+              { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
+            ],
           }),
         );
         if (!picked.current || !picked.value) return;
@@ -859,15 +869,16 @@
           "text/csv;charset=utf-8",
         );
       }
-      if (sessionView.isCurrent(view)) flash("已导出 CSV");
+      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.exportedCsv"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`导出失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }));
     }
   }
 
   async function handleExportXml(): Promise<void> {
     if (!currentVault) return;
-    if (!window.confirm("导出的 XML 包含明文密码，请妥善保管并在使用后删除。继续导出？")) return;
+    if (!window.confirm(t(settings.general.language, "page.exportXmlConfirm"))) return;
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;
@@ -877,7 +888,9 @@
         const picked = await awaitCurrentView(sessionView, view, () =>
           save({
             defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".xml",
-            filters: [{ name: "KeePass XML 文件", extensions: ["xml"] }],
+            filters: [
+              { name: t(settings.general.language, "page.filterXml"), extensions: ["xml"] },
+            ],
           }),
         );
         if (!picked.current || !picked.value) return;
@@ -893,9 +906,10 @@
           "text/xml;charset=utf-8",
         );
       }
-      if (sessionView.isCurrent(view)) flash("已导出 XML");
+      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.exportedXml"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`导出失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }));
     }
   }
 
@@ -908,8 +922,10 @@
     try {
       const picked = await awaitCurrentView(sessionView, view, () =>
         save({
-          defaultPath: `SecPivot-应急表-${new Date().toISOString().slice(0, 10)}.html`,
-          filters: [{ name: "HTML 文件", extensions: ["html"] }],
+          defaultPath: `SecPivot-emergency-${new Date().toISOString().slice(0, 10)}.html`,
+          filters: [
+            { name: t(settings.general.language, "page.filterHtml"), extensions: ["html"] },
+          ],
         }),
       );
       if (!picked.current || !picked.value) return;
@@ -920,24 +936,26 @@
       });
       if (!sessionView.isCurrent(view)) return;
       emergencyExportOpen = false;
-      flash("应急表已导出");
+      flash(t(settings.general.language, "page.emergencyExported"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`导出应急表失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.emergencyExportFailed", { e: String(e) }));
     }
   }
 
   async function handleClearHistory(): Promise<void> {
     if (!currentVault) return;
-    if (!window.confirm("将删除所有条目的历史版本快照（当前条目内容不受影响）。继续？")) return;
+    if (!window.confirm(t(settings.general.language, "page.purgeHistoryConfirm"))) return;
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;
     try {
       const cleared = await vault.callInSession(sessionId, () => vault.clearAllHistory());
       if (!sessionView.isCurrent(view)) return;
-      flash(`已清理 ${cleared} 个条目的历史`);
+      flash(t(settings.general.language, "page.historyPurged", { n: cleared }));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`清理历史失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.historyPurgeFailed", { e: String(e) }));
     }
   }
 
@@ -955,21 +973,29 @@
       reportOpen = true;
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
-      flash(`安全分析失败：${e}`);
+      flash(t(settings.general.language, "page.securityFailed", { e: String(e) }));
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
   }
 
   async function handleDownloadFavicons(): Promise<void> {
-    await runFaviconDownload(faviconHost, undefined, "没有可下载的网址图标");
+    await runFaviconDownload(
+      faviconHost,
+      undefined,
+      t(settings.general.language, "page.noFaviconAll"),
+    );
   }
 
   /** Download icons for the selected entries only (context menu, multi-select aware). */
   async function downloadSelectedFavicons(entry: VaultEntry): Promise<void> {
     const uuids =
       selection.selectedUuids.size > 1 ? Array.from(selection.selectedUuids) : [entry.uuid];
-    await runFaviconDownload(faviconHost, uuids, "所选条目没有可下载的网址图标");
+    await runFaviconDownload(
+      faviconHost,
+      uuids,
+      t(settings.general.language, "page.noFaviconSelected"),
+    );
   }
 
   async function copyEntryPassword(entry: VaultEntry): Promise<void> {
@@ -983,9 +1009,10 @@
         () => vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid)),
         (password) => copyValue(password, true),
       );
-      if (copied && sessionView.isCurrent(view)) flash("已复制密码");
+      if (copied && sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.copiedPassword"));
     } catch {
-      if (sessionView.isCurrent(view)) flash("复制失败");
+      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
     }
   }
 
@@ -1008,11 +1035,13 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(ioHost, view, [{ name: "CSV 文件", extensions: ["csv"] }]);
+    const text = await pickImportFile(ioHost, view, [
+      { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
+    ]);
     if (text === null) return;
     const entries: ImportEntry[] = csvToImportEntries(text);
     if (entries.length === 0) {
-      flash("CSV 中没有可导入的条目");
+      flash(t(settings.general.language, "page.noCsvEntries"));
       return;
     }
     await runImportEntries(ioHost, entries, view, baseGroupUuid);
@@ -1024,13 +1053,13 @@
     if (!view) return;
     const baseGroupUuid = selectedGroup;
     const text = await pickImportFile(ioHost, view, [
-      { name: "KeePass XML 文件", extensions: ["xml"] },
-      { name: "CSV 文件", extensions: ["csv"] },
+      { name: t(settings.general.language, "page.filterXml"), extensions: ["xml"] },
+      { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
     ]);
     if (text === null) return;
     const entries: ImportEntry[] = xmlToImportEntries(text, settings.general.language);
     if (entries.length === 0) {
-      flash("XML 中没有可导入的条目");
+      flash(t(settings.general.language, "page.noXmlEntries"));
       return;
     }
     await runImportEntries(ioHost, entries, view, baseGroupUuid);
@@ -1042,24 +1071,30 @@
     if (!view) return;
     const baseGroupUuid = selectedGroup;
     const text = await pickImportFile(ioHost, view, [
-      { name: "Bitwarden JSON 文件", extensions: ["json"] },
+      { name: t(settings.general.language, "page.filterJson"), extensions: ["json"] },
     ]);
     if (text === null) return;
     let rows: ImportRow[];
     try {
-      if (!isTauriRuntime()) throw new Error("浏览器预览不支持 Bitwarden 导入");
+      if (!isTauriRuntime())
+        throw new Error(
+          t(settings.general.language, "browser.unsupported", {
+            feature: t(settings.general.language, "browser.featBitwardenImport"),
+          }),
+        );
       const parsed = await awaitCurrentView(sessionView, view, () =>
         invoke<ImportRow[]>("parse_bitwarden_json", { text }),
       );
       if (!parsed.current) return;
       rows = parsed.value;
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`导入 Bitwarden 失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.bitwardenFailed", { e: String(e) }));
       return;
     }
     const entries: ImportEntry[] = importRowsToEntries(rows);
     if (entries.length === 0) {
-      flash("Bitwarden 文件中没有可导入的条目");
+      flash(t(settings.general.language, "page.noBitwardenEntries"));
       return;
     }
     await runImportEntries(ioHost, entries, view, baseGroupUuid);
@@ -1071,24 +1106,30 @@
     if (!view) return;
     const baseGroupUuid = selectedGroup;
     const text = await pickImportFile(ioHost, view, [
-      { name: "1Password 1PIF 文件", extensions: ["1pif"] },
+      { name: t(settings.general.language, "page.filter1pif"), extensions: ["1pif"] },
     ]);
     if (text === null) return;
     let rows: ImportRow[];
     try {
-      if (!isTauriRuntime()) throw new Error("浏览器预览不支持 1Password 导入");
+      if (!isTauriRuntime())
+        throw new Error(
+          t(settings.general.language, "browser.unsupported", {
+            feature: t(settings.general.language, "browser.feat1pImport"),
+          }),
+        );
       const parsed = await awaitCurrentView(sessionView, view, () =>
         invoke<ImportRow[]>("parse_1pif", { text }),
       );
       if (!parsed.current) return;
       rows = parsed.value;
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`导入 1Password 失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.onePasswordFailed", { e: String(e) }));
       return;
     }
     const entries: ImportEntry[] = importRowsToEntries(rows);
     if (entries.length === 0) {
-      flash("1PIF 文件中没有可导入的条目");
+      flash(t(settings.general.language, "page.no1pEntries"));
       return;
     }
     await runImportEntries(ioHost, entries, view, baseGroupUuid);
@@ -1099,9 +1140,10 @@
   }
 
   async function handleLock(): Promise<void> {
-    if (currentVault?.dirty && !window.confirm("有未保存的修改，仍要锁定吗？")) return;
+    if (currentVault?.dirty && !window.confirm(t(settings.general.language, "page.lockConfirm")))
+      return;
     await lockVault();
-    flash("数据库已锁定");
+    flash(t(settings.general.language, "page.locked"));
   }
 
   /** Editor dialog flow (open modes + guarded save pipeline); see
@@ -1188,7 +1230,7 @@
           requestAnimationFrame(() => {
             revealGroupUuid = targetGroup;
           });
-          flash("已定位到所在分组");
+          flash(t(settings.general.language, "page.locatedGroup"));
         }
       },
     });
@@ -1325,9 +1367,10 @@
       await vault.callInSession(sessionId, () => vault.restoreEntry(entry.uuid));
       if (!sessionView.isCurrent(view)) return;
       if (selection.selectedEntry?.uuid === entry.uuid) selection.selectedEntry = null;
-      flash("已恢复条目");
+      flash(t(settings.general.language, "page.entryRestored"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`恢复失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.entryRestoreFailed", { e: String(e) }));
     }
   }
 
@@ -1337,9 +1380,11 @@
     if (!view) return;
     const { sessionId } = view;
     confirmState = {
-      message: permanent
-        ? `永久删除条目「${entry.title || "未命名"}」？此操作无法撤销。`
-        : `删除条目「${entry.title || "未命名"}」？可从回收站恢复。`,
+      message: t(
+        settings.general.language,
+        permanent ? "page.deleteEntryPermAsk" : "page.deleteEntryAsk",
+        { title: entry.title || t(settings.general.language, "page.untitled") },
+      ),
       onconfirm: async () => {
         if (!sessionView.isCurrent(view)) return;
         try {
@@ -1351,9 +1396,15 @@
             next.delete(entry.uuid);
             selection.selectedUuids = next;
           }
-          flash(permanent ? "已永久删除条目" : "已移入回收站");
+          flash(
+            t(
+              settings.general.language,
+              permanent ? "page.entryDeletedPerm" : "groupflow.deletedBin",
+            ),
+          );
         } catch (e) {
-          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
+          if (sessionView.isCurrent(view))
+            flash(t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }));
         }
       },
     };
@@ -1367,9 +1418,11 @@
     if (!view) return;
     const { sessionId } = view;
     confirmState = {
-      message: allInBin
-        ? `永久删除所选 ${uuids.length} 个条目？此操作无法撤销。`
-        : `删除所选 ${uuids.length} 个条目？可从回收站恢复。`,
+      message: t(
+        settings.general.language,
+        allInBin ? "page.deleteSelectedPermAsk" : "page.deleteSelectedAsk",
+        { n: uuids.length },
+      ),
       onconfirm: async () => {
         if (!sessionView.isCurrent(view)) return;
         try {
@@ -1377,9 +1430,15 @@
           if (!sessionView.isCurrent(view)) return;
           selection.selectedUuids = new Set();
           selection.selectedEntry = null;
-          flash(allInBin ? "已永久删除所选条目" : "所选条目已移入回收站");
+          flash(
+            t(
+              settings.general.language,
+              allInBin ? "page.selectedDeletedPerm" : "page.selectedDeletedBin",
+            ),
+          );
         } catch (e) {
-          if (sessionView.isCurrent(view)) flash(`删除失败：${e}`);
+          if (sessionView.isCurrent(view))
+            flash(t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }));
         }
       },
     };
@@ -1438,9 +1497,10 @@
     if (!view) return;
     try {
       await copyValue(value, sensitive);
-      if (sessionView.isCurrent(view)) flash(`已复制${label}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.copiedField", { label }));
     } catch {
-      if (sessionView.isCurrent(view)) flash("复制失败");
+      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
     }
   }
 
@@ -1536,9 +1596,10 @@
   function handleEntryMenuAction(id: string, entry: VaultEntry): void {
     if (id === "edit" || id === "edit-selected") openEditEntry(entry);
     else if (id === "copy-username" && entry.username)
-      void copyEntryValue(entry.username, "用户名");
+      void copyEntryValue(entry.username, t(settings.general.language, "page.fieldUsername"));
     else if (id === "copy-password") void copyEntryPassword(entry);
-    else if (id === "copy-url" && entry.url) void copyEntryValue(entry.url, "网址");
+    else if (id === "copy-url" && entry.url)
+      void copyEntryValue(entry.url, t(settings.general.language, "page.fieldUrl"));
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "autotype-password") void runAutoType(entry, AUTOTYPE_PASSWORD_SEQUENCE);
     else if (id === "tcato") void openTcatoOverlay(entry);
@@ -1561,9 +1622,10 @@
     try {
       await vault.callInSession(sessionId, () => vault.autoType(entry.uuid, sequence));
       if (!sessionView.isCurrent(view)) return;
-      flash("已最小化，请在 1.5 秒内切换到目标窗口");
+      flash(t(settings.general.language, "page.minimizedHint"));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(`自动填充失败：${e}`);
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.autotypeFailed", { e: String(e) }));
     }
   }
 
@@ -1576,14 +1638,14 @@
     const view = sessionView.capture();
     const operation = tcatoOperations.begin();
     try {
-      if (!view) throw new Error("数据库未打开");
+      if (!view) throw new Error(t(settings.general.language, "error.noOpenDb"));
       await invoke("open_tcato_overlay", { sessionId: view.sessionId, uuid: entry.uuid });
       focusLockLease.confirm();
     } catch (e) {
       if (view && sessionView.isCurrent(view) && tcatoOperations.isCurrent(operation)) {
-        flash(`TCATO 覆盖层打开失败：${e}`);
+        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }));
       } else if (!view && tcatoOperations.isCurrent(operation)) {
-        flash(`TCATO 覆盖层打开失败：${e}`);
+        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }));
       }
     } finally {
       focusLockLease.release();
@@ -1707,7 +1769,7 @@
         {#if layout.mobileNavOpen}
           <button
             class="mobile-drawer-backdrop"
-            aria-label="关闭分组面板"
+            aria-label={t(settings.general.language, "page.closeGroupPanel")}
             onclick={() => (layout.mobileNavOpen = false)}
           ></button>
         {/if}
@@ -1749,7 +1811,7 @@
           class="group-resize-handle"
           role="separator"
           aria-orientation="vertical"
-          title="调整分组宽度"
+          title={t(settings.general.language, "page.resizeGroups")}
           onpointerdown={layout.startGroupResize}
         ></span>
 
@@ -1783,7 +1845,11 @@
             onselectentry={setSingleSelection}
             onfavorite={(entry) => void toggleFavorite(entry)}
             oncopyusername={(entry) => {
-              if (entry.username) void copyEntryValue(entry.username, "用户名");
+              if (entry.username)
+                void copyEntryValue(
+                  entry.username,
+                  t(settings.general.language, "page.fieldUsername"),
+                );
             }}
             oncopypassword={(entry) => void copyEntryPassword(entry)}
           />
@@ -1794,7 +1860,7 @@
             class="detail-resize-handle"
             role="separator"
             aria-orientation="vertical"
-            title="调整详情宽度"
+            title={t(settings.general.language, "page.resizeDetail")}
             onpointerdown={layout.startDetailResize}
           ></span>
 
@@ -1813,7 +1879,7 @@
             {:else}
               <div class="detail-empty">
                 <AppIcon name="eye" size={22} />
-                <p>选择条目查看详情</p>
+                <p>{t(settings.general.language, "page.selectEntryHint")}</p>
               </div>
             {/if}
           </section>
@@ -1822,17 +1888,29 @@
 
       <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
-          <span class="result-count">{filteredEntries.length} 个条目</span>
+          <span class="result-count"
+            >{t(settings.general.language, "page.entryCount", {
+              n: filteredEntries.length,
+            })}</span
+          >
           {#if selection.selectedUuids.size > 1}
-            <span class="status-group-filter">已选 {selection.selectedUuids.size} 个</span>
+            <span class="status-group-filter"
+              >{t(settings.general.language, "page.selectedCount", {
+                n: selection.selectedUuids.size,
+              })}</span
+            >
           {/if}
           {#if selectedGroup !== null}
             <span class="status-group-filter" title={pathOf(selectedGroup)}>
-              筛选于 {pathOf(selectedGroup)}
+              {t(settings.general.language, "page.filteredByGroup", {
+                path: pathOf(selectedGroup),
+              })}
             </span>
           {/if}
           {#if currentVault.dirty}
-            <span class="status-dirty"><i></i>未保存的修改</span>
+            <span class="status-dirty"
+              ><i></i>{t(settings.general.language, "page.unsavedChanges")}</span
+            >
           {/if}
         </span>
         <span class="status-right">
@@ -1989,8 +2067,12 @@
 
 {#if groupModalOpen}
   <ModalShell
-    title="新建分组"
-    description={`在${groupModalParent ? pathOf(groupModalParent) : "根"}下创建子分组`}
+    title={t(settings.general.language, "page.newGroup")}
+    description={t(settings.general.language, "page.newGroupDesc", {
+      parent: groupModalParent
+        ? pathOf(groupModalParent)
+        : t(settings.general.language, "page.root"),
+    })}
     size="small"
     closeOnEscape
     onclose={() => (groupModalOpen = false)}
@@ -1999,13 +2081,13 @@
     {#snippet children()}
       <TextField
         bind:value={newGroupName}
-        placeholder="分组名称"
+        placeholder={t(settings.general.language, "page.groupNamePh")}
         onkeydown={(e) => {
           if (e.key === "Enter") void confirmCreateGroup();
           if (e.key === "Escape") groupModalOpen = false;
         }}
       />
-      <span class="group-icon-label">图标</span>
+      <span class="group-icon-label">{t(settings.general.language, "page.iconLabel")}</span>
       <div class="group-icon-grid">
         {#each KEEPASS_ICON_CHOICES as index}
           <button
@@ -2013,7 +2095,7 @@
             class="icon-option"
             class:selected={groupIconIndex === index}
             onclick={() => (groupIconIndex = groupIconIndex === index ? null : index)}
-            title={`内置图标 ${index}`}
+            title={t(settings.general.language, "page.builtinIcon", { i: index })}
             aria-pressed={groupIconIndex === index}
           >
             <AppIcon name={groupIconName(index)} size={16} />
@@ -2022,13 +2104,15 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (groupModalOpen = false)}>取消</Button>
+      <Button onclick={() => (groupModalOpen = false)}
+        >{t(settings.general.language, "common.cancel")}</Button
+      >
       <Button
         variant="primary"
         onclick={() => void confirmCreateGroup()}
         disabled={!newGroupName.trim() || groupCreating}
       >
-        创建</Button
+        {t(settings.general.language, "page.create")}</Button
       >
     {/snippet}
   </ModalShell>
@@ -2036,15 +2120,15 @@
 
 {#if groupIconDialogUuid}
   <ModalShell
-    title="设置分组图标"
-    description="选择内置图标,点击保存后生效"
+    title={t(settings.general.language, "page.setGroupIcon")}
+    description={t(settings.general.language, "page.setGroupIconDesc")}
     size="small"
     closeOnEscape
     onclose={() => (groupIconDialogUuid = null)}
   >
     {#snippet icon()}<AppIcon name="palette" size={18} />{/snippet}
     {#snippet children()}
-      <span class="group-icon-label">图标</span>
+      <span class="group-icon-label">{t(settings.general.language, "page.iconLabel")}</span>
       <div class="group-icon-grid">
         {#each KEEPASS_ICON_CHOICES as index}
           <button
@@ -2052,7 +2136,7 @@
             class="icon-option"
             class:selected={groupIconPick === index}
             onclick={() => (groupIconPick = groupIconPick === index ? null : index)}
-            title={`内置图标 ${index}`}
+            title={t(settings.general.language, "page.builtinIcon", { i: index })}
             aria-pressed={groupIconPick === index}
           >
             <AppIcon name={groupIconName(index)} size={16} />
@@ -2061,13 +2145,15 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (groupIconDialogUuid = null)}>取消</Button>
+      <Button onclick={() => (groupIconDialogUuid = null)}
+        >{t(settings.general.language, "common.cancel")}</Button
+      >
       <Button
         variant="primary"
         onclick={() => void confirmChangeGroupIcon()}
         disabled={groupIconSaving}
       >
-        保存</Button
+        {t(settings.general.language, "common.save")}</Button
       >
     {/snippet}
   </ModalShell>
@@ -2089,8 +2175,8 @@
 
 {#if emergencyExportOpen}
   <ModalShell
-    title="导出 HTML 应急表"
-    description="生成可离线打开、可直接打印的应急文件"
+    title={t(settings.general.language, "page.emergencyTitle")}
+    description={t(settings.general.language, "page.emergencyDesc")}
     size="small"
     closeOnEscape
     onclose={() => (emergencyExportOpen = false)}
@@ -2098,26 +2184,29 @@
     {#snippet children()}
       <div class="export-warning">
         <p>
-          导出的 HTML
-          是明文文件。若勾选包含密码，文件将写入所有条目的明文密码，请妥善保管并在使用后删除。
+          {t(settings.general.language, "page.emergencyPlainWarning")}
         </p>
         <label class="export-check">
           <input type="checkbox" bind:checked={emergencyIncludePasswords} />
-          包含密码（强烈建议不勾选）
+          {t(settings.general.language, "page.includePasswords")}
         </label>
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (emergencyExportOpen = false)}>取消</Button>
-      <Button variant="primary" onclick={() => void confirmExportEmergency()}>导出</Button>
+      <Button onclick={() => (emergencyExportOpen = false)}
+        >{t(settings.general.language, "common.cancel")}</Button
+      >
+      <Button variant="primary" onclick={() => void confirmExportEmergency()}
+        >{t(settings.general.language, "page.export")}</Button
+      >
     {/snippet}
   </ModalShell>
 {/if}
 
 {#if remoteConflict}
   <ModalShell
-    title="远程库已变更"
-    description="保存前检测到远程版本已被其他设备修改"
+    title={t(settings.general.language, "page.remoteChangedTitle")}
+    description={t(settings.general.language, "page.remoteChangedDesc")}
     size="small"
     closeOnEscape
     onclose={() => (remoteConflict = null)}
@@ -2126,11 +2215,17 @@
       <p class="conflict-note">{remoteConflict}</p>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (remoteConflict = null)}>取消（保留本地）</Button>
-      <Button onclick={() => void resolveRemoteConflict("merge")}>合并本地与远程</Button>
-      <Button onclick={() => void resolveRemoteConflict("download")}>下载远程</Button>
+      <Button onclick={() => (remoteConflict = null)}
+        >{t(settings.general.language, "page.keepLocal")}</Button
+      >
+      <Button onclick={() => void resolveRemoteConflict("merge")}
+        >{t(settings.general.language, "page.mergeBoth")}</Button
+      >
+      <Button onclick={() => void resolveRemoteConflict("download")}
+        >{t(settings.general.language, "page.downloadRemote")}</Button
+      >
       <Button variant="danger" onclick={() => void resolveRemoteConflict("overwrite")}>
-        覆盖远程</Button
+        {t(settings.general.language, "page.overwriteRemote")}</Button
       >
     {/snippet}
   </ModalShell>
@@ -2138,9 +2233,9 @@
 
 {#if confirmState}
   <ModalShell
-    title="确认删除"
+    title={t(settings.general.language, "page.confirmDeleteTitle")}
     description={confirmState.message}
-    ariaLabel="确认操作"
+    ariaLabel={t(settings.general.language, "page.confirmAction")}
     size="confirm"
     tone="danger"
     closeOnEscape
@@ -2148,7 +2243,9 @@
   >
     {#snippet icon()}<AppIcon name="trash" size={18} />{/snippet}
     {#snippet actions()}
-      <Button onclick={() => (confirmState = null)}>取消</Button>
+      <Button onclick={() => (confirmState = null)}
+        >{t(settings.general.language, "common.cancel")}</Button
+      >
       <Button
         variant="danger"
         onclick={() => {
@@ -2159,7 +2256,7 @@
           action();
         }}
       >
-        删除</Button
+        {t(settings.general.language, "common.delete")}</Button
       >
     {/snippet}
   </ModalShell>
