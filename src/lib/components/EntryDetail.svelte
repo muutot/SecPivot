@@ -10,7 +10,8 @@
   import { formatBytes } from "$lib/utils/format";
   import { formatLocalDate } from "$lib/utils/date";
   import { classifyContact, linkifyContacts } from "$lib/utils/contact";
-  import { isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { t } from "$lib/i18n";
   import { vault } from "$lib/services/vault";
   import {
     awaitCurrentView,
@@ -50,6 +51,18 @@
   }: Props = $props();
 
   const iconName = $derived(keepassIconName(entry.icon));
+
+  let s = $state($appSettings);
+  $effect(() => {
+    const unsubscribe = appSettings.subscribe((value) => {
+      s = value;
+    });
+    return unsubscribe;
+  });
+
+  const lang = $derived(s.general.language);
+  /** Locale tag for date formatting (BCP 47). */
+  const dateLocale = $derived(lang === "en" ? "en-US" : "zh-CN");
 
   /** Data URL of the database-stored custom icon (favicon), if any. */
   const customIconUrl = $derived(
@@ -211,8 +224,10 @@
   }
 
   async function restoreVersion(version: HistoryVersion): Promise<void> {
-    const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
-    if (!window.confirm(`确定恢复到 ${when} 的版本吗？当前内容会保留为新的历史记录。`)) return;
+    const when = version.modified
+      ? new Date(version.modified).toLocaleString(dateLocale)
+      : t(lang, "detail.unknownTime");
+    if (!window.confirm(t(lang, "detail.restoreConfirm", { when }))) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
     const view = detailView.capture();
@@ -230,8 +245,10 @@
   }
 
   async function deleteVersion(version: HistoryVersion): Promise<void> {
-    const when = version.modified ? new Date(version.modified).toLocaleString("zh-CN") : "未知时间";
-    if (!window.confirm(`确定删除 ${when} 的历史版本吗？此操作无法撤销。`)) return;
+    const when = version.modified
+      ? new Date(version.modified).toLocaleString(dateLocale)
+      : t(lang, "detail.unknownTime");
+    if (!window.confirm(t(lang, "detail.deleteHistoryConfirm", { when }))) return;
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
     const view = detailView.capture();
@@ -364,33 +381,33 @@
   function toastMessage(kind: string): { message: string; isError: boolean } {
     switch (kind) {
       case "error":
-        return { message: "操作失败", isError: true };
+        return { message: t(lang, "detail.opFailed"), isError: true };
       case "attachment":
-        return { message: "附件已保存", isError: false };
+        return { message: t(lang, "detail.attachmentSaved"), isError: false };
       case "attachmentAdded":
-        return { message: "附件已添加", isError: false };
+        return { message: t(lang, "detail.attachmentAdded"), isError: false };
       case "username":
-        return { message: "已复制用户名", isError: false };
+        return { message: t(lang, "detail.copiedUsername"), isError: false };
       case "password":
-        return { message: "已复制密码", isError: false };
+        return { message: t(lang, "detail.copiedPassword"), isError: false };
       case "restored":
-        return { message: "已恢复历史版本", isError: false };
+        return { message: t(lang, "detail.restoredVersion"), isError: false };
       case "deleted":
-        return { message: "已删除历史版本", isError: false };
+        return { message: t(lang, "detail.deletedVersion"), isError: false };
       case "url":
-        return { message: "已复制网址", isError: false };
+        return { message: t(lang, "detail.copiedUrl"), isError: false };
       case "email":
-        return { message: "已复制邮箱", isError: false };
+        return { message: t(lang, "detail.copiedEmail"), isError: false };
       case "phone":
-        return { message: "已复制电话号码", isError: false };
+        return { message: t(lang, "detail.copiedPhone"), isError: false };
       case "notes":
-        return { message: "备注已保存", isError: false };
+        return { message: t(lang, "detail.notesSaved"), isError: false };
       case "saved":
-        return { message: "已保存", isError: false };
+        return { message: t(lang, "detail.saved"), isError: false };
       case "protected":
-        return { message: "受保护字段需先显示后再编辑", isError: true };
+        return { message: t(lang, "detail.protectedFirst"), isError: true };
       default:
-        return { message: "已复制到剪贴板", isError: false };
+        return { message: t(lang, "detail.copied"), isError: false };
     }
   }
 
@@ -447,7 +464,7 @@
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.onerror = () => reject(new Error(t(lang, "detail.readFileFailed")));
       reader.readAsDataURL(file);
     });
   }
@@ -732,13 +749,17 @@
         {/if}</span
       >
       <div class="detail-titles">
-        <h3 class="detail-title">{entry.title || "未命名条目"}</h3>
+        <h3 class="detail-title">{entry.title || t(lang, "common.untitled")}</h3>
         <p class="detail-path">{groupPath}</p>
       </div>
     </div>
     <div class="detail-actions">
       {#if inRecycleBin && onrestore}
-        <button class="detail-btn restore" onclick={() => onrestore(entry)} title="恢复条目">
+        <button
+          class="detail-btn restore"
+          onclick={() => onrestore(entry)}
+          title={t(lang, "detail.restoreEntry")}
+        >
           <AppIcon name="undo" size={15} />
         </button>
       {/if}
@@ -746,22 +767,26 @@
         class="detail-btn"
         class:star-active={entry.favorite}
         onclick={() => onfavorite(entry)}
-        title={entry.favorite ? "取消收藏" : "收藏条目"}
+        title={entry.favorite ? t(lang, "menu.unfavorite") : t(lang, "menu.favorite")}
       >
         <AppIcon name="star" size={15} />
       </button>
-      <button class="detail-btn" onclick={() => onedit(entry)} title="编辑条目">
+      <button class="detail-btn" onclick={() => onedit(entry)} title={t(lang, "menu.editEntry")}>
         <AppIcon name="edit" size={15} />
       </button>
-      <button class="detail-btn danger" onclick={() => ondelete(entry)} title="删除条目">
+      <button
+        class="detail-btn danger"
+        onclick={() => ondelete(entry)}
+        title={t(lang, "menu.deleteEntry")}
+      >
         <AppIcon name="trash" size={15} />
       </button>
       {#if oncollapse}
         <button
           class="detail-btn"
           onclick={oncollapse}
-          title="隐藏详情面板"
-          aria-label="隐藏详情面板"
+          title={t(lang, "menu.hideDetail")}
+          aria-label={t(lang, "menu.hideDetail")}
         >
           <AppIcon name="chevron-right" size={15} />
         </button>
@@ -769,7 +794,7 @@
     </div>
   </header>
 
-  <div class="detail-tabs" role="tablist" aria-label="详情选项卡">
+  <div class="detail-tabs" role="tablist" aria-label={t(lang, "detail.tabs")}>
     <button
       type="button"
       role="tab"
@@ -778,7 +803,7 @@
       aria-selected={activeTab === "fields"}
       onclick={() => (activeTab = "fields")}
     >
-      字段
+      {t(lang, "detail.tabFields")}
     </button>
     <button
       type="button"
@@ -791,7 +816,7 @@
         void loadStorage();
       }}
     >
-      元属性
+      {t(lang, "detail.tabMeta")}
     </button>
     <button
       type="button"
@@ -801,7 +826,7 @@
       aria-selected={activeTab === "attachments"}
       onclick={() => (activeTab = "attachments")}
     >
-      附件
+      {t(lang, "detail.tabAttachments")}
     </button>
     <button
       type="button"
@@ -814,7 +839,7 @@
         void loadHistory();
       }}
     >
-      历史
+      {t(lang, "detail.tabHistory")}
     </button>
   </div>
 
@@ -823,7 +848,7 @@
       <div class="fields-layout" bind:this={fieldsLayoutEl}>
         <div class="fields-scroll">
           <div class="field-block">
-            <span class="field-label">用户名</span>
+            <span class="field-label">{t(lang, "tcato.username")}</span>
             <div
               class="field-value"
               class:editing={editingMatches({ kind: "username" })}
@@ -835,7 +860,7 @@
               }}
               ondblclick={() => void startEdit({ kind: "username" })}
               onkeydown={(e) => onFieldKeydown(e, { kind: "username" })}
-              title="双击或右键编辑"
+              title={t(lang, "detail.editOnAction")}
             >
               {#if editingMatches({ kind: "username" })}
                 <input
@@ -852,7 +877,7 @@
                   <button
                     class="copy-btn"
                     onclick={() => handleCopy(entry.username, "username")}
-                    title="复制用户名"
+                    title={t(lang, "menu.copyUsername")}
                   >
                     <AppIcon name="copy" size={13} />
                   </button>
@@ -862,7 +887,7 @@
           </div>
 
           <div class="field-block">
-            <span class="field-label">密码</span>
+            <span class="field-label">{t(lang, "tcato.password")}</span>
             <div
               class="field-value"
               class:editing={editingMatches({ kind: "password" })}
@@ -874,7 +899,7 @@
               }}
               ondblclick={() => void startEdit({ kind: "password" })}
               onkeydown={(e) => onFieldKeydown(e, { kind: "password" })}
-              title="双击或右键编辑"
+              title={t(lang, "detail.editOnAction")}
             >
               {#if editingMatches({ kind: "password" })}
                 <input
@@ -892,11 +917,17 @@
                 <button
                   class="copy-btn"
                   onclick={toggleReveal}
-                  title={revealPassword ? "隐藏密码" : "显示密码"}
+                  title={revealPassword
+                    ? t(lang, "table.hidePassword")
+                    : t(lang, "table.showPassword")}
                 >
                   <AppIcon name={revealPassword ? "eye-off" : "eye"} size={13} />
                 </button>
-                <button class="copy-btn" onclick={copyPassword} title="复制密码">
+                <button
+                  class="copy-btn"
+                  onclick={copyPassword}
+                  title={t(lang, "menu.copyPassword")}
+                >
                   <AppIcon name="copy" size={13} />
                 </button>
               {/if}
@@ -905,7 +936,7 @@
 
           {#if entry.url}
             <div class="field-block">
-              <span class="field-label">网址</span>
+              <span class="field-label">{t(lang, "detail.url")}</span>
               <div
                 class="field-value"
                 class:editing={editingMatches({ kind: "url" })}
@@ -917,7 +948,7 @@
                 }}
                 ondblclick={() => void startEdit({ kind: "url" })}
                 onkeydown={(e) => onFieldKeydown(e, { kind: "url" })}
-                title="双击或右键编辑"
+                title={t(lang, "detail.editOnAction")}
               >
                 {#if editingMatches({ kind: "url" })}
                   <input
@@ -935,7 +966,7 @@
                   <button
                     class="copy-btn"
                     onclick={() => handleCopy(entry.url, "url")}
-                    title="复制网址"
+                    title={t(lang, "menu.copyUrl")}
                   >
                     <AppIcon name="copy" size={13} />
                   </button>
@@ -946,7 +977,7 @@
 
           {#if entry.hasTotp}
             <div class="field-block">
-              <span class="field-label">OTP 验证码</span>
+              <span class="field-label">{t(lang, "detail.totp")}</span>
               <div class="field-value">
                 <TotpWidget entryUuid={entry.uuid} />
               </div>
@@ -959,7 +990,7 @@
                 <span class="field-label">
                   {field.name}
                   {#if field.protected}
-                    <span class="protected-badge" title="受保护字段 (值不进入快照)">
+                    <span class="protected-badge" title={t(lang, "detail.protectedBadge")}>
                       <AppIcon name="lock" size={10} />
                     </span>
                   {/if}
@@ -989,7 +1020,7 @@
                       name: field.name,
                       protected: field.protected,
                     })}
-                  title="双击或右键编辑"
+                  title={t(lang, "detail.editOnAction")}
                 >
                   {#if editingMatches({ kind: "custom", name: field.name })}
                     <input
@@ -1015,7 +1046,9 @@
                       <button
                         class="copy-btn"
                         onclick={() => toggleCustomFieldReveal(field.name)}
-                        title={customFieldRevealed[field.name] ? "隐藏字段值" : "显示字段值"}
+                        title={customFieldRevealed[field.name]
+                          ? t(lang, "detail.hideField")
+                          : t(lang, "detail.showField")}
                       >
                         <AppIcon
                           name={customFieldRevealed[field.name] ? "eye-off" : "eye"}
@@ -1025,7 +1058,7 @@
                       <button
                         class="copy-btn"
                         onclick={() => copyCustomField(field.name)}
-                        title="复制字段值"
+                        title={t(lang, "detail.copyFieldValue")}
                       >
                         <AppIcon name="copy" size={13} />
                       </button>
@@ -1044,7 +1077,7 @@
                       <button
                         class="field-text link contact"
                         onclick={() => handleCopy(field.value, contact)}
-                        title="点击复制"
+                        title={t(lang, "detail.clickCopy")}
                       >
                         {field.value}
                       </button>
@@ -1055,7 +1088,7 @@
                       <button
                         class="copy-btn"
                         onclick={() => handleCopy(field.value, "custom")}
-                        title="复制字段值"
+                        title={t(lang, "detail.copyFieldValue")}
                       >
                         <AppIcon name="copy" size={13} />
                       </button>
@@ -1069,14 +1102,14 @@
 
         <div class="notes-section">
           <div class="notes-divider" role="presentation">
-            <span>备注</span>
+            <span>{t(lang, "detail.notes")}</span>
           </div>
           {#if notesEditing}
             <textarea
               class="notes-textarea"
               bind:this={notesTextareaEl}
               bind:value={notesDraft}
-              placeholder="添加备注…"
+              placeholder={t(lang, "detail.addNotes")}
               oninput={() => {
                 scheduleNotesSave();
                 resizeNotes();
@@ -1091,7 +1124,7 @@
               class="notes-view"
               role="button"
               tabindex="0"
-              aria-label="备注（点击编辑）"
+              aria-label={t(lang, "detail.notesEditLabel")}
               bind:this={notesViewEl}
               onclick={onNotesViewClick}
               onkeydown={onNotesViewKeydown}
@@ -1104,14 +1137,14 @@
                       type="button"
                       onclick={(e) => onNotesLinkClick(e, token.value)}
                       onkeydown={(e) => onNotesLinkKeydown(e, token.value)}
-                      title="打开链接">{token.value}</button
+                      title={t(lang, "detail.openLink")}>{token.value}</button
                     >
                   {:else}
                     <span>{token.value}</span>
                   {/if}
                 {/each}
               {:else}
-                <span class="notes-placeholder">添加备注…</span>
+                <span class="notes-placeholder">{t(lang, "detail.addNotes")}</span>
               {/if}
             </div>
           {/if}
@@ -1119,35 +1152,39 @@
       </div>
     {:else if activeTab === "meta"}
       <div class="field-block">
-        <span class="field-label">所属分组</span>
+        <span class="field-label">{t(lang, "detail.group")}</span>
         <div class="field-value">
           <span class="field-text">{groupPath || "—"}</span>
         </div>
       </div>
 
       <div class="field-block">
-        <span class="field-label">创建时间</span>
+        <span class="field-label">{t(lang, "detail.created")}</span>
         <div class="field-value">
           <span class="field-text">{formatLocalDate(entry.created)}</span>
         </div>
       </div>
 
       <div class="field-block">
-        <span class="field-label">修改时间</span>
+        <span class="field-label">{t(lang, "detail.modified")}</span>
         <div class="field-value">
           <span class="field-text">{formatLocalDate(entry.modified)}</span>
         </div>
       </div>
 
       <div class="field-block">
-        <span class="field-label">占用空间</span>
+        <span class="field-label">{t(lang, "detail.storage")}</span>
         <div class="field-value">
           {#if storageLoading}
-            <span class="field-text faint">正在统计…</span>
+            <span class="field-text faint">{t(lang, "detail.storageLoading")}</span>
           {:else if storage}
             <span
               class="field-text"
-              title={`字段 ${formatBytes(storage.fields)} · 附件 ${formatBytes(storage.attachments)} · 历史 ${formatBytes(storage.history)}`}
+              title={t(lang, "detail.storageTitle", {
+                fields: formatBytes(storage.fields),
+                attachments: formatBytes(storage.attachments),
+                history: formatBytes(storage.history),
+              })}
             >
               {formatBytes(storage.total)}
             </span>
@@ -1159,10 +1196,10 @@
 
       {#if entry.expires}
         <div class="field-block">
-          <span class="field-label">过期时间</span>
+          <span class="field-label">{t(lang, "detail.expires")}</span>
           <div class="field-value">
             <span class="field-text" class:expired-text={entry.expired}>
-              {formatLocalDate(entry.expires)}{entry.expired ? " · 已过期" : ""}
+              {formatLocalDate(entry.expires)}{entry.expired ? t(lang, "detail.expiredSuffix") : ""}
             </span>
           </div>
         </div>
@@ -1170,7 +1207,7 @@
 
       {#if entry.tags}
         <div class="field-block">
-          <span class="field-label">标签</span>
+          <span class="field-label">{t(lang, "detail.tags")}</span>
           <div class="field-value">
             <span class="field-text">{entry.tags}</span>
           </div>
@@ -1178,9 +1215,11 @@
       {/if}
 
       <div class="field-block">
-        <span class="field-label">收藏状态</span>
+        <span class="field-label">{t(lang, "detail.favoriteState")}</span>
         <div class="field-value">
-          <span class="field-text">{entry.favorite ? "已收藏" : "未收藏"}</span>
+          <span class="field-text"
+            >{entry.favorite ? t(lang, "detail.favorited") : t(lang, "detail.notFavorited")}</span
+          >
         </div>
       </div>
 
@@ -1195,7 +1234,7 @@
         class="attachment-dropzone"
         class:dragging={attachmentDragActive}
         role="group"
-        aria-label="附件拖放区域"
+        aria-label={t(lang, "detail.attachDrop")}
         ondragenter={handleAttachmentDragEnter}
         ondragover={handleAttachmentDragOver}
         ondragleave={handleAttachmentDragLeave}
@@ -1211,14 +1250,14 @@
                 <button
                   class="copy-btn"
                   onclick={() => (previewAttachmentName = attachment.name)}
-                  title="预览附件"
+                  title={t(lang, "detail.previewAttachment")}
                 >
                   <AppIcon name="eye" size={13} />
                 </button>
                 <button
                   class="copy-btn"
                   onclick={() => saveAttachment(attachment.name)}
-                  title="保存附件"
+                  title={t(lang, "detail.saveAttachment")}
                 >
                   <AppIcon name="download" size={13} />
                 </button>
@@ -1228,21 +1267,21 @@
         {:else}
           <div class="tab-empty">
             <AppIcon name="file" size={18} />
-            <p>该条目没有附件</p>
+            <p>{t(lang, "detail.noAttachments")}</p>
           </div>
         {/if}
-        <p class="attachment-drop-hint">拖拽文件到此处添加附件</p>
+        <p class="attachment-drop-hint">{t(lang, "detail.dropHint")}</p>
       </div>
     {:else if activeTab === "history"}
       {#if historyLoading}
         <div class="tab-empty">
           <AppIcon name="clock" size={18} />
-          <p>正在加载历史版本…</p>
+          <p>{t(lang, "detail.loadingHistory")}</p>
         </div>
       {:else if historyVersions.length === 0}
         <div class="tab-empty">
           <AppIcon name="clock" size={18} />
-          <p>该条目没有历史版本</p>
+          <p>{t(lang, "detail.noHistory")}</p>
         </div>
       {:else}
         <div class="history-list">
@@ -1255,32 +1294,36 @@
               <div class="history-item-main">
                 <span class="history-time">
                   {version.modified
-                    ? new Date(version.modified).toLocaleString("zh-CN")
-                    : "未知时间"}
+                    ? new Date(version.modified).toLocaleString(dateLocale)
+                    : t(lang, "detail.unknownTime")}
                 </span>
-                <span class="history-title">{version.title || "未命名条目"}</span>
+                <span class="history-title">{version.title || t(lang, "common.untitled")}</span>
               </div>
               <button
                 class="copy-btn"
                 onclick={() => (viewingVersion = version)}
-                title="查看此版本"
+                title={t(lang, "detail.viewVersion")}
               >
                 <AppIcon name="eye" size={13} />
               </button>
-              <button class="copy-btn" onclick={() => restoreVersion(version)} title="恢复此版本">
+              <button
+                class="copy-btn"
+                onclick={() => restoreVersion(version)}
+                title={t(lang, "detail.restoreVersion")}
+              >
                 <AppIcon name="undo" size={13} />
               </button>
               <button
                 class="copy-btn danger"
                 onclick={() => deleteVersion(version)}
-                title="删除此版本"
+                title={t(lang, "detail.deleteVersion")}
               >
                 <AppIcon name="trash" size={13} />
               </button>
             </div>
           {/each}
         </div>
-        <p class="history-hint">最多保留最近 10 个版本;恢复操作本身也会记录为新版本。</p>
+        <p class="history-hint">{t(lang, "detail.historyHint")}</p>
       {/if}
     {/if}
   </div>
