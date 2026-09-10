@@ -149,10 +149,10 @@
         class="channel-button"
         onmousedown={(e) => e.preventDefault()}
         onclick={() => send("totp")}
-      disabled={!hasTotp}
-      title={t(lang, "tcato.totpTitle")}
-    >
-      <AppIcon name="clock" size={13} />{t(lang, "tcato.totp")}
+        disabled={!hasTotp}
+        title={t(lang, "tcato.totpTitle")}
+      >
+        <AppIcon name="clock" size={13} />{t(lang, "tcato.totp")}
       </button>
     </div>
   {/if}

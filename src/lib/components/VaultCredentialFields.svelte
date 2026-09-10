@@ -51,9 +51,7 @@
     <div class="path-row">
       <TextField
         bind:value={path}
-        placeholder={
-          isTauriRuntime() ? t(lang, "vault.pickFile") : t(lang, "vault.demoStorage")
-        }
+        placeholder={isTauriRuntime() ? t(lang, "vault.pickFile") : t(lang, "vault.demoStorage")}
         disabled={!isTauriRuntime()}
       />
       {#if isTauriRuntime() && onPickCreatePath}

@@ -97,7 +97,11 @@
   }
 </script>
 
-<StandaloneVaultShell icon="lock" title={t(lang, "lock.title")} subtitle={remembered?.fileName ?? ""}>
+<StandaloneVaultShell
+  icon="lock"
+  title={t(lang, "lock.title")}
+  subtitle={remembered?.fileName ?? ""}
+>
   <div class="lock-fields">
     <VaultCredentialFields
       bind:password

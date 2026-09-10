@@ -24,7 +24,8 @@ export const en: Record<I18nKey, string> = {
   "tcato.injectedUsername": "Username injected",
   "tcato.injectedPassword": "Password injected",
   "tcato.injectedTotp": "One-time code injected",
-  "tcato.hint": "Move focus to the target window first, then click what to inject; passwords bypass keyboard hooks.",
+  "tcato.hint":
+    "Move focus to the target window first, then click what to inject; passwords bypass keyboard hooks.",
   "tcato.lastTarget": "Last filled target: {window}",
   "tcato.pickLabel": "Choose an entry to fill",
   "tcato.untitled": "Untitled entry",
@@ -34,7 +35,8 @@ export const en: Record<I18nKey, string> = {
   "tcato.totpTitle": "Inject the current one-time code",
   "lock.title": "Database locked",
   "lock.needPassword": "Enter the master password or pick a key file",
-  "lock.noSavedCredential": "No saved credential; enable “Remember password (Windows Hello)” in settings first",
+  "lock.noSavedCredential":
+    "No saved credential; enable “Remember password (Windows Hello)” in settings first",
   "lock.switchDatabase": "Use another database",
   "lock.unlocking": "Unlocking…",
   "lock.unlock": "Unlock",
