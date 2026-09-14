@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 (2026-09-14)
+
+### 🐛 Bug Fixes
+
+- **android**: stage per-ABI APKs by arch flavor and fail closed (13761702)
+
 ## 1.6.0 (2026-09-10)
 
 ### ✨ Features
