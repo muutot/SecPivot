@@ -286,6 +286,8 @@ jobs:
       - name: Verify Android release APKs
         shell: bash
         run: |
+          set -euo pipefail
+          shopt -s nullglob
           apks=(src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
           if [ ${#apks[@]} -eq 0 ]; then
             echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
@@ -299,11 +301,29 @@ jobs:
           fi
           for apk in "${apks[@]}"; do
             "$apksigner" verify --verbose "$apk"
+            # cargo-mobile2 writes per-ABI APKs to
+            #   app/build/outputs/apk/<arch>/release/app-<arch>-release.apk
+            # so the ABI flavor is the directory two levels above the file.
+            # Assert the packaged APK really carries that native ABI; an
+            # x86_64-only APK once shipped for an arm64 phone because this
+            # path was misread as .../apk/release/.
+            flavor=$(basename "$(dirname "$(dirname "$apk")")")
+            case "$flavor" in
+              arm64) abi="arm64-v8a" ;;
+              x86_64) abi="x86_64" ;;
+              *) abi="$flavor" ;;
+            esac
+            if ! unzip -l "$apk" | grep -q "lib/${abi}/"; then
+              echo "APK ${apk} does not contain lib/${abi}/." >&2
+              exit 1
+            fi
           done
 
       - name: Stage Android release assets
         shell: bash
         run: |
+          set -euo pipefail
+          shopt -s nullglob
           apks=(src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
           if [ ${#apks[@]} -eq 0 ]; then
             echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
@@ -311,10 +331,31 @@ jobs:
           fi
           mkdir -p dist/android
           for apk in "${apks[@]}"; do
-            abi=$(basename "$(dirname "$apk")")
+            # The ABI flavor is two directories above the file
+            # (apk/<arch>/release/<apk>). Using the immediate parent gave
+            # every ABI the name `...-android-release.apk`, so the copies
+            # collided and only the last one survived; the published release
+            # then carried an x86_64-only APK that could not install on an
+            # arm64 phone. Map cargo-mobile2's arch flavor to the canonical
+            # Android ABI name used in the asset filename.
+            flavor=$(basename "$(dirname "$(dirname "$apk")")")
+            case "$flavor" in
+              arm64) abi="arm64-v8a" ;;
+              x86_64) abi="x86_64" ;;
+              *) abi="$flavor" ;;
+            esac
             asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
             cp "$apk" "$asset"
             echo "Staged $(basename "$asset")"
+          done
+          # Fail closed: every shipped 64-bit ABI must be present as a distinct
+          # asset. A missing arm64-v8a build is a broken release, not a warning.
+          for abi in arm64-v8a x86_64; do
+            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            if [ ! -f "$asset" ]; then
+              echo "Expected Android release asset for ABI ${abi} was not staged (${asset})." >&2
+              exit 1
+            fi
           done
 
       - name: Generate Android SHA256SUMS
