@@ -145,7 +145,9 @@ pub struct DensitySettings {
     pub group_padding_y: i32,
     pub group_indent: i32,
     pub group_radius: i32,
+    #[serde(default = "default_true")]
     pub show_group_icon: bool,
+    #[serde(default = "default_true")]
     pub show_group_chevron: bool,
 }
 
@@ -173,6 +175,7 @@ impl Default for DensitySettings {
 #[serde(rename_all = "camelCase", default)]
 pub struct EntryColumnState {
     pub id: String,
+    #[serde(default = "default_true")]
     pub visible: bool,
     pub width: i32,
 }
@@ -318,22 +321,33 @@ pub struct SavedSearch {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ToolbarItemVisibility {
+    #[serde(default = "default_true")]
     pub new_entry: bool,
+    #[serde(default = "default_true")]
     pub save: bool,
+    #[serde(default = "default_toolbar_base")]
     pub save_as: bool,
+    #[serde(default = "default_true")]
     pub lock: bool,
+    #[serde(default = "default_toolbar_base")]
     pub toggle_detail: bool,
+    #[serde(default = "default_toolbar_base")]
     pub security_report: bool,
     pub similar_passwords: bool,
     pub hibp_check: bool,
     pub import_menu: bool,
+    #[serde(default = "default_toolbar_base")]
     pub export_menu: bool,
     pub expired_entries: bool,
     pub clear_history: bool,
     pub db_settings: bool,
+    #[serde(default = "default_toolbar_base")]
     pub app_settings: bool,
+    #[serde(default = "default_true")]
     pub window_minimize: bool,
+    #[serde(default = "default_true")]
     pub window_maximize: bool,
+    #[serde(default = "default_true")]
     pub window_close: bool,
 }
 
@@ -371,10 +385,12 @@ pub struct GeneralSettings {
     pub custom_presets: Vec<ThemeColors>,
     pub custom_themes: Vec<CustomTheme>,
     pub density: DensitySettings,
+    #[serde(default = "default_true")]
     pub show_descriptions: bool,
     pub font_sizes: FontSizes,
     pub window_effect: String,
     pub window_opacity: i32,
+    #[serde(default = "default_true")]
     pub remember_last_database: bool,
     pub recent_files: Vec<String>,
     /// Main-window size remembered from the user's resize; the welcome screen
@@ -510,7 +526,9 @@ pub struct KeyboardSettings {
 pub struct SecuritySettings {
     pub auto_lock_minutes: i32,
     pub clipboard_clear_seconds: i32,
+    #[serde(default = "default_true")]
     pub minimize_to_tray: bool,
+    #[serde(default = "default_true")]
     pub clear_on_lock: bool,
     pub lock_after_action: bool,
     pub lock_on_focus_loss: bool,
@@ -542,9 +560,13 @@ pub struct PasswordGeneratorSettings {
     /// Profile name; absent on the built-in default.
     pub name: Option<String>,
     pub length: i32,
+    #[serde(default = "default_true")]
     pub include_upper: bool,
+    #[serde(default = "default_true")]
     pub include_lower: bool,
+    #[serde(default = "default_true")]
     pub include_digits: bool,
+    #[serde(default = "default_true")]
     pub include_symbols: bool,
     pub exclude_similar: bool,
     pub exclude_ambiguous: bool,
@@ -770,6 +792,12 @@ impl Default for RpcSettings {
 
 fn default_true() -> bool {
     true
+}
+
+/// Default for toolbar items that are shown on desktop but hidden on mobile.
+/// Mirrors `ToolbarItemVisibility::default`'s `base` flag.
+fn default_toolbar_base() -> bool {
+    !cfg!(any(target_os = "android", target_os = "ios"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

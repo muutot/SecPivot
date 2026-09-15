@@ -138,6 +138,7 @@ impl VaultSessions {
         active.rpc_session_timeout_secs = secs;
         for session in inner.parked.values_mut() {
             session.rpc_session_timeout_secs = secs;
+            session.reset_rpc_key_expiry();
         }
         inner.rpc_session_timeout_secs = secs;
         active.reset_rpc_key_expiry();

@@ -275,10 +275,10 @@ fn toggle_main_window(app: &tauri::AppHandle, force_show: bool) {
 /// toggles the main window; the menu always forces a show.
 #[cfg(desktop)]
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("bundle icon must exist");
+    let Some(icon) = app.default_window_icon().cloned() else {
+        eprintln!("tray: bundle icon missing, skipping tray setup");
+        return Ok(());
+    };
     let show = MenuItem::with_id(app, TRAY_MENU_SHOW, "显示主窗口", true, None::<&str>)?;
     let lock = MenuItem::with_id(app, TRAY_MENU_LOCK, "锁定数据库", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, TRAY_MENU_QUIT, "退出", true, None::<&str>)?;
@@ -396,6 +396,7 @@ pub fn run() {
             commands::get_config,
             commands::app_info,
             commands::set_config,
+            commands::set_window_opacity,
             commands::open_vault,
             commands::create_vault,
             commands::close_vault,

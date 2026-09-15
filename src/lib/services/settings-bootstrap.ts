@@ -1,9 +1,17 @@
 import { get } from "svelte/store";
-import { appSettings, selectThemeColors } from "$lib/services/settings";
+import { appSettings, isTauriRuntime, selectThemeColors } from "$lib/services/settings";
 import { applyThemeColors } from "$lib/utils/theme";
 
 export function applySettingsToDocument(): void {
   const s = get(appSettings);
+  // Window opacity was previously persisted but never applied; drive the
+  // native window through the backend layered-window command (best-effort,
+  // Tauri only) so the slider takes effect.
+  if (isTauriRuntime()) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("set_window_opacity", { opacity: s.general.windowOpacity }))
+      .catch(() => {});
+  }
   const colors = selectThemeColors(s);
   applyThemeColors(colors);
 

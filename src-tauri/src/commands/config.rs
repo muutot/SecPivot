@@ -37,6 +37,50 @@ pub(crate) fn app_info(store: tauri::State<'_, ConfigStore>) -> AppInfo {
     }
 }
 
+/// Set the main-window opacity in percent (40–100, Windows layered window).
+/// The `windowOpacity` setting was previously persisted but never applied;
+/// the settings bootstrap invokes this on every settings change so the
+/// slider takes effect. 100% restores the default (non-layered) style.
+#[tauri::command]
+pub(crate) fn set_window_opacity(app: tauri::AppHandle, opacity: f64) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::Manager;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, GWL_EXSTYLE, LWA_ALPHA,
+            WS_EX_LAYERED,
+        };
+        let Some(window) = app.get_webview_window("main") else {
+            return Ok(());
+        };
+        let Ok(hwnd) = window.hwnd() else {
+            return Err("获取窗口句柄失败".to_owned());
+        };
+        let hwnd = hwnd.0;
+        // SAFETY: `hwnd` is the live main window owned by the Tauri runtime.
+        unsafe {
+            let mut exstyle = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+            let alpha = (opacity.clamp(40.0, 100.0) / 100.0 * 255.0).round() as u8;
+            if alpha == 255 {
+                exstyle &= !WS_EX_LAYERED;
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle as i32);
+            } else {
+                exstyle |= WS_EX_LAYERED;
+                SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle as i32);
+                if SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA) == 0 {
+                    return Err("设置窗口透明度失败".to_owned());
+                }
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, opacity);
+        Ok(())
+    }
+}
+
 /// Trim a stored backup template, falling back to the default when empty.
 pub(crate) fn normalize_backup_template(template: &str) -> String {
     let trimmed = template.trim();
@@ -61,11 +105,28 @@ pub(crate) fn set_config(
         &saved.keyboard.tcato_summon_global,
     );
     sync_vault_matching(&app, &saved);
+    sync_capture_guard(&app, &saved);
     #[cfg(desktop)]
     sync_bridge(&app, &saved);
     #[cfg(desktop)]
     sync_rpc(&app, &saved);
     Ok(saved)
+}
+
+/// Re-apply the screen-capture guard when the setting changes at runtime: a
+/// vault already open must pick up the toggle without requiring a reopen, and
+/// turning it off must release the guard immediately.
+pub(crate) fn sync_capture_guard(app: &tauri::AppHandle, config: &config::AppConfig) {
+    let Some(session) = app.try_state::<std::sync::Mutex<crate::vault::VaultSession>>() else {
+        return;
+    };
+    let Ok(active) = session.lock() else {
+        return;
+    };
+    if !active.is_open() {
+        return;
+    }
+    crate::platform::shield::set_capture_guard(app, config.security.screen_capture_guard);
 }
 
 /// Keep URL matching consistent across the active slot, parked tabs and

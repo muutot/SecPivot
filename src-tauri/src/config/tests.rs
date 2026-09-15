@@ -66,6 +66,36 @@ fn old_config_without_density_loads_with_defaults() {
 }
 
 #[test]
+fn partial_objects_keep_true_defaults_instead_of_silently_clearing() {
+    // A hand-edited config with partial objects must not flip true-default
+    // bools to false on load: serde container `default` yields the field
+    // type's default, so each true-default bool declares its own default fn.
+    let config: crate::config::AppConfig = serde_json::from_value(serde_json::json!({
+        "general": {
+            "density": { "entryRowHeight": 30 },
+            "toolbarItems": { "newEntry": true },
+        },
+        "database": { "generator": { "length": 20 } },
+    }))
+    .unwrap();
+    assert!(config.general.density.show_group_icon);
+    assert!(config.general.density.show_group_chevron);
+    assert!(config.database.generator.include_upper);
+    assert!(config.database.generator.include_lower);
+    assert!(config.database.generator.include_digits);
+    assert!(config.database.generator.include_symbols);
+    assert!(config.security.minimize_to_tray);
+    assert!(config.security.clear_on_lock);
+    assert!(config.general.show_descriptions);
+    assert!(config.general.remember_last_database);
+    let toolbar = config.general.toolbar_items.as_ref().unwrap();
+    assert!(toolbar.save);
+    assert!(toolbar.lock);
+    assert!(toolbar.window_close);
+    assert!(!toolbar.similar_passwords);
+}
+
+#[test]
 fn icon_only_buttons_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

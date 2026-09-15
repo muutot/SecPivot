@@ -207,23 +207,16 @@ impl S3Storage {
         for (name, value) in extra_headers {
             request = request.header(*name, *value);
         }
-        request
-            .send()
-            .map_err(|e| Self::map_error(method, e, timeout))
-    }
-
-    /// Translate a reqwest error into the user-facing message, distinguishing
-    /// the request-level timeout from other connect/TLS errors.
-    fn map_error(method: &str, e: reqwest::Error, _timeout: Duration) -> String {
-        if e.is_timeout() {
-            if method == "GET" {
+        let list_timeout = self.list_timeout;
+        request.send().map_err(|e| {
+            if e.is_timeout() && timeout == list_timeout {
                 "S3 列表请求超时，请检查网络与服务地址".to_owned()
-            } else {
+            } else if e.is_timeout() {
                 "S3 传输超时，请检查网络与服务地址".to_owned()
+            } else {
+                format!("S3 请求失败: {e}")
             }
-        } else {
-            format!("S3 请求失败: {e}")
-        }
+        })
     }
 
     /// Path-style canonical path for an object key (`/{bucket}/{key}`).
