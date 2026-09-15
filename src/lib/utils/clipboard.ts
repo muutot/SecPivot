@@ -11,8 +11,14 @@ let clearTimer: ReturnType<typeof setTimeout> | null = null;
 let lastCopiedText: string | null = null;
 
 export async function copyText(text: string): Promise<void> {
+  try {
+    await copyRaw(text);
+  } catch (e) {
+    // A failed write must not leave the plaintext as the ownership baseline.
+    lastCopiedText = null;
+    throw e;
+  }
   lastCopiedText = text;
-  await copyRaw(text);
   scheduleClipboardClear(text);
 }
 
@@ -36,8 +42,15 @@ export function scheduleClipboardClear(text: string): void {
  * non-text), leave it alone — the app must never destroy unrelated data. */
 export async function clearClipboardIfUnchanged(): Promise<void> {
   if (!isTauriRuntime()) {
-    // Browser demo: no backend read-back; fall back to the old behavior.
+    // Browser demo: no backend read-back. Compare via the Web Clipboard API
+    // when readable so an unrelated copy made while the timer was pending is
+    // never destroyed; fall back to clearing only when unreadable.
     try {
+      const read = (navigator.clipboard as Clipboard | undefined)?.readText;
+      if (read) {
+        const current = await read.call(navigator.clipboard);
+        if (lastCopiedText !== null && current !== lastCopiedText) return;
+      }
       await copyRaw("");
     } catch {
       // clipboard unavailable; nothing to clear

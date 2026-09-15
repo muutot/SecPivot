@@ -106,8 +106,15 @@ export function parseCsvRows(raw: string[][]): ImportCsvRow[] {
     const indexOf = (header: string): number => {
       const exact = normalized.indexOf(header);
       if (exact >= 0) return exact;
-      const alias = HEADER_ALIASES[header];
-      return alias ? normalized.indexOf(alias) : -1;
+      // HEADER_ALIASES maps alias -> canonical (e.g. name -> title), so
+      // resolve the canonical header back to any alias present in the row.
+      for (const [alias, canonical] of Object.entries(HEADER_ALIASES)) {
+        if (canonical === header) {
+          const hit = normalized.indexOf(alias);
+          if (hit >= 0) return hit;
+        }
+      }
+      return -1;
     };
     const indices = HEADERS.map(indexOf);
     if (indices.some((i) => i >= 0)) {

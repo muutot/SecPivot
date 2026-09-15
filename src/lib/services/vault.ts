@@ -282,6 +282,13 @@ function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState 
     );
   }
   const next = { ...current, revision: delta.revision };
+  if (delta.kind === "favorite") {
+    // The backend marks the vault dirty on favorite toggle; the lightweight
+    // delta carries no dirty flag, so reflect it locally (groupsExpanded uses
+    // bump_revision and intentionally stays clean).
+    next.dirty = true;
+    next.modifiedAt = new Date().toISOString();
+  }
   next.root = applyTreeDelta(current.root, entryPatches, groupPatches);
   return commitSessionState(sessionId, next);
 }
@@ -698,9 +705,12 @@ export const vault: VaultStore = {
    *  promotes the next tab (clearing all state when none remains). */
   async close(): Promise<void> {
     if (isTauriRuntime()) {
-      const path = get(state)?.path;
-      const closingId = captureSessionId();
+      // Capture the target inside the queue: a switch enqueued earlier must
+      // win over the id visible at call time.
       return topologyQueue.enqueue(async () => {
+        const closingId = activeSessionId;
+        if (!closingId) return;
+        const path = get(tabs).find((t) => t.sessionId === closingId)?.path ?? get(state)?.path;
         await backendInvoke("close_vault", { sessionId: closingId });
         sessionStates.delete(closingId);
         iconCaches.delete(closingId);
@@ -732,6 +742,7 @@ export const vault: VaultStore = {
     sessionEpochs.clear();
     state.set(null);
     tabs.set([]);
+    activeId.set(null);
   },
 
   /** Lock-everything path shared by lock/idle/focus-loss: closes all backend
