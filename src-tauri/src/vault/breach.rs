@@ -59,6 +59,12 @@ impl VaultSession {
                         continue;
                     }
                 }
+                // Skip empty passwords: their SHA-1 prefix is the constant
+                // DA39A, which would leak the existence of empty-password
+                // entries to a network observer.
+                if entry.get(FIELD_PASSWORD).unwrap_or_default().is_empty() {
+                    continue;
+                }
                 rows.push((
                     uuid,
                     entry.get_title().unwrap_or_default().to_owned(),
@@ -105,6 +111,27 @@ mod tests {
             })
             .unwrap();
         let uuid = state.root.entries[0].uuid.clone();
+        let rows = session.hibp_entries(None).unwrap();
+        assert_eq!(rows.len(), 1);
+        // Empty passwords are skipped: their SHA-1 prefix is the constant
+        // DA39A and would leak their existence to a network observer.
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: "Empty".into(),
+                username: "nobody".into(),
+                password: "".into(),
+                url: String::new(),
+                notes: String::new(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
         let rows = session.hibp_entries(None).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].1, "GitHub");

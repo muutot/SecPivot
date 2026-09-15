@@ -180,12 +180,14 @@ fn clean_secret(input: &str) -> String {
         .to_ascii_uppercase()
 }
 
-/// Detect the algorithm tokens KeePass and otpauth use into a `HashAlgo`.
-fn hash_from_alg(value: &str) -> HashAlgo {
+/// Strict variant for otpauth URIs: an explicitly declared but unknown
+/// algorithm is rejected instead of silently downgrading to SHA1.
+fn hash_from_alg_checked(value: &str) -> Result<HashAlgo, String> {
     match value.trim().to_ascii_uppercase().as_str() {
-        "SHA256" => HashAlgo::Sha256,
-        "SHA512" => HashAlgo::Sha512,
-        _ => HashAlgo::Sha1,
+        "SHA1" => Ok(HashAlgo::Sha1),
+        "SHA256" => Ok(HashAlgo::Sha256),
+        "SHA512" => Ok(HashAlgo::Sha512),
+        other => Err(format!("TOTP algorithm 不支持: {other}")),
     }
 }
 
@@ -201,21 +203,22 @@ fn parse_otpauth_uri(uri: &str) -> Result<OtpSpec, String> {
         .find(|(k, _)| k == "secret")
         .map(|(_, v)| v.clone())
         .ok_or_else(|| "TOTP URI 缺少 secret".to_owned())?;
-    let digits = url
-        .query_pairs()
-        .find(|(k, _)| k == "digits")
-        .map(|(_, v)| v.parse::<u32>().unwrap_or(DEFAULT_DIGITS))
-        .unwrap_or(DEFAULT_DIGITS);
-    let period = url
-        .query_pairs()
-        .find(|(k, _)| k == "period")
-        .map(|(_, v)| v.parse::<u64>().unwrap_or(DEFAULT_PERIOD))
-        .unwrap_or(DEFAULT_PERIOD);
-    let algorithm = url
-        .query_pairs()
-        .find(|(k, _)| k == "algorithm")
-        .map(|(_, v)| hash_from_alg(&v))
-        .unwrap_or(HashAlgo::Sha1);
+    let digits = match url.query_pairs().find(|(k, _)| k == "digits") {
+        None => DEFAULT_DIGITS,
+        Some((_, v)) => v
+            .parse::<u32>()
+            .map_err(|_| "TOTP digits 参数无效".to_owned())?,
+    };
+    let period = match url.query_pairs().find(|(k, _)| k == "period") {
+        None => DEFAULT_PERIOD,
+        Some((_, v)) => v
+            .parse::<u64>()
+            .map_err(|_| "TOTP period 参数无效".to_owned())?,
+    };
+    let algorithm = match url.query_pairs().find(|(k, _)| k == "algorithm") {
+        None => HashAlgo::Sha1,
+        Some((_, v)) => hash_from_alg_checked(&v)?,
+    };
     Ok(OtpSpec {
         kind: OtpKind::Totp,
         secret: decode_base32(&secret)?,
@@ -412,7 +415,7 @@ mod tests {
                 let spec = OtpSpec {
                     kind: OtpKind::Totp,
                     secret: secret.to_vec(),
-                    algorithm: hash_from_alg(alg),
+                    algorithm: hash_from_alg_checked(alg).unwrap(),
                     digits: 8,
                     period: 30,
                     counter: 0,
@@ -458,6 +461,18 @@ mod tests {
     fn invalid_base32_is_rejected() {
         assert!(parse_totp_seed("####").is_err());
         assert!(parse_totp_seed("").is_err());
+    }
+
+    #[test]
+    fn otpauth_uri_rejects_invalid_digits_period_and_algorithm() {
+        // Present-but-unparsable params must error, not silently fall back.
+        assert!(parse_totp_seed("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=abc").is_err());
+        assert!(parse_totp_seed("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&period=abc").is_err());
+        assert!(parse_totp_seed("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=MD5").is_err());
+        // Absent params still take the documented defaults.
+        let spec = parse_totp_seed("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP").unwrap();
+        assert_eq!(spec.digits, DEFAULT_DIGITS);
+        assert_eq!(spec.period, DEFAULT_PERIOD);
     }
 
     /// RFC 4226 Appendix D — HOTP with ASCII "12345678901234567890".

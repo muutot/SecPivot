@@ -6341,6 +6341,95 @@ fn add_entries_aborts_whole_batch_on_bad_attachment() {
 }
 
 #[test]
+fn add_entries_aborts_whole_batch_on_unknown_group() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("v.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "pw", "Aes", "Aes256", "None", None)
+        .unwrap();
+
+    let inputs: Vec<EntryInput> = vec![
+        entry_input(ROOT_GROUP_UUID, "Good", "u", "p", "https://ok"),
+        EntryInput {
+            group_uuid: "00000000-0000-0000-0000-000000000000".into(),
+            ..entry_input(ROOT_GROUP_UUID, "Bad", "u", "p", "https://bad")
+        },
+    ];
+    let err = session.add_entries(&inputs).unwrap_err();
+    assert!(err.contains("目标分组不存在"));
+    let state = session.state().unwrap().unwrap();
+    assert!(state.root.entries.is_empty(), "no entry must be committed");
+    assert!(!state.dirty);
+}
+
+#[test]
+fn delete_entries_is_atomic_on_unknown_uuid() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(ROOT_GROUP_UUID, "E", "u", "p", ""))
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+    let err = session
+        .delete_entries(&[uuid.clone(), "00000000-0000-0000-0000-000000000000".into()])
+        .unwrap_err();
+    assert!(err.contains("条目不存在"));
+    let state = session.state().unwrap().unwrap();
+    assert!(
+        state.root.entries.iter().any(|e| e.uuid == uuid),
+        "no partial delete"
+    );
+}
+
+#[test]
+fn update_entry_flags_rejects_invalid_foreground_color() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(ROOT_GROUP_UUID, "E", "u", "p", ""))
+        .unwrap();
+    let uuid = state.root.entries.last().unwrap().uuid.clone();
+    let err = session
+        .update_entry_flags(&uuid, None, None, Some("#zzzzzz".into()))
+        .unwrap_err();
+    assert!(err.contains("前景色无效"));
+}
+
+#[test]
+fn remote_refresh_resets_save_failure_counter() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let local = dir.path().join("local");
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session.note_save_failure();
+    session.note_save_failure();
+    assert!(!session.is_read_only());
+    let job = session.prepare_remote_refresh().unwrap();
+    let revision = job.revision;
+    session
+        .complete_remote_refresh(revision, persist_remote_refresh(job).unwrap())
+        .unwrap();
+    session.note_save_failure();
+    assert!(
+        !session.is_read_only(),
+        "a successful refresh must reset the consecutive-failure counter"
+    );
+}
+
+#[test]
 fn update_entry_with_invalid_attachment_keeps_original_and_history() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("v.kdbx");

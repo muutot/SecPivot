@@ -140,7 +140,10 @@ impl VaultSession {
     fn advance_hotp_counter(&mut self, id: EntryId, spec: &otp::OtpSpec) -> Result<(), String> {
         let next = {
             let mut next = spec.clone();
-            next.counter = spec.counter + 1;
+            next.counter = spec
+                .counter
+                .checked_add(1)
+                .ok_or_else(|| "HOTP 计数器已达上限".to_owned())?;
             otp::render_hotp_seed(&next)
         };
         {

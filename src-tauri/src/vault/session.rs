@@ -264,6 +264,7 @@ impl VaultSession {
         self.remote = None;
         self.cached_snapshot = None;
         self.pending_autotype_window = None;
+        self.tcato_last_window.clear();
     }
 
     pub fn state(&mut self) -> Result<Option<VaultState>, String> {
@@ -683,6 +684,9 @@ impl VaultSession {
         if self.revision != revision {
             return Err("远程刷新期间数据库已发生修改，请重试".to_owned());
         }
+        // A successful refresh re-syncs with the remote, so reset the
+        // consecutive-save-failure counter like the other success paths.
+        self.note_save_success();
         self.db = Some(result.db);
         self.dirty = false;
         self.revision += 1;

@@ -298,6 +298,18 @@ impl VaultSession {
             .iter()
             .map(|input| decode_attachments(&input.attachments))
             .collect::<Result<_, _>>()?;
+        // Validate every target group up-front so a bad group aborts the
+        // whole batch before any entry is inserted (no partial import).
+        {
+            let db = self.require_db()?;
+            for input in inputs {
+                if input.group_uuid != ROOT_GROUP_UUID {
+                    let group_id = parse_group_id(&input.group_uuid)?;
+                    db.group(group_id)
+                        .ok_or_else(|| "目标分组不存在".to_owned())?;
+                }
+            }
+        }
         {
             let db = self.require_db_mut()?;
             for (input, payload) in inputs.iter().zip(&payloads) {
@@ -386,7 +398,14 @@ impl VaultSession {
                 entry.quality_check = check;
             }
             if let Some(color) = foreground_color {
-                entry.foreground_color = super::serialize::parse_color(Some(color.as_str()));
+                let trimmed = color.trim();
+                if trimmed.is_empty() {
+                    entry.foreground_color = None;
+                } else if let Some(parsed) = super::serialize::parse_color(Some(trimmed)) {
+                    entry.foreground_color = Some(parsed);
+                } else {
+                    return Err("前景色无效，应为 #RRGGBB".to_owned());
+                }
             }
         }
         self.mark_dirty();
@@ -508,6 +527,15 @@ impl VaultSession {
     /// bin (`Meta.recyclebin_enabled == Some(false)`; no bin group is created
     /// in that case).
     pub fn delete_entries(&mut self, uuids: &[String]) -> Result<VaultState, String> {
+        // Validate every uuid up-front so a bad id aborts the whole batch
+        // before any entry is moved or removed (no partial delete).
+        {
+            let db = self.require_db()?;
+            for uuid in uuids {
+                let id = parse_entry_id(uuid)?;
+                db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+            }
+        }
         {
             let db = self.require_db_mut()?;
             let recycle_disabled = db.meta.recyclebin_enabled == Some(false);
