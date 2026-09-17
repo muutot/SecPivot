@@ -751,7 +751,22 @@ export const vault: VaultStore = {
   async closeAll(): Promise<void> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
+        // Capture every open vault path before the backend wipes the
+        // sessions: when `rememberPassword` is disabled the OS-stored master
+        // passwords must be dropped on lock, mirroring `close`/`closeTab`.
+        const openPaths = new Set<string>();
+        for (const tab of get(tabs)) {
+          if (tab.path) openPaths.add(tab.path);
+        }
+        const activePath = get(state)?.path;
+        if (activePath) openPaths.add(activePath);
+        const dropSaved = !get(appSettings).security.rememberPassword;
         await backendInvoke("close_all_vaults");
+        if (dropSaved) {
+          for (const path of openPaths) {
+            void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
+          }
+        }
         activeSessionId = null;
         await discardTempAttachments();
         browserState = null;
