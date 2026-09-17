@@ -1,8 +1,9 @@
 /** Parser for KeePass 2.x XML export files (`File ▸ Export ▸ KeePass XML`).
  *  Walks the `<Root><Group>` tree, mapping nested groups to `A / B` paths and
  *  each entry's `String` fields to the fixed columns (Title/UserName/Password/
- *  URL/Notes) plus a TOTP seed (the `otp`/`TimeOtp`/`HmacOtp`/`SteamOtp` keys)
- *  and any remaining non-standard `String`s as custom fields. */
+ *  URL/Notes) plus a TOTP seed (the `otp`/`TimeOtp`/`HmacOtp`/`SteamOtp` keys),
+ *  `<Times>` expiry (`<Expires>` + `<ExpiryTime>`), and any remaining
+ *  non-standard `String`s as custom fields. */
 import type { Language } from "$lib/types/settings";
 import { t } from "$lib/i18n";
 
@@ -14,6 +15,8 @@ export interface XmlImportEntry {
   url: string;
   notes: string;
   totp: string;
+  /** Raw `<ExpiryTime>` text, kept only when `<Expires>` is true; empty = no expiry. */
+  expires: string;
   customFields: { name: string; value: string }[];
 }
 
@@ -48,13 +51,18 @@ function parseEntry(entry: Element, group: string): XmlImportEntry {
     url: "",
     notes: "",
     totp: "",
+    expires: "",
     customFields: [],
   };
-  for (const str of childElements(entry)) {
-    if (str.tagName !== "String") continue;
-    const key = textOf(childElements(str).find((e) => e.tagName === "Key"));
+  for (const child of childElements(entry)) {
+    if (child.tagName === "Times") {
+      out.expires = parseExpiryTime(child);
+      continue;
+    }
+    if (child.tagName !== "String") continue;
+    const key = textOf(childElements(child).find((e) => e.tagName === "Key"));
     if (!key) continue;
-    const valueEl = childElements(str).find((e) => e.tagName === "Value");
+    const valueEl = childElements(child).find((e) => e.tagName === "Value");
     const protectedValue = valueEl?.getAttribute("Protected")?.toLowerCase() === "true";
     const raw = valueEl?.textContent ?? "";
     const value = protectedValue ? decodeProtectedValue(raw) : raw;
@@ -85,6 +93,17 @@ function parseEntry(entry: Element, group: string): XmlImportEntry {
     }
   }
   return out;
+}
+
+/** Read `<Times><Expires>/<ExpiryTime>` of one KeePass XML entry. Returns the
+ *  raw expiry text only when expiry is enabled; otherwise empty (no expiry).
+ *  The backend `parse_expiry` accepts both RFC 3339 and naive
+ *  `%Y-%m-%dT%H:%M:%S` forms, so the text passes through untouched. */
+function parseExpiryTime(times: Element): string {
+  const kids = childElements(times);
+  const expires = textOf(kids.find((e) => e.tagName === "Expires")).toLowerCase();
+  if (expires !== "true") return "";
+  return textOf(kids.find((e) => e.tagName === "ExpiryTime"));
 }
 
 /** Parse a KeePass 2.x XML import file into entries with `A / B` group paths

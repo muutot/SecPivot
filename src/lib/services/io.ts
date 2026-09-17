@@ -54,6 +54,8 @@ export type ImportEntry = {
   url: string;
   notes: string;
   totp?: string;
+  /** ISO-8601 expiry; empty/absent disables expiry (only KeePass XML supplies it). */
+  expires?: string;
   customFields: { name: string; value: string }[];
 };
 
@@ -116,7 +118,11 @@ export function csvToImportEntries(text: string): ImportEntry[] {
 }
 
 export function xmlToImportEntries(text: string, lang: Language): ImportEntry[] {
-  return parseKdbxXml(text, lang);
+  return parseKdbxXml(text, lang).map((row) => ({
+    ...row,
+    totp: row.totp || undefined,
+    expires: row.expires || undefined,
+  }));
 }
 
 /** Shared row mapping for the JSON-based importers (Bitwarden, 1Password). */
@@ -229,6 +235,7 @@ export async function importEntries(
       url: entry.url,
       notes: entry.notes,
       totp: entry.totp || undefined,
+      expires: entry.expires || undefined,
       customFields: entry.customFields,
       attachments: [],
     }));
