@@ -147,7 +147,8 @@ export function parseCsvRows(raw: string[][]): ImportCsvRow[] {
           notes: cells[5] ?? "",
           totp: cells[6] ?? "",
         };
-    if (!row.title && !row.password) continue;
+    if (!row.title && !row.username && !row.password && !row.url && !row.notes && !row.totp)
+      continue;
     rows.push(row);
   }
   return rows;

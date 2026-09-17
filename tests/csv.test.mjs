@@ -24,4 +24,14 @@ describe("parseCsvRows", () => {
     assert.equal(rows[0].title, "T");
     assert.equal(rows[0].group, "G");
   });
+
+  it("keeps rows that have content but no title or password", () => {
+    const raw = parseCsv(
+      "Group,Title,Username,Password,URL,Notes\nG,,user1,,https://u.example,note-only\n",
+    );
+    const rows = parseCsvRows(raw);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].username, "user1");
+    assert.equal(rows[0].url, "https://u.example");
+  });
 });
