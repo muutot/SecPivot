@@ -616,6 +616,15 @@
         : customIconSelected
           ? undefined
           : null;
+    // Expiry: the `datetime-local` input only carries minute precision, so an
+    // untouched field must resend the original full-precision value instead
+    // of a truncated round-trip (which would shave the seconds on every save).
+    const initialExpiresLocal = initialEntry?.expires ? toDateTimeInput(initialEntry.expires) : "";
+    const expiresValue = !expiresLocal
+      ? undefined
+      : initialEntry?.expires && expiresLocal === initialExpiresLocal
+        ? initialEntry.expires
+        : new Date(expiresLocal).toISOString();
     const autotype: EntryAutoTypeConfig = {
       enabled: autoTypeEnabled,
       defaultSequence: autoTypeDefaultSeq.trim() || undefined,
@@ -633,7 +642,7 @@
           url: url.trim(),
           notes,
           totp: totp.trim() || undefined,
-          expires: expiresLocal ? new Date(expiresLocal).toISOString() : undefined,
+          expires: expiresValue,
           ...(iconValue !== undefined ? { icon: iconValue } : {}),
           color: colorHex || undefined,
           tags: tags.trim(),
