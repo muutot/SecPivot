@@ -15,7 +15,7 @@ use crate::crypto::otp;
 use crate::platform::autotype::{self, AutotypeContext};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use keepass::db::{EntryId, GroupId, Icon, Value};
+use keepass::db::{EntryId, GroupId, Icon, Times, Value};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -136,7 +136,9 @@ impl VaultSession {
     /// Advance an `HmacOtp` entry's counter by rewriting the seed field with
     /// `counter+1`. Mutates without `track_changes` so showing a code does not
     /// pollute the entry's history; the vault is left dirty so the next save
-    /// persists the new counter.
+    /// persists the new counter. The entry's `last_modification` is stamped
+    /// like any other edit so timestamp-based merge keeps ordering the counter
+    /// forward instead of tripping the same-timestamp divergence guard.
     fn advance_hotp_counter(&mut self, id: EntryId, spec: &otp::OtpSpec) -> Result<(), String> {
         let next = {
             let mut next = spec.clone();
@@ -150,6 +152,7 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             entry.set(FIELD_HMAC_OTP, Value::unprotected(next));
+            entry.times.last_modification = Some(Times::now());
         }
         self.mark_dirty();
         Ok(())

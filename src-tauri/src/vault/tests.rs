@@ -4078,6 +4078,17 @@ fn hotp_code_advances_counter_and_writes_back() {
         })
         .unwrap();
     let uuid = state.root.entries[0].uuid.clone();
+    // Pin the entry clock back so the counter advance must re-stamp it.
+    let id = crate::vault::helpers::parse_entry_id(&uuid).unwrap();
+    let pinned =
+        chrono::NaiveDateTime::parse_from_str("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+    session
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(id)
+        .unwrap()
+        .times
+        .last_modification = Some(pinned);
     let first = session.totp_code(&uuid).unwrap();
     assert_eq!(first.kind, "hotp");
     assert_eq!(first.period, 0);
@@ -4087,6 +4098,18 @@ fn hotp_code_advances_counter_and_writes_back() {
     // A third call keeps advancing (no repeat of an earlier code).
     let third = session.totp_code(&uuid).unwrap();
     assert_eq!(third.counter, Some(2));
+    // Counter advances stamp last_modification so timestamp-based merge
+    // keeps ordering the counter forward instead of tripping the
+    // same-timestamp divergence guard.
+    let mtime = session
+        .require_db()
+        .unwrap()
+        .entry(id)
+        .unwrap()
+        .times
+        .last_modification
+        .unwrap();
+    assert!(mtime > pinned);
 }
 
 /// A Steam guard entry yields a 5-character code from the Steam alphabet
