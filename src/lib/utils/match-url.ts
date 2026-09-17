@@ -13,11 +13,17 @@
 type Accuracy = "Exact" | "Hostname" | "Domain";
 
 /** Lower-cased host portion of a URL (`host[:port]`), or `null` when unparsable.
- */
+ *  Bracketed IPv6 literals (`[2001:db8::1]`, `[2001:db8::1]:8080`) resolve to
+ *  the address inside the brackets — never the first `:` segment. */
 export function urlHost(url: string): string | null {
   const m = /^[a-z][a-z0-9+.-]*:\/\//i.exec(url);
   const rest = (m ? url.slice(m[0].length) : url).split(/[/?#]/)[0];
-  const host = rest.replace(/^\[/, "").replace(/\]$/, "").split(":")[0].toLowerCase();
+  if (rest.startsWith("[")) {
+    const end = rest.indexOf("]");
+    if (end > 1) return rest.slice(1, end).toLowerCase();
+    return null;
+  }
+  const host = rest.split(":")[0].toLowerCase();
   return host || null;
 }
 

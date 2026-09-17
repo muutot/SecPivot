@@ -8,16 +8,19 @@ use std::path::{Path, PathBuf};
 /// Any `://` scheme is dropped, then the leading host portion up to the first
 /// of `/`, `:`, `?`, `#` is taken, trimmed, and lower-cased. Plain hostnames
 /// and `host:port` inputs pass through unchanged (everything after the host is
-/// a delimiter). Returns `None` when nothing remains, so callers can distinguish
-/// "no host" from a literal `""`.
+/// a delimiter). Bracketed IPv6 literals (`[2001:db8::1]`,
+/// `[2001:db8::1]:8080`) resolve to the address inside the brackets — never
+/// the first `:` segment. Returns `None` when nothing remains, so callers can
+/// distinguish "no host" from a literal `""`.
 pub fn url_host(url: &str) -> Option<String> {
     let rest = url.split("://").nth(1).unwrap_or(url);
-    let host = rest
-        .split(['/', ':', '?', '#'])
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = if let Some(bracketed) = authority.strip_prefix('[') {
+        bracketed.split(']').next().unwrap_or_default()
+    } else {
+        authority.split(':').next().unwrap_or_default()
+    };
+    let host = host.trim().to_ascii_lowercase();
     (!host.is_empty()).then_some(host)
 }
 
@@ -76,6 +79,11 @@ mod tests {
         assert_eq!(url_host("http://a.b.c:8080/x?y=1"), Some("a.b.c".into()));
         assert_eq!(url_host("ftp://EXAMPLE.com:21"), Some("example.com".into()));
         assert_eq!(url_host("plain-host"), Some("plain-host".into()));
+        assert_eq!(
+            url_host("http://[2001:db8::1]:8080/x"),
+            Some("2001:db8::1".into())
+        );
+        assert_eq!(url_host("https://[::1]/"), Some("::1".into()));
         assert_eq!(url_host("https://"), None);
         assert_eq!(url_host(""), None);
         assert_eq!(url_host("   "), None);
