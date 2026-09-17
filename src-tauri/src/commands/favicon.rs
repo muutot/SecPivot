@@ -20,6 +20,9 @@ pub(crate) struct FaviconCancel {
     pub flag: Arc<std::sync::atomic::AtomicBool>,
     /// Run generation, bumped by every `reset` (see `HibpCancel::epoch`).
     pub epoch: Arc<std::sync::atomic::AtomicU64>,
+    /// Session that owns the current run (`reset_for`). A cancel from any
+    /// other session is ignored so one tab cannot abort another tab's run.
+    owner: Arc<Mutex<Option<String>>>,
 }
 
 impl Default for FaviconCancel {
@@ -28,6 +31,7 @@ impl Default for FaviconCancel {
             notify: Arc::new(Notify::new()),
             flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             epoch: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            owner: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -40,6 +44,18 @@ impl FaviconCancel {
         self.notify.notify_waiters();
     }
 
+    /// Session-scoped cancel: fires only when `session_id` owns the current
+    /// run (or when no run is tracked and no session is given, preserving the
+    /// legacy global behavior for compat callers).
+    pub(crate) fn cancel_for(&self, session_id: Option<&str>) {
+        let owned = self.owner.lock().map(|owner| owner.clone()).unwrap_or(None);
+        match (owned.as_deref(), session_id) {
+            (Some(owner), Some(id)) if owner == id => self.cancel(),
+            (None, None) => self.cancel(),
+            _ => {}
+        }
+    }
+
     /// Start a new run generation: clears any previous cancel, wakes tasks
     /// parked by the previous run so they observe the epoch change, and
     /// returns the new epoch for `should_stop`.
@@ -48,6 +64,14 @@ impl FaviconCancel {
         self.flag.store(false, std::sync::atomic::Ordering::SeqCst);
         self.notify.notify_waiters();
         epoch
+    }
+
+    /// Start a new run generation owned by `session_id` (see `owner`).
+    pub(crate) fn reset_for(&self, session_id: &str) -> u64 {
+        if let Ok(mut owner) = self.owner.lock() {
+            *owner = Some(session_id.to_owned());
+        }
+        self.reset()
     }
 
     /// Whether the run started at `epoch` must stop: cancelled inside its own
@@ -59,8 +83,11 @@ impl FaviconCancel {
 }
 
 #[tauri::command]
-pub(crate) fn cancel_favicons(cancel: tauri::State<'_, FaviconCancel>) -> Result<(), String> {
-    cancel.cancel();
+pub(crate) fn cancel_favicons(
+    cancel: tauri::State<'_, FaviconCancel>,
+    session_id: Option<String>,
+) -> Result<(), String> {
+    cancel.cancel_for(session_id.as_deref());
     Ok(())
 }
 
@@ -488,8 +515,10 @@ pub(crate) async fn download_favicons(
     // One client per command keeps a single connection pool for every host.
     // `reqwest::Client::clone` is cheap (Arc-backed), while rebuilding it per
     // host discards warm TLS/proxy connections and repeats proxy setup.
-    // Reset cancel flag for this run; previous run's cancel must not poison the next.
-    let epoch = cancel_state.reset();
+    // Reset cancel flag for this run, owned by the originating session so a
+    // cancel from another tab cannot abort it; previous run's cancel must
+    // not poison the next.
+    let epoch = cancel_state.reset_for(&session_id);
     let client = build_favicon_client();
     let mut set = tokio::task::JoinSet::new();
     for job in &jobs {

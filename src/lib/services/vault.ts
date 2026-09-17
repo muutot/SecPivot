@@ -1207,7 +1207,8 @@ export const vault: VaultStore = {
   async cancelHibp(): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-      await backendInvoke<void>("cancel_hibp", {});
+      // Session-scoped: the backend only aborts the run owned by this tab.
+      await backendInvoke<void>("cancel_hibp", { sessionId: activeSessionId });
     } catch {
       // No active check — safe to ignore.
     }
@@ -1231,7 +1232,8 @@ export const vault: VaultStore = {
   async cancelFavicons(): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-      await backendInvoke<void>("cancel_favicons", {});
+      // Session-scoped: the backend only aborts the run owned by this tab.
+      await backendInvoke<void>("cancel_favicons", { sessionId: activeSessionId });
     } catch {
       // No active download or already finished — safe to ignore.
     }

@@ -197,6 +197,30 @@ fn favicon_superseded_run_stops_even_after_reset_clears_flag() {
     assert!(cancel.should_stop(second));
 }
 
+#[test]
+fn hibp_cancel_is_session_scoped() {
+    let cancel = HibpCancel::default();
+    let epoch = cancel.reset_for("s1");
+    assert!(!cancel.should_stop(epoch));
+    // A cancel from another tab must not abort this run.
+    cancel.cancel_for(Some("s2"));
+    assert!(!cancel.should_stop(epoch));
+    // The owning tab's cancel aborts it.
+    cancel.cancel_for(Some("s1"));
+    assert!(cancel.should_stop(epoch));
+}
+
+#[test]
+fn favicon_cancel_is_session_scoped() {
+    let cancel = FaviconCancel::default();
+    let epoch = cancel.reset_for("s1");
+    assert!(!cancel.should_stop(epoch));
+    cancel.cancel_for(Some("s2"));
+    assert!(!cancel.should_stop(epoch));
+    cancel.cancel_for(Some("s1"));
+    assert!(cancel.should_stop(epoch));
+}
+
 #[tokio::test]
 async fn hibp_cancel_wakes_a_parked_waiter() {
     let cancel = HibpCancel::default();
