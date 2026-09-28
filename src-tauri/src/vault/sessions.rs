@@ -525,7 +525,9 @@ mod tests {
             attempting_tx.send(()).unwrap();
             // Unwrap: holding the `Result` would drop the permit immediately and
             // the gate would not actually be taken.
-            let _second = registry_worker.acquire_persistence().expect("second permit");
+            let _second = registry_worker
+                .acquire_persistence()
+                .expect("second permit");
             entered_tx.send(()).unwrap();
         });
 

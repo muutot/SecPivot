@@ -9369,7 +9369,9 @@ fn ip_literal_hosts_never_cross_match() {
         "the entry must still match its own address"
     );
     assert!(
-        session.logins_for("http://192.168.0.1:3000/login", None).is_empty(),
+        session
+            .logins_for("http://192.168.0.1:3000/login", None)
+            .is_empty(),
         "a different address in the same /24 must not match"
     );
     assert!(
@@ -9409,7 +9411,9 @@ fn unrelated_hosts_under_a_multi_label_suffix_do_not_cross_match() {
         ("新西兰银行", "evil.co.nz"),
     ] {
         assert!(
-            session.logins_for(&format!("https://{other}/login"), None).is_empty(),
+            session
+                .logins_for(&format!("https://{other}/login"), None)
+                .is_empty(),
             "{title} credentials must never be offered to {other}"
         );
     }
@@ -9478,7 +9482,10 @@ fn every_supported_kdf_and_cipher_round_trips_through_reopen() {
                 .unwrap_or_else(|e| panic!("reopen {name} declared as {kdf}/{cipher}: {e}"));
             let round_tripped = reopened.database_settings().unwrap().unwrap();
             assert_eq!(round_tripped.kdf, kdf, "{name} KDF must round trip");
-            assert_eq!(round_tripped.cipher, cipher, "{name} cipher must round trip");
+            assert_eq!(
+                round_tripped.cipher, cipher,
+                "{name} cipher must round trip"
+            );
         }
     }
 }
@@ -9526,7 +9533,14 @@ fn the_shipped_default_kdf_creates_a_reopenable_vault() {
     let path = dir.path().join("default-kdf.kdbx");
     let mut session = VaultSession::default();
     session
-        .create(&path, "master-password", &default_kdf, "Aes256", "None", None)
+        .create(
+            &path,
+            "master-password",
+            &default_kdf,
+            "Aes256",
+            "None",
+            None,
+        )
         .unwrap_or_else(|e| panic!("create with the shipped default {default_kdf}: {e}"));
     session.close();
     let mut reopened = VaultSession::default();

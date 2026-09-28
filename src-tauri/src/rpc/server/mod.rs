@@ -584,8 +584,12 @@ fn reply_jsonrpc_write(
     let _persistence = match vaults.acquire_persistence() {
         Ok(permit) => permit,
         Err(message) => {
-            return encode_jsonrpc_result(conn, &request.id, Err(RpcError::InvalidMessage(message)))
-                .is_some_and(|reply| send_envelope(ws, &reply));
+            return encode_jsonrpc_result(
+                conn,
+                &request.id,
+                Err(RpcError::InvalidMessage(message)),
+            )
+            .is_some_and(|reply| send_envelope(ws, &reply));
         }
     };
     let job = {
