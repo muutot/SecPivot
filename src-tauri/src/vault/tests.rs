@@ -80,7 +80,7 @@ fn entry_exchange_copy_then_paste_creates_a_new_entry() {
         .clone();
 
     assert_eq!(
-        session.copy_entries_to_exchange(&[source_uuid.clone()], false),
+        session.copy_entries_to_exchange(std::slice::from_ref(&source_uuid), false),
         Ok(1)
     );
 
@@ -120,7 +120,7 @@ fn entry_exchange_copy_then_paste_creates_a_new_entry() {
     assert_eq!(pasted.url, "https://github.com");
     assert_eq!(pasted.notes, "note");
     assert!(pasted.has_password, "the password is never in the snapshot");
-    assert!(pasted.has_totp == false);
+    assert!(!pasted.has_totp);
     assert_eq!(pasted.tags.as_deref(), Some("work"));
     assert_eq!(pasted.attachments.len(), 1);
     assert_eq!(pasted.attachments[0].name, "a.txt");
