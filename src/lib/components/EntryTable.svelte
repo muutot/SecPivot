@@ -113,6 +113,10 @@
 
   let revealedPassword = $state<{ uuid: string; value: string } | null>(null);
   let revealTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped on every reveal request and on every hide, so a late
+   * `onrevealpassword` response from a superseded click cannot paint another
+   * entry's plaintext into the cell the user is actually looking at. */
+  let revealGeneration = 0;
 
   /** Long-press (touch) → context menu, mirroring desktop right-click. */
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -149,6 +153,8 @@
   }
 
   function hideRevealedPassword(): void {
+    // Invalidate any in-flight reveal so its response is discarded.
+    revealGeneration += 1;
     if (revealTimer !== undefined) clearTimeout(revealTimer);
     revealTimer = undefined;
     revealedPassword = null;
@@ -160,12 +166,29 @@
       return;
     }
     hideRevealedPassword();
+    const generation = revealGeneration;
     const value = await onrevealpassword(entry);
-    if (!value) return;
+    // A newer click (or a hide) landed while the read was in flight: drop this
+    // response instead of showing a password the user never asked to see here.
+    if (!value || generation !== revealGeneration) return;
     revealedPassword = { uuid: entry.uuid, value };
     revealTimer = setTimeout(hideRevealedPassword, REVEAL_TIMEOUT_MS);
   }
 
+  $effect(() => {
+    // A revealed password is rendered inside its row's cell, so scrolling that
+    // row out of the virtual window unmounts the cell. Re-mask here so the
+    // plaintext never outlives the visible row in component state.
+    const revealedUuid = revealedPassword?.uuid;
+    if (
+      revealedUuid !== undefined &&
+      !virtualRows.some((row) => row.kind === "entry" && row.entry.uuid === revealedUuid)
+    ) {
+      hideRevealedPassword();
+    }
+  });
+
+  // Re-mask on component destroy.
   $effect(() => {
     return () => hideRevealedPassword();
   });
