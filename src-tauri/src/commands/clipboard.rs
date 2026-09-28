@@ -36,6 +36,25 @@ pub(crate) fn clipboard_clear() -> Result<(), String> {
 /// thread whose generation is no longer current was superseded and must not
 /// touch the clipboard.
 static WIPE_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Whether a sleeping wipe thread may clear the clipboard.
+///
+/// Pure so the generation contract is unit-testable: the end-to-end version of
+/// this check has to sleep for a whole second against the *real* Windows
+/// clipboard, which any other process on the desktop may replace or empty
+/// meanwhile — that made the previous integration test fail (and, before the
+/// `restore_clipboard` helper, destroy the developer's clipboard contents).
+///
+/// `current` is what the clipboard holds right now; the wipe fires only when it
+/// still holds exactly this thread's own secret.
+fn should_wipe(
+    current_generation: u64,
+    scheduled_generation: u64,
+    secret: &str,
+    current: Option<&str>,
+) -> bool {
+    current_generation == scheduled_generation && current == Some(secret)
+}
 /// Cancel every pending scheduled wipe (called on explicit clear / lock).
 #[tauri::command]
 pub(crate) fn clipboard_cancel_scheduled_wipe() {
@@ -58,16 +77,13 @@ pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), 
         .name("clipboard-wipe".into())
         .spawn(move || {
             std::thread::sleep(Duration::from_secs(seconds));
-            if WIPE_GENERATION.load(Ordering::SeqCst) != generation {
-                // Superseded by a newer copy or an explicit cancel.
-                secret.zeroize();
-                return;
-            }
-            let still_ours = match clipboard::read_clipboard_text() {
-                Ok(Some(current)) => current == secret,
-                _ => false,
-            };
-            if still_ours {
+            let current = clipboard::read_clipboard_text().ok().flatten();
+            if should_wipe(
+                WIPE_GENERATION.load(Ordering::SeqCst),
+                generation,
+                &secret,
+                current.as_deref(),
+            ) {
                 let _ = clipboard::clear_clipboard();
             }
             secret.zeroize();
@@ -123,40 +139,63 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::clipboard::write_clipboard_text;
-
-    /// The Windows clipboard is a process-wide resource shared with the
-    /// platform tests; serialize to avoid cross-test interference.
-    static CLIPBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    use crate::platform::clipboard::tests::{
+        clipboard_is_usable, lock_clipboard, restore_clipboard,
+    };
+    use crate::platform::clipboard::{read_clipboard_text, write_clipboard_text};
 
     #[test]
     fn scheduled_wipe_clears_our_own_text() {
-        let _guard = CLIPBOARD_LOCK.lock().unwrap();
-        let _ = write_clipboard_text("secpivot-scheduled-wipe");
-        clipboard_schedule_wipe("secpivot-scheduled-wipe".into(), 1).unwrap();
-        std::thread::sleep(Duration::from_millis(1800));
-        match clipboard::read_clipboard_text() {
-            // Cleared, or the station has no interactive clipboard (CI): both fine.
-            Ok(Some(text)) => assert_ne!(text, "secpivot-scheduled-wipe"),
-            Ok(None) => {}
-            Err(e) => panic!("unexpected clipboard error: {e}"),
+        let _guard = lock_clipboard();
+        let saved = read_clipboard_text().ok().flatten();
+        if !clipboard_is_usable("secpivot-wipe-probe") {
+            eprintln!("no interactive clipboard on this station; skipping wipe assertion");
+            restore_clipboard(saved);
+            return;
         }
+        write_clipboard_text("secpivot-scheduled-wipe").unwrap();
+        clipboard_schedule_wipe("secpivot-scheduled-wipe".into(), 1).unwrap();
+        // The wipe thread sleeps a full second against the *shared* Windows
+        // clipboard. Re-check ownership just before sleeping so a foreign
+        // clipboard change is reported as "cannot conclude" instead of being
+        // misattributed to the wipe.
+        if read_clipboard_text().ok().flatten().as_deref() != Some("secpivot-scheduled-wipe") {
+            eprintln!("clipboard was replaced by another process; skipping wipe assertion");
+            restore_clipboard(saved);
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(1800));
+        let after = read_clipboard_text().ok().flatten();
+        if after.as_deref() == Some("secpivot-scheduled-wipe") {
+            panic!("the scheduled wipe must clear the exact text it owns");
+        }
+        if after.is_none() && read_clipboard_text().ok().flatten().is_none() {
+            // Empty could be our wipe or another process emptying the
+            // clipboard; only a still-present foreign value proves the wipe
+            // did not fire. Treat the ambiguous case as inconclusive.
+            eprintln!("clipboard emptied during the wipe window; outcome inconclusive");
+        }
+        restore_clipboard(saved);
     }
 
+    /// Deterministic contract for the generation guard. The end-to-end variant
+    /// of this used to sleep against the live clipboard and passed even with
+    /// `WIPE_GENERATION` deleted (no job owned the clipboard text, so nothing
+    /// could ever clear it) — it could not detect the regression it claimed to.
     #[test]
-    fn superseded_wipe_never_touches_the_clipboard() {
-        let _guard = CLIPBOARD_LOCK.lock().unwrap();
-        let _ = write_clipboard_text("keep-me");
-        // First job owns "other-text"; the second schedule supersedes it.
-        clipboard_schedule_wipe("other-text".into(), 1).unwrap();
-        clipboard_schedule_wipe("never-matches-keep-me".into(), 1).unwrap();
-        std::thread::sleep(Duration::from_millis(1800));
-        match clipboard::read_clipboard_text() {
-            Ok(Some(text)) => assert_eq!(text, "keep-me", "superseded wipe must not clear"),
-            Ok(None) => {}
-            Err(e) => panic!("unexpected clipboard error: {e}"),
-        }
-        let _ = clipboard::clear_clipboard();
+    fn superseded_generation_never_wipes() {
+        // First schedule is generation 1, second is 2. The first thread reads
+        // the *current* generation when it wakes, so it is superseded and must
+        // not clear — even though the clipboard still holds its own secret.
+        assert!(!should_wipe(2, 1, "victim", Some("victim")));
+        // The surviving generation only wipes for its own exact secret.
+        assert!(!should_wipe(2, 2, "other", Some("victim")));
+        assert!(should_wipe(2, 2, "victim", Some("victim")));
+        // Empty, non-text, or foreign content is never ours to clear.
+        assert!(!should_wipe(2, 2, "victim", None));
+        assert!(!should_wipe(2, 2, "victim", Some("someone-else")));
+        // An explicit cancel bumps the generation just like a new schedule.
+        assert!(!should_wipe(3, 2, "victim", Some("victim")));
     }
 
     #[test]

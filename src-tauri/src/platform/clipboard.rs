@@ -226,37 +226,83 @@ pub fn write_clipboard_bytes(_format: &str, _bytes: &[u8]) -> Result<(), String>
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    /// The Windows clipboard is a process-wide resource; the tests share
-    /// system state, so serializing them avoids cross-test interference
-    /// (including heap corruption from racing `GlobalLock`/`EmptyClipboard`).
-    static CLIPBOARD_LOCK: Mutex<()> = Mutex::new(());
+    /// The Windows clipboard is a process-wide resource. One shared guard for
+    /// every clipboard test in the crate — a per-module lock left the platform
+    /// and command tests free to interleave, so `OpenClipboard` contention made
+    /// them read back each other's (or the developer's) text. Process-wide only:
+    /// `cargo nextest` gives every test its own process, so the tests below
+    /// also probe for a usable clipboard and skip instead of asserting on
+    /// foreign content.
+    pub(crate) static CLIPBOARD_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Lock the shared clipboard guard, tolerating a poisoned mutex left by an
+    /// earlier failing test.
+    pub(crate) fn lock_clipboard() -> std::sync::MutexGuard<'static, ()> {
+        CLIPBOARD_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    /// Whether this station has an interactive clipboard at all. A successful
+    /// write followed by `Ok(None)`/`Err` means there is no window station to
+    /// test against (CI, service session, locked desktop) — the caller must
+    /// skip rather than assert against whatever else holds the clipboard.
+    pub(crate) fn clipboard_is_usable(probe: &str) -> bool {
+        matches!(write_clipboard_text(probe), Ok(()))
+            && matches!(read_clipboard_text(), Ok(Some(ref text)) if text == probe)
+    }
+
+    /// Put back whatever the clipboard held before the test ran, so a test
+    /// never destroys the developer's real clipboard contents.
+    pub(crate) fn restore_clipboard(saved: Option<String>) {
+        match saved {
+            Some(text) => {
+                let _ = write_clipboard_text(&text);
+            }
+            None => {
+                let _ = clear_clipboard();
+            }
+        }
+    }
 
     #[test]
     fn clipboard_read_write_round_trip() {
-        let _guard = CLIPBOARD_LOCK.lock().unwrap();
-        let _ = write_clipboard_text("secpivot-clipboard-test");
-        match read_clipboard_text() {
-            Ok(Some(text)) => assert_eq!(text, "secpivot-clipboard-test"),
-            // CI machines may have no interactive window station; the API
-            // must then degrade gracefully instead of panicking.
-            Ok(None) => {}
-            Err(e) => panic!("unexpected clipboard error: {e}"),
+        let _guard = lock_clipboard();
+        let saved = read_clipboard_text().ok().flatten();
+        if !clipboard_is_usable("secpivot-clipboard-probe") {
+            eprintln!("no interactive clipboard on this station; skipping round-trip assertions");
+            restore_clipboard(saved);
+            return;
         }
-        let _ = clear_clipboard();
+        write_clipboard_text("secpivot-clipboard-test").unwrap();
+        assert_eq!(
+            read_clipboard_text().unwrap().as_deref(),
+            Some("secpivot-clipboard-test"),
+            "a successful write must read back byte-for-byte"
+        );
+        restore_clipboard(saved);
     }
 
     #[test]
     fn clear_clipboard_empties_text() {
-        let _guard = CLIPBOARD_LOCK.lock().unwrap();
-        let _ = write_clipboard_text("to-be-emptied");
-        let _ = clear_clipboard();
-        // After EmptyClipboard the clipboard may be owned by an app that
-        // re-supplies content; either result is acceptable as long as we
-        // do not error out.
-        let _ = read_clipboard_text();
+        let _guard = lock_clipboard();
+        let saved = read_clipboard_text().ok().flatten();
+        if !clipboard_is_usable("secpivot-clear-probe") {
+            eprintln!("no interactive clipboard on this station; skipping clear assertions");
+            restore_clipboard(saved);
+            return;
+        }
+        write_clipboard_text("to-be-emptied").unwrap();
+        clear_clipboard().unwrap();
+        assert_ne!(
+            read_clipboard_text().unwrap().as_deref(),
+            Some("to-be-emptied"),
+            "clear_clipboard must remove the text it just wrote"
+        );
+        restore_clipboard(saved);
     }
 }

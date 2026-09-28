@@ -304,6 +304,15 @@ fn s3_rejects_scheme_less_or_non_http_endpoints() {
 #[test]
 fn s3_transport_round_trips_against_live_s3_server() {
     const ENDPOINT: &str = "http://127.0.0.1:9000";
+    // Opt in explicitly. The previous guard only checked that *something*
+    // accepts TCP on the port, so an unrelated service (or a MinIO instance
+    // with different credentials) made the test run and fail on an HTTP 403
+    // that has nothing to do with this codebase. A test that needs an external
+    // service must require the operator to say so.
+    if std::env::var("SECPIVOT_S3_LIVE").as_deref() != Ok("1") {
+        eprintln!("skip: set SECPIVOT_S3_LIVE=1 to run the live S3 round-trip");
+        return;
+    }
     let addr: std::net::SocketAddr = "127.0.0.1:9000".parse().expect("loopback addr");
     if std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_err() {
         eprintln!("skip: local S3-compatible server not running at {ENDPOINT}");
