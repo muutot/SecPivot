@@ -99,7 +99,7 @@
     <span class="title-icon"><AppIcon name="shield" size={15} /></span>
     <div class="heading">
       <strong>{t(lang, "tcato.title")}</strong>
-      <p {title}>{title || t(lang, "tcato.loading")}</p>
+      <p>{title || t(lang, "tcato.loading")}</p>
     </div>
     <button class="close-button" onclick={close} aria-label={t(lang, "common.close")}>×</button>
   </header>
