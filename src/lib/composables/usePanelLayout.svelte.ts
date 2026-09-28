@@ -61,13 +61,19 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
   });
 
   $effect(() => {
-    const entry = options.selectedEntry();
+    // Track the selected entry's *uuid*, not the object. `selectedEntry` is
+    // re-created on every vault snapshot (favourite toggle, notes autosave,
+    // favicon download, browser-bridge write), and tracking object identity
+    // made each of those background updates count as a new selection — which
+    // re-opened a detail panel the user had deliberately closed. Genuine
+    // re-selection of the same entry is covered by `selectionVersion`.
+    const selectedUuid = options.selectedEntry()?.uuid ?? null;
     // also track showDetailOnSelect so toggling the setting re-evaluates
     const autoShow = showDetailOnSelect;
     // track version to re-open same entry after detail was closed
     const version = options.selectionVersion?.() ?? 0;
     void version;
-    if (entry) {
+    if (selectedUuid !== null) {
       if (suppressDetailAutoOpen) {
         suppressDetailAutoOpen = false;
       } else {
