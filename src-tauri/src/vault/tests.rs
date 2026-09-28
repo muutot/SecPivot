@@ -9444,3 +9444,95 @@ fn trailing_dot_hosts_match_their_plain_form() {
         "a trailing root dot names the same host"
     );
 }
+
+/// Storage settings must survive a create -> close -> reopen round trip for every
+/// KDF / cipher the UI offers, because these are exactly the values a wrongly
+/// built vault writes. The default KDF for newly created vaults is Argon2id
+/// (`config::settings::database::kdf`), yet the string "Argon2id" never appeared
+/// anywhere in this suite: the `apply_kdf` branch every new vault takes was
+/// executed zero times, so a mistake in the Argon2 parameters (memory in KiB vs
+/// MiB, parallelism, `Version13`) would have left every other test green while
+/// each created vault wrote a header no other KeePass client accepts.
+#[test]
+fn every_supported_kdf_and_cipher_round_trips_through_reopen() {
+    let dir = TempDir::new().unwrap();
+    for kdf in ["Aes", "Argon2", "Argon2id"] {
+        for cipher in ["Aes256", "ChaCha20"] {
+            let name = format!("{kdf}-{cipher}.kdbx");
+            let path = dir.path().join(&name);
+
+            let mut session = VaultSession::default();
+            session
+                .create(&path, "master-password", kdf, cipher, "None", None)
+                .unwrap_or_else(|e| panic!("create {name}: {e}"));
+            let reported = session.database_settings().unwrap().unwrap();
+            assert_eq!(reported.kdf, kdf, "{name} must report its KDF");
+            assert_eq!(reported.cipher, cipher, "{name} must report its cipher");
+            session.close();
+
+            // Reopening with the same credentials: a header this code cannot read
+            // back is a header other KeePass clients may reject too.
+            let mut reopened = VaultSession::default();
+            reopened
+                .open(&path, "master-password", None)
+                .unwrap_or_else(|e| panic!("reopen {name} declared as {kdf}/{cipher}: {e}"));
+            let round_tripped = reopened.database_settings().unwrap().unwrap();
+            assert_eq!(round_tripped.kdf, kdf, "{name} KDF must round trip");
+            assert_eq!(round_tripped.cipher, cipher, "{name} cipher must round trip");
+        }
+    }
+}
+
+/// The Argon2id parameters SecPivot writes for new vaults are fixed by
+/// `vault::ARGON2_*`; pin them so a unit slip (KiB vs MiB) fails here instead of
+/// producing a vault no other client can open. `memory` is stored in bytes.
+#[test]
+fn argon2id_vaults_use_the_documented_owasp_parameters() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("argon2id-params.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "master-password", "Argon2id", "Aes256", "None", None)
+        .unwrap();
+    let db = session.require_db().expect("open database");
+    match &db.config.kdf_config {
+        keepass::config::KdfConfig::Argon2id {
+            iterations,
+            memory,
+            parallelism,
+            version,
+        } => {
+            assert_eq!(*iterations, super::ARGON2_ITERATIONS);
+            assert_eq!(
+                *memory,
+                u64::from(super::ARGON2_MEMORY_KIB) * 1024,
+                "Argon2id memory must be KiB * 1024 (64 MiB), not raw KiB"
+            );
+            assert_eq!(*parallelism, super::ARGON2_PARALLELISM);
+            assert_eq!(*version, argon2::Version::Version13);
+        }
+        other => panic!("expected Argon2id, got {other:?}"),
+    }
+}
+
+/// The settings a fresh install creates a vault with must be ones this build can
+/// actually write. `config::settings` owns the UI default; this keeps it and
+/// `apply_kdf` from drifting apart.
+#[test]
+fn the_shipped_default_kdf_creates_a_reopenable_vault() {
+    let default_kdf = crate::config::AppConfig::default().database.kdf;
+    assert_eq!(default_kdf, "Argon2id", "the shipped default is Argon2id");
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("default-kdf.kdbx");
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "master-password", &default_kdf, "Aes256", "None", None)
+        .unwrap_or_else(|e| panic!("create with the shipped default {default_kdf}: {e}"));
+    session.close();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    assert_eq!(
+        reopened.database_settings().unwrap().unwrap().kdf,
+        default_kdf
+    );
+}
