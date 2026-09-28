@@ -264,6 +264,21 @@
     scrollTop = nextScrollTop;
   });
 
+  $effect(() => {
+    // Filtering/sorting can shrink `rows` below the remembered focus index.
+    // `findNextEntryIndex(rows, lastFocusedIndex + 1, 1)` then starts past the
+    // end and returns null, so ArrowDown/ArrowUp stop working until the user
+    // clicks a row. Clamp alongside the scroll position so keyboard navigation
+    // always has a valid anchor.
+    const last = rows.length - 1;
+    if (rows.length === 0) {
+      if (lastFocusedIndex !== 0) lastFocusedIndex = 0;
+      return;
+    }
+    if (lastFocusedIndex > last) lastFocusedIndex = last;
+    else if (lastFocusedIndex < 0) lastFocusedIndex = 0;
+  });
+
   /** Teardown for the in-flight column resize/drag. `onUp` was the only
    *  removal point, so a destroy mid-gesture (idle lock, tab switch, route
    *  change) left three window listeners plus the `body` cursor class behind
