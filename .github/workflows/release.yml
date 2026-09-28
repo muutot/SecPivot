@@ -11,11 +11,19 @@ on:
         required: true
         type: string
 
+# Least privilege by default. Only the jobs that publish need `contents: write`;
+# `verify` merely runs the test suite and `android` only produces an artifact.
 permissions:
-  contents: write
+  contents: read
+
+# One release run per tag. A re-pushed or manually re-dispatched tag must not
+# race another run rewriting the same published release assets.
+concurrency:
+  group: release-${{ env.RELEASE_TAG }}
+  cancel-in-progress: false
 
 env:
-  # Tag push �?use the pushed tag; manual dispatch �?build the tag from the
+  # Tag push — use the pushed tag; manual dispatch — build the tag from the
   # version input so `tauri-action` names the release/tag consistently.
   RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
 
@@ -23,6 +31,7 @@ jobs:
   verify:
     name: Verify
     runs-on: windows-latest
+    timeout-minutes: 45
     env:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
@@ -36,7 +45,11 @@ jobs:
           node-version: "24"
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      # No `toolchain:` input on purpose: the action's default (`stable`) is
+      # installed but immediately overridden by the repository's
+      # `rust-toolchain.toml` (channel 1.96.0), which is the single source of
+      # truth for the compiler pin. Bump the TOML, not this line.
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
 
       - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
@@ -65,6 +78,10 @@ jobs:
     name: Build (Windows x64)
     needs: verify
     runs-on: windows-latest
+    # Only this job creates and uploads the GitHub release.
+    permissions:
+      contents: write
+    timeout-minutes: 60
     env:
       # Extreme runtime optimization is enabled ONLY here, in the GitHub release
       # build. Local `tauri build` and CI stay fast (see src-tauri/Cargo.toml).
@@ -84,7 +101,11 @@ jobs:
           node-version: "24"
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      # No `toolchain:` input on purpose: the action's default (`stable`) is
+      # installed but immediately overridden by the repository's
+      # `rust-toolchain.toml` (channel 1.96.0), which is the single source of
+      # truth for the compiler pin. Bump the TOML, not this line.
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
 
       - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
@@ -181,10 +202,17 @@ jobs:
   android:
     name: Build (Android APK)
     # Parallel to the Windows build: runs as soon as verification passes. The
-    # job must stay on Linux �?openssl-src (vendored OpenSSL for the Android
+    # job must stay on Linux — openssl-src (vendored OpenSSL for the Android
     # target) cannot cross-compile OpenSSL from a native Windows host.
+    #
+    # Opt-in: the signing secrets are not part of the public repository, so an
+    # unconfigured fork (or a maintainer releasing Windows only) would otherwise
+    # fail this job and, through `needs: [build, android]`, mark the whole
+    # workflow failed even though the Windows artifacts were published fine.
+    if: ${{ vars.ANDROID_RELEASE_ENABLED == 'true' }}
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       # Same extreme runtime optimization as the Windows build (fat LTO, opt3,
       # cgu1). target-cpu is x86-64 specific and is NOT applied here �?each of
@@ -206,7 +234,11 @@ jobs:
           node-version: "24"
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      # No `toolchain:` input on purpose: the action's default (`stable`) is
+      # installed but immediately overridden by the repository's
+      # `rust-toolchain.toml` (channel 1.96.0), which is the single source of
+      # truth for the compiler pin. Bump the TOML, not this line.
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           # 64-bit ABIs only: armv7/i686 32-bit targets are not shipped.
           targets: aarch64-linux-android,x86_64-linux-android
@@ -381,8 +413,14 @@ jobs:
 
   publish-android:
     name: Publish (Android APK)
+    # `always()` because `android` is now skipped by default; a skip must not
+    # be reported as a failure, and a real failure must still fail the run.
+    if: ${{ always() && needs.build.result == 'success' && (needs.android.result == 'success' || needs.android.result == 'skipped') }}
     needs: [build, android]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
     steps:
       - name: Restore Android release asset
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
