@@ -47,7 +47,7 @@ test("dry-run exits before every release write", () => {
   const dryRunGuard = releaseScript.indexOf("if (isDryRun) {");
   for (const write of [
     'run(process.execPath, ["scripts/version.mjs"',
-    'run("cargo", ["generate-lockfile"',
+    'run("cargo", ["update", "-p", "secpivot-desktop"',
     'run(process.execPath, ["scripts/changelog.mjs"]',
     'run("git", ["add"',
     'run("git", ["tag", "-a"',
@@ -60,6 +60,41 @@ test("dry-run exits before every release write", () => {
     /\["scripts\/changelog\.mjs", "--preview", "--version", targetVersion\]/,
   );
   assert.match(releaseScript, /✓ Dry run complete\. Planned tag/);
+});
+
+test("releases never re-resolve the whole dependency tree", () => {
+  // `cargo generate-lockfile` re-resolves *every* dependency to the newest
+  // compatible version, so the v1.6.1 commit titled "bump version to 1.6.1"
+  // silently carried 153 changed `Cargo.lock` lines of unreviewed transitive
+  // upgrades that no CVE scan ever looked at. Only our own lock entry may move.
+  // (The name is allowed to appear in comments, just never as a `run` argument.)
+  assert.doesNotMatch(releaseScript, /run\(\s*"cargo",\s*\[\s*"generate-lockfile"/);
+  assert.match(releaseScript, /\["update", "-p", "secpivot-desktop"/);
+});
+
+test("pausing for RELEASE.md curation reports failure, not success", () => {
+  // Steps 1-2 have already rewritten the version files and CHANGELOG when this
+  // branch is taken, so the tree is dirty and nothing was released. Anchor on
+  // the step-3 heading so the dry-run preview's own `exit(0)` is not matched.
+  const step3 = releaseScript.indexOf("// Step 3: RELEASE.md check");
+  assert.ok(step3 > 0, "step 3 must still exist");
+  const pause = releaseScript.indexOf("RELEASE.md needs update", step3);
+  assert.ok(pause > step3, "step 3 must report the curation pause");
+  // The explanatory comment between the message and the exit is long, so scan a
+  // generous window rather than trying to jump to the next `console.log`.
+  const after = releaseScript.slice(pause, pause + 1200);
+  assert.match(after, /process\.exit\((?!0\))/);
+  assert.doesNotMatch(after, /process\.exit\(0\)/);
+});
+
+test("the Cargo.lock sync runs on every attempt, not only on a version bump", () => {
+  // A re-run after the curation pause takes the "Already at <version>" branch.
+  // When the lock sync lived inside the bump branch it was skipped, leaving
+  // `Cargo.lock` at the previous version while still being staged for commit.
+  const lockSync = releaseScript.indexOf('["update", "-p", "secpivot-desktop"');
+  const bumpBranch = releaseScript.indexOf("if (currentVersion !== targetVersion) {");
+  const bumpBranchEnd = releaseScript.indexOf("} else {", bumpBranch);
+  assert.ok(lockSync > bumpBranchEnd, "the lock sync must sit after the bump if/else");
 });
 
 test("release commits whitelist only canonical release files", () => {

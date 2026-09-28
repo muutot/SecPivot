@@ -203,13 +203,20 @@ console.log(`\n[1/6] Bumping version (${BRANCH})...`);
 if (currentVersion !== targetVersion) {
   run(process.execPath, ["scripts/version.mjs", targetVersion]);
   currentVersion = getVersion();
-  run("cargo", ["generate-lockfile", "--manifest-path", "src-tauri/Cargo.toml"], {
-    silent: true,
-  });
   console.log(`  ✓ ${currentVersion}`);
 } else {
   console.log(`  ✓ Already at ${currentVersion}`);
 }
+// Sync only this package's `Cargo.lock` entry, and do it unconditionally so a
+// re-run after the RELEASE.md pause in step 3 still repairs the lockfile.
+// `cargo generate-lockfile` must NOT be used here: it re-resolves *every*
+// dependency to the newest compatible version, so a commit titled "bump
+// version to N" silently carried a full transitive-dependency upgrade with it
+// (153 changed `Cargo.lock` lines in 92356d1) — unreviewed, unvetted by any CVE
+// scan, and split across no changelog entry.
+run("cargo", ["update", "-p", "secpivot-desktop", "--manifest-path", "src-tauri/Cargo.toml"], {
+  silent: true,
+});
 
 // Step 2: Generate changelog
 console.log("\n[2/6] Generating changelog...");
@@ -220,7 +227,12 @@ console.log("\n[3/6] Checking RELEASE.md...");
 if (!checkReleaseMd(currentVersion)) {
   console.log(`  RELEASE.md needs update for v${currentVersion}.`);
   console.log("  → Read CHANGELOG.md and curate RELEASE.md, then re-run.");
-  process.exit(0);
+  // Non-zero on purpose: steps 1-2 have already rewritten the version files and
+  // CHANGELOG, so the working tree is dirty and nothing was released. Exiting 0
+  // here told any caller (CI, a wrapper script, a human reading CI output) that
+  // the release had succeeded. Re-running is safe: step 1 is idempotent and the
+  // `Cargo.lock` sync now runs unconditionally.
+  process.exit(2);
 }
 console.log(`  ✓ RELEASE.md matches v${currentVersion}`);
 
