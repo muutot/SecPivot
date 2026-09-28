@@ -183,6 +183,11 @@
   });
 
   onDestroy(() => {
+    // A draft typed less than 800ms before this component dies (tab switch,
+    // idle lock, vault close) would otherwise be dropped: the debounce timer
+    // dies with the component. Flush it while the view is still current. The
+    // already-in-flight case is covered by the re-arm in `persistNotes`.
+    if (notesDirty && !notesSaving) void persistNotes();
     detailView.activate(null);
     if (notesSaveTimer) {
       clearTimeout(notesSaveTimer);
@@ -523,14 +528,17 @@
   }
 
   async function persistNotes(): Promise<void> {
-    if (notesSaveTimer) {
-      clearTimeout(notesSaveTimer);
-      notesSaveTimer = undefined;
-    }
     const view = detailView.capture();
     const uuid = entry.uuid;
     const sessionId = detailSessionId();
     if (!view || !sessionId || notesSaving || !notesDirty) return;
+    // Consume the debounce timer only once we are actually going to write.
+    // Clearing it before the `notesSaving` guard above made a blur during an
+    // in-flight save cancel the pending draft with nothing left to re-arm it.
+    if (notesSaveTimer) {
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = undefined;
+    }
     if (notesDraft === entry.notes) {
       notesDirty = false;
       return;
@@ -546,9 +554,14 @@
     } catch {
       if (detailView.isCurrent(view)) flash("error");
     } finally {
-      if (detailView.isCurrent(view)) {
-        notesSaving = false;
-        if (notesDirty && notesSaveVersion !== version) void persistNotes();
+      // Always release the in-flight flag. A newer draft may have landed while
+      // this save was running, so re-arm the debounce even when the view moved
+      // on: the view-change effect resets `notesDirty`, so this can never write
+      // another entry's notes — but when the view is unchanged it is what keeps
+      // a draft typed during the round-trip from being dropped.
+      notesSaving = false;
+      if (notesDirty && notesSaveVersion !== version) {
+        notesSaveTimer = setTimeout(() => void persistNotes(), 800);
       }
     }
   }
