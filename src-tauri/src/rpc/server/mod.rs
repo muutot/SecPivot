@@ -31,7 +31,8 @@ use std::sync::{mpsc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tungstenite::handshake::server::{ErrorResponse, Request, Response};
-use tungstenite::{accept_hdr, Message as WsMessage, WebSocket};
+use tungstenite::protocol::WebSocketConfig;
+use tungstenite::{accept_hdr_with_config, Message as WsMessage, WebSocket};
 use zeroize::Zeroize;
 
 mod handshake;
@@ -53,7 +54,10 @@ const DATA_TIMEOUT: Duration = Duration::from_secs(300);
 const SIDE_CHANNEL_TTL: Duration = Duration::from_secs(120);
 /// Side-channel password entropy: 8 bytes → 16 lowercase hex chars.
 const SIDE_CHANNEL_BYTES: usize = 8;
-/// Payload cap (well above any real KeePassRPC message).
+/// Payload cap (well above any real KeePassRPC message). Enforced by tungstenite
+/// during frame reassembly, *not* after `read()` returns: checking `text.len()`
+/// on an already-buffered message cannot bound memory, so a local process could
+/// hand us a multi-gigabyte frame before the check ever ran.
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
 
 /// Event emitted to the frontend so the side-channel password can be shown.
@@ -362,8 +366,14 @@ fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
         }
         return None;
     }
-    // The request head was only peeked, so tungstenite still sees it.
-    match accept_hdr(stream, accept_callback) {
+    // The request head was only peeked, so tungstenite still sees it. The size
+    // caps must be handed to the library: it is the layer that buffers frames,
+    // so a post-read `text.len()` check is not a memory bound. `WebSocketConfig`
+    // is `#[non_exhaustive]`, so build it from `default()` instead of a literal.
+    let mut config = WebSocketConfig::default();
+    config.max_message_size = Some(MAX_FRAME_BYTES);
+    config.max_frame_size = Some(MAX_FRAME_BYTES);
+    match accept_hdr_with_config(stream, accept_callback, Some(config)) {
         Ok(ws) => Some(ws),
         Err(e) => {
             eprintln!("[rpc] websocket accept failed: {e}");
