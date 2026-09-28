@@ -59,7 +59,6 @@ export function buildEntryMenuItems({
       disabled: !isDesktop && !entry.password,
     },
     { id: "copy-url", label: t(locale, "menu.copyUrl"), icon: "link", disabled: !entry.url },
-    { id: "copy-entry", label: t(locale, "menu.copyEntry"), icon: "file" },
     { id: "autotype", label: t(locale, "menu.autotype"), icon: "keyboard" },
     { id: "autotype-password", label: t(locale, "menu.autotypePassword"), icon: "key" },
     {
@@ -80,6 +79,24 @@ export function buildEntryMenuItems({
       id: "favorite",
       label: entry.favorite ? t(locale, "menu.unfavorite") : t(locale, "menu.favorite"),
       icon: "star",
+    },
+    // KeePass `Entry → Data Exchange`. The payload is binary and always
+    // plaintext-bearing, so the copy is not a text clipboard write and the paste
+    // needs a target group — both are desktop-only and handled by the backend.
+    {
+      id: "data-exchange",
+      label: t(locale, "menu.dataExchange"),
+      icon: "copy",
+      children: [
+        {
+          id: "exchange-copy-encrypted",
+          label: t(locale, "menu.exchangeCopyEncrypted"),
+          icon: "lock",
+        },
+        { id: "exchange-copy", label: t(locale, "menu.exchangeCopy"), icon: "copy" },
+        { id: "exchange-paste", label: t(locale, "menu.exchangePaste"), icon: "file" },
+      ],
+      disabled: !isDesktop,
     },
     { id: "delete", label: t(locale, "menu.deleteEntry"), icon: "trash", destructive: true },
   ];

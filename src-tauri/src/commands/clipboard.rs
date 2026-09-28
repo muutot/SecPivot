@@ -36,7 +36,6 @@ pub(crate) fn clipboard_clear() -> Result<(), String> {
 /// thread whose generation is no longer current was superseded and must not
 /// touch the clipboard.
 static WIPE_GENERATION: AtomicU64 = AtomicU64::new(0);
-
 /// Cancel every pending scheduled wipe (called on explicit clear / lock).
 #[tauri::command]
 pub(crate) fn clipboard_cancel_scheduled_wipe() {
@@ -70,6 +69,50 @@ pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), 
             };
             if still_ours {
                 let _ = clipboard::clear_clipboard();
+            }
+            secret.zeroize();
+        })
+        .map_err(|e| format!("无法创建剪贴板清除任务: {e}"))?;
+    Ok(())
+}
+
+/// Backend safety net for the KeePass entry-exchange payload
+/// (`Entry → Data Exchange → Copy Entry`). That payload lives under a custom
+/// clipboard format, so the text wipe above never sees it — and it carries
+/// plaintext field values in *both* variants (the encrypted one only adds a
+/// DPAPI wrapper), so it must be wiped just as a password is. The thread keeps
+/// a zeroizing copy of what we wrote and clears only when the clipboard still
+/// holds exactly those bytes, so content copied elsewhere is never destroyed.
+/// Shares the text wipe's generation counter, so either schedule supersedes the
+/// other.
+#[tauri::command]
+pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), String> {
+    use crate::platform::clipboard::{clear_clipboard, read_clipboard_bytes};
+    use crate::vault::exchange::CLIP_FORMAT_ENTRIES;
+
+    if seconds == 0 {
+        return Ok(());
+    }
+    let Some(ours) = read_clipboard_bytes(CLIP_FORMAT_ENTRIES)? else {
+        // Nothing of ours on the clipboard: nothing to wipe.
+        return Ok(());
+    };
+    let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let mut secret = ours;
+    std::thread::Builder::new()
+        .name("clipboard-exchange-wipe".into())
+        .spawn(move || {
+            std::thread::sleep(Duration::from_secs(seconds));
+            if WIPE_GENERATION.load(Ordering::SeqCst) != generation {
+                secret.zeroize();
+                return;
+            }
+            let still_ours = read_clipboard_bytes(CLIP_FORMAT_ENTRIES)
+                .ok()
+                .flatten()
+                .is_some_and(|current| current == secret);
+            if still_ours {
+                let _ = clear_clipboard();
             }
             secret.zeroize();
         })

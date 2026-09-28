@@ -124,6 +124,107 @@ pub fn write_clipboard_text(_text: &str) -> Result<(), String> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Custom clipboard formats (KeePass entry exchange)
+// ---------------------------------------------------------------------------
+
+/// Cap for a single custom-format read. The clipboard is writable by any local
+/// app, so the size is checked before the allocation, not after.
+#[cfg(target_os = "windows")]
+const MAX_CUSTOM_FORMAT_BYTES: usize = 64 * 1024 * 1024;
+
+#[cfg(target_os = "windows")]
+fn register_format(name: &str) -> Result<u32, String> {
+    use windows_sys::Win32::System::DataExchange::RegisterClipboardFormatW;
+    // SAFETY: `name` is a NUL-terminated UTF-16 buffer that outlives the call.
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    let id = unsafe { RegisterClipboardFormatW(wide.as_ptr()) };
+    if id == 0 {
+        return Err("注册剪贴板格式失败".to_owned());
+    }
+    Ok(id)
+}
+
+/// Read a raw byte payload previously stored under a custom clipboard format.
+/// `Ok(None)` means the clipboard simply does not hold that format.
+#[cfg(target_os = "windows")]
+pub fn read_clipboard_bytes(format: &str) -> Result<Option<Vec<u8>>, String> {
+    use windows_sys::Win32::System::DataExchange::GetClipboardData;
+
+    let id = register_format(format)?;
+    // SAFETY: null HWND uses the current thread's window station, valid for
+    // read access; a failure is reported as "unreadable" rather than fatal.
+    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
+        return Ok(None);
+    }
+    let handle = unsafe { GetClipboardData(id) };
+    if handle.is_null() {
+        unsafe { CloseClipboard() };
+        return Ok(None);
+    }
+    let len = unsafe { GlobalSize(handle) };
+    if len == 0 || len > MAX_CUSTOM_FORMAT_BYTES {
+        unsafe { CloseClipboard() };
+        return Err("剪贴板数据大小无效".to_owned());
+    }
+    let ptr = unsafe { GlobalLock(handle) } as *const u8;
+    if ptr.is_null() {
+        unsafe { CloseClipboard() };
+        return Err("锁定剪贴板内存失败".to_owned());
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec();
+    unsafe {
+        GlobalUnlock(handle);
+        CloseClipboard();
+    }
+    Ok(Some(bytes))
+}
+
+/// Non-Windows stub: no OS clipboard bridge, so the exchange format is absent.
+#[cfg(not(target_os = "windows"))]
+pub fn read_clipboard_bytes(_format: &str) -> Result<Option<Vec<u8>>, String> {
+    Ok(None)
+}
+
+/// Store a raw byte payload under a custom clipboard format, replacing whatever
+/// the clipboard held. The clipboard takes ownership of the global memory.
+#[cfg(target_os = "windows")]
+pub fn write_clipboard_bytes(format: &str, bytes: &[u8]) -> Result<(), String> {
+    use windows_sys::Win32::System::DataExchange::SetClipboardData;
+
+    let id = register_format(format)?;
+    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
+        return Err("打开剪贴板失败".to_owned());
+    }
+    unsafe { EmptyClipboard() };
+    let hmem: HGLOBAL = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes.len()) };
+    if hmem.is_null() {
+        unsafe { CloseClipboard() };
+        return Err("分配剪贴板内存失败".to_owned());
+    }
+    let dest = unsafe { GlobalLock(hmem) } as *mut u8;
+    if dest.is_null() {
+        unsafe { CloseClipboard() };
+        return Err("锁定剪贴板内存失败".to_owned());
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
+        GlobalUnlock(hmem);
+    }
+    let ok = unsafe { SetClipboardData(id, hmem) };
+    unsafe { CloseClipboard() };
+    if ok.is_null() {
+        return Err("写入剪贴板失败".to_owned());
+    }
+    Ok(())
+}
+
+/// Non-Windows stub: the renderer has no binary clipboard bridge.
+#[cfg(not(target_os = "windows"))]
+pub fn write_clipboard_bytes(_format: &str, _bytes: &[u8]) -> Result<(), String> {
+    Err("当前平台不支持条目数据交换".to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,8 +4,8 @@
 
 use super::entries::history_diff;
 use super::helpers::{
-    otp_kind_name, parse_entry_id, parse_entry_otp_spec, recycle_bin_id, walk_match,
-    walk_match_candidates, walk_ref_match,
+    otp_kind_name, parse_entry_id, parse_entry_otp_spec, parse_group_id, recycle_bin_id,
+    walk_match, walk_match_candidates, walk_ref_match,
 };
 use super::serialize::{
     collect_favicon_hosts, escape_csv, estimate_entropy, extract_host, format_iso,
@@ -498,8 +498,82 @@ impl VaultSession {
     pub fn get_entry_password(&self, uuid: &str) -> Result<String, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
-        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        let entry = db.entry(id).ok_or_else(|| "��Ŀ������".to_owned())?;
         Ok(entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned())
+    }
+
+    /// Serialize the given entries into a KDBX entry-exchange payload and put it
+    /// on the clipboard under KeePass' own `Entries-F` format
+    /// (`Entry → Data Exchange → Copy Entry`). Both variants carry plaintext
+    /// field values — the encrypted one only adds a DPAPI wrapper — so the
+    /// caller must schedule the exchange wipe like a password copy.
+    pub fn copy_entries_to_exchange(
+        &self,
+        uuids: &[String],
+        encrypt: bool,
+    ) -> Result<usize, String> {
+        if uuids.is_empty() {
+            return Err("没有选中条目".to_owned());
+        }
+        let document = {
+            let db = self.require_db()?;
+            let ids = uuids
+                .iter()
+                .map(|uuid| parse_entry_id(uuid))
+                .collect::<Result<Vec<_>, _>>()?;
+            crate::vault::exchange::build_entries_document(db, &ids)?
+        };
+        let payload = crate::vault::exchange::encode_payload(&document, encrypt)?;
+        crate::platform::clipboard::write_clipboard_bytes(
+            crate::vault::exchange::CLIP_FORMAT_ENTRIES,
+            &payload,
+        )?;
+        Ok(uuids.len())
+    }
+
+    /// Read an entry-exchange payload back from the clipboard and insert the
+    /// entries into `group_uuid` under fresh UUIDs
+    /// (`Entry → Data Exchange → Paste Entry`). Returns the new UUIDs together
+    /// with a fresh snapshot so the caller can select what was just pasted.
+    pub fn paste_entries_from_exchange(
+        &mut self,
+        group_uuid: &str,
+    ) -> Result<(Vec<String>, super::dto::VaultState), String> {
+        let payload = crate::platform::clipboard::read_clipboard_bytes(
+            crate::vault::exchange::CLIP_FORMAT_ENTRIES,
+        )?
+        .ok_or_else(|| "剪贴板中没有条目数据".to_owned())?;
+        let document = crate::vault::exchange::decode_payload(&payload)?;
+        let parsed = crate::vault::exchange::parse_entries_document(&document)?;
+        if parsed.is_empty() {
+            return Err("剪贴板中没有条目数据".to_owned());
+        }
+        let inserted = {
+            let db = self.require_db_mut()?;
+            let group = if group_uuid == ROOT_GROUP_UUID {
+                Some(db.root_mut())
+            } else {
+                db.group_mut(parse_group_id(group_uuid)?)
+            };
+            let Some(mut group) = group else {
+                return Err("目标分组不存在".to_owned());
+            };
+            let mut inserted = Vec::with_capacity(parsed.len());
+            // Parse and validate every entry first: a malformed item must not
+            // leave a half-applied paste behind.
+            for entry in &parsed {
+                if let Ok(uuid) = crate::vault::exchange::insert_entry(&mut group, entry) {
+                    inserted.push(uuid.to_string());
+                }
+            }
+            inserted
+        };
+        if inserted.is_empty() {
+            return Err("粘贴条目失败".to_owned());
+        }
+        self.mark_dirty();
+        let state = self.snapshot_without_icons()?;
+        Ok((inserted, state))
     }
 
     /// Fetch a single entry's TOTP seed on demand (never part of `VaultState`).

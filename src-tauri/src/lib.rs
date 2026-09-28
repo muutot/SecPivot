@@ -482,7 +482,10 @@ pub fn run() {
             commands::clipboard_read_text,
             commands::clipboard_clear,
             commands::clipboard_schedule_wipe,
+            commands::clipboard_schedule_exchange_wipe,
             commands::clipboard_cancel_scheduled_wipe,
+            commands::copy_entries_exchange,
+            commands::paste_entries_exchange,
             #[cfg(desktop)]
             commands::remember_credential,
             #[cfg(desktop)]

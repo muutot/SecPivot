@@ -59,16 +59,40 @@ describe("buildEntryMenuItems", () => {
     assert.ok(disabledIds.includes("copy-url"));
   });
 
-  it("offers a whole-entry copy that stays enabled for a fieldless entry", () => {
-    const items = buildEntryMenuItems({
-      entry: { username: "", password: "", url: "", favorite: false },
+  it("offers KeePass-style Data Exchange, desktop-only", () => {
+    const desktop = buildEntryMenuItems({
+      entry: baseEntry,
       selectedCount: 1,
       isDesktop: true,
       ...zh,
     });
-    const copyEntry = items.find((item) => item.id === "copy-entry");
-    assert.equal(copyEntry.label, "复制条目");
-    assert.notEqual(copyEntry.disabled, true);
+    const exchange = desktop.find((item) => item.id === "data-exchange");
+    assert.equal(exchange.label, "数据交换");
+    assert.deepEqual(
+      exchange.children.map((child) => child.id),
+      ["exchange-copy-encrypted", "exchange-copy", "exchange-paste"],
+    );
+    // Copy is available for a multi-selection (KeePass copies the selection).
+    const multi = buildEntryMenuItems({
+      entry: baseEntry,
+      selectedCount: 3,
+      isDesktop: true,
+      locale: "en",
+    });
+    const multiExchange = multi.find((item) => item.id === "data-exchange");
+    assert.equal(multiExchange.label, "Data Exchange");
+    assert.equal(
+      multiExchange.children.find((child) => child.id === "exchange-copy").label,
+      "Copy Entry (Unencrypted)",
+    );
+    // The exchange is a binary clipboard format: no browser fallback.
+    const browser = buildEntryMenuItems({
+      entry: baseEntry,
+      selectedCount: 1,
+      isDesktop: false,
+      ...zh,
+    });
+    assert.equal(browser.find((item) => item.id === "data-exchange").disabled, true);
   });
 
   it("labels favorite by current state", () => {

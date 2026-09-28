@@ -123,6 +123,14 @@ interface VaultStore {
   restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
+  /** KeePass `Entry → Data Exchange → Copy Entry`: put the entries on the
+   *  clipboard as a KDBX entry-exchange payload. The payload is built and
+   *  written entirely in the backend (it is binary, so the renderer cannot
+   *  build it); returns how many entries were copied. */
+  copyEntriesExchange: (uuids: string[], encrypt: boolean) => Promise<number>;
+  /** KeePass `Entry → Data Exchange → Paste Entry`: insert the clipboard's
+   *  entries into `groupUuid` under fresh UUIDs. */
+  pasteEntriesExchange: (groupUuid: string) => Promise<{ uuids: string[]; state: VaultState }>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
   getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
   /** Update one custom field's value in place, keeping its protected flag and
@@ -1110,6 +1118,29 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.password ?? "";
+  },
+
+  async copyEntriesExchange(uuids: string[], encrypt: boolean): Promise<number> {
+    // Browser demo: there is no binary clipboard bridge, so the exchange is
+    // desktop-only. Never silently fall back to a text copy — that would put
+    // the entry on the clipboard in a form a paste cannot consume.
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featEntryExchange");
+    return invokeSession<number>("copy_entries_exchange", { uuids, encrypt });
+  },
+
+  async pasteEntriesExchange(groupUuid: string): Promise<{ uuids: string[]; state: VaultState }> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featEntryExchange");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<{ uuids: string[]; state: VaultState }>(
+      "paste_entries_exchange",
+      { groupUuid },
+      sessionId,
+    );
+    // The command returns the state alongside the new UUIDs, so it must be
+    // committed explicitly (a stale epoch must not overwrite the live view).
+    commitSessionStateAtEpoch(sessionId, epoch, result.state);
+    return result;
   },
 
   async getEntryTotp(uuid: string): Promise<string | null> {

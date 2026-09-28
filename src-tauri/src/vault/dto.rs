@@ -724,6 +724,15 @@ pub struct FaviconReport {
     pub downloaded: usize,
 }
 
+/// Result of a "Paste Entry" run: the freshly inserted UUIDs (always new, never
+/// the copied ones) plus the state that owns them.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasteEntriesResult {
+    pub uuids: Vec<String>,
+    pub state: crate::vault::dto::VaultState,
+}
+
 /// Progress of a "Download Favicons" run, emitted after each host finishes.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

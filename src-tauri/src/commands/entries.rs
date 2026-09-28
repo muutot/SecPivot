@@ -494,3 +494,41 @@ pub(crate) fn parse_bitwarden_json(text: String) -> Result<Vec<crate::vault::Imp
 pub(crate) fn parse_1pif(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
     Ok(crate::vault::parse_1pif(&text))
 }
+
+/// KeePass `Entry → Data Exchange → Copy Entry (Encrypted|Unencrypted)`: put the
+/// addressed entries on the clipboard as a KDBX entry-exchange payload. The
+/// payload is never text, so the renderer cannot build it; it only asks for the
+/// copy and then schedules `clipboard_schedule_exchange_wipe`.
+#[tauri::command]
+pub(crate) fn copy_entries_exchange(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+    uuids: Vec<String>,
+    encrypt: bool,
+) -> Result<usize, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.copy_entries_to_exchange(&uuids, encrypt),
+    )
+}
+
+/// KeePass `Entry → Data Exchange → Paste Entry`: insert the clipboard's entries
+/// into `group_uuid` under fresh UUIDs.
+#[tauri::command]
+pub(crate) fn paste_entries_exchange(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: Option<String>,
+    group_uuid: String,
+) -> Result<crate::vault::dto::PasteEntriesResult, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        session_id.as_deref(),
+        |target| target.paste_entries_from_exchange(&group_uuid),
+    )
+    .map(|(uuids, state)| crate::vault::dto::PasteEntriesResult { uuids, state })
+}

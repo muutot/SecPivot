@@ -34,6 +34,101 @@ fn create_session(dir: &TempDir) -> (VaultSession, std::path::PathBuf) {
     (session, path)
 }
 
+/// KeePass `Entry → Data Exchange`: copying entries to the clipboard and
+/// pasting them back into a group creates **new** entries with fresh UUIDs
+/// (KeePass `AddEntry(…, bAllowNewUuid)`), carrying the fields, the protected
+/// flag and the attachment. The clipboard is a process-wide resource shared
+/// with the platform tests, so this is serialized against them.
+#[test]
+#[cfg(target_os = "windows")]
+fn entry_exchange_copy_then_paste_creates_a_new_entry() {
+    static CLIPBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = CLIPBOARD_LOCK.lock().unwrap();
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "GitHub".into(),
+            username: "octocat".into(),
+            password: "s3cret".into(),
+            url: "https://github.com".into(),
+            notes: "note".into(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: Some("work".into()),
+            custom_fields: vec![CustomField {
+                name: "PIN".into(),
+                value: "1234".into(),
+                protected: false,
+            }],
+            attachments: vec![AttachmentInput {
+                name: "a.txt".into(),
+                data: Some(BASE64.encode(b"body")),
+            }],
+        })
+        .unwrap();
+    let before = session.state().unwrap().expect("open session");
+    let source_uuid = before
+        .root
+        .entries
+        .last()
+        .expect("entry added")
+        .uuid
+        .clone();
+
+    assert_eq!(
+        session.copy_entries_to_exchange(&[source_uuid.clone()], false),
+        Ok(1)
+    );
+
+    // Paste into a fresh group so the new entry is unambiguously ours.
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: None,
+            name: "Pasted".into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_uuid = state
+        .root
+        .children
+        .iter()
+        .find(|group| group.name == "Pasted")
+        .expect("new group present in the snapshot")
+        .uuid
+        .clone();
+    let (uuids, _state) = session.paste_entries_from_exchange(&group_uuid).unwrap();
+    assert_eq!(uuids.len(), 1, "one copied entry yields one pasted entry");
+    assert_ne!(
+        uuids[0], source_uuid,
+        "a paste must not reuse the source UUID"
+    );
+
+    let after = session.state().unwrap().expect("open session");
+    let pasted = after
+        .root
+        .children
+        .iter()
+        .find(|group| group.name == "Pasted")
+        .and_then(|group| group.entries.iter().find(|entry| entry.uuid == uuids[0]))
+        .expect("pasted entry present in the snapshot");
+    assert_eq!(pasted.title, "GitHub");
+    assert_eq!(pasted.username, "octocat");
+    assert_eq!(pasted.url, "https://github.com");
+    assert_eq!(pasted.notes, "note");
+    assert!(pasted.has_password, "the password is never in the snapshot");
+    assert!(pasted.has_totp == false);
+    assert_eq!(pasted.tags.as_deref(), Some("work"));
+    assert_eq!(pasted.attachments.len(), 1);
+    assert_eq!(pasted.attachments[0].name, "a.txt");
+    // The protected password survives the round-trip and is still protected.
+    assert_eq!(session.get_entry_password(&uuids[0]), Ok("s3cret".into()));
+    assert!(after.dirty, "a paste is an unsaved change");
+}
+
 /// KeePass "Download Favicons": jobs are grouped by URL host, fetched
 /// bytes land in the database as custom icons on every entry of that
 /// host, and survive a save + reopen round-trip.

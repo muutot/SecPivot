@@ -72,6 +72,26 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
   }
 }
 
+/**
+ * Schedule the backend wipe for a KeePass entry-exchange payload
+ * (`Entry → Data Exchange → Copy Entry`). The payload is a *binary* clipboard
+ * format, so the text wipe above can neither see nor clear it; both variants
+ * carry plaintext field values, so it needs its own timer. The backend keeps
+ * the zeroizing copy and clears only when the clipboard still holds exactly our
+ * bytes, so unrelated content copied meanwhile is never destroyed.
+ */
+export async function scheduleExchangeWipe(): Promise<void> {
+  const seconds = get(appSettings).security.clipboardClearSeconds;
+  if (seconds <= 0) return;
+  if (isTauriRuntime()) {
+    try {
+      await invoke("clipboard_schedule_exchange_wipe", { seconds });
+    } catch {
+      // best-effort only: the payload simply stays until the user copies again
+    }
+  }
+}
+
 /** Immediately wipe the clipboard (used by lock when `clearOnLock` is enabled)
  *  and drop all in-memory traces of what this session copied: the scheduled
  *  wipe timer and the remembered text, so the password string does not outlive

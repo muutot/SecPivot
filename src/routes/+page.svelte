@@ -102,11 +102,11 @@
   import TcatoOverlay from "$lib/components/TcatoOverlay.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { buildCsv, parseCsv, parseCsvRows } from "$lib/utils/csv";
+  import { scheduleExchangeWipe } from "$lib/utils/clipboard";
   import { buildKeePassXml, parseKdbxXml } from "$lib/utils/kdbx-xml";
   import { formatDateOnly } from "$lib/utils/date";
   import { formatBytes, formatKeePassSize } from "$lib/utils/format";
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
-  import { formatEntryText, type EntryCopyLabels } from "$lib/utils/entry-copy";
   import {
     awaitCurrentView,
     consumeCurrentView,
@@ -1017,43 +1017,61 @@
     }
   }
 
-  /** Labels for the whole-entry clipboard text, following the UI locale. */
-  function entryCopyLabels(locale: Language): EntryCopyLabels {
-    return {
-      title: t(locale, "columns.title"),
-      username: t(locale, "page.fieldUsername"),
-      password: t(locale, "columns.password"),
-      url: t(locale, "page.fieldUrl"),
-      notes: t(locale, "columns.notes"),
-    };
-  }
-
-  /** Copy a whole entry as labeled plain text. The password is resolved
-   *  server-side and bound to the still-current session view, and the text
-   *  takes the sensitive copy path (scheduled wipe + `lockAfterAction`)
-   *  because it carries the secret. */
-  async function copyWholeEntry(entry: VaultEntry): Promise<void> {
+  /** KeePass `Entry → Data Exchange → Copy Entry`: put the selected entries on
+   *  the clipboard as a KDBX entry-exchange payload. Both variants carry
+   *  plaintext field values, so this schedules the exchange wipe (the text wipe
+   *  never sees a binary payload) and the backend keeps the whole exchange
+   *  server-side. */
+  async function copyEntriesExchange(encrypt: boolean): Promise<void> {
     const view = sessionView.capture();
     if (!view) return;
     const { sessionId } = view;
-    const locale = settings.general.language;
+    const uuids =
+      selection.selectedUuids.size > 1
+        ? Array.from(selection.selectedUuids)
+        : selection.selectedEntry
+          ? [selection.selectedEntry.uuid]
+          : [];
+    if (uuids.length === 0) {
+      flash(t(settings.general.language, "page.noEntrySelected"));
+      return;
+    }
     try {
-      const copied = await consumeCurrentView(
-        sessionView,
-        view,
-        () => vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid)),
-        (password) =>
-          copyValue(formatEntryText({ ...entry, password }, entryCopyLabels(locale)), true),
+      const copied = await vault.callInSession(sessionId, () =>
+        vault.copyEntriesExchange(uuids, encrypt),
       );
-      if (copied && sessionView.isCurrent(view)) flash(t(locale, "page.copiedEntry"));
-    } catch {
-      if (sessionView.isCurrent(view)) flash(t(locale, "page.copyFailed"));
+      if (!sessionView.isCurrent(view)) return;
+      scheduleExchangeWipe();
+      flash(t(settings.general.language, "page.copiedEntries", { count: copied }));
+    } catch (e) {
+      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
+    }
+  }
+
+  /** KeePass `Entry → Data Exchange → Paste Entry`: insert the clipboard's
+   *  entries into the current group under fresh UUIDs and select them. */
+  async function pasteEntriesExchange(): Promise<void> {
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const groupUuid = selectedGroup ?? currentVault?.root.uuid ?? "root";
+    try {
+      const result = await vault.callInSession(sessionId, () =>
+        vault.pasteEntriesExchange(groupUuid),
+      );
+      if (!sessionView.isCurrent(view)) return;
+      selection.selectedUuids = new Set(result.uuids);
+      selection.selectedEntry = findEntryByUuid(result.state, result.uuids[0] ?? null);
+      flash(t(settings.general.language, "page.pastedEntries", { count: result.uuids.length }));
+    } catch (e) {
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.pasteEntryFailed", { e: String(e) }));
     }
   }
 
   /** In-place reveal for the entry-list password column: resolve the secret
-   * only for the still-current session view; any staleness or failure keeps
-   * the cell masked (EntryTable re-masks on timeout/mouse leave as well). */
+   *  only for the still-current session view; any staleness or failure keeps
+   *  the cell masked (EntryTable re-masks on timeout/mouse leave as well). */
   async function revealEntryPassword(entry: VaultEntry): Promise<string | null> {
     const view = sessionView.capture();
     if (!view) return null;
@@ -1635,7 +1653,9 @@
     else if (id === "copy-password") void copyEntryPassword(entry);
     else if (id === "copy-url" && entry.url)
       void copyEntryValue(entry.url, t(settings.general.language, "page.fieldUrl"));
-    else if (id === "copy-entry") void copyWholeEntry(entry);
+    else if (id === "exchange-copy-encrypted") void copyEntriesExchange(true);
+    else if (id === "exchange-copy") void copyEntriesExchange(false);
+    else if (id === "exchange-paste") void pasteEntriesExchange();
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "autotype-password") void runAutoType(entry, AUTOTYPE_PASSWORD_SEQUENCE);
     else if (id === "tcato") void openTcatoOverlay(entry);
