@@ -578,7 +578,16 @@ fn reply_jsonrpc_write(
         return encode_jsonrpc_result(conn, &request.id, Err(RpcError::Locked))
             .is_some_and(|reply| send_envelope(ws, &reply));
     };
-    let _persistence = vaults.acquire_persistence();
+    // Serialize against every other writer. Must be unwrapped: holding the
+    // `Result` would drop the contained permit on the first `drop`, so the gate
+    // would look acquired to this function while other writers still overlap.
+    let _persistence = match vaults.acquire_persistence() {
+        Ok(permit) => permit,
+        Err(message) => {
+            return encode_jsonrpc_result(conn, &request.id, Err(RpcError::InvalidMessage(message)))
+                .is_some_and(|reply| send_envelope(ws, &reply));
+        }
+    };
     let job = {
         let Ok(mut active) = session_state.lock() else {
             return false;

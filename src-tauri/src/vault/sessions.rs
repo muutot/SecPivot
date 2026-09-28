@@ -13,6 +13,17 @@
 use super::{SessionInfo, VaultOpenResult, VaultSession, VaultState};
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
+
+/// Longest a writer waits for the process-local persistence gate before giving
+/// up. A remote save can hold the gate for roughly four minutes (a 120s conflict
+/// check plus a 120s upload), so an unbounded wait was the failure mode: the
+/// caller blocked forever and, because it waits on a condition variable, it
+/// also occupied a `spawn_blocking` thread for that whole time.
+const PERSISTENCE_WAIT_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// Reported when the gate is still held after the wait budget is spent.
+const WAIT_EXPIRED: &str = "另一项保存仍在进行中，请稍候再试";
 
 #[derive(Default)]
 struct PersistenceGate {
@@ -21,16 +32,27 @@ struct PersistenceGate {
 }
 
 impl PersistenceGate {
-    fn acquire(self: &Arc<Self>) -> PersistencePermit {
+    /// Take the gate, or fail with a user-facing message when a writer has held
+    /// it for longer than [`PERSISTENCE_WAIT_TIMEOUT`].
+    fn acquire(self: &Arc<Self>) -> Result<PersistencePermit, String> {
         let mut busy = self.busy.lock().unwrap_or_else(|error| error.into_inner());
+        let deadline = Instant::now() + PERSISTENCE_WAIT_TIMEOUT;
         while *busy {
-            busy = self
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(WAIT_EXPIRED.to_owned());
+            }
+            let (guard, timeout) = self
                 .ready
-                .wait(busy)
+                .wait_timeout(busy, remaining)
                 .unwrap_or_else(|error| error.into_inner());
+            busy = guard;
+            if timeout.timed_out() && *busy {
+                return Err(WAIT_EXPIRED.to_owned());
+            }
         }
         *busy = true;
-        PersistencePermit { gate: self.clone() }
+        Ok(PersistencePermit { gate: self.clone() })
     }
 }
 
@@ -95,17 +117,19 @@ impl VaultSessions {
     /// Serialize prepare/persist/complete transactions across every runtime
     /// writer. The permit does not hold either session lock, so UI reads and
     /// in-memory edits remain responsive while storage work runs.
-    pub(crate) fn acquire_persistence(&self) -> PersistencePermit {
+    pub(crate) fn acquire_persistence(&self) -> Result<PersistencePermit, String> {
         self.persistence.acquire()
     }
 
     /// Async acquisition uses the blocking pool while waiting on the process-
     /// local condition variable; the owned permit can then span `.await`.
+    /// The wait is bounded, so a stalled remote save cannot pin a blocking-pool
+    /// thread indefinitely.
     pub(crate) async fn acquire_persistence_async(&self) -> Result<PersistencePermit, String> {
         let gate = self.persistence.clone();
         tokio::task::spawn_blocking(move || gate.acquire())
             .await
-            .map_err(|error| format!("数据库持久化门禁任务异常: {error}"))
+            .map_err(|error| format!("数据库持久化门禁任务异常: {error}"))?
     }
 
     /// Apply the configured URL-match mode to the active slot, every parked
