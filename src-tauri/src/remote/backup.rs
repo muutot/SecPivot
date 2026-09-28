@@ -101,11 +101,19 @@ pub(crate) fn write_local_copy(
         let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f").to_string();
         let backup = unique_backup_path(dir, backup_template, &stem, &ext, &stamp);
         if backup != dest {
-            std::fs::rename(&dest, &backup).map_err(|e| format!("创建本地备份失败: {e}"))?;
+            // Copy the previous bytes instead of renaming `dest` away: the
+            // mirror is the user's only local copy of a remote vault, so it must
+            // stay intact until the new bytes have landed. The former
+            // rename-then-write order left a window where a crash or a failed
+            // write left the mirror with no current copy at all.
+            let previous = std::fs::read(&dest).map_err(|e| format!("读取待备份副本失败: {e}"))?;
+            crate::util::atomic_write(&backup, &previous, "本地备份")?;
         }
         prune_local_backups(dir, &stem, &ext, backup_count, backup_template)?;
     }
-    std::fs::write(&dest, bytes).map_err(|e| format!("写入本地副本失败: {e}"))
+    // Same atomic contract as the primary vault file and the config: temp file
+    // + fsync + rename, so a reader never observes a half-written mirror.
+    crate::util::atomic_write(&dest, bytes, "本地副本")
 }
 
 /// Keep only the newest `keep` backup files matching `backup_template`.
