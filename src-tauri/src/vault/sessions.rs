@@ -104,6 +104,26 @@ impl SessionsInner {
     }
 }
 
+/// Run `operation` with a panic converted into `Err(on_panic)`.
+///
+/// `with_session_mut` and friends run the caller-supplied closure *while holding*
+/// the registry mutex, and their callers already hold the active-session mutex.
+/// An unwinding closure therefore poisons both, and every later `lock()` on this
+/// path maps the poison to "数据库锁已损坏" — the app keeps rendering but every
+/// vault operation fails until restart. The bridge and RPC servers already guard
+/// their handlers for exactly this reason (`bridge/server.rs` keeps the guard
+/// outside the `catch_unwind` closure for the same reason); the IPC command path
+/// did not, so this brings it in line.
+fn run_guarded<T, E>(operation: impl FnOnce() -> Result<T, E>, on_panic: E) -> Result<T, E> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation)) {
+        Ok(result) => result,
+        Err(_) => {
+            eprintln!("[vault] session operation panicked; reported as a command error");
+            Err(on_panic)
+        }
+    }
+}
+
 /// Managed state backing multi-database tabs. All methods follow the lock
 /// order `active mutex -> registry` so callers that hold the active session
 /// lock first never deadlock against registry operations.
@@ -208,13 +228,19 @@ impl VaultSessions {
             .lock()
             .map_err(|_| map_registry_error("数据库锁已损坏".to_owned()))?;
         if inner.active_id.as_deref() == Some(session_id) {
-            operation(active)
+            run_guarded(
+                || operation(active),
+                map_registry_error("数据库操作内部错误".to_owned()),
+            )
         } else {
             let session = inner
                 .parked
                 .get_mut(session_id)
                 .ok_or_else(|| map_registry_error("找不到数据库会话".to_owned()))?;
-            operation(session)
+            run_guarded(
+                || operation(session),
+                map_registry_error("数据库操作内部错误".to_owned()),
+            )
         }
     }
 
@@ -237,13 +263,13 @@ impl VaultSessions {
                 .ok_or_else(|| "没有打开的数据库".to_owned())?,
         };
         let result = if inner.active_id.as_deref() == Some(target.as_str()) {
-            operation(active)?
+            run_guarded(|| operation(active), "数据库操作内部错误".to_owned())?
         } else {
             let session = inner
                 .parked
                 .get_mut(&target)
                 .ok_or_else(|| "找不到数据库会话".to_owned())?;
-            operation(session)?
+            run_guarded(|| operation(session), "数据库操作内部错误".to_owned())?
         };
         Ok((target, result))
     }
@@ -491,13 +517,15 @@ mod tests {
     #[test]
     fn persistence_gate_serializes_runtime_writers() {
         let registry = Arc::new(VaultSessions::default());
-        let first = registry.acquire_persistence();
+        let first = registry.acquire_persistence().expect("first permit");
         let (attempting_tx, attempting_rx) = std::sync::mpsc::channel();
         let (entered_tx, entered_rx) = std::sync::mpsc::channel();
         let registry_worker = registry.clone();
         let worker = std::thread::spawn(move || {
             attempting_tx.send(()).unwrap();
-            let _second = registry_worker.acquire_persistence();
+            // Unwrap: holding the `Result` would drop the permit immediately and
+            // the gate would not actually be taken.
+            let _second = registry_worker.acquire_persistence().expect("second permit");
             entered_tx.send(()).unwrap();
         });
 
@@ -510,6 +538,66 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(1))
             .unwrap();
         worker.join().unwrap();
+    }
+
+    #[test]
+    fn a_panicking_operation_does_not_poison_the_registry() {
+        // The registry mutex is held while the caller's closure runs, and the
+        // caller already holds the active-session mutex. Without a panic guard
+        // one unwinding operation poisons both, and every later vault command
+        // fails with "数据库锁已损坏" until the app restarts.
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        registry
+            .open(&mut active, create_vault(&dir, "panic.kdbx"))
+            .unwrap();
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            registry.with_session_mut(&mut active, None, |_target| -> Result<(), String> {
+                panic!("simulated protocol bug")
+            })
+        }));
+        // The panic is converted into a command error, not left to unwind out of
+        // the registry lock.
+        assert!(
+            matches!(outcome, Ok(Err(message)) if message == "数据库操作内部错误"),
+            "a panic must surface as an error, not unwind past the lock"
+        );
+
+        // Both the registry and the active session must still be usable.
+        assert!(registry.any_open(&active));
+        assert!(registry.active_id().is_some());
+        assert!(registry.state(&mut active, None).unwrap().is_some());
+        // A later command on the same session still works.
+        registry
+            .with_session_mut(&mut active, None, |target| {
+                Ok(target.tab_summary().is_some())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn a_panicking_operation_reports_an_error_on_the_result_path() {
+        use crate::rpc::RpcError;
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let session_id = registry
+            .open(&mut active, create_vault(&dir, "panic-result.kdbx"))
+            .unwrap()
+            .session_id;
+        let outcome = registry.with_session_mut_result(
+            &mut active,
+            &session_id,
+            RpcError::InvalidMessage,
+            |_target| -> Result<(), RpcError> { panic!("simulated protocol bug") },
+        );
+        assert!(
+            matches!(outcome, Err(RpcError::InvalidMessage(message)) if message == "数据库操作内部错误"),
+            "a panic must surface as a structured error, not a poisoned lock"
+        );
+        assert!(registry.state(&mut active, None).unwrap().is_some());
     }
 
     fn create_vault<'a>(
