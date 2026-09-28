@@ -162,6 +162,123 @@ pub fn encrypt_for_storage(value: &str) -> Result<String, String> {
     encrypt(&plain)
 }
 
+/// Protect raw bytes for a *transient* transfer (the KeePass "Copy Entry
+/// (Encrypted)" clipboard payload) with `CryptProtectData` in current-user
+/// scope, using caller-supplied optional entropy.
+///
+/// `entropy` is not secret — it is a fixed, published constant (KeePass uses
+/// its `ClipDomainSep`) that binds a blob to this program. A blob protected
+/// with different entropy, or by another user/machine, fails to unprotect.
+/// Nothing is persisted and no `dpapi1:` prefix is added: the caller keeps the
+/// ciphertext in memory only.
+#[cfg(target_os = "windows")]
+pub fn protect_bytes_with_entropy(data: &[u8], entropy: &[u8]) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Cryptography::{CryptProtectData, CRYPT_INTEGER_BLOB};
+
+    let input = CRYPT_INTEGER_BLOB {
+        cbData: data.len() as u32,
+        pbData: data.as_ptr() as *mut u8,
+    };
+    let entropy_blob = CRYPT_INTEGER_BLOB {
+        cbData: entropy.len() as u32,
+        pbData: entropy.as_ptr() as *mut u8,
+    };
+    let mut output = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
+    // SAFETY: both input blobs point at valid memory for the call duration;
+    // `output` is filled by the API and released with `LocalFree` below.
+    let ok = unsafe {
+        CryptProtectData(
+            &input,
+            std::ptr::null(),
+            if entropy.is_empty() {
+                std::ptr::null()
+            } else {
+                &entropy_blob
+            },
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            &mut output,
+        )
+    };
+    if ok == 0 {
+        return Err("DPAPI 加密失败".into());
+    }
+    // SAFETY: on success `output` references API-owned memory sized by
+    // `cbData`; copy it out before releasing.
+    let cipher =
+        unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec() };
+    unsafe {
+        LocalFree(output.pbData as _);
+    }
+    Ok(cipher)
+}
+
+/// Reverse of [`protect_bytes_with_entropy`]. Returns a generic error for every
+/// failure mode (wrong user, wrong entropy, corrupted blob) so the caller
+/// cannot distinguish them.
+#[cfg(target_os = "windows")]
+pub fn unprotect_bytes_with_entropy(data: &[u8], entropy: &[u8]) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
+
+    let input = CRYPT_INTEGER_BLOB {
+        cbData: data.len() as u32,
+        pbData: data.as_ptr() as *mut u8,
+    };
+    let entropy_blob = CRYPT_INTEGER_BLOB {
+        cbData: entropy.len() as u32,
+        pbData: entropy.as_ptr() as *mut u8,
+    };
+    let mut output = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
+    // SAFETY: input blobs are valid for the call; `output` is API-owned and
+    // released with `LocalFree` below.
+    let ok = unsafe {
+        CryptUnprotectData(
+            &input,
+            std::ptr::null_mut(),
+            if entropy.is_empty() {
+                std::ptr::null()
+            } else {
+                &entropy_blob
+            },
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            &mut output,
+        )
+    };
+    if ok == 0 {
+        return Err("DPAPI 解密失败".into());
+    }
+    let plain =
+        unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec() };
+    unsafe {
+        LocalFree(output.pbData as _);
+    }
+    Ok(plain)
+}
+
+/// Non-Windows stub: no OS key store is wired, so the encrypted variant of the
+/// clipboard transfer is unavailable rather than silently unprotected.
+#[cfg(not(target_os = "windows"))]
+pub fn protect_bytes_with_entropy(_data: &[u8], _entropy: &[u8]) -> Result<Vec<u8>, String> {
+    Err("当前平台不支持 DPAPI".into())
+}
+
+/// Non-Windows stub; see [`protect_bytes_with_entropy`].
+#[cfg(not(target_os = "windows"))]
+pub fn unprotect_bytes_with_entropy(_data: &[u8], _entropy: &[u8]) -> Result<Vec<u8>, String> {
+    Err("当前平台不支持 DPAPI".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

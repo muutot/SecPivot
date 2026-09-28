@@ -46,6 +46,9 @@ url = "2"
 # Parse WebDAV PROPFIND multistatus responses (same minor as keepass's vendored
 # copy, so no extra crate version enters the lock).
 quick-xml = "0.41"
+# gzip for the KeePass "Data Exchange" clipboard payload (KeePass stores the
+# package gzipped; the same crate is already in the lock via `keepass`).
+flate2 = "1"
 # KeePassRPC entry match accuracy: Perl-compatible regex matching for
 # per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
 regex = "1"
