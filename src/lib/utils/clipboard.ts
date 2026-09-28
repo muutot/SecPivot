@@ -41,6 +41,16 @@ export function scheduleClipboardClear(text: string): void {
  * user has since copied something else (or the clipboard is unreadable /
  * non-text), leave it alone — the app must never destroy unrelated data. */
 export async function clearClipboardIfUnchanged(): Promise<void> {
+  // Snapshot the ownership token: a concurrent `copyText` may have replaced
+  // `lastCopiedText` while this wipe was awaiting, and that newer copy owns
+  // its own timer, so it must keep its baseline.
+  const owned = lastCopiedText;
+  /** Drop the plaintext once our own copy is gone from the clipboard. The
+   * backend zeroizes its holding copy; the renderer had no equivalent, so the
+   * password used to sit in this module global until the process exited. */
+  const releaseOwnership = (): void => {
+    if (lastCopiedText === owned) lastCopiedText = null;
+  };
   if (!isTauriRuntime()) {
     // Browser demo: no backend read-back. Compare via the Web Clipboard API
     // when readable so an unrelated copy made while the timer was pending is
@@ -49,9 +59,10 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
       const read = (navigator.clipboard as Clipboard | undefined)?.readText;
       if (read) {
         const current = await read.call(navigator.clipboard);
-        if (lastCopiedText !== null && current !== lastCopiedText) return;
+        if (owned !== null && current !== owned) return;
       }
       await copyRaw("");
+      releaseOwnership();
     } catch {
       // clipboard unavailable; nothing to clear
     }
@@ -59,13 +70,15 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
   }
   try {
     const current = await invoke<string | null>("clipboard_read_text");
-    if (current !== null && lastCopiedText !== null && current === lastCopiedText) {
+    if (current !== null && owned !== null && current === owned) {
       await invoke("clipboard_clear");
+      releaseOwnership();
     }
   } catch {
     // backend unavailable; fall back to writing an empty string
     try {
       await copyRaw("");
+      releaseOwnership();
     } catch {
       // clipboard unavailable; nothing to clear
     }
