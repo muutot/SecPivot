@@ -379,6 +379,53 @@ test("detail-pane drag-and-drop attachment add stays IPC-aligned", async () => {
   assert.match(session, /track_changes\(\)/);
 });
 
+test("toolbar blank space drags the window without hijacking its controls", async () => {
+  // Tauri >= 2.6: a bare `data-tauri-drag-region` only accepts direct clicks on
+  // the element itself, so the toolbar's three full-width group wrappers left
+  // every gap non-draggable. `deep` extends the region to non-interactive
+  // descendants; the hit-test walk still stops at clickable elements, so the
+  // buttons and the search input must NOT carry the attribute themselves.
+  const toolbar = await readFile(
+    new URL("../src/lib/components/AppToolbar.svelte", import.meta.url),
+    "utf8",
+  );
+  const root = toolbar.match(/<div class="toolbar"[^>]*>/);
+
+  assert.ok(root, "toolbar root element must exist");
+  assert.match(root[0], /data-tauri-drag-region="deep"/);
+  assert.doesNotMatch(root[0], /data-tauri-drag-region(?![-=\w])/);
+
+  const marked = [...toolbar.matchAll(/<[a-z]+[^>]*data-tauri-drag-region[^>]*>/g)];
+  assert.equal(marked.length, 1, "only the toolbar root may be a drag region");
+  assert.ok(
+    !/<input[^>]*data-tauri-drag-region/.test(toolbar),
+    "search input must stay draggable-free",
+  );
+  assert.ok(
+    !/<button[^>]*data-tauri-drag-region/.test(toolbar),
+    "toolbar buttons must stay drag-free",
+  );
+});
+
+test("full-surface containers keep the self-only drag region", async () => {
+  // These elements are completely covered by interactive content (entry list,
+  // settings body). Marking them `deep` would turn the whole window into a
+  // drag surface and break selection, text selection, and panel interaction.
+  const [page, settings] = await Promise.all([
+    readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/components/SettingsDialog.svelte", import.meta.url), "utf8"),
+  ]);
+
+  for (const [name, source] of [
+    ["main content", page],
+    ["settings content", settings],
+  ]) {
+    assert.ok(source.includes("data-tauri-drag-region>"), `${name} keeps a bare drag region`);
+  }
+  assert.doesNotMatch(page, /class="main-content"[\s\S]{0,200}data-tauri-drag-region="deep"/);
+  assert.doesNotMatch(settings, /id="settings-content"[\s\S]{0,200}data-tauri-drag-region="deep"/);
+});
+
 test("remote-conflict sentinel stays byte-identical across backend and frontend", async () => {
   const [remote, page] = await Promise.all([
     readFile(new URL("../src-tauri/src/remote/mod.rs", import.meta.url), "utf8"),

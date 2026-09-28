@@ -158,7 +158,13 @@
   }
 </script>
 
-<div class="toolbar" role="presentation" data-tauri-drag-region>
+<!-- `deep` (Tauri >= 2.6) makes every non-interactive descendant part of the
+     drag region, so the empty stretches between the action groups and around
+     the search box move the frameless window. A bare attribute only accepts
+     direct clicks on this element, which the three full-width group wrappers
+     never leave. Buttons and the search input still block dragging because
+     the hit-test walk stops at clickable elements. -->
+<div class="toolbar" role="presentation" data-tauri-drag-region="deep">
   <div class="toolbar-left">
     <button
       class="mobile-nav-toggle"
