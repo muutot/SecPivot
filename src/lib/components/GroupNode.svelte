@@ -251,6 +251,7 @@
       />
       <button
         class="mini-btn"
+        onmousedown={(e) => e.preventDefault()}
         onclick={() => (renaming = false)}
         aria-label={t(lang, "common.cancel")}
       >
