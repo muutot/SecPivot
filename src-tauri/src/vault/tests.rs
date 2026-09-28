@@ -9347,3 +9347,100 @@ fn change_timeline_lists_transitions_newest_first_and_skips_recycle_bin() {
     session.clear_all_history().unwrap();
     assert!(session.change_timeline().unwrap().is_empty());
 }
+
+/// An IP literal has no registrable domain, so it must only ever match itself.
+/// Without the early return in `registrable_domain`, `10.0.0.1` and
+/// `192.168.0.1` both reduced to the two-label string `0.1` and cross-matched,
+/// handing one host's credentials to an unrelated one.
+#[test]
+fn ip_literal_hosts_never_cross_match() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "内网开发机",
+        "http://10.0.0.1:3000/",
+        serde_json::json!({ "version": 1, "altURLs": ["http://10.0.0.1:3000/"] }),
+    );
+    session.match_registrable_domain = true;
+    assert_eq!(
+        session.logins_for("http://10.0.0.1:3000/login", None).len(),
+        1,
+        "the entry must still match its own address"
+    );
+    assert!(
+        session.logins_for("http://192.168.0.1:3000/login", None).is_empty(),
+        "a different address in the same /24 must not match"
+    );
+    assert!(
+        session.logins_for("http://172.16.0.1/", None).is_empty(),
+        "an unrelated address must not match"
+    );
+}
+
+/// A multi-label public suffix missing from the curated table used to collapse
+/// both hosts onto the bare suffix, so `bank.co.il` credentials were offered to
+/// `evil.co.il`. Pin the family for a few suffixes from each list.
+#[test]
+fn unrelated_hosts_under_a_multi_label_suffix_do_not_cross_match() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    for (title, host) in [
+        ("以色列银行", "bank.co.il"),
+        ("土耳其银行", "bank.com.tr"),
+        ("印度银行", "bank.co.in"),
+        ("韩国银行", "bank.co.kr"),
+        ("新西兰银行", "bank.co.nz"),
+    ] {
+        let url = format!("https://{host}/login");
+        entry_with_kprpc_config(
+            &mut session,
+            title,
+            &url,
+            serde_json::json!({ "version": 1, "altURLs": [&url] }),
+        );
+    }
+    session.match_registrable_domain = true;
+    for (title, other) in [
+        ("以色列银行", "evil.co.il"),
+        ("土耳其银行", "evil.com.tr"),
+        ("印度银行", "evil.co.in"),
+        ("韩国银行", "evil.co.kr"),
+        ("新西兰银行", "evil.co.nz"),
+    ] {
+        assert!(
+            session.logins_for(&format!("https://{other}/login"), None).is_empty(),
+            "{title} credentials must never be offered to {other}"
+        );
+    }
+    // Sibling subdomains of the *same* registrable domain still match — that is
+    // the feature this setting exists for.
+    assert_eq!(
+        session
+            .logins_for("https://www.bank.co.il/login", None)
+            .len(),
+        1,
+        "sibling subdomains must still share the registrable domain"
+    );
+}
+
+/// A fully-qualified host with a trailing dot is the same host; without
+/// normalization it reduced to a different registrable domain than the plain
+/// form and stopped matching itself.
+#[test]
+fn trailing_dot_hosts_match_their_plain_form() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _path) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "示例站点",
+        "https://example.com/login",
+        serde_json::json!({ "version": 1, "altURLs": ["https://example.com/login"] }),
+    );
+    session.match_registrable_domain = true;
+    assert_eq!(
+        session.logins_for("https://example.com./login", None).len(),
+        1,
+        "a trailing root dot names the same host"
+    );
+}
