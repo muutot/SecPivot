@@ -8,7 +8,7 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
   import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
-  import type { EntryColumnState } from "$lib/types/settings";
+  import type { EntryColumnState, Language } from "$lib/types/settings";
   import ColumnConfigMenu, {
     type ColumnMenuSection,
   } from "$lib/components/ColumnConfigMenu.svelte";
@@ -106,6 +106,7 @@
   import { formatDateOnly } from "$lib/utils/date";
   import { formatBytes, formatKeePassSize } from "$lib/utils/format";
   import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
+  import { formatEntryText, type EntryCopyLabels } from "$lib/utils/entry-copy";
   import {
     awaitCurrentView,
     consumeCurrentView,
@@ -1016,6 +1017,40 @@
     }
   }
 
+  /** Labels for the whole-entry clipboard text, following the UI locale. */
+  function entryCopyLabels(locale: Language): EntryCopyLabels {
+    return {
+      title: t(locale, "columns.title"),
+      username: t(locale, "page.fieldUsername"),
+      password: t(locale, "columns.password"),
+      url: t(locale, "page.fieldUrl"),
+      notes: t(locale, "columns.notes"),
+    };
+  }
+
+  /** Copy a whole entry as labeled plain text. The password is resolved
+   *  server-side and bound to the still-current session view, and the text
+   *  takes the sensitive copy path (scheduled wipe + `lockAfterAction`)
+   *  because it carries the secret. */
+  async function copyWholeEntry(entry: VaultEntry): Promise<void> {
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const locale = settings.general.language;
+    try {
+      const copied = await consumeCurrentView(
+        sessionView,
+        view,
+        () => vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid)),
+        (password) =>
+          copyValue(formatEntryText({ ...entry, password }, entryCopyLabels(locale)), true),
+      );
+      if (copied && sessionView.isCurrent(view)) flash(t(locale, "page.copiedEntry"));
+    } catch {
+      if (sessionView.isCurrent(view)) flash(t(locale, "page.copyFailed"));
+    }
+  }
+
   /** In-place reveal for the entry-list password column: resolve the secret
    * only for the still-current session view; any staleness or failure keeps
    * the cell masked (EntryTable re-masks on timeout/mouse leave as well). */
@@ -1600,6 +1635,7 @@
     else if (id === "copy-password") void copyEntryPassword(entry);
     else if (id === "copy-url" && entry.url)
       void copyEntryValue(entry.url, t(settings.general.language, "page.fieldUrl"));
+    else if (id === "copy-entry") void copyWholeEntry(entry);
     else if (id === "autotype") void runAutoType(entry);
     else if (id === "autotype-password") void runAutoType(entry, AUTOTYPE_PASSWORD_SEQUENCE);
     else if (id === "tcato") void openTcatoOverlay(entry);

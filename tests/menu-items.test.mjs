@@ -59,6 +59,18 @@ describe("buildEntryMenuItems", () => {
     assert.ok(disabledIds.includes("copy-url"));
   });
 
+  it("offers a whole-entry copy that stays enabled for a fieldless entry", () => {
+    const items = buildEntryMenuItems({
+      entry: { username: "", password: "", url: "", favorite: false },
+      selectedCount: 1,
+      isDesktop: true,
+      ...zh,
+    });
+    const copyEntry = items.find((item) => item.id === "copy-entry");
+    assert.equal(copyEntry.label, "复制条目");
+    assert.notEqual(copyEntry.disabled, true);
+  });
+
   it("labels favorite by current state", () => {
     const fav = buildEntryMenuItems({
       entry: { ...baseEntry, favorite: true },

@@ -59,6 +59,7 @@ export function buildEntryMenuItems({
       disabled: !isDesktop && !entry.password,
     },
     { id: "copy-url", label: t(locale, "menu.copyUrl"), icon: "link", disabled: !entry.url },
+    { id: "copy-entry", label: t(locale, "menu.copyEntry"), icon: "file" },
     { id: "autotype", label: t(locale, "menu.autotype"), icon: "keyboard" },
     { id: "autotype-password", label: t(locale, "menu.autotypePassword"), icon: "key" },
     {
