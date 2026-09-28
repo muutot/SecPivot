@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import type { VaultEntry } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
@@ -264,6 +264,17 @@
     scrollTop = nextScrollTop;
   });
 
+  /** Teardown for the in-flight column resize/drag. `onUp` was the only
+   *  removal point, so a destroy mid-gesture (idle lock, tab switch, route
+   *  change) left three window listeners plus the `body` cursor class behind
+   *  for the rest of the process. */
+  let endColumnGesture: (() => void) | null = null;
+
+  onDestroy(() => {
+    endColumnGesture?.();
+    endColumnGesture = null;
+  });
+
   function startColResize(event: PointerEvent, colId: string): void {
     event.preventDefault();
     event.stopPropagation();
@@ -291,22 +302,28 @@
         container.style.setProperty("--entry-cols", tokens.join(" "));
       }
     };
-    const onUp = (upEvent: PointerEvent): void => {
-      if (target.hasPointerCapture(upEvent.pointerId)) {
-        target.releasePointerCapture(upEvent.pointerId);
-      }
+    const detach = (): void => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("resizing-column");
+      if (container) container.style.removeProperty("--entry-cols");
+      if (endColumnGesture === detach) endColumnGesture = null;
+    };
+    const onUp = (upEvent: PointerEvent): void => {
+      if (target.hasPointerCapture(upEvent.pointerId)) {
+        target.releasePointerCapture(upEvent.pointerId);
+      }
+      detach();
       const finalWidth = Math.min(
         COL_WIDTH_MAX,
         Math.max(COL_WIDTH_MIN, startWidth + (upEvent.clientX - startX)),
       );
-      if (container) container.style.removeProperty("--entry-cols");
       oncolumnresize(colId, finalWidth);
       onsavelayout();
     };
+    endColumnGesture?.();
+    endColumnGesture = detach;
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -326,11 +343,15 @@
       }
       if (active) colDropIndex = computeColumnDropIndex(moveEvent.clientX);
     };
-    const onUp = (): void => {
+    const detach = (): void => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       document.body.classList.remove("dragging-column");
+      if (endColumnGesture === detach) endColumnGesture = null;
+    };
+    const onUp = (): void => {
+      detach();
       if (active) {
         oncolumnreorder(colId, colDropIndex ?? fromIndex);
         suppressColumnSort = true;
@@ -340,6 +361,8 @@
         colDropIndex = null;
       }
     };
+    endColumnGesture?.();
+    endColumnGesture = detach;
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
