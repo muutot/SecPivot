@@ -126,6 +126,9 @@ name reappears in any component outside `templates/`. Extend its
   `.settings-row`, `.settings-note(.warn)`;
 - `.transparency-slider` including WebKit/Firefox tracks/thumbs;
 - color-swatch/color-input helpers for the custom theme editor;
+- `.theme-segmented` / `.theme-segment(.active)` and `.swatch*` — the shared
+  segmented control used by the appearance theme mode and the general language
+  switch;
 - `.mirror-dir`, `.auto-save-note`, and the default pointer cursor.
 
 `src/app.css` imports this file globally. Child panels must rely on these

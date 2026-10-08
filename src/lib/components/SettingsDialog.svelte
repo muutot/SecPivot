@@ -4,6 +4,7 @@
   import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GeneralSettingsPanel from "$lib/components/settings/GeneralSettingsPanel.svelte";
+  import AppearanceSettingsPanel from "$lib/components/settings/AppearanceSettingsPanel.svelte";
   import SecuritySettingsPanel from "$lib/components/settings/SecuritySettingsPanel.svelte";
   import DatabaseSettingsPanel from "$lib/components/settings/DatabaseSettingsPanel.svelte";
   import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
@@ -13,8 +14,16 @@
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
   type Section =
-    "general" | "security" | "keyboard" | "database" | "remote" | "integrations" | "about";
-  type GeneralTab = "appearance" | "display" | "layout" | "toolbar" | "network";
+    | "general"
+    | "appearance"
+    | "security"
+    | "keyboard"
+    | "database"
+    | "remote"
+    | "integrations"
+    | "about";
+  type GeneralTab = "general" | "network";
+  type AppearanceTab = "theme" | "display" | "window" | "layout" | "toolbar";
   type RemoteTab = "s3" | "webdav";
   type IntegrationsTab = "http" | "rpc";
 
@@ -48,7 +57,8 @@
   });
 
   let active: Section = $state("general");
-  let generalTab: GeneralTab = $state("appearance");
+  let generalTab: GeneralTab = $state("general");
+  let appearanceTab: AppearanceTab = $state("theme");
   let remoteTab: RemoteTab = $state("s3");
   let integrationsTab: IntegrationsTab = $state("http");
   let mobileNavOpen = $state(false);
@@ -56,17 +66,19 @@
   const currentTab = $derived(
     active === "general"
       ? generalTab
-      : active === "remote"
-        ? remoteTab
-        : active === "integrations"
-          ? integrationsTab
-          : null,
+      : active === "appearance"
+        ? appearanceTab
+        : active === "remote"
+          ? remoteTab
+          : active === "integrations"
+            ? integrationsTab
+            : null,
   );
 
   const sections: {
     id: Section;
     label: string;
-    icon: "sliders" | "shield" | "keyboard" | "database" | "cloud" | "plug" | "info";
+    icon: "sliders" | "palette" | "shield" | "keyboard" | "database" | "cloud" | "plug" | "info";
     description: string;
     tabs?: { id: string; label: string }[];
     title: string;
@@ -78,11 +90,22 @@
       title: t(lang, "nav.general.title"),
       description: t(lang, "nav.general.description"),
       tabs: [
-        { id: "appearance", label: t(lang, "nav.general.appearance") },
-        { id: "display", label: t(lang, "nav.general.display") },
-        { id: "layout", label: t(lang, "nav.general.layout") },
-        { id: "toolbar", label: t(lang, "nav.general.toolbar") },
+        { id: "general", label: t(lang, "nav.general.general") },
         { id: "network", label: t(lang, "nav.general.network") },
+      ],
+    },
+    {
+      id: "appearance",
+      label: t(lang, "nav.appearance.label"),
+      icon: "palette",
+      title: t(lang, "nav.appearance.title"),
+      description: t(lang, "nav.appearance.description"),
+      tabs: [
+        { id: "theme", label: t(lang, "nav.appearance.theme") },
+        { id: "display", label: t(lang, "nav.appearance.display") },
+        { id: "window", label: t(lang, "nav.appearance.window") },
+        { id: "layout", label: t(lang, "nav.appearance.layout") },
+        { id: "toolbar", label: t(lang, "nav.appearance.toolbar") },
       ],
     },
     {
@@ -165,7 +188,8 @@
           class:active={active === section.id}
           onclick={() => {
             active = section.id;
-            if (section.id === "general") generalTab = "appearance";
+            if (section.id === "general") generalTab = "general";
+            if (section.id === "appearance") appearanceTab = "theme";
             if (section.id === "remote") remoteTab = "s3";
             if (section.id === "integrations") integrationsTab = "http";
             mobileNavOpen = false;
@@ -234,6 +258,7 @@
               class:active={currentTab === tab.id}
               onclick={() => {
                 if (active === "general") generalTab = tab.id as GeneralTab;
+                if (active === "appearance") appearanceTab = tab.id as AppearanceTab;
                 if (active === "remote") remoteTab = tab.id as RemoteTab;
                 if (active === "integrations") integrationsTab = tab.id as IntegrationsTab;
               }}
@@ -253,6 +278,8 @@
 
     {#if active === "general"}
       <GeneralSettingsPanel {onclose} showHeader={false} section={generalTab} />
+    {:else if active === "appearance"}
+      <AppearanceSettingsPanel {onclose} showHeader={false} section={appearanceTab} />
     {:else if active === "security"}
       <SecuritySettingsPanel {onclose} showHeader={false} />
     {:else if active === "keyboard"}
