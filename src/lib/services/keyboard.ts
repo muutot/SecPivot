@@ -57,6 +57,13 @@ export const KEYBOARD_ACTIONS: KeyboardAction[] = [
     default: "Ctrl+K",
   },
   {
+    id: "clear-search",
+    label: "shortcuts.clear-search.label",
+    description: "shortcuts.clear-search.description",
+    icon: "x",
+    default: "Ctrl+Shift+K",
+  },
+  {
     id: "locate-in-tree",
     label: "shortcuts.locate-in-tree.label",
     description: "shortcuts.locate-in-tree.description",

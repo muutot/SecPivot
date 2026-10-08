@@ -630,6 +630,8 @@ export const zhCN = {
   "shortcuts.new-entry.description": "在当前分组下新建条目",
   "shortcuts.focus-search.label": "聚焦搜索",
   "shortcuts.focus-search.description": "把焦点移到条目搜索框",
+  "shortcuts.clear-search.label": "清空搜索",
+  "shortcuts.clear-search.description": "清除条目搜索框中的内容",
   "shortcuts.locate-in-tree.label": "定位到所在分组",
   "shortcuts.locate-in-tree.description": "在左侧分组树中选中并展开所选条目所在的分组",
   "keyboard.title": "快捷键",

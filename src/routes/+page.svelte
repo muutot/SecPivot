@@ -1289,6 +1289,7 @@
         },
         "new-entry": () => editor.openCreate(),
         "focus-search": () => toolbarEl?.focusSearch(),
+        "clear-search": () => (search = ""),
         "locate-in-tree": locateSelectedInTree,
       })
     )

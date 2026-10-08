@@ -649,6 +649,8 @@ export const en: Record<I18nKey, string> = {
   "shortcuts.new-entry.description": "Create an entry in the current group",
   "shortcuts.focus-search.label": "Focus search",
   "shortcuts.focus-search.description": "Move focus to the entry search box",
+  "shortcuts.clear-search.label": "Clear search",
+  "shortcuts.clear-search.description": "Clear the entry search box",
   "shortcuts.locate-in-tree.label": "Locate in tree",
   "shortcuts.locate-in-tree.description":
     "Select and expand the selected entry's group in the tree",
