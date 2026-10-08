@@ -18,6 +18,8 @@
     customIcons?: Record<string, string>;
     onselect: (uuid: string | null) => void;
     onaddsubgroup: (parentUuid: string | null) => void;
+    /** Select and reveal the group holding the selected entry (Ctrl+G). */
+    onlocate?: () => void;
     onrename: (uuid: string, name: string) => void;
     onchangeicon: (uuid: string) => void;
     onautotype?: (uuid: string) => void;
@@ -43,6 +45,7 @@
     customIcons = {},
     onselect,
     onaddsubgroup,
+    onlocate,
     onrename,
     onchangeicon,
     onautotype,
@@ -215,6 +218,16 @@
           onclick={onclose}
         >
           <AppIcon name="x" size={13} />
+        </button>
+      {/if}
+      {#if onlocate}
+        <button
+          class="tool-btn"
+          title={t(lang, "shortcuts.locate-in-tree.label")}
+          aria-label={t(lang, "shortcuts.locate-in-tree.label")}
+          onclick={onlocate}
+        >
+          <AppIcon name="locate" size={13} />
         </button>
       {/if}
       <button

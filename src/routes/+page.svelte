@@ -1215,6 +1215,22 @@
     focusSearch: (seed?: string) => void;
   } | null = $state(null);
 
+  /** Select and reveal the group that contains the selected entry (Ctrl+G and
+   *  the group-tree locate button). No-op without a selected entry/vault. */
+  function locateSelectedInTree(): void {
+    if (!selection.selectedEntry || !currentVault) return;
+    const targetGroup = selection.selectedEntry.groupUuid;
+    selectedGroup = targetGroup;
+    // Reset so a repeat locate on the same group still re-expands the tree
+    // even after a full collapse (setting the identical uuid again would not
+    // re-run the reveal effect).
+    revealGroupUuid = null;
+    requestAnimationFrame(() => {
+      revealGroupUuid = targetGroup;
+    });
+    flash(t(settings.general.language, "page.locatedGroup"));
+  }
+
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
     if (isTcatoOverlay || !currentVault) return;
@@ -1273,20 +1289,7 @@
         },
         "new-entry": () => editor.openCreate(),
         "focus-search": () => toolbarEl?.focusSearch(),
-        "locate-in-tree": () => {
-          if (selection.selectedEntry && currentVault) {
-            const targetGroup = selection.selectedEntry.groupUuid;
-            selectedGroup = targetGroup;
-            // Reset so a repeat locate on the same group still re-expands the
-            // tree even after a full collapse (setting the identical uuid
-            // again would not re-run the reveal effect).
-            revealGroupUuid = null;
-            requestAnimationFrame(() => {
-              revealGroupUuid = targetGroup;
-            });
-            flash(t(settings.general.language, "page.locatedGroup"));
-          }
-        },
+        "locate-in-tree": locateSelectedInTree,
       })
     )
       return;
@@ -1861,6 +1864,7 @@
                 selection.selectionAnchor = null;
               }}
               onaddsubgroup={openGroupModal}
+              onlocate={locateSelectedInTree}
               onrename={(uuid: string, name: string) => void renameGroup(uuid, name)}
               onchangeicon={openGroupIconDialog}
               onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
