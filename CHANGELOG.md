@@ -1,5 +1,66 @@
 # Changelog
 
+## 1.6.2 (2026-10-08)
+
+### ✨ Features
+
+- **shortcuts**: add clear-search action (6d38114e)
+- **groups**: add locate-in-tree button beside new group (5ccb1f40)
+- **search**: focus search on non-shortcut typing with a setting (b3d8209e)
+- **exchange**: wire the KeePass entry data exchange end to end (d2038177)
+- **vault**: add the KeePass entry-exchange payload core (c90e3871)
+- **menu**: add copy entry action to the entry context menu (c5ebfc62)
+
+### 🐛 Bug Fixes
+
+- **ci**: use allowed contexts in release concurrency (75c0df05)
+- **ci**: scope release write permissions to the publishing jobs (cdd779aa)
+- **ui**: re-open the detail panel on selection change, not on any vault update (72a5c2c5)
+- **security**: drop the copied plaintext once the clipboard is wiped (020b0e14)
+- **ui**: clamp the focused row when filtering shrinks the list (0fb6f4c3)
+- **ui**: release column drag listeners when the table unmounts (e95764f1)
+- **security**: discard a stale reveal response and re-mask scrolled rows (5f46adbb)
+- **ui**: make the group rename cancel button actually cancel (65a4c172)
+- **notes**: stop losing the last notes draft (d89696a9)
+- **vault**: contain command panics instead of poisoning the registry (22de0670)
+- **vault**: bound the persistence gate wait (0316a8b1)
+- **rpc**: enforce the frame cap during websocket reassembly (f6b03b36)
+- **backup**: write the remote local mirror atomically (fabba849)
+- **security**: stop unrelated hosts from sharing a registrable domain (8ee5e263)
+- **toolbar**: drag the window from the toolbar blank space (f62a9b1c)
+- **session**: scope HIBP and favicon cancels to the owning tab (8d7a59b0)
+- **match**: parse bracketed IPv6 hosts on both sides (c46d6b76)
+- **otp**: stamp last-modification when the HOTP counter advances (b170b9f0)
+- **import**: keep CSV rows with content but no title or password (4300cfbb)
+- **editor**: preserve expiry seconds when the field is untouched (5fde8cdb)
+- **import**: preserve KeePass XML entry expiry on import (6fee5555)
+- **vault**: clear saved credentials on lock when remember is disabled (70b07c1b)
+- **config**: preserve true-defaults on load and make opacity and capture guard apply at runtime (7d349dda)
+- **vault**: fail bulk ops atomically and harden session, OTP and breach handling (691a9f49)
+- **import**: correct CSV alias direction, clipboard ownership and vault close races (d5aad80b)
+
+### ♻️ Refactoring
+
+- **settings**: promote appearance to a top-level category (1d1af610)
+
+### 🎨 Styling
+
+- **ci**: apply cargo fmt to the code added in this series (2039a71e)
+- **ui**: drop the duplicated title attribute in the TCATO overlay (3356c202)
+- **tests**: satisfy clippy in the vault test suite (28169de0)
+- **docs**: prettier reflow for cancel contract rows (e17ae303)
+
+### ✅ Testing
+
+- **frontend**: make the frontend test gate fail closed (320e9571)
+- **clipboard**: make the wipe tests deterministic and non-destructive (a41895b8)
+- **vault**: cover the Argon2id default KDF end to end (0fc86965)
+
+### 🔧 Chores
+
+- **ci**: cancel superseded runs and bound job time (5326c60a)
+- **release**: stop the release script upgrading every dependency (71e8e95a)
+
 ## 1.6.1 (2026-09-14)
 
 ### 🐛 Bug Fixes
