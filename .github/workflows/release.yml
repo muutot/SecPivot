@@ -418,9 +418,14 @@ jobs:
 
   publish-android:
     name: Publish (Android APK)
-    # `always()` because `android` is now skipped by default; a skip must not
-    # be reported as a failure, and a real failure must still fail the run.
-    if: ${{ always() && needs.build.result == 'success' && (needs.android.result == 'success' || needs.android.result == 'skipped') }}
+    # Only run when the Android build actually produced assets. `android` is
+    # opt-in (`vars.ANDROID_RELEASE_ENABLED`); a skipped build uploads no
+    # `android-release-apk` artifact, so downloading here would fail the whole
+    # run even though the Windows release published fine. `always()` keeps the
+    # job evaluated when a dependency was skipped, but `needs.android.result ==
+    # 'success'` means a skip is skipped (not failed) and a real build failure
+    # still leaves the run red through the `android` job itself.
+    if: ${{ always() && needs.build.result == 'success' && needs.android.result == 'success' }}
     needs: [build, android]
     runs-on: ubuntu-latest
     permissions:
