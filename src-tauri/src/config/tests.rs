@@ -88,6 +88,7 @@ fn partial_objects_keep_true_defaults_instead_of_silently_clearing() {
     assert!(config.security.clear_on_lock);
     assert!(config.general.show_descriptions);
     assert!(config.general.remember_last_database);
+    assert!(config.general.focus_search_on_type);
     let toolbar = config.general.toolbar_items.as_ref().unwrap();
     assert!(toolbar.save);
     assert!(toolbar.lock);
@@ -126,6 +127,21 @@ fn mobile_columns_defaults_off_and_survives_round_trip() {
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     assert!(reloaded.get().unwrap().general.mobile_columns);
+}
+
+#[test]
+fn focus_search_on_type_defaults_on_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    assert!(config.general.focus_search_on_type, "defaults on");
+
+    config.general.focus_search_on_type = false;
+    let saved = store.set(config).unwrap();
+    assert!(!saved.general.focus_search_on_type);
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(!reloaded.get().unwrap().general.focus_search_on_type);
 }
 
 #[test]

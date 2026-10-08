@@ -234,6 +234,9 @@ export interface GeneralSettings {
   toolbarFullSeparators: ToolbarButtonId[];
   /** Whether clicking an entry automatically shows the detail panel. */
   showDetailOnSelect: boolean;
+  /** Type-to-search: typing a printable character that matches no shortcut
+   *  focuses the search box and seeds the character. Default on. */
+  focusSearchOnType: boolean;
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

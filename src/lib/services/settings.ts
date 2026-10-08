@@ -209,6 +209,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   toolbarSides: { ...DEFAULT_TOOLBAR_SIDES },
   toolbarFullSeparators: [...DEFAULT_TOOLBAR_FULL_SEPARATORS],
   showDetailOnSelect: true,
+  focusSearchOnType: true,
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
   showGroupSeparators: true,
@@ -901,6 +902,10 @@ export function normalizeSettings(
       typeof (g as unknown as Record<string, unknown>).showDetailOnSelect === "boolean"
         ? ((g as unknown as Record<string, unknown>).showDetailOnSelect as boolean)
         : fallback.general.showDetailOnSelect,
+    focusSearchOnType:
+      typeof (g as unknown as Record<string, unknown>).focusSearchOnType === "boolean"
+        ? ((g as unknown as Record<string, unknown>).focusSearchOnType as boolean)
+        : (fallback.general.focusSearchOnType ?? true),
     showGroupSeparators:
       typeof (g as unknown as Record<string, unknown>).showGroupSeparators === "boolean"
         ? ((g as unknown as Record<string, unknown>).showGroupSeparators as boolean)

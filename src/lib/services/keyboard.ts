@@ -106,16 +106,20 @@ export function matchesShortcut(event: KeyboardEvent, combo: string): boolean {
  * `bindings` insertion order; a match consumes the event (`preventDefault`)
  * and stops the search, so later bindings with identical combos never fire.
  * Empty/blank combos are skipped (an action may be unbound).
+ *
+ * Returns `true` when a binding matched (the event was consumed), so callers
+ * can tell a real shortcut from a plain typed character.
  */
 export function dispatchShortcut(
   event: KeyboardEvent,
   bindings: Record<string, string>,
   handlers: Record<string, () => void>,
-): void {
+): boolean {
   for (const [actionId, combo] of Object.entries(bindings)) {
     if (!combo || !matchesShortcut(event, combo)) continue;
     event.preventDefault();
     handlers[actionId]?.();
-    return;
+    return true;
   }
+  return false;
 }

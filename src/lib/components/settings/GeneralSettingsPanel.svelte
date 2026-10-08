@@ -757,6 +757,14 @@
     />
 
     <SettingToggleCard
+      icon="search"
+      label={t(lang, "settings.focusSearchOnType")}
+      description={t(lang, "settings.focusSearchOnTypeDesc")}
+      checked={general.focusSearchOnType}
+      onchange={(checked) => change("focusSearchOnType", checked)}
+    />
+
+    <SettingToggleCard
       icon="eye"
       label={t(lang, "settings.iconOnly")}
       description={t(lang, "settings.iconOnlyDesc")}

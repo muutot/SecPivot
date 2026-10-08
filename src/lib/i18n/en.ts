@@ -398,6 +398,9 @@ export const en: Record<I18nKey, string> = {
   "settings.showDescriptions": "Show entry descriptions",
   "settings.showDescriptionsDesc": "Show scheme-stripped URLs in the list",
   "settings.showDescriptionsAria": "Show descriptions",
+  "settings.focusSearchOnType": "Type to focus search",
+  "settings.focusSearchOnTypeDesc":
+    "Typing a character in the main window focuses the search box and enters that character; shortcuts are unaffected",
   "settings.iconOnly": "Toolbar icons only",
   "settings.iconOnlyDesc": "Buttons show icons only; names appear on hover",
   "settings.showGroupIcon": "Show group icons",

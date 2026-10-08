@@ -389,6 +389,9 @@ export const zhCN = {
   "settings.showDescriptions": "显示条目描述",
   "settings.showDescriptionsDesc": "在列表中展示去除协议后的网址信息",
   "settings.showDescriptionsAria": "显示描述",
+  "settings.focusSearchOnType": "输入即聚焦搜索框",
+  "settings.focusSearchOnTypeDesc":
+    "在主窗口直接输入字符时自动聚焦搜索框，并把该字符填入搜索内容；快捷键不受影响",
   "settings.iconOnly": "工具栏仅显示图标",
   "settings.iconOnlyDesc": "控制按钮只显示图标，按钮名称在鼠标悬浮时提示",
   "settings.showGroupIcon": "显示分组图标",

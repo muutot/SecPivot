@@ -1212,7 +1212,7 @@
   });
 
   let toolbarEl: {
-    focusSearch: () => void;
+    focusSearch: (seed?: string) => void;
   } | null = $state(null);
 
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
@@ -1261,32 +1261,48 @@
       return;
     }
     const shortcuts = effectiveShortcuts(get(appSettings).keyboard.shortcuts);
-    dispatchShortcut(event, shortcuts, {
-      save: () => void handleSave(),
-      lock: () => void handleLock(),
-      edit: () => {
-        if (selection.selectedEntry) openEditEntry(selection.selectedEntry);
-      },
-      "copy-password": () => {
-        if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
-      },
-      "new-entry": () => editor.openCreate(),
-      "focus-search": () => toolbarEl?.focusSearch(),
-      "locate-in-tree": () => {
-        if (selection.selectedEntry && currentVault) {
-          const targetGroup = selection.selectedEntry.groupUuid;
-          selectedGroup = targetGroup;
-          // Reset so a repeat locate on the same group still re-expands the
-          // tree even after a full collapse (setting the identical uuid
-          // again would not re-run the reveal effect).
-          revealGroupUuid = null;
-          requestAnimationFrame(() => {
-            revealGroupUuid = targetGroup;
-          });
-          flash(t(settings.general.language, "page.locatedGroup"));
-        }
-      },
-    });
+    if (
+      dispatchShortcut(event, shortcuts, {
+        save: () => void handleSave(),
+        lock: () => void handleLock(),
+        edit: () => {
+          if (selection.selectedEntry) openEditEntry(selection.selectedEntry);
+        },
+        "copy-password": () => {
+          if (selection.selectedEntry) void copyEntryPassword(selection.selectedEntry);
+        },
+        "new-entry": () => editor.openCreate(),
+        "focus-search": () => toolbarEl?.focusSearch(),
+        "locate-in-tree": () => {
+          if (selection.selectedEntry && currentVault) {
+            const targetGroup = selection.selectedEntry.groupUuid;
+            selectedGroup = targetGroup;
+            // Reset so a repeat locate on the same group still re-expands the
+            // tree even after a full collapse (setting the identical uuid
+            // again would not re-run the reveal effect).
+            revealGroupUuid = null;
+            requestAnimationFrame(() => {
+              revealGroupUuid = targetGroup;
+            });
+            flash(t(settings.general.language, "page.locatedGroup"));
+          }
+        },
+      })
+    )
+      return;
+    // Type-to-search: a plain printable character (no shortcut, no modifier)
+    // focuses the search box and seeds the character so it is not lost.
+    if (
+      settings.general.focusSearchOnType &&
+      toolbarEl &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      event.key.length === 1
+    ) {
+      event.preventDefault();
+      toolbarEl.focusSearch(event.key);
+    }
   }
 
   /** Collect the fully-populated entries behind the current selection. */

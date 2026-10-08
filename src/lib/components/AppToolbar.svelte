@@ -152,9 +152,19 @@
 
   let searchInputEl = $state<HTMLInputElement | null>(null);
 
-  /** Focus hook for the Ctrl+K shortcut (the input lives in this component). */
-  export function focusSearch(): void {
-    searchInputEl?.focus();
+  /** Focus the search input. When `seed` is given (type-to-search), the
+   *  character is appended first and the caret moves to the end, so the very
+   *  first typed character is not lost. */
+  export function focusSearch(seed?: string): void {
+    const el = searchInputEl;
+    if (!el) return;
+    if (seed) {
+      search += seed;
+      el.value = search;
+    }
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
   }
 </script>
 

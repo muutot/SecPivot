@@ -119,4 +119,19 @@ describe("dispatchShortcut", () => {
       dispatchShortcut(event, { save: "Ctrl+S" }, { totallyDifferent: mock.fn() }),
     );
   });
+
+  it("reports whether a binding matched so plain typing can be distinguished", () => {
+    assert.equal(
+      dispatchShortcut(
+        keyEvent({ key: "s", ctrlKey: true }),
+        { save: "Ctrl+S" },
+        { save: mock.fn() },
+      ),
+      true,
+    );
+    assert.equal(
+      dispatchShortcut(keyEvent({ key: "x" }), { save: "Ctrl+S" }, { save: mock.fn() }),
+      false,
+    );
+  });
 });

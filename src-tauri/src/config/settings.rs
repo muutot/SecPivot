@@ -426,6 +426,10 @@ pub struct GeneralSettings {
     /// Whether clicking an entry automatically shows the detail panel.
     #[serde(default = "default_true")]
     pub show_detail_on_select: bool,
+    /// Type-to-search: typing a printable character that matches no shortcut
+    /// focuses the main-window search box and seeds the character. Default on.
+    #[serde(default = "default_true")]
+    pub focus_search_on_type: bool,
     /// KeepPass-style subgroup separator line above each group's entries (default on).
     #[serde(default = "default_true")]
     pub show_group_separators: bool,
@@ -495,6 +499,7 @@ impl Default for GeneralSettings {
             toolbar_sides: default_toolbar_sides(),
             toolbar_full_separators: vec!["saveAs".into()],
             show_detail_on_select: true,
+            focus_search_on_type: true,
             show_group_separators: true,
             group_separator_color: String::new(),
             global_auto_type_shortcut: String::new(),
