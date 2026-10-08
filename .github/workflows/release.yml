@@ -18,8 +18,13 @@ permissions:
 
 # One release run per tag. A re-pushed or manually re-dispatched tag must not
 # race another run rewriting the same published release assets.
+#
+# The `env` context is NOT available in `concurrency` (only `github`, `inputs`,
+# `vars`), so the release tag is inlined here instead of using `env.RELEASE_TAG`
+# — referring to `env.RELEASE_TAG` here fails workflow validation with
+# "Unrecognized named-value: 'env'" and no job ever starts.
 concurrency:
-  group: release-${{ env.RELEASE_TAG }}
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
   cancel-in-progress: false
 
 env:
