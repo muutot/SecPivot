@@ -2415,7 +2415,7 @@
   <FaviconProgressDialog
     dialog={faviconDialog}
     onclose={() => (faviconDialog = null)}
-    oncancel={() => void cancelFaviconDownload()}
+    oncancel={() => void cancelFaviconDownload(faviconDialog?.progress.sessionId)}
   />
 {/if}
 

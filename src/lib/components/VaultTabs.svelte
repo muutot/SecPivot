@@ -2,6 +2,7 @@
   import { vault } from "$lib/services/vault";
   import type { SessionInfo } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
+  import { showTip } from "$lib/services/tips";
   import { t } from "$lib/i18n";
 
   let sessions = $state<SessionInfo[]>([]);
@@ -40,6 +41,8 @@
     } catch {
       // `vault.setActiveSession` restores the previous visible session on a
       // failed switch; the tab bar follows the restored active-id store.
+      // Surface the failure: silent no-ops leave users retrying a dead tab.
+      showTip(t(lang, "tabs.switchFailed"), "error");
     }
   }
 </script>

@@ -84,7 +84,9 @@
 
   function cancel(): void {
     cancelled = true;
-    void vault.cancelHibp();
+    // `sessionId` was captured when the dialog opened: the cancel must reach
+    // the originating tab's run even after an A→B switch.
+    void vault.cancelHibp(sessionId);
   }
 </script>
 

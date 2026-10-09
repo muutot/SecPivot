@@ -571,12 +571,11 @@ impl VaultSession {
                 return Err("目标分组不存在".to_owned());
             };
             let mut inserted = Vec::with_capacity(parsed.len());
-            // Parse and validate every entry first: a malformed item must not
-            // leave a half-applied paste behind.
+            // Fail closed: a malformed item aborts the paste with an error
+            // instead of being silently skipped while the rest lands.
             for entry in &parsed {
-                if let Ok(uuid) = crate::vault::exchange::insert_entry(&mut group, entry) {
-                    inserted.push(uuid.to_string());
-                }
+                let uuid = crate::vault::exchange::insert_entry(&mut group, entry)?;
+                inserted.push(uuid.to_string());
             }
             inserted
         };

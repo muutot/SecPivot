@@ -997,6 +997,7 @@ export const zhCN = {
   "tabs.switchTo": "切换到 {name}",
   "tabs.dirty": "有未保存的更改",
   "tabs.closeTab": "关闭 {name}",
+  "tabs.switchFailed": "切换数据库失败",
   "totp.copyTitle": "复制验证码",
   "totp.clickCopy": "点击复制验证码",
   "totp.genError": "无法生成验证码",

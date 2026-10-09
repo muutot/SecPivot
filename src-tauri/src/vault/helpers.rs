@@ -670,30 +670,39 @@ const KDB_SIGNATURE: [u8; 8] = [0x03, 0xD9, 0xA2, 0x9A, 0x65, 0xFB, 0x4B, 0xB5];
 
 /// Inspect a file's header and size without attempting decryption: classifies
 /// it as `kdbx`, `kdb` or `unknown`. Missing/unreadable files are errors.
+/// Test-only: production open paths probe the bytes they already hold via
+/// [`probe_vault_bytes`].
+#[cfg(test)]
 pub(crate) fn probe_vault(path: &Path) -> Result<VaultProbe, String> {
     let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
+    Ok(probe_vault_bytes(&data))
+}
+
+/// Pure half of [`probe_vault`] over already-read bytes, so open paths that
+/// hold the file content don't read it from disk a second time.
+pub(crate) fn probe_vault_bytes(data: &[u8]) -> VaultProbe {
     let head: [u8; 8] = data
         .get(..8)
         .and_then(|slice| slice.try_into().ok())
         .unwrap_or_default();
     let size = data.len() as u64;
     if head == KDBX_SIGNATURE {
-        Ok(VaultProbe {
+        VaultProbe {
             kind: "kdbx",
             note: format!("KeePass 数据库文件（KDBX，大小 {size} 字节）"),
-        })
+        }
     } else if head == KDB_SIGNATURE {
-        Ok(VaultProbe {
+        VaultProbe {
             kind: "kdb",
             note: format!("KeePass 1.x 数据库（KDB，暂不支持打开，大小 {size} 字节）"),
-        })
+        }
     } else {
-        Ok(VaultProbe {
+        VaultProbe {
             kind: "unknown",
             note: format!(
                 "不是 KeePass 数据库文件（缺少 KDBX 头，大小 {size} 字节），可能已损坏或选择了错误文件"
             ),
-        })
+        }
     }
 }
 

@@ -103,6 +103,6 @@ export async function runFaviconDownload(
   }
 }
 
-export async function cancelFaviconDownload(): Promise<void> {
-  await vault.cancelFavicons();
+export async function cancelFaviconDownload(sessionId?: string | null): Promise<void> {
+  await vault.cancelFavicons(sessionId);
 }

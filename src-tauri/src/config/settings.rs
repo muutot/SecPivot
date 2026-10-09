@@ -1319,10 +1319,16 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
 }
 
 /// Lowercase the transport kind and fall back to `"s3"` on anything unknown.
+/// The fallback is loud: a typo'd kind would otherwise connect with S3
+/// semantics to a WebDAV endpoint and fail with a misleading error.
 fn normalize_remote_kind(kind: &str) -> String {
     match kind.trim().to_ascii_lowercase().as_str() {
         "webdav" => "webdav".into(),
-        _ => "s3".into(),
+        "s3" => "s3".into(),
+        unknown => {
+            eprintln!("config: unknown remote kind '{unknown}', falling back to s3");
+            "s3".into()
+        }
     }
 }
 

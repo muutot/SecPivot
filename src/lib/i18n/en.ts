@@ -1028,6 +1028,7 @@ export const en: Record<I18nKey, string> = {
   "tabs.switchTo": "Switch to {name}",
   "tabs.dirty": "Unsaved changes",
   "tabs.closeTab": "Close {name}",
+  "tabs.switchFailed": "Failed to switch database",
   "totp.copyTitle": "Copy verification code",
   "totp.clickCopy": "Click to copy verification code",
   "totp.genError": "Cannot generate verification code",

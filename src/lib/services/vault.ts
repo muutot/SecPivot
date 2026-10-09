@@ -147,9 +147,9 @@ interface VaultStore {
   expiredEntries: () => Promise<ExpiredEntry[]>;
   changeTimeline: () => Promise<ChangeTimelineEvent[]>;
   checkHibp: (uuids?: string[]) => Promise<BreachFinding[]>;
-  cancelHibp: () => Promise<void>;
+  cancelHibp: (sessionId?: string | null) => Promise<void>;
   downloadFavicons: (uuids?: string[]) => Promise<FaviconReport>;
-  cancelFavicons: () => Promise<void>;
+  cancelFavicons: (sessionId?: string | null) => Promise<void>;
   toggleFavorite: (uuid: string) => Promise<VaultState>;
   autoType: (uuid: string, sequence: string) => Promise<void>;
   saveAttachment: (uuid: string, name: string, dest: string) => Promise<void>;
@@ -1235,11 +1235,12 @@ export const vault: VaultStore = {
     });
   },
 
-  async cancelHibp(): Promise<void> {
+  async cancelHibp(sessionId?: string | null): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-      // Session-scoped: the backend only aborts the run owned by this tab.
-      await backendInvoke<void>("cancel_hibp", { sessionId: activeSessionId });
+      // Session-scoped: cancel the run owned by the originating tab, not
+      // whatever tab happens to be active when the button is pressed.
+      await backendInvoke<void>("cancel_hibp", { sessionId: sessionId ?? activeSessionId });
     } catch {
       // No active check — safe to ignore.
     }
@@ -1260,11 +1261,14 @@ export const vault: VaultStore = {
     return report;
   },
 
-  async cancelFavicons(): Promise<void> {
+  async cancelFavicons(sessionId?: string | null): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-      // Session-scoped: the backend only aborts the run owned by this tab.
-      await backendInvoke<void>("cancel_favicons", { sessionId: activeSessionId });
+      // Session-scoped: cancel the run owned by the originating tab, not
+      // whatever tab happens to be active when the button is pressed.
+      await backendInvoke<void>("cancel_favicons", {
+        sessionId: sessionId ?? activeSessionId,
+      });
     } catch {
       // No active download or already finished — safe to ignore.
     }
