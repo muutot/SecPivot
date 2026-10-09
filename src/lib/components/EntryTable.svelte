@@ -483,6 +483,13 @@
   }
 
   function handleRowKeydown(event: KeyboardEvent, index: number, entry: VaultEntry): void {
+    // Rows own focus ~all the time: Ctrl+A here must select entries, not row text.
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      event.stopPropagation();
+      onselectall();
+      return;
+    }
     if (event.key === "Enter") {
       onselectentry(entry);
       return;

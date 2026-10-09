@@ -208,6 +208,7 @@ export const en: Record<I18nKey, string> = {
   "detail.deleteVersion": "Delete this version",
   "detail.historyHint":
     "Keeps at most the 10 most recent versions; a restore itself is recorded as a new version.",
+  "detail.invalidUrl": "Only http/https links can be opened",
   "common.apply": "Apply",
   "editor.createTitle": "New entry",
   "editor.batchEdit": "Batch edit {count} entries",

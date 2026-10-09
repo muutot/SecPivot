@@ -436,6 +436,19 @@
 
   function openExternalUrl(url: string): void {
     if (!url) return;
+    // Vault URL fields are attacker-controlled (shared/imported databases):
+    // only http(s) may reach the external opener, never javascript:/file:.
+    let scheme = "";
+    try {
+      scheme = new URL(url).protocol.toLowerCase();
+    } catch {
+      showTip(t(lang, "detail.invalidUrl"), "error");
+      return;
+    }
+    if (scheme !== "http:" && scheme !== "https:") {
+      showTip(t(lang, "detail.invalidUrl"), "error");
+      return;
+    }
     if (isTauriRuntime()) {
       void openUrl(url);
     } else {

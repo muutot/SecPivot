@@ -283,7 +283,14 @@
           e.preventDefault();
           const raw = e.dataTransfer.getData(DRAG_MIME);
           if (!raw) return;
-          ondropentry?.(group.uuid, JSON.parse(raw) as string[]);
+          try {
+            const uuids = JSON.parse(raw) as unknown;
+            if (Array.isArray(uuids) && uuids.every((u) => typeof u === "string")) {
+              ondropentry?.(group.uuid, uuids);
+            }
+          } catch {
+            // Foreign drag payload: ignore instead of throwing inside the handler.
+          }
         }}
       >
         {#if showChevron}

@@ -202,6 +202,7 @@ export const zhCN = {
   "detail.restoreVersion": "恢复此版本",
   "detail.deleteVersion": "删除此版本",
   "detail.historyHint": "最多保留最近 10 个版本;恢复操作本身也会记录为新版本。",
+  "detail.invalidUrl": "仅支持打开 http/https 链接",
   "common.apply": "应用",
   "editor.createTitle": "新建条目",
   "editor.batchEdit": "批量编辑 {count} 个条目",

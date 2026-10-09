@@ -110,7 +110,9 @@ export function downloadTextFile(content: string, fileName: string, mime: string
   anchor.href = url;
   anchor.download = fileName;
   anchor.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously aborts the download in Firefox/Safari; Chromium
+  // tolerates it, which is why the empty-file failure stayed hidden.
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 export function csvToImportEntries(text: string): ImportEntry[] {
