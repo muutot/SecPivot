@@ -305,7 +305,10 @@ pub(crate) async fn update_database_settings(
     let (db, new_hash) = match persisted {
         Ok(result) => result,
         Err(e) => {
-            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) && !vault::is_transient_save_error(&e) {
+            if matches!(
+                vault::classify_save_error(&e),
+                vault::SaveErrorClass::Persistent
+            ) {
                 if let Ok(mut active) = session.lock() {
                     let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
                         target.note_save_failure();
@@ -351,7 +354,10 @@ pub(crate) async fn save_vault(
             })
         }
         Err(e) => {
-            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) && !vault::is_transient_save_error(&e) {
+            if matches!(
+                vault::classify_save_error(&e),
+                vault::SaveErrorClass::Persistent
+            ) {
                 if let Ok(mut active) = session.lock() {
                     let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
                         target.note_save_failure();
@@ -528,7 +534,10 @@ pub(crate) async fn change_master_key(
         // bytes) on the heap; the success path moved them into the session,
         // which zeroizes them on close.
         Err(e) => {
-            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) && !vault::is_transient_save_error(&e) {
+            if matches!(
+                vault::classify_save_error(&e),
+                vault::SaveErrorClass::Persistent
+            ) {
                 if let Ok(mut active) = session.lock() {
                     let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
                         target.note_save_failure();

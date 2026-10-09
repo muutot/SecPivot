@@ -54,13 +54,31 @@ pub(crate) const BROWSER_VAULT_CHANGED_EVENT: &str = "browser-vault-changed";
 /// `config`; re-exported here for callers that reference it via `vault::`.
 pub(crate) use crate::config::DEFAULT_BACKUP_TEMPLATE;
 
-/// Transient transport hiccups (timeouts, refused/reset connections, DNS)
-/// must not push the vault toward read-only degradation: the data path is
-/// fine, only the network flapped. Persistent errors (auth, disk IO,
-/// serialization, conflicts) still count. Markers mirror the Chinese/English
-/// timeout texts produced by the S3/WebDAV transports.
-pub(crate) fn is_transient_save_error(err: &str) -> bool {
-    const MARKERS: &[&str] = &[
+/// How a save failure feeds read-only degradation. Single source of truth
+/// for all 11 counting sites (session/hosts/commands/rpc): previously each
+/// site re-spelled the `REMOTE_CHANGED`-prefix check inline, so editing one
+/// Chinese sentence could silently misroute conflicts into the failure
+/// counter. This is the first typed-error installment (see TYP-01); the
+/// payload stays a `String`, only the classification is centralized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SaveErrorClass {
+    /// Remote moved under us: user decision required, never a degradation.
+    Conflict,
+    /// Transient transport hiccup (timeouts, refused/reset connections,
+    /// DNS): the data path is fine, only the network flapped.
+    Transient,
+    /// Everything else (auth, disk IO, serialization): counts toward the
+    /// consecutive-failure limit.
+    Persistent,
+}
+
+pub(crate) fn classify_save_error(err: &str) -> SaveErrorClass {
+    if err.starts_with(persist::REMOTE_CHANGED_MARKER) {
+        return SaveErrorClass::Conflict;
+    }
+    // Markers mirror the Chinese/English timeout texts produced by the
+    // S3/WebDAV transports.
+    const TRANSIENT_MARKERS: &[&str] = &[
         "超时",
         "timeout",
         "timed out",
@@ -72,7 +90,17 @@ pub(crate) fn is_transient_save_error(err: &str) -> bool {
         "网络",
     ];
     let lower = err.to_lowercase();
-    MARKERS.iter().any(|m| lower.contains(&m.to_lowercase()))
+    if TRANSIENT_MARKERS
+        .iter()
+        .any(|m| lower.contains(&m.to_lowercase()))
+    {
+        return SaveErrorClass::Transient;
+    }
+    SaveErrorClass::Persistent
+}
+
+pub(crate) fn is_transient_save_error(err: &str) -> bool {
+    matches!(classify_save_error(err), SaveErrorClass::Transient)
 }
 
 /// Standard KeePass field names shared with `vault_serialize`.

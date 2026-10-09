@@ -4697,16 +4697,30 @@ fn reopening_resets_save_failure_counter() {
 
 #[test]
 fn transient_save_errors_do_not_degrade_to_read_only() {
-    assert!(super::is_transient_save_error(
-        "S3 传输超时，请检查网络与服务地址"
-    ));
-    assert!(super::is_transient_save_error(
-        "request timed out after 120s"
-    ));
-    assert!(!super::is_transient_save_error(
-        "无法写入数据库文件: permission denied"
-    ));
-    assert!(!super::is_transient_save_error("REMOTE_CHANGED\nconflict"));
+    use super::{classify_save_error, SaveErrorClass};
+    assert_eq!(
+        classify_save_error("S3 传输超时，请检查网络与服务地址"),
+        SaveErrorClass::Transient
+    );
+    assert_eq!(
+        classify_save_error("request timed out after 120s"),
+        SaveErrorClass::Transient
+    );
+    assert_eq!(
+        classify_save_error("REMOTE_CHANGED\nconflict"),
+        SaveErrorClass::Conflict
+    );
+    assert_eq!(
+        classify_save_error("无法写入数据库文件: permission denied"),
+        SaveErrorClass::Persistent
+    );
+    // Classification lives here, not re-spelled at each of the 11 counting
+    // sites: editing the conflict sentence must not silently misroute
+    // conflicts into the degradation counter.
+    assert_ne!(
+        classify_save_error("REMOTE_CHANGED\nconflict"),
+        SaveErrorClass::Persistent
+    );
 }
 
 #[test]

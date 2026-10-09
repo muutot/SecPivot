@@ -331,9 +331,10 @@ impl VaultSession {
         let (db, new_hash) = match persist_save_with_db(job) {
             Ok(result) => result,
             Err(e) => {
-                if !e.starts_with(super::REMOTE_CHANGED_MARKER)
-                    && !super::is_transient_save_error(&e)
-                {
+                if matches!(
+                    super::classify_save_error(&e),
+                    super::SaveErrorClass::Persistent
+                ) {
                     self.note_save_failure();
                 }
                 return Err(e);
@@ -348,9 +349,10 @@ impl VaultSession {
         let new_hash = match persist_save(job) {
             Ok(hash) => hash,
             Err(e) => {
-                if !e.starts_with(super::REMOTE_CHANGED_MARKER)
-                    && !super::is_transient_save_error(&e)
-                {
+                if matches!(
+                    super::classify_save_error(&e),
+                    super::SaveErrorClass::Persistent
+                ) {
                     self.note_save_failure();
                 }
                 return Err(e);
@@ -371,9 +373,10 @@ impl VaultSession {
         let new_hash = match persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
             Ok(hash) => hash,
             Err(e) => {
-                if !e.starts_with(super::REMOTE_CHANGED_MARKER)
-                    && !super::is_transient_save_error(&e)
-                {
+                if matches!(
+                    super::classify_save_error(&e),
+                    super::SaveErrorClass::Persistent
+                ) {
                     self.note_save_failure();
                 }
                 return Err(e);
