@@ -435,6 +435,9 @@ impl VaultSession {
         self.db = Some(db);
         self.dirty = false;
         self.modified_at = now_iso();
+        // New database identity: IO failures against the previous target must
+        // not leak into the read-only degradation counter.
+        self.save_failures = 0;
         self.cached_snapshot = None;
         self.snapshot()
     }
@@ -450,6 +453,9 @@ impl VaultSession {
         self.dirty = false;
         self.modified_at = now_iso();
         self.remote = None;
+        // Same as adopt_remote: opening a different database resets the
+        // consecutive-save-failure counter for the previous target.
+        self.save_failures = 0;
         self.cached_snapshot = None;
     }
 

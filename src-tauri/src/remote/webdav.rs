@@ -68,12 +68,16 @@ impl WebDavStorage {
     }
 
     /// Absolute URL for a vault key (or, with an empty key, the base URL).
-    /// Rejects `.`/`..` path segments so a key cannot escape the endpoint.
+    /// Rejects `.`/`..` path segments so a key can neither escape the endpoint
+    /// nor alias another key (`a/../a` must fail, not silently become `a`).
     pub(crate) fn url_for(&self, path: &str) -> Result<String, String> {
         let mut url = self.base_url.clone();
         for segment in path.split('/') {
-            if segment.is_empty() || segment == "." || segment == ".." {
+            if segment.is_empty() {
                 continue;
+            }
+            if segment == "." || segment == ".." {
+                return Err("远程键名不得包含 `.` 或 `..` 路径段".to_owned());
             }
             url.push('/');
             url.push_str(&encode_path_segment(segment));

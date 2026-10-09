@@ -258,9 +258,16 @@ fn registrable_domain(host: &str) -> String {
 }
 
 /// Compile a user regex; malformed patterns simply never match (Kee ignores
-/// them too rather than failing the whole login lookup).
-fn regex_matches(pattern: &str, text: &str) -> bool {
-    regex::Regex::new(pattern)
+/// them too rather than failing the whole login lookup). Patterns come from
+/// vault content (shared/imported databases), so bound the compile: oversized
+/// patterns never match instead of burning CPU on every login lookup/hotkey.
+pub(crate) fn regex_matches(pattern: &str, text: &str) -> bool {
+    if pattern.len() > 256 || text.len() > 4096 {
+        return false;
+    }
+    regex::RegexBuilder::new(pattern)
+        .size_limit(100_000)
+        .build()
         .ok()
         .is_some_and(|re| re.is_match(text))
 }

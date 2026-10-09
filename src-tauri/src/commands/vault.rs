@@ -458,17 +458,10 @@ pub(crate) async fn save_vault_as(
                 target.complete_save_as(path_for_complete, revision)
             })
         }
-        Err(e) => {
-            if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
-                if let Ok(mut active) = session.lock() {
-                    let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                        target.note_save_failure();
-                        Ok(())
-                    });
-                }
-            }
-            Err(e)
-        }
+        // A failed save-as targets a *different* path: it must not feed the
+        // read-only degradation counter of the current session. The session is
+        // unchanged on failure (prepare/complete only swap on Ok).
+        Err(e) => Err(e),
     }
 }
 

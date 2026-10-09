@@ -36,10 +36,22 @@ impl VaultSession {
     /// still reported so the UI can show the truncation.
     pub fn attachment_preview(&self, uuid: &str, name: &str) -> Result<AttachmentPreview, String> {
         const PREVIEW_MAX_BYTES: usize = 2 * 1024 * 1024;
-        let data = self.attachment_data(uuid, name)?;
-        let truncated = data.len() > PREVIEW_MAX_BYTES;
-        let slice = &data[..data.len().min(PREVIEW_MAX_BYTES)];
-        let size = data.len();
+        // Copy at most the preview head: the previous `attachment_data`
+        // full `to_vec()` OOM'd on hundred-MB attachments before truncating.
+        let (size, head) = {
+            let db = self.require_db()?;
+            let id = parse_entry_id(uuid)?;
+            let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+            let attachment = entry
+                .attachment_by_name(name)
+                .ok_or_else(|| "附件不存在".to_owned())?;
+            let raw = attachment.data.get();
+            let size = raw.len();
+            let head = raw[..size.min(PREVIEW_MAX_BYTES)].to_vec();
+            (size, head)
+        };
+        let truncated = size > PREVIEW_MAX_BYTES;
+        let slice = &head[..];
         if let Some(mime) = preview_image_mime(name) {
             Ok(AttachmentPreview {
                 kind: "image".into(),
@@ -498,7 +510,7 @@ impl VaultSession {
     pub fn get_entry_password(&self, uuid: &str) -> Result<String, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
-        let entry = db.entry(id).ok_or_else(|| "��Ŀ������".to_owned())?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
         Ok(entry.get(FIELD_PASSWORD).unwrap_or_default().to_owned())
     }
 

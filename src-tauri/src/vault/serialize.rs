@@ -680,6 +680,10 @@ pub(crate) struct AttachmentPayload {
 pub(crate) fn decode_attachments(
     input: &[AttachmentInput],
 ) -> Result<Vec<AttachmentPayload>, String> {
+    // Mirror the 64 MiB temp-import ceiling: one oversized IPC batch must be
+    // rejected atomically instead of ballooning backend memory (OOM).
+    const MAX_TOTAL_BYTES: usize = 64 * 1024 * 1024;
+    let mut total = 0usize;
     let mut payloads = Vec::new();
     for attachment in input {
         if attachment.name.trim().is_empty() {
@@ -689,6 +693,10 @@ pub(crate) fn decode_attachments(
             let bytes = BASE64
                 .decode(data.trim())
                 .map_err(|e| format!("附件数据解码失败: {e}"))?;
+            total = total
+                .checked_add(bytes.len())
+                .filter(|&t| t <= MAX_TOTAL_BYTES)
+                .ok_or_else(|| "附件总大小超过 64 MiB 上限".to_owned())?;
             payloads.push(AttachmentPayload {
                 name: attachment.name.clone(),
                 data: bytes,

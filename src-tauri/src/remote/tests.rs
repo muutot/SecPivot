@@ -643,6 +643,9 @@ fn webdav_url_for_encodes_segments_and_rejects_dotdot() {
         "http://h/dav/a%20b/c.kdbx"
     );
     assert_eq!(storage.url_for("a.kdbx").unwrap(), "http://h/dav/a.kdbx");
-    // ".." segments must not escape the endpoint.
-    assert_eq!(storage.url_for("../x.kdbx").unwrap(), "http://h/dav/x.kdbx");
+    // ".."/"." segments are rejected outright: silently skipping them would
+    // alias distinct keys (e.g. `a/../a` collapsing onto `a`).
+    assert!(storage.url_for("../x.kdbx").is_err());
+    assert!(storage.url_for("a/../a.kdbx").is_err());
+    assert!(storage.url_for("./a.kdbx").is_err());
 }

@@ -101,11 +101,24 @@ pub(crate) struct RemoteMergeError {
 }
 
 /// Read an optional keyfile into memory (called without the session lock).
+/// Capped at 10 MiB: a keyfile is key material, never a multi-GB blob, and an
+/// uncapped read turns a misclick into an OOM.
 pub(crate) fn read_keyfile(keyfile: Option<&Path>) -> Result<Option<Vec<u8>>, String> {
+    const MAX_KEYFILE_BYTES: u64 = 10 * 1024 * 1024;
     match keyfile {
-        Some(keyfile_path) => std::fs::read(keyfile_path)
-            .map(Some)
-            .map_err(|e| format!("无法读取密钥文件: {e}")),
+        Some(keyfile_path) => {
+            let meta =
+                std::fs::metadata(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?;
+            if meta.len() > MAX_KEYFILE_BYTES {
+                return Err("密钥文件超过 10 MiB 上限".to_owned());
+            }
+            let bytes =
+                std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?;
+            if bytes.len() as u64 > MAX_KEYFILE_BYTES {
+                return Err("密钥文件超过 10 MiB 上限".to_owned());
+            }
+            Ok(Some(bytes))
+        }
         None => Ok(None),
     }
 }

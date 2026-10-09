@@ -4630,6 +4630,59 @@ fn attachment_preview_text_image_and_binary_in_memory() {
 }
 
 #[test]
+fn oversized_attachment_batch_is_rejected_atomically() {
+    // 64 MiB ceiling (mirrors the temp-import limit): one oversized IPC batch
+    // must fail before anything is written, never OOM the backend.
+    let over = vec![0u8; 64 * 1024 * 1024 + 1];
+    let input = vec![AttachmentInput {
+        name: "huge.bin".into(),
+        data: Some(BASE64.encode(&over)),
+    }];
+    assert!(super::serialize::decode_attachments(&input).is_err());
+}
+
+#[test]
+fn oversized_keyfile_is_rejected() {
+    let dir = TempDir::new().unwrap();
+    let big = dir.path().join("big.key");
+    std::fs::write(&big, vec![7u8; 10 * 1024 * 1024 + 1]).unwrap();
+    assert!(super::persist::read_keyfile(Some(&big)).is_err());
+    let small = dir.path().join("small.key");
+    std::fs::write(&small, b"tiny-key-material").unwrap();
+    assert!(super::persist::read_keyfile(Some(&small)).is_ok());
+}
+
+#[test]
+fn oversized_user_regex_never_matches() {
+    // Vault-controlled patterns are compile-bounded: normal ones still work,
+    // overlong ones fail closed instead of burning CPU per lookup.
+    assert!(super::helpers::regex_matches(
+        r"example\.com",
+        "https://example.com/login"
+    ));
+    assert!(!super::helpers::regex_matches("([", "https://example.com"));
+    let long = format!("a{{{}}}", 300);
+    assert!(!super::helpers::regex_matches(&long, "aaa"));
+}
+
+#[test]
+fn reopening_resets_save_failure_counter() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    session.note_save_failure();
+    session.note_save_failure();
+    assert!(!session.is_read_only());
+    // Opening a different database clears the streak: two old failures plus
+    // one new one must not read-only the new vault.
+    let other = dir.path().join("other.kdbx");
+    session
+        .create(&other, "master-password", "Aes", "Aes256", "None", None)
+        .unwrap();
+    session.note_save_failure();
+    assert!(!session.is_read_only());
+}
+
+#[test]
 fn import_attachment_from_temp_replaces_bytes_and_persists() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

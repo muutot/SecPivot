@@ -345,7 +345,7 @@ fn attr_value(tag: &str, name: &str) -> Option<String> {
     let cached = CACHE
         .get_or_init(Default::default)
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .get(name)
         .cloned();
     let re = match cached {
@@ -359,7 +359,7 @@ fn attr_value(tag: &str, name: &str) -> Option<String> {
             CACHE
                 .get_or_init(Default::default)
                 .lock()
-                .unwrap()
+                .unwrap_or_else(|e| e.into_inner())
                 .insert(name.to_owned(), re.clone());
             re
         }
