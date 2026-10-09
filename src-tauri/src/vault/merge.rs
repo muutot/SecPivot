@@ -218,10 +218,11 @@ fn snapshot_ancestor_dropped(
 
 /// Resolve collisions between detached bin objects and objects the merge
 /// kept active, then reattach the surviving bin contents. For a collision
-/// the newer timestamp wins: a newer local deletion removes the active
-/// object from the merged tree (recorded in `deleted_objects` so it
+/// the strictly newer timestamp wins: a newer local deletion removes the
+/// active object from the merged tree (recorded in `deleted_objects` so it
 /// propagates); a newer remote edit drops the bin copy (and, for groups, its
-/// whole snapshot subtree).
+/// whole snapshot subtree). Exact ties keep the active edit: resurrecting an
+/// entry the user can see and re-delete beats silently dropping an edit.
 fn restore_bin(dest: &mut Database, bin: DetachedBin) {
     let mut dropped_groups: HashSet<GroupId> = HashSet::new();
     for snap in &bin.groups {
@@ -229,7 +230,7 @@ fn restore_bin(dest: &mut Database, bin: DetachedBin) {
             continue; // not active in the merged tree — nothing to resolve
         };
         let bin_time = bin_change(&snap.group.times);
-        if bin_time >= active_time {
+        if bin_time > active_time {
             if let Some(mut group) = dest.group_mut(snap.id) {
                 // GroupTrack::remove records deleted_objects (deletion wins).
                 let _ = group.track_changes().remove();
@@ -246,7 +247,7 @@ fn restore_bin(dest: &mut Database, bin: DetachedBin) {
         };
         let bin_time = bin_change(&snap.entry.times);
         let active_time = active_change(&active.times);
-        if bin_time >= active_time {
+        if bin_time > active_time {
             if let Some(mut entry) = dest.entry_mut(snap.id) {
                 // EntryTrack::remove records deleted_objects (deletion wins).
                 entry.track_changes().remove();

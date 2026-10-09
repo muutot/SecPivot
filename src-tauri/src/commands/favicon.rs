@@ -642,7 +642,9 @@ pub(crate) async fn download_favicons(
                     })?;
             }
             Err(e) => {
-                if !e.starts_with(vault::REMOTE_CHANGED_MARKER) {
+                if !e.starts_with(vault::REMOTE_CHANGED_MARKER)
+                    && !vault::is_transient_save_error(&e)
+                {
                     if let Ok(mut active) = session.lock() {
                         let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
                             target.note_save_failure();

@@ -270,12 +270,28 @@ pub(crate) fn persist_snapshot(
                 let (current, etag) = storage
                     .get_with_etag(key)
                     .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
-                if crate::crypto::sha256_bytes(&current) != *base_hash {
-                    return Err(format!(
+                let conflict = |current: &[u8]| {
+                    format!(
                         "{REMOTE_CHANGED_MARKER}远程库已被其他设备修改（远程 {} 字节 / 本地 {} 字节），请选择合并、覆盖远程、下载远程或保留本地",
                         current.len(),
                         buffer.len(),
-                    ));
+                    )
+                };
+                if crate::crypto::sha256_bytes(&current) != *base_hash {
+                    return Err(conflict(&current));
+                }
+                if etag.is_none() {
+                    // Servers without ETag support cannot precondition the
+                    // upload: re-read immediately before the put so a writer
+                    // that slipped in during serialization is still caught.
+                    // Best-effort (a writer inside the final RTT still wins),
+                    // but it closes the wide serialize-then-put window.
+                    let (current, _) = storage
+                        .get_with_etag(key)
+                        .map_err(|e| format!("读取远程当前版本失败: {e}"))?;
+                    if crate::crypto::sha256_bytes(&current) != *base_hash {
+                        return Err(conflict(&current));
+                    }
                 }
                 storage
                     .put_if_match(key, &buffer, etag.as_deref())

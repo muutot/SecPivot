@@ -156,6 +156,40 @@ impl AttachmentTempStore {
     }
 }
 
+/// Remove token directories left behind by a previous process that never
+/// reached its discard path (crash, kill, power loss): their plaintext
+/// attachment copies would otherwise linger in the system temp dir forever.
+/// Only entries older than `max_age` are swept so a concurrently running
+/// second instance keeps its fresh files. Returns the number removed.
+/// Best-effort: unreadable entries are skipped, never fatal.
+pub fn sweep_stale_temp_attachments(max_age: std::time::Duration) -> usize {
+    sweep_dir(&std::env::temp_dir().join("secpivot-attachments"), max_age)
+}
+
+fn sweep_dir(base: &std::path::Path, max_age: std::time::Duration) -> usize {
+    let entries = match std::fs::read_dir(base) {
+        Ok(entries) => entries,
+        Err(_) => return 0,
+    };
+    let mut removed = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let stale = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > max_age);
+        if stale && std::fs::remove_dir_all(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    if removed > 0 {
+        eprintln!("[attachments] swept {removed} stale temp directorie(s)");
+    }
+    removed
+}
+
 /// Keep only a single file-name segment with safe characters; fall back to a
 /// fixed name so the extracted file cannot escape the token directory.
 fn sanitize_file_name(name: &str) -> String {
@@ -268,6 +302,26 @@ mod tests {
             "a failed cross-session lookup must not discard the token"
         );
         store.discard(&token).unwrap();
+    }
+
+    #[test]
+    fn sweep_dir_removes_only_stale_entries() {
+        use std::time::Duration;
+        let base = std::env::temp_dir().join(format!("secpivot-sweep-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let stale = base.join("old-token");
+        let fresh = base.join("new-token");
+        std::fs::create_dir_all(&stale).unwrap();
+        std::fs::create_dir_all(&fresh).unwrap();
+        // Zero age: everything counts as stale.
+        assert_eq!(sweep_dir(&base, Duration::ZERO), 2);
+        assert!(!stale.exists() && !fresh.exists());
+        // Missing base is a no-op, huge age keeps fresh entries.
+        assert_eq!(sweep_dir(&base.join("nope"), Duration::ZERO), 0);
+        std::fs::create_dir_all(&fresh).unwrap();
+        assert_eq!(sweep_dir(&base, Duration::from_secs(u64::MAX)), 0);
+        assert!(fresh.exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

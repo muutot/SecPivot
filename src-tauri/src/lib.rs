@@ -351,6 +351,9 @@ pub fn run() {
             #[cfg(desktop)]
             setup_tray(app.handle())?;
             app.manage(store);
+            // Crash leftovers: a killed process never ran its temp-attachment
+            // discard, so sweep day-old plaintext copies before serving.
+            vault::sweep_stale_temp_attachments(std::time::Duration::from_secs(24 * 3600));
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(VaultSessions::default());
             app.manage(vault::AttachmentTempStore::default());

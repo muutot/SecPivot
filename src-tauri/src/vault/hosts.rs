@@ -239,7 +239,9 @@ impl RpcHost for VaultSession {
         let result = match persist_rpc_write(job) {
             Ok(result) => result,
             Err(error) => {
-                if !error.starts_with(super::REMOTE_CHANGED_MARKER) {
+                if !error.starts_with(super::REMOTE_CHANGED_MARKER)
+                    && !super::is_transient_save_error(&error)
+                {
                     self.note_save_failure();
                 }
                 return Err(RpcError::InvalidMessage(format!("保存失败: {error}")));
@@ -262,7 +264,9 @@ impl RpcHost for VaultSession {
         let result = match persist_rpc_write(job) {
             Ok(result) => result,
             Err(error) => {
-                if !error.starts_with(super::REMOTE_CHANGED_MARKER) {
+                if !error.starts_with(super::REMOTE_CHANGED_MARKER)
+                    && !super::is_transient_save_error(&error)
+                {
                     self.note_save_failure();
                 }
                 return Err(RpcError::InvalidMessage(format!("保存失败: {error}")));

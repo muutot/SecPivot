@@ -4683,6 +4683,20 @@ fn reopening_resets_save_failure_counter() {
 }
 
 #[test]
+fn transient_save_errors_do_not_degrade_to_read_only() {
+    assert!(super::is_transient_save_error(
+        "S3 传输超时，请检查网络与服务地址"
+    ));
+    assert!(super::is_transient_save_error(
+        "request timed out after 120s"
+    ));
+    assert!(!super::is_transient_save_error(
+        "无法写入数据库文件: permission denied"
+    ));
+    assert!(!super::is_transient_save_error("REMOTE_CHANGED\nconflict"));
+}
+
+#[test]
 fn import_attachment_from_temp_replaces_bytes_and_persists() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);
@@ -6158,6 +6172,99 @@ fn remote_save_detects_external_change_and_conflicts_do_not_trigger_read_only() 
     storage.put("vaults/seed.kdbx", &[1u8; 64]).unwrap();
     let err = session.save().unwrap_err();
     assert!(err.starts_with("REMOTE_CHANGED"), "unexpected: {err}");
+}
+
+/// ETag-less servers cannot precondition the upload: a writer that slips in
+/// between the conflict check and the put must still be caught by the
+/// second read, instead of being silently clobbered.
+#[test]
+fn remote_save_without_etag_rechecks_before_put() {
+    use crate::remote::{RemoteObject, RemoteStorage};
+    use std::sync::Mutex;
+
+    struct FlappingStorage {
+        inner: crate::remote::MemoryStorage,
+        reads: Mutex<usize>,
+    }
+    impl RemoteStorage for FlappingStorage {
+        fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
+            self.inner.list(prefix)
+        }
+        fn get(&self, key: &str) -> Result<Vec<u8>, String> {
+            self.inner.get(key)
+        }
+        fn put(&self, key: &str, data: &[u8]) -> Result<(), String> {
+            self.inner.put(key, data)
+        }
+        fn get_with_etag(&self, key: &str) -> Result<(Vec<u8>, Option<String>), String> {
+            let mut reads = self.reads.lock().unwrap();
+            *reads += 1;
+            if *reads == 1 {
+                // Open path: pristine content, no ETag (plain WebDAV-style).
+                Ok((self.inner.get(key)?, None))
+            } else {
+                // A concurrent writer lands between our check and our put.
+                self.inner.put(key, &[9u8; 64]).unwrap();
+                Ok((self.inner.get(key)?, None))
+            }
+        }
+        fn put_if_match(&self, key: &str, data: &[u8], _etag: Option<&str>) -> Result<(), String> {
+            self.inner.put(key, data)
+        }
+    }
+
+    let dir = TempDir::new().unwrap();
+    let seed_path = dir.path().join("seed.kdbx");
+    {
+        let mut session = VaultSession::default();
+        session
+            .create(&seed_path, "pw", "Aes", "Aes256", "None", None)
+            .unwrap();
+    }
+    let inner = crate::remote::MemoryStorage::default();
+    inner.seed("vaults/seed.kdbx", std::fs::read(&seed_path).unwrap());
+    let storage = Arc::new(FlappingStorage {
+        inner,
+        reads: Mutex::new(0),
+    });
+    let local = dir.path().join("local");
+
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            storage,
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &local,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "Local".into(),
+            username: "u".into(),
+            password: "pw".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let err = session.save().unwrap_err();
+    assert!(err.starts_with("REMOTE_CHANGED"), "unexpected: {err}");
+    assert!(
+        !session.is_read_only(),
+        "conflicts must not degrade the session to read-only"
+    );
 }
 
 #[test]
@@ -9026,6 +9133,27 @@ fn merge_databases_remote_edit_wins_over_older_local_deletion() {
         entry.parent().id(),
         bin_id,
         "a newer remote edit resurrects the entry out of the bin"
+    );
+}
+
+/// 删除/编辑同秒: an edit at exactly the deletion timestamp keeps the active
+/// entry (ties favor the visible edit over a silent drop).
+#[test]
+fn merge_databases_edit_wins_on_equal_deletion_timestamp() {
+    let (base, entry_id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    let bin_id = add_bin(&mut local);
+    bin_entry(&mut local, entry_id, bin_id, merge_ts(40));
+    edit_title(&mut remote, entry_id, "v1-remote-tie", merge_ts(40));
+
+    let merged = merge_databases(&local, &remote).unwrap();
+    let entry = merged.entry(entry_id).unwrap();
+    assert_eq!(entry.get_title(), Some("v1-remote-tie"));
+    assert_ne!(
+        entry.parent().id(),
+        bin_id,
+        "a same-second edit must not be silently dropped by the deletion"
     );
 }
 

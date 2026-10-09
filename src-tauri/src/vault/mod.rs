@@ -54,6 +54,27 @@ pub(crate) const BROWSER_VAULT_CHANGED_EVENT: &str = "browser-vault-changed";
 /// `config`; re-exported here for callers that reference it via `vault::`.
 pub(crate) use crate::config::DEFAULT_BACKUP_TEMPLATE;
 
+/// Transient transport hiccups (timeouts, refused/reset connections, DNS)
+/// must not push the vault toward read-only degradation: the data path is
+/// fine, only the network flapped. Persistent errors (auth, disk IO,
+/// serialization, conflicts) still count. Markers mirror the Chinese/English
+/// timeout texts produced by the S3/WebDAV transports.
+pub(crate) fn is_transient_save_error(err: &str) -> bool {
+    const MARKERS: &[&str] = &[
+        "超时",
+        "timeout",
+        "timed out",
+        "connection refused",
+        "connection reset",
+        "connection aborted",
+        "dns",
+        "network unreachable",
+        "网络",
+    ];
+    let lower = err.to_lowercase();
+    MARKERS.iter().any(|m| lower.contains(&m.to_lowercase()))
+}
+
 /// Standard KeePass field names shared with `vault_serialize`.
 pub(crate) const FIELD_TITLE: &str = "Title";
 pub(crate) const FIELD_USERNAME: &str = "UserName";
@@ -122,7 +143,7 @@ pub use self::breach::BreachFinding;
 pub(crate) use self::breach::HIBP_RANGE_URL;
 pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};
 pub use self::sessions::VaultSessions;
-pub use self::temp_attachments::AttachmentTempStore;
+pub use self::temp_attachments::{sweep_stale_temp_attachments, AttachmentTempStore};
 
 // ---------------------------------------------------------------------------
 // Session

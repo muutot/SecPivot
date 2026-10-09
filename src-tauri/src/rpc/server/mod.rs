@@ -20,8 +20,8 @@
 use crate::config::PasswordGeneratorSettings;
 use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
 use crate::vault::{
-    persist_rpc_write, VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT,
-    REMOTE_CHANGED_MARKER,
+    is_transient_save_error, persist_rpc_write, VaultSession, VaultSessions,
+    BROWSER_VAULT_CHANGED_EVENT, REMOTE_CHANGED_MARKER,
 };
 use serde::Serialize;
 use std::io::{Read, Write};
@@ -662,7 +662,7 @@ fn reply_jsonrpc_write(
             }
         }
         Err(error) => {
-            if !error.starts_with(REMOTE_CHANGED_MARKER) {
+            if !error.starts_with(REMOTE_CHANGED_MARKER) && !is_transient_save_error(&error) {
                 if let Ok(mut active) = session_state.lock() {
                     let _ = vaults.with_session_mut(&mut active, Some(&session_id), |target| {
                         target.note_save_failure();
