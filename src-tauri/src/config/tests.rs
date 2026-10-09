@@ -1035,6 +1035,25 @@ fn missing_app_data_falls_back_to_exe_dir() {
 }
 
 #[test]
+#[cfg(unix)]
+fn written_config_is_owner_only_on_unix() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let defaults = store.get().unwrap();
+    store.set(defaults).unwrap();
+    let mode = fs::metadata(store.config_path())
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "config.json must not be group/world-readable"
+    );
+}
+
+#[test]
 fn load_with_mode_reports_portable_flag_and_paths() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load_with_mode(dir.path().to_path_buf(), true).unwrap();

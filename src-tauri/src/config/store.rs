@@ -90,7 +90,16 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
-    crate::util::atomic_write(&path, text.as_bytes(), "配置")
+    crate::util::atomic_write(&path, text.as_bytes(), "配置")?;
+    // The config carries remote credentials (DPAPI-encrypted on Windows,
+    // plaintext elsewhere): never leave it group/world-readable on unix.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("设置配置文件权限失败: {e}"))?;
+    }
+    Ok(())
 }
 
 fn decrypt_profile_creds(settings: &mut RemoteSettings) {
