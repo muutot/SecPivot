@@ -37,13 +37,25 @@ fn create_session(dir: &TempDir) -> (VaultSession, std::path::PathBuf) {
 /// KeePass `Entry → Data Exchange`: copying entries to the clipboard and
 /// pasting them back into a group creates **new** entries with fresh UUIDs
 /// (KeePass `AddEntry(…, bAllowNewUuid)`), carrying the fields, the protected
-/// flag and the attachment. The clipboard is a process-wide resource shared
-/// with the platform tests, so this is serialized against them.
+/// flag and the attachment. Uses the crate-wide clipboard guard and the
+/// usability probe shared with the platform/command tests: a private lock
+/// left this test free to interleave with them, and a headless station has
+/// no clipboard to assert against at all.
 #[test]
 #[cfg(target_os = "windows")]
 fn entry_exchange_copy_then_paste_creates_a_new_entry() {
-    static CLIPBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _guard = CLIPBOARD_LOCK.lock().unwrap();
+    use crate::platform::clipboard::tests::{
+        clipboard_is_usable, lock_clipboard, restore_clipboard,
+    };
+    let _guard = lock_clipboard();
+    let saved = crate::platform::clipboard::read_clipboard_text()
+        .ok()
+        .flatten();
+    if !clipboard_is_usable("secpivot-exchange-probe") {
+        eprintln!("no interactive clipboard on this station; skipping exchange assertions");
+        restore_clipboard(saved);
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);
     session
@@ -127,6 +139,7 @@ fn entry_exchange_copy_then_paste_creates_a_new_entry() {
     // The protected password survives the round-trip and is still protected.
     assert_eq!(session.get_entry_password(&uuids[0]), Ok("s3cret".into()));
     assert!(after.dirty, "a paste is an unsaved change");
+    restore_clipboard(saved);
 }
 
 /// KeePass "Download Favicons": jobs are grouped by URL host, fetched
