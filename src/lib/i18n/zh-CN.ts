@@ -500,6 +500,8 @@ export const zhCN = {
   "remote.secretWebdavDesc": "WebDAV 登录密码",
   "remote.secretS3": "Secret Key",
   "remote.secretS3Desc": "与 Access Key 配对的私钥",
+  "remote.savedKeepHint": "已保存 — 留空保留，填写替换",
+  "remote.renamedSecretsReset": "配置已重命名，远程凭据需重新输入",
   "remote.dpapiNote":
     "风险提示：凭据以 DPAPI 加密后写入 config.json（属次要凭据）。若泄露仅影响远程存储读写，不会暴露任何数据库内容。",
   "remote.prefix": "对象前缀",

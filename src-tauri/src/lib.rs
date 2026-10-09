@@ -397,6 +397,7 @@ pub fn run() {
     let app = builder
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
+            commands::remote_secret_present,
             commands::app_info,
             commands::set_config,
             commands::set_window_opacity,

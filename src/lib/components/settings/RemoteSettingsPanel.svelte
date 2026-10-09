@@ -5,6 +5,7 @@
     remoteMirrorPath,
     remoteProfilePath,
     remoteProfilesForKind,
+    remoteSecretPresence,
   } from "$lib/services/settings";
   import type { RemoteKind, RemoteProfilePath } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -48,6 +49,17 @@
   const mirrorPath = $derived(remoteMirrorPath(activeProfile));
   const kindLabel = $derived(kind === "webdav" ? "WebDAV" : "S3");
   const lang = $derived(s.general.language);
+
+  // Stored secrets never enter the renderer (IPC masked): presence drives
+  // the "saved — leave blank to keep" placeholders instead of values.
+  let presenceMap = $state<Record<string, { accessKey: boolean; secretKey: boolean }>>({});
+  $effect(() => {
+    const unsubscribe = remoteSecretPresence.subscribe((value) => {
+      presenceMap = value;
+    });
+    return unsubscribe;
+  });
+  const presence = $derived(presenceMap[activePath] ?? { accessKey: false, secretKey: false });
 
   $effect(() => {
     if (s.activeRemote !== activePath) appSettings.setActiveRemote(activePath);
@@ -236,7 +248,11 @@
           autocomplete="off"
           spellcheck={false}
           value={remote.accessKey}
-          placeholder={kind === "webdav" ? "user" : "AKIA..."}
+          placeholder={presence.accessKey && remote.accessKey === ""
+            ? t(lang, "remote.savedKeepHint")
+            : kind === "webdav"
+              ? "user"
+              : "AKIA..."}
           oninput={(event) => change("accessKey", event.currentTarget.value)}
         />
       </div>
@@ -264,7 +280,9 @@
           autocomplete="off"
           spellcheck={false}
           value={remote.secretKey}
-          placeholder="••••••••"
+          placeholder={presence.secretKey && remote.secretKey === ""
+            ? t(lang, "remote.savedKeepHint")
+            : "••••••••"}
           oninput={(event) => change("secretKey", event.currentTarget.value)}
         />
       </div>

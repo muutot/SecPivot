@@ -11,11 +11,36 @@ use tauri::Manager;
 // Config commands
 // ---------------------------------------------------------------------------
 
+/// Full settings snapshot with remote credentials blanked: stored secrets
+/// never cross the IPC boundary (transports resolve them server-side by
+/// profile path; see `ConfigStore::remote_settings`).
 #[tauri::command]
 pub(crate) fn get_config(
     store: tauri::State<'_, ConfigStore>,
 ) -> Result<config::AppConfig, String> {
-    store.get()
+    store.get_masked()
+}
+
+/// Whether a remote profile holds stored credentials, without revealing
+/// them. Drives the settings/welcome placeholder UI ("saved — leave blank
+/// to keep"): an empty field means keep, a filled one replaces.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSecretPresence {
+    pub access_key: bool,
+    pub secret_key: bool,
+}
+
+#[tauri::command]
+pub(crate) fn remote_secret_present(
+    store: tauri::State<'_, ConfigStore>,
+    profile: String,
+) -> Result<RemoteSecretPresence, String> {
+    let (access_key, secret_key) = store.secret_presence(&profile)?;
+    Ok(RemoteSecretPresence {
+        access_key,
+        secret_key,
+    })
 }
 
 /// Where the app keeps its data and whether it runs portably (data beside the

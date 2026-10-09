@@ -512,6 +512,8 @@ export const en: Record<I18nKey, string> = {
   "remote.secretWebdavDesc": "WebDAV login password",
   "remote.secretS3": "Secret Key",
   "remote.secretS3Desc": "Private key paired with the access key",
+  "remote.savedKeepHint": "Saved — leave blank to keep, type to replace",
+  "remote.renamedSecretsReset": "Profile renamed; remote credentials must be re-entered",
   "remote.dpapiNote":
     "Risk note: credentials are DPAPI-encrypted into config.json (secondary credentials). A leak only affects remote storage, never database content.",
   "remote.prefix": "Object prefix",

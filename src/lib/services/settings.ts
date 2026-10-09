@@ -22,6 +22,8 @@ import type {
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
 import { LatestPersistQueue } from "$lib/utils/latest-persist-queue";
+import { showTip } from "$lib/services/tips";
+import { t } from "$lib/i18n";
 
 export const PERSIST_DEBOUNCE_MS = 120;
 
@@ -1116,9 +1118,64 @@ async function writeSettings(value: AppSettings): Promise<AppSettings> {
   return value;
 }
 
+/** Per-profile stored-credential presence (`<kind>/<name>` → flags). The
+ *  secrets themselves never enter the renderer: `get_config`/`set_config`
+ *  cross IPC masked, and an empty field means "keep the stored value". */
+export interface RemoteSecretPresence {
+  accessKey: boolean;
+  secretKey: boolean;
+}
+
+const secretPresence = writable<Record<string, RemoteSecretPresence>>({});
+
+export const remoteSecretPresence = { subscribe: secretPresence.subscribe };
+
+export function getRemoteSecretPresence(path: string): RemoteSecretPresence | undefined {
+  return get(secretPresence)[path];
+}
+
+/** Query the backend for every profile's presence (best-effort: unknown on
+ *  failure, which simply renders empty fields). */
+async function refreshSecretPresence(profiles: RemoteProfile[]): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const next: Record<string, RemoteSecretPresence> = {};
+  await Promise.all(
+    profiles.map(async (profile) => {
+      const path = remoteProfilePath(profile);
+      try {
+        next[path] = await invoke<RemoteSecretPresence>("remote_secret_present", {
+          profile: path,
+        });
+      } catch {
+        next[path] = { accessKey: false, secretKey: false };
+      }
+    }),
+  );
+  secretPresence.set(next);
+}
+
+/** After a successful persist, submitted non-empty credentials are stored
+ *  backend-side (empty means keep): reflect that optimistically so the
+ *  placeholder UI flips to "saved" without waiting for a reload. */
+function markSubmittedSecretsPresent(submitted: AppSettings): void {
+  secretPresence.update((current) => {
+    const next = { ...current };
+    for (const profile of submitted.remoteProfiles) {
+      const path = remoteProfilePath(profile);
+      const prev = next[path] ?? { accessKey: false, secretKey: false };
+      next[path] = {
+        accessKey: prev.accessKey || profile.settings.accessKey !== "",
+        secretKey: prev.secretKey || profile.settings.secretKey !== "",
+      };
+    }
+    return next;
+  });
+}
+
 function applyPersistedSettings(saved: AppSettings, submitted: AppSettings): void {
   if (isTauriRuntime()) {
     settings.set(normalizeSettings(saved, submitted));
+    markSubmittedSecretsPresent(submitted);
   }
 }
 
@@ -1148,6 +1205,9 @@ export const appSettings: AppSettingsStore = {
       try {
         const loaded = await invoke<AppSettings>("get_config");
         settings.set(normalizeSettings(loaded, DEFAULT_APP_SETTINGS));
+        // Secrets arrive masked: fetch per-profile presence for the
+        // placeholder UI ("saved — leave blank to keep").
+        void refreshSecretPresence(get(settings).remoteProfiles);
       } catch {
         settings.set(DEFAULT_APP_SETTINGS);
       }
@@ -1199,6 +1259,14 @@ export const appSettings: AppSettingsStore = {
       );
       return { ...s, remoteProfiles };
     });
+    // A freshly typed credential will be stored on persist: flip presence
+    // optimistically so the field can clear to its "saved" placeholder.
+    if ((key === "accessKey" || key === "secretKey") && value !== "") {
+      secretPresence.update((current) => {
+        const prev = current[path] ?? { accessKey: false, secretKey: false };
+        return { ...current, [path]: { ...prev, [key]: true } };
+      });
+    }
     schedulePersist();
   },
 
@@ -1230,6 +1298,12 @@ export const appSettings: AppSettingsStore = {
   },
 
   removeRemoteProfile(path): void {
+    secretPresence.update((current) => {
+      if (!(path in current)) return current;
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
     settings.update((s) => {
       const current = findRemoteProfile(s.remoteProfiles, path);
       if (!current) return s;
@@ -1249,6 +1323,21 @@ export const appSettings: AppSettingsStore = {
   },
 
   renameRemoteProfile(path, name): void {
+    // A rename changes the profile identity the backend merges credentials
+    // by, so stored secrets do not follow it: drop presence for both paths
+    // and tell the user to re-enter them.
+    const hadSecrets = (() => {
+      const presence = get(secretPresence)[path];
+      return !!presence && (presence.accessKey || presence.secretKey);
+    })();
+    secretPresence.update((current) => {
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+    if (hadSecrets) {
+      showTip(t(get(settings).general.language, "remote.renamedSecretsReset"), "error");
+    }
     settings.update((s) => {
       const current = findRemoteProfile(s.remoteProfiles, path);
       if (!current) return s;

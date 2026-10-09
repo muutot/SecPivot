@@ -371,6 +371,65 @@ fn remote_secrets_never_persist_in_plaintext() {
 }
 
 #[test]
+fn masked_snapshot_never_carries_secrets_but_reports_presence() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.remote_profiles[0].settings.access_key = "AKIA-secret-access".into();
+    config.remote_profiles[0].settings.secret_key = "plaintext-s3cret".into();
+    store.set(config).unwrap();
+
+    // What the renderer receives over IPC: no secret material anywhere.
+    let masked = store.get_masked().unwrap();
+    let wire = serde_json::to_string(&masked).unwrap();
+    assert!(!wire.contains("AKIA-secret-access"));
+    assert!(!wire.contains("plaintext-s3cret"));
+    // ...but presence is queryable without revealing values.
+    assert_eq!(store.secret_presence("s3/config_1").unwrap(), (true, true));
+    assert_eq!(
+        store.secret_presence("webdav/config_1").unwrap(),
+        (false, false)
+    );
+    assert!(store.secret_presence("s3/missing").is_err());
+    // The backend itself still resolves full credentials by profile path.
+    let resolved = store.remote_settings("s3/config_1").unwrap();
+    assert_eq!(resolved.secret_key, "plaintext-s3cret");
+}
+
+#[test]
+fn empty_credentials_keep_stored_secrets_while_new_ones_replace() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.remote_profiles[0].settings.access_key = "AKIA-secret-access".into();
+    config.remote_profiles[0].settings.secret_key = "plaintext-s3cret".into();
+    store.set(config).unwrap();
+
+    // Placeholder-keep: an edit round-trip from the masked snapshot (empty
+    // secrets) must not wipe the stored credentials...
+    let masked = store.get_masked().unwrap();
+    let echoed = store.set(masked).unwrap();
+    let wire = serde_json::to_string(&echoed).unwrap();
+    assert!(
+        !wire.contains("plaintext-s3cret"),
+        "set echo must stay masked"
+    );
+    assert_eq!(
+        store.remote_settings("s3/config_1").unwrap().secret_key,
+        "plaintext-s3cret"
+    );
+    // ...while explicitly typed values replace them.
+    let mut rotated = store.get_masked().unwrap();
+    rotated.remote_profiles[0].settings.secret_key = "rotated-s3cret".into();
+    store.set(rotated).unwrap();
+    assert_eq!(
+        store.remote_settings("s3/config_1").unwrap().secret_key,
+        "rotated-s3cret"
+    );
+    assert_eq!(store.secret_presence("s3/config_1").unwrap(), (true, true));
+}
+
+#[test]
 fn remote_defaults_and_normalization_rules() {
     let mut config = AppConfig::default();
     assert_eq!(config.remote_profiles.len(), 2);

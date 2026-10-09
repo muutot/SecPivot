@@ -8,6 +8,7 @@
     remoteMirrorPath,
     remoteProfilePath,
     remoteProfilesForKind,
+    remoteSecretPresence,
   } from "$lib/services/settings";
   import { rememberCredential } from "$lib/services/security";
   import { vault } from "$lib/services/vault";
@@ -76,16 +77,30 @@
 
   const remote = $derived(activeProfile.settings);
   const remoteKindLabel = $derived(remote.kind === "webdav" ? "WebDAV" : "S3");
+  // Stored secrets never enter the renderer (IPC masked): presence counts
+  // as configured alongside any freshly typed value.
+  let presenceMap = $state<Record<string, { accessKey: boolean; secretKey: boolean }>>({});
+  $effect(() => {
+    const unsubscribe = remoteSecretPresence.subscribe((value) => {
+      presenceMap = value;
+    });
+    return unsubscribe;
+  });
+  const presence = $derived(
+    presenceMap[settings.activeRemote] ?? { accessKey: false, secretKey: false },
+  );
+  const hasAccessKey = $derived(remote.accessKey !== "" || presence.accessKey);
+  const hasSecretKey = $derived(remote.secretKey !== "" || presence.secretKey);
   const remoteConfigured = $derived(
     remote.kind === "webdav"
       ? Boolean(remote.endpoint)
-      : Boolean(remote.endpoint && remote.bucket && remote.accessKey && remote.secretKey),
+      : Boolean(remote.endpoint && remote.bucket && hasAccessKey && hasSecretKey),
   );
 
   function isRemoteConfigured(r: RemoteSettings): boolean {
     return r.kind === "webdav"
       ? Boolean(r.endpoint)
-      : Boolean(r.endpoint && r.bucket && r.accessKey && r.secretKey);
+      : Boolean(r.endpoint && r.bucket && hasAccessKey && hasSecretKey);
   }
 
   function changeRemote<K extends import("$lib/services/settings").RemoteUpdateKey>(
@@ -561,7 +576,11 @@
           >
           <TextField
             value={remote.accessKey}
-            placeholder={remote.kind === "webdav" ? "user" : "AKIA..."}
+            placeholder={presence.accessKey && remote.accessKey === ""
+              ? t(lang, "remote.savedKeepHint")
+              : remote.kind === "webdav"
+                ? "user"
+                : "AKIA..."}
             autocomplete="off"
             spellcheck={false}
             oninput={(e) => changeRemote("accessKey", e.currentTarget.value)}
@@ -576,7 +595,9 @@
           <TextField
             type="password"
             value={remote.secretKey}
-            placeholder="••••••••"
+            placeholder={presence.secretKey && remote.secretKey === ""
+              ? t(lang, "remote.savedKeepHint")
+              : "••••••••"}
             autocomplete="off"
             spellcheck={false}
             oninput={(e) => changeRemote("secretKey", e.currentTarget.value)}
