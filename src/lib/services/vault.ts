@@ -1743,8 +1743,10 @@ export const vault: VaultStore = {
    *  promote the next tab. */
   async closeTab(sessionId: string): Promise<void> {
     if (!isTauriRuntime()) return;
-    const tab = get(tabs).find((t) => t.sessionId === sessionId);
     return topologyQueue.enqueue(async () => {
+      // Capture the target inside the queue: a concurrent switch/close may have
+      // replaced the tab list between the click and this operation running.
+      const tab = get(tabs).find((t) => t.sessionId === sessionId);
       await backendInvoke("close_vault", { sessionId });
       sessionStates.delete(sessionId);
       iconCaches.delete(sessionId);

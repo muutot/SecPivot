@@ -1077,7 +1077,13 @@
     if (!view) return null;
     const { sessionId } = view;
     try {
-      return await vault.callInSession(sessionId, () => vault.getEntryPassword(entry.uuid));
+      const password = await vault.callInSession(sessionId, () =>
+        vault.getEntryPassword(entry.uuid),
+      );
+      // A→B→A during the IPC flight must not paint A's secret into B's cell
+      // (same uuid can exist in a cloned database on the other tab).
+      if (!sessionView.isCurrent(view)) return null;
+      return password;
     } catch {
       return null;
     }
@@ -1519,13 +1525,19 @@
 
   async function moveEntriesTo(groupUuid: string, uuids: string[]): Promise<void> {
     if (!currentVault || uuids.length === 0) return;
+    // Dropping entries back onto their own group is a no-op: skip the IPC so
+    // it never bumps revision or lights the dirty flag (issues.md #5).
+    const actionable = uuids.filter(
+      (uuid) => findEntryByUuid(currentVault, uuid)?.groupUuid !== groupUuid,
+    );
+    if (actionable.length === 0) return;
     const view = sessionView.capture();
     if (!view) return;
     await moveEntriesFlow(groupFlowHost, {
       view,
       sessionId: view.sessionId,
       groupUuid,
-      uuids,
+      uuids: actionable,
     });
     // Moved entries left the visible view; drop them from the selection so a
     // later batch delete cannot hit rows the user can no longer see.
