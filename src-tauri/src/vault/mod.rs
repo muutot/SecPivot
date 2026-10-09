@@ -39,7 +39,6 @@ pub(crate) use self::persist::{
     persist_change, persist_remote_merge, persist_remote_refresh, persist_save,
     persist_save_with_db, prepare_local_create, prepare_local_open, prepare_remote_create,
     prepare_remote_open, read_keyfile, write_attachment_file, write_csv_file,
-    REMOTE_CHANGED_MARKER,
 };
 
 /// Virtual root group id used by the frontend; maps to the DB root group.
@@ -97,10 +96,6 @@ pub(crate) fn classify_save_error(err: &str) -> SaveErrorClass {
         return SaveErrorClass::Transient;
     }
     SaveErrorClass::Persistent
-}
-
-pub(crate) fn is_transient_save_error(err: &str) -> bool {
-    matches!(classify_save_error(err), SaveErrorClass::Transient)
 }
 
 /// Standard KeePass field names shared with `vault_serialize`.
