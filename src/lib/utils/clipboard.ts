@@ -75,13 +75,11 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
       releaseOwnership();
     }
   } catch {
-    // backend unavailable; fall back to writing an empty string
-    try {
-      await copyRaw("");
-      releaseOwnership();
-    } catch {
-      // clipboard unavailable; nothing to clear
-    }
+    // Read failed (e.g. the clipboard is briefly locked by another process):
+    // ownership cannot be verified, so never blind-clear. Destroying unknown
+    // clipboard content is worse than leaving ours in place — the backend
+    // wipe scheduled at copy time remains the safety net and re-verifies
+    // ownership server-side.
   }
 }
 
