@@ -439,7 +439,7 @@ impl VaultSession {
             base_hash,
         });
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
-        self.password = Some(password.to_owned());
+        wipe_replaced_password(&mut self.password, password);
         self.keyfile = keyfile;
         self.db = Some(db);
         self.dirty = false;
@@ -456,7 +456,7 @@ impl VaultSession {
     /// must never upload to a stale S3 target.
     fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
         self.path = Some(path.to_string_lossy().into_owned());
-        self.password = Some(password.to_owned());
+        wipe_replaced_password(&mut self.password, password);
         self.keyfile = keyfile;
         self.db = Some(db);
         self.dirty = false;
@@ -832,6 +832,11 @@ impl VaultSession {
         if let Some(remote) = self.remote.as_mut() {
             remote.base_hash = new_hash;
         }
+        // Swapping to the new master password must wipe the old one from
+        // memory instead of letting it drop unzeroed.
+        if let Some(mut old) = self.password.take() {
+            wipe_secret_string(&mut old);
+        }
         self.password = Some(password);
         self.keyfile = keyfile;
         if self.revision == revision {
@@ -841,4 +846,14 @@ impl VaultSession {
         }
         self.snapshot()
     }
+}
+
+/// Replace the session's master password, wiping the previous value from
+/// memory instead of letting it drop unzeroed (adopt_remote/replace swap in a
+/// different database, so the old password is never reused).
+fn wipe_replaced_password(slot: &mut Option<String>, password: &str) {
+    if let Some(mut old) = slot.take() {
+        wipe_secret_string(&mut old);
+    }
+    *slot = Some(password.to_owned());
 }
