@@ -542,7 +542,10 @@ const SEARCH_FIELDS = new Set(["all", "title", "username", "url", "notes", "tags
 function normalizeSavedSearches(searches: SavedSearch[] | undefined): SavedSearch[] {
   const seen = new Set<string>();
   return (searches ?? []).map((search) => {
-    const base = search.name.trim();
+    // Persisted JSON may predate the `name` field; a missing name must not
+    // throw (normalizeSettings runs inside initialize, whose catch resets
+    // every setting to defaults).
+    const base = typeof search?.name === "string" ? search.name.trim() : "";
     let name = base || "Unnamed search";
     let suffix = 2;
     while (seen.has(name)) {
@@ -1184,6 +1187,16 @@ function applyPersistedSettings(saved: AppSettings, submitted: AppSettings): voi
  * superseding value instead of leaving it stranded after the debounce timer. */
 async function runPersist(): Promise<void> {
   await persistQueue.drain(writeSettings, applyPersistedSettings);
+  // A failed write keeps its value pending in the queue, but the debounce
+  // timer that triggered this run has already fired — re-arm one so the
+  // pending value is retried instead of being silently lost until the next
+  // user edit (or app close).
+  if (persistQueue.hasPending && !persistTimer) {
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      void runPersist();
+    }, PERSIST_DEBOUNCE_MS);
+  }
 }
 
 function schedulePersist(): void {
