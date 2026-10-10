@@ -10,8 +10,12 @@ export interface CsvRow {
 }
 
 function escapeCsv(value: string): string {
-  if (/[",\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  let cell = /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  // Spreadsheet formula-injection guard: a leading =, +, -, @, tab or CR
+  // would execute as a formula when the export is opened in Excel or
+  // LibreOffice; a leading apostrophe forces text interpretation.
+  if (/^[=+\-@\t\r]/.test(value)) cell = `'${cell}`;
+  return cell;
 }
 
 /** Serialize entries as RFC 4180 CSV (CRLF, quoted cells, UTF-8 BOM). */
@@ -117,7 +121,10 @@ export function parseCsvRows(raw: string[][]): ImportCsvRow[] {
       return -1;
     };
     const indices = HEADERS.map(indexOf);
-    if (indices.some((i) => i >= 0)) {
+    // Require at least two known columns: a data row can legitimately contain
+    // a single header-like cell (e.g. a title of "url"), which must not be
+    // mistaken for a header row and silently dropped.
+    if (indices.filter((i) => i >= 0).length >= 2) {
       cols = indices;
       start = 1;
     }

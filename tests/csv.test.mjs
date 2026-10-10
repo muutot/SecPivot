@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseCsv, parseCsvRows } from "../src/lib/utils/csv.ts";
+import { parseCsv, parseCsvRows, buildCsv } from "../src/lib/utils/csv.ts";
 
 describe("parseCsvRows", () => {
   it("maps LastPass export headers via aliases", () => {
@@ -33,5 +33,32 @@ describe("parseCsvRows", () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].username, "user1");
     assert.equal(rows[0].url, "https://u.example");
+  });
+
+  it("keeps a positional first row whose title happens to match a header name", () => {
+    const raw = parseCsv("Finance,url,bob,s3cret,https://u.example,note\n");
+    const rows = parseCsvRows(raw);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].group, "Finance");
+    assert.equal(rows[0].title, "url");
+  });
+
+  it("neutralizes spreadsheet formula prefixes on export", () => {
+    const csv = buildCsv([
+      {
+        group: "",
+        title: "=1+1",
+        username: "+2",
+        password: "-3",
+        url: "@cmd",
+        notes: "",
+        totp: "",
+        favorite: false,
+      },
+    ]);
+    assert.ok(csv.includes("'=1+1"));
+    assert.ok(csv.includes("'+2"));
+    assert.ok(csv.includes("'-3"));
+    assert.ok(csv.includes("'@cmd"));
   });
 });
