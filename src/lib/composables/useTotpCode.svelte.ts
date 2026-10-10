@@ -186,6 +186,10 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
     return () => {
       if (copiedTimer) clearTimeout(copiedTimer);
       copiedTimer = undefined;
+      // Reset the copied badge: when the composable instance is reused for
+      // another entry (uuid change), a stale "copied" state must not carry
+      // over past the timer being cleared.
+      copied = false;
       entry.listeners.delete(sync);
       entry.refcount -= 1;
       if (entry.refcount === 0) {
