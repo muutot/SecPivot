@@ -189,28 +189,28 @@ impl ConfigStore {
         // Placeholder-keep: the renderer edits from a masked snapshot, so an
         // empty credential means "keep the stored one", never "clear it".
         // (Clearing happens by deleting the profile.) New non-empty values
-        // replace; profiles unknown to the store are taken as-is.
-        {
-            let guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
-            for incoming in &mut normalized.remote_profiles {
-                let incoming_path = incoming.path();
-                if let Some(stored) = guard
-                    .remote_profiles
-                    .iter()
-                    .find(|p| p.path() == incoming_path)
-                {
-                    if incoming.settings.access_key.is_empty() {
-                        incoming.settings.access_key = stored.settings.access_key.clone();
-                    }
-                    if incoming.settings.secret_key.is_empty() {
-                        incoming.settings.secret_key = stored.settings.secret_key.clone();
-                    }
+        // replace; profiles unknown to the store are taken as-is. The lock is
+        // held across the disk write so concurrent `set()` calls cannot
+        // interleave file contents with in-memory state.
+        let mut guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
+        for incoming in &mut normalized.remote_profiles {
+            let incoming_path = incoming.path();
+            if let Some(stored) = guard
+                .remote_profiles
+                .iter()
+                .find(|p| p.path() == incoming_path)
+            {
+                if incoming.settings.access_key.is_empty() {
+                    incoming.settings.access_key = stored.settings.access_key.clone();
+                }
+                if incoming.settings.secret_key.is_empty() {
+                    incoming.settings.secret_key = stored.settings.secret_key.clone();
                 }
             }
         }
         write_config(&self.project_dir, &normalized)?;
-        let mut guard = self.config.lock().map_err(|_| "配置锁已损坏".to_owned())?;
         *guard = normalized.clone();
+        drop(guard);
         // Echo back masked: `set_config` must not become a read-back oracle.
         for profile in &mut normalized.remote_profiles {
             profile.settings.access_key.clear();
