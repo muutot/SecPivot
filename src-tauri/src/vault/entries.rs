@@ -27,7 +27,7 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
 
 /// Both retention limits from the database meta: the snapshot-count cap and
 /// the cumulative byte budget (`<= 0` = unlimited).
-fn history_limits(meta: &Meta) -> (usize, i64) {
+pub(crate) fn history_limits(meta: &Meta) -> (usize, i64) {
     let max_size = meta.history_max_size.unwrap_or(0);
     (
         history_cap(meta),
@@ -39,7 +39,7 @@ fn history_limits(meta: &Meta) -> (usize, i64) {
 /// `trim_entry_history_by_size`. `entry_ref` must view the entry *after* the
 /// tracking scope dropped, so index 0 is the just-appended pre-change
 /// snapshot and every size lines up with the list being trimmed.
-fn snapshot_sizes(entry_ref: &EntryRef<'_>) -> Vec<u64> {
+pub(crate) fn snapshot_sizes(entry_ref: &EntryRef<'_>) -> Vec<u64> {
     let Some(history) = entry_ref.history.as_ref() else {
         return Vec::new();
     };

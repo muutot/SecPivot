@@ -1,7 +1,7 @@
 //! Host adapters over the in-memory `VaultSession`: implement the KeePassHttp
 //! `BridgeHost` and KeePassRPC `RpcHost` traits, plus the pure helper
 //! functions they use (RPC/bridge tree building, URL matching, write-path
-//! field application). Extracted from `vault.rs`.
+//! field application).
 
 use crate::bridge::{BridgeHost, BridgeLogin};
 use crate::rpc::{
@@ -17,7 +17,9 @@ use keepass::db::{EntryId, EntryMut, GroupId, GroupRef, Value};
 use keepass::Database;
 use uuid::Uuid;
 
+use super::entries::{history_limits, snapshot_sizes};
 use super::persist::{persist_save_with_db, SaveJob};
+use super::serialize::{trim_entry_history, trim_entry_history_by_size};
 
 #[derive(Clone)]
 enum RpcWriteOperation {
@@ -134,6 +136,8 @@ impl BridgeHost for VaultSession {
         {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
+            // Retention caps must be read before `entry_mut` borrows `db`.
+            let (cap, max_history_size) = history_limits(&db.meta);
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             if entry.get_username() == Some(login) && entry.get_password() == Some(password) {
                 return Ok(());
@@ -143,6 +147,12 @@ impl BridgeHost for VaultSession {
                 entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
                 entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
             });
+            // Browser-extension writes append history via `edit_tracking`;
+            // apply the same retention caps as the app's own entry paths so
+            // the history cannot grow unboundedly.
+            trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         Ok(())
@@ -390,11 +400,18 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
                 FindEntryOutcome::Found(urls) => urls,
             };
             let merged_urls = merge_urls(&current, &login.urls, *url_merge_mode);
+            // Retention caps must be read before `entry_mut` borrows `db`.
+            let (cap, max_history_size) = history_limits(&db.meta);
             let mut entry = db.entry_mut(id).ok_or(RpcError::EntryNotFound)?;
             entry.edit_tracking(|tracked| {
                 let mut this = tracked.as_mut();
                 apply_login_write(&mut this, login, &merged_urls.join(" "));
             });
+            // Same retention caps as `set_login`: keep the RPC write path's
+            // history bounded.
+            trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
             Ok(old_uuid.to_owned())
         }
     }
