@@ -74,7 +74,9 @@
         vault.changeMasterKey(newPassword, newKeyfile),
       );
       if (vault.getActiveSessionId() !== sessionId) return;
-      if (state.path && newPassword.length > 0) {
+      if (state.path && newPassword.length > 0 && !newKeyfile) {
+        // A stored password alone can never open a keyfile-protected vault;
+        // don't remember one when the change introduced (or kept) a keyfile.
         await rememberCredential(state.path, newPassword);
       }
       newPassword = "";

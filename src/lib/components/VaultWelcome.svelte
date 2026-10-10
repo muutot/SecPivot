@@ -237,6 +237,10 @@
     }
     keyfilePath = "";
     error = "";
+    // Secret hygiene: a cancelled earlier attempt must not leak its password
+    // into this vault's unlock dialog.
+    password = "";
+    confirm = "";
     modal = "open";
   }
 
@@ -258,7 +262,9 @@
     error = "";
     try {
       await vault.open(path, password, keyfilePath || undefined);
-      void rememberCredential(path, password);
+      // A stored password alone can never open a keyfile-protected vault —
+      // remembering one would present a Windows Hello button that only fails.
+      if (!keyfilePath) void rememberCredential(path, password);
       modal = "none";
       onopened();
     } catch (e) {
@@ -271,6 +277,10 @@
   function openRecent(file: string): void {
     path = file;
     isDemo = false;
+    // Secret hygiene: never carry a previously typed master password into a
+    // different vault's unlock dialog.
+    password = "";
+    confirm = "";
     keyfilePath = "";
     error = "";
     modal = "open";
@@ -333,7 +343,9 @@
         compression: settings.database.compression,
         keyfile: keyfilePath || undefined,
       });
-      void rememberCredential(target, password);
+      // A stored password alone can never open a keyfile-protected vault —
+      // remembering one would present a Windows Hello button that only fails.
+      if (!keyfilePath) void rememberCredential(target, password);
       modal = "none";
       onopened();
     } catch (e) {
@@ -401,7 +413,12 @@
     description={path}
     size="small"
     closeOnEscape
-    onclose={() => (modal = "none")}
+    onclose={() => {
+      // Secret hygiene: cancelling the dialog must not leave the master
+      // password in the masked input.
+      modal = "none";
+      password = "";
+    }}
   >
     {#snippet icon()}<AppIcon name="lock" size={18} />{/snippet}
     {#snippet children()}

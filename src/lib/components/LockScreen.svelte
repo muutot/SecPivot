@@ -65,7 +65,10 @@
     error = "";
     try {
       await vault.open(remembered.path, password, keyfilePath || undefined);
-      void rememberCredential(remembered.path, password);
+      // A stored password alone can never open a keyfile-protected vault, so
+      // don't remember one — it would present a Windows Hello button that can
+      // only ever fail.
+      if (!keyfilePath) void rememberCredential(remembered.path, password);
       onopened();
     } catch (e) {
       error = String(e);
