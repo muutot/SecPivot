@@ -474,11 +474,19 @@ pub(crate) fn delete_history_entry(entry: &mut Entry, index: usize) -> bool {
 }
 
 /// RFC 4180 cell escaping: quote when the value contains separators or quotes.
+/// A leading `=`, `+`, `-`, `@`, tab or CR would execute as a spreadsheet
+/// formula when the export is opened in Excel/LibreOffice, so a leading
+/// apostrophe forces text interpretation (formula-injection guard).
 pub(crate) fn escape_csv(value: &str) -> String {
-    if value.contains([',', '"', '\r', '\n']) {
+    let cell = if value.contains([',', '"', '\r', '\n']) {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
         value.to_owned()
+    };
+    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{cell}")
+    } else {
+        cell
     }
 }
 
