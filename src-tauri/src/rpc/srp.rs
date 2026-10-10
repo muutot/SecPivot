@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use super::dto::RpcError;
 use super::{group, mod_pow, SECURITY_LEVEL, SRP_G, SRP_K_HEX};
-use crate::crypto::{random_bytes, random_hex, sha256_hex};
+use crate::crypto::{mac_eq, random_bytes, random_hex, sha256_hex};
 // ---------------------------------------------------------------------------
 // SRP-6a (server side, KeePassRPC variant)
 // ---------------------------------------------------------------------------
@@ -77,12 +77,14 @@ impl SrpServer {
             return Err(RpcError::AuthFailed);
         }
         let m_expected = sha256_hex(&format!("{a}{}{s_hex}", self.b_hex));
-        let client_s_hex = if m.to_lowercase() == m_expected {
+        // Constant-time comparison: `m` is attacker-controlled and `m_expected`
+        // depends on the shared secret, so a naive string compare would leak.
+        let client_s_hex = if mac_eq(&m.to_lowercase(), &m_expected) {
             s_hex
         } else {
             let neg_hex = (&n - &s).to_str_radix(16).to_uppercase();
             let m_expected_neg = sha256_hex(&format!("{a}{}-{}", self.b_hex, neg_hex));
-            if m.to_lowercase() == m_expected_neg {
+            if mac_eq(&m.to_lowercase(), &m_expected_neg) {
                 eprintln!(
                     "[rpc] verify_proof: accepted negative-S M (Kee SRPc BigInt remainder quirk)"
                 );
