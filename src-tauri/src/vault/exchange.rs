@@ -768,7 +768,9 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
         // A pasted custom icon becomes a fresh icon in the target database, so
         // no cross-database icon id has to be remapped.
         let _ = node.set_icon_custom_new(data.clone());
-    } else if let Some(icon) = entry.icon {
+    } else if let Some(icon) = entry.icon.filter(|icon| *icon >= 0) {
+        // The clipboard payload is untrusted: a negative icon id would wrap
+        // into a huge usize and corrupt the built-in icon lookup.
         node.set_icon_builtin(icon as usize);
     }
     Ok(node.as_ref().id().uuid())
