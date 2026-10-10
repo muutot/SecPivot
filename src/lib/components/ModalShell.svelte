@@ -3,6 +3,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
+  import { acquireEscapeScope } from "$lib/utils/escape-stack";
 
   export type ModalSize = "small" | "confirm" | "medium" | "large" | "report";
   export type ModalTone = "default" | "danger";
@@ -56,6 +57,12 @@
 
   const lang = $derived(s.general.language);
 
+  // Only the topmost modal on the stack reacts to Escape, so nested modals
+  // (e.g. a picker opened inside the entry editor) never cascade-close the
+  // dialogs beneath them.
+  const escapeScope = acquireEscapeScope();
+  $effect(() => () => escapeScope.release());
+
   /** Focusable descendants kept inside the dialog while it is open. */
   const FOCUSABLE_SELECTOR =
     "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])";
@@ -67,6 +74,7 @@
 
   function handleKeydown(event: KeyboardEvent): void {
     if (closeOnEscape && event.key === "Escape") {
+      if (!escapeScope.isTop()) return;
       event.preventDefault();
       onclose?.();
       return;

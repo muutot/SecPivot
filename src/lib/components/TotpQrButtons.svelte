@@ -5,6 +5,7 @@
   import Button from "$lib/components/templates/action/Button.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
+  import { acquireEscapeScope } from "$lib/utils/escape-stack";
 
   interface Props {
     /** Called with the decoded payload (otpauth URI or Base32 seed). */
@@ -31,6 +32,20 @@
 
   let dragStart: { x: number; y: number } | null = null;
   let rect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  // While the screenshot overlay or the results modal is active it owns
+  // Escape: the editor's ModalShell sits below it on the escape stack and
+  // must not close (losing unsaved edits) on the same keypress.
+  let overlayEscape: { isTop: () => boolean } | null = $state(null);
+  $effect(() => {
+    if (!selecting && results.length === 0) {
+      overlayEscape = null;
+      return;
+    }
+    const scope = acquireEscapeScope();
+    overlayEscape = scope;
+    return () => scope.release();
+  });
 
   $effect(() => {
     return () => {
@@ -245,7 +260,11 @@
 {/if}
 
 <svelte:window
-  onkeydown={(e) => (selecting || results.length > 0) && e.key === "Escape" && closeOverlay()}
+  onkeydown={(e) =>
+    (selecting || results.length > 0) &&
+    e.key === "Escape" &&
+    overlayEscape?.isTop() &&
+    closeOverlay()}
 />
 
 <style>
