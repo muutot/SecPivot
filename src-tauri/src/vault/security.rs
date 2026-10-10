@@ -428,18 +428,33 @@ impl VaultSession {
         if !pattern.contains('*') {
             return title.contains(&pattern);
         }
+        let anchored_start = !pattern.starts_with('*');
+        let anchored_end = !pattern.ends_with('*');
         let parts: Vec<&str> = pattern.split('*').filter(|part| !part.is_empty()).collect();
+        // A pattern of only wildcards matches any title.
+        if parts.is_empty() {
+            return true;
+        }
         let mut rest = title.as_str();
         for (index, part) in parts.iter().enumerate() {
-            let Some(position) = rest.find(part) else {
-                return false;
-            };
-            if index == 0 && !pattern.starts_with('*') && position != 0 {
-                return false;
+            if index == 0 && anchored_start {
+                let Some(head) = rest.strip_prefix(part) else {
+                    return false;
+                };
+                rest = head;
+            } else if index + 1 == parts.len() && anchored_end {
+                // The trailing literal must terminate the title; earlier
+                // parts keep the longest possible span because `find` is
+                // leftmost.
+                return rest.ends_with(part);
+            } else {
+                let Some(position) = rest.find(part) else {
+                    return false;
+                };
+                rest = &rest[position + part.len()..];
             }
-            rest = &rest[position + part.len()..];
         }
-        pattern.ends_with('*') || rest.is_empty()
+        true
     }
 
     /// Best-matching entry for global auto-type given the title of the window
