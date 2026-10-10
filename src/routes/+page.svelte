@@ -19,6 +19,7 @@
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { buildDisplayRows, type DisplayRow } from "$lib/utils/display-rows";
+  import { isAnyModalOpen } from "$lib/utils/escape-stack";
   import { t } from "$lib/i18n";
   import { BUILTIN_COLUMNS, columnLabel, useEntryColumns } from "$lib/services/columns.svelte";
   import {
@@ -1250,6 +1251,11 @@
     // Holding a key fires repeats: never dispatch the same shortcut twice, and
     // never start a second action while another (import/favicon/save) is running.
     if (event.repeat || busy) return;
+    // Any open modal blocks global shortcuts. The explicit state list below
+    // covers page-owned surfaces; the escape stack also covers dialogs owned
+    // by child components (entry detail's history/attachment previews, dialogs
+    // opened inside the editor, …) that this handler cannot see.
+    if (isAnyModalOpen()) return;
     if (
       editor.editorOpen ||
       groupModalOpen ||
