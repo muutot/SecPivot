@@ -549,8 +549,11 @@ impl VaultSession {
                 let id = parse_entry_id(uuid)?;
                 let in_bin = match bin_id {
                     Some(bin_id) => {
+                        // Recursive containment: an entry inside a subgroup of
+                        // the bin counts as recycled, like the group path.
                         let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-                        entry.parent().id() == bin_id
+                        let parent = entry.parent().id();
+                        group_contains(db, bin_id, parent)
                     }
                     None => false,
                 };
@@ -592,8 +595,11 @@ impl VaultSession {
             };
             let in_bin = match bin_id {
                 Some(bin_id) => {
+                    // Recursive containment: an entry inside a subgroup of the
+                    // bin counts as recycled, like the group path.
                     let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-                    entry.parent().id() == bin_id
+                    let parent = entry.parent().id();
+                    group_contains(db, bin_id, parent)
                 }
                 None => false,
             };
