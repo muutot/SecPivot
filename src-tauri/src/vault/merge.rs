@@ -117,6 +117,29 @@ fn push_losers_into_history(dest: &mut Database, losers: Vec<(EntryId, Entry)>) 
         if dominated {
             continue;
         }
+        // Skip a loser whose timestamp already exists in the target history:
+        // duplicate `last_modification` values make every later merge of the
+        // merged database fail with `DuplicateHistoryEntries`.
+        let loser_time = loser.times.last_modification;
+        let duplicate_timestamp = loser_time.is_some()
+            && dest
+                .entry(id)
+                .map(|entry| {
+                    entry
+                        .history
+                        .as_ref()
+                        .map(|history| {
+                            history
+                                .get_entries()
+                                .iter()
+                                .any(|snapshot| snapshot.times.last_modification == loser_time)
+                        })
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+        if duplicate_timestamp {
+            continue;
+        }
         if let Some(mut entry) = dest.entry_mut(id) {
             let mut history = entry.history.take().unwrap_or_default();
             history.add_entry(loser);
