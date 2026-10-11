@@ -72,7 +72,7 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         };
         let mut value = value;
         for profile in &mut value.remote_profiles {
-            decrypt_profile_creds(&mut profile.settings);
+            decrypt_profile_creds(&profile.name, &mut profile.settings);
         }
         Ok(normalize_config(value))
     } else {
@@ -86,13 +86,14 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let path = dir.join(CONFIG_FILE);
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
-        encrypt_profile_creds(&mut profile.settings)?;
+        encrypt_profile_creds(&profile.name, &mut profile.settings)?;
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
     crate::util::atomic_write(&path, text.as_bytes(), "配置")?;
-    // The config carries remote credentials (DPAPI-encrypted on Windows,
-    // plaintext elsewhere): never leave it group/world-readable on unix.
+    // The config carries remote credentials, protected per platform:
+    // DPAPI-encrypted inline on Windows, OS-keyring references on desktop
+    // non-Windows. Never leave it group/world-readable on unix.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -102,14 +103,18 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn decrypt_profile_creds(settings: &mut RemoteSettings) {
-    settings.access_key = crate::platform::dpapi::decrypt(&settings.access_key);
-    settings.secret_key = crate::platform::dpapi::decrypt(&settings.secret_key);
+fn decrypt_profile_creds(name: &str, settings: &mut RemoteSettings) {
+    settings.access_key =
+        crate::platform::remote_secret::load(&settings.access_key, &format!("{name}/accessKey"));
+    settings.secret_key =
+        crate::platform::remote_secret::load(&settings.secret_key, &format!("{name}/secretKey"));
 }
 
-fn encrypt_profile_creds(settings: &mut RemoteSettings) -> Result<(), String> {
-    settings.access_key = crate::platform::dpapi::encrypt_for_storage(&settings.access_key)?;
-    settings.secret_key = crate::platform::dpapi::encrypt_for_storage(&settings.secret_key)?;
+fn encrypt_profile_creds(name: &str, settings: &mut RemoteSettings) -> Result<(), String> {
+    settings.access_key =
+        crate::platform::remote_secret::store(&settings.access_key, &format!("{name}/accessKey"))?;
+    settings.secret_key =
+        crate::platform::remote_secret::store(&settings.secret_key, &format!("{name}/secretKey"))?;
     Ok(())
 }
 

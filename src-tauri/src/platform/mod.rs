@@ -8,6 +8,8 @@
 //! - [`clipboard`] — clipboard read/clear/write.
 //! - [`credential`] — keyring-backed saved-credential store.
 //! - [`dpapi`] — Windows DPAPI secret protection for config persistence.
+//! - [`remote_secret`] — remote-profile credential protection: DPAPI on
+//!   Windows, OS keyring references on desktop non-Windows.
 
 pub mod autotype;
 pub mod clipboard;
@@ -16,4 +18,5 @@ pub mod credential;
 pub mod dpapi;
 #[cfg(desktop)]
 pub mod focus;
+pub mod remote_secret;
 pub mod shield;

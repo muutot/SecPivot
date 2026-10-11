@@ -2,8 +2,9 @@
 //!
 //! On Windows, values are encrypted with `CryptProtectData` (current-user
 //! scope, non-exportable) and persisted as `dpapi1:<base64>`. Other platforms
-//! store plaintext (no protection available). Decryption accepts legacy
-//! plaintext values, so old config files keep working.
+//! route through [`super::remote_secret`] (OS keyring references on desktop)
+//! or keep plaintext (mobile); decryption always accepts legacy plaintext
+//! values, so old config files keep working.
 
 #[cfg(target_os = "windows")]
 use base64::engine::general_purpose::STANDARD as BASE64;
