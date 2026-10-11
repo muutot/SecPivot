@@ -2,6 +2,7 @@
 //! Extracted from `rpc::mod.rs`.
 use num_bigint::BigUint;
 use serde_json::{json, Value};
+use zeroize::Zeroize;
 
 use super::dto::RpcError;
 use super::{group, mod_pow, SECURITY_LEVEL, SRP_G, SRP_K_HEX};
@@ -106,5 +107,18 @@ impl SrpServer {
             Some(s_hex) => Ok(sha256_hex(s_hex)),
             None => Err(RpcError::InvalidMessage("SRP 尚未完成".to_owned())),
         }
+    }
+}
+
+impl Drop for SrpServer {
+    fn drop(&mut self) {
+        // Best-effort scrub: num-bigint has no zeroize support, so flatten
+        // each secret to bytes and overwrite the buffer before it is freed.
+        let mut bytes = std::mem::take(&mut self.b).to_bytes_be();
+        bytes.zeroize();
+        let mut bytes = std::mem::take(&mut self.v).to_bytes_be();
+        bytes.zeroize();
+        self.b_hex.zeroize();
+        self.s_hex_upper.zeroize();
     }
 }

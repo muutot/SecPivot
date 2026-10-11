@@ -20,12 +20,26 @@
 
 use std::fmt;
 #[cfg(desktop)]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(desktop)]
 use std::thread;
 #[cfg(desktop)]
 use std::time::Duration;
 
 #[cfg(desktop)]
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+
+/// Set by the vault lock path so an in-flight replay aborts before the next
+/// token instead of typing secrets into whatever window now has focus.
+#[cfg(desktop)]
+static REPLAY_CANCEL: AtomicBool = AtomicBool::new(false);
+
+/// Request cancellation of any auto-type replay currently in flight. The
+/// vault lock path calls this right before zeroizing secrets.
+#[cfg(desktop)]
+pub fn cancel_replay() {
+    REPLAY_CANCEL.store(true, Ordering::SeqCst);
+}
 
 /// Values available for `{PLACEHOLDER}` substitution.
 #[derive(Debug, Clone, Default)]
@@ -343,12 +357,17 @@ pub fn parse_sequence(
     Ok(tokens)
 }
 
-/// Replay a resolved token stream via enigo keyboard simulation.
+/// Replay a resolved token stream via enigo keyboard simulation. Aborts
+/// quietly once [`cancel_replay`] has been requested (e.g. the vault was
+/// locked mid-replay).
 #[cfg(desktop)]
 pub fn execute_tokens(tokens: &[AutotypeToken]) -> Result<(), AutotypeError> {
     let mut enigo =
         Enigo::new(&Settings::default()).map_err(|e| AutotypeError::Input(e.to_string()))?;
     for token in tokens {
+        if REPLAY_CANCEL.load(Ordering::SeqCst) {
+            return Ok(());
+        }
         match token {
             AutotypeToken::Text(text) => {
                 enigo
@@ -374,6 +393,10 @@ pub fn execute_tokens(tokens: &[AutotypeToken]) -> Result<(), AutotypeError> {
 #[cfg(desktop)]
 pub fn run_sequence(sequence: &str, ctx: &AutotypeContext) -> Result<(), AutotypeError> {
     let tokens = parse_sequence(sequence, ctx)?;
+    // A fresh replay starts uncancelled; any request arriving after this
+    // point (e.g. the user locks the vault during the startup delay) still
+    // aborts the loop in `execute_tokens`.
+    REPLAY_CANCEL.store(false, Ordering::SeqCst);
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(1500));
         if let Err(e) = execute_tokens(&tokens) {

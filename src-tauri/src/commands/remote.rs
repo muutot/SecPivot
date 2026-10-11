@@ -9,7 +9,7 @@ use crate::vault;
 use crate::vault::{RemoteMode, VaultOpenResult, VaultSession, VaultSessions};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 // ---------------------------------------------------------------------------
 // Remote vault commands
 // ---------------------------------------------------------------------------
@@ -64,7 +64,10 @@ pub(crate) async fn open_remote_vault(
     // async worker thread: the remote transport blocks on its own runtime, which
     // panics on a runtime worker (the command future would abort and the
     // invoke would never resolve — the UI would stay on "正在加载…").
-    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+    // Wrap in Zeroizing so the copy moved into the blocking task is zeroized
+    // on drop even if the task panics (JoinError) before returning it.
+    let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
+        let password = Zeroizing::new(password);
         let result = vault::prepare_remote_open(
             storage_for_network,
             &key,
@@ -99,7 +102,8 @@ pub(crate) async fn open_remote_vault(
         }
         Err(e) => Err(e),
     };
-    password.zeroize();
+    // `password` is a Zeroizing<String>: dropping it here zeroizes the copy
+    // that came back from the blocking task.
     if result.is_ok() {
         apply_capture_guard(&app, &config);
     }
@@ -143,7 +147,10 @@ pub(crate) async fn create_remote_vault(
     // KDF, serialization, upload and local mirror run without the lock, off
     // the async worker thread (the remote transport must not block a runtime
     // worker — see the comment in `open_remote_vault`).
-    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+    // Wrap in Zeroizing so the copy moved into the blocking task is zeroized
+    // on drop even if the task panics (JoinError) before returning it.
+    let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
+        let password = Zeroizing::new(password);
         let result = vault::prepare_remote_create(
             storage_for_network,
             &key,
@@ -181,7 +188,8 @@ pub(crate) async fn create_remote_vault(
         }
         Err(e) => Err(e),
     };
-    password.zeroize();
+    // `password` is a Zeroizing<String>: dropping it here zeroizes the copy
+    // that came back from the blocking task.
     if result.is_ok() {
         apply_capture_guard(&app, &config);
     }

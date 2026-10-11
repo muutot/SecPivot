@@ -6,6 +6,7 @@ use zeroize::Zeroize;
 
 use super::{Conn, SIDE_CHANNEL_BYTES, SIDE_CHANNEL_TTL};
 use crate::config::PasswordGeneratorSettings;
+use crate::crypto::mac_eq;
 use crate::rpc::{
     decrypt_frame, encrypt_frame, handle_jsonrpc_with_generator, hex, key_auth_cr, key_auth_sr,
     random_hex, secret_bytes, Envelope, ErrorMessage, KeyMessage, RpcError, SrpMessage, SrpServer,
@@ -107,7 +108,7 @@ pub(crate) fn dispatch_setup(
             let cc = key.cc.clone().unwrap_or_default();
             let cr = key.cr.clone().unwrap_or_default();
             let secret_hex = hex(&secret);
-            if cr != key_auth_cr(&secret_hex, &sc, &cc) {
+            if !mac_eq(&cr, &key_auth_cr(&secret_hex, &sc, &cc)) {
                 secret.zeroize();
                 return Some(error("AUTH_FAILED"));
             }
