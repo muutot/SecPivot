@@ -1091,6 +1091,9 @@ const STORAGE_KEY = "secpivot-settings";
 
 const persistQueue = new LatestPersistQueue<AppSettings>();
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+/** Automatic retry budget for a failed write; a fresh user edit restarts it. */
+const PERSIST_MAX_RETRIES = 5;
+let persistRetries = 0;
 let initialized = false;
 
 /** Strip remote credentials from a settings clone so the browser-preview
@@ -1190,8 +1193,12 @@ async function runPersist(): Promise<void> {
   // A failed write keeps its value pending in the queue, but the debounce
   // timer that triggered this run has already fired — re-arm one so the
   // pending value is retried instead of being silently lost until the next
-  // user edit (or app close).
-  if (persistQueue.hasPending && !persistTimer) {
+  // user edit (or app close). The retry is bounded: a persistent failure
+  // (disk full, policy denial) must not turn into an endless 120 ms hammer,
+  // and an unbounded timer would also keep node:test processes alive forever.
+  if (!persistQueue.hasPending) persistRetries = 0;
+  if (persistQueue.hasPending && persistRetries < PERSIST_MAX_RETRIES && !persistTimer) {
+    persistRetries += 1;
     persistTimer = setTimeout(() => {
       persistTimer = null;
       void runPersist();
@@ -1201,6 +1208,7 @@ async function runPersist(): Promise<void> {
 
 function schedulePersist(): void {
   persistQueue.enqueue(normalizeSettings(get(settings)));
+  persistRetries = 0;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
