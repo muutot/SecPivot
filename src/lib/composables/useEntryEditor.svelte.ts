@@ -113,21 +113,32 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
     try {
       if (mode === "create" && input) {
         let state = await vault.callInSession(sessionId, () => vault.addEntry(input));
+        // The entry exists backend-side the moment addEntry resolves: creation
+        // is committed. Close and rebind selection immediately so a failed
+        // follow-up can never cause a duplicate entry on retry.
         const created = options.findNewestInGroup(state, input.groupUuid);
-        if (autotype && created) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryAutoType(created.uuid, autotype),
-          );
+        if (options.sessionView.isCurrent(view)) {
+          options.setSingleSelection(options.findEntry(state, created?.uuid ?? null));
+          editorOpen = false;
+          options.notify(t(lang(), "editor.createdEntry"));
         }
-        if (flags && created) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryFlags(created.uuid, flags),
-          );
+        if (created && (autotype || flags)) {
+          try {
+            if (autotype) {
+              state = await vault.callInSession(sessionId, () =>
+                vault.updateEntryAutoType(created.uuid, autotype),
+              );
+            }
+            if (flags) {
+              state = await vault.callInSession(sessionId, () =>
+                vault.updateEntryFlags(created.uuid, flags),
+              );
+            }
+          } catch (e) {
+            if (options.sessionView.isCurrent(view))
+              options.notify(t(lang(), "editor.followUpFailed", { e: String(e) }));
+          }
         }
-        if (!options.sessionView.isCurrent(view)) return;
-        options.setSingleSelection(options.findEntry(state, created?.uuid ?? null));
-        editorOpen = false;
-        options.notify(t(lang(), "editor.createdEntry"));
       } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
         const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));

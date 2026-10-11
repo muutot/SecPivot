@@ -150,23 +150,21 @@ export function installFocusLock(): () => void {
     void lockVault();
   };
   window.addEventListener("blur", onBlur);
-  let stopOpen: UnlistenFn | undefined;
-  let stopClose: UnlistenFn | undefined;
+  // Keep the promises: if the cleanup runs before listen() resolves, the
+  // then-callback still unregisters, closing the unmount race.
+  let stopOpen: Promise<UnlistenFn> | undefined;
+  let stopClose: Promise<UnlistenFn> | undefined;
   if (isTauriRuntime()) {
-    void listen("tcato-overlay-open", () => {
+    stopOpen = listen("tcato-overlay-open", () => {
       setTcatoOverlayOpen(true);
-    }).then((fn) => {
-      stopOpen = fn;
     });
-    void listen("tcato-overlay-close", () => {
+    stopClose = listen("tcato-overlay-close", () => {
       setTcatoOverlayOpen(false);
-    }).then((fn) => {
-      stopClose = fn;
     });
   }
   return () => {
     window.removeEventListener("blur", onBlur);
-    stopOpen?.();
-    stopClose?.();
+    void stopOpen?.then((fn) => fn());
+    void stopClose?.then((fn) => fn());
   };
 }

@@ -37,12 +37,11 @@
     // /settings; focus-lock already lived here.
     const stopFocusLock = isTcatoOverlay ? () => {} : installFocusLock();
     const stopAutoLock = isTcatoOverlay ? () => {} : installAutoLock();
-    // System tray "锁定数据库" action.
-    let stopTrayLock: UnlistenFn | undefined;
+    // System tray "锁定数据库" action. Keep the promise: if cleanup runs
+    // before listen() resolves, the then-callback still unregisters.
+    let stopTrayLock: Promise<UnlistenFn> | undefined;
     if (!isTcatoOverlay && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      void listen("tray-lock", () => void lockVault()).then((fn) => {
-        stopTrayLock = fn;
-      });
+      stopTrayLock = listen("tray-lock", () => void lockVault());
     }
     // Window-size persistence must survive navigation to /settings — the main
     // page unmounts there and its resize listener would otherwise miss drags
@@ -69,7 +68,7 @@
       if (resizeTimer) clearTimeout(resizeTimer);
       stopFocusLock();
       stopAutoLock();
-      stopTrayLock?.();
+      void stopTrayLock?.then((fn) => fn());
     };
   });
 </script>

@@ -1161,6 +1161,7 @@ export const zhCN = {
   "favicon.dlDone": "已下载 {done}/{total} 个网址图标",
   "favicon.dlFailed": "图标下载失败：{e}",
   "editor.createdEntry": "已创建条目",
+  "editor.followUpFailed": "条目已创建，但应用自动输入/标志失败：{e}",
   "editor.updatedEntries": "已更新 {n} 个条目",
   "editor.savedChanges": "已保存修改",
   "editor.opFailed": "操作失败：{e}",

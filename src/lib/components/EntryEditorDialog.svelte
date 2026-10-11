@@ -679,7 +679,7 @@
   ariaLabel={mode === "create" ? t(lang, "editor.createTitle") : t(lang, "editor.editTitle")}
   size="large"
   scrollable
-  closeOnEscape
+  closeOnEscape={!saving}
   {onclose}
 >
   {#snippet icon()}

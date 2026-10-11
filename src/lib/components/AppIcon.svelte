@@ -152,5 +152,5 @@
   aria-hidden="true"
   class="app-icon"
 >
-  {@html paths[name]}
+  {@html paths[name] ?? ""}
 </svg>

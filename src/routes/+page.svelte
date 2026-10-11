@@ -382,13 +382,13 @@
     });
     // Browser-extension writes land straight in the backend session; refresh
     // so the entry list and dirty tab state update without a reopen.
-    let unlistenVaultChanged: UnlistenFn | undefined;
-    let unlistenAutotypePick: UnlistenFn | undefined;
+    // Keep the promises: if cleanup runs before listen() resolves, the
+    // then-callback still unregisters, closing the unmount race.
+    let unlistenVaultChanged: Promise<UnlistenFn> | undefined;
+    let unlistenAutotypePick: Promise<UnlistenFn> | undefined;
     if (isTauriRuntime()) {
-      void listen("browser-vault-changed", () => void vault.refresh()).then(
-        (stop) => (unlistenVaultChanged = stop),
-      );
-      void listen<AutotypeCandidate[]>("autotype-pick-request", (event) => {
+      unlistenVaultChanged = listen("browser-vault-changed", () => void vault.refresh());
+      unlistenAutotypePick = listen<AutotypeCandidate[]>("autotype-pick-request", (event) => {
         const candidates = event.payload;
         if (
           candidates.length === 0 ||
@@ -397,15 +397,15 @@
           return;
         }
         autotypePick = candidates;
-      }).then((stop) => (unlistenAutotypePick = stop));
+      });
     }
     void vault.refresh();
     return () => {
       unsubscribe();
       unsubRemembered();
       unsubActive();
-      void unlistenVaultChanged?.();
-      void unlistenAutotypePick?.();
+      void unlistenVaultChanged?.then((stop) => stop());
+      void unlistenAutotypePick?.then((stop) => stop());
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
       sessionView.activate(null);
     };

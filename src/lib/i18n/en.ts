@@ -1200,6 +1200,7 @@ export const en: Record<I18nKey, string> = {
   "favicon.dlDone": "Downloaded favicons for {done}/{total} URLs",
   "favicon.dlFailed": "Favicon download failed: {e}",
   "editor.createdEntry": "Entry created",
+  "editor.followUpFailed": "Entry created, but applying auto-type/flags failed: {e}",
   "editor.updatedEntries": "Updated {n} entries",
   "editor.savedChanges": "Changes saved",
   "editor.opFailed": "Operation failed: {e}",

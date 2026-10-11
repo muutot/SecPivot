@@ -109,18 +109,17 @@
   const lang = $derived(s.general.language);
   onMount(() => {
     if (!appWindow || isMobile()) return;
-    let unlisten: (() => void) | undefined;
     const sync = (): void => {
       appWindow.isMaximized().then((v) => {
         maximized = v;
       });
     };
     sync();
-    void appWindow.onResized(sync).then((fn) => {
-      unlisten = fn;
-    });
+    // Keep the promise: if cleanup runs before onResized resolves, the
+    // then-callback still unregisters, closing the unmount race.
+    const resized: Promise<() => void> = appWindow.onResized(sync);
     return () => {
-      unlisten?.();
+      void resized.then((fn) => fn());
     };
   });
   function winMinimize(): void {
