@@ -753,6 +753,9 @@
                 class="row-btn"
                 class:star-active={row.entry.favorite}
                 title={row.entry.favorite ? t(lang, "menu.unfavorite") : t(lang, "menu.favorite")}
+                aria-label={row.entry.favorite
+                  ? t(lang, "menu.unfavorite")
+                  : t(lang, "menu.favorite")}
                 onclick={(event) => {
                   event.stopPropagation();
                   onfavorite(row.entry);
@@ -763,6 +766,7 @@
               <button
                 class="row-btn"
                 title={t(lang, "menu.copyUsername")}
+                aria-label={t(lang, "menu.copyUsername")}
                 onclick={(event) => {
                   event.stopPropagation();
                   oncopyusername(row.entry);
@@ -773,6 +777,7 @@
               <button
                 class="row-btn"
                 title={t(lang, "menu.copyPassword")}
+                aria-label={t(lang, "menu.copyPassword")}
                 onclick={(event) => {
                   event.stopPropagation();
                   oncopypassword(row.entry);

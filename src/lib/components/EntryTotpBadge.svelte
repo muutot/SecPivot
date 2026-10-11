@@ -26,6 +26,7 @@
 <button
   class="totp-badge"
   title={totp.code ? t(lang, "totp.clickCopy") : t(lang, "totp.genError")}
+  aria-label={totp.code ? t(lang, "totp.clickCopy") : t(lang, "totp.genError")}
   onclick={() => void totp.copy()}
   disabled={!totp.code}
 >

@@ -27,7 +27,12 @@
   <div class="totp-code-row">
     <span class="totp-code mono">{totp.code || "••••••"}</span>
     {#if totp.code}
-      <button class="totp-copy" onclick={() => void totp.copy()} title={t(lang, "totp.copyTitle")}>
+      <button
+        class="totp-copy"
+        onclick={() => void totp.copy()}
+        title={t(lang, "totp.copyTitle")}
+        aria-label={t(lang, "totp.copyTitle")}
+      >
         <AppIcon name={totp.copied ? "check" : "copy"} size={13} />
       </button>
     {/if}
