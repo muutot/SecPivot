@@ -372,6 +372,14 @@ fn remote_secrets_never_persist_in_plaintext() {
 
 #[test]
 fn masked_snapshot_never_carries_secrets_but_reports_presence() {
+    // Same environment gate as the store/replace test above: headless CI on
+    // keyring targets has no OS key store.
+    if let Err(e) =
+        crate::platform::remote_secret::store("probe", "secpivot-test://config-store-probe")
+    {
+        eprintln!("credential store unavailable, skipping: {e}");
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
@@ -398,6 +406,15 @@ fn masked_snapshot_never_carries_secrets_but_reports_presence() {
 
 #[test]
 fn empty_credentials_keep_stored_secrets_while_new_ones_replace() {
+    // Windows persists through DPAPI (works headless); the keyring path on
+    // other desktop targets needs an OS key store, which headless CI lacks —
+    // skip instead of failing on the environment.
+    if let Err(e) =
+        crate::platform::remote_secret::store("probe", "secpivot-test://config-store-probe")
+    {
+        eprintln!("credential store unavailable, skipping: {e}");
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
