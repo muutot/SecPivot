@@ -3,8 +3,6 @@
 //! and decoded in-process with rxing; results are plain strings returned to
 //! the renderer, nothing is persisted or logged.
 
-use std::io::Cursor;
-
 /// Capture the entire virtual desktop (all monitors) and return it as a PNG.
 #[cfg(windows)]
 #[tauri::command]
@@ -19,7 +17,6 @@ pub fn capture_screen_png() -> Result<Vec<u8>, String> {
 pub fn capture_screen_png() -> Result<Vec<u8>, String> {
     Err("当前平台暂不支持屏幕截图".to_owned())
 }
-
 /// Decode every barcode found in a PNG image (full screenshot or user-drawn
 /// region). Returns all hits so the UI can disambiguate multiple codes.
 #[tauri::command]
@@ -131,7 +128,12 @@ fn capture_virtual_screen() -> Result<(Vec<u8>, u32, u32), String> {
     }
 }
 
+/// Encode raw RGBA pixels as PNG bytes. Only the Windows capture path
+/// consumes it; on other targets the (unused) helper would trip the
+/// dead-code gate in clippy.
+#[cfg(windows)]
 fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    use std::io::Cursor;
     let img =
         image::RgbaImage::from_raw(width, height, rgba.to_vec()).ok_or("截图数据尺寸不匹配")?;
     let mut out = Vec::new();
@@ -144,6 +146,7 @@ fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use rxing::{BarcodeFormat, MultiFormatWriter, Writer};
+    use std::io::Cursor;
 
     #[test]
     fn decodes_generated_qr_png() {

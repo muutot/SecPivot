@@ -36,6 +36,9 @@ pub fn foreground_window_title() -> Option<String> {
     }
 }
 
+/// Exact title of the TCATO overlay window; only the Windows foreground
+/// check compares against it.
+#[cfg(target_os = "windows")]
 const TCATO_TITLE: &str = "TCATO 两通道填充";
 
 #[cfg(target_os = "windows")]

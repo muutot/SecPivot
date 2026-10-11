@@ -61,6 +61,8 @@ const FLAG_ENCRYPTED: u32 = 1;
 
 /// KeePass `EntryUtil.ClipDomainSep`, passed as DPAPI optional entropy so a
 /// blob written by an unrelated program is never unwrapped by accident.
+/// DPAPI itself only exists on Windows, so is the entropy.
+#[cfg(target_os = "windows")]
 const CLIP_DOMAIN_SEP: [u8; 8] = [0xF8, 0x03, 0xFA, 0x51, 0x87, 0x18, 0x49, 0x5D];
 
 /// Bound both the clipboard read and the inflate output: any local app can

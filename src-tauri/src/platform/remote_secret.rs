@@ -49,7 +49,7 @@ pub fn store(plain: &str, field_key: &str) -> Result<String, String> {
 /// Recover the plaintext previously stored by [`store`]. Failure modes
 /// (missing entry, locked/unavailable store, cross-platform reference)
 /// decrypt to an empty string, matching [`dpapi::decrypt`] semantics.
-pub fn load(stored: &str, field_key: &str) -> String {
+pub fn load(stored: &str, _field_key: &str) -> String {
     if stored.is_empty() {
         return String::new();
     }
@@ -60,11 +60,10 @@ pub fn load(stored: &str, field_key: &str) -> String {
             // passes legacy plaintext through and empties undecryptable blobs.
             return dpapi::decrypt(stored);
         };
+        // The entry key rides inside the reference, so a resolved reference
+        // carries the same field_key the caller passed to `store`.
         match keyring::Entry::new(SERVICE, field) {
-            Ok(entry) => match entry.get_password() {
-                Ok(value) => value,
-                Err(_) => String::new(),
-            },
+            Ok(entry) => entry.get_password().unwrap_or_default(),
             Err(_) => String::new(),
         }
     }
@@ -76,7 +75,6 @@ pub fn load(stored: &str, field_key: &str) -> String {
         if stored.starts_with(PREFIX) {
             return String::new();
         }
-        let _ = field_key;
         dpapi::decrypt(stored)
     }
 }
