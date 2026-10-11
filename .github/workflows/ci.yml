@@ -126,8 +126,10 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # --no-fail-fast: platform-specific failures all surface in one run
+      # instead of one per push while a target's suite is still maturing.
       - name: Test
-        run: cargo nextest run --cargo-profile ci --manifest-path src-tauri/Cargo.toml
+        run: cargo nextest run --no-fail-fast --cargo-profile ci --manifest-path src-tauri/Cargo.toml
 
       - name: Test (cargo test runner)
-        run: cargo test -j 1 --manifest-path src-tauri/Cargo.toml
+        run: cargo test -j 1 --no-fail-fast --manifest-path src-tauri/Cargo.toml
