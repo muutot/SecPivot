@@ -146,6 +146,13 @@ fn focus_search_on_type_defaults_on_and_survives_round_trip() {
 
 #[test]
 fn remote_profiles_survive_deserialize_write_reload() {
+    // Same environment gate as the other credential-persisting tests.
+    if let Err(e) =
+        crate::platform::remote_secret::store("probe", "secpivot-test://config-store-probe")
+    {
+        eprintln!("credential store unavailable, skipping: {e}");
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = AppConfig::default();
