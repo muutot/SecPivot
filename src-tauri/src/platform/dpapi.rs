@@ -307,6 +307,9 @@ mod tests {
         assert_eq!(decrypt("dpapi1:###not-valid-base64###"), "");
     }
 
+    // Only Windows actually wraps; the non-Windows `encrypt` is a plaintext
+    // passthrough (no `dpapi1:` layer to guard against).
+    #[cfg(target_os = "windows")]
     #[test]
     fn encrypt_for_storage_never_double_wraps() {
         // A valid plaintext secret is wrapped exactly once.
