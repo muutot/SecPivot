@@ -1,5 +1,5 @@
 //! App settings serde shapes (mirrors `src/lib/types/settings.ts`) plus
-//! defaults and normalization (extracted from config.rs).
+//! defaults and normalization.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

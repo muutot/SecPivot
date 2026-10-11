@@ -1,6 +1,6 @@
 //! Local mirror + backup rotation for remote vaults: write the downloaded
 //! KDBX bytes under the local cache dir, rotating timestamped backups and
-//! pruning to a retention count. Extracted from `vault.rs`; pure std + chrono.
+//! pruning to a retention count. Pure std + chrono.
 
 use std::path::{Path, PathBuf};
 
