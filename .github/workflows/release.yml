@@ -261,6 +261,13 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          # v4 defaults to `packages: tools platform-tools`, but the hosted
+          # runner's SDK repository no longer publishes the legacy `tools`
+          # package, so sdkmanager exits 1 before the build starts. The image
+          # already ships the NDK/platform/build-tools; accepting licenses and
+          # refreshing platform-tools is all this step needs.
+          packages: platform-tools
 
       - name: Install dependencies
         run: npm ci
