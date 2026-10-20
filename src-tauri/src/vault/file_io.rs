@@ -66,12 +66,11 @@ fn read_uri(path: &Path, what: &str) -> Result<Vec<u8>, String> {
     let app = APP
         .get()
         .ok_or_else(|| format!("无法读取{what}: 应用尚未初始化"))?;
+    let mut options = tauri_plugin_fs::OpenOptions::new();
+    options.read(true);
     let mut file = app
         .fs()
-        .open(
-            document_path(path)?,
-            tauri_plugin_fs::OpenOptions::new().read(true),
-        )
+        .open(document_path(path)?, options)
         .map_err(|e| format!("无法读取{what}: {e}"))?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)
@@ -87,14 +86,11 @@ fn write_uri(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let app = APP
         .get()
         .ok_or_else(|| "写入数据库失败: 应用尚未初始化".to_owned())?;
+    let mut options = tauri_plugin_fs::OpenOptions::new();
+    options.write(true).truncate(true);
     let mut file = app
         .fs()
-        .open(
-            document_path(path)?,
-            tauri_plugin_fs::OpenOptions::new()
-                .write(true)
-                .truncate(true),
-        )
+        .open(document_path(path)?, options)
         .map_err(|e| format!("写入数据库失败: {e}"))?;
     file.write_all(bytes)
         .map_err(|e| format!("写入数据库失败: {e}"))?;

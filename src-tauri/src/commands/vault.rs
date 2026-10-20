@@ -189,6 +189,7 @@ pub(crate) fn close_all_vaults(
     let keep_rpc = keep_rpc_session(&app);
     // Cancel any in-flight auto-type replay before secrets are zeroized:
     // locking mid-replay must not keep typing them into another window.
+    #[cfg(desktop)]
     autotype::cancel_replay();
     {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
