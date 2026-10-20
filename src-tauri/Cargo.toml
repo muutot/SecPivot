@@ -24,6 +24,9 @@ tauri-plugin-dialog = "2"
 # Android document pickers return content:// URIs; the fs plugin resolves them
 # to file descriptors so vault files open and save on mobile (vault/file_io.rs).
 tauri-plugin-fs = "2"
+# SAF picker with persistable grants (ACTION_OPEN_DOCUMENT / CREATE_DOCUMENT),
+# used instead of the dialog plugin's read-only ACTION_GET_CONTENT on Android.
+tauri-plugin-saf = { path = "plugins/saf" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
@@ -61,6 +64,11 @@ rxing = "0.9.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
+
+# Android's rustls-platform-verifier is unusable without Tauri-side JNI setup
+# (see src/net.rs), so reqwest is pinned to this bundled Mozilla root store.
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-root-certs = "1"
 
 # Desktop-only dependencies. `cfg(desktop)`/`cfg(mobile)` are set by the
 # tauri-build build script and are NOT visible to Cargo's target resolution,

@@ -120,7 +120,7 @@ fn build_favicon_client() -> Option<reqwest::Client> {
             builder = builder.proxy(proxy);
         }
     }
-    builder.build().ok()
+    crate::net::client_builder(builder).build().ok()
 }
 
 /// Windows system proxy for https targets, as `http://host:port`. Returns

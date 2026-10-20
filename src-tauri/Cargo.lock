@@ -4532,11 +4532,13 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
+ "tauri-plugin-saf",
  "tempfile",
  "tokio",
  "tungstenite",
  "url",
  "uuid",
+ "webpki-root-certs",
  "windows-sys 0.59.0",
  "zeroize",
 ]
@@ -5362,6 +5364,16 @@ dependencies = [
  "url",
  "windows",
  "zbus",
+]
+
+[[package]]
+name = "tauri-plugin-saf"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

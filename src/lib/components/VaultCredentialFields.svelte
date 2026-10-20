@@ -1,7 +1,7 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
-  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
   interface Props {
@@ -53,6 +53,7 @@
         bind:value={path}
         placeholder={isTauriRuntime() ? t(lang, "vault.pickFile") : t(lang, "vault.demoStorage")}
         disabled={!isTauriRuntime()}
+        readonly={isMobile()}
       />
       {#if isTauriRuntime() && onPickCreatePath}
         <button

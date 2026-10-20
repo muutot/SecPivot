@@ -1,0 +1,3 @@
+[default]
+description = "Allows selecting and creating documents through the Android Storage Access Framework."
+permissions = ["allow-open-document", "allow-create-document"]

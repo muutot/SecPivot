@@ -1,6 +1,6 @@
 import { writable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import { isTauriRuntime, appSettings, RECENT_FILES_MAX } from "$lib/services/settings";
+import { isAndroid, isTauriRuntime, appSettings, RECENT_FILES_MAX } from "$lib/services/settings";
 import type {
   VaultState,
   VaultGroup,
@@ -79,8 +79,13 @@ interface VaultStore {
   callInSession: <T>(sessionId: string, operation: () => Promise<T>) => Promise<T>;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
   updateDatabaseSettings: (patch: DatabaseSettingsPatch) => Promise<VaultState>;
-  open: (path: string, password: string, keyfile?: string) => Promise<VaultState>;
-  create: (request: CreateVaultRequest) => Promise<VaultState>;
+  open: (
+    path: string,
+    password: string,
+    keyfile?: string,
+    displayName?: string | null,
+  ) => Promise<VaultState>;
+  create: (request: CreateVaultRequest, displayName?: string | null) => Promise<VaultState>;
   listRemoteObjects: () => Promise<RemoteObject[]>;
   openRemote: (
     key: string,
@@ -106,7 +111,7 @@ interface VaultStore {
   /** Merge the remote vault's latest bytes into the session by entry/group
    *  UUID + last-modified (histories preserved, recycle bin excluded). */
   mergeRemote: () => Promise<VaultState>;
-  saveAs: (path: string) => Promise<VaultState>;
+  saveAs: (path: string, displayName?: string | null) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   addEntries: (inputs: EntryInput[]) => Promise<VaultState>;
@@ -473,14 +478,27 @@ function isDocumentUri(path: string): boolean {
 }
 
 /** Move a successfully opened/created vault path to the front of the recent list.
- * Remote (`s3://`) and document-URI paths are excluded — the local open flow
- * cannot reopen them. */
-function rememberRecent(path: string): void {
-  if (!path || path.startsWith("s3://") || isDocumentUri(path)) return;
-  const current = get(appSettings).general.recentFiles;
+ * Remote (`s3://`) paths are excluded. On Android, SAF grants are persisted so
+ * `content://` paths stay reopenable; other document URIs remain transient. */
+function rememberRecent(path: string, displayName?: string | null): void {
+  if (!path || path.startsWith("s3://")) return;
+  if (isDocumentUri(path) && !(isAndroid() && path.startsWith("content://"))) return;
+  const general = get(appSettings).general;
+  const current = general.recentFiles;
+  const names = { ...general.recentFileNames };
+  const label = displayName?.trim();
+  if (label && isAndroid()) names[path] = Array.from(label).slice(0, 120).join("");
   const next = [path, ...current.filter((p) => p !== path)].slice(0, RECENT_FILES_MAX);
-  if (next.length === current.length && next.every((p, i) => p === current[i])) return;
-  appSettings.updateGeneral("recentFiles", next);
+  const kept = new Set(next);
+  const nextNames = Object.fromEntries(
+    Object.entries(names).filter(([key, name]) => kept.has(key) && name),
+  );
+  if (next.length !== current.length || next.some((p, i) => p !== current[i])) {
+    appSettings.updateGeneral("recentFiles", next);
+  }
+  if (JSON.stringify(nextNames) !== JSON.stringify(general.recentFileNames)) {
+    appSettings.updateGeneral("recentFileNames", nextNames);
+  }
 }
 
 async function backendInvoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -657,7 +675,7 @@ export const vault: VaultStore = {
 
   /** Open a local KDBX file; serializes through the topology queue, records
    *  the path for quick reopen and recent files, and switches the tab bar. */
-  async open(path, password, keyfile): Promise<VaultState> {
+  async open(path, password, keyfile, displayName): Promise<VaultState> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
         const result = await backendInvoke<VaultOpenResult>("open_vault", {
@@ -668,8 +686,11 @@ export const vault: VaultStore = {
         activeSessionId = result.sessionId;
         sessionEpochs.set(result.sessionId, 0);
         commitSessionState(result.sessionId, result.state);
-        remembered.set({ path: result.state.path, fileName: result.state.fileName });
-        rememberRecent(result.state.path);
+        remembered.set({
+          path: result.state.path,
+          fileName: displayName ?? result.state.fileName,
+        });
+        rememberRecent(result.state.path, displayName);
         await refreshTabs();
         return result.state;
       });
@@ -679,13 +700,13 @@ export const vault: VaultStore = {
     browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
     const result = deepClone(browserState);
     state.set(applyBackendState(result));
-    remembered.set({ path: result.path, fileName: result.fileName });
-    rememberRecent(result.path);
+    remembered.set({ path: result.path, fileName: displayName ?? result.fileName });
+    rememberRecent(result.path, displayName);
     await refreshTabs();
     return result;
   },
 
-  async create(request: CreateVaultRequest): Promise<VaultState> {
+  async create(request: CreateVaultRequest, displayName): Promise<VaultState> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
         const result = await backendInvoke<VaultOpenResult>("create_vault", {
@@ -695,8 +716,11 @@ export const vault: VaultStore = {
         activeSessionId = result.sessionId;
         sessionEpochs.set(result.sessionId, 0);
         commitSessionState(result.sessionId, result.state);
-        remembered.set({ path: result.state.path, fileName: result.state.fileName });
-        rememberRecent(result.state.path);
+        remembered.set({
+          path: result.state.path,
+          fileName: displayName ?? result.state.fileName,
+        });
+        rememberRecent(result.state.path, displayName);
         await refreshTabs();
         return result.state;
       });
@@ -708,8 +732,8 @@ export const vault: VaultStore = {
     browserState = fresh;
     const result = deepClone(fresh);
     state.set(applyBackendState(result));
-    remembered.set({ path: result.path, fileName: result.fileName });
-    rememberRecent(result.path);
+    remembered.set({ path: result.path, fileName: displayName ?? result.fileName });
+    rememberRecent(result.path, displayName);
     await browserPersist(result);
     await refreshTabs();
     return result;
@@ -909,12 +933,16 @@ export const vault: VaultStore = {
   },
 
   /** Save As: persist to a new local path and switch the session target. */
-  async saveAs(path: string): Promise<VaultState> {
+  async saveAs(path: string, displayName?: string | null): Promise<VaultState> {
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
       const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault_as", { sessionId, path });
       const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
+      if (activeSessionId === sessionId) {
+        remembered.set({ path: result.path, fileName: displayName ?? result.fileName });
+      }
+      rememberRecent(result.path, displayName);
       await refreshTabs();
       return committed;
     }
@@ -925,8 +953,8 @@ export const vault: VaultStore = {
     saved.dirty = false;
     browserState = saved;
     state.set(saved);
-    remembered.set({ path: saved.path, fileName: saved.fileName });
-    rememberRecent(path);
+    remembered.set({ path: saved.path, fileName: displayName ?? saved.fileName });
+    rememberRecent(path, displayName ?? saved.fileName);
     await browserPersist(saved);
     return saved;
   },

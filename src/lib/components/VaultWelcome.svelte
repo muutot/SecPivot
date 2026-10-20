@@ -4,6 +4,7 @@
   import {
     activeRemoteProfile,
     appSettings,
+    isAndroid,
     isTauriRuntime,
     remoteMirrorPath,
     remoteProfilePath,
@@ -11,6 +12,7 @@
     remoteSecretPresence,
   } from "$lib/services/settings";
   import { rememberCredential } from "$lib/services/security";
+  import { createDocument, openDocument } from "$lib/services/saf";
   import { vault } from "$lib/services/vault";
   import type { RemoteMode, RemoteObject } from "$lib/types/vault";
   import type { RemoteKind, RemoteProfilePath, RemoteSettings } from "$lib/types/settings";
@@ -68,6 +70,9 @@
   let keyfilePath = $state("");
   let showPassword = $state(false);
   let isDemo = $state(false);
+  // SAF URIs usually have no readable file name; carry the provider's display
+  // name through unlock/create so recents and the lock screen can show it.
+  let pendingName = $state<string | null>(null);
 
   let remoteTab: RemoteTab = $state("open");
   let remoteObjects: RemoteObject[] = $state([]);
@@ -219,16 +224,24 @@
   }
 
   async function handleOpen(): Promise<void> {
+    pendingName = null;
     if (isTauriRuntime()) {
-      const selected = await open({
-        multiple: false,
-        filters: [
-          { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
-          { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
-        ],
-      });
-      if (!selected) return;
-      path = String(selected);
+      if (isAndroid()) {
+        const picked = await openDocument();
+        if (!picked) return;
+        path = picked.uri;
+        pendingName = picked.name ?? null;
+      } else {
+        const selected = await open({
+          multiple: false,
+          filters: [
+            { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+            { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
+          ],
+        });
+        if (!selected) return;
+        path = String(selected);
+      }
       isDemo = false;
     } else {
       path = "demo://vault.kdbx";
@@ -261,7 +274,7 @@
     busy = true;
     error = "";
     try {
-      await vault.open(path, password, keyfilePath || undefined);
+      await vault.open(path, password, keyfilePath || undefined, pendingName);
       // A stored password alone can never open a keyfile-protected vault —
       // remembering one would present a Windows Hello button that only fails.
       if (!keyfilePath) void rememberCredential(path, password);
@@ -274,8 +287,20 @@
     }
   }
 
+  function recentLabel(file: string): string {
+    const named = settings.general.recentFileNames[file];
+    if (named) return named;
+    const segment = file.split(/[?#]/)[0].split(/[\\/]/).pop() || file;
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  }
+
   function openRecent(file: string): void {
     path = file;
+    pendingName = settings.general.recentFileNames[file] ?? null;
     isDemo = false;
     // Secret hygiene: never carry a previously typed master password into a
     // different vault's unlock dialog.
@@ -288,6 +313,7 @@
 
   function handleCreate(): void {
     path = "";
+    pendingName = null;
     password = "";
     confirm = "";
     keyfilePath = "";
@@ -296,6 +322,14 @@
   }
 
   async function pickCreatePath(): Promise<void> {
+    if (isAndroid()) {
+      const picked = await createDocument("new-vault.kdbx");
+      if (picked) {
+        path = picked.uri;
+        pendingName = picked.name ?? null;
+      }
+      return;
+    }
     const selected = await save({
       defaultPath: "new-vault.kdbx",
       filters: [
@@ -321,28 +355,38 @@
       let target = path;
       if (!target) {
         if (isTauriRuntime()) {
-          const selected = await save({
-            defaultPath: "new-vault.kdbx",
-            filters: [
-              { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
-              { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
-            ],
-          });
-          if (!selected) return;
-          target = String(selected);
+          if (isAndroid()) {
+            const picked = await createDocument("new-vault.kdbx");
+            if (!picked) return;
+            target = picked.uri;
+            pendingName = picked.name ?? null;
+          } else {
+            const selected = await save({
+              defaultPath: "new-vault.kdbx",
+              filters: [
+                { name: t(lang, "welcome.filterKdbx"), extensions: ["kdbx"] },
+                { name: t(lang, "welcome.filterAll"), extensions: ["*"] },
+              ],
+            });
+            if (!selected) return;
+            target = String(selected);
+          }
         } else {
           target = "demo://new-vault.kdbx";
         }
       }
       const settings = get(appSettings);
-      await vault.create({
-        path: target,
-        password,
-        kdf: settings.database.kdf,
-        cipher: settings.database.cipher,
-        compression: settings.database.compression,
-        keyfile: keyfilePath || undefined,
-      });
+      await vault.create(
+        {
+          path: target,
+          password,
+          kdf: settings.database.kdf,
+          cipher: settings.database.cipher,
+          compression: settings.database.compression,
+          keyfile: keyfilePath || undefined,
+        },
+        pendingName,
+      );
       // A stored password alone can never open a keyfile-protected vault —
       // remembering one would present a Windows Hello button that only fails.
       if (!keyfilePath) void rememberCredential(target, password);
@@ -383,7 +427,7 @@
       {#each recentFiles as file (file)}
         <button class="recent-item" onclick={() => openRecent(file)} title={file}>
           <AppIcon name="clock" size={12} />
-          <span class="recent-name">{file.split(/[\\/]/).pop() || file}</span>
+          <span class="recent-name">{recentLabel(file)}</span>
         </button>
       {/each}
     </div>
@@ -410,7 +454,7 @@
 {#if modal === "open"}
   <ModalShell
     title={isDemo ? t(lang, "welcome.unlockTitle") : t(lang, "welcome.openTitle")}
-    description={path}
+    description={pendingName ?? path}
     size="small"
     closeOnEscape
     onclose={() => {

@@ -757,6 +757,45 @@ fn recent_files_normalize_trims_dedups_and_caps() {
 }
 
 #[test]
+fn recent_file_names_round_trip_and_prune() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.general.recent_files = vec![
+        "content://com.android.providers.downloads.documents/document/1".into(),
+        "C:/vault.kdbx".into(),
+    ];
+    config.general.recent_file_names.insert(
+        "content://com.android.providers.downloads.documents/document/1".into(),
+        "  personal.kdbx  ".into(),
+    );
+    config
+        .general
+        .recent_file_names
+        .insert("C:/vault.kdbx".into(), "   ".into());
+    config
+        .general
+        .recent_file_names
+        .insert("orphan.kdbx".into(), "Orphan".into());
+    store.set(config).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"recentFileNames\""));
+    assert!(text.contains("personal.kdbx"));
+
+    let again = ConfigStore::load(dir.path().to_path_buf())
+        .unwrap()
+        .get()
+        .unwrap();
+    assert_eq!(again.general.recent_file_names.len(), 1);
+    assert_eq!(
+        again.general.recent_file_names
+            ["content://com.android.providers.downloads.documents/document/1"],
+        "personal.kdbx"
+    );
+}
+
+#[test]
 fn window_and_panel_sizes_survive_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

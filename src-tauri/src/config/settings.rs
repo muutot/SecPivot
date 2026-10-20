@@ -393,6 +393,9 @@ pub struct GeneralSettings {
     #[serde(default = "default_true")]
     pub remember_last_database: bool,
     pub recent_files: Vec<String>,
+    /// Display names for recent entries whose path has no readable file name
+    /// (Android `content://` document URIs). Keyed by the recent-file path.
+    pub recent_file_names: std::collections::HashMap<String, String>,
     /// Main-window size remembered from the user's resize; the welcome screen
     /// uses a smaller fixed size instead.
     pub window_width: i32,
@@ -486,6 +489,7 @@ impl Default for GeneralSettings {
             window_opacity: 100,
             remember_last_database: true,
             recent_files: Vec::new(),
+            recent_file_names: std::collections::HashMap::new(),
             window_width: 1100,
             window_height: 720,
             panel_widths: PanelWidths::default(),
@@ -1178,6 +1182,19 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
         .map(|p| p.trim().to_owned())
         .filter(|p| !p.is_empty() && seen.insert(p.clone()))
         .take(RECENT_FILES_MAX)
+        .collect();
+
+    let recent_set: std::collections::HashSet<String> =
+        config.general.recent_files.iter().cloned().collect();
+    config.general.recent_file_names = std::mem::take(&mut config.general.recent_file_names)
+        .into_iter()
+        .filter_map(|(path, name)| {
+            let name = name.trim();
+            if !recent_set.contains(&path) || name.is_empty() {
+                return None;
+            }
+            Some((path, name.chars().take(120).collect()))
+        })
         .collect();
 
     config.security.auto_lock_minutes = clamp_i32(config.security.auto_lock_minutes, 0, 240, 5);

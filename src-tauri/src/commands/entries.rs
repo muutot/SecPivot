@@ -355,11 +355,13 @@ pub(crate) async fn check_hibp(
     // cancel from another tab cannot abort it).
     let epoch = cancel_state.reset_for(&resolved_id);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)")
-        .build()
-        .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
+    let client = crate::net::client_builder(
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("SecPivot/1.0 (HIBP k-anonymity range check)"),
+    )
+    .build()
+    .map_err(|e| format!("构建 HIBP 客户端失败: {e}"))?;
 
     check_hibp_entries(
         entries,

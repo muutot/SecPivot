@@ -212,6 +212,8 @@ export interface GeneralSettings {
   windowOpacity: number;
   rememberLastDatabase: boolean;
   recentFiles: string[];
+  /** Readable display names for recent-file paths without a usable file name (Android content URIs). */
+  recentFileNames: Record<string, string>;
   /** Main-window size remembered from the user's resize; the welcome screen uses a smaller fixed size. */
   windowWidth: number;
   windowHeight: number;

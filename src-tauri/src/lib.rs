@@ -3,6 +3,7 @@ pub mod bridge;
 pub mod commands;
 pub mod config;
 pub mod crypto;
+mod net;
 pub mod platform;
 pub mod remote;
 #[cfg(desktop)]
@@ -334,6 +335,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_saf::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             #[cfg(mobile)]

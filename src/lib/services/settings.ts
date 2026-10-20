@@ -42,6 +42,12 @@ export function isMobile(): boolean {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+/** Android needs SAF for persistable document access; iOS is not shipped. */
+export function isAndroid(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
 /** Default entry-table columns. `width: 0` on "title" is an auto sentinel
  *  (the frontend renders the default column width). Mirrors
  *  `default_entry_columns` in config.rs. */
@@ -198,6 +204,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowOpacity: 100,
   rememberLastDatabase: true,
   recentFiles: [],
+  recentFileNames: {},
   windowWidth: 1100,
   windowHeight: 720,
   panelWidths: { group: 200, detail: 300, urlCol: 200 },
@@ -338,6 +345,21 @@ export function normalizeRecentFiles(files: unknown): string[] {
     seen.add(trimmed);
     out.push(trimmed);
     if (out.length >= RECENT_FILES_MAX) break;
+  }
+  return out;
+}
+
+/** Keep only readable names for paths still present in the recent list. */
+export function normalizeRecentFileNames(
+  value: unknown,
+  recentFiles: string[],
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  const allowed = new Set(recentFiles);
+  for (const [path, name] of Object.entries(value)) {
+    const label = String(name ?? "").trim();
+    if (allowed.has(path) && label) out[path] = Array.from(label).slice(0, 120).join("");
   }
   return out;
 }
@@ -769,6 +791,7 @@ export function normalizeSettings(
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
 ): AppSettings {
   const g = source.general ?? fallback.general;
+  const recentFiles = normalizeRecentFiles(g.recentFiles);
   const general: GeneralSettings = {
     ...fallback.general,
     ...(typeof g === "object" ? g : {}),
@@ -924,7 +947,8 @@ export function normalizeSettings(
       fallback.general.groupSeparatorColor ?? "",
     ),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
-    recentFiles: normalizeRecentFiles(g.recentFiles),
+    recentFiles,
+    recentFileNames: normalizeRecentFileNames(g.recentFileNames, recentFiles),
     language:
       g.language === "en" || g.language === "zh-CN"
         ? g.language

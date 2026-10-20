@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-create-document"
+description = "Enables the create_document command."
+commands.allow = ["create_document"]

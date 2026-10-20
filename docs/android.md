@@ -10,15 +10,17 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ## 已完成的仓库改动
 
-| 改动              | 文件                                                                     | 说明                                                                                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 安卓最小 SDK 声明 | `src-tauri/tauri.conf.json`                                              | `bundle.android.minSdkVersion: 24`；桌面 NSIS 分支不受影响                                                                                                                                                                           |
-| 安卓独立包名      | `src-tauri/tauri.android.conf.json`（新增）                              | `identifier: com.secpivot.mobile`；桌面仍为 `com.secpivot.desktop`                                                                                                                                                                   |
-| 安卓能力          | `src-tauri/capabilities/android.json`（新增）                            | `platforms:["android"]` + `core/dialog/opener` 权限；Windows 下被过滤                                                                                                                                                                |
-| 桌面功能门控      | `src-tauri/src/lib.rs`                                                   | 系统托盘 / 全局热键 / auto-type / TCATO 的 `register_global_hotkey`、`setup_tray`、`handle_global_hotkey`、`toggle_main_window`、`handle_close_requested` 及 import/常量加 `#[cfg(desktop)]`；builder 链重构为分步变量以支持条件编译 |
-| 桌面专属依赖隔离  | `src-tauri/Cargo.toml`                                                   | `enigo` / `keyring` / `tauri-plugin-global-shortcut` / `tungstenite` / `num-bigint` / `aes` / `cbc` / `cipher` / `block-padding` 移入 `[target.'cfg(any(windows,macos,linux))'.dependencies]`，Android 不编译                        |
-| 桌面专属模块门控  | `src-tauri/src/lib.rs`、`src-tauri/src/{commands,platform,vault,crypto}` | `bridge`/`rpc` 模块、`commands::bridge/credential/tcato`、`platform::credential/focus`、`vault::hosts`、AES 加解密、auto-type 执行（`enigo`）整体 `#[cfg(desktop)]`；桌面 IPC 命令与 manage 状态同步门控                             |
-| 移动端文件 I/O    | `src-tauri/src/vault/file_io.rs`（新增）、`Cargo.toml`、`lib.rs`         | `tauri-plugin-fs` 解析 `content://`；`setup` 中 `capture_app` 注入 AppHandle（`#[cfg(mobile)]`）；`read_keyfile` / `prepare_local_open` / `write_database_bytes` 统一走该模块，桌面分支保持原子写                                    |
+| 改动              | 文件                                                                                               | 说明                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 安卓最小 SDK 声明 | `src-tauri/tauri.conf.json`                                                                        | `bundle.android.minSdkVersion: 24`；桌面 NSIS 分支不受影响                                                                                                                                                                           |
+| 安卓独立包名      | `src-tauri/tauri.android.conf.json`（新增）                                                        | `identifier: com.secpivot.mobile`；桌面仍为 `com.secpivot.desktop`                                                                                                                                                                   |
+| 安卓能力          | `src-tauri/capabilities/android.json`（新增）                                                      | `platforms:["android"]` + `core/dialog/opener/saf` 权限；Windows 下被过滤                                                                                                                                                            |
+| 桌面功能门控      | `src-tauri/src/lib.rs`                                                                             | 系统托盘 / 全局热键 / auto-type / TCATO 的 `register_global_hotkey`、`setup_tray`、`handle_global_hotkey`、`toggle_main_window`、`handle_close_requested` 及 import/常量加 `#[cfg(desktop)]`；builder 链重构为分步变量以支持条件编译 |
+| 桌面专属依赖隔离  | `src-tauri/Cargo.toml`                                                                             | `enigo` / `keyring` / `tauri-plugin-global-shortcut` / `tungstenite` / `num-bigint` / `aes` / `cbc` / `cipher` / `block-padding` 移入 `[target.'cfg(any(windows,macos,linux))'.dependencies]`，Android 不编译                        |
+| 桌面专属模块门控  | `src-tauri/src/lib.rs`、`src-tauri/src/{commands,platform,vault,crypto}`                           | `bridge`/`rpc` 模块、`commands::bridge/credential/tcato`、`platform::credential/focus`、`vault::hosts`、AES 加解密、auto-type 执行（`enigo`）整体 `#[cfg(desktop)]`；桌面 IPC 命令与 manage 状态同步门控                             |
+| 移动端文件 I/O    | `src-tauri/src/vault/file_io.rs`（新增）、`Cargo.toml`、`lib.rs`                                   | `tauri-plugin-fs` 解析 `content://`；`setup` 中 `capture_app` 注入 AppHandle（`#[cfg(mobile)]`）；`read_keyfile` / `prepare_local_open` / `write_database_bytes` 统一走该模块，桌面分支保持原子写                                    |
+| 安卓 TLS 信任     | `src-tauri/src/net.rs`（新增）、`Cargo.toml`、`remote/mod.rs`、`commands/{favicon,entries}.rs`     | reqwest 0.13 在 Android 默认使用未初始化的 `rustls-platform-verifier`，首次 TLS 即 panic；Android 改用 `webpki-root-certs` + `tls_certs_only`，S3/WebDAV/favicon/HIBP 统一走 `net::*_builder`，桌面/iOS 仍用平台验证器               |
+| 安卓 SAF 选择器   | `src-tauri/plugins/saf/`（新增）、`lib.rs`、`capabilities/android.json`、`src/lib/services/saf.ts` | 本地 Tauri 插件：`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` + `takePersistableUriPermission`，返回 provider 的 `DISPLAY_NAME`；打开/新建/另存为改用 SAF，`content://` 可跨重启重开；桌面仍走 dialog 插件                      |
 
 > 验证状态（2026-08-19）：
 >
@@ -32,6 +34,19 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 > - 本机未安装 NDK/clang，`cargo check --target aarch64-linux-android` 在 `aws-lc-sys` 的 cc 阶段失败（找不到 `aarch64-linux-android-clang`），本地无法编译移动端分支。
 > - CI 已闭环编译与打包：[run 39409873118](https://github.com/muutot/SecPivot/actions/runs/39409873118) 的 `Build (Android APK)` 全绿，`cfg(mobile)` 分支在 `aarch64-linux-android` / `x86_64-linux-android` 上真实编译，v1.6.3 Release 已发布 arm64-v8a 与 x86_64 两个签名 APK。
 > - 仍未闭环：`content://` 读写的**真机运行验证**（打开、另存为、挂载 SMB/WebDAV 后的保存行为），需在设备上按本文步骤实测。
+
+> 验证状态（2026-10-20，Android TLS）：
+>
+> - 根因：reqwest 0.13.5 在未显式提供 roots 时启用 `rustls-platform-verifier`；Android 缺少 JNI 初始化与 Kotlin 组件，首次校验即 panic（`Expect rustls-platform-verifier to be initialized`），最终表现为 `远程列表任务异常: event loop thread panicked`。
+> - 修复：`src-tauri/src/net.rs` 在 Android 上用 `webpki-root-certs` + `tls_certs_only` 固定 Mozilla roots，S3/WebDAV/favicon/HIBP 共用；桌面/iOS 仍走平台验证器。**代价**：Android 不信任用户安装的企业 CA。
+> - Windows host 已通过 `cargo check`、`clippy -D warnings`、`cargo fmt --check`、`npm run check`、`npm run build`、`npm run test:rust`（454 通过）与前端测试；Android 分支仍需下一次 CI Android job 真实编译，真机需复测 S3/WebDAV 列表、favicon 与 HIBP 不再触发该 panic。
+
+> 验证状态（2026-10-20，Android SAF 与最近文件）：
+>
+> - 打开/新建/另存为在 Android 上改为 `tauri-plugin-saf`：`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` 申请读写并调用 `takePersistableUriPermission`，provider 支持时授权跨重启；取消选择返回空对象，由前端按“未选择”处理。
+> - 最近文件在 Android 上保留 `content://` 路径，并把 `DISPLAY_NAME` 存入 `general.recentFileNames`（键为路径，仅保留仍在 `recentFiles` 中的项，trim + 120 字符上限）；欢迎页与锁屏优先显示该名称，旧配置无映射时回退到 URI 末段。
+> - 新建/另存为的 SAF intent 使用 `type="*/*"` + `EXTRA_MIME_TYPES`（`application/octet-stream`、`application/x-keepass2`）并只设置 `EXTRA_TITLE`；能否离开 Downloads 取决于 OEM DocumentsUI，仍可能被 provider 限制。
+> - 本地无 NDK，插件 Kotlin/`cfg(target_os="android")` 分支只能由 CI Android job 编译；真机需验证打开、新建、另存为、重启后最近文件重开，以及 Google Drive 等 provider 的 display name。
 
 ## 后续必建（需工具链环境，按顺序执行）
 
@@ -55,9 +70,9 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 - 触控精度（拖动阈值 / 长按）
 - 隐藏自绘标题栏 `WindowControls`、适配无窗口语义
 - Android 返回键（返回上层 / 退出）
-- ~~文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）~~（已落地：`vault/file_io.rs` 用 `tauri-plugin-fs` 经 ContentResolver 读写 `content://`，桌面仍走 `std::fs` / 原子写。**限制**：`ACTION_GET_CONTENT` 只授予读权限，打开的原文件直接保存会失败，需用「另存为」（`ACTION_CREATE_DOCUMENT`，本次会话内可写）；未调用 `takePersistableUriPermission`，重启后不能快速重开，故 `content://` 不写入最近文件。真机读写仍待验证。）
+- ~~文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）~~（已落地：`vault/file_io.rs` 用 `tauri-plugin-fs` 经 ContentResolver 读写 `content://`；打开/新建/另存为改用 `tauri-plugin-saf` 的 `ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` 并 `takePersistableUriPermission`，`content://` 可写入最近文件并跨重启重开；桌面仍走 `std::fs` / 原子写与 dialog 插件。**限制**：provider 可能拒绝持久授权或撤销旧授权，失败时需重新选择；`ACTION_CREATE_DOCUMENT` 的初始位置仍由系统 DocumentsUI 决定。真机读写仍待验证。）
 - 附件保存 / CSV 导出 / 文本导入（`write_attachment_file`、`write_csv_file`、`read_text_file`）仍直接使用 `std::fs`，移动端尚不可用，后续接入 `vault/file_io.rs`
-- 状态栏 / 沉浸式 / 软键盘弹起 / 捏合缩放
+- 状态栏 / 沉浸式：已用 `.app-shell.mobile` 的 `env(safe-area-inset-*)` 预留系统栏并隐藏 30px 桌面拖拽条；软键盘弹起 / 捏合缩放仍待适配，真机视觉验证待补
 
 ### 4. 安全语义裁剪 + 权限
 

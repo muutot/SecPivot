@@ -60,7 +60,7 @@ pub(crate) fn shared_blocking_client() -> Result<&'static reqwest::blocking::Cli
             let handle = std::thread::Builder::new()
                 .name("remote-client-init".into())
                 .spawn(|| {
-                    reqwest::blocking::Client::builder()
+                    crate::net::blocking_client_builder(reqwest::blocking::Client::builder())
                         .connect_timeout(REMOTE_CONNECT_TIMEOUT)
                         .build()
                 })

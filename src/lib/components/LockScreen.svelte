@@ -64,7 +64,7 @@
     busy = true;
     error = "";
     try {
-      await vault.open(remembered.path, password, keyfilePath || undefined);
+      await vault.open(remembered.path, password, keyfilePath || undefined, remembered.fileName);
       // A stored password alone can never open a keyfile-protected vault, so
       // don't remember one — it would present a Windows Hello button that can
       // only ever fail.
@@ -90,7 +90,7 @@
         helloAvailable = false;
         return;
       }
-      await vault.open(remembered.path, saved.password);
+      await vault.open(remembered.path, saved.password, undefined, remembered.fileName);
       onopened();
     } catch (e) {
       error = String(e);

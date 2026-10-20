@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-open-document"
+description = "Enables the open_document command."
+commands.allow = ["open_document"]

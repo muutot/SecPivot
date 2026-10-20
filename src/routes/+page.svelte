@@ -7,7 +7,8 @@
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
-  import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { appSettings, isAndroid, isMobile, isTauriRuntime } from "$lib/services/settings";
+  import { createDocument } from "$lib/services/saf";
   import type { EntryColumnState, Language } from "$lib/types/settings";
   import ColumnConfigMenu, {
     type ColumnMenuSection,
@@ -822,17 +823,24 @@
     const fileName = currentVault.fileName;
     try {
       const ext = get(appSettings).database.fileExtension;
-      const baseName = (fileName.replace(/\.\w+$/i, "") || "secpivot") + "." + ext;
-      const picked = await awaitCurrentView(sessionView, view, () =>
-        save({
+      const sourceName = get(appSettings).general.recentFileNames[currentVault.path] ?? fileName;
+      const baseName = (sourceName.replace(/\.\w+$/i, "") || "secpivot") + "." + ext;
+      const picked = await awaitCurrentView(sessionView, view, async () => {
+        if (isAndroid()) {
+          const doc = await createDocument(baseName);
+          return doc ? { path: doc.uri, name: doc.name ?? null } : null;
+        }
+        const selected = await save({
           defaultPath: baseName,
           filters: [
             { name: t(settings.general.language, "welcome.filterKdbx"), extensions: [ext] },
           ],
-        }),
-      );
+        });
+        return selected ? { path: String(selected), name: null } : null;
+      });
       if (!picked.current || !picked.value) return;
-      await vault.callInSession(sessionId, () => vault.saveAs(String(picked.value)));
+      const target = picked.value;
+      await vault.callInSession(sessionId, () => vault.saveAs(target.path, target.name));
       if (!sessionView.isCurrent(view)) return;
       flash(t(settings.general.language, "page.savedAsFile"));
     } catch (e) {
@@ -1802,6 +1810,7 @@
   <main
     class="app-shell compact"
     class:standalone={!currentVault}
+    class:mobile={isMobile()}
     class:mobile-nav-open={layout.mobileNavOpen}
     style:--group-gap={`${groupDensity.groupGap}px`}
     style:--group-pad-y={`${groupDensity.groupPaddingY}px`}
@@ -2441,6 +2450,27 @@
 
   .app-shell.compact {
     min-width: 680px;
+  }
+
+  /* Android WebViews draw edge-to-edge; reserve the system bar insets. The
+   * fallback keeps older WebViews (where `env()` is 0) usable, and the 30px
+   * desktop drag bar is replaced by the real status bar height. */
+  .app-shell.mobile {
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .app-shell.standalone.mobile {
+    height: 100dvh;
+    min-height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .app-shell.mobile .standalone-bar {
+    display: none;
   }
 
   /* Welcome / lock views render in the smaller standalone window. */
