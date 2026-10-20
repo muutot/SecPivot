@@ -29,7 +29,9 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 > 验证状态（2026-10-20，移动端文件 I/O）：
 >
 > - Windows host 已通过 `cargo check`、`clippy -D warnings`、`cargo fmt --check`、`npm run check`、`npm run build`、`npm run test:rust`（454 通过）。
-> - 本机未安装 NDK/clang，`cargo check --target aarch64-linux-android` 在 `aws-lc-sys` 的 cc 阶段失败（找不到 `aarch64-linux-android-clang`），因此 `cfg(mobile)` 分支与 `content://` 真机读写**尚无编译/运行证据**，需 CI 或真机闭环。
+> - 本机未安装 NDK/clang，`cargo check --target aarch64-linux-android` 在 `aws-lc-sys` 的 cc 阶段失败（找不到 `aarch64-linux-android-clang`），本地无法编译移动端分支。
+> - CI 已闭环编译与打包：[run 39409873118](https://github.com/muutot/SecPivot/actions/runs/39409873118) 的 `Build (Android APK)` 全绿，`cfg(mobile)` 分支在 `aarch64-linux-android` / `x86_64-linux-android` 上真实编译，v1.6.3 Release 已发布 arm64-v8a 与 x86_64 两个签名 APK。
+> - 仍未闭环：`content://` 读写的**真机运行验证**（打开、另存为、挂载 SMB/WebDAV 后的保存行为），需在设备上按本文步骤实测。
 
 ## 后续必建（需工具链环境，按顺序执行）
 
