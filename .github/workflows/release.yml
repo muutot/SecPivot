@@ -210,11 +210,12 @@ jobs:
     # job must stay on Linux — openssl-src (vendored OpenSSL for the Android
     # target) cannot cross-compile OpenSSL from a native Windows host.
     #
-    # Opt-in: the signing secrets are not part of the public repository, so an
-    # unconfigured fork (or a maintainer releasing Windows only) would otherwise
-    # fail this job and, through `needs: [build, android]`, mark the whole
-    # workflow failed even though the Windows artifacts were published fine.
-    if: ${{ vars.ANDROID_RELEASE_ENABLED == 'true' }}
+    # On by default for the canonical repository, where the signing secrets are
+    # configured: a release without an APK is a regression. Forks lack those
+    # secrets, so they skip this job instead of failing the whole run; set
+    # `ANDROID_RELEASE_ENABLED=false` for a deliberate Windows-only release.
+    # Missing secrets on the canonical repo still fail closed.
+    if: ${{ github.repository == 'muutot/SecPivot' && vars.ANDROID_RELEASE_ENABLED != 'false' }}
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -418,9 +419,10 @@ jobs:
 
   publish-android:
     name: Publish (Android APK)
-    # Only run when the Android build actually produced assets. `android` is
-    # opt-in (`vars.ANDROID_RELEASE_ENABLED`); a skipped build uploads no
-    # `android-release-apk` artifact, so downloading here would fail the whole
+    # Only run when the Android build actually produced assets. The build is on
+    # by default on the canonical repository (`vars.ANDROID_RELEASE_ENABLED=false`
+    # can force it off); a skipped build uploads no `android-release-apk`
+    # artifact, so downloading here would fail the whole
     # run even though the Windows release published fine. `always()` keeps the
     # job evaluated when a dependency was skipped, but `needs.android.result ==
     # 'success'` means a skip is skipped (not failed) and a real build failure
