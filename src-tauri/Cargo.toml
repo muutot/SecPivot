@@ -1,6 +1,6 @@
 [package]
 name = "secpivot-desktop"
-version = "1.6.2"
+version = "1.6.3"
 description = "A professional, compact KeePass client built with Tauri and Rust"
 authors = []
 edition = "2021"

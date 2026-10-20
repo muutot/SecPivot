@@ -1,5 +1,71 @@
 # Changelog
 
+## 1.6.3 (2026-10-20)
+
+### ✨ Features
+
+- **vault**: open and save vault files from Android document URIs (ca8f2d9f)
+- **security**: harden credential lifetime and auth comparisons (813d2271)
+- **remote**: store remote profile credentials via the os keyring (a87a4582)
+- **config**: mask remote credentials over IPC with placeholder-keep (630f774b)
+
+### 🐛 Bug Fixes
+
+- **linux**: satisfy clippy on the linux target (83263926)
+- **settings**: bound the persist retry budget (a44488ce)
+- **ui**: close unmount races and make entry creation atomic (c58703bb)
+- **unlock**: clear welcome credentials and gate remember with keyfiles (666ff953)
+- **csv**: neutralize formula prefixes and tighten header detection (9b3fdfa0)
+- **clipboard**: do not wipe the clipboard after a failed read (cba84121)
+- **totp**: clear the copied flag when the code refreshes (6ea8398d)
+- **settings**: guard saved-search normalization and retry persists (a4a3afa2)
+- **autotype**: strip userinfo from url host matching (bb3deea6)
+- **shortcuts**: skip global shortcuts while a modal is open (15ad6710)
+- **ui**: respond to Escape only in the topmost modal layer (e1e7f796)
+- **vault**: detect recycle-bin ancestry recursively for entries (bcc23179)
+- **export**: neutralize csv formula injection (f1cc2168)
+- **config**: hold the store lock across config writes (935d4595)
+- **rpc**: verify SRP proofs with constant-time comparison (457f7322)
+- **exchange**: reject negative icon ids on import (b8e16b8d)
+- **merge**: dedupe loser history snapshots by modification time (c55eb314)
+- **autotype**: rewrite window title glob with proper backtracking (d4df2ddf)
+- **vault**: wipe replaced master password slots on credential change (89ad66ac)
+- **vault**: trim entry history on RPC and browser write paths (956be1e1)
+- **config**: restrict config file to owner-only on unix (863c77f6)
+- **vault**: harden remote save, merge ties and temp lifecycle (182d9224)
+- **cancel**: scope abort, probe and paste paths to the originating session (a25fcc9a)
+- **vault**: bound untrusted inputs and fix read-only counter attribution (a5aebeef)
+- **ui**: allowlist external URLs and harden table, drop and export paths (46c9029a)
+- **session**: close stale-view gaps in reveal, copy-lock and tab close (aff7893e)
+
+### ♻️ Refactoring
+
+- **vault**: drop superseded transient predicate (f7ca6005)
+- **vault**: centralize save-error classification for read-only counting (ad4b83a7)
+
+### 🎨 Styling
+
+- **a11y**: label inline entry actions and totp buttons (e9a846a5)
+
+### 📝 Documentation
+
+- **rust**: drop stale extraction-source references (2e7e748d)
+- **skills**: import fuck-my-shit-mountain audit skill and delete-remote-release helper (d877d58c)
+
+### ✅ Testing
+
+- **dpapi**: gate the double-wrap test to windows (fba79d7f)
+- **config**: gate remote_profiles round trip on key store too (f7f3a6a8)
+- **config**: skip keyring-backed tests when no os key store exists (46a2ece5)
+- **exchange**: share the crate-wide clipboard guard and probe (d6710258)
+- **config**: gate TS-Rust settings contract in verify (689c6f85)
+
+### 🔧 Chores
+
+- **ci**: build Android APKs by default on the canonical repository (6544d6f4)
+- **ci**: run tests with --no-fail-fast (c1c4dbad)
+- **ci**: add linux rust job (ee1d8213)
+
 ## 1.6.2 (2026-10-08)
 
 ### ✨ Features

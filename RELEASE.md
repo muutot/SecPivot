@@ -1,82 +1,55 @@
-# SecPivot Desktop v1.6.2
+# SecPivot Desktop v1.6.3
 
 > 专业、紧凑、信息密度高的 KeePass 桌面客户端，本地优先、无同步上传
 >
-> Released: 2026-10-08
+> Released: 2026-10-20
 
 ---
 
-## 条目数据交换（KeePass Data Exchange）
+## Android 支持
 
-- **载荷核心与端到端接线** — 新增 `build/parse_entries_document`、KeePass 帧编码与可选 DPAPI 包装，粘贴在全新 UUID 下还原字段/附件/标签/自定义数据/自动填充等，前后端打通 | [`c90e387`](https://github.com/muutot/SecPivot/commit/c90e387) · [`d203817`](https://github.com/muutot/SecPivot/commit/d203817)
+- **Release 默认构建 APK** — canonical 仓库的发布流程默认并行构建 `arm64-v8a` 与 `x86_64` 两个签名 APK 并上传到 draft release；fork 缺签名 secrets 时自动跳过，`ANDROID_RELEASE_ENABLED=false` 可显式关闭 | [`6544d6f`](https://github.com/muutot/SecPivot/commit/6544d6f4)
+- **Android 文档 URI 读写** — 新增 `vault/file_io.rs`，通过 `tauri-plugin-fs` 解析文档选择器返回的 `content://`，本地库与密钥文件可在手机上打开、新建、另存；打开后直接保存受系统只读授权限制，需使用「另存为」 | [`ca8f2d9`](https://github.com/muutot/SecPivot/commit/ca8f2d9f)
 
-## 搜索与快捷键
+## 凭据与密钥安全
 
-- **输入即聚焦搜索** — 主窗口输入非快捷键字符时自动聚焦搜索框并填入首字符，新增「外观 → 显示」开关 `focusSearchOnType`（默认开启）| [`b3d8209`](https://github.com/muutot/SecPivot/commit/b3d8209)
-- **清空搜索快捷键** — 新增 `clear-search` 动作（默认 `Ctrl+Shift+K`）| [`6d38114`](https://github.com/muutot/SecPivot/commit/6d38114)
-- **过滤后聚焦行收敛** — 过滤使列表变短时按新边界钳制聚焦行 | [`0fb6f4c`](https://github.com/muutot/SecPivot/commit/0fb6f4c)
+- **远程凭据落盘加密** — S3/WebDAV 访问密钥改由操作系统钥匙串保存，配置文件中不再出现明文 | [`a87a458`](https://github.com/muutot/SecPivot/commit/a87a4582)
+- **IPC 凭据脱敏** — 远程凭据经 IPC 输出时以占位符掩码，编辑时保留未改动的密钥 | [`630f774`](https://github.com/muutot/SecPivot/commit/630f774b)
+- **认证比较加固** — 统一凭据生命周期并改为常量时间比较；RPC 的 SRP 证明校验同样使用常量时间比较 | [`813d227`](https://github.com/muutot/SecPivot/commit/813d2271) · [`457f732`](https://github.com/muutot/SecPivot/commit/457f7322)
+- **主密码槽位清理** — 更换主密码/密钥文件时覆盖被替换的旧密码槽位 | [`89ad66a`](https://github.com/muutot/SecPivot/commit/89ad66ac)
+- **配置与解锁边界** — Unix 下配置文件收紧为仅所有者可读写；解锁时清空欢迎页凭据，并在启用密钥文件时正确门控「记住密码」 | [`863c77f`](https://github.com/muutot/SecPivot/commit/863c77f6) · [`666ff95`](https://github.com/muutot/SecPivot/commit/666ff953)
 
-## 分组树
+## 数据完整性
 
-- **定位到所在分组按钮** — 「新建分组」左侧新增定位按钮，与 `Ctrl+G` 共用同一实现 | [`5ccb1f4`](https://github.com/muutot/SecPivot/commit/5ccb1f4)
-- **重命名取消修复** — 分组重命名弹窗的取消按钮现在真正取消 | [`65a4c17`](https://github.com/muutot/SecPivot/commit/65a4c17)
+- **CSV 公式注入防护** — 导出与导入双向中和 `=`/`+`/`-`/`@` 前缀，并收紧表头识别 | [`f1cc216`](https://github.com/muutot/SecPivot/commit/f1cc2168) · [`9b3fdaf`](https://github.com/muutot/SecPivot/commit/9b3fdfa0)
+- **远程保存与合并** — 加固远程保存、合并并列项的取舍与临时文件生命周期；历史快照按修改时间去重 | [`182d922`](https://github.com/muutot/SecPivot/commit/182d9224) · [`c55eb31`](https://github.com/muutot/SecPivot/commit/c55eb314)
+- **历史与回收站** — RPC/浏览器写入路径同样裁剪条目历史；回收站祖先判定改为递归 | [`956be1e`](https://github.com/muutot/SecPivot/commit/956be1e1) · [`bcc2317`](https://github.com/muutot/SecPivot/commit/bcc23179)
+- **输入边界** — 拒绝导入中的负图标 ID，限制不可信输入长度，并修正只读计数器归属 | [`b8e16b8`](https://github.com/muutot/SecPivot/commit/b8e16b8d) · [`a5abeef`](https://github.com/muutot/SecPivot/commit/a5aebeef)
 
-## 条目详情与编辑
+## 界面与交互
 
-- **右键复制整条条目** — 条目右键菜单新增「复制条目」（KeePass 字段顺序，空字段省略，受保护自定义字段不输出明文）| [`c5ebfc6`](https://github.com/muutot/SecPivot/commit/c5ebfc6)
-- **详情面板重开时机** — 仅在选中变化时重开详情面板，而非任意库更新 | [`72a5c2c`](https://github.com/muutot/SecPivot/commit/72a5c2c)
-- **备注草稿不再丢失** — 保留最后一次备注草稿 | [`d89696a`](https://github.com/muutot/SecPivot/commit/d89696a)
-- **过期秒级保留** — 未改动过期字段时保留原有秒数 | [`5fde8cd`](https://github.com/muutot/SecPivot/commit/5fde8cd)
-- **过期响应与滚动遮罩** — 丢弃过期的密钥揭示响应，并重新遮罩已滚动行 | [`5f46adb`](https://github.com/muutot/SecPivot/commit/5f46adb)
+- **模态与快捷键** — Escape 只关闭最顶层模态；模态打开时暂停全局快捷键 | [`e1e7f79`](https://github.com/muutot/SecPivot/commit/e1e7f796) · [`15ad671`](https://github.com/muutot/SecPivot/commit/15ad6710)
+- **竞态修复** — 关闭组件卸载竞态，条目创建改为原子操作；修复揭示密码、复制锁定与关闭标签页的陈旧视图缺口 | [`c58703b`](https://github.com/muutot/SecPivot/commit/c58703bb) · [`aff7893`](https://github.com/muutot/SecPivot/commit/aff7893e)
+- **复制与验证码** — 剪贴板读取失败时不再清空内容；TOTP 刷新时清除「已复制」标记 | [`cba8412`](https://github.com/muutot/SecPivot/commit/cba84121) · [`6ea8398`](https://github.com/muutot/SecPivot/commit/6ea8398d)
+- **外链与可达性** — 外部 URL 改为白名单跳转，加固表格拖放与导出路径；为行内操作和 TOTP 按钮补充无障碍标签 | [`46c9029`](https://github.com/muutot/SecPivot/commit/46c9029a) · [`e9a846a`](https://github.com/muutot/SecPivot/commit/e9a846a5)
 
-## 设置外观
+## 稳定性
 
-- **外观提升为一级分类** — 原「通用 → 外观」拆分为独立一级分类（主题/显示/窗口/布局/工具栏），界面语言与网络留在「通用」| [`1d1af61`](https://github.com/muutot/SecPivot/commit/1d1af61)
+- **设置持久化** — 为持久化重试设置上限，并保护已保存搜索的规范化与重试 | [`a44488c`](https://github.com/muutot/SecPivot/commit/a44488ce) · [`a4a3afa`](https://github.com/muutot/SecPivot/commit/a4a3afa2)
+- **配置锁** — 配置写入期间持有存储锁，避免并发覆盖 | [`935d459`](https://github.com/muutot/SecPivot/commit/935d4595)
+- **取消归属** — 中止、探测与粘贴路径绑定到发起会话 | [`a25fcc9`](https://github.com/muutot/SecPivot/commit/a25fcc9a)
+- **Auto-Type** — URL 主机匹配剥离 userinfo；窗口标题通配符改为带回溯的实现 | [`bb3deea`](https://github.com/muutot/SecPivot/commit/bb3deea6) · [`d4df2dd`](https://github.com/muutot/SecPivot/commit/d4df2ddf)
 
-## 安全
+## 平台与 CI
 
-- **剪贴板明文清除** — 计划清理生效后立即丢弃内存中的明文副本 | [`020b0e1`](https://github.com/muutot/SecPivot/commit/020b0e1)
-- **注册域匹配收敛** — 阻止无关主机共享同一注册域 | [`8ee5e26`](https://github.com/muutot/SecPivot/commit/8ee5e26)
-- **锁定清理凭据** — 关闭「记住密码」时锁定即清除已保存凭据 | [`70b07c1`](https://github.com/muutot/SecPivot/commit/70b07c1)
-- **批量原子性与加固** — 批量操作失败原子回滚，会话/OTP/HIBP 处理加固 | [`691a9f4`](https://github.com/muutot/SecPivot/commit/691a9f4)
-
-## 导入 / 导出
-
-- **CSV 无标题行保留** — 保留有内容但缺标题或密码的 CSV 行 | [`4300cfb`](https://github.com/muutot/SecPivot/commit/4300cfb)
-- **KeePass XML 过期保留** — 导入时保留条目过期时间 | [`6fee555`](https://github.com/muutot/SecPivot/commit/6fee555)
-- **CSV 别名与竞态** — 修正 LastPass 别名方向、剪贴板归属与关闭竞态 | [`d5aad80`](https://github.com/muutot/SecPivot/commit/d5aad80)
-
-## 稳定性与后端
-
-- **命令 panic 隔离** — 命令 panic 不再毒化会话注册表 | [`22de067`](https://github.com/muutot/SecPivot/commit/22de067)
-- **持久化门限等待** — 为持久化 gate 等待设置上界 | [`0316a8b`](https://github.com/muutot/SecPivot/commit/0316a8b)
-- **RPC 帧上限** — websocket 重组阶段强制帧大小上限 | [`f6b03b3`](https://github.com/muutot/SecPivot/commit/f6b03b3)
-- **远程镜像原子写** — 远程库本地镜像改为原子写 | [`fabba84`](https://github.com/muutot/SecPivot/commit/fabba84)
-- **取消按标签页隔离** — HIBP 与 favicon 取消绑定到所属标签页 | [`8d7a59b`](https://github.com/muutot/SecPivot/commit/8d7a59b)
-- **IPv6 主机匹配** — 双侧解析带方括号的 IPv6 主机 | [`c46d6b7`](https://github.com/muutot/SecPivot/commit/c46d6b7)
-- **HOTP 修改时间** — HOTP 计数器推进时更新最后修改时间 | [`b170b9f`](https://github.com/muutot/SecPivot/commit/b170b9f)
-- **配置默认值与运行时应用** — 加载时保留 true 默认值，透明度与截屏防护运行时即时生效 | [`7d349dd`](https://github.com/muutot/SecPivot/commit/7d349dd)
-- **工具栏空白拖窗** — 工具栏空白区域可拖动窗口 | [`f62a9b1`](https://github.com/muutot/SecPivot/commit/f62a9b1)
-- **列拖拽监听释放** — 表格卸载时释放列拖拽监听 | [`e95764f`](https://github.com/muutot/SecPivot/commit/e95764f)
-
-## 构建与 CI
-
-- **发布工作流校验修复** — `release.yml` 的 `concurrency.group` 引用了 `concurrency` 中不可用的 `env` 上下文，导致整个 workflow 校验失败、run 在 0 个 job 时即失败（无日志、无构建）；改为内联表达式后恢复发布 | [`75c0df0`](https://github.com/muutot/SecPivot/commit/75c0df0)
-- **发布写权限收敛** — 发布作业 write 权限仅限发布步骤 | [`cdd779a`](https://github.com/muutot/SecPivot/commit/cdd779a)
-- **CI 运行治理** — 取消被取代的运行并限制作业时长 | [`5326c60`](https://github.com/muutot/SecPivot/commit/5326c60) · [`2039a71`](https://github.com/muutot/SecPivot/commit/2039a71)
-- **发布脚本** — 发布脚本不再升级全部依赖 | [`71e8e95`](https://github.com/muutot/SecPivot/commit/71e8e95)
-
-## 测试与文档
-
-- **前端门禁 fail-closed** — 前端测试门禁失败即阻断 | [`320e957`](https://github.com/muutot/SecPivot/commit/320e957)
-- **剪贴板测试确定性** — 清理测试确定且无副作用 | [`a41895b`](https://github.com/muutot/SecPivot/commit/a41895b)
-- **Argon2id 默认 KDF** — 端到端覆盖默认 KDF | [`0fc8696`](https://github.com/muutot/SecPivot/commit/0fc8696)
-- **格式与文档** — TCATO 重复 title 移除、clippy 修复、取消契约行 prettier 重排 | [`3356c20`](https://github.com/muutot/SecPivot/commit/3356c20) · [`28169de`](https://github.com/muutot/SecPivot/commit/28169de) · [`e17ae30`](https://github.com/muutot/SecPivot/commit/e17ae30)
+- **Linux 目标** — 新增 Linux Rust CI job 并修复该目标下的 clippy；测试运行改为 `--no-fail-fast` | [`ee1d821`](https://github.com/muutot/SecPivot/commit/ee1d8213) · [`8326392`](https://github.com/muutot/SecPivot/commit/83263926) · [`c1c4dba`](https://github.com/muutot/SecPivot/commit/c1c4dbad)
+- **测试门控** — 钥匙串相关测试在无 OS 钥匙串时跳过，DPAPI 双重包装测试限定 Windows，并在 `verify` 中加入 TS-Rust 设置契约检查 | [`46a2ece`](https://github.com/muutot/SecPivot/commit/46a2ece5) · [`f7f3a6a`](https://github.com/muutot/SecPivot/commit/f7f3a6a8) · [`fba79d7`](https://github.com/muutot/SecPivot/commit/fba79d7f) · [`689c6f8`](https://github.com/muutot/SecPivot/commit/689c6f85)
+- **内部整理** — 移除被替代的瞬时谓词，集中保存错误分类；清理过时的提取来源文档 | [`f7ca600`](https://github.com/muutot/SecPivot/commit/f7ca6005) · [`ad4b83a`](https://github.com/muutot/SecPivot/commit/ad4b83a7) · [`2e7e748`](https://github.com/muutot/SecPivot/commit/2e7e748d)
 
 ---
 
 ## 构建产物
 
-- **NSIS 安装包**: `SecPivot_1.6.2_x64-setup.exe`
-- **便携版 ZIP**: `SecPivot-1.6.2-portable.zip`（由 `scripts/package-portable.ps1` 生成，解压即用，配置存于 exe 旁 `conf/`）
-- **Android APK**: 按 64 位 ABI 拆分签名的 release APK（`arm64-v8a`/`x86_64`，由 release 工作流 android job 在 Linux 并行构建）
+- **NSIS 安装包**: `SecPivot_1.6.3_x64-setup.exe`
+- **便携版 ZIP**: `SecPivot-1.6.3-portable.zip`（由 `scripts/package-portable.ps1` 生成，解压即用，配置存于 exe 旁 `conf/`）
+- **Android APK**: 64 位签名 release APK（`arm64-v8a` / `x86_64`），由 CI 的 Android job 在 Linux 上构建并逐包校验
