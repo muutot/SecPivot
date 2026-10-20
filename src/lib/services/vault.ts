@@ -466,10 +466,17 @@ function groupInBin(root: VaultGroup, uuid: string): boolean {
   return false;
 }
 
+/** Mobile document pickers return transient content:// URIs whose grant does
+ *  not survive a restart, so they are never persisted for quick reopen. */
+function isDocumentUri(path: string): boolean {
+  return path.startsWith("content://") || path.startsWith("file://");
+}
+
 /** Move a successfully opened/created vault path to the front of the recent list.
- * Remote (`s3://`) paths are excluded — the local open flow cannot reopen them. */
+ * Remote (`s3://`) and document-URI paths are excluded — the local open flow
+ * cannot reopen them. */
 function rememberRecent(path: string): void {
-  if (!path || path.startsWith("s3://")) return;
+  if (!path || path.startsWith("s3://") || isDocumentUri(path)) return;
   const current = get(appSettings).general.recentFiles;
   const next = [path, ...current.filter((p) => p !== path)].slice(0, RECENT_FILES_MAX);
   if (next.length === current.length && next.every((p, i) => p === current[i])) return;

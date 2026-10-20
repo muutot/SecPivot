@@ -107,13 +107,16 @@ pub(crate) fn read_keyfile(keyfile: Option<&Path>) -> Result<Option<Vec<u8>>, St
     const MAX_KEYFILE_BYTES: u64 = 10 * 1024 * 1024;
     match keyfile {
         Some(keyfile_path) => {
-            let meta =
-                std::fs::metadata(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?;
-            if meta.len() > MAX_KEYFILE_BYTES {
-                return Err("密钥文件超过 10 MiB 上限".to_owned());
+            // Metadata is unavailable for mobile document URIs, so the length
+            // is checked after the read there instead.
+            if !super::file_io::is_document_uri(keyfile_path) {
+                let meta = std::fs::metadata(keyfile_path)
+                    .map_err(|e| format!("无法读取密钥文件: {e}"))?;
+                if meta.len() > MAX_KEYFILE_BYTES {
+                    return Err("密钥文件超过 10 MiB 上限".to_owned());
+                }
             }
-            let bytes =
-                std::fs::read(keyfile_path).map_err(|e| format!("无法读取密钥文件: {e}"))?;
+            let bytes = super::file_io::read(keyfile_path, "密钥文件")?;
             if bytes.len() as u64 > MAX_KEYFILE_BYTES {
                 return Err("密钥文件超过 10 MiB 上限".to_owned());
             }
@@ -132,7 +135,7 @@ pub(crate) fn prepare_local_open(
 ) -> Result<(Database, Option<Vec<u8>>), String> {
     let keyfile_bytes = read_keyfile(keyfile)?;
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
-    let data = std::fs::read(path).map_err(|e| format!("无法读取数据库文件: {e}"))?;
+    let data = super::file_io::read(path, "数据库文件")?;
     // Reuse the bytes just read: probing from disk again doubles I/O and
     // peak memory on large vaults.
     let probe = probe_vault_bytes(&data);

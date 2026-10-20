@@ -6,6 +6,7 @@ mod breach;
 pub mod dto;
 mod entries;
 pub mod exchange;
+pub(crate) mod file_io;
 pub(crate) mod helpers;
 #[cfg(desktop)]
 mod hosts;

@@ -333,8 +333,11 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(mobile)]
+            vault::file_io::capture_app(app.handle().clone());
             let exe_dir = std::env::current_exe()
                 .ok()
                 .and_then(|p| p.parent().map(|p| p.to_path_buf()));

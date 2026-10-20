@@ -18,12 +18,18 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 | 桌面功能门控      | `src-tauri/src/lib.rs`                                                   | 系统托盘 / 全局热键 / auto-type / TCATO 的 `register_global_hotkey`、`setup_tray`、`handle_global_hotkey`、`toggle_main_window`、`handle_close_requested` 及 import/常量加 `#[cfg(desktop)]`；builder 链重构为分步变量以支持条件编译 |
 | 桌面专属依赖隔离  | `src-tauri/Cargo.toml`                                                   | `enigo` / `keyring` / `tauri-plugin-global-shortcut` / `tungstenite` / `num-bigint` / `aes` / `cbc` / `cipher` / `block-padding` 移入 `[target.'cfg(any(windows,macos,linux))'.dependencies]`，Android 不编译                        |
 | 桌面专属模块门控  | `src-tauri/src/lib.rs`、`src-tauri/src/{commands,platform,vault,crypto}` | `bridge`/`rpc` 模块、`commands::bridge/credential/tcato`、`platform::credential/focus`、`vault::hosts`、AES 加解密、auto-type 执行（`enigo`）整体 `#[cfg(desktop)]`；桌面 IPC 命令与 manage 状态同步门控                             |
+| 移动端文件 I/O    | `src-tauri/src/vault/file_io.rs`（新增）、`Cargo.toml`、`lib.rs`         | `tauri-plugin-fs` 解析 `content://`；`setup` 中 `capture_app` 注入 AppHandle（`#[cfg(mobile)]`）；`read_keyfile` / `prepare_local_open` / `write_database_bytes` 统一走该模块，桌面分支保持原子写                                    |
 
 > 验证状态（2026-08-19）：
 >
 > - Windows host 的完整 `npm run verify` 已通过（格式、Svelte/Vite 前端、Rust 测试 373 个、clippy -D warnings）；它只能证明桌面分支与跨平台纯逻辑，不能替代 Android APK/真机证据。
 > - GitHub Release 运行 [31619359721](https://github.com/muutot/SecPivot/actions/runs/31619359721) 已真实完成 `tauri android init`、release 签名配置和 Android Rust 交叉编译的大部分流程；失败发生在 vendored OpenSSL 安装阶段：`openssl-src` 调用了不存在的 `aarch64-linux-android-ranlib`。
 > - 当前工作流显式选择同一 NDK、导出其 `llvm-ranlib` 为 `TARGET_RANLIB`、只安装 64 位 Android Rust targets（`aarch64-linux-android`、`x86_64-linux-android`），用 `--split-per-abi` 产出按 ABI 拆分的签名 release APK，再逐包 `apksigner verify` 并上传。此项修复仍需新的远端运行证明 APK 生成、签名与上传成功。（注：`TARGET_RANLIB` 导出现在已属冗余——S3/WebDAV 网络栈全部 rustls 化后不再有 openssl-src 交叉编译需求，见下文「打包与 CI」；工作流中保留该导出仅为历史兼容。）
+
+> 验证状态（2026-10-20，移动端文件 I/O）：
+>
+> - Windows host 已通过 `cargo check`、`clippy -D warnings`、`cargo fmt --check`、`npm run check`、`npm run build`、`npm run test:rust`（454 通过）。
+> - 本机未安装 NDK/clang，`cargo check --target aarch64-linux-android` 在 `aws-lc-sys` 的 cc 阶段失败（找不到 `aarch64-linux-android-clang`），因此 `cfg(mobile)` 分支与 `content://` 真机读写**尚无编译/运行证据**，需 CI 或真机闭环。
 
 ## 后续必建（需工具链环境，按顺序执行）
 
@@ -47,7 +53,8 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 - 触控精度（拖动阈值 / 长按）
 - 隐藏自绘标题栏 `WindowControls`、适配无窗口语义
 - Android 返回键（返回上层 / 退出）
-- 文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）
+- ~~文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）~~（已落地：`vault/file_io.rs` 用 `tauri-plugin-fs` 经 ContentResolver 读写 `content://`，桌面仍走 `std::fs` / 原子写。**限制**：`ACTION_GET_CONTENT` 只授予读权限，打开的原文件直接保存会失败，需用「另存为」（`ACTION_CREATE_DOCUMENT`，本次会话内可写）；未调用 `takePersistableUriPermission`，重启后不能快速重开，故 `content://` 不写入最近文件。真机读写仍待验证。）
+- 附件保存 / CSV 导出 / 文本导入（`write_attachment_file`、`write_csv_file`、`read_text_file`）仍直接使用 `std::fs`，移动端尚不可用，后续接入 `vault/file_io.rs`
 - 状态栏 / 沉浸式 / 软键盘弹起 / 捏合缩放
 
 ### 4. 安全语义裁剪 + 权限
@@ -60,7 +67,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 5. 打包与 CI
 
-- 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上用 `--split-per-abi --target aarch64 --target x86_64` 构建 **64 位按 ABI 拆分** 的签名 release APK；工作流用 `apksigner verify` 逐包校验签名，并从 cargo-mobile2 的输出路径 `app/build/outputs/apk/<arch>/release/app-<arch>-release.apk` 取 **上两级目录** 的 arch flavor（`arm64`→`arm64-v8a`、`x86_64`）命名，将 APK 暂存为 Actions artifact；暂存前断言包内确实含 `lib/<abi>/`，且 `arm64-v8a`/`x86_64` 两个资产必须都存在，否则发布失败（见 `PITFALLS.md` 的 Android 条目——曾因误取直接父目录 `release` 使两个 ABI 撞名，最终只发布 x86_64 单包）。再由同时依赖 Windows/Android 构建成功的 `publish-android` job 上传 `SecPivot-<version>-android-<abi>.apk`。这样不会用固定超时轮询较慢的极限 LTO 桌面构建；APK 缺失、未签名、draft release 缺失或上传失败仍会使发布失败。Android job 与桌面构建一样应用 `CARGO_PROFILE_RELEASE_LTO/CODEGEN_UNITS/OPT_LEVEL` 极限优化覆盖（`target-cpu=x86-64-v3` 是 x86-64 专用，不在 Android job 上设置），避免以本地快速 `release` 档（opt-level 0）打包出体积显著偏大的原生库。
+- 跟随桌面发布：`release.yml` 的 `android` job 与桌面 `build` 并行（两者都只依赖 `verify`），在 **`ubuntu-latest`** 上用 `--split-per-abi --target aarch64 --target x86_64` 构建 **64 位按 ABI 拆分** 的签名 release APK；canonical 仓库默认构建（`vars.ANDROID_RELEASE_ENABLED=false` 可显式跳过，fork 因缺签名 secrets 自动跳过而不是让整轮变红），签名 secrets 缺失时仍 fail closed。工作流用 `apksigner verify` 逐包校验签名，并从 cargo-mobile2 的输出路径 `app/build/outputs/apk/<arch>/release/app-<arch>-release.apk` 取 **上两级目录** 的 arch flavor（`arm64`→`arm64-v8a`、`x86_64`）命名，将 APK 暂存为 Actions artifact；暂存前断言包内确实含 `lib/<abi>/`，且 `arm64-v8a`/`x86_64` 两个资产必须都存在，否则发布失败（见 `PITFALLS.md` 的 Android 条目——曾因误取直接父目录 `release` 使两个 ABI 撞名，最终只发布 x86_64 单包）。再由同时依赖 Windows/Android 构建成功的 `publish-android` job 上传 `SecPivot-<version>-android-<abi>.apk`。这样不会用固定超时轮询较慢的极限 LTO 桌面构建；APK 缺失、未签名、draft release 缺失或上传失败仍会使发布失败。Android job 与桌面构建一样应用 `CARGO_PROFILE_RELEASE_LTO/CODEGEN_UNITS/OPT_LEVEL` 极限优化覆盖（`target-cpu=x86-64-v3` 是 x86-64 专用，不在 Android job 上设置），避免以本地快速 `release` 档（opt-level 0）打包出体积显著偏大的原生库。
 - Gradle 仓库回退：`tauri android init` 生成的 `gen/android`（gitignored）在 `:buildSrc` 配置阶段曾只查 `plugins.gradle.org/m2`，其 Kotlin 插件 POM 与父 BOM 不同步时（`kotlin-gradle-plugin:2.0.21` 可解析而 `kotlin-gradle-plugins-bom:2.0.21` 缺失）整个构建失败。`release.yml` 在 init 之后、任何 gradlew 调用之前运行 `scripts/patch-android-gradle-repos.ps1`，幂等地给 buildSrc / settings（pluginManagement + dependencyResolutionManagement）/ 根构建文件的每个 `repositories` 块补齐 `google()` + `mavenCentral()` + `gradlePluginPortal()`。
 - 所有网络栈均为 rustls（reqwest blocking + rustls），Android 不再编译任何 OpenSSL/native-tls/openssl-sys 依赖，也不再有 openssl-src 交叉编译与 `TARGET_RANLIB` 需求。
 - 签名配置：`scripts/configure-android-signing.ps1` 要求全部四个 secrets（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS`），解码 keystore 并幂等 patch `build.gradle.kts`（Tauri 2 模板默认无 signingConfigs）；Gradle 在构建时从环境读取存储密码与独立 key password，缺任一项立即失败，不把密码写入 `keystore.properties`，并清理旧版脚本遗留的该文件。需先在任意有 JDK 的机器生成 keystore：

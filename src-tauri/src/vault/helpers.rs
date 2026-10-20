@@ -713,9 +713,10 @@ pub(crate) fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Res
     write_database_bytes(path, &buffer)
 }
 
-/// Atomic write of already-serialized KDBX bytes (local vault save).
+/// Write already-serialized KDBX bytes (local vault save). Desktop paths keep
+/// the atomic temp-and-rename; mobile document URIs go through the fs plugin.
 pub(crate) fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), String> {
-    crate::util::atomic_write(path, buffer, "数据库")
+    super::file_io::write(path, buffer)
 }
 
 pub(crate) fn apply_kdf(db: &mut Database, kdf: &str) -> Result<(), String> {
