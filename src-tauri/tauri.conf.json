@@ -34,7 +34,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "SecPivot",
+    "publisher": "Muu",
     "copyright": "© 2026 SecPivot",
     "category": "Utility",
     "shortDescription": "专业、紧凑、信息密度高的 KeePass 桌面客户端",
