@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 /**
  * Fail closed unless the release tag and every version source describe the
- * exact same semantic version. The workflow passes RELEASE_TAG for both tag
- * pushes and manual dispatches.
+ * exact same semantic version, and unless the checked-out commit is the one
+ * the tag points at. The workflow passes RELEASE_TAG for both tag pushes and
+ * manual dispatches.
+ *
+ * The commit binding is what stops a manual dispatch from rebuilding an
+ * already published version from later commits: without it, dispatching
+ * `1.6.4` on `main` passes the version check and then replaces the published
+ * `v1.6.4` assets with binaries that were never released.
  */
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,9 +68,55 @@ export function validateReleaseIdentity(releaseTag = process.env.RELEASE_TAG) {
   return { releaseTag, version };
 }
 
+/** Resolve a git ref to a commit id, or `""` when the ref does not exist. */
+function resolveCommit(ref, cwd) {
+  try {
+    return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], {
+      cwd,
+      encoding: "utf-8",
+      stdio: "pipe",
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Fail closed unless the checked-out commit is exactly the commit the release
+ * tag points at. A manual dispatch on a branch that already moved past the
+ * tag would otherwise publish binaries that do not correspond to the tag.
+ */
+export function validateReleaseCommit(releaseTag = process.env.RELEASE_TAG, { cwd = ROOT } = {}) {
+  if (!releaseTag) throw new Error("RELEASE_TAG is required.");
+
+  const tagCommit = resolveCommit(releaseTag, cwd);
+  if (!tagCommit) {
+    throw new Error(
+      `Release tag ${releaseTag} does not exist in this checkout. Only an existing tag can be released.`,
+    );
+  }
+
+  const head = resolveCommit("HEAD", cwd);
+  if (!head) {
+    throw new Error("Unable to resolve the checked-out commit (HEAD).");
+  }
+
+  if (head !== tagCommit) {
+    throw new Error(
+      `Checked-out commit ${head.slice(0, 7)} is not the commit of ${releaseTag} (${tagCommit.slice(
+        0,
+        7,
+      )}). Release only the tagged commit.`,
+    );
+  }
+
+  return { releaseTag, head, tagCommit };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const { releaseTag, version } = validateReleaseIdentity();
+    validateReleaseCommit(releaseTag);
     console.log(`Validated release ${releaseTag} against repository version ${version}.`);
   } catch (error) {
     console.error(`Release identity validation failed: ${error.message}`);

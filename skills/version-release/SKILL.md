@@ -164,6 +164,7 @@ After a successful release, report:
 Pushing a semantic-version tag (`v<major>.<minor>.<patch>`, with an optional prerelease suffix) triggers `.github/workflows/release.yml` which (desktop is Windows-first and bundles only the NSIS installer; the Android APK is a secondary artifact built on Linux):
 
 - Fails before verification/build if the release tag does not exactly match the identical versions in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; manual dispatch therefore cannot publish an arbitrary version from unrelated source. The check is a separate cheap `validate` job (`ubuntu-latest`) that every other job depends on
+- Also fails when the checked-out commit is not the commit the release tag points at (`validate-release-version.mjs::validateReleaseCommit`): a manual dispatch on a branch that already moved past the tag would otherwise rebuild the published version from unreleased commits and overwrite its assets (`tauri-action` resolves the existing release by tag name, `gh release upload --clobber` replaces the files). The `validate` job checks out with `fetch-depth: 0` so the tag is available for the comparison
 - Runs `npm run verify` on `windows-latest` (`verify` job) **in parallel** with both builders. The **extreme-release build** validation (fat LTO, opt-level 3, codegen-units 1, `target-cpu=x86-64-v3`) is the Windows `build` job itself — compiling the shipped configuration is the evidence, so `verify` must not repeat it. `publish-android` requires a green `verify`, and the release stays a draft until a human publishes it, so a red test suite never ships
 - Builds the Windows x64 bundle with extent runtime optimization via `CARGO_PROFILE_RELEASE_*` + `RUSTFLAGS` (`tauri-action` → NSIS `SecPivot_<version>_x64-setup.exe`)
 - Packages a portable (no-install) ZIP (`scripts/package-portable.ps1 -SkipBuild -ReleaseExe <exe> -Version <ver>`) and uploads it to the same release as `SecPivot-<version>-portable.zip`; a missing exe/ZIP or failed upload fails the job
@@ -172,7 +173,7 @@ Pushing a semantic-version tag (`v<major>.<minor>.<patch>`, with an optional pre
 
 Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
 
-The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name. The input must equal the checked-out repository version; use the ref selector in GitHub Actions to dispatch the matching release commit.
+The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) drives `tauri-action`'s tag name. The input must equal the checked-out repository version **and** the checked-out commit must be the commit that tag points at; use the ref selector in GitHub Actions to dispatch the matching release commit (dispatching `main` after the tag moved on is rejected by the `validate` job).
 
 ## Version source files
 
