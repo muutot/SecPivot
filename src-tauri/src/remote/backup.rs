@@ -15,8 +15,37 @@ pub(crate) fn validate_remote_key(key: &str) -> Result<String, String> {
 }
 
 /// Basename of an S3 object key, used as the local mirror file name.
+///
+/// The key comes from the remote listing, so it is untrusted input: it may
+/// contain Windows separators, a drive prefix or `..` segments that would
+/// place the mirrored file outside the mirror directory. Only the last path
+/// segment survives, and it is reduced to a safe file name (the same shape
+/// the attachment temp store uses) so `dir.join(name)` always stays inside
+/// `dir`.
 pub(crate) fn remote_key_basename(key: &str) -> String {
-    key.rsplit('/').next().unwrap_or(key).to_owned()
+    let last = key.rsplit(['/', '\\']).next().unwrap_or(key).trim();
+    // A drive prefix ("C:evil") would make `join` discard the mirror
+    // directory on Windows; keep only the part behind it.
+    let last = match last.split_once(':') {
+        Some((_prefix, rest)) if !rest.is_empty() => rest,
+        _ => last,
+    };
+    let cleaned: String = last
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || "._- ".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_matches('.').to_owned();
+    if cleaned.is_empty() {
+        "vault.kdbx".to_owned()
+    } else {
+        cleaned
+    }
 }
 
 /// Expand a backup name template. `{name}` → file stem, `{timestamp}` →
@@ -87,6 +116,11 @@ pub(crate) fn write_local_copy(
 ) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
     let dest = dir.join(name);
+    // Defense in depth: even if a caller passes an unsanitized name, the
+    // mirror file must stay inside the mirror directory.
+    if dest.parent() != Some(dir) {
+        return Err(format!("远程文件名不合法: {name}"));
+    }
     if backup_count > 0 && dest.exists() {
         let stem = dest
             .file_stem()
@@ -212,6 +246,40 @@ mod tests {
         assert!(validate_remote_key("").is_err());
         assert_eq!(remote_key_basename("vaults/a.kdbx"), "a.kdbx");
         assert_eq!(remote_key_basename("a.kdbx"), "a.kdbx");
+    }
+
+    #[test]
+    fn remote_key_basename_cannot_escape_the_mirror_directory() {
+        // A remote listing is untrusted input: Windows separators, drive
+        // prefixes and `..` segments must never reach the local file name.
+        assert_eq!(remote_key_basename("a/..\\..\\evil.kdbx"), "evil.kdbx");
+        assert_eq!(remote_key_basename("a\\..\\..\\evil.kdbx"), "evil.kdbx");
+        assert_eq!(remote_key_basename("C:evil.kdbx"), "evil.kdbx");
+        assert_eq!(remote_key_basename("a/.."), "vault.kdbx");
+        assert_eq!(remote_key_basename("a/"), "vault.kdbx");
+        assert_eq!(remote_key_basename(""), "vault.kdbx");
+        for key in [
+            "a/..\\..\\evil.kdbx",
+            "a\\..\\..\\evil.kdbx",
+            "C:evil.kdbx",
+            "a/..",
+            "a/",
+            "",
+        ] {
+            let name = remote_key_basename(key);
+            assert!(
+                !name.contains('/') && !name.contains('\\') && !name.contains(':'),
+                "unsafe mirror file name from {key}: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn write_local_copy_rejects_a_name_that_would_escape() {
+        let dir = tempfile::tempdir().unwrap();
+        let mirror = dir.path().join("mirror");
+        let err = write_local_copy(&mirror, "..\\evil.kdbx", b"x", 0, "{name}.bak").unwrap_err();
+        assert!(err.contains("远程文件名不合法"), "unexpected message: {err}");
     }
 
     #[test]
