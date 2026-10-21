@@ -529,6 +529,13 @@ jobs:
           name: android-release-apk-unsigned
           path: dist/unsigned
 
+      # apksigner is a Java tool: the signing job needs a JRE, exactly like
+      # the build job that produced the APKs.
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
       # The signing job needs the Android SDK build tools. The hosted image
       # used to ship them, but `ubuntu-latest` is migrating to a new image
       # that does not, so the SDK is set up here with exactly the same
@@ -564,11 +571,18 @@ jobs:
           fi
           build_tools=$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           apksigner="$build_tools/apksigner"
-          echo "Using apksigner at $apksigner"
+          echo "SDK root: $sdk_root"
+          echo "Build tools: $build_tools"
+          ls -1 "$build_tools" | head -20
           if [ ! -x "$apksigner" ]; then
             echo "Android apksigner not found at $apksigner." >&2
             exit 1
           fi
+          if ! command -v java >/dev/null 2>&1; then
+            echo "java is not on PATH; apksigner cannot run." >&2
+            exit 1
+          fi
+          java -version
           # The keystore is decoded into a private temporary directory that is
           # never part of a checked-out workspace, and it is removed when the
           # job ends.
