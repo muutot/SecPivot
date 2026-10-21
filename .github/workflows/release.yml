@@ -547,24 +547,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set -x
           shopt -s nullglob
-          # Locate the SDK: the environment variable, then the usual install
-          # locations of the hosted image.
+          # Locate the SDK: the environment variable first, then the usual
+          # install locations of the hosted image.
           sdk_root="${ANDROID_HOME:-}"
-          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
-            for candidate in "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
-              if [ -d "$candidate" ]; then
-                sdk_root="$candidate"
-                break
-              fi
-            done
-          fi
+          for candidate in "$sdk_root" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
+            if [ -n "$candidate" ] && [ -d "$candidate/build-tools" ]; then
+              sdk_root="$candidate"
+              break
+            fi
+          done
           if [ -z "$sdk_root" ] || [ ! -d "$sdk_root/build-tools" ]; then
             echo "Android build-tools not found (ANDROID_HOME=${ANDROID_HOME:-unset})." >&2
             exit 1
           fi
           build_tools=$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           apksigner="$build_tools/apksigner"
+          echo "Using apksigner at $apksigner"
           if [ ! -x "$apksigner" ]; then
             echo "Android apksigner not found at $apksigner." >&2
             exit 1
@@ -598,10 +598,15 @@ jobs:
               --key-pass "pass:$ANDROID_KEY_PASSWORD" \
               --out "$out" "$apk"
             "$apksigner" verify --verbose "$out"
-            if ! unzip -l "$out" | grep -q "lib/${abi}/"; then
+            # The listing is written to a file first: `unzip | grep -q` makes
+            # grep exit early, which SIGPIPEs unzip, and `set -o pipefail`
+            # would then fail the step even though the check passed.
+            unzip -l "$out" > "$out.listing"
+            if ! grep -q "lib/${abi}/" "$out.listing"; then
               echo "Signed APK ${out} does not contain lib/${abi}/." >&2
               exit 1
             fi
+            rm -f "$out.listing"
             echo "Signed $(basename "$out")"
           done
           rm -f "$keystore"
