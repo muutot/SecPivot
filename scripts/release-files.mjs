@@ -1,5 +1,6 @@
 export const RELEASE_FILES = Object.freeze([
   "package.json",
+  "package-lock.json",
   "src-tauri/tauri.conf.json",
   "src-tauri/Cargo.toml",
   "src-tauri/Cargo.lock",

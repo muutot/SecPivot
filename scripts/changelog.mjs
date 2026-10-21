@@ -58,7 +58,11 @@ function gitLog(fromRef) {
 
 function getLatestTag() {
   try {
-    const tags = execFileSync("git", ["tag", "--sort=-creatordate"], {
+    // Only tags that are ancestors of HEAD count as a baseline: a tag on an
+    // unrelated branch (or a hotfix tag) is not the starting point of the
+    // commits that are about to be released. `-v:refname` orders by version,
+    // not by tag creation time.
+    const tags = execFileSync("git", ["tag", "--merged", "HEAD", "--sort=-v:refname"], {
       cwd: ROOT,
       encoding: "utf-8",
     }).trim();

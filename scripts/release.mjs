@@ -133,6 +133,17 @@ if (isRegenerate) {
     exit(1);
   }
 
+  // The release notes must be curated for the target version *before* the
+  // history is rewritten. The rebase drops the old release commit, which
+  // takes the previous RELEASE.md with it, so checking afterwards would
+  // always fail and leave the branch rebased with the tag deleted.
+  if (!isDryRun && !checkReleaseMd(targetVersion)) {
+    console.error(
+      `Regenerate failed: RELEASE.md does not describe v${targetVersion} yet. Curate it first, then re-run.`,
+    );
+    exit(1);
+  }
+
   const tagCommit = execFileSync("git", ["rev-list", "-n", "1", tagVersion], {
     cwd: ROOT,
     encoding: "utf-8",
@@ -168,8 +179,20 @@ if (isRegenerate) {
       exit(1);
     }
     console.log(`  Dropping commit ${shortSha} via rebase (onto ${parentSha.slice(0, 7)})...`);
+    // The curated release files are dirty (RELEASE.md at least), and git
+    // refuses to rebase with a dirty tree. Stash them for the rewrite and
+    // restore them afterwards, so the notes survive the dropped commit.
+    const dirtyReleaseFiles = [
+      ...new Set([...gitChangedFiles(["--cached"]), ...gitChangedFiles()]),
+    ].filter((file) => RELEASE_FILES.includes(file));
+    if (dirtyReleaseFiles.length > 0) {
+      run("git", ["stash", "push", "--", ...dirtyReleaseFiles]);
+    }
     run("git", ["rebase", "--onto", parentSha, tagCommit]);
     run("git", ["tag", "-d", tagVersion]);
+    if (dirtyReleaseFiles.length > 0) {
+      run("git", ["stash", "pop"]);
+    }
     forcePush = true;
     currentVersion = getVersion();
     console.log(`  ✓ Old release commit removed, tag ${tagVersion} deleted\n`);
@@ -262,7 +285,27 @@ if (!exists) {
   run("git", ["tag", "-a", tagVersion, "-m", `Release ${tagVersion}`]);
   console.log(`  ✓ ${tagVersion}`);
 } else {
-  console.log(`  ✓ Tag ${tagVersion} already exists`);
+  // An existing tag is only valid when it points at the release commit. A
+  // tag left behind by an earlier run would otherwise publish a source tree
+  // that does not match the branch it is pushed from.
+  const tagCommit = execFileSync("git", ["rev-list", "-n", "1", tagVersion], {
+    cwd: ROOT,
+    encoding: "utf-8",
+  }).trim();
+  const head = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+  }).trim();
+  if (tagCommit !== head) {
+    console.error(
+      `Release tag ${tagVersion} already points at ${tagCommit.slice(0, 7)}, but the release commit is ${head.slice(
+        0,
+        7,
+      )}. Refusing to publish a release whose source does not match the tag.`,
+    );
+    exit(1);
+  }
+  console.log(`  ✓ Tag ${tagVersion} already exists and matches the release commit`);
 }
 
 // Step 6: Push

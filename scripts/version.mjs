@@ -8,7 +8,7 @@
  *   node scripts/version.mjs --current              # print current version
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -23,7 +23,6 @@ const VERSION_FILES = [
   { path: "src-tauri/tauri.conf.json", key: "version", format: "json" },
   { path: "src-tauri/Cargo.toml", key: "version", format: "toml" },
 ];
-
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf-8"));
 }
@@ -68,8 +67,21 @@ function setVersion(newVersion) {
       content = content.replace(/^version\s*=\s*"[^"]*"/m, `version = "${newVersion}"`);
       writeToml(filePath, content);
     }
-
     console.log(`  ✓ ${file.path}`);
+  }
+
+  // The npm lockfile carries the project version in two places. Leaving them
+  // stale makes `npm install` rewrite the file (which then blocks the next
+  // release) and makes the published package report the old version.
+  const lockPath = resolve(ROOT, "package-lock.json");
+  if (existsSync(lockPath)) {
+    const lock = JSON.parse(readFileSync(lockPath, "utf-8"));
+    lock.version = newVersion;
+    if (lock.packages && lock.packages[""]) {
+      lock.packages[""].version = newVersion;
+    }
+    writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n", "utf-8");
+    console.log("  ✓ package-lock.json");
   }
 
   console.log(`\nVersion set to ${newVersion}`);

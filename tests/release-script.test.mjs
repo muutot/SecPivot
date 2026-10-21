@@ -10,6 +10,40 @@ import { hasReleaseHeading } from "../scripts/release-document.mjs";
 import { isGitAncestor, isReleaseCommitSubject } from "../scripts/release-git.mjs";
 
 const releaseScript = readFileSync(new URL("../scripts/release.mjs", import.meta.url), "utf-8");
+const changelogScript = readFileSync(new URL("../scripts/changelog.mjs", import.meta.url), "utf-8");
+const versionScript = readFileSync(new URL("../scripts/version.mjs", import.meta.url), "utf-8");
+
+test("an existing release tag must point at the release commit", () => {
+  // A leftover tag would publish a source tree that does not match the
+  // branch it is pushed from.
+  assert.match(releaseScript, /rev-list", "-n", "1", tagVersion/);
+  assert.match(releaseScript, /Refusing to publish a release whose source does not match the tag/);
+  assert.ok(
+    releaseScript.indexOf('rev-list", "-n", "1", tagVersion') >
+      releaseScript.indexOf('run("git", ["tag", "-a", tagVersion]'),
+  );
+});
+
+test("regenerate validates the release notes before rewriting history", () => {
+  assert.match(releaseScript, /Regenerate failed: RELEASE\.md does not describe/);
+  assert.ok(
+    releaseScript.indexOf("RELEASE.md does not describe") <
+      releaseScript.indexOf('run("git", ["rebase", "--onto", parentSha, tagCommit])'),
+  );
+  // The curated notes are stashed for the rewrite and restored afterwards.
+  assert.match(releaseScript, /run\("git", \["stash", "push", "--", \.\.\.dirtyReleaseFiles\]\)/);
+  assert.match(releaseScript, /run\("git", \["stash", "pop"\]\)/);
+});
+
+test("the changelog baseline is the newest tag merged into HEAD", () => {
+  assert.match(changelogScript, /\["tag", "--merged", "HEAD", "--sort=-v:refname"\]/);
+  assert.doesNotMatch(changelogScript, /--sort=-creatordate/);
+});
+
+test("the version bump keeps the npm lockfile in sync", () => {
+  assert.match(versionScript, /package-lock\.json/);
+  assert.ok(RELEASE_FILES.includes("package-lock.json"));
+});
 
 test("normal releases never infer a force push from ahead/behind counts", () => {
   assert.doesNotMatch(releaseScript, /rev-list --count --left-right/);

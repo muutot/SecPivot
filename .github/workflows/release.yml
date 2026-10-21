@@ -3,7 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+      # Stable releases and prereleases. The filter cannot express a full
+      # semver, so the `validate` job is the real gate: it rejects anything
+      # that is not the repository version.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
   workflow_dispatch:
     inputs:
       version:
