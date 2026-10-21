@@ -40,7 +40,7 @@ fn js_client_handshake(
 #[test]
 fn srp_round_trip_with_js_style_client() {
     let password = "yk4q-9Kz2!";
-    let (mut server, payload) = SrpServer::begin(password);
+    let (mut server, payload) = SrpServer::begin(password).expect("entropy");
     let s = payload["s"].as_str().unwrap().to_owned();
     let b = payload["B"].as_str().unwrap().to_owned();
     assert_eq!(payload["stage"], "identifyToClient");
@@ -49,7 +49,7 @@ fn srp_round_trip_with_js_style_client() {
         .chars()
         .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()));
 
-    let a = BigUint::from_bytes_be(&random_bytes(32)) % &group();
+    let a = BigUint::from_bytes_be(&random_bytes(32).expect("entropy")) % &group();
     let a_public = mod_pow(&BigUint::from(SRP_G), &a, &group());
     let a_hex = a_public.to_str_radix(16).to_uppercase();
     let (m, m2_expected, k_expected) = js_client_handshake(&s, &b, password, &a);
@@ -62,17 +62,17 @@ fn srp_round_trip_with_js_style_client() {
 
 #[test]
 fn srp_rejects_wrong_password_or_tampered_proof() {
-    let (mut server, payload) = SrpServer::begin("correct-pw");
+    let (mut server, payload) = SrpServer::begin("correct-pw").expect("entropy");
     let s = payload["s"].as_str().unwrap().to_owned();
     let b = payload["B"].as_str().unwrap().to_owned();
-    let a = BigUint::from_bytes_be(&random_bytes(32)) % &group();
+    let a = BigUint::from_bytes_be(&random_bytes(32).expect("entropy")) % &group();
     let a_public = mod_pow(&BigUint::from(SRP_G), &a, &group());
     let a_hex = a_public.to_str_radix(16).to_uppercase();
 
     let (m, _, _) = js_client_handshake(&s, &b, "wrong-pw", &a);
     assert_eq!(server.verify_proof(&a_hex, &m), Err(RpcError::AuthFailed));
 
-    let (mut server2, payload2) = SrpServer::begin("correct-pw");
+    let (mut server2, payload2) = SrpServer::begin("correct-pw").expect("entropy");
     let s2 = payload2["s"].as_str().unwrap().to_owned();
     let b2 = payload2["B"].as_str().unwrap().to_owned();
     let (m2, _, _) = js_client_handshake(&s2, &b2, "correct-pw", &a);
@@ -85,7 +85,7 @@ fn srp_rejects_wrong_password_or_tampered_proof() {
 
 #[test]
 fn secret_key_requires_finished_handshake() {
-    let (server, _) = SrpServer::begin("pw");
+    let (server, _) = SrpServer::begin("pw").expect("entropy");
     assert_eq!(
         server.secret_key(),
         Err(RpcError::InvalidMessage("SRP 尚未完成".to_owned()))
@@ -94,22 +94,22 @@ fn secret_key_requires_finished_handshake() {
 
 #[test]
 fn key_auth_challenge_response_matches_expected_hash() {
-    let secret = random_hex(32);
-    let sc = random_hex(32);
-    let cc = random_hex(32);
+    let secret = random_hex(32).expect("entropy");
+    let sc = random_hex(32).expect("entropy");
+    let cc = random_hex(32).expect("entropy");
     let cr = key_auth_cr(&secret, &sc, &cc);
     let sr = key_auth_sr(&secret, &sc, &cc);
     assert_eq!(cr, sha256_hex(&format!("1{secret}{sc}{cc}")));
     assert_eq!(sr, sha256_hex(&format!("0{secret}{sc}{cc}")));
     assert_ne!(cr, sr);
-    let other = key_auth_cr(&random_hex(32), &sc, &cc);
+    let other = key_auth_cr(&random_hex(32).expect("entropy"), &sc, &cc);
     assert_ne!(cr, other);
 }
 
 #[test]
 fn frame_round_trip_and_tamper_rejection() {
-    let secret = secret_bytes(&random_hex(32)).unwrap();
-    let frame = encrypt_frame(&secret, r#"{"jsonrpc":"2.0","id":7}"#);
+    let secret = secret_bytes(&random_hex(32).expect("entropy")).unwrap();
+    let frame = encrypt_frame(&secret, r#"{"jsonrpc":"2.0","id":7}"#).expect("entropy");
     let plaintext = decrypt_frame(&secret, &frame).unwrap();
     assert_eq!(plaintext, r#"{"jsonrpc":"2.0","id":7}"#);
 
@@ -128,7 +128,7 @@ fn frame_round_trip_and_tamper_rejection() {
         .replace_range(mid..mid + 1, if ch == b'A' { "B" } else { "A" });
     assert_eq!(decrypt_frame(&secret, &flipped), Err(RpcError::AuthFailed));
 
-    let other_secret = secret_bytes(&random_hex(32)).unwrap();
+    let other_secret = secret_bytes(&random_hex(32).expect("entropy")).unwrap();
     assert_eq!(
         decrypt_frame(&other_secret, &frame),
         Err(RpcError::AuthFailed)

@@ -96,7 +96,7 @@ fn client_ephemeral() -> (String, BigUint) {
     let group_hex = crate::rpc::group_n_hex();
     let n = BigUint::parse_bytes(group_hex.as_bytes(), 16).unwrap();
     let g = BigUint::from(2u32);
-    let a = BigUint::from_bytes_be(&random_hex(32).into_bytes());
+    let a = BigUint::from_bytes_be(&random_hex(32).expect("entropy").into_bytes());
     let a_hex = g.modpow(&a, &n).to_str_radix(16).to_uppercase();
     (a_hex, a)
 }
@@ -186,7 +186,8 @@ fn kee_406_client_srp_compatibility_statistics() {
     let mut rejected_with_positive_s = 0u32;
     for _ in 0..trials {
         let (a_hex, a) = client_ephemeral();
-        let (mut server, payload) = crate::rpc::SrpServer::begin("password-shared");
+        let (mut server, payload) =
+            crate::rpc::SrpServer::begin("password-shared").expect("entropy");
         let salt = payload["s"].as_str().unwrap().to_owned();
         let b_hex = payload["B"].as_str().unwrap().to_owned();
         let (m, neg) = kee_406_client_proof(&salt, &b_hex, "password-shared", &a_hex, &a);
@@ -322,10 +323,9 @@ fn full_srp_handshake_registers_key_and_round_trips_jsonrpc() {
 
     // JSON-RPC round trip under the derived session key.
     let request = json!({"jsonrpc":"2.0","id":41,"method":"GetAllDatabases","params":[]});
-    let env = Envelope::jsonrpc(encrypt_frame(
-        conn.session_key.as_ref().unwrap(),
-        &request.to_string(),
-    ));
+    let env = Envelope::jsonrpc(
+        encrypt_frame(conn.session_key.as_ref().unwrap(), &request.to_string()).expect("entropy"),
+    );
     let (reply, method) = dispatch_jsonrpc(
         &mut conn,
         &env,
@@ -429,7 +429,7 @@ fn stored_key_challenge_round_trip_and_restart_on_missing_key() {
         Some(SECURITY_LEVEL)
     );
     assert!(reply.features.is_some());
-    let cc = random_hex(16);
+    let cc = random_hex(16).expect("entropy");
     let secret_hex = hex(&[9u8; 32]);
     let cr = key_auth_cr(&secret_hex, &sc, &cc);
 
@@ -455,7 +455,10 @@ fn stored_key_challenge_round_trip_and_restart_on_missing_key() {
     .unwrap();
     let reply = dispatch_setup(
         &mut conn,
-        &key_challenge_response(&random_hex(16), &random_hex(32)),
+        &key_challenge_response(
+            &random_hex(16).expect("entropy"),
+            &random_hex(32).expect("entropy"),
+        ),
         &mut host,
         &mut |_, _| {},
     )
@@ -492,7 +495,7 @@ fn tampered_or_keyless_jsonrpc_frames_close() {
     let mut host = FakeHost::open();
     host.register_rpc_key("alice@kprpc", vec![3u8; 32]);
     let request = json!({"jsonrpc":"2.0","id":1,"method":"GetAllDatabases"});
-    let env = Envelope::jsonrpc(encrypt_frame(&[9u8; 32], &request.to_string()));
+    let env = Envelope::jsonrpc(encrypt_frame(&[9u8; 32], &request.to_string()).expect("entropy"));
 
     // Key wiped (as on lock) → frame MAC fails → no reply.
     let mut conn = Conn::default();

@@ -156,7 +156,13 @@ pub(crate) fn prepare_associate(
             "关联校验失败",
         )));
     }
-    let id = request.id.clone().unwrap_or_else(new_client_id);
+    let id = match request.id.clone() {
+        Some(id) => id,
+        None => match new_client_id() {
+            Ok(id) => id,
+            Err(e) => return Err(Box::new(BridgeResponse::failure(&request_type, &e))),
+        },
+    };
     Ok(PreparedAssociate {
         request_type,
         id,
@@ -173,7 +179,10 @@ pub(crate) fn complete_associate(
     if !host.is_open() {
         return prepared.reject("数据库未打开或已锁定");
     }
-    let nonce = random_bytes(NONCE_LEN);
+    let nonce = match random_bytes(NONCE_LEN) {
+        Ok(nonce) => nonce,
+        Err(_) => return prepared.reject("随机数生成失败"),
+    };
     let nonce_b64 = STANDARD.encode(&nonce);
     let verifier_b64 = make_verifier(&prepared.key, &nonce);
     let response = BridgeResponse {
@@ -196,8 +205,8 @@ pub(crate) fn complete_associate(
 }
 
 /// Random client/approval token (base64 of 12 entropy bytes).
-pub fn new_client_id() -> String {
-    STANDARD.encode(random_bytes(12))
+pub fn new_client_id() -> Result<String, String> {
+    random_bytes(12).map(|bytes| STANDARD.encode(bytes))
 }
 
 /// Decrypt-then-serve for the authorized request types. Runs only after the

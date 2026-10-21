@@ -30,10 +30,15 @@ type Aes256CbcEnc = Encryptor<Aes256>;
 type Aes256CbcDec = Decryptor<Aes256>;
 
 /// CSPRNG bytes from the OS.
-pub fn random_bytes(len: usize) -> Vec<u8> {
+///
+/// The entropy source can fail (a restricted container, an early boot with an
+/// uninitialized pool). That is reported as an error instead of a panic, so
+/// the caller can answer the peer with a protocol error instead of taking the
+/// whole process down.
+pub fn random_bytes(len: usize) -> Result<Vec<u8>, String> {
     let mut buf = vec![0u8; len];
-    getrandom::getrandom(&mut buf).expect("OS RNG must be available");
-    buf
+    getrandom::getrandom(&mut buf).map_err(|e| format!("随机数生成失败: {e}"))?;
+    Ok(buf)
 }
 
 /// AES-256-CBC encrypt with PKCS7 padding (raw bytes). `key` must be 32 bytes,
@@ -118,8 +123,8 @@ pub fn b64_decode(data: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Random bytes, lowercase hex.
-pub fn random_hex(len: usize) -> String {
-    hex(&random_bytes(len))
+pub fn random_hex(len: usize) -> Result<String, String> {
+    random_bytes(len).map(|bytes| hex(&bytes))
 }
 
 /// Constant-time-ish equality for string digests/MACs.

@@ -45,10 +45,22 @@ pub(crate) fn dispatch_setup(
                     return Some(error("AUTH_FAILED"));
                 }
                 eprintln!("[rpc] identifyToServer accepted");
-                let mut password = random_hex(SIDE_CHANNEL_BYTES);
+                let mut password = match random_hex(SIDE_CHANNEL_BYTES) {
+                    Ok(password) => password,
+                    Err(e) => {
+                        eprintln!("[rpc] side-channel password unavailable: {e}");
+                        return Some(error("AUTH_FAILED"));
+                    }
+                };
                 let expires = SIDE_CHANNEL_TTL.as_secs();
                 side_channel(&password, expires);
-                let (server, payload) = SrpServer::begin(&password);
+                let (server, payload) = match SrpServer::begin(&password) {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        eprintln!("[rpc] SRP handshake unavailable: {e}");
+                        return Some(error("AUTH_FAILED"));
+                    }
+                };
                 password.zeroize();
                 let srp_msg: SrpMessage = serde_json::from_value(payload).unwrap_or_default();
                 conn.username = Some(i);
@@ -130,7 +142,13 @@ pub(crate) fn dispatch_setup(
             if secret.len() != 32 {
                 return Some(error("AUTH_RESTART"));
             }
-            let sc = random_hex(32);
+            let sc = match random_hex(32) {
+                Ok(sc) => sc,
+                Err(e) => {
+                    eprintln!("[rpc] key secret unavailable: {e}");
+                    return Some(error("AUTH_RESTART"));
+                }
+            };
             conn.key_secret = Some(secret);
             conn.key_sc = Some(sc.clone());
             let mut reply = Envelope::setup();
@@ -207,10 +225,14 @@ pub(crate) fn encode_jsonrpc_result(
         ),
         Err(RpcError::InRecycleBin) => jsonrpc_error(id, -32002, "Entry is in the Recycle Bin."),
     };
-    Some(Envelope::jsonrpc(encrypt_frame(
-        secret,
-        &response.to_string(),
-    )))
+    let frame = match encrypt_frame(secret, &response.to_string()) {
+        Ok(frame) => frame,
+        Err(e) => {
+            eprintln!("[rpc] response frame unavailable: {e:?}");
+            return None;
+        }
+    };
+    Some(Envelope::jsonrpc(frame))
 }
 // ---------------------------------------------------------------------------
 // Small helpers

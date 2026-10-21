@@ -383,7 +383,13 @@ pub(crate) fn request_approval_with(
     id: &str,
     timeout: Duration,
 ) -> bool {
-    let token = new_client_id();
+    let token = match new_client_id() {
+        Ok(token) => token,
+        Err(e) => {
+            eprintln!("[bridge] approval token unavailable: {e}");
+            return false;
+        }
+    };
     let (tx, rx) = mpsc::channel();
     if !board.insert(&token, tx) {
         return false;
@@ -564,7 +570,7 @@ mod tests {
 
     fn associate_request(id: &str) -> BridgeRequest {
         let key = [0x44; 32];
-        let nonce = crate::crypto::random_bytes(16);
+        let nonce = crate::crypto::random_bytes(16).expect("entropy");
         BridgeRequest {
             request_type: "associate".to_owned(),
             id: Some(id.to_owned()),

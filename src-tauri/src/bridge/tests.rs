@@ -68,7 +68,7 @@ fn hmac_matches_rfc4231_vector() {
 #[test]
 fn verifier_round_trip_and_checks() {
     let key = [3u8; 32];
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let verifier = make_verifier(&key, &nonce);
     let nonce_b64 = STANDARD.encode(&nonce);
 
@@ -178,7 +178,7 @@ fn field(value: &str, key: &[u8], iv: &[u8]) -> String {
 
 fn authorized_request(request_type: &str) -> BridgeRequest {
     let key = [0x11; 32];
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let verifier = make_verifier(&key, &nonce);
     BridgeRequest {
@@ -355,7 +355,7 @@ fn set_login_creates_when_no_uuid_and_updates_with_uuid() {
 #[test]
 fn associate_approves_and_registers_new_client() {
     let key = [0x22; 32];
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let request = BridgeRequest {
         request_type: "associate".to_owned(),
@@ -378,7 +378,7 @@ fn associate_approves_and_registers_new_client() {
     assert!(host.clients.contains_key("browser-chrome"));
 
     // The new client is immediately usable.
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let request = BridgeRequest {
         request_type: "test-associate".to_owned(),
@@ -398,7 +398,7 @@ fn associate_rejects_bad_key_or_rejection() {
 
     // Key of the wrong length is refused before the approval prompt.
     let prompted = std::cell::Cell::new(false);
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let bad_key_request = BridgeRequest {
         request_type: "associate".to_owned(),
@@ -417,7 +417,7 @@ fn associate_rejects_bad_key_or_rejection() {
 
     // A valid-length key with a bad verifier is also refused before approval.
     let key = [0x32; 32];
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let bad_verifier_request = BridgeRequest {
         request_type: "associate".to_owned(),
         nonce: STANDARD.encode(&nonce),
@@ -435,7 +435,7 @@ fn associate_rejects_bad_key_or_rejection() {
 
     // User rejection cancels the association.
     let key = [0x33; 32];
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let request = BridgeRequest {
         request_type: "associate".to_owned(),
@@ -456,7 +456,7 @@ fn associate_fails_when_locked() {
     let mut host = MockHost::open();
     host.open = false;
     let prompted = std::cell::Cell::new(false);
-    let nonce = random_bytes(16);
+    let nonce = random_bytes(16).expect("entropy");
     let nonce_b64 = STANDARD.encode(&nonce);
     let request = BridgeRequest {
         request_type: "associate".to_owned(),

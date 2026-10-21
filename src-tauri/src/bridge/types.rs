@@ -83,7 +83,10 @@ impl BridgeResponse {
 
     /// Success envelope: fresh nonce, verifier and hmac under `key`.
     pub(crate) fn success(request_type: &str, key: &[u8], host: &dyn BridgeHost) -> Self {
-        let nonce = random_bytes(NONCE_LEN);
+        let nonce = match random_bytes(NONCE_LEN) {
+            Ok(nonce) => nonce,
+            Err(_) => return Self::failure(request_type, "随机数生成失败"),
+        };
         let nonce_b64 = STANDARD.encode(&nonce);
         let verifier_b64 = make_verifier(key, &nonce);
         Self {

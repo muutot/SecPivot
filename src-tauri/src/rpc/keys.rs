@@ -22,14 +22,15 @@ pub fn key_auth_sr(secret_hex: &str, sc: &str, cc: &str) -> String {
 // ---------------------------------------------------------------------------
 
 /// Encrypt one JSON-RPC payload under the session key (fresh IV).
-pub fn encrypt_frame(secret: &[u8], plaintext: &str) -> JsonRpcFrame {
-    let iv = random_bytes(NONCE_LEN);
+pub fn encrypt_frame(secret: &[u8], plaintext: &str) -> Result<JsonRpcFrame, RpcError> {
+    let iv = random_bytes(NONCE_LEN)
+        .map_err(|_| RpcError::InvalidMessage("随机数生成失败".to_owned()))?;
     let ciphertext = aes_cbc_encrypt(secret, &iv, plaintext.as_bytes());
-    JsonRpcFrame {
+    Ok(JsonRpcFrame {
         message: b64_encode(&ciphertext),
         iv: b64_encode(&iv),
         hmac: frame_mac(secret, &ciphertext, &iv),
-    }
+    })
 }
 
 /// Decrypt a frame after verifying its keyed SHA-1 "hmac".

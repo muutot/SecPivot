@@ -25,14 +25,14 @@ pub struct SrpServer {
 impl SrpServer {
     /// Start a handshake: derive `v = g^x` from the side-channel password and
     /// emit `identifyToClient`'s `{s, B, securityLevel}` payload.
-    pub fn begin(password: &str) -> (Self, Value) {
-        let salt = random_hex(16);
+    pub fn begin(password: &str) -> Result<(Self, Value), String> {
+        let salt = random_hex(16)?;
         let x = BigUint::parse_bytes(sha256_hex(&format!("{salt}{password}")).as_bytes(), 16)
             .expect("sha256 hex parses");
         let g = BigUint::from(SRP_G);
         let n = group();
         let v = mod_pow(&g, &x, &n);
-        let b = BigUint::from_bytes_be(&random_bytes(32)) % &n;
+        let b = BigUint::from_bytes_be(&random_bytes(32)?) % &n;
         let k = BigUint::parse_bytes(SRP_K_HEX.as_bytes(), 16).expect("k parses");
         let b_val = (&k * &v + mod_pow(&g, &b, &n)) % &n;
         let b_val_hex = b_val.to_str_radix(16).to_uppercase();
@@ -42,7 +42,7 @@ impl SrpServer {
             "B": b_val_hex,
             "securityLevel": SECURITY_LEVEL,
         });
-        (
+        Ok((
             Self {
                 b,
                 b_hex: b_val_hex,
@@ -50,7 +50,7 @@ impl SrpServer {
                 s_hex_upper: None,
             },
             payload,
-        )
+        ))
     }
 
     /// Verify the client proof `M` and produce `M2` on success.
