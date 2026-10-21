@@ -30,7 +30,9 @@
 <style>
   .settings-shell {
     width: 100%;
-    height: 100%;
+    height: 100dvh;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   }
 
   :global(html),

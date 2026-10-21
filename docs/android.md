@@ -67,12 +67,12 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 ### 3. 前端移动端适配
 
 - ~~小屏响应式断点~~（已落地 `@media (max-width: 720px)`：主界面单列堆叠、分组抽屉、条目摘要列表、详情全屏覆盖；设置页一级分类改为抽屉并让正文占满宽度；移动平台默认将另存为、详情、安全报告、导出和设置收纳到“更多”菜单，且可在“通用 → 布局”调整密度；新增分组位于分组标题栏的展开/折叠按钮左侧）
-- 触控精度（拖动阈值 / 长按）
+- 触控精度（拖动阈值 / 长按）：长按菜单已按 `pointerdown` 坐标传给页面菜单状态，并对 Android WebView 的 `(0, 0)` 原生 `contextmenu` 回退到触发元素位置；拖动阈值仍待真机调优
 - 隐藏自绘标题栏 `WindowControls`、适配无窗口语义
 - Android 返回键（返回上层 / 退出）
 - ~~文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）~~（已落地：`vault/file_io.rs` 用 `tauri-plugin-fs` 经 ContentResolver 读写 `content://`；打开/新建/另存为改用 `tauri-plugin-saf` 的 `ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` 并 `takePersistableUriPermission`，`content://` 可写入最近文件并跨重启重开；桌面仍走 `std::fs` / 原子写与 dialog 插件。**限制**：provider 可能拒绝持久授权或撤销旧授权，失败时需重新选择；`ACTION_CREATE_DOCUMENT` 的初始位置仍由系统 DocumentsUI 决定。真机读写仍待验证。）
 - 附件保存 / CSV 导出 / 文本导入（`write_attachment_file`、`write_csv_file`、`read_text_file`）仍直接使用 `std::fs`，移动端尚不可用，后续接入 `vault/file_io.rs`
-- 状态栏 / 沉浸式：已用 `.app-shell.mobile` 的 `env(safe-area-inset-*)` 预留系统栏并隐藏 30px 桌面拖拽条；软键盘弹起 / 捏合缩放仍待适配，真机视觉验证待补
+- 状态栏 / 沉浸式：主界面 `.app-shell.mobile` 与 `/settings` 的 `.settings-shell` 均用 `env(safe-area-inset-*)` 预留系统栏；主界面隐藏 30px 桌面拖拽条，设置对话框填充安全区内容盒。软键盘弹起 / 捏合缩放仍待适配，真机视觉验证待补
 
 ### 4. 安全语义裁剪 + 权限
 

@@ -34,6 +34,11 @@ full viewport width, and selecting a primary category or pressing the backdrop
 closes the drawer. Keep the secondary row horizontally scrollable instead of
 wrapping labels character-by-character.
 
+The `/settings` route wrapper (`.settings-shell`) owns `100dvh` and
+`env(safe-area-inset-*)` padding, while `SettingsDialog` fills its content box;
+do not put a second `100dvh` on the dialog or it will overflow the reserved
+system-bar space on Android.
+
 ## Approved shell hierarchy
 
 ```text

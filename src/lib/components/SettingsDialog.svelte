@@ -509,7 +509,7 @@
     .settings-dialog {
       display: block;
       min-width: 0;
-      height: 100dvh;
+      height: 100%;
       overflow: hidden;
     }
 
