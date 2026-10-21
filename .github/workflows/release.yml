@@ -459,10 +459,15 @@ jobs:
               x86_64) abi="x86_64" ;;
               *) abi="$flavor" ;;
             esac
-            if ! unzip -l "$apk" | grep -q "lib/${abi}/"; then
+            if ! unzip -l "$apk" > "$apk.listing"; then
+              echo "Cannot list $apk." >&2
+              exit 1
+            fi
+            if ! grep -q "lib/${abi}/" "$apk.listing"; then
               echo "APK ${apk} does not contain lib/${abi}/." >&2
               exit 1
             fi
+            rm -f "$apk.listing"
           done
 
       - name: Stage unsigned Android release assets
@@ -573,7 +578,9 @@ jobs:
           apksigner="$build_tools/apksigner"
           echo "SDK root: $sdk_root"
           echo "Build tools: $build_tools"
-          ls -1 "$build_tools" | head -20
+          # `sed` reads the whole listing: `ls | head` would SIGPIPE `ls`, and
+          # with `set -o pipefail` that alone fails the step.
+          ls -1 "$build_tools" | sed -n '1,20p' || true
           if [ ! -x "$apksigner" ]; then
             echo "Android apksigner not found at $apksigner." >&2
             exit 1
