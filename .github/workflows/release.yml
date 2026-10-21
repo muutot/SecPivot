@@ -561,30 +561,47 @@ jobs:
           set -euo pipefail
           set -x
           shopt -s nullglob
-          # Locate the SDK: the environment variable first, then the usual
-          # install locations of the hosted image.
-          sdk_root="${ANDROID_HOME:-}"
-          for candidate in "$sdk_root" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
-            if [ -n "$candidate" ] && [ -d "$candidate/build-tools" ]; then
-              sdk_root="$candidate"
+          # Locate apksigner in every SDK the runner may have. The image and
+          # the setup action can expose different roots, and a root that only
+          # carries `platform-tools` has no build-tools at all.
+          apksigner=""
+          for root in "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk /usr/lib/android-sdk; do
+            [ -n "$root" ] || continue
+            [ -d "$root/build-tools" ] || continue
+            found=$(find "$root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
+            if [ -n "$found" ]; then
+              apksigner="$found"
               break
             fi
           done
-          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root/build-tools" ]; then
-            echo "Android build-tools not found (ANDROID_HOME=${ANDROID_HOME:-unset})." >&2
+          if [ -z "$apksigner" ]; then
+            # No build-tools anywhere: install them with the SDK manager that
+            # ships with the image.
+            sdkmanager=""
+            for candidate in "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" "$HOME/Android/Sdk/cmdline-tools/latest/bin/sdkmanager" /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager; do
+              if [ -x "$candidate" ]; then
+                sdkmanager="$candidate"
+                break
+              fi
+            done
+            if [ -n "$sdkmanager" ]; then
+              echo "Installing build-tools with $sdkmanager"
+              yes | "$sdkmanager" --install "build-tools;35.0.0" >/dev/null || true
+              for root in "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk; do
+                [ -n "$root" ] && [ -d "$root/build-tools" ] || continue
+                found=$(find "$root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
+                if [ -n "$found" ]; then
+                  apksigner="$found"
+                  break
+                fi
+              done
+            fi
+          fi
+          if [ -z "$apksigner" ]; then
+            echo "Android apksigner not found (ANDROID_HOME=${ANDROID_HOME:-unset})." >&2
             exit 1
           fi
-          build_tools=$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          apksigner="$build_tools/apksigner"
-          echo "SDK root: $sdk_root"
-          echo "Build tools: $build_tools"
-          # `sed` reads the whole listing: `ls | head` would SIGPIPE `ls`, and
-          # with `set -o pipefail` that alone fails the step.
-          ls -1 "$build_tools" | sed -n '1,20p' || true
-          if [ ! -x "$apksigner" ]; then
-            echo "Android apksigner not found at $apksigner." >&2
-            exit 1
-          fi
+          echo "Using apksigner at $apksigner"
           if ! command -v java >/dev/null 2>&1; then
             echo "java is not on PATH; apksigner cannot run." >&2
             exit 1
