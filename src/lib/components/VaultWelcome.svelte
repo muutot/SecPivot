@@ -73,6 +73,9 @@
   // SAF URIs usually have no readable file name; carry the provider's display
   // name through unlock/create so recents and the lock screen can show it.
   let pendingName = $state<string | null>(null);
+  /** Whether the picked document keeps its access grant after a restart.
+   *  `false` keeps the path out of the recent files. */
+  let pendingPersistable = $state<boolean | undefined>(undefined);
 
   let remoteTab: RemoteTab = $state("open");
   let remoteObjects: RemoteObject[] = $state([]);
@@ -225,12 +228,14 @@
 
   async function handleOpen(): Promise<void> {
     pendingName = null;
+    pendingPersistable = undefined;
     if (isTauriRuntime()) {
       if (isAndroid()) {
         const picked = await openDocument();
         if (!picked) return;
         path = picked.uri;
         pendingName = picked.name ?? null;
+        pendingPersistable = picked.persisted !== false;
       } else {
         const selected = await open({
           multiple: false,
@@ -274,7 +279,10 @@
     busy = true;
     error = "";
     try {
-      await vault.open(path, password, keyfilePath || undefined, pendingName);
+      await vault.open(path, password, keyfilePath || undefined, {
+        name: pendingName,
+        persistable: pendingPersistable,
+      });
       // A stored password alone can never open a keyfile-protected vault —
       // remembering one would present a Windows Hello button that only fails.
       if (!keyfilePath) void rememberCredential(path, password);
@@ -314,6 +322,7 @@
   function handleCreate(): void {
     path = "";
     pendingName = null;
+    pendingPersistable = undefined;
     password = "";
     confirm = "";
     keyfilePath = "";
@@ -327,6 +336,7 @@
       if (picked) {
         path = picked.uri;
         pendingName = picked.name ?? null;
+        pendingPersistable = picked.persisted !== false;
       }
       return;
     }
@@ -360,6 +370,7 @@
             if (!picked) return;
             target = picked.uri;
             pendingName = picked.name ?? null;
+            pendingPersistable = picked.persisted !== false;
           } else {
             const selected = await save({
               defaultPath: "new-vault.kdbx",
@@ -385,7 +396,7 @@
           compression: settings.database.compression,
           keyfile: keyfilePath || undefined,
         },
-        pendingName,
+        { name: pendingName, persistable: pendingPersistable },
       );
       // A stored password alone can never open a keyfile-protected vault —
       // remembering one would present a Windows Hello button that only fails.

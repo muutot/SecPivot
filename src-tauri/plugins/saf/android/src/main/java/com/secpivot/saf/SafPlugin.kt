@@ -85,9 +85,14 @@ class SafPlugin(private val activity: Activity) : Plugin(activity) {
     val takeFlags =
       data!!.flags and
         (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    // Whether the grant survives a restart. A provider that only grants a
+    // session-scoped URI cannot be reopened later, so the caller must not
+    // remember the document as a recent file.
+    var persisted = false
     if (takeFlags != 0) {
       try {
         activity.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        persisted = true
       } catch (_: SecurityException) {
         // Some providers grant only a session-scoped URI; the open still works.
       }
@@ -95,6 +100,7 @@ class SafPlugin(private val activity: Activity) : Plugin(activity) {
 
     val response = JSObject()
     response.put("uri", uri.toString())
+    response.put("persisted", persisted)
     displayName(uri)?.let { response.put("name", it) }
     invoke.resolve(response)
   }

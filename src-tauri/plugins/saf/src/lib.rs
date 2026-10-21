@@ -24,6 +24,10 @@ struct PickedDocument {
     uri: Option<String>,
     #[serde(default)]
     name: Option<String>,
+    /// Whether the provider granted a persistable URI permission. `None` when
+    /// the platform did not report it.
+    #[serde(default)]
+    persisted: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +35,8 @@ struct PickedDocument {
 pub struct SafDocument {
     pub uri: String,
     pub name: Option<String>,
+    /// `false` when the document can only be used in the current session.
+    pub persisted: bool,
 }
 
 #[cfg(target_os = "android")]
@@ -84,6 +90,7 @@ async fn pick<R: Runtime>(
         Ok(picked.uri.map(|uri| SafDocument {
             uri,
             name: picked.name,
+            persisted: picked.persisted.unwrap_or(false),
         }))
     }
 }

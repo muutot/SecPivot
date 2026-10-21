@@ -3,6 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 export interface SafDocument {
   uri: string;
   name?: string | null;
+  /** Whether the provider granted a persistable URI permission. A document
+   *  without it can be used now but cannot be reopened after a restart. */
+  persisted?: boolean;
 }
 
 /** `.kdbx` files are commonly reported as generic binary data on Android. */

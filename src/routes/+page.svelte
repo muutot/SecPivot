@@ -831,7 +831,9 @@
       const picked = await awaitCurrentView(sessionView, view, async () => {
         if (isAndroid()) {
           const doc = await createDocument(baseName);
-          return doc ? { path: doc.uri, name: doc.name ?? null } : null;
+          return doc
+            ? { path: doc.uri, name: doc.name ?? null, persistable: doc.persisted !== false }
+            : null;
         }
         const selected = await save({
           defaultPath: baseName,
@@ -843,7 +845,9 @@
       });
       if (!picked.current || !picked.value) return;
       const target = picked.value;
-      await vault.callInSession(sessionId, () => vault.saveAs(target.path, target.name));
+      await vault.callInSession(sessionId, () =>
+        vault.saveAs(target.path, { name: target.name, persistable: target.persistable }),
+      );
       if (!sessionView.isCurrent(view)) return;
       flash(t(settings.general.language, "page.savedAsFile"));
     } catch (e) {
