@@ -88,7 +88,10 @@
   import GroupMetaDialog from "$lib/components/GroupMetaDialog.svelte";
   import EntryDetail from "$lib/components/EntryDetail.svelte";
   import EntryEditorDialog from "$lib/components/EntryEditorDialog.svelte";
-  import EntryTable, { type EntryTableColumn } from "$lib/components/EntryTable.svelte";
+  import EntryTable, {
+    type ContextMenuPoint,
+    type EntryTableColumn,
+  } from "$lib/components/EntryTable.svelte";
   import AdvancedSearchDialog from "$lib/components/AdvancedSearchDialog.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import AppToolbar from "$lib/components/AppToolbar.svelte";
@@ -675,12 +678,12 @@
     }
     return sections;
   });
-  function openColumnMenu(e: MouseEvent): void {
+  function openColumnMenu(e: MouseEvent, point?: ContextMenuPoint): void {
     e.preventDefault();
     entryMenu = null;
     blankMenu = null;
     toolbarMenu = null;
-    columnMenu = { x: e.clientX, y: e.clientY };
+    columnMenu = { x: point?.x ?? e.clientX, y: point?.y ?? e.clientY };
     openContextMenu("page");
   }
 
@@ -1607,7 +1610,7 @@
   let blankMenu = $state<{ x: number; y: number } | null>(null);
   let toolbarMenu = $state<{ x: number; y: number } | null>(null);
 
-  function openEntryMenu(event: MouseEvent, entry: VaultEntry): void {
+  function openEntryMenu(event: MouseEvent, entry: VaultEntry, point?: ContextMenuPoint): void {
     event.preventDefault();
     event.stopPropagation();
     blankMenu = null;
@@ -1618,16 +1621,16 @@
     if (selection.selectedEntry !== entry) layout.suppressNextAutoOpen();
     if (!selection.selectedUuids.has(entry.uuid)) setSingleSelection(entry);
     selection.selectedEntry = entry;
-    entryMenu = { x: event.clientX, y: event.clientY, entry };
+    entryMenu = { x: point?.x ?? event.clientX, y: point?.y ?? event.clientY, entry };
     openContextMenu("page");
   }
 
-  function openBlankMenu(event: MouseEvent): void {
+  function openBlankMenu(event: MouseEvent, point?: ContextMenuPoint): void {
     event.preventDefault();
     entryMenu = null;
     toolbarMenu = null;
     columnMenu = null;
-    blankMenu = { x: event.clientX, y: event.clientY };
+    blankMenu = { x: point?.x ?? event.clientX, y: point?.y ?? event.clientY };
     openContextMenu("page");
   }
 

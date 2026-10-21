@@ -29,6 +29,11 @@
     entry: VaultEntry;
   }
 
+  export interface ContextMenuPoint {
+    x: number;
+    y: number;
+  }
+
   interface Props {
     rows: DisplayRow[];
     /** Entry-only total supplied by the caller (counted in the display-rows
@@ -61,9 +66,9 @@
     oncolumnreorder: (colId: string, toIndex: number) => void;
     onsavelayout: () => void;
     onrowclick: (event: MouseEvent, entry: VaultEntry) => void;
-    onentrycontextmenu: (event: MouseEvent, entry: VaultEntry) => void;
-    oncolumncontextmenu: (event: MouseEvent) => void;
-    onblankcontextmenu: (event: MouseEvent) => void;
+    onentrycontextmenu: (event: MouseEvent, entry: VaultEntry, point?: ContextMenuPoint) => void;
+    oncolumncontextmenu: (event: MouseEvent, point?: ContextMenuPoint) => void;
+    onblankcontextmenu: (event: MouseEvent, point?: ContextMenuPoint) => void;
     onselectall: () => void;
     onselectentry: (entry: VaultEntry) => void;
     onfavorite: (entry: VaultEntry) => void;
@@ -120,7 +125,11 @@
 
   /** Long-press (touch) → context menu, mirroring desktop right-click. */
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
-  let pressStart: { x: number; y: number } | null = null;
+  let pressStart: ContextMenuPoint | null = null;
+  /** Android WebView can emit a native `contextmenu` with (0, 0) after the
+   *  long-press timer. Keep the last touch point so every menu path can still
+   *  anchor to the finger instead of the viewport corner. */
+  let lastTouchPoint: ContextMenuPoint | null = null;
   /** Swallow the click that follows a fired long-press so the menu's target
    *  row is not also selected when the finger lifts. */
   let suppressClick = false;
@@ -131,19 +140,34 @@
     pressStart = null;
   }
 
-  function startPress(event: PointerEvent, fire: (event: MouseEvent) => void): void {
+  function eventPoint(event: MouseEvent): ContextMenuPoint | undefined {
+    const hasCoords =
+      Number.isFinite(event.clientX) &&
+      Number.isFinite(event.clientY) &&
+      (event.clientX !== 0 || event.clientY !== 0);
+    if (hasCoords) return undefined;
+    if (lastTouchPoint) return lastTouchPoint;
+    const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+    if (!rect) return undefined;
+    return {
+      x: rect.left + Math.min(24, rect.width / 2),
+      y: rect.top + Math.min(24, rect.height / 2),
+    };
+  }
+
+  function startPress(
+    event: PointerEvent,
+    fire: (event: MouseEvent, point: ContextMenuPoint) => void,
+  ): void {
     if (event.pointerType === "mouse") return;
-    pressStart = { x: event.clientX, y: event.clientY };
+    const point = { x: event.clientX, y: event.clientY };
+    lastTouchPoint = point;
+    pressStart = point;
     pressTimer = setTimeout(() => {
       pressTimer = undefined;
       suppressClick = true;
       event.preventDefault();
-      fire(
-        new MouseEvent("contextmenu", {
-          clientX: pressStart?.x ?? 0,
-          clientY: pressStart?.y ?? 0,
-        }),
-      );
+      fire(new MouseEvent("contextmenu", { clientX: point.x, clientY: point.y }), point);
     }, 500);
   }
 
@@ -532,8 +556,8 @@
     class="entry-table-head"
     role="row"
     tabindex="-1"
-    oncontextmenu={oncolumncontextmenu}
-    onpointerdown={(e) => startPress(e, oncolumncontextmenu)}
+    oncontextmenu={(event) => oncolumncontextmenu(event, eventPoint(event))}
+    onpointerdown={(e) => startPress(e, (event, point) => oncolumncontextmenu(event, point))}
     onpointermove={movePress}
     onpointerup={clearPress}
     onpointercancel={clearPress}
@@ -583,8 +607,8 @@
     aria-multiselectable="true"
     tabindex="-1"
     bind:this={entryListEl}
-    oncontextmenu={onblankcontextmenu}
-    onpointerdown={(e) => startPress(e, onblankcontextmenu)}
+    oncontextmenu={(event) => onblankcontextmenu(event, eventPoint(event))}
+    onpointerdown={(e) => startPress(e, (event, point) => onblankcontextmenu(event, point))}
     onpointermove={movePress}
     onpointerup={clearPress}
     onpointercancel={clearPress}
@@ -637,7 +661,8 @@
             draggable="true"
             onfocus={() => (lastFocusedIndex = rowIndex)}
             ondragstart={(event) => startEntryDrag(event, row.entry)}
-            onpointerdown={(e) => startPress(e, (ev) => onentrycontextmenu(ev, row.entry))}
+            onpointerdown={(e) =>
+              startPress(e, (event, point) => onentrycontextmenu(event, row.entry, point))}
             onpointermove={movePress}
             onpointerup={clearPress}
             onpointercancel={clearPress}
@@ -648,7 +673,7 @@
               }
               onrowclick(event, row.entry);
             }}
-            oncontextmenu={(event) => onentrycontextmenu(event, row.entry)}
+            oncontextmenu={(event) => onentrycontextmenu(event, row.entry, eventPoint(event))}
             onkeydown={(event) => handleRowKeydown(event, rowIndex, row.entry)}
           >
             {#if row.entry.color}
