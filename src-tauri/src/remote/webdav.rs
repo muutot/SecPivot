@@ -174,10 +174,12 @@ impl RemoteStorage for WebDavStorage {
                 .get("ETag")
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
-            response
-                .bytes()
-                .map(|b| (b.to_vec(), etag))
-                .map_err(|e| format!("WebDAV 下载响应读取失败: {e}"))
+            let data = super::read_response_capped(
+                response,
+                super::MAX_REMOTE_OBJECT_BYTES,
+                "WebDAV 下载响应",
+            )?;
+            Ok((data, etag))
         } else {
             Err(format!("WebDAV 下载失败: HTTP {}", response.status()))
         }

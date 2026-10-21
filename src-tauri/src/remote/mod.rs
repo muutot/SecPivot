@@ -39,6 +39,43 @@ const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REMOTE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Overall bound for download/upload calls (vault files; generous for slow links).
 const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(120);
+/// Largest remote object that is read into memory. A vault file is a few
+/// megabytes; anything beyond this is a broken or hostile endpoint, and the
+/// request timeout alone does not bound the memory a response can claim.
+pub(crate) const MAX_REMOTE_OBJECT_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// Read a blocking response into memory, refusing to buffer more than
+/// `limit` bytes. The declared `Content-Length` is checked first, and the
+/// copy itself is capped, so a chunked response cannot allocate without
+/// bound either.
+pub(crate) fn read_response_capped(
+    mut response: reqwest::blocking::Response,
+    limit: u64,
+    what: &str,
+) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+
+    if let Some(length) = response.content_length() {
+        if length > limit {
+            return Err(format!(
+                "{what} 超过 {} MiB 上限（声明 {} 字节）",
+                limit / 1024 / 1024,
+                length
+            ));
+        }
+    }
+    let mut buffer = Vec::new();
+    // `take` bounds the copy itself, so a chunked response cannot allocate
+    // without bound either.
+    let mut limited = response.by_ref().take(limit.saturating_add(1));
+    limited
+        .read_to_end(&mut buffer)
+        .map_err(|e| format!("{what}读取失败: {e}"))?;
+    if buffer.len() as u64 > limit {
+        return Err(format!("{what} 超过 {} MiB 上限", limit / 1024 / 1024));
+    }
+    Ok(buffer)
+}
 
 /// One process-wide shared reqwest blocking client used by both the S3 and
 /// WebDAV transports. The client owns a tokio runtime that must never be

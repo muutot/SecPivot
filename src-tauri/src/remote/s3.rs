@@ -262,10 +262,12 @@ impl RemoteStorage for S3Storage {
                 .get("ETag")
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
-            response
-                .bytes()
-                .map(|b| (b.to_vec(), etag))
-                .map_err(|e| format!("S3 下载响应读取失败: {e}"))
+            let data = super::read_response_capped(
+                response,
+                super::MAX_REMOTE_OBJECT_BYTES,
+                "S3 下载响应",
+            )?;
+            Ok((data, etag))
         } else {
             Err(format!("S3 下载失败: HTTP {}", response.status()))
         }

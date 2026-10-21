@@ -30,12 +30,27 @@ pub(crate) fn is_document_uri(path: &Path) -> bool {
     text.starts_with("content://") || text.starts_with("file://")
 }
 
+/// Largest local file that is read into memory. A KeePass database is a few
+/// megabytes; a bigger file is a mis-picked or hostile path, and reading it
+/// unconditionally turns it into an out-of-memory abort.
+const MAX_LOCAL_FILE_BYTES: u64 = 512 * 1024 * 1024;
+
 /// Read a vault or keyfile, resolving mobile document URIs via the fs plugin.
 /// `what` names the file type in user-facing error messages.
 pub(crate) fn read(path: &Path, what: &str) -> Result<Vec<u8>, String> {
     #[cfg(mobile)]
     if is_document_uri(path) {
         return read_uri(path, what);
+    }
+    if !is_document_uri(path) {
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.len() > MAX_LOCAL_FILE_BYTES {
+                return Err(format!(
+                    "{what}超过 {} MiB 上限",
+                    MAX_LOCAL_FILE_BYTES / 1024 / 1024
+                ));
+            }
+        }
     }
     std::fs::read(path).map_err(|e| format!("无法读取{what}: {e}"))
 }
