@@ -21,7 +21,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
@@ -179,9 +179,11 @@ if (isRegenerate) {
       exit(1);
     }
     console.log(`  Dropping commit ${shortSha} via rebase (onto ${parentSha.slice(0, 7)})...`);
-    // The curated release files are dirty (RELEASE.md at least), and git
-    // refuses to rebase with a dirty tree. Stash them for the rewrite and
-    // restore them afterwards, so the notes survive the dropped commit.
+    // The curated release notes are part of the dropped release commit, so
+    // the rebase would restore the previous version's notes. Keep the current
+    // content and put it back afterwards; the dirty-file stash below only
+    // covers uncommitted edits.
+    const releaseNotes = existsSync(RELEASE_PATH) ? readFileSync(RELEASE_PATH, "utf-8") : null;
     const dirtyReleaseFiles = [
       ...new Set([...gitChangedFiles(["--cached"]), ...gitChangedFiles()]),
     ].filter((file) => RELEASE_FILES.includes(file));
@@ -192,6 +194,13 @@ if (isRegenerate) {
     run("git", ["tag", "-d", tagVersion]);
     if (dirtyReleaseFiles.length > 0) {
       run("git", ["stash", "pop"]);
+    }
+    if (releaseNotes !== null) {
+      const current = existsSync(RELEASE_PATH) ? readFileSync(RELEASE_PATH, "utf-8") : null;
+      if (current !== releaseNotes) {
+        writeFileSync(RELEASE_PATH, releaseNotes, "utf-8");
+        console.log("  Restored the curated release notes.");
+      }
     }
     forcePush = true;
     currentVersion = getVersion();
