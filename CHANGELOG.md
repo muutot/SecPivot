@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.4 (2026-10-21)
+
+### ✨ Features
+
+- **android**: add persistable SAF picker and recent files (320cc328)
+- **packaging**: add Muu as the Windows publisher and installer company (78660ce7)
+
+### 🐛 Bug Fixes
+
+- **android**: gate auto-type replay cancel and pass owned fs options on mobile (70741133)
+- **ci**: drop the removed Android SDK tools package from setup (04b5b6d5)
+
+### 🚀 Performance
+
+- **ci**: run release jobs in parallel and drop the duplicate extreme build (70c9b603)
+
+### 📝 Documentation
+
+- **android**: record APK build evidence and mobile-only compile pitfalls (6b3fddca)
+
 ## 1.6.3 (2026-10-20)
 
 ### ✨ Features
