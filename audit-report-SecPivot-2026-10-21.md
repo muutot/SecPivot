@@ -45,6 +45,35 @@ Overall         ███████░░░  7.1  A
 | Info      | 0      | 0         | 0         |
 | **Total** | **20** | **19**    | **1**     |
 
+### Remediation Status / 修复状态
+
+复核后逐条修复（每个修复一个独立提交，`npm run verify` 全绿：457 个 Rust 测试、190 个前端测试、clippy `-D warnings`、svelte-check、build、格式检查）：
+
+| 编号                            | 严重度 | 状态                 | 提交 / 说明                                                                                                                               |
+| ------------------------------- | ------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| F-1 发布身份未绑定提交          | High   | ✅ 已修复            | `16251c9` — `validate` 增 `validateReleaseCommit`（HEAD 必须等于标签提交），`validate` job 改 `fetch-depth: 0`，含 fixture 测试           |
+| F-2 签名私钥暴露给构建代码      | High   | ✅ 已修复            | `175d72d` — 构建 job 不再持有任何签名 secret，新增独立 `sign-android` job 用 `apksigner` 重签并校验                                       |
+| F-5 SAF 原地截断写入毁库        | High   | ✅ 已修复            | `e05aea9` — 写入前读旧内容、写入后读回比对、失败回滚（移动端代码由 Android CI 编译验证）                                                  |
+| F-6 远程 key 路径穿越           | Medium | ✅ 已修复            | `469e3bc` + `b491c54` — basename 白名单净化 + 目标目录断言 + 单测                                                                         |
+| F-3 Windows 产物要求 AVX2       | Medium | ✅ 已修复            | `ff84112` — `target-cpu` 由 `x86-64-v3` 降为 `x86-64-v2`                                                                                  |
+| F-4 Windows 产物未签名/无证明   | Medium | ⏸ 部分处理           | 校验和已存在；Authenticode 需采购证书，provenance 需新增 action（仓库要求 SHA 固定，本次无法取得其 SHA 而不破坏固定策略）                 |
+| F-7 附件临时文件默认权限        | Medium | ✅ 已修复            | `30a3958` — 目录 0700 / 文件 0600（Unix）                                                                                                 |
+| F-8 下载与本地读取无上限        | Medium | ✅ 已修复            | `b83780d` — 远程按 Content-Length + 拷贝上限双保险，本地读取前置体积校验                                                                  |
+| F-9 regenerate 门禁顺序死锁     | Medium | ✅ 已修复            | `75d4aaf` — 门禁前置 + 脏文件 stash 保护 rebase + 恢复说明                                                                                |
+| F-10 复用过期标签               | Low    | ✅ 已修复            | `75d4aaf` — 已有标签必须指向发布提交，否则拒绝推送                                                                                        |
+| F-11 changelog 基线取错标签     | Low    | ✅ 已修复            | `75d4aaf` — 改用 `--merged HEAD --sort=-v:refname`                                                                                        |
+| F-12 Gradle 仓库补丁自证无效    | Medium | ✅ 已修复            | `4f2fa12` — 改为大括号配对定位块体 + 单行块兼容 + fixture 测试                                                                            |
+| F-13 lockfile 版本漂移          | Low    | ✅ 已修复            | `75d4aaf` — 版本提升同步 `package-lock.json`，并纳入发布文件白名单                                                                        |
+| F-14 标签过滤无法匹配预发布     | Low    | ✅ 已修复            | `75d4aaf` — 增加 `v[0-9]+.[0-9]+.[0-9]+-*` 模式                                                                                           |
+| F-15 原子写丢弃 0600            | Low    | ✅ 已修复            | `30a3958` — 临时文件 0600 + `create_new`（拒绝符号链接）                                                                                  |
+| F-16 熵源失败即 panic           | Low    | ⏸ 未修（复核后降级） | `random_bytes` 只用于 bridge/RPC nonce 与 SRP，不在保存路径上；实际影响限于桌面端握手，随机源失败属极端场景，改造会触及握手代码而收益极低 |
+| F-17 构建 job 持有写权限令牌    | Medium | ✅ 已修复            | `ff84112` — 构建 job 改 `contents: read` + `persist-credentials: false`，移除 `tauri-action`，新增只下载产物的 `publish` job              |
+| F-18 verify 不阻塞 Windows 产物 | Medium | ✅ 已修复            | `ff84112` — `build` 改为 `needs: [validate, verify]`                                                                                      |
+| F-19 持久授权失败被静默吞掉     | Medium | ✅ 已修复            | `a8d3c5f` — 插件回报 `persisted`，非持久授权文档不进最近文件                                                                              |
+| F-20 `+page.svelte` 巨型组件    | Low    | ⏳ 计划中            | 2620 行 / 68 个顶层函数；属 2–3 天结构性重构，未在本次修复批次内进行                                                                      |
+
+> 另有两项与本次会话相关的前端修复先行提交：`1a23955`（设置页安全区避让）、`e9dc689`（移动端长按菜单定位）。
+
 ## 2. Project Map / 项目地图
 
 **架构分层**
@@ -501,11 +530,11 @@ Overall         ███████░░░  7.1  A
 - Evidence:
   - File: `src-tauri/src/crypto/primitives.rs:33-35`（`getrandom::getrandom(&mut buf).expect("OS RNG must be available")`）
   - Function / Module: `random_bytes`
-  - Relevant behavior: 熵源不可用时直接 panic（Rust 侧为 abort 级中断），调用方无法降级。
+  - Relevant behavior: 熵源不可用时直接 panic（Rust 侧为 abort 级中断），调用方无法降级；调用点只有 bridge / RPC 的 nonce 与 SRP 随机数（`bridge/dispatch.rs:176,200`、`bridge/server.rs:567`、`bridge/types.rs:86`、`rpc/keys.rs:26`、`rpc/srp.rs:35`），**不在数据库保存路径上**。
 - Problem: 唯一的熵源失败路径是硬崩溃。
-- Why it matters: 该函数用于生成会话随机数与 SRP nonce，崩溃点可能在保存流程中间，留下不一致的中间状态。
-- Realistic failure scenario: 容器/受限环境（早期启动、熵池未初始化）调用 `random_bytes` → 进程 abort → 用户看到应用无提示消失。
-- Minimal fix: 改为返回 `Result<Vec<u8>, String>`，把错误沿调用链向上传递；在保存路径上给出可读提示。
+- Why it matters: 影响范围限于桌面端本地协议握手（bridge / RPC），且只在操作系统熵池不可用时发生（受限容器、极早期启动）。
+- Realistic failure scenario: 容器/受限环境（早期启动、熵池未初始化）调用 `random_bytes` → 进程 abort；影响的是本地桥接会话，而不是库数据。
+- Minimal fix: 改为返回 `Result<Vec<u8>, String>`，把错误沿调用链向上传递。
 - Better long-term fix: 熵源失败时保留上一轮已生成的会话随机数，避免中途崩溃。
 - Regression test suggestion: 抽象熵源依赖后，用失败的假实现断言返回错误而非 panic。
 - Estimated effort: 2–4 小时
