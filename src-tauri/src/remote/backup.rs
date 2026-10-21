@@ -279,7 +279,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mirror = dir.path().join("mirror");
         let err = write_local_copy(&mirror, "..\\evil.kdbx", b"x", 0, "{name}.bak").unwrap_err();
-        assert!(err.contains("远程文件名不合法"), "unexpected message: {err}");
+        assert!(
+            err.contains("远程文件名不合法"),
+            "unexpected message: {err}"
+        );
     }
 
     #[test]
