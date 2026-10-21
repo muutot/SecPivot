@@ -531,11 +531,12 @@ jobs:
 
       # The signing job needs the Android SDK build tools. The hosted image
       # used to ship them, but `ubuntu-latest` is migrating to a new image
-      # that does not, so the SDK is installed explicitly here.
+      # that does not, so the SDK is set up here with exactly the same
+      # configuration the `android` job uses (a package spec without a
+      # version is rejected by the action).
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
-          packages: build-tools
-          accept-android-sdk-licenses: true
+          packages: platform-tools
 
       - name: Sign release APKs with the release key
         env:
