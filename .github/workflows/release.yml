@@ -207,14 +207,33 @@ jobs:
           }
           Set-Content -LiteralPath $sumsFile -Value $lines -Encoding ascii
 
+      - name: Stage Windows release assets
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          $ver = $env:RELEASE_TAG.TrimStart("v")
+          $nsis = "${{ github.workspace }}\src-tauri\target\release\bundle\nsis\SecPivot_$($ver)_x64-setup.exe"
+          $zip = "${{ github.workspace }}\dist\SecPivot-$ver-portable.zip"
+          $stage = "${{ github.workspace }}\dist\release"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          foreach ($artifact in @($nsis, $zip)) {
+            if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+              throw "Release artifact not found at $artifact."
+            }
+            Copy-Item -LiteralPath $artifact -Destination $stage -Force
+          }
+          Copy-Item -LiteralPath "${{ github.workspace }}\dist\SHA256SUMS-windows.txt" -Destination $stage -Force
+          Get-ChildItem -LiteralPath $stage | ForEach-Object { Write-Host "Staged $($_.Name)" }
+
       - name: Preserve Windows release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-release
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            dist/SecPivot-*-portable.zip
-            dist/SHA256SUMS-windows.txt
+          # A flat directory: upload-artifact keeps the paths relative to the
+          # common root of the matched files, so a multi-directory path list
+          # would nest the artifacts and the publish job would not find them.
+          path: dist/release/*
           if-no-files-found: error
           retention-days: 1
 
@@ -385,6 +404,25 @@ jobs:
           echo "NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
           echo "TARGET_RANLIB=$ranlib" >> "$GITHUB_ENV"
 
+      - name: Build unsigned release APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle_file="src-tauri/gen/android/app/build.gradle.kts"
+          if [ -f "$gradle_file" ]; then
+            # The template signs the release build type with the throwaway
+            # debug key. The release key is applied by the separate signing
+            # job, so the built APK must stay unsigned: re-signing an
+            # already signed APK is not a supported apksigner flow.
+            sed -i '/signingConfig\s*=\s*signingConfigs\.getByName("debug")/d' "$gradle_file"
+            if grep -q 'signingConfig' "$gradle_file"; then
+              echo "Remaining signingConfig references:" >&2
+              grep -n 'signingConfig' "$gradle_file" >&2
+            else
+              echo "Release APK will be built unsigned."
+            fi
+          fi
+
       - name: Build Android APKs (release, per-ABI)
         # The build runs WITHOUT any signing secret: the generated project
         # signs with the throwaway debug keystore, and the `sign-android` job
@@ -491,6 +529,14 @@ jobs:
           name: android-release-apk-unsigned
           path: dist/unsigned
 
+      # The signing job needs the Android SDK build tools. The hosted image
+      # used to ship them, but `ubuntu-latest` is migrating to a new image
+      # that does not, so the SDK is installed explicitly here.
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: build-tools
+          accept-android-sdk-licenses: true
+
       - name: Sign release APKs with the release key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -501,7 +547,22 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          # Locate the SDK: the environment variable, then the usual install
+          # locations of the hosted image.
+          sdk_root="${ANDROID_HOME:-}"
+          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
+            for candidate in "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
+              if [ -d "$candidate" ]; then
+                sdk_root="$candidate"
+                break
+              fi
+            done
+          fi
+          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root/build-tools" ]; then
+            echo "Android build-tools not found (ANDROID_HOME=${ANDROID_HOME:-unset})." >&2
+            exit 1
+          fi
+          build_tools=$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           apksigner="$build_tools/apksigner"
           if [ ! -x "$apksigner" ]; then
             echo "Android apksigner not found at $apksigner." >&2
