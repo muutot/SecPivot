@@ -239,11 +239,13 @@ jobs:
     # The job must stay on Linux — openssl-src (vendored OpenSSL for the
     # Android target) cannot cross-compile OpenSSL from a native Windows host.
     #
-    # On by default for the canonical repository, where the signing secrets are
-    # configured: a release without an APK is a regression. Forks lack those
-    # secrets, so they skip this job instead of failing the whole run; set
+    # On by default for the canonical repository, where the release signing
+    # secrets are configured: a release without an APK is a regression. Forks
+    # are excluded by the repository check (they have no signing secrets, so
+    # the `sign-android` job could not produce a signed APK anyway); set
     # `ANDROID_RELEASE_ENABLED=false` for a deliberate Windows-only release.
-    # Missing secrets on the canonical repo still fail closed.
+    # Missing secrets on the canonical repo still fail closed in the
+    # `sign-android` job.
     if: ${{ github.repository == 'muutot/SecPivot' && vars.ANDROID_RELEASE_ENABLED != 'false' }}
     needs: validate
     runs-on: ubuntu-latest
@@ -338,28 +340,20 @@ jobs:
           echo "NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
           echo "TARGET_RANLIB=$ranlib" >> "$GITHUB_ENV"
 
-      - name: Configure Android release signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        shell: pwsh
-        run: ./scripts/configure-android-signing.ps1
-
       - name: Build Android APKs (release, per-ABI)
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        # `--split-per-abi` emits one signed APK per architecture
+        # The build runs WITHOUT any signing secret: the generated project
+        # signs with the throwaway debug keystore, and the `sign-android` job
+        # re-signs the produced APKs with the release key in a job that
+        # executes no npm, Gradle or cargo build code. A compromised build
+        # dependency can therefore never read the release keystore.
+        # `--split-per-abi` emits one APK per architecture
         # (`apk/<arch>/release/app-<arch>-release.apk`) instead of a fat
         # universal APK, cutting per-device download size to a quarter.
         # `--target` restricts to the shipped 64-bit ABIs.
         run: npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64
         working-directory: src-tauri
 
-      - name: Verify Android release APKs
+      - name: Verify unsigned Android release APKs
         shell: bash
         run: |
           set -euo pipefail
@@ -369,14 +363,7 @@ jobs:
             echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
             exit 1
           fi
-          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          apksigner="$build_tools/apksigner"
-          if [ ! -x "$apksigner" ]; then
-            echo "Android apksigner not found at $apksigner." >&2
-            exit 1
-          fi
           for apk in "${apks[@]}"; do
-            "$apksigner" verify --verbose "$apk"
             # cargo-mobile2 writes per-ABI APKs to
             #   app/build/outputs/apk/<arch>/release/app-<arch>-release.apk
             # so the ABI flavor is the directory two levels above the file.
@@ -395,7 +382,7 @@ jobs:
             fi
           done
 
-      - name: Stage Android release assets
+      - name: Stage unsigned Android release assets
         shell: bash
         run: |
           set -euo pipefail
@@ -405,7 +392,7 @@ jobs:
             echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
             exit 1
           fi
-          mkdir -p dist/android
+          mkdir -p dist/unsigned
           for apk in "${apks[@]}"; do
             # The ABI flavor is two directories above the file
             # (apk/<arch>/release/<apk>). Using the immediate parent gave
@@ -420,23 +407,103 @@ jobs:
               x86_64) abi="x86_64" ;;
               *) abi="$flavor" ;;
             esac
-            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            asset="dist/unsigned/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
             cp "$apk" "$asset"
             echo "Staged $(basename "$asset")"
           done
           # Fail closed: every shipped 64-bit ABI must be present as a distinct
           # asset. A missing arm64-v8a build is a broken release, not a warning.
           for abi in arm64-v8a x86_64; do
-            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            asset="dist/unsigned/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
             if [ ! -f "$asset" ]; then
               echo "Expected Android release asset for ABI ${abi} was not staged (${asset})." >&2
               exit 1
             fi
           done
 
+      - name: Preserve unsigned Android release asset
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-release-apk-unsigned
+          path: dist/unsigned/*.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # Signing runs in its own job so the release keystore never coexists with
+  # third-party build code. This job downloads the built APKs, re-signs them
+  # with the release key, verifies the result, and publishes the signed
+  # artifacts. It runs no npm script, no Gradle task and no cargo build.
+  sign-android:
+    name: Sign (Android APK)
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: android-release-apk-unsigned
+          path: dist/unsigned
+
+      - name: Sign release APKs with the release key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          apksigner="$build_tools/apksigner"
+          if [ ! -x "$apksigner" ]; then
+            echo "Android apksigner not found at $apksigner." >&2
+            exit 1
+          fi
+          # The keystore is decoded into a private temporary directory that is
+          # never part of a checked-out workspace, and it is removed when the
+          # job ends.
+          keystore_dir=$(mktemp -d)
+          keystore="$keystore_dir/secpivot-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          chmod 600 "$keystore"
+          unsigned=(dist/unsigned/*.apk)
+          if [ ${#unsigned[@]} -eq 0 ]; then
+            echo "No unsigned Android APK to sign." >&2
+            exit 1
+          fi
+          mkdir -p dist/android
+          for apk in "${unsigned[@]}"; do
+            name=$(basename "$apk")
+            abi="${name##*-}"
+            abi="${abi%.apk}"
+            out="dist/android/$name"
+            # Drop the debug keystore's v1 signature files before re-signing
+            # (apksigner replaces the v2/v3 block itself). `zip -d` exits 12
+            # when there is nothing to remove, which is not a failure here.
+            zip -d "$apk" 'META-INF/*.RSA' 'META-INF/*.SF' 'META-INF/*.MF' >/dev/null 2>&1 || true
+            "$apksigner" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$out" "$apk"
+            "$apksigner" verify --verbose "$out"
+            if ! unzip -l "$out" | grep -q "lib/${abi}/"; then
+              echo "Signed APK ${out} does not contain lib/${abi}/." >&2
+              exit 1
+            fi
+            echo "Signed $(basename "$out")"
+          done
+          rm -f "$keystore"
+          rm -rf "$keystore_dir"
+
       - name: Generate Android SHA256SUMS
         shell: bash
         run: |
+          set -euo pipefail
           sums="dist/android/SHA256SUMS-android.txt"
           : > "$sums"
           for asset in dist/android/*.apk; do
@@ -445,7 +512,7 @@ jobs:
           done
           cat "$sums"
 
-      - name: Preserve Android release asset
+      - name: Preserve signed Android release asset
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: android-release-apk
@@ -457,17 +524,18 @@ jobs:
 
   publish-android:
     name: Publish (Android APK)
-    # Only run when verification and the Android build both produced usable
-    # assets. The build is on by default on the canonical repository
-    # (`vars.ANDROID_RELEASE_ENABLED=false` can force it off); a skipped build
-    # uploads no `android-release-apk` artifact, so downloading here would fail
-    # the whole run even though the Windows release published fine. `always()`
-    # keeps the job evaluated when a dependency was skipped, but every needed
-    # `result == 'success'` means a skip is skipped (not failed) and a real
-    # failure still leaves the run red through the failing job itself.
+    # Only run when verification, the Windows release and the Android signing
+    # job all produced usable assets. The build is on by default on the
+    # canonical repository (`vars.ANDROID_RELEASE_ENABLED=false` can force it
+    # off); a skipped build uploads no `android-release-apk` artifact, so
+    # downloading here would fail the whole run even though the Windows
+    # release published fine. `always()` keeps the job evaluated when a
+    # dependency was skipped, but every needed `result == 'success'` means a
+    # skip is skipped (not failed) and a real failure still leaves the run red
+    # through the failing job itself.
     # `verify` is listed so a red test suite keeps APKs off the draft release.
-    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.android.result == 'success' }}
-    needs: [verify, build, android]
+    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.sign-android.result == 'success' }}
+    needs: [verify, build, sign-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
