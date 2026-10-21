@@ -30,7 +30,39 @@ pub fn url_host(url: &str) -> Option<String> {
 /// in the user-facing error messages (e.g. `"配置"`, `"数据库"`).
 pub fn atomic_write(path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
     let tmp = temp_sibling(path);
-    if let Err(e) = std::fs::write(&tmp, bytes) {
+    // The temp file holds the new content in clear (it is an encrypted vault,
+    // but the same helper writes other files too), so it is created with
+    // owner-only permissions instead of the process umask. `create_new` also
+    // refuses to follow a pre-planted symlink; a leftover temp file from a
+    // crashed run is removed and recreated once.
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let write = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = match options.open(&tmp) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let _ = std::fs::remove_file(&tmp);
+                options.open(&tmp)?
+            }
+            Err(e) => return Err(e),
+        };
+        file.write_all(bytes)?;
+        // The mode is only applied at creation; set it explicitly as well so
+        // a recreated temp file can never keep a wider mode.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = write {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("写入{what}失败: {e}"));
     }

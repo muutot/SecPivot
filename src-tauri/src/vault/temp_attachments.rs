@@ -38,6 +38,14 @@ impl AttachmentTempStore {
         let token = uuid::Uuid::new_v4().to_string();
         let dir = base.join(&token);
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
+        // The extracted attachment is plaintext, so the directory and the file
+        // must not be readable by other local accounts (the system temp
+        // directory is shared on Unix).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        }
         let path = dir.join(sanitize_file_name(name));
         let mut inner = match self.inner.lock() {
             Ok(inner) => inner,
@@ -59,6 +67,11 @@ impl AttachmentTempStore {
             // immediate removal remains reachable by a later lock cleanup.
             let _ = self.discard(&token);
             return Err(format!("写入临时附件失败: {error}"));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
         }
         Ok((token, path))
     }
