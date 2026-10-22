@@ -973,6 +973,17 @@ fn update_database_settings_persists_history_size_and_template_group() {
         settings.entry_templates_group.as_deref(),
         Some(templates_uuid.as_str())
     );
+    // The snapshot exposes the templates group so the renderer can offer
+    // template prefill without a separate settings query.
+    assert_eq!(
+        session
+            .state()
+            .unwrap()
+            .unwrap()
+            .entry_templates_group
+            .as_deref(),
+        Some(templates_uuid.as_str())
+    );
 
     session.save().unwrap();
     drop(session);
@@ -1001,6 +1012,12 @@ fn update_database_settings_persists_history_size_and_template_group() {
     let settings = session.database_settings().unwrap().unwrap();
     assert_eq!(settings.history_max_size, None);
     assert_eq!(settings.entry_templates_group, None);
+    assert!(session
+        .state()
+        .unwrap()
+        .unwrap()
+        .entry_templates_group
+        .is_none());
 }
 
 /// A content-only edit (icon omitted) must keep the entry's icon — both a

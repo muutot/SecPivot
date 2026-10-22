@@ -165,6 +165,9 @@ export interface VaultState {
   databaseName?: string;
   /** KDBX `Meta.DatabaseDescription`. Editable via `vault.updateDbMeta`. */
   databaseDescription?: string;
+  /** KDBX `Meta.EntryTemplatesGroup` uuid; the group whose direct entries
+   *  act as new-entry templates. Absent when unset (browser demo fallback). */
+  entryTemplatesGroup?: string;
 }
 
 /** Result of an open/create command: the registry id of the newly active

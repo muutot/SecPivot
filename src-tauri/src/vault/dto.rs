@@ -236,6 +236,10 @@ pub struct VaultState {
     /// KDBX `Meta.DatabaseDescription`. Editable via `update_db_meta`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database_description: Option<String>,
+    /// KDBX `Meta.EntryTemplatesGroup` uuid; the group whose direct entries
+    /// act as new-entry templates. Absent when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry_templates_group: Option<String>,
 }
 
 /// Result of an open/create command: the registry id of the newly active
