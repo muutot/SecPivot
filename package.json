@@ -1,6 +1,6 @@
 {
   "name": "secpivot-desktop",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "A professional, compact KeePass client built with Tauri and Rust.",
   "type": "module",
   "scripts": {

@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.6.5 (2026-10-22)
+
+### ✨ Features
+
+- **release**: publish from a token-free build job (ff841126)
+- **release**: sign Android APKs in a separate job (175d72d7)
+- **release**: bind the release identity to the tagged commit (16251c9f)
+
+### 🐛 Bug Fixes
+
+- **release**: sign Android APKs in the build job (81dc6d52)
+- **release**: make the signing step find apksigner on its own (aff4d8f8)
+- **release**: remove the SIGPIPE traps from the Android steps (ddfdeae7)
+- **release**: give the signing job a JRE and SDK diagnostics (48e772c7)
+- **release**: harden the APK signing step (92b5ab96)
+- **stability**: report an entropy failure instead of aborting the process (514a33b7)
+- **release**: use the proven Android SDK setup in the signing job (04f8fda6)
+- **release**: keep the curated release notes across a regenerate (b0593ca0)
+- **release**: stage the Windows assets flat and sign fresh APKs (34ea8b01)
+- **android**: keep non-persistable documents out of the recent files (a8d3c5f2)
+- **stability**: cap remote downloads and local vault reads (b83780d8)
+- **security**: create vault and attachment temp files with owner-only permissions (30a39583)
+- **android**: patch each Gradle repositories block by brace pairing (4f2fa124)
+- **release**: harden the release scripts against stale tags and notes (75d4aaf6)
+- **remote**: keep the local mirror file inside the mirror directory (469e3bc9)
+- **android**: roll back a failed SAF write instead of destroying the vault (e05aea94)
+- **android**: anchor the long-press context menu to the touch point (e9dc6899)
+- **android**: reserve system bar insets on the settings screen (1a239556)
+
+### 🎨 Styling
+
+- **remote**: apply rustfmt to the mirror file name test (b491c544)
+
+### 📝 Documentation
+
+- **audit**: record the remediation status of the 2026-10-21 audit (589e968d)
+
 ## 1.6.4 (2026-10-21)
 
 ### ✨ Features
