@@ -404,16 +404,15 @@ jobs:
           echo "NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
           echo "TARGET_RANLIB=$ranlib" >> "$GITHUB_ENV"
 
-      - name: Build unsigned release APKs
+      - name: Build Android APKs (release, per-ABI, unsigned)
         shell: bash
         run: |
           set -euo pipefail
           gradle_file="src-tauri/gen/android/app/build.gradle.kts"
           if [ -f "$gradle_file" ]; then
             # The template signs the release build type with the throwaway
-            # debug key. The release key is applied by the separate signing
-            # job, so the built APK must stay unsigned: re-signing an
-            # already signed APK is not a supported apksigner flow.
+            # debug key. We sign with the release key in the next step, so
+            # drop any existing signing config first.
             sed -i '/signingConfig\s*=\s*signingConfigs\.getByName("debug")/d' "$gradle_file"
             if grep -q 'signingConfig' "$gradle_file"; then
               echo "Remaining signingConfig references:" >&2
@@ -422,21 +421,56 @@ jobs:
               echo "Release APK will be built unsigned."
             fi
           fi
-
-      - name: Build Android APKs (release, per-ABI)
-        # The build runs WITHOUT any signing secret: the generated project
-        # signs with the throwaway debug keystore, and the `sign-android` job
-        # re-signs the produced APKs with the release key in a job that
-        # executes no npm, Gradle or cargo build code. A compromised build
-        # dependency can therefore never read the release keystore.
-        # `--split-per-abi` emits one APK per architecture
-        # (`apk/<arch>/release/app-<arch>-release.apk`) instead of a fat
-        # universal APK, cutting per-device download size to a quarter.
-        # `--target` restricts to the shipped 64-bit ABIs.
-        run: npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64
+          npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64
         working-directory: src-tauri
 
-      - name: Verify unsigned Android release APKs
+      - name: Sign release APKs with the release key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          apksigner="$build_tools/apksigner"
+          keystore_dir=$(mktemp -d)
+          keystore="$keystore_dir/secpivot-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          chmod 600 "$keystore"
+          apks=(src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "No unsigned Android APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
+            exit 1
+          fi
+          mkdir -p dist/android
+          for apk in "${apks[@]}"; do
+            flavor=$(basename "$(dirname "$(dirname "$apk")")")
+            case "$flavor" in
+              arm64) abi="arm64-v8a" ;;
+              x86_64) abi="x86_64" ;;
+              *) abi="$flavor" ;;
+            esac
+            out="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            # Drop the debug keystore's v1 signature files before re-signing
+            # (apksigner replaces the v2/v3 block itself). `zip -d` exits 12
+            # when there is nothing to remove, which is not a failure here.
+            zip -d "$apk" 'META-INF/*.RSA' 'META-INF/*.SF' 'META-INF/*.MF' >/dev/null 2>&1 || true
+            "$apksigner" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$out" "$apk"
+            "$apksigner" verify --verbose "$out"
+            echo "Signed $(basename "$out")"
+          done
+          rm -f "$keystore"
+          rm -rf "$keystore_dir"
+
+      - name: Verify signed Android release APKs
         shell: bash
         run: |
           set -euo pipefail
@@ -459,10 +493,10 @@ jobs:
               x86_64) abi="x86_64" ;;
               *) abi="$flavor" ;;
             esac
-            if ! unzip -l "$apk" > "$apk.listing"; then
-              echo "Cannot list $apk." >&2
-              exit 1
-            fi
+            # The listing is written to a file first: `unzip | grep -q` makes
+            # grep exit early, which SIGPIPEs unzip, and `set -o pipefail`
+            # would then fail the step even though the check passed.
+            unzip -l "$apk" > "$apk.listing"
             if ! grep -q "lib/${abi}/" "$apk.listing"; then
               echo "APK ${apk} does not contain lib/${abi}/." >&2
               exit 1
@@ -470,7 +504,7 @@ jobs:
             rm -f "$apk.listing"
           done
 
-      - name: Stage unsigned Android release assets
+      - name: Stage signed Android release assets
         shell: bash
         run: |
           set -euo pipefail
@@ -480,7 +514,7 @@ jobs:
             echo "No Android release APK produced under src-tauri/gen/android/app/build/outputs/apk/." >&2
             exit 1
           fi
-          mkdir -p dist/unsigned
+          mkdir -p dist/android
           for apk in "${apks[@]}"; do
             # The ABI flavor is two directories above the file
             # (apk/<arch>/release/<apk>). Using the immediate parent gave
@@ -495,160 +529,19 @@ jobs:
               x86_64) abi="x86_64" ;;
               *) abi="$flavor" ;;
             esac
-            asset="dist/unsigned/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
             cp "$apk" "$asset"
             echo "Staged $(basename "$asset")"
           done
           # Fail closed: every shipped 64-bit ABI must be present as a distinct
           # asset. A missing arm64-v8a build is a broken release, not a warning.
           for abi in arm64-v8a x86_64; do
-            asset="dist/unsigned/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            asset="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
             if [ ! -f "$asset" ]; then
               echo "Expected Android release asset for ABI ${abi} was not staged (${asset})." >&2
               exit 1
             fi
           done
-
-      - name: Preserve unsigned Android release asset
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: android-release-apk-unsigned
-          path: dist/unsigned/*.apk
-          if-no-files-found: error
-          retention-days: 1
-
-  # Signing runs in its own job so the release keystore never coexists with
-  # third-party build code. This job downloads the built APKs, re-signs them
-  # with the release key, verifies the result, and publishes the signed
-  # artifacts. It runs no npm script, no Gradle task and no cargo build.
-  sign-android:
-    name: Sign (Android APK)
-    needs: android
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: android-release-apk-unsigned
-          path: dist/unsigned
-
-      # apksigner is a Java tool: the signing job needs a JRE, exactly like
-      # the build job that produced the APKs.
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      # The signing job needs the Android SDK build tools. The hosted image
-      # used to ship them, but `ubuntu-latest` is migrating to a new image
-      # that does not, so the SDK is set up here with exactly the same
-      # configuration the `android` job uses (a package spec without a
-      # version is rejected by the action).
-      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
-        with:
-          packages: platform-tools
-
-      - name: Sign release APKs with the release key
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          set -x
-          shopt -s nullglob
-          # Locate apksigner in every SDK the runner may have. The image and
-          # the setup action can expose different roots, and a root that only
-          # carries `platform-tools` has no build-tools at all.
-          apksigner=""
-          for root in "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk /usr/lib/android-sdk; do
-            [ -n "$root" ] || continue
-            [ -d "$root/build-tools" ] || continue
-            found=$(find "$root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
-            if [ -n "$found" ]; then
-              apksigner="$found"
-              break
-            fi
-          done
-          if [ -z "$apksigner" ]; then
-            # No build-tools anywhere: install them with the SDK manager that
-            # ships with the image.
-            sdkmanager=""
-            for candidate in "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" "$HOME/Android/Sdk/cmdline-tools/latest/bin/sdkmanager" /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager; do
-              if [ -x "$candidate" ]; then
-                sdkmanager="$candidate"
-                break
-              fi
-            done
-            if [ -n "$sdkmanager" ]; then
-              echo "Installing build-tools with $sdkmanager"
-              yes | "$sdkmanager" --install "build-tools;35.0.0" >/dev/null || true
-              for root in "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk; do
-                [ -n "$root" ] && [ -d "$root/build-tools" ] || continue
-                found=$(find "$root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
-                if [ -n "$found" ]; then
-                  apksigner="$found"
-                  break
-                fi
-              done
-            fi
-          fi
-          if [ -z "$apksigner" ]; then
-            echo "Android apksigner not found (ANDROID_HOME=${ANDROID_HOME:-unset})." >&2
-            exit 1
-          fi
-          echo "Using apksigner at $apksigner"
-          if ! command -v java >/dev/null 2>&1; then
-            echo "java is not on PATH; apksigner cannot run." >&2
-            exit 1
-          fi
-          java -version
-          # The keystore is decoded into a private temporary directory that is
-          # never part of a checked-out workspace, and it is removed when the
-          # job ends.
-          keystore_dir=$(mktemp -d)
-          keystore="$keystore_dir/secpivot-release.jks"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
-          chmod 600 "$keystore"
-          unsigned=(dist/unsigned/*.apk)
-          if [ ${#unsigned[@]} -eq 0 ]; then
-            echo "No unsigned Android APK to sign." >&2
-            exit 1
-          fi
-          mkdir -p dist/android
-          for apk in "${unsigned[@]}"; do
-            name=$(basename "$apk")
-            abi="${name##*-}"
-            abi="${abi%.apk}"
-            out="dist/android/$name"
-            # Drop the debug keystore's v1 signature files before re-signing
-            # (apksigner replaces the v2/v3 block itself). `zip -d` exits 12
-            # when there is nothing to remove, which is not a failure here.
-            zip -d "$apk" 'META-INF/*.RSA' 'META-INF/*.SF' 'META-INF/*.MF' >/dev/null 2>&1 || true
-            "$apksigner" sign \
-              --ks "$keystore" \
-              --ks-key-alias "$ANDROID_KEY_ALIAS" \
-              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
-              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
-              --out "$out" "$apk"
-            "$apksigner" verify --verbose "$out"
-            # The listing is written to a file first: `unzip | grep -q` makes
-            # grep exit early, which SIGPIPEs unzip, and `set -o pipefail`
-            # would then fail the step even though the check passed.
-            unzip -l "$out" > "$out.listing"
-            if ! grep -q "lib/${abi}/" "$out.listing"; then
-              echo "Signed APK ${out} does not contain lib/${abi}/." >&2
-              exit 1
-            fi
-            rm -f "$out.listing"
-            echo "Signed $(basename "$out")"
-          done
-          rm -f "$keystore"
-          rm -rf "$keystore_dir"
 
       - name: Generate Android SHA256SUMS
         shell: bash
@@ -684,8 +577,8 @@ jobs:
     # skip is skipped (not failed) and a real failure still leaves the run red
     # through the failing job itself.
     # `verify` is listed so a red test suite keeps APKs off the draft release.
-    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.sign-android.result == 'success' && needs.publish.result == 'success' }}
-    needs: [verify, build, sign-android, publish]
+    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.android.result == 'success' && needs.publish.result == 'success' }}
+    needs: [verify, build, android, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
