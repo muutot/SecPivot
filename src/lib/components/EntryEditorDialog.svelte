@@ -22,6 +22,7 @@
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import Select from "$lib/components/Select.svelte";
   import TotpQrButtons from "$lib/components/TotpQrButtons.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
@@ -34,6 +35,9 @@
     entry: VaultEntry | null;
     /** All selected entries in batch mode (`mode === "edit-multi"`). */
     entries: VaultEntry[];
+    /** Entries offered as new-entry templates (create mode only); the direct
+     *  children of the database's configured entry-templates group. */
+    templates?: VaultEntry[];
     onclose: () => void;
     onsaved: (
       input: EntryInput | null,
@@ -43,7 +47,16 @@
     ) => Promise<void> | void;
   }
 
-  let { mode, groups, groupUuid, entry, entries, onclose, onsaved }: Props = $props();
+  let {
+    mode,
+    groups,
+    groupUuid,
+    entry,
+    entries,
+    onclose,
+    onsaved,
+    templates = [],
+  }: Props = $props();
 
   let lang = $state($appSettings.general.language);
   $effect(() => {
@@ -576,8 +589,93 @@
     colorHex = "";
   }
 
+  // ---------------------------------------------------------------------------
+  // Template prefill (create mode only)
+  // ---------------------------------------------------------------------------
+
+  /** Selected template uuid; `""` = blank entry. */
+  let templateUuid = $state("");
+  /** True while the template's snapshot-hidden values (password, TOTP seed,
+   *  protected custom fields) are being fetched; the save gate stays closed. */
+  let templateLoading = $state(false);
+
+  /** Prefill the new entry from the selected template. Values hidden from the
+   *  snapshot are fetched on demand (same pattern as the edit-mode effects
+   *  above); attachments are not copied — their payloads are not part of the
+   *  snapshot and cannot be re-fetched wholesale. The target group stays the
+   *  caller's choice, never the template's own group. */
+  async function applyTemplate(uuid: string): Promise<void> {
+    templateUuid = uuid;
+    if (mode !== "create" || !uuid) return;
+    const template = templates.find((t) => t.uuid === uuid);
+    if (!template) return;
+    const sessionId = vault.getActiveSessionId();
+    templateLoading = true;
+    let fetchedPassword = template.password ?? "";
+    let fetchedTotp = template.totp ?? "";
+    const protectedValues = new Map<string, string>();
+    if (sessionId) {
+      try {
+        const fetches: Promise<void>[] = [
+          vault
+            .callInSession(sessionId, () => vault.getEntryPassword(uuid))
+            .then((value) => {
+              fetchedPassword = value;
+            }),
+        ];
+        if (template.hasTotp) {
+          fetches.push(
+            vault
+              .callInSession(sessionId, () => vault.getEntryTotp(uuid))
+              .then((value) => {
+                fetchedTotp = value ?? "";
+              }),
+          );
+        }
+        for (const field of template.customFields ?? []) {
+          if (!field.protected) continue;
+          fetches.push(
+            vault
+              .callInSession(sessionId, () => vault.getCustomFieldValue(uuid, field.name))
+              .then((value) => {
+                protectedValues.set(field.name, value ?? "");
+              }),
+          );
+        }
+        await Promise.all(fetches);
+      } catch {
+        // Snapshot-visible fields below are still applied; a failed secret
+        // fetch leaves the default (empty) value instead of blocking the form.
+      }
+    }
+    title = template.title;
+    username = template.username;
+    password = fetchedPassword;
+    url = template.url;
+    notes = template.notes;
+    tags = template.tags ?? "";
+    overrideUrl = template.overrideUrl ?? "";
+    qualityCheck = template.qualityCheck ?? true;
+    foregroundHex = template.foregroundColor ?? "";
+    colorHex = template.color ?? "";
+    expiresLocal = template.expires ? toDateTimeInput(template.expires) : "";
+    iconIndex = template.icon ?? null;
+    iconTouched = true;
+    customIconSelected = false;
+    totp = fetchedTotp;
+    customFields = (template.customFields ?? []).map((field) => ({
+      ...field,
+      value: field.protected ? (protectedValues.get(field.name) ?? field.value) : field.value,
+    }));
+    autoTypeEnabled = template.autoType?.enabled ?? true;
+    autoTypeDefaultSeq = template.autoType?.defaultSequence ?? "";
+    autoTypeAssociations = (template.autoType?.associations ?? []).map((a) => ({ ...a }));
+    templateLoading = false;
+  }
+
   function submit(): void {
-    if (!multi && (!passwordReady || !totpReady || !protectedFieldsReady)) return;
+    if (!multi && (!passwordReady || !totpReady || !protectedFieldsReady || templateLoading))
+      return;
     if (multi) {
       const patch: EntryPatch = {};
       if (!untouched.has("title")) patch.title = title.trim();
@@ -696,7 +794,9 @@
       onclick={submit}
       aria-label={t(lang, "common.save")}
       title={t(lang, "common.save")}
-      disabled={saving || (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
+      disabled={saving ||
+        templateLoading ||
+        (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
     >
       <AppIcon name="check" size={15} />
     </button>
@@ -783,6 +883,24 @@
 
     {#if activeTab === "fields"}
       <div class="form-grid" role="tabpanel">
+        {#if !multi && templates.length > 0}
+          <label class="field template-row">
+            <span>{t(lang, "editor.template")}</span>
+            <Select
+              value={templateUuid}
+              options={[
+                { value: "", label: t(lang, "editor.templateNone") },
+                ...templates.map((tpl) => ({
+                  value: tpl.uuid,
+                  label: tpl.title || tpl.username || tpl.uuid,
+                })),
+              ]}
+              onchange={(uuid) => void applyTemplate(uuid)}
+              disabled={templateLoading}
+              ariaLabel={t(lang, "editor.template")}
+            />
+          </label>
+        {/if}
         <label class="field">
           <span>{t(lang, "editor.title")}</span>
           <TextField
@@ -1392,6 +1510,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .template-row {
+    grid-column: 1 / -1;
   }
 
   .editor-tabs {
