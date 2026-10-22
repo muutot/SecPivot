@@ -115,6 +115,13 @@ pub(crate) fn write_local_copy(
     backup_template: &str,
 ) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
+    // A mirror name must be a bare file name on every platform. On Linux a
+    // backslash is a legal file name character, so the parent check below
+    // alone would accept `..\evil.kdbx`; callers are expected to pass
+    // `remote_key_basename` output, which never contains separators.
+    if name.contains(['/', '\\', ':']) {
+        return Err(format!("远程文件名不合法: {name}"));
+    }
     let dest = dir.join(name);
     // Defense in depth: even if a caller passes an unsanitized name, the
     // mirror file must stay inside the mirror directory.
