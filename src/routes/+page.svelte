@@ -21,6 +21,7 @@
   import { useEntryEditor } from "$lib/composables/useEntryEditor.svelte";
   import { buildDisplayRows, type DisplayRow } from "$lib/utils/display-rows";
   import { isAnyModalOpen } from "$lib/utils/escape-stack";
+  import { collectTemplateEntries } from "$lib/utils/templates";
   import { t } from "$lib/i18n";
   import { BUILTIN_COLUMNS, columnLabel, useEntryColumns } from "$lib/services/columns.svelte";
   import {
@@ -1233,6 +1234,12 @@
     getSelectedEntry: () => selection.selectedEntry,
   });
 
+  /** New-entry templates: direct entries of the database's configured
+   *  templates group (empty when unset — the editor hides the selector). */
+  const templateEntries = $derived(
+    currentVault ? collectTemplateEntries(currentVault.root, currentVault.entryTemplatesGroup) : [],
+  );
+
   let toolbarEl: {
     focusSearch: (seed?: string) => void;
   } | null = $state(null);
@@ -1410,6 +1417,29 @@
     groupIconDialogUuid = uuid;
     groupIconPick = group?.icon ?? null;
     groupIconSaving = false;
+  }
+
+  /** Toggle the group's role as the database's entry-templates group via the
+   *  `update_database_settings` patch. The committed snapshot carries the new
+   *  `entryTemplatesGroup`, so the group menus and the editor's template
+   *  selector react without extra bookkeeping. */
+  async function setTemplatesGroup(uuid: string): Promise<void> {
+    const view = sessionView.capture();
+    if (!view) return;
+    const { sessionId } = view;
+    const isCurrent = currentVault?.entryTemplatesGroup === uuid;
+    try {
+      await vault.callInSession(sessionId, () =>
+        vault.updateDatabaseSettings({ entryTemplatesGroup: isCurrent ? null : uuid }),
+      );
+      if (sessionView.isCurrent(view))
+        flash(
+          t(settings.general.language, isCurrent ? "page.templatesCleared" : "page.templatesSet"),
+        );
+    } catch (e) {
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.templatesFailed", { e: String(e) }));
+    }
   }
 
   async function confirmChangeGroupIcon(): Promise<void> {
@@ -1904,6 +1934,8 @@
               onchangeicon={openGroupIconDialog}
               onautotype={(uuid: string) => (groupAutoTypeUuid = uuid)}
               onmeta={(uuid: string) => (groupMetaUuid = uuid)}
+              templatesGroup={currentVault?.entryTemplatesGroup ?? null}
+              ontemplates={(uuid: string) => void setTemplatesGroup(uuid)}
               ondelete={askDeleteGroup}
               onrestore={(uuid: string) => void restoreGroup(uuid)}
               onemptybin={askEmptyRecycleBin}
@@ -2071,6 +2103,7 @@
     groupUuid={selectedGroup ?? currentVault?.root.uuid ?? "root"}
     entry={editor.editEntry}
     entries={editor.editEntries}
+    templates={templateEntries}
     onclose={editor.close}
     onsaved={(
       input: EntryInput | null,

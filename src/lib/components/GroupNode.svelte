@@ -35,6 +35,9 @@
     onchangeicon: (uuid: string) => void;
     onautotype?: (uuid: string) => void;
     onmeta?: (uuid: string) => void;
+    /** UUID of the database's configured entry-templates group, if any. */
+    templatesGroup?: string | null;
+    ontemplates?: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -59,6 +62,8 @@
     onchangeicon,
     onautotype,
     onmeta,
+    templatesGroup = null,
+    ontemplates,
     ondelete,
     onrestore,
     onemptybin,
@@ -172,6 +177,16 @@
             { id: "autotype", label: t(lang, "groupnode.autotype"), icon: "keyboard" },
             { id: "meta", label: t(lang, "groupnode.meta"), icon: "sliders" },
             {
+              id: "templates",
+              label: t(
+                lang,
+                templatesGroup === group.uuid
+                  ? "groupnode.unsetTemplates"
+                  : "groupnode.setTemplates",
+              ),
+              icon: "copy",
+            },
+            {
               id: "delete",
               label: t(lang, "groupnode.deleteGroup"),
               icon: "trash",
@@ -218,6 +233,7 @@
     else if (id === "change-icon") onchangeicon(group.uuid);
     else if (id === "autotype") onautotype?.(group.uuid);
     else if (id === "meta") onmeta?.(group.uuid);
+    else if (id === "templates") ontemplates?.(group.uuid);
     else if (id === "delete") ondelete(group.uuid);
     else if (id === "restore") onrestore?.(group.uuid);
     else if (id === "empty-bin") onemptybin?.();

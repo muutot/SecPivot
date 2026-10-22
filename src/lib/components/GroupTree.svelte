@@ -24,6 +24,9 @@
     onchangeicon: (uuid: string) => void;
     onautotype?: (uuid: string) => void;
     onmeta?: (uuid: string) => void;
+    /** UUID of the database's configured entry-templates group, if any. */
+    templatesGroup?: string | null;
+    ontemplates?: (uuid: string) => void;
     ondelete: (uuid: string) => void;
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
@@ -50,6 +53,8 @@
     onchangeicon,
     onautotype,
     onmeta,
+    templatesGroup = null,
+    ontemplates,
     ondelete,
     onrestore,
     onemptybin,
@@ -273,6 +278,8 @@
         {onchangeicon}
         {onautotype}
         {onmeta}
+        {templatesGroup}
+        {ontemplates}
         {ondelete}
         {onrestore}
         {onemptybin}
