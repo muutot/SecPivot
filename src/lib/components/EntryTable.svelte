@@ -17,6 +17,7 @@
     pageUpTargetIndex,
   } from "$lib/utils/entry-nav";
   import { formatEntryDescription } from "$lib/utils/format";
+  import { createLongPressTracker } from "$lib/utils/long-press";
 
   export interface EntryTableColumn {
     id: string;
@@ -112,6 +113,10 @@
   const COL_WIDTH_MAX = 400;
   const NARROW_ROW_HEIGHT = 36;
   const VIRTUAL_OVERSCAN = 6;
+  /** How long a touch must be held before the context menu opens. */
+  const LONG_PRESS_THRESHOLD_MS = 500;
+  /** How far the finger may travel before the press is abandoned. */
+  const LONG_PRESS_MOVE_TOLERANCE_PX = 12;
   /** How long an in-place revealed password stays visible before the cell
    * re-masks itself (also re-masked on second click, mouse leave, unmount). */
   const REVEAL_TIMEOUT_MS = 10_000;
@@ -124,21 +129,14 @@
   let revealGeneration = 0;
 
   /** Long-press (touch) → context menu, mirroring desktop right-click. */
-  let pressTimer: ReturnType<typeof setTimeout> | undefined;
-  let pressStart: ContextMenuPoint | null = null;
+  const longPress = createLongPressTracker({
+    threshold: LONG_PRESS_THRESHOLD_MS,
+    moveTolerance: LONG_PRESS_MOVE_TOLERANCE_PX,
+  });
   /** Android WebView can emit a native `contextmenu` with (0, 0) after the
    *  long-press timer. Keep the last touch point so every menu path can still
    *  anchor to the finger instead of the viewport corner. */
   let lastTouchPoint: ContextMenuPoint | null = null;
-  /** Swallow the click that follows a fired long-press so the menu's target
-   *  row is not also selected when the finger lifts. */
-  let suppressClick = false;
-
-  function clearPress(): void {
-    if (pressTimer !== undefined) clearTimeout(pressTimer);
-    pressTimer = undefined;
-    pressStart = null;
-  }
 
   function eventPoint(event: MouseEvent): ContextMenuPoint | undefined {
     const hasCoords =
@@ -159,21 +157,22 @@
     event: PointerEvent,
     fire: (event: MouseEvent, point: ContextMenuPoint) => void,
   ): void {
-    if (event.pointerType === "mouse") return;
     const point = { x: event.clientX, y: event.clientY };
-    lastTouchPoint = point;
-    pressStart = point;
-    pressTimer = setTimeout(() => {
-      pressTimer = undefined;
-      suppressClick = true;
-      event.preventDefault();
-      fire(new MouseEvent("contextmenu", { clientX: point.x, clientY: point.y }), point);
-    }, 500);
+    if (event.pointerType !== "mouse") lastTouchPoint = point;
+    // Only the innermost element under the finger arms the press: the same
+    // `pointerdown` also bubbles to the list's blank-area handler, and a
+    // second armed timer would fire the context menu after a plain tap.
+    longPress.start(event.pointerType, point, (fired) => {
+      fire(new MouseEvent("contextmenu", { clientX: fired.x, clientY: fired.y }), fired);
+    });
   }
 
   function movePress(event: PointerEvent): void {
-    if (!pressStart) return;
-    if (Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > 12) clearPress();
+    longPress.move({ x: event.clientX, y: event.clientY });
+  }
+
+  function clearPress(): void {
+    longPress.cancel();
   }
 
   function hideRevealedPassword(): void {
@@ -667,10 +666,9 @@
             onpointerup={clearPress}
             onpointercancel={clearPress}
             onclick={(event) => {
-              if (suppressClick) {
-                suppressClick = false;
-                return;
-              }
+              // Swallow the click that follows a fired long-press so the
+              // menu's target row is not also selected when the finger lifts.
+              if (longPress.consumeSuppressedClick()) return;
               onrowclick(event, row.entry);
             }}
             oncontextmenu={(event) => onentrycontextmenu(event, row.entry, eventPoint(event))}
