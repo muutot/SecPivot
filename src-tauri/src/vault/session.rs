@@ -573,6 +573,7 @@ impl VaultSession {
             meta_custom_data: custom_data_entries(&db.meta.custom_data),
             database_name: db.meta.database_name.clone(),
             database_description: db.meta.database_description.clone(),
+            entry_templates_group: db.meta.entry_templates_group.map(|uuid| uuid.to_string()),
         };
         if include_icons {
             self.cached_snapshot = Some((self.revision, state.clone()));
