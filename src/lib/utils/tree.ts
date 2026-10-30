@@ -153,6 +153,16 @@ export function findBinGroup(root: VaultGroup): VaultGroup | null {
   return root.children.find((c) => c.isRecycleBin) ?? null;
 }
 
+/** Display order for tree children: recycle-bin groups always render last,
+ *  every other group keeps its stored (KDBX) order. Pure — never mutates the
+ *  snapshot, so the saved file order is untouched. */
+export function orderedChildren(group: VaultGroup): VaultGroup[] {
+  const rest: VaultGroup[] = [];
+  const bins: VaultGroup[] = [];
+  for (const child of group.children) (child.isRecycleBin ? bins : rest).push(child);
+  return bins.length > 0 ? [...rest, ...bins] : rest;
+}
+
 /** Total entries in a subtree. */
 export function countEntries(root: VaultGroup): number {
   let total = root.entries.length;

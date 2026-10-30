@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
   import { untrack } from "svelte";
-  import { buildEntryCounts, findBinGroup, totalExcludingBin } from "$lib/utils/tree";
+  import { buildEntryCounts, findBinGroup, orderedChildren, totalExcludingBin } from "$lib/utils/tree";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
