@@ -199,7 +199,15 @@
     if (renaming) inputEl?.focus();
   });
 
-  function handleRowClick(): void {
+  function handleRowClick(event: MouseEvent): void {
+    // The chevron is decorative markup inside the row button (no nested
+    // interactive element); detect clicks on it here and toggle expansion
+    // instead of selecting, restoring the pre-merge chevron behavior.
+    const target = event.target as HTMLElement | null;
+    if (hasChildren && target?.closest(".chevron")) {
+      ontoggle(group.uuid);
+      return;
+    }
     onselect(group.uuid);
   }
 
@@ -401,6 +409,7 @@
     height: 16px;
     margin-right: -4px;
     color: var(--text-faint);
+    cursor: pointer;
     transition: transform 0.15s ease;
   }
 
