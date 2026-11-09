@@ -292,3 +292,11 @@ closure independently of that queue. Synthetic `clipboard-service.test.mjs`
 regressions cover write/lock order, rejection recovery, same-content conditional
 clear order and synchronous idle start. Cross-window/native binary order and
 external clipboard sequence ownership remain outside this queue.
+
+`security.ts::copySensitive` owns temporary active-id/state observers and a
+`KeyedViewGuard` for its nonsecret copy-follow-up lifetime. `clipboard.ts` admits
+its optional afterCopy hook only for completed current copies. `vault.ts` checks
+the optional closeAll predicate inside the existing topology queue; no backend
+command or new global secret state is added. `tests/security-copy.test.mjs` uses
+the real service graph with synthetic Clipboard API/IPC seams to cover stale,
+queued, cancelled, browser-path, current and failure follow-ups.

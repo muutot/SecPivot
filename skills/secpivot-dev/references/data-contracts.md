@@ -297,3 +297,11 @@ The queue starts idle work synchronously and recovers from rejection. It does no
 order native binary-copy commands or other windows/processes. `lockVault` starts
 `clearClipboard` and `vault.closeAll` together; closing/zeroizing sessions no
 longer waits for platform clipboard completion. No IPC schema changes.
+
+`copyText(text, afterCopy?)` retains its Promise<void> API; the optional hook
+runs only for a completed current generation, including zero-second schedules
+and unavailable renderer Web Crypto. `copySensitive` binds the lock hook to a
+continuous active-id + vault-path view with temporary nonsecret observers. It
+keeps them until `vault.closeAll(whenCurrent?)` revalidates that predicate inside
+the topology queue. The Tauri `close_all_vaults` schema is unchanged. Explicit
+lock remains unconditional; stale copy follow-ups do not invoke backend close.

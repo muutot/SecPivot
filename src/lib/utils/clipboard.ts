@@ -53,7 +53,12 @@ async function fingerprintText(text: string): Promise<Uint8Array> {
   }
 }
 
-export async function copyText(text: string): Promise<void> {
+/** `afterCopy` runs only for a completed copy that still owns this operation.
+ * It is synchronous at the admission point, before any follow-up promise. */
+export async function copyText(
+  text: string,
+  afterCopy?: () => void | Promise<void>,
+): Promise<void> {
   const epoch = ++operationEpoch;
   cancelRendererTimer();
   releaseOwnership(lastCopy);
@@ -70,20 +75,22 @@ export async function copyText(text: string): Promise<void> {
     // zeroizes this short-lived input and retains only its fingerprint.
     void invoke("clipboard_schedule_wipe", { text, seconds }).catch(() => {});
   }
-  if (seconds <= 0) return;
-  try {
-    const fingerprint = await fingerprintText(text);
-    if (epoch !== operationEpoch) {
-      fingerprint.fill(0);
-      return;
+  if (seconds > 0) {
+    try {
+      const fingerprint = await fingerprintText(text);
+      if (epoch !== operationEpoch) {
+        fingerprint.fill(0);
+        return;
+      }
+      const owned = { fingerprint };
+      lastCopy = owned;
+      clearTimer = setTimeout(() => void clearOwnedClipboard(owned), seconds * 1000);
+    } catch {
+      // No Web Crypto means no renderer baseline, never a retained plaintext
+      // fallback. The native scheduled wipe remains available on Windows.
     }
-    const owned = { fingerprint };
-    lastCopy = owned;
-    clearTimer = setTimeout(() => void clearOwnedClipboard(owned), seconds * 1000);
-  } catch {
-    // No Web Crypto means no renderer baseline, never a retained plaintext
-    // fallback. The native scheduled wipe remains available on Windows.
   }
+  if (afterCopy && epoch === operationEpoch) await afterCopy();
 }
 
 /** Clear only the copy owned by this timer. Object identity distinguishes
