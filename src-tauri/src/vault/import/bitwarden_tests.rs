@@ -2,6 +2,108 @@ use crate::vault::{ImportEntryInput, VaultSession, FIELD_PASSWORD};
 use tempfile::TempDir;
 
 #[test]
+fn bitwarden_explicit_uri_modes_fail_closed_before_import_rows() {
+    for mode in 0..=5 {
+        let text = serde_json::json!({"items":[
+            {"type":2,"name":"Earlier note","notes":"synthetic-sensitive-note"},
+            {"type":1,"name":"synthetic-sensitive-title","login":{
+                "password":"synthetic-sensitive-password",
+                "uris":[{"uri":"https://synthetic-sensitive.example/login","match":mode}]
+            }}
+        ]})
+        .to_string();
+        let result = crate::commands::parse_bitwarden_json(text);
+        assert!(result.is_err(), "mode {mode} was silently weakened");
+        let error = result.err().unwrap();
+        assert!(error.contains("第 2 条"));
+        assert!(error.contains("当前不支持"));
+        assert!(!error.contains("synthetic-sensitive"));
+    }
+}
+
+#[test]
+fn bitwarden_multiple_default_uris_fail_closed_instead_of_dropping_destinations() {
+    for uris in [
+        serde_json::json!([
+            {"uri":"https://first.example.test/login"},
+            {"uri":"https://second.example.test/login","match":null}
+        ]),
+        serde_json::json!([
+            {"uri":null},{"uri":""},
+            {"uri":"https://first.example.test/login"},
+            {"uri":"https://second.example.test/login"}
+        ]),
+    ] {
+        let text = serde_json::json!({"items":[
+            {"type":2,"name":"Earlier note"},
+            {"type":1,"name":"Multiple URIs","login":{"uris":uris}}
+        ]})
+        .to_string();
+        let result = crate::commands::parse_bitwarden_json(text);
+        assert!(result.is_err(), "additional destination was discarded");
+        assert!(result.err().unwrap().contains("第 2 条"));
+    }
+}
+
+#[test]
+fn bitwarden_invalid_uri_shapes_never_create_matching_destinations() {
+    for uris in [
+        serde_json::json!({"uri":"synthetic-sensitive"}),
+        serde_json::json!("synthetic-sensitive"),
+        serde_json::json!([null]),
+        serde_json::json!(["synthetic-sensitive"]),
+        serde_json::json!([{"uri":42}]),
+        serde_json::json!([{"uri":true}]),
+        serde_json::json!([{"uri":"https://first.example.test","match":true}]),
+        serde_json::json!([{"uri":"https://first.example.test","match":"5"}]),
+        serde_json::json!([{"uri":"https://first.example.test","match":-1}]),
+        serde_json::json!([{"uri":"https://first.example.test","match":6}]),
+        serde_json::json!([{"uri":"https://first.example.test","match":0.5}]),
+        serde_json::json!([{"uri":"first.example.test second.example.test"}]),
+    ] {
+        let text = serde_json::json!({"items":[{"type":1,"login":{"uris":uris}}]}).to_string();
+        let result = crate::commands::parse_bitwarden_json(text);
+        assert!(result.is_err(), "malformed URI was accepted");
+        let error = result.err().unwrap();
+        assert!(error.contains("网址格式无效"));
+        assert!(!error.contains("synthetic-sensitive"));
+        assert!(!error.contains("example.test"));
+    }
+}
+
+#[test]
+fn bitwarden_default_single_uri_and_empty_uri_shapes_survive_kdbx_reopen() {
+    for (login, expected) in [
+        (serde_json::json!({}), ""),
+        (serde_json::json!({"uris":null}), ""),
+        (serde_json::json!({"uris":[]}), ""),
+        (
+            serde_json::json!({"uris":[{"uri":null},{"uri":"","match":null}]}),
+            "",
+        ),
+        (
+            serde_json::json!({"uris":[{"uri":"https://account.example.test/login"}]}),
+            "https://account.example.test/login",
+        ),
+        (
+            serde_json::json!({"uris":[{}, {"uri":null}, {"uri":"https://account.example.test/login","match":null}]}),
+            "https://account.example.test/login",
+        ),
+    ] {
+        let text =
+            serde_json::json!({"items":[{"type":1,"name":"Synthetic default URI","login":login}]})
+                .to_string();
+        let (_dir, session, id) = imported(&text);
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        assert_eq!(entry.get_url().unwrap_or_default(), expected);
+    }
+}
+
+#[test]
 fn bitwarden_linked_card_identity_and_full_name_targets_follow_official_ids() {
     for (kind, section, first_id, keys) in [
         (

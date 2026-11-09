@@ -42,7 +42,7 @@ pub struct ImportRow {
 
 /// Parse an unencrypted Bitwarden `.json` export. Official item types 1–8 are
 /// retained; specialized values become protected custom fields. Folders become the
-/// group path, the first URI becomes the URL, `login.totp` seeds TOTP, and
+/// group path, one default-mode URI becomes the URL, `login.totp` seeds TOTP, and
 /// custom fields round-trip as entry fields.
 pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
     let root: serde_json::Value =
@@ -111,6 +111,7 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         let mut url = String::new();
         let mut totp = String::new();
         if let Some(login) = item.get("login") {
+            url = default_login_uri(login, index)?;
             username = login
                 .get("username")
                 .and_then(serde_json::Value::as_str)
@@ -124,15 +125,6 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             totp = login
                 .get("totp")
                 .and_then(serde_json::Value::as_str)
-                .unwrap_or("")
-                .to_owned();
-            url = login
-                .get("uris")
-                .and_then(serde_json::Value::as_array)
-                .and_then(|uris| {
-                    uris.iter()
-                        .find_map(|uri| uri.get("uri").and_then(serde_json::Value::as_str))
-                })
                 .unwrap_or("")
                 .to_owned();
         }
@@ -203,6 +195,53 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         });
     }
     Ok(rows)
+}
+
+/// Native entry-wide matching cannot represent mixed Bitwarden URI strategies.
+/// Reject unsupported documents instead of dropping URLs or weakening a rule.
+fn default_login_uri(login: &serde_json::Value, index: usize) -> Result<String, String> {
+    let invalid = || format!("第 {} 条 Bitwarden 记录的网址格式无效", index + 1);
+    let unsupported = || {
+        format!(
+            "第 {} 条 Bitwarden 记录包含多个网址或显式网址匹配规则，当前不支持；整份文件未导入",
+            index + 1
+        )
+    };
+    let uris = match login.get("uris") {
+        None | Some(serde_json::Value::Null) => return Ok(String::new()),
+        Some(serde_json::Value::Array(uris)) => uris,
+        Some(_) => return Err(invalid()),
+    };
+    let mut url = None;
+    for uri in uris {
+        if !uri.is_object() {
+            return Err(invalid());
+        }
+        match uri.get("match") {
+            None | Some(serde_json::Value::Null) => {}
+            Some(value) if value.as_u64().is_some_and(|mode| mode <= 5) => {
+                return Err(unsupported());
+            }
+            Some(_) => return Err(invalid()),
+        }
+        let value = match uri.get("uri") {
+            None | Some(serde_json::Value::Null) => continue,
+            Some(serde_json::Value::String(value)) => value.trim(),
+            Some(_) => return Err(invalid()),
+        };
+        if value.is_empty() {
+            continue;
+        }
+        // The native URL field is whitespace-separated; one malformed source
+        // URI must not accidentally turn into multiple matching destinations.
+        if value.chars().any(char::is_whitespace) {
+            return Err(invalid());
+        }
+        if url.replace(value).is_some() {
+            return Err(unsupported());
+        }
+    }
+    Ok(url.unwrap_or_default().to_owned())
 }
 
 /// Keys follow Bitwarden's public Export models. Unknown extensions remain
