@@ -22,25 +22,52 @@
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "fcee069",
-  "remediated_findings": ["SP-01", "SP-02", "SP-04", "SP-05", "SP-06", "SP-07", "SP-08"],
+  "remediation_checkpoint": "a2b0ddf",
+  "remediated_findings": [
+    "SP-01",
+    "SP-02",
+    "SP-03",
+    "SP-04",
+    "SP-05",
+    "SP-06",
+    "SP-07",
+    "SP-08",
+    "SP-09"
+  ],
   "partially_remediated_findings": ["SP-14"],
   "supplemental_findings": [
     {
       "area": "Android SAF ACL",
       "commit": "e5e3c4e",
       "status": "source fix and host ACL tests passed; APK/device verification pending"
+    },
+    {
+      "area": "Protected HOTP seed downgraded by counter advancement",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "a2b0ddf",
+      "status": "red-to-green regression and KDBX save/reopen passed"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "frontend_tests": 208,
-    "rust_unit_tests": 464,
+    "checkpoint": "42d2f1a",
+    "frontend_tests": 210,
+    "rust_unit_tests": 465,
     "android_acl_tests": 2,
+    "subsequent_backend_gate": {
+      "checkpoint": "a2b0ddf",
+      "result": "passed",
+      "rust_unit_tests": 466,
+      "android_acl_tests": 2,
+      "clippy": "passed",
+      "format": "passed"
+    },
     "limitations": [
       "Android APK build and device I/O not run",
-      "macOS/Linux keyring runtime not run"
+      "macOS/Linux keyring runtime not run",
+      "Native KeePass plaintext XML import not run"
     ]
   }
 }
