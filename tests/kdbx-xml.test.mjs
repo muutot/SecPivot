@@ -6,6 +6,59 @@ register("./helpers/lib-alias-loader.mjs", import.meta.url);
 
 const { buildKeePassXml } = await import("../src/lib/utils/kdbx-xml.ts");
 
+test("XML export refuses unrepresentable characters instead of changing credentials", () => {
+  const base = {
+    group: "",
+    title: "Synthetic",
+    username: "",
+    password: "",
+    url: "",
+    notes: "",
+    totp: "",
+  };
+  for (const invalid of [
+    "\u0000",
+    "\u0001",
+    "\u000b",
+    "\u001f",
+    "\ufffe",
+    "\uffff",
+    "\ud800",
+    "\udfff",
+  ]) {
+    for (const field of [
+      "group",
+      "title",
+      "username",
+      "password",
+      "url",
+      "notes",
+      "totp",
+      "expires",
+    ]) {
+      assert.throws(
+        () => buildKeePassXml([{ ...base, [field]: `synthetic${invalid}value` }]),
+        /XML/,
+      );
+    }
+    for (const custom of [
+      { name: `synthetic${invalid}name`, value: "value", protected: false },
+      { name: "PIN", value: `synthetic${invalid}value`, protected: true },
+    ]) {
+      assert.throws(() => buildKeePassXml([{ ...base, customFields: [custom] }]), /XML/);
+    }
+  }
+});
+
+test("XML export retains valid Unicode and carriage returns", () => {
+  const password = " synthetic\r\nline\rtab\t😀\u0085\u2028\ufffd ";
+  const xml = buildKeePassXml([
+    { group: "", title: "Synthetic", username: "", password, url: "", notes: "", totp: "" },
+  ]);
+  assert.ok(xml.includes("synthetic&#13;\nline&#13;tab\t😀\u0085\u2028\ufffd"));
+  assert.ok(!xml.includes("\r"));
+});
+
 test("buildKeePassXml nests groups from A / B paths and escapes text", () => {
   const xml = buildKeePassXml([
     {

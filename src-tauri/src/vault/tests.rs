@@ -6158,6 +6158,125 @@ fn xml_preserves_native_otp_custom_protection_and_expiry() {
     assert_eq!(entry.times.expires, Some(true));
 }
 
+#[test]
+fn export_xml_round_trips_carriage_returns_from_saved_credentials() {
+    #[derive(serde::Deserialize)]
+    struct File {
+        #[serde(rename = "Root")]
+        root: Root,
+    }
+    #[derive(serde::Deserialize)]
+    struct Root {
+        #[serde(rename = "Group")]
+        group: Group,
+    }
+    #[derive(serde::Deserialize)]
+    struct Group {
+        #[serde(rename = "Entry")]
+        entry: XmlEntry,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlEntry {
+        #[serde(rename = "String")]
+        fields: Vec<Field>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Field {
+        #[serde(rename = "Key")]
+        key: String,
+        #[serde(rename = "Value")]
+        value: String,
+    }
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let expected = "synthetic\r\nline\rtab\t😀\u{0085}\u{2028}\u{fffd}";
+    let input: EntryInput = serde_json::from_value(serde_json::json!({
+        "groupUuid": "root", "title": "Synthetic XML", "username": "", "password": expected,
+        "url": "", "notes": "", "customFields": [{ "name": "PIN", "value": expected, "protected": true }], "attachments": []
+    })).unwrap();
+    let state = session.add_entries(&[input]).unwrap();
+    let id = state.root.entries[0].uuid.clone();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.get_entry_password(&id).unwrap(), expected);
+    let xml = session.export_xml_content().unwrap();
+    let parsed: File = quick_xml::de::from_str(&xml).unwrap();
+    for key in ["Password", "PIN"] {
+        assert_eq!(
+            parsed
+                .root
+                .group
+                .entry
+                .fields
+                .iter()
+                .find(|f| f.key == key)
+                .unwrap()
+                .value,
+            expected,
+            "XML newline normalization changed a credential"
+        );
+    }
+}
+
+#[test]
+fn export_xml_rejects_invalid_saved_secrets_before_destination_write() {
+    for invalid in [
+        '\u{0000}', '\u{0001}', '\u{000b}', '\u{001f}', '\u{fffe}', '\u{ffff}',
+    ] {
+        for in_password in [true, false] {
+            let dir = TempDir::new().unwrap();
+            let (mut session, path) = create_session(&dir);
+            let secret = format!("synthetic{invalid}credential");
+            let password = if in_password {
+                secret.as_str()
+            } else {
+                "valid-synthetic-password"
+            };
+            let custom = if in_password {
+                "valid-synthetic-field"
+            } else {
+                secret.as_str()
+            };
+            let input: EntryInput = serde_json::from_value(serde_json::json!({
+            "groupUuid": "root", "title": "Synthetic XML", "username": "", "password": password,
+            "url": "", "notes": "", "customFields": [{ "name": "PIN", "value": custom, "protected": true }], "attachments": []
+        })).unwrap();
+            let state = session.add_entries(&[input]).unwrap();
+            let id = state.root.entries[0].uuid.clone();
+            session.save().unwrap();
+            session.close();
+            session.open(&path, "master-password", None).unwrap();
+            assert_eq!(session.get_entry_password(&id).unwrap(), password);
+            assert_eq!(
+                session
+                    .get_custom_field_value(&id, "PIN")
+                    .unwrap()
+                    .as_deref(),
+                Some(custom)
+            );
+            let dest = dir.path().join("export.xml");
+            std::fs::write(&dest, b"previous synthetic export").unwrap();
+            let result = session.export_xml(dest.to_str().unwrap());
+            assert!(
+                result.is_err(),
+                "invalid XML was reported as successful export"
+            );
+            assert!(!result.unwrap_err().contains("synthetic"));
+            assert_eq!(std::fs::read(&dest).unwrap(), b"previous synthetic export");
+            assert_eq!(session.get_entry_password(&id).unwrap(), password);
+            assert_eq!(
+                session
+                    .get_custom_field_value(&id, "PIN")
+                    .unwrap()
+                    .as_deref(),
+                Some(custom)
+            );
+        }
+    }
+}
+
 /// Create a local vault and seed it into an in-memory remote storage.
 fn seed_remote_storage(dir: &TempDir) -> (crate::remote::MemoryStorage, std::path::PathBuf) {
     let seed_path = dir.path().join("seed.kdbx");

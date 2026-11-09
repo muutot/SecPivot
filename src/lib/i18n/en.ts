@@ -1178,6 +1178,8 @@ export const en: Record<I18nKey, string> = {
   "error.sessionNotOpen": "Database session is not open",
   "error.createGroupFailed": "Failed to create group",
   "error.invalidXml": "File is not valid XML",
+  "error.invalidXmlExport":
+    "Cannot export XML: a value contains characters XML cannot represent. The original values have been kept.",
   "error.notKeepassXml": "Not a valid KeePass XML file (missing KeePassFile/Root/Group)",
   "error.encryptedKeepassXml":
     "This XML contains encrypted fields. Export it as plaintext KeePass XML in KeePass, then try again.",

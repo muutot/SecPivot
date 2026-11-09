@@ -926,7 +926,7 @@
       } else {
         if (!sessionView.isCurrent(view)) return;
         downloadTextFile(
-          buildKeePassXml(toXmlExportRows(reportEntries)),
+          buildKeePassXml(toXmlExportRows(reportEntries), settings.general.language),
           "secpivot-export.xml",
           "text/xml;charset=utf-8",
         );

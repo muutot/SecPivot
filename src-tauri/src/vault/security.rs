@@ -1103,7 +1103,7 @@ impl VaultSession {
 
     /// Export all entries as a KeePass 2.x XML file (passwords included).
     pub fn export_xml(&self, path: &str) -> Result<(), String> {
-        let content = self.export_xml_content()?;
+        let content = zeroize::Zeroizing::new(self.export_xml_content()?);
         write_csv_file(path, &content)
     }
 
@@ -1117,19 +1117,19 @@ impl VaultSession {
     /// `ProtectInMemory="True"` (not stream-encrypted `Protected` Base64).
     pub(crate) fn export_xml_content(&self) -> Result<String, String> {
         let db = self.require_db()?;
-        let mut xml = String::from(
+        let mut xml = zeroize::Zeroizing::new(String::from(
             "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n\
              <KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>",
-        );
+        ));
         fn write_string_field(xml: &mut String, key: &str, value: &str, protected: bool) {
             xml.push_str("<String><Key>");
-            xml.push_str(&escape_html(key));
+            xml.push_str(&escape_xml(key));
             xml.push_str("</Key><Value");
             if protected {
                 xml.push_str(" ProtectInMemory=\"True\"");
             }
             xml.push('>');
-            xml.push_str(&escape_html(value));
+            xml.push_str(&escape_xml(value));
             xml.push_str("</Value></String>");
         }
         fn write_entry(xml: &mut String, entry: &keepass::db::EntryRef<'_>) {
@@ -1190,7 +1190,7 @@ impl VaultSession {
             xml.push_str("<Group><UUID>");
             xml.push_str(&BASE64.encode(group.id().uuid().as_bytes()));
             xml.push_str("</UUID><Name>");
-            xml.push_str(&escape_html(&group.name));
+            xml.push_str(&escape_xml(&group.name));
             xml.push_str("</Name>");
             for entry in group.entries() {
                 write_entry(xml, &entry);
@@ -1202,8 +1202,22 @@ impl VaultSession {
         }
         walk(&mut xml, &db.root());
         xml.push_str("</Root></KeePassFile>\n");
-        Ok(xml)
+        // XML 1.0 cannot represent these scalar values, even as references.
+        // Reject before destination I/O rather than changing stored credentials.
+        if xml.chars().any(|ch| {
+            !matches!(ch,
+            '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}' |
+            '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
+        }) {
+            return Err("无法导出 XML：内容含 XML 无法表示的字符，原值已保留。".to_owned());
+        }
+        Ok(std::mem::take(&mut *xml))
     }
+}
+
+/// XML readers normalize literal CR/CRLF, but preserve referenced CR.
+fn escape_xml(value: &str) -> String {
+    escape_html(value).replace('\r', "&#13;")
 }
 
 /// HTML-escape text for the emergency sheet (never inject markup).

@@ -142,6 +142,13 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+XML exports preserve CR/CRLF through numeric CR references and reject characters
+that XML 1.0 cannot represent, including invalid JS surrogate halves. Rejection
+never includes a field value and occurs before destination writes; stored KDBX
+credentials stay unchanged. The Rust intermediate document is Zeroizing even
+when validation fails. This is a plaintext export fidelity boundary, not proof
+of native client interoperability or JavaScript heap zeroization.
+
 Android release keystore/passwords are scoped only to the inline signing step
 of the separate `sign-android` job. Build jobs receive no signing secrets;
 signing/publishing jobs never check out or run build sources. The keystore

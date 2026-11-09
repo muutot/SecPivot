@@ -1140,6 +1140,7 @@ export const zhCN = {
   "error.sessionNotOpen": "数据库会话未打开",
   "error.createGroupFailed": "创建分组失败",
   "error.invalidXml": "文件不是有效的 XML",
+  "error.invalidXmlExport": "无法导出 XML：内容含 XML 无法表示的字符，原值已保留。",
   "error.notKeepassXml": "不是有效的 KeePass XML 文件（缺少 KeePassFile/Root/Group）",
   "error.encryptedKeepassXml": "此 XML 含加密字段。请在 KeePass 中导出为明文 KeePass XML 后重试。",
   "groupflow.created": "已创建分组",
