@@ -34,13 +34,24 @@ pub struct ImportRow {
     pub custom_fields: Vec<ImportCustomField>,
 }
 
-/// Parse a Bitwarden `.json` export. Login (type 1) and secure-note (type 2)
+/// Parse an unencrypted Bitwarden `.json` export. Login (type 1) and secure-note (type 2)
 /// items are imported; cards and identities are skipped. Folders become the
 /// group path, the first URI becomes the URL, `login.totp` seeds TOTP, and
 /// custom fields round-trip as entry fields.
 pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
     let root: serde_json::Value =
         serde_json::from_str(text).map_err(|e| format!("不是有效的 Bitwarden JSON: {e}"))?;
+    for name in ["encrypted", "passwordProtected"] {
+        match root.get(name) {
+            Some(serde_json::Value::Bool(true)) => {
+                return Err(
+                    "这是加密的 Bitwarden 导出，请在 Bitwarden 中导出未加密 JSON 后重试".into(),
+                );
+            }
+            Some(serde_json::Value::Bool(false)) | None => {}
+            Some(_) => return Err("Bitwarden JSON 的加密标记无效".into()),
+        }
+    }
     let items = root
         .get("items")
         .and_then(serde_json::Value::as_array)
@@ -208,5 +219,49 @@ mod tests {
         assert!(parse_bitwarden_json(r#"{ "items": [] }"#)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn bitwarden_json_rejects_encrypted_exports_before_mapping_items() {
+        for flags in [
+            serde_json::json!({"encrypted": true}),
+            serde_json::json!({"encrypted": true, "passwordProtected": true}),
+            serde_json::json!({"encrypted": false, "passwordProtected": true}),
+        ] {
+            let mut export = flags;
+            export["items"] = serde_json::json!([{
+                "type": 1, "name": "synthetic-ciphertext-title",
+                "login": {"password": "synthetic-ciphertext-password"}
+            }]);
+            let result = parse_bitwarden_json(&export.to_string());
+            assert!(
+                result.is_err(),
+                "encrypted export was accepted as plaintext"
+            );
+            let error = result.err().unwrap();
+            assert!(error.contains("加密"));
+            assert!(!error.contains("synthetic-ciphertext"));
+        }
+    }
+
+    #[test]
+    fn bitwarden_json_validates_encryption_markers_and_accepts_legacy_plaintext() {
+        for flag in [
+            serde_json::json!("true"),
+            serde_json::json!(1),
+            serde_json::Value::Null,
+        ] {
+            for name in ["encrypted", "passwordProtected"] {
+                let export = serde_json::json!({name: flag, "items": []});
+                assert!(parse_bitwarden_json(&export.to_string()).is_err());
+            }
+        }
+        for export in [
+            r#"{"items": []}"#,
+            r#"{"encrypted":false,"items": []}"#,
+            r#"{"encrypted":false,"passwordProtected":false,"items": []}"#,
+        ] {
+            assert!(parse_bitwarden_json(export).unwrap().is_empty());
+        }
     }
 }
