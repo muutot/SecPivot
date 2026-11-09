@@ -670,6 +670,7 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 | SP-09         | `42d2f1a`            | 保留原生 OTP 字段名、受保护自定义字段和过期时间；第七项浏览器往返回归及真实 KDBX 保存重开通过                           | 标准字段的全部属性及第三方原生导入仍需独立验证                           |
 | SP-10         | `a5cded1`、`7ebe497` | 两页真实 HTTP 请求先红后绿；保留 token/键名的空格、中文、实体和 CDATA；异常后页、整体超时、对象/页数/响应大小上限均通过 | 当前无 MinIO 服务，真实服务端验签未验证                                  |
 | SP-11（部分） | `39697a0`            | Windows 比较/清空共用一次 OS 锁；前端真实服务的替换复制回归通过；UTF-16 在首个 NUL 截断并有大小/编码边界测试            | 锁定与零间隔的秘密保留、后端任务取消后释放仍需修复；未操作真实 OS 剪贴板 |
+| SP-12         | `95accb2`            | 独立 signer 无 checkout/构建代码；全部动作固定 SHA；真实内联 Bash 的合成测试验证密码 env 引用、失败清理和 ABI 检查      | 未执行真实 CI 签名任务或 APK 安装，仍需工件验证                          |
 | SP-13         | `7c53ef8`            | 浏览器与真实 Vite 服务：旧配置同源 HMR 可用，数字地址回退被拒；修复后两者均可连接，零 connect-src violation             | 未运行原生 Tauri dev；探针隔离了自动处理的 inline nonce/hash             |
 | SP-14（部分） | `fa2bab1`            | 纠正项目地图与远端凭据说明；格式门禁恢复通过                                                                            | 其余过期文档及主题 token 仍需逐项核实                                    |
 
@@ -693,4 +694,6 @@ CSP 复核同时区分测试浏览器的本地网络访问授权与产品 CSP：
 
 最新完整 `npm run verify` 对应 `39697a0` 的改动，日志 `verify-clipboard-atomic-final.log`：格式、Svelte check 零错误警告、150 键契约、生产构建、前端 212、Rust 475 + ACL 2、clippy `-D warnings` 全部通过。首次重跑曾在 clippy 范围判定风格检查失败，修正后已完整重跑成功。
 
-SP-11、SP-14 部分修复，SP-12 未修复，SP-15 保持 Suspected。竞品差距、XML 原生互操作、剪贴板生命周期及签名隔离继续处理；本阶段不承诺完整语义覆盖或零 bug。
+SP-12 已落实源代码修复：`android` 仅构建并上传未签名 APK；独立 `sign-android` 下载工件并用固定 build-tools 35.0.0 签名，无 checkout 或构建源码。四项秘密仅注入签名 step，keystore 私有临时目录通过 EXIT/INT/TERM 清理，密码参数使用 `env:` 引用。最终 staged APK 校验签名、必需 native 库与独占 ABI 后才生成 SHA256SUMS。Windows `RELEASE.md` 随工件传递，发布任务删除可变 checkout；所有剩余动作均固定 SHA。顺带修正同一构建路径中的 Gradle 文件相对目录并在无法移除签名配置时失败。四项回归使用真实内联 Bash 和显式模拟工具，覆盖成功、秘密缺失、验签失败、缺失/混入 ABI 与 keystore 清理；YAML 图和全部内联 Bash 语法也通过。本机没有真实签名工具链，没有执行 CI、构建 APK 或使用正式签名秘密；不能据此恢复 Android 发布 TODO 的完成状态。
+
+最新完整 `npm run verify` 的日志为 `verify-release-signing-isolation.log`，对应 `95accb2`：格式、Svelte check、150 键契约、构建、前端 216、Rust 475 + ACL 2、clippy `-D warnings` 全部通过。SP-11、SP-14 仍部分修复，SP-15 保持 Suspected。竞品差距、XML 原生互操作、剪贴板生命周期和真实发布工件继续处理；本阶段不承诺完整语义覆盖或零 bug。

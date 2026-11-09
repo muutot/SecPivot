@@ -22,7 +22,7 @@
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "39697a0",
+  "remediation_checkpoint": "95accb2",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -34,6 +34,7 @@
     "SP-08",
     "SP-09",
     "SP-10",
+    "SP-12",
     "SP-13"
   ],
   "partially_remediated_findings": ["SP-11", "SP-14"],
@@ -68,9 +69,9 @@
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "39697a0",
-    "log": "verify-clipboard-atomic-final.log",
-    "frontend_tests": 212,
+    "checkpoint": "95accb2",
+    "log": "verify-release-signing-isolation.log",
+    "frontend_tests": 216,
     "rust_unit_tests": 475,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -87,13 +88,15 @@
       "Native KeePass plaintext XML import not run",
       "Live S3 signature validation not run; local MinIO unavailable",
       "CSP websocket probe is a browser test, not native Tauri dev",
-      "Live OS clipboard tests opted out; deterministic tests do not prove native clipboard runtime"
+      "Live OS clipboard tests opted out; deterministic tests do not prove native clipboard runtime",
+      "Isolated signing workflow tested with synthetic Bash tool doubles; actual CI and APK signatures not exercised"
     ]
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
     "Retract mock-expiry attribution: later HTTP 502 peer differed from loopback fixture endpoint and system proxy was enabled; 2cb9449 disables proxies only in the test client and full verify passed",
     "39697a0 atomically compares and clears Windows clipboard content; SP-11 lifecycle retention remains partially unresolved",
+    "95accb2 isolates signing secrets from build runners and removes publishing checkout; YAML/Bash and synthetic cleanup/ABI regressions passed",
     "Supplemental findings do not change baseline finding counts or scores"
   ]
 }
