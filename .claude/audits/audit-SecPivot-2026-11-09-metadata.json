@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S26; historical supplemental tracking notes excluded",
-    "total": 37,
-    "confirmed": 37,
+    "scope": "15 baseline cards plus SP-S05 through SP-S27; historical supplemental tracking notes excluded",
+    "total": 38,
+    "confirmed": 38,
     "suspected": 0,
     "by_severity": {
       "High": 10,
-      "Medium": 22,
+      "Medium": 23,
       "Low": 5
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "8a7e939",
+  "remediation_checkpoint": "19b6658",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -286,15 +286,24 @@
       "source_checkpoint": "e98fecb",
       "commit": "8a7e939",
       "status": "Confirmed and remediated. Reopened synthetic KDBX returned a credential through both adapters for four port differences under two configurations; frontend suggestion dropped :8443. Fixed official HostnameAndPort reference independently corroborates explicit/default/omitted policy. Canonical authority now retains an optional explicit numeric port without guessing scheme defaults; frontend suggestions preserve ports and IPv6 brackets. Shared 27-case Rust/Node corpus and 19 supported suggested alt rules after KDBX reopen passed, plus Domain loose-scope control. First full gate only failed manual_strip clippy after behavior success; strip_prefix repaired it. Final full verify 303 frontend/560 Rust/ACL2. Strict JSON fixture formatting override and focused docs/TODO updated. No new DTO/IPC/setting/dependency/markup. Native extension, Android and complete per-URI/rule-interaction audit remain pending."
+    },
+    {
+      "id": "SP-S27",
+      "area": "CSV formula guards outside RFC quotes split columns and records",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "7cfe304",
+      "commit": "19b6658",
+      "status": "Confirmed and remediated. Frontend buildCsv and actual native VaultSession.export_csv each emitted eight synthetic rows with empty passwords. Independent Python stdlib csv.reader(strict=True) parsed 12 rows including header with inconsistent column counts and false guarded-value fidelity. Guard now precedes RFC quoting in both writers; independent read now returns nine rows of eight columns with all guarded values and literal apostrophes intact. One frontend wire and one native actual-file regression added. npm run verify passed with 304 frontend, 559 Rust and ACL2; two unrelated shared-clipboard tests explicitly filtered via an external Cargo runner. Private window-station creation was denied before launching checks; first gate failed one unrelated loopback resource error 10055, isolated recheck passed and final Rust tests ran serially. No test weakening, new IPC/settings/dependency/markup/CSS. Source apostrophes remain literal; formula guarding is not a lossless original-value migration. Native spreadsheet and Android device behavior remain unverified."
     }
   ],
   "verification": {
-    "command": "npm run verify",
-    "result": "passed",
-    "checkpoint": "8a7e939",
-    "log": "verify-hostname-port-complete.log",
-    "frontend_tests": 303,
-    "rust_unit_tests": 560,
+    "command": "npm run verify (RUST_TEST_THREADS=1; external Cargo runner filters two unrelated live clipboard tests)",
+    "result": "passed with explicit unrelated live-clipboard exclusions",
+    "checkpoint": "19b6658",
+    "log": "verify-csv-formula-quoting-complete.log",
+    "frontend_tests": 304,
+    "rust_unit_tests": 559,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -323,6 +332,19 @@
       "contact_sheet": "menu-keyboard-contact-sheet.png",
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
+    },
+    "rust_unit_tests_discovered": 561,
+    "rust_unit_tests_filtered": 2,
+    "excluded_live_tests": [
+      "vault::tests::entry_exchange_copy_then_paste_creates_a_new_entry",
+      "commands::clipboard::tests::scheduled_wipe_clears_our_own_text"
+    ],
+    "standard_csv_reader": {
+      "result": "passed",
+      "log": "csv-standard-reader-green.log",
+      "rows_including_header": 9,
+      "columns": 8,
+      "probe_sha256": "92ba448da46549efce567324639af8ff2a8a325084227a1f8c28e351688c56b8"
     }
   },
   "reverification_notes": [
@@ -369,6 +391,7 @@
     "4dbe49c closes SP-S23 unsafe URI import by rejecting unsupported documents rather than silently weakening source policy. Two temporary real-command/wire/host/reopened-KDBX probes failed for four restrictive modes and second URI loss; only counts were logged and the exact original test source was restored. Four permanent tests exercise explicit 0–5/mixed documents, multiple default URIs, twelve malformed shapes and six supported default/no-URI KDBX round trips; 19 targeted imports and full verify 299 frontend/552 Rust/ACL2 passed. Complete per-URI compatibility remains pending and current valid files using those features now reject. Fixed Bitwarden source 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 plus source hashes/official help snapshot recorded. No new DTO/IPC/matcher/setting/UI/dependency, user vault/clipboard/device or live extension exercised.",
     "1a3a680 repairs actual destination-host extraction without changing port/Exact policy. Two valid baseline red tests and independent WHATWG host results retained; three permanent unit/reopened-KDBX tests and full verify 299 frontend/555 Rust/ACL2 passed. Documentation currency updates shared helper, security and data references. Synthetic vaults only, no user vault or shared OS clipboard; native browser extension and Android APK/device remain unverified. Original baseline preserved, full goal still active.",
     "49a5be3 honors native complete Exact URL policy and preserves full frontend suggestion. Valid original red: ten wrong host matches and frontend query loss. Intermediate target/full gates failed legitimate uppercase-path Bridge URL; adapter pre-normalization repaired and request/submit regression passed. Final full verify 301 frontend/556 Rust/ACL2. Fixed official source dc0a59b60b3ac21da9944bc5b98fe96e706af80a; API quota and clone lazy-fetch failures were tooling only, pinned raw source obtained. Data/security/module documentation updated. Synthetic vaults only, no user vault/clipboard, native extension or Android APK/device evidence. Full goal remains active and mobile Save As unverified.",
-    "8a7e939 preserves strict Hostname destination ports and usable frontend rules. Actual KDBX/host baseline eight wrong matches plus frontend port-loss failure retained. Four native and two frontend regressions cover 27 canonical authority cases, 19 suggested alt rules, explicit/default/omitted ports and Domain scope. First full gate clippy manual_strip failure corrected; final full verify 303 frontend/560 Rust/ACL2. Fixed KPRPC URLSummary snapshot hash recorded. Source @/:// in bare path/query are no longer misclassified. Only synthetic vaults; native extension and Android APK/device remain unverified. CSV formula quoting is the next independently unconfirmed candidate, not an extra issue count. Original baseline unchanged, goal active on 2026-11-10."
+    "8a7e939 preserves strict Hostname destination ports and usable frontend rules. Actual KDBX/host baseline eight wrong matches plus frontend port-loss failure retained. Four native and two frontend regressions cover 27 canonical authority cases, 19 suggested alt rules, explicit/default/omitted ports and Domain scope. First full gate clippy manual_strip failure corrected; final full verify 303 frontend/560 Rust/ACL2. Fixed KPRPC URLSummary snapshot hash recorded. Source @/:// in bare path/query are no longer misclassified. Only synthetic vaults; native extension and Android APK/device remain unverified. CSV formula quoting is the next independently unconfirmed candidate, not an extra issue count. Original baseline unchanged, goal active on 2026-11-10.",
+    "19b6658 fixes SP-S27 CSV cell boundaries without removing formula protection. Standard-library reader independently reproduced both writers and confirms guarded-value fidelity after fix. Initial station creation failed WinError5 without launching tests; initial gate loopback 10055 failure is retained, isolated check and serial final gate passed. Full check explicitly excludes two shared-clipboard tests, not reported as executed. One vault exchange test lacks the usual live opt-in and needs a separate audit unit. Original baseline/score remains unchanged; goal active and mobile v1.6.5 Save As still lacks APK/device evidence."
   ]
 }

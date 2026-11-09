@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S26；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S27；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
-| Medium    | 22     | 22        | 0         |
+| Medium    | 23     | 23        | 0         |
 | Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **37** | **37**    | **0**     |
+| **Total** | **38** | **38**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1614,3 +1614,52 @@ documentation currency gate 同步数据/安全/模块/维护引用，TODO 仅�
 原始 15 项/6.1 分基线不变。完整逐 URI 迁移、regex/blocked 交互、
 原生扩展、Android APK/真机及剩余语义/UI 覆盖仍待继续；CSV 的公式
 防护与 RFC 引号组合进入下一轮独立验证，当前尚不计入正式发现。
+
+### Finding: SP-S27 CSV 公式防护前缀破坏标准单元格引用（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Stability / Testing
+- Status: Confirmed
+- Affected area: frontend and native CSV export
+- Evidence:
+  - File: `src/lib/utils/csv.ts:12`、`src-tauri/src/vault/serialize.rs:475`（`7cfe304` 修复前）
+  - Function / Module: `escapeCsv` / `escape_csv` / `export_csv`
+  - Relevant behavior: 两个 writer 都先引用原字段，再把公式防护撇号加在 CSV 引号外；标准读取器认为此字段已以普通字符开始，逗号和换行不再受引号保护。
+  - Reproduction: 前端 buildCsv 与实际合成 VaultSession.export_csv 各导出 8 条记录，密码全部为空；Python stdlib csv.reader(strict=True) 各读出 12 行（含表头），列数为 8/9/8/2/7/9/9/2/1/7/8/8，字段保真为 false。原生 wire 回归同时失败；日志 `csv-standard-reader-red.log`、`csv-backend-red.log`，仅记录行列数/布尔值。
+- Problem: 含危险前缀与逗号/引号/换行的标题、用户名、密码或笔记可能拆成额外字段或记录；内部宽松 parser 会掩盖 wire 格式问题。
+- Why it matters: 导出文件常用于迁移或应急读取，字段错位会将内容解释到错误列，造成数据损坏。
+- Realistic failure scenario: 笔记以减号开头并包含换行，另一个 CSV 客户端将笔记拆成多条记录；带逗号的公式样式字段把后续凭据列整体移位。
+- Minimal fix: 先把防护前缀加入字段值，再统一执行 RFC 4180 引号及双引号转义；保留已有前缀保护策略。
+- Better long-term fix: 用独立标准读取器覆盖两个 writer 的合成输出，并独立评估导入严格性及公式防护造成的值变化，避免删除用户原有撇号。
+- Regression test suggestion: 六种危险前缀分别组合逗号/引号/CRLF，检查实际原生文件和前端序列化、行列数、已有撇号和普通引用单元格不变。
+- Estimated effort: 0.5–1 小时（两个 writer 及导出 wire 回归）
+
+`19b6658` 已修复 SP-S27。前端及 Rust writer 先对字段值添加原有公式
+防护，再执行 RFC 引号引用和双引号转义。原有普通撇号保持字面值。
+`csv-standard-reader-green.log` 的独立 Python stdlib strict reader 对
+两份实际输出均读出 **9 行（含表头）、每行 8 列**，所有防护后的
+字段值一致。前端 wire 回归和原生实际文件回归覆盖六种前缀、逗号、
+双引号、CRLF、普通引用内容和原有撇号；临时审计输出语句已从测试移除。
+独立 reader 脚本 SHA-256
+92ba448da46549efce567324639af8ff2a8a325084227a1f8c28e351688c56b8。
+
+本轮首先尝试独立 Windows window station；CreateWindowStation 返回
+WinError 5，未启动测试。随后通过任务外部 Cargo runner 明确排除两项
+共享剪贴板测试：entry_exchange_copy_then_paste_creates_a_new_entry 和
+scheduled_wipe_clears_our_own_text；后者已有环境开关，前者开关缺失将另行
+审计。没有接触用户数据库或共享剪贴板，也没有修改测试命令的仓库配置。
+第一轮门禁 `verify-csv-formula-quoting.log` 的 CSV 回归通过，但已有
+loopback listener-stop 测试发生系统套接字资源不足 10055；单独复跑
+`csv-loopback-resource-recheck.log` 通过。保留失败日志后以
+RUST_TEST_THREADS=1 串行复跑完整门禁，正式
+`verify-csv-formula-quoting-complete.log` 终态 exit 0：前端 **304**、
+Rust **559 通过 / 2 明确过滤**（发现 561 项）、ACL **2**，格式、
+Svelte、150 键契约、生产构建与 clippy 均通过。未将过滤测试计为执行。
+
+documentation currency gate 更新数据/安全/模块引用与这一有限 TODO。
+没有新 IPC/配置/依赖或 UI markup/CSS；防护会改变原字段值，此修复
+不声称可无损导回，也不声称真实 Excel/LibreOffice 执行验证。当前
+卡片 **38**（High 10 / Medium 23 / Low 5），原始 15 项/6.1 分不变。
+整体审计继续进行；CSV 导入严格性、逐 URI 迁移及其余语义/UI 覆盖
+继续核查，手机 v1.6.5 另存为仍缺新 APK/真机选择器验证。
