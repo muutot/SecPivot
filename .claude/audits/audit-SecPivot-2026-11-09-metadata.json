@@ -33,7 +33,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "8c09399",
+  "remediation_checkpoint": "79f48c8",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -57,6 +57,12 @@
       "commit": "c97a894",
       "evidence": "64 incomplete HTTP requests retained 64 workers in an isolated socket fixture before the fix; production admission budget limited the same fixture to 32; shared listener restart/refusal/recovery and handler unwind tests passed",
       "limitations": "No process memory exhaustion or live Tauri/extension denial-of-service reproduction; SP-S06 tracks the separately verified shutdown fix and remaining frontend prompt cancellation"
+    },
+    "SP-11": {
+      "current_status": "Confirmed, partially remediated",
+      "commit": "79f48c8",
+      "evidence": "Two production renderer regressions failed before the fix: a pending Clipboard API write restored content after lock clear and a delayed older write overwrote a newer copy. Same-renderer promise queue, epoch cancellation, pending write drain, rejection recovery, conditional native clear order and synchronous idle start passed. Intermediate queue/lock sequencing regression exposed delayed session closure and was corrected by starting closeAll and clearing together.",
+      "limitations": "Synthetic platform API promises, no shared OS clipboard or user vault. Cross-renderer/native binary-copy order and external identical-copy sequence ownership remain pending."
     }
   },
   "supplemental_findings": [
@@ -141,9 +147,9 @@
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "8c09399",
-    "log": "verify-onepassword-json-line-final.log",
-    "frontend_tests": 243,
+    "checkpoint": "79f48c8",
+    "log": "verify-clipboard-renderer-write-order-final.log",
+    "frontend_tests": 249,
     "rust_unit_tests": 522,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -194,6 +200,7 @@
     "Cancelled attempt followed by stored-key setup initially discarded the cancellation lease while retaining pending SRP; production regression failed, fixed by clearing all pending SRP state on any setup after cancellation; final full gate passed at 242 frontend, 518 Rust, ACL 2",
     "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review",
     "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending",
-    "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests"
+    "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests",
+    "79f48c8 orders same-renderer text writes and conditional/explicit clears; first two real-module regressions failed before source remediation. A third intermediate-fix regression caught delayed vault close while awaiting pending writes; closeAll now starts independently. Six new frontend regressions passed; full verify 249 frontend, 522 Rust, ACL 2. SP-11 remains partial for cross-window/native binary/external sequence ownership."
   ]
 }

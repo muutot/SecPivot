@@ -913,3 +913,30 @@ security-model 与 project-structure；TODO 继续 partial，完整导入未被�
 当前详细卡片保持 **21**，原始 15 项与 6.1 分基线不变。手机 v1.6.5 另存为
 仍只有 ACL 源码修复证据，无新 APK 或真机选择器验证；SAF provider、剪贴板并发、
 原生 XML、现代 1PUX 与其余完整语义/UI 覆盖仍须继续处理，整体目标保持进行中。
+
+`79f48c8` 补齐 SP-11 的单 renderer 写入顺序。修复前生产 clipboard.ts 在
+copyRaw 完成后才检查代次；用真实模块图与两个可控 Clipboard API Promise
+复现：A 写入未完成 → 锁定清空 → A 完成，会恢复合成秘密且不安装清理 timer；
+A 未完成 → B 完成 → A 完成，会让旧 A 覆盖新 B。两项断言真实失败，见
+`clipboard-renderer-pending-write-red.log`。仅替换平台 API，没有用户 vault 或
+共享 OS 剪贴板操作，结论为受支持异步完成时序的代码缺陷，非真机测量。
+
+修复增加同一 renderer 的文本写入/条件 native clear/显式 clear Promise 队列。
+空闲写入仍同步开始，保留 consumer guard 与实际写入之间的调用边界；新操作
+同步释放旧 ownership，旧排队复制被代次取消，已开始的写入完成后才显式清空。
+Browser read/hash 等待不占队列，其最后 clear 重新验证 ownership；拒绝的写入
+不损坏队列。初版队列复核还实际失败于 lockVault 原先 await clear 后才 closeAll
+的顺序：等待平台写入会阻塞会话关闭，见 `clipboard-lock-close-pending-red.log`。
+这属于修复中发现并纠正的边界，未新增为基线产品卡片。最终 lockVault 同步发起
+ownership 失效后，并行启动 session close 与 clipboard clear；即使写入仍未完成，
+会话关闭已执行，迟到的写入随后仍清空。lockAfterAction 的保留剪贴板选择保持。
+
+`clipboard-service.test.mjs` 现在 14 项，其中新增六项覆盖待写/锁定、旧写覆盖新写、
+取消排队复制与提前会话关闭、拒绝后恢复、旧 native wipe 与新相同文本复制的
+顺序，以及空闲复制同步开始。最终完整 `npm run verify` 日志
+`verify-clipboard-renderer-write-order-final.log`：格式、Svelte check、150 键契约、
+构建、前端 **249**、Rust **522 + ACL 2**、clippy 全通过。维护文档 currency gate
+同步 security-model、data-contracts、project-structure 与 partial TODO。
+本队列没有协调另一 webview、原生 binary-copy command 或外部程序的 clipboard
+sequence；这些并发/ownership 边界仍待验证，SP-11 继续 partial，整体目标进行中。
+当前详细卡片与原始基线统计不变；无 markup/CSS 变化，也无新 APK/设备验证。
