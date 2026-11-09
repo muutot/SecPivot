@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S28；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S29；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
-| Medium    | 23     | 23        | 0         |
+| Medium    | 24     | 24        | 0         |
 | Low       | 6      | 6         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **39** | **39**    | **0**     |
+| **Total** | **40** | **40**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1698,3 +1698,57 @@ RUST_TEST_THREADS=2 运行完成 exit 0：前端 **304**、Rust harness
 或任何领域断言。当前卡片 **39**（High 10 / Medium 23 / Low 6）；
 原始基线不变，完整审计继续。CSV 异常引号的转换/模拟 IPC 与独立
 标准 reader 已显示差异，将单独记录修复，不合并进此测试安全单元。
+
+### Finding: SP-S29 CSV 导入静默接受异常引号并提交损坏字段（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Stability / Frontend state
+- Status: Confirmed
+- Affected area: CSV parser and main-window CSV import
+- Evidence:
+  - File: `src/lib/utils/csv.ts:47`、`src/lib/services/io.ts:124`、`src/routes/+page.svelte:1115`（`86bfab8` 修复前）
+  - Function / Module: `parseCsv` / `csvToImportEntries` / `handleImportCsv`
+  - Relevant behavior: parser 在任何位置见双引号都进入引用，不验证结束引用后的字符，也不拒绝 EOF 时尚在引用中；残缺内容正常返回条目，页面没有解析错误反馈分支。
+  - Reproduction: 两个纯合成文件分别缺少结束引号、在结束引号后接 junk；实际 csvToImportEntries 各返回 2/1 条，真实 importEntries 服务均向模拟 Tauri adapter 提交 1 次 bulk IPC。Python stdlib csv.reader(strict=True) 独立拒绝两者，合法含逗号/双引号/CRLF 对照均正常。`csv-malformed-io-red.log`、`csv-malformed-standard.log` 仅记录计数和布尔值，未写用户数据库。
+- Problem: 不完整文件会把后续字段/记录拼进引用字段，异常引号也会被删除或拼接；用户看到正常导入，无法发现原文件已损坏。
+- Why it matters: 迁移的标题、用户名、密码及笔记边界必须保持；识别到格式错误时整份解析失败才能避免局部正确记录掩盖后续损坏。
+- Realistic failure scenario: 导出/传输截断了最后一个多行字段的结束引号，导入器仍保存被截断的记录，且不提示重新取得完整文件。
+- Minimal fix: 按字段开始/引用中/已结束引用的状态验证 CSV 语法，未闭合、非引用字段内双引号及结束引用后的非法字符明确拒绝；页面捕获本地化、无字段内容的解析错误并停止导入。
+- Better long-term fix: 保留合法 BOM、双引号转义和多行字段语料，并用独立标准读取器验证；对历史不合规范导出明确提示检查原文件，不猜测或删除真实内容以继续导入。
+- Regression test suggestion: 完整前缀后接残缺记录应整份失败，错误不含合成标记；实际服务/页面 handler 不提交批量写入，合法多行保真且切换视图后旧结果不显示反馈。
+- Estimated effort: 1–2 小时（状态验证、中文反馈、服务/页面回归）
+
+`e1f4bdd` 已修复 SP-S29。parser 显式区分字段开始、引用中和引用结束，
+异常格式整份抛出无内容 CsvParseError；IO 翻译为当前语言，CSV 页面
+捕获并显示错误，先检查发起视图再解析。保留 BOM、quoted empty、
+escaped quotes、原始 CR/LF 内容，以及 CRLF/LF/CR 行结束。未删除
+真实撇号、未猜测修复历史不合规范的文件；这些文件现在会明确拒绝。
+
+新增两项 parser、三项真实服务/提取页面 handler 回归，覆盖残缺尾部
+整份拒绝、内容不泄露、中文提示不带英文 Error 前缀、合法多行批量
+字段及 A→B→A 旧选择不写入/不提示。Python stdlib writer 独立生成
+**288** 组合法文档，含最小/全引用、BOM、空字段、空白、逗号、双引号、
+CR/LF、多行、Unicode、尾行结束变体，全部字段保真。
+`csv-valid-standard-corpus.log`、`csv-strict-import-final-targeted-complete.log`
+及 `csv-malformed-io-green.log` 保存计数/布尔证据。
+
+真实浏览器验证在全新 headless Edge profile、独立 Vite dev 实例完成：
+菜单→文件选择→FileReader→主页面，异常文件显示中文提示，合成库仍为空
+且 dirty=false；合法文件导入一条，多行 notes/title 原值保留，pageerror=0。
+`csv-import-browser-final.log`、760×520 dark 截图
+`csv-import-feedback-dark.png` 已检查，临时 Vite 进程已终止。最初长期
+开发服务器 fixture 未进入主视图而超时；独立服务后 locator 又同时匹配
+桌面/移动两个节点，限定可见行后通过。这些失败未计为产品问题。去掉
+英文 Error 前缀的提取 handler 测试曾因 VM/服务不同 Error 构造器失败，
+绑定与实际应用一致的构造器后通过；失败日志完整保留。
+
+正式 `verify-csv-strict-import-complete.log` 终态 exit 0：前端 **309**、
+Rust harness **561**、ACL **2**，格式、Svelte、150 键契约、构建与
+clippy 通过，RUST_TEST_THREADS=2，无外部过滤。四个原生剪贴板 body
+因缺省显式开关 skip，不称为实际 OS 互操作通过。开发数据/安全/模块
+引用同步，TODO 仅新增由这些证据覆盖的 CSV 语法项。无新 IPC/配置/
+依赖或 CSS/markup；浏览器 fallback 不证明原生/Android 运行行为。
+当前卡片 **40**（High 10 / Medium 24 / Low 6），原始 15 项/6.1 分不变。
+整体目标继续：XML 解析错误反馈、提示色彩语义、逐 URI 迁移及其余
+系统/UI 覆盖仍待核查，手机 v1.6.5 另存为仍缺 APK/真机验证。
