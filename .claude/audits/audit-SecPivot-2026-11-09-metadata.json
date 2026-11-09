@@ -21,19 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S37; historical supplemental tracking notes excluded",
-    "total": 48,
-    "confirmed": 48,
+    "scope": "15 baseline cards plus SP-S05 through SP-S39; historical supplemental tracking notes excluded",
+    "total": 50,
+    "confirmed": 50,
     "suspected": 0,
     "by_severity": {
-      "High": 11,
+      "Critical": 1,
+      "High": 12,
       "Medium": 28,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "17dd196",
+  "remediation_checkpoint": "4fbc748",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -66,6 +67,24 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S39",
+      "area": "Sparse KDBX4 binary references corrupt other current attachments after recycle cleanup",
+      "severity": "Critical",
+      "confidence": "High",
+      "source_checkpoint": "93c7953",
+      "commit": "4fbc748",
+      "status": "Confirmed and remediated. Actual synthetic delete/empty-recycle/save/reopen lost an untouched entry attachment; an independent project using original registry keepass 0.13.22 failed too. XML references now share exact dense header order for all current/history entries and missing references reject publication. Current loss scope is attachments, not password fields or decryption. Full verify 316/582/ACL2 passed; native KeePass client and Android provider interoperability remain unverified."
+    },
+    {
+      "id": "SP-S38",
+      "area": "Attachment mutation destroys historical ownership or reuses old payload IDs",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "93c7953",
+      "commit": "4fbc748",
+      "status": "Confirmed and remediated for ownership. Three actual native synthetic mutation regressions failed before patch; leases and version-specific references now preserve old binaries, while history removal reclaims only affected orphans. Nine new application regressions, two dependency shared-owner/unwind tests, and full verify 316/582/ACL2 passed. Pinned crate retains 57 byte-identical upstream files and three reviewed patches; fresh archive + patch rebuild matches all 60 hashes. Whole attachment-set restoration remains pending."
+    },
     {
       "id": "SP-S37",
       "area": "Bitwarden JSON silently discards official source password history",
@@ -383,12 +402,12 @@
     }
   ],
   "verification": {
-    "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
+    "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "ed5a86d",
-    "log": "verify-import-favorite.log",
+    "checkpoint": "4fbc748",
+    "log": "verify-attachment-integrity-final.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 564,
+    "rust_unit_tests": 582,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -418,7 +437,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 564,
+    "rust_unit_tests_discovered": 582,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -488,6 +507,17 @@
       "screenshots": ["import-favorite-760.png", "import-favorite-390.png"],
       "reference_provenance": "bitwarden-export-metadata-provenance.json",
       "scope": "Synthetic command/wire/KDBX reopen and fresh Edge CSV page; no native Bitwarden export/device or clipboard"
+    },
+    "attachment_integrity": {
+      "application_red_logs": ["historical-attachment-red.log", "sparse-attachment-ids-red.log"],
+      "independent_registry_red_log": "sparse-attachment-registry-independent-red.log",
+      "targeted_green_log": "attachment-history-and-ids-green.log",
+      "targeted_tests": 14,
+      "dependency_green_log": "keepass-patched-shared-unwind-corrected.log",
+      "dependency_tests": 2,
+      "provenance_gate": "npm run verify:keepass-patch: 60 verified files, 3 reviewed patches",
+      "reconstruction": "Fresh original archive plus git -c core.autocrlf=false apply --unidiff-zero: all 60 SHA256 hashes match",
+      "scope": "Synthetic vaults and source references; no user vault, shared clipboard, native KeePass client, Android APK/device or provider I/O"
     }
   },
   "reverification_notes": [
@@ -542,6 +572,7 @@
     "414e049 fixes SP-S31 explicit failure severity across page and IO/group/favicon/editor seams. Actual source probes, 38 adjacent IO tests and nine rendered Edge combinations passed; full verify 312/561/ACL2 exit 0. Default live clipboard bodies skipped; no new token or CSS geometry. External patch-script TypeScript resolution/trailing-comma faults corrected before final gate and not counted as product findings. Baseline unchanged, goal active; light contrast and mobile Save As APK/device remain pending.",
     "34b6768 fixes SP-S32 transient tip text contrast using existing primary text token. Independent Edge measured 12/18 baseline failures and 18/18 green passes, including actual import errors/success. Eighteen screenshots inspected; check/build/format passed; full gate remains at 414e049 until a later integration run. Original baseline unchanged, goal active; long-message geometry and Android Save As device/APK remain pending.",
     "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending.",
-    "ed5a86d fixes SP-S34 favorite loss across structured and CSV import, frontend metadata and native/browser bulk creation. Three native and three frontend red-to-green plus invalid localized CSV regression passed; six favorite Rust tests and real chooser/icon checks passed. Full verify 316/564/ACL2 exit 0 with four live clipboard bodies skipped. Source docs/TODO synchronized; original baseline preserved. Official JSON excludes trash and includes passwordHistory; attachments belong to ZIP, so initial deleted-item hypothesis is not promoted. Full migration/mobile Save As/remaining system/UI audit still active."
+    "ed5a86d fixes SP-S34 favorite loss across structured and CSV import, frontend metadata and native/browser bulk creation. Three native and three frontend red-to-green plus invalid localized CSV regression passed; six favorite Rust tests and real chooser/icon checks passed. Full verify 316/564/ACL2 exit 0 with four live clipboard bodies skipped. Source docs/TODO synchronized; original baseline preserved. Official JSON excludes trash and includes passwordHistory; attachments belong to ZIP, so initial deleted-item hypothesis is not promoted. Full migration/mobile Save As/remaining system/UI audit still active.",
+    "4fbc748 fixes SP-S38/SP-S39 together as one complete attachment invariant. Valid native history red had three failures; sparse-ID loss reproduced independently with original registry crate. First full gate had one S3 100-page fixture connection failure at page 82; unchanged isolated fixture and serial final full gate passed, without attributing the single failure to product or environment. Final verify 316/582/ACL2 and two dedicated dependency tests passed; four live clipboard bodies skipped. Early fixture compile failures and blanket rustfmt drift were corrected; 57 upstream files restored and provenance gate passed. Initial optional patch reconstruction had only CRLF differences on three files; explicit core.autocrlf=false fresh reconstruction verified all 60 hashes. Data/security/structure/maintenance references and partial history TODO synchronized. Full attachment restore, imports, remaining system/UI coverage and v1.6.5 mobile Save As APK/device remain pending; baseline b7c5d9f and 6.1 score unchanged."
   ]
 }

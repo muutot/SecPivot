@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S37；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S39；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
-| Critical  | 0      | 0         | 0         |
-| High      | 11     | 11        | 0         |
+| Critical  | 1      | 1         | 0         |
+| High      | 12     | 12        | 0         |
 | Medium    | 28     | 28        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **48** | **48**    | **0**     |
+| **Total** | **50** | **50**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2062,3 +2062,66 @@ v1.6.5 Save As APK/设备验证仍未完成，目标 active。
 逐 URI/集合/ZIP/1PUX、KDF/剪贴板生命周期及其余系统/UI 覆盖。手机
 v1.6.5 云端库另存为的 ACL 源码修复已有 host tests，但没有新版 APK
 与 Android provider/选择器真机结果，不能标记已恢复。
+
+### Finding: SP-S38 附件替换/删除破坏历史数据并产生无效引用（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data integrity / Stability / Dependency correctness
+- Status: Confirmed
+- Affected area: Native attachment mutations and keepass history attachment ownership
+- Evidence:
+  - File: `src-tauri/src/vault/serialize.rs:720`、`src-tauri/src/vault/entries.rs:354`、`src-tauri/src/vault/entries.rs:1130`（`93c7953` 修复前）；keepass 0.13.22 `src/db/types/entry.rs:380/454/473/832`
+  - Function / Module: sync_attachments / add_attachment_payloads / EntryMut::remove_attachment_by_name / EntryTrack::drop
+  - Relevant behavior: track_changes 在 drop 才追加快照，没有保留待追加快照的附件所有权。附件移除清掉同 entry 的全部 refs，而非仅当前版本；旧数据被删除后快照仍指向旧 id。next_free 可重用该 id，历史随即指向新数据。
+  - Reproduction: 合成 KDBX 先保存并重开，再通过实际 update_entry 替换/删除或 add_attachments 同名替换。`historical-attachment-red.log` exit 101：三个回归均失败；前两项访问历史附件在 AttachmentRef 内 panic，后一项内存旧值不等且保存重开仍不等，save 本身却成功。
+  - Independent verification: 固定官方 KeePass PwEntry.cs commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5（SHA256 a68f2d7df7a0d49940b63387ed20634f849e60de6f4bb01c4f0ab8a4becba230）CreateBackup/CloneDeep 保留旧 Binaries。只读检查 crates.io 0.13.25 与 0.17.0，相关删除/track/drop 逻辑仍相同，不能声称升级会解决。
+- Problem: 合法附件编辑后，旧历史不再保留原数据，可能指向不存在的二进制或另一个新附件。
+- Why it matters: 历史恢复与审计无法依赖历史附件；命令可以在变更途中 panic，或成功保存错误历史。没有真实用户库损坏或整进程崩溃证据，不按 Critical 的不可恢复当前库损坏定级。
+- Realistic failure scenario: 修改已有附件，之后查看/恢复旧版本，却读取新内容或触发无效引用；删除附件同样使旧快照失去原始数据。
+- Minimal fix: 修正依赖的版本级引用和待追加历史保留，快照落地后重建实际引用；历史裁剪/删除后重新索引并只清理真正孤立数据。保留原 pinned version 与明确源码来源，不修改本机 Cargo registry。
+- Better long-term fix: 将最小引用修复反馈至上游并在有真实修复的版本上移除本地补丁；恢复入口完整附件恢复仍需独立验证，不能用 catch_unwind 或忽略缺失值代替历史保真。
+- Regression test suggestion: 编辑器替换/删除、详情替换、已有多个历史与共享附件、历史裁剪/删除、待追踪期间修改、KDBX 保存重开均保留旧值；回收只删除无当前/历史/待追加拥有者的内容。
+- Estimated effort: 3–6 小时（依赖局部修复、保真与引用回收回归）
+
+### Finding: SP-S39 回收站清理后 KDBX 二进制序号错位导致其他附件丢失（补充发现）
+
+- Severity: Critical
+- Confidence: High
+- Category: Data integrity / Storage / Dependency correctness
+- Status: Confirmed
+- Affected area: keepass KDBX4 XML Binary Ref versus inner-header binary order
+- Evidence:
+  - File: keepass 0.13.22 `src/format/xml_db/mod.rs:56–78`、`src/format/xml_db/entry.rs:190–200`、`src-tauri/src/vault/entries.rs:980`
+  - Function / Module: xml_db::to_xml / Entry::db_to_xml / empty_recycle_bin
+  - Relevant behavior: 文件头按存活 AttachmentId 排序后只输出二进制内容，序号成为连续 0..N；XML Binary Ref 却继续使用原来的稀疏 id。解析器仅接受实际存在的头序号，静默忽略超出序号的引用。
+  - Reproduction: 创建三个合成条目，各有独立附件；通过实际 delete_entries/empty_recycle_bin 删除中间条目，保存成功并重开后最后一个未删除条目没有附件。`sparse-attachment-ids-red.log` exit 101。回归执行时仅引用管理已补丁，XML writer 与原始 registry 文件逐字节一致，因此不是新增 writer 行为。
+  - Independent verification: 独立小项目仅依赖原始 registry keepass 0.13.22，`sparse-attachment-registry-independent-red.log` exit 101 复现同样丢失；对比 header 的排序/连续枚举和 XML 旧 id，同一现象在历史删除后的保存重开回归出现。KDBX4 头的二进制位置必须与 Ref 保持一致；不把内存 AttachmentId 当作文件内序号。
+- Problem: 删除操作可使未删除条目的当前附件引用失效或指向另一段内容，且保存仍返回成功。
+- Why it matters: 这是正常操作触发的当前数据损坏，符合 Critical 的正常操作数据丢失/损坏条件；影响限定于附件映射，不声称密码字段丢失、整库不可解密或远程攻击。尚未接触真实用户库。
+- Realistic failure scenario: 清空回收站释放中间二进制 id，随后保存并重开；后面的附件丢失，用户再次保存/回收时还可能丢弃已无法从条目访问的孤立内容。
+- Minimal fix: 同一次序列化为所有 Binary Ref 建立与头数组完全相同的 dense-id 映射，包含分组递归/历史；无法映射的引用明确拒绝保存。加载时重建所有当前/历史附件反向引用，防止后续回收误删其他条目的数据。
+- Better long-term fix: 上游修复并加入独立 KDBX 客户端的稀疏二进制互操作；现有局部历史修复必须连同 dense-id 写入检查，不能先发布会进一步释放 id 的版本。
+- Regression test suggestion: 清理中间条目、多个稀疏 id、当前/历史与跨条目共享附件保存重开仍保持数据；缺失引用保存拒绝、旧目标保持、加载后全局回收只删除孤立数据。
+- Estimated effort: 2–4 小时（序列化映射、加载索引及真实 KDBX 回归，与 SP-S38 同一完整引用不变量）
+
+`4fbc748` 已同时修复 SP-S38/SP-S39 的完整附件引用不变量。14 项附件相关
+应用测试、2 项依赖共享/guard unwind 测试通过；最终
+`verify-attachment-integrity-final.log` exit 0：316 frontend、582 Rust、ACL 2，
+`RUST_TEST_THREADS=1`、无外部过滤，四个剪贴板 live body 默认跳过。
+局部 keepass 补丁保留原 pinned version 与 MIT license；57 文件逐字节不变，
+仅 3 个 Rust 文件修改，provenance/格式 gate 通过。原始 archive 重新解压后，
+用显式 `core.autocrlf=false` 应用 zero-context patch，全部 60 文件 SHA256
+与 provenance 相同；初次默认行尾转换的差异不作为产品缺陷。
+
+首轮完整门有一次 S3 100-page fixture 在第 82 页连接失败；原测试单独重跑
+与最终串行 full gate 都通过，没有据此归因产品或环境。初始 fixture 编译
+错误、非 workspace 测试方式和 blanket rustfmt drift 均已纠正，与有效产品
+red 证据区分。未执行原生 KeePass 客户端：现存参考 ZIP 无法解压，官方
+源码对照只支持格式/语义结论，不替代客户端互操作。
+
+本提交同步 data/security/project-structure/maintenance 引用，并将整条目
+历史 TODO 保留 partial：当前恢复入口仍未替换附件集合。旧损坏文件恢复、
+完整历史恢复、外部附件修改快照及其余系统/UI 审计继续进行；手机 v1.6.5
+云端库另存为仍缺新版 APK/选择器/provider 真机证据。原始基线和评分不变，
+目标继续 active。本报告更新不改变产品契约，无额外 reference 修改需要。
