@@ -10,6 +10,9 @@ format with separators, quotes, multiline fields and literal apostrophes.
 `io.csvToImportEntries` localizes it and the main CSV handler stops before writes.
 `io-import.test.mjs` exercises that actual extracted handler, valid multiline
 bulk fields and obsolete picker completions, alongside the parser wire tests.
+The same tests extract the XML handler to check its error/view boundary and
+XML-only filter; actual DOMParser/menu/filechooser behavior is verified with
+fresh-browser synthetic XML, not inferred from the handler fixture.
 
 `GroupTree` initializes known UUIDs from every initial group independently of
 persisted expansion flags; existing collapsed groups must never auto-expand as

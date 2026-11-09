@@ -16,6 +16,12 @@ translates that content-free error with the current locale by default. The main
 CSV handler catches it under the captured view and stops before group creation
 or batch IPC. It also discards an obsolete picker completion before parsing.
 
+The XML page handler likewise checks the captured view before conversion and
+catches parser failures with localized content-free feedback before any group
+or batch write. Its picker lists XML only; Android MIME fallbacks still cover
+text/xml and generic provider text. Malformed and encrypted-field XML continue
+to fail at the existing parser boundary, while stale picker results do not parse.
+
 New-entry templates resolve all hidden password, OTP and protected-field values
 atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
 show an error. Component destruction or a session/path change invalidates pending

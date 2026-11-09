@@ -1148,10 +1148,20 @@
     const baseGroupUuid = selectedGroup;
     const text = await pickImportFile(ioHost, view, [
       { name: t(settings.general.language, "page.filterXml"), extensions: ["xml"] },
-      { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
     ]);
-    if (text === null) return;
-    const entries: ImportEntry[] = xmlToImportEntries(text, settings.general.language);
+    if (text === null || !sessionView.isCurrent(view)) return;
+    let entries: ImportEntry[];
+    try {
+      entries = xmlToImportEntries(text, settings.general.language);
+    } catch (e) {
+      if (sessionView.isCurrent(view))
+        flash(
+          t(settings.general.language, "io.importFailed", {
+            e: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      return;
+    }
     if (entries.length === 0) {
       flash(t(settings.general.language, "page.noXmlEntries"));
       return;
