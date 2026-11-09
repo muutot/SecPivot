@@ -353,3 +353,10 @@ Android provider interoperability. History restore clones binary Values only
 inside the native session before mutation/retention, preserving protection flags
 and the pre-restore undo snapshot. The returned DTO has names/sizes only.
 External attachment edit snapshots remain a separate audit boundary.
+
+A configured zero history count/size does not retain superseded passwords or
+attachments after tracked edits. Positive size ceilings also apply to a single
+oversized snapshot; there is no mandatory minimum-one exception. Negative
+limits remain unlimited. This is encrypted-vault retention, not secure erasure
+of filesystem blocks, backups, orphan input payloads or JavaScript memory.
+Metadata-only changes do not perform an eager database-wide history purge.
