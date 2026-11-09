@@ -1145,9 +1145,9 @@ impl VaultSession {
                 entry.get(FIELD_NOTES).unwrap_or_default(),
                 false,
             );
-            if let Some(seed) = entry.get_raw_otp_value() {
-                if !seed.is_empty() {
-                    write_string_field(xml, "otp", seed, false);
+            if let Some(value) = entry.fields.get(FIELD_OTP) {
+                if !value.get().is_empty() {
+                    write_string_field(xml, FIELD_OTP, value.get(), value.is_protected());
                 }
             }
             let mut names: Vec<&String> = entry
@@ -1160,6 +1160,19 @@ impl VaultSession {
                 let value = &entry.fields[name];
                 write_string_field(xml, name, value.get(), value.is_protected());
             }
+            xml.push_str("<Times><Expires>");
+            xml.push_str(if entry.times.expires == Some(true) {
+                "True"
+            } else {
+                "False"
+            });
+            xml.push_str("</Expires>");
+            if let Some(expiry) = entry.times.expiry {
+                xml.push_str("<ExpiryTime>");
+                xml.push_str(&format_iso(expiry));
+                xml.push_str("</ExpiryTime>");
+            }
+            xml.push_str("</Times>");
             xml.push_str("</Entry>");
         }
         fn walk(xml: &mut String, group: &keepass::db::GroupRef<'_>) {

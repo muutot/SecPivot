@@ -22,6 +22,10 @@ KeePass XML export uses the official PlainXml value contract: escaped literal
 text and `ProtectInMemory="True"`. Import decodes old unencrypted `Protected`
 Base64 only when `Meta/Generator` identifies SecPivot, with strict UTF-8 validation;
 foreign encrypted fields and mixed protection markers fail before any import writes.
+Native `TimeOtp`, `HmacOtp`, `SteamOtp` and `steam` fields remain custom fields,
+including their protected flags; only `otp` uses the dedicated input. XML export
+writes actual OTP keys once and includes entry expiry. Browser export-row mapping
+copies custom fields and expiry instead of reducing XML to the CSV field set.
 
 ## Config contract
 

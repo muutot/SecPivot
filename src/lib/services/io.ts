@@ -17,7 +17,7 @@ import {
   type SessionViewToken,
 } from "$lib/utils/session-state";
 import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
-import type { EntryInput, ImportRow, VaultState } from "$lib/types/vault";
+import type { CustomField, EntryInput, ImportRow, VaultState } from "$lib/types/vault";
 import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
 import { isTauriRuntime, appSettings } from "$lib/services/settings";
@@ -56,7 +56,7 @@ export type ImportEntry = {
   totp?: string;
   /** ISO-8601 expiry; empty/absent disables expiry (only KeePass XML supplies it). */
   expires?: string;
-  customFields: { name: string; value: string }[];
+  customFields: CustomField[];
 };
 
 /** One flattened export row: entry fields plus its resolved group path. All
@@ -69,6 +69,8 @@ export type ExportSourceRow = {
     url?: string;
     notes?: string;
     totp?: string;
+    expires?: string;
+    customFields?: CustomField[];
     favorite?: boolean | null;
   };
   path: string;
@@ -99,6 +101,8 @@ export function toXmlExportRows(source: ExportSourceRow[]): XmlExportRow[] {
     url: entry.url ?? "",
     notes: entry.notes ?? "",
     totp: entry.totp ?? "",
+    expires: entry.expires,
+    customFields: entry.customFields?.map((field) => ({ ...field })),
   }));
 }
 

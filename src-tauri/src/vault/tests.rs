@@ -6074,6 +6074,55 @@ fn export_xml_writes_kepass_structure_and_escapes() {
     assert!(text.ends_with("</Root></KeePassFile>\n"));
 }
 
+#[test]
+fn xml_preserves_native_otp_custom_protection_and_expiry() {
+    use super::helpers::parse_entry_otp_spec;
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    // This is the EntryInput wire shape produced by the XML import pipeline.
+    let input: EntryInput = serde_json::from_value(serde_json::json!({
+        "groupUuid": "root", "title": "Synthetic HOTP", "username": "", "password": "",
+        "url": "", "notes": "", "expires": "2030-01-02T03:04:05Z",
+        "customFields": [{ "name": "HmacOtp", "value": "JBSWY3DPEHPK3PXP:6:42", "protected": true }],
+        "attachments": []
+    })).unwrap();
+    let state = session.add_entries(&[input]).unwrap();
+    let uuid = &state.root.entries[0].uuid;
+    let field = &state.root.entries[0].custom_fields[0];
+    assert!(field.protected);
+    assert!(
+        field.value.is_empty(),
+        "protected OTP must stay out of the snapshot"
+    );
+    let xml = session.export_xml_content().unwrap();
+    assert!(xml.contains(
+        "<Key>HmacOtp</Key><Value ProtectInMemory=\"True\">JBSWY3DPEHPK3PXP:6:42</Value>"
+    ));
+    assert!(
+        !xml.contains("<Key>otp</Key>"),
+        "native OTP must not be shadowed by a new TOTP field"
+    );
+    assert!(xml.contains(
+        "<Times><Expires>True</Expires><ExpiryTime>2030-01-02T03:04:05Z</ExpiryTime></Times>"
+    ));
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    let db = reopened.require_db().unwrap();
+    let entry = db
+        .entry(super::helpers::parse_entry_id(uuid).unwrap())
+        .unwrap();
+    let spec = parse_entry_otp_spec(&entry).unwrap();
+    assert_eq!(spec.kind, otp::OtpKind::Hotp);
+    assert_eq!(spec.counter, 42);
+    assert!(entry.fields[FIELD_HMAC_OTP].is_protected());
+    assert_eq!(
+        entry.times.expiry,
+        parse_expiry(Some("2030-01-02T03:04:05Z"))
+    );
+    assert_eq!(entry.times.expires, Some(true));
+}
+
 /// Create a local vault and seed it into an in-memory remote storage.
 fn seed_remote_storage(dir: &TempDir) -> (crate::remote::MemoryStorage, std::path::PathBuf) {
     let seed_path = dir.path().join("seed.kdbx");
