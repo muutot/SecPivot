@@ -349,4 +349,7 @@ loading a vault nor an unrelated edit silently sweeps orphan header content.
 KDBX4 serialization shares one dense header/ref map and rejects missing binary
 data before replacing the destination. The audited local keepass patch preserves
 the original version/license/provenance; it is not proof of native client or
-Android provider interoperability, nor of complete history restoration.
+Android provider interoperability. History restore clones binary Values only
+inside the native session before mutation/retention, preserving protection flags
+and the pre-restore undo snapshot. The returned DTO has names/sizes only.
+External attachment edit snapshots remain a separate audit boundary.

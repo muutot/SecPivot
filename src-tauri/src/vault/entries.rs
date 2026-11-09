@@ -764,18 +764,23 @@ impl VaultSession {
         index: usize,
     ) -> Result<VaultState, String> {
         let id = parse_entry_id(uuid)?;
-        let version = {
+        let (version, attachments) = {
             let db = self.require_db()?;
             let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-            let history = entry
+            entry
                 .history
                 .as_ref()
                 .ok_or_else(|| "该条目没有历史版本".to_owned())?;
-            history
-                .get_entries()
-                .get(index)
-                .ok_or_else(|| "历史版本不存在".to_owned())?
-                .clone()
+            let historical = entry
+                .historical(index)
+                .ok_or_else(|| "历史版本不存在".to_owned())?;
+            // Resolve binary values before changing the record or trimming its
+            // history. Keep their protection flags and never send bytes via IPC.
+            let attachments: Vec<_> = historical
+                .attachments_named()
+                .map(|(name, attachment)| (name.to_owned(), attachment.data.clone()))
+                .collect();
+            (historical.clone(), attachments)
         };
         {
             let (cap, max_history_size) = {
@@ -818,6 +823,17 @@ impl VaultSession {
                     current.quality_check = version.quality_check;
                     current.autotype = version.autotype.clone();
                     current.custom_data = version.custom_data.clone();
+                    let old_names: Vec<_> = current
+                        .as_ref()
+                        .attachments_named()
+                        .map(|(name, _)| name.to_owned())
+                        .collect();
+                    for name in old_names {
+                        current.remove_attachment_by_name(&name);
+                    }
+                    for (name, data) in attachments {
+                        current.add_attachment(name, data);
+                    }
                 }
                 tracked.times.last_modification = Some(Times::now());
             }

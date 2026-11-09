@@ -1467,12 +1467,87 @@ fn entry_history_tracks_versions_and_restores() {
     assert_eq!(history.len(), 3);
     assert_eq!(history[0].title, "C");
     assert_eq!(history[0].attachments.len(), 1);
-    // Restore overwrites fields only; attachments are left untouched.
-    assert_eq!(state.root.entries[0].attachments.len(), 1);
+    // The selected version had no attachments; restoring it removes later
+    // attachments while the pre-restore snapshot still permits an undo.
+    assert!(state.root.entries[0].attachments.is_empty());
 
     assert!(session
         .restore_entry_version(&uuid, 99)
         .is_err_and(|err| err.contains("历史版本不存在")));
+}
+
+#[test]
+fn restore_history_attachment_set_survives_reopen_undo_and_retention() {
+    for cap in [10, 1] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic old", "", "", "");
+        input.attachments = vec![
+            AttachmentInput {
+                name: "shared.txt".into(),
+                data: Some(BASE64.encode(b"synthetic old")),
+            },
+            AttachmentInput {
+                name: "旧的空附件.txt".into(),
+                data: Some(BASE64.encode(b"")),
+            },
+        ];
+        let state = session.add_entry(&input).unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        // A source vault can contain both protection flags, unlike the
+        // ordinary app editor's always-protected payloads.
+        session
+            .require_db_mut()
+            .unwrap()
+            .entry_mut(parse_entry_id(&uuid).unwrap())
+            .unwrap()
+            .attachment_by_name_mut("旧的空附件.txt")
+            .unwrap()
+            .data = keepass::db::Value::unprotected(Vec::new());
+        input.title = "Synthetic new".into();
+        input.attachments = vec![
+            AttachmentInput {
+                name: "shared.txt".into(),
+                data: Some(BASE64.encode(b"synthetic new")),
+            },
+            AttachmentInput {
+                name: "new-only.txt".into(),
+                data: Some(BASE64.encode(b"new only")),
+            },
+        ];
+        session.update_entry(&uuid, &input).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        session.require_db_mut().unwrap().meta.history_max_items = Some(cap);
+        session.restore_entry_version(&uuid, 0).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&uuid).unwrap())
+            .unwrap();
+        assert_eq!(entry.get_title(), Some("Synthetic old"));
+        let restored = entry.attachment_by_name("shared.txt").unwrap();
+        assert!(restored.get().as_slice() == b"synthetic old");
+        assert!(restored.is_protected());
+        assert!(entry.attachment_by_name("new-only.txt").is_none());
+        let empty = entry.attachment_by_name("旧的空附件.txt").unwrap();
+        assert!(empty.get().is_empty());
+        assert!(!empty.is_protected());
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), if cap == 1 { 1 } else { 2 });
+        assert_eq!(history[0].title, "Synthetic new");
+        session.restore_entry_version(&uuid, 0).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        assert!(session.attachment_data(&uuid, "shared.txt").unwrap() == b"synthetic new");
+        assert!(session.attachment_data(&uuid, "new-only.txt").unwrap() == b"new only");
+        assert!(session.attachment_data(&uuid, "旧的空附件.txt").is_err());
+    }
 }
 
 #[test]
