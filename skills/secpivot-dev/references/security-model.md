@@ -4,6 +4,11 @@ SecPivot stores credentials in standard KDBX 4.0 files. This reference documents
 
 ## Core invariants
 
+- **Desktop development CSP**: HTTP and HMR WebSocket connections permit only
+  the configured loopback Vite port 14200 (`localhost` and `127.0.0.1`), plus the
+  existing same-origin/IPC sources. Vite may advertise the numeric address when
+  the page uses localhost. Production CSP has no additional development origins.
+
 - **Local-only**: the vault master password and the derived key never leave the machine. There is no telemetry or automatic upload. The one exception is the opt-in remote vault feature (S3 or WebDAV): opening or creating a remote vault sends the KDBX payload (encrypted with the master key) to the configured endpoint, and `save()` uploads it back. Local vaults never touch the network. Master passwords still never leave the machine 鈥?they cross the IPC to the backend only, and never to the remote storage.
 - **In-memory session**: the decrypted database and the master password live only in backend managed state while a vault is open. `close_vault` and lock paths clear the session and zeroize the password buffer.
 - **No vault-secret persistence**: config (`config.json`) never stores vault master passwords, entry passwords, or vault content. Opt-in remote-storage credentials are the narrow exception: on Windows they are DPAPI-encrypted before persistence; desktop non-Windows uses OS-keyring references; mobile currently retains legacy passthrough. The browser demo fallback stores fake demo data only.
