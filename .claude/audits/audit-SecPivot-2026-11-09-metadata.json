@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S10; historical supplemental tracking notes excluded",
-    "total": 21,
-    "confirmed": 21,
+    "scope": "15 baseline cards plus SP-S05 through SP-S11; historical supplemental tracking notes excluded",
+    "total": 22,
+    "confirmed": 22,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 13,
+      "Medium": 14,
       "Low": 3
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "79f48c8",
+  "remediation_checkpoint": "a02c759",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -142,14 +142,23 @@
       "source_checkpoint": "8e050d8",
       "status": "basic standard/Windows JSON-line import fixed; five authentic-schema synthetic regressions plus real frontend bulk IPC mapping and KDBX save/reopen passed; exact three Bitwarden public fixture records passed independent probe; folder/attachment migration refused, native history and native client exports pending, TODO remains partial",
       "commit": "8c09399"
+    },
+    {
+      "id": "SP-S11",
+      "area": "Cancelled or delayed sensitive copy closes later vaults via unowned lock-after-action completion",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "79f48c8",
+      "status": "current-renderer follow-up fixed: completed current copy hook, active-id + path continuous ownership, topology queue predicate and failure cleanup; four baseline regressions failed, all eight actual-service regressions passed; browser path intermediate failure fixed; native multi-window authorization remains unverified",
+      "commit": "a02c759"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "79f48c8",
-    "log": "verify-clipboard-renderer-write-order-final.log",
-    "frontend_tests": 249,
+    "checkpoint": "a02c759",
+    "log": "verify-sensitive-copy-owner-final.log",
+    "frontend_tests": 257,
     "rust_unit_tests": 522,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -201,6 +210,7 @@
     "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review",
     "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending",
     "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests",
-    "79f48c8 orders same-renderer text writes and conditional/explicit clears; first two real-module regressions failed before source remediation. A third intermediate-fix regression caught delayed vault close while awaiting pending writes; closeAll now starts independently. Six new frontend regressions passed; full verify 249 frontend, 522 Rust, ACL 2. SP-11 remains partial for cross-window/native binary/external sequence ownership."
+    "79f48c8 orders same-renderer text writes and conditional/explicit clears; first two real-module regressions failed before source remediation. A third intermediate-fix regression caught delayed vault close while awaiting pending writes; closeAll now starts independently. Six new frontend regressions passed; full verify 249 frontend, 522 Rust, ACL 2. SP-11 remains partial for cross-window/native binary/external sequence ownership.",
+    "a02c759 admits lock-after-copy only for completed current copy and continuous active-id/path view; ownership rechecked inside topology queue before backend close. Four old service regressions failed, eight final tests passed including cancellation/queued open/A-B-A/current/failure/browser path/no Web Crypto. One transient Node Zone Allocation failure on npm check was followed by unchanged-code check and full verify success; no application OOM attribution. Native multi-window behavior remains pending."
   ]
 }

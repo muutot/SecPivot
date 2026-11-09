@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S10；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S11；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 13     | 13        | 0         |
+| Medium    | 14     | 14        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **21** | **21**    | **0**     |
+| **Total** | **22** | **22**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S10 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S11 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -940,3 +940,54 @@ ownership 失效后，并行启动 session close 与 clipboard clear；即使写
 本队列没有协调另一 webview、原生 binary-copy command 或外部程序的 clipboard
 sequence；这些并发/ownership 边界仍待验证，SP-11 继续 partial，整体目标进行中。
 当前详细卡片与原始基线统计不变；无 markup/CSS 变化，也无新 APK/设备验证。
+
+### Finding: SP-S11 迟到或被取消的密码复制仍锁定后来的数据库（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Frontend State / Stability / Data Integrity
+- Status: Confirmed（当前 renderer 路径已修复；原生多窗口归属待验证）
+- Affected area: sensitive copy completion and lock-after-action topology
+- Evidence:
+  - File: `src/lib/services/security.ts:42`、`src/lib/utils/clipboard.ts:56`、`src/lib/services/vault.ts:817`（`79f48c8`）
+  - Function / Module: `copySensitive` / `copyText` / `VaultStore.closeAll`
+  - Relevant behavior: copySensitive 在 await copyText 后仅检查当前 lockAfterAction 设置，然后关闭所有会话；不检查复制是否被代次取消或原来的可见会话是否仍连续有效。closeAll 排队后也没有完成归属检查。
+  - Reproduction: `tests/security-copy.test.mjs` 运行实际 security/clipboard/vault 模块图，仅替换 Clipboard API 与 Tauri invoke 边界。四个断言在生产实现上失败：复制未完成时打开 B；A→B→A；排队密码复制被 clear 取消；B open 先进入 topology 队列而旧复制 lock 随后进入。当前会话均被 closeAll 清掉，见 `security-copy-owner-red.log`。正常当前复制的对照测试通过。全部数据为合成，未访问用户库或系统剪贴板。
+- Problem: 旧复制完成会被解释为对当前所有会话的锁定授权，即使该复制根本没有写入剪贴板，或用户已经进入另一个数据库。
+- Why it matters: 锁定关闭所有后端会话，后来的数据库工作流会突然中断；未保存编辑存在丢失风险。本轮复现验证了前端发送全库关闭及缓存清空，不声称真实用户数据丢失。
+- Realistic failure scenario: 开启复制后锁定，复制 A 密码时平台写入延迟；用户先打开 B 或切回原 A，旧复制完成后全部标签被锁定。另一场景是取消排队复制后仍被误锁。
+- Minimal fix: 只让真正完成且仍属于原可见会话的复制触发 follow-up；以连续 view epoch 防止 A→B→A，锁定入队后在 topology 执行点再次检查，失败/取消不得触发锁定。
+- Better long-term fix: 将所有跨 await 的全局 follow-up 绑定到操作身份，并继续验证多窗口/后端活动会话变化的授权边界。
+- Regression test suggestion: 延迟写入后的打开/切换/原标签回访、复制取消、先入队 open、正常当前复制及失败路径；验证真正调用的关闭命令、会话状态与剪贴板保留语义，后续补原生平台运行证据。
+- Estimated effort: 1–2 小时
+
+本项单独计入当前卡片统计；不把 SP-11 的单 renderer 写入顺序修复描述为已解决
+全部 follow-up 归属。当前卡片 **22**（High 5 / Medium 14 / Low 3，全部 Confirmed）；
+原始 15 项与 6.1 分审计基线不变。修复及完整验证继续进行。
+
+`a02c759` 修复 SP-S11 当前 renderer 的完成归属。copyText 的可选 afterCopy
+hook 仅在写入成功且原复制代次仍 current 时执行，保留 Promise<void> API；零秒
+清理与 renderer digest 不可用仍支持正常 copy-follow-up。copySensitive 用临时
+active-id/state 观察者和 KeyedViewGuard 绑定连续 session-id + path 视图，并核对
+内部 active id 与当前设置；A→B→A、关闭/重开、browser 固定 id 路径变化都取消
+旧归属。观察者持续到 queued close 的执行点，随后 success/failure 均释放。
+closeAll 的可选非秘密 predicate 在既有 topology 队列内、调用后台之前再次验证；
+browser 分支在附件清理的 await 后也重查。手动/闲置/焦点锁定无 predicate，保持
+原来的全库锁定语义，close_all_vaults 的后台 IPC schema 未变。
+
+八项新增 actual-service 回归全部通过：前述四条 baseline 失败路径、当前复制
+锁定且保留值的对照、browser 固定 id 的路径变化、拒绝写入不锁且观察者释放、
+无 renderer digest 时仍能正常锁定。初版仅按 active id 观察时，browser 新路径
+回归实际失败，见 `security-copy-browser-path-intermediate-red.log`；补上 path
+生命周期后通过。这属于修复过程中补强边界，不另列基线产品卡片。测试替换
+Clipboard API 和 Tauri invoke，未使用真实用户库或共享 OS 剪贴板；不代表原生
+Android/macOS/WebView 多窗口端到端验证。
+
+最新完整 npm run verify 日志 `verify-sensitive-copy-owner-final.log`：格式、
+Svelte check 零错误警告、150 键契约、构建、前端 **257**、Rust **522 + ACL 2**、
+clippy 全通过。此前一次 npm run check 在 Svelte 启动阶段报 Node Zone Allocation
+内存分配失败；未改变源码或检查参数的再次检查和最终全门均通过，未将其归因
+为应用缺陷，也没有借缩小检查范围掩盖失败。维护文档 currency gate 已同步三份
+引用，TODO 保留 native 多窗口 pending。报告/metadata 当前卡片 **22**，原始
+15 项/6.1 分基线保持不变；手机另存为新 APK 与设备、SAF provider、跨 renderer
+剪贴板、竞品导入与完整 UI/语义覆盖继续推进。
