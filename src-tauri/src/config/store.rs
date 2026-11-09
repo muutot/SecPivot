@@ -72,7 +72,8 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
         };
         let mut value = value;
         for profile in &mut value.remote_profiles {
-            decrypt_profile_creds(&profile.name, &mut profile.settings);
+            let namespace = credential_namespace(project_dir, &profile.path());
+            decrypt_profile_creds(&namespace, &mut profile.settings);
         }
         Ok(normalize_config(value))
     } else {
@@ -86,7 +87,8 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     let path = dir.join(CONFIG_FILE);
     let mut persisted = config.clone();
     for profile in &mut persisted.remote_profiles {
-        encrypt_profile_creds(&profile.name, &mut profile.settings)?;
+        let namespace = credential_namespace(project_dir, &profile.path());
+        encrypt_profile_creds(&namespace, &mut profile.settings)?;
     }
     let text =
         serde_json::to_string_pretty(&persisted).map_err(|e| format!("序列化配置失败: {e}"))?;
@@ -103,11 +105,41 @@ fn write_config(project_dir: &Path, config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// Separate transports and installations; legacy keyring references carry
+/// their own old address and remain readable until the next successful save.
+fn credential_namespace(project_dir: &Path, profile_path: &str) -> String {
+    let absolute = project_dir
+        .canonicalize()
+        .unwrap_or_else(|_| project_dir.to_path_buf());
+    let root_hash = crate::crypto::hex(&crate::crypto::sha256_bytes(
+        absolute.as_os_str().as_encoded_bytes(),
+    ));
+    format!("remote-v2/{root_hash}/{profile_path}")
+}
+
 fn decrypt_profile_creds(name: &str, settings: &mut RemoteSettings) {
     settings.access_key =
         crate::platform::remote_secret::load(&settings.access_key, &format!("{name}/accessKey"));
     settings.secret_key =
         crate::platform::remote_secret::load(&settings.secret_key, &format!("{name}/secretKey"));
+}
+
+#[cfg(test)]
+mod credential_namespace_tests {
+    use super::*;
+
+    #[test]
+    fn namespace_separates_transports_and_data_roots() {
+        let first = tempfile::TempDir::new().unwrap();
+        let second = tempfile::TempDir::new().unwrap();
+        let s3 = credential_namespace(first.path(), "s3/config_1");
+        assert_ne!(s3, credential_namespace(first.path(), "webdav/config_1"));
+        assert_ne!(s3, credential_namespace(second.path(), "s3/config_1"));
+        assert_eq!(
+            s3,
+            credential_namespace(&first.path().join("."), "s3/config_1")
+        );
+    }
 }
 
 fn encrypt_profile_creds(name: &str, settings: &mut RemoteSettings) -> Result<(), String> {
