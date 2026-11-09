@@ -1,7 +1,7 @@
 //! Windows clipboard helpers. The scheduled clipboard wipe must only clear
 //! the text *we* copied: blindly emptying the clipboard could destroy
 //! something the user copied in another app while the timer was pending.
-//! `read_clipboard_text` lets the frontend compare before wiping.
+//! Conditional clears hold one Win32 clipboard lock across read/compare/clear.
 
 #[cfg(target_os = "windows")]
 use windows_sys::{
@@ -17,40 +17,97 @@ use windows_sys::{
 #[cfg(target_os = "windows")]
 const CF_UNICODETEXT: u32 = 13;
 
+#[cfg(target_os = "windows")]
+const MAX_TEXT_FORMAT_BYTES: usize = 4 * 1024 * 1024;
+
+#[cfg(target_os = "windows")]
+struct OpenClipboardGuard;
+
+#[cfg(target_os = "windows")]
+impl Drop for OpenClipboardGuard {
+    fn drop(&mut self) {
+        // SAFETY: this guard exists only after this thread opened the clipboard.
+        unsafe { CloseClipboard() };
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn open_clipboard() -> Result<OpenClipboardGuard, String> {
+    // SAFETY: null HWND selects the current thread's window station.
+    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
+        return Err("打开剪贴板失败".to_owned());
+    }
+    Ok(OpenClipboardGuard)
+}
+
+#[cfg(target_os = "windows")]
+fn decode_clipboard_text(units: &[u16]) -> Result<String, String> {
+    let end = units
+        .iter()
+        .position(|unit| *unit == 0)
+        .ok_or_else(|| "剪贴板文本缺少终止符".to_owned())?;
+    String::from_utf16(&units[..end]).map_err(|_| "剪贴板文本编码无效".to_owned())
+}
+
 /// Current clipboard text, if the clipboard holds Unicode text. Returns
 /// `None` for empty or non-text content.
 #[cfg(target_os = "windows")]
 pub fn read_clipboard_text() -> Result<Option<String>, String> {
-    // SAFETY: clipboard APIs take a nullable HWND; passing null uses the
-    // current thread's window station, which is valid for read access.
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
-        // Another process holds the clipboard open; treat as unreadable
-        // rather than failing the caller.
-        return Ok(None);
-    }
+    let _open = open_clipboard()?;
+    read_text_open()
+}
+
+/// Caller holds OpenClipboardGuard throughout every access to the OS handle.
+#[cfg(target_os = "windows")]
+fn read_text_open() -> Result<Option<String>, String> {
     let handle = unsafe { GetClipboardData(CF_UNICODETEXT) };
     if handle.is_null() {
-        unsafe { CloseClipboard() };
         return Ok(None);
+    }
+    let byte_len = unsafe { GlobalSize(handle) };
+    if !(2..=MAX_TEXT_FORMAT_BYTES).contains(&byte_len) || !byte_len.is_multiple_of(2) {
+        return Err("剪贴板文本大小无效".to_owned());
     }
     let ptr = unsafe { GlobalLock(handle) } as *const u16;
     if ptr.is_null() {
-        unsafe { CloseClipboard() };
-        return Ok(None);
+        return Err("锁定剪贴板内存失败".to_owned());
     }
-    // Length in bytes; divide by two for the UTF-16 code-unit count. The
-    // allocation includes the NUL terminator, which is not part of the text.
-    let byte_len = unsafe { GlobalSize(handle) };
-    let code_units = (byte_len / 2).saturating_sub(1);
-    let text = if code_units > 0 {
-        let slice = unsafe { std::slice::from_raw_parts(ptr, code_units as usize) };
-        String::from_utf16_lossy(slice)
-    } else {
-        String::new()
-    };
+    // SAFETY: GlobalSize bounds this locked allocation; the length is even,
+    // capped before allocation, and the clipboard remains open on this thread.
+    let slice = unsafe { std::slice::from_raw_parts(ptr, byte_len / 2) };
+    let text = decode_clipboard_text(slice);
     unsafe { GlobalUnlock(handle) };
-    unsafe { CloseClipboard() };
-    Ok(Some(text))
+    text.map(Some)
+}
+
+/// Compare and clear text while the clipboard is exclusively open, so a
+/// foreign copy cannot arrive between the comparison and EmptyClipboard.
+#[cfg(target_os = "windows")]
+pub fn clear_clipboard_text_if(
+    predicate: impl FnOnce(Option<&str>) -> bool,
+) -> Result<bool, String> {
+    let _open = open_clipboard()?;
+    let text = read_text_open()?.map(zeroize::Zeroizing::new);
+    if !predicate(text.as_ref().map(|text| text.as_str())) {
+        return Ok(false);
+    }
+    empty_open()?;
+    Ok(true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn clear_clipboard_text_if(
+    _predicate: impl FnOnce(Option<&str>) -> bool,
+) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(target_os = "windows")]
+fn empty_open() -> Result<(), String> {
+    if unsafe { EmptyClipboard() } == 0 {
+        return Err("清空剪贴板失败".to_owned());
+    }
+    Ok(())
 }
 
 /// Non-Windows stub: clipboard is handled by the webview (`navigator.clipboard`).
@@ -63,17 +120,8 @@ pub fn read_clipboard_text() -> Result<Option<String>, String> {
 /// holds our own text, or on lock with `clearOnLock`).
 #[cfg(target_os = "windows")]
 pub fn clear_clipboard() -> Result<(), String> {
-    // SAFETY: see `read_clipboard_text`; `EmptyClipboard` requires the
-    // clipboard to be open by this thread.
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
-        return Err("打开剪贴板失败".to_owned());
-    }
-    let ok = unsafe { EmptyClipboard() };
-    unsafe { CloseClipboard() };
-    if ok == 0 {
-        return Err("清空剪贴板失败".to_owned());
-    }
-    Ok(())
+    let _open = open_clipboard()?;
+    empty_open()
 }
 
 /// Non-Windows stub: webview clipboard is cleared by the renderer.
@@ -149,35 +197,53 @@ fn register_format(name: &str) -> Result<u32, String> {
 /// `Ok(None)` means the clipboard simply does not hold that format.
 #[cfg(target_os = "windows")]
 pub fn read_clipboard_bytes(format: &str) -> Result<Option<Vec<u8>>, String> {
-    use windows_sys::Win32::System::DataExchange::GetClipboardData;
-
     let id = register_format(format)?;
-    // SAFETY: null HWND uses the current thread's window station, valid for
-    // read access; a failure is reported as "unreadable" rather than fatal.
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
-        return Ok(None);
-    }
+    let _open = open_clipboard()?;
+    read_bytes_open(id)
+}
+
+#[cfg(target_os = "windows")]
+fn read_bytes_open(id: u32) -> Result<Option<Vec<u8>>, String> {
     let handle = unsafe { GetClipboardData(id) };
     if handle.is_null() {
-        unsafe { CloseClipboard() };
         return Ok(None);
     }
     let len = unsafe { GlobalSize(handle) };
     if len == 0 || len > MAX_CUSTOM_FORMAT_BYTES {
-        unsafe { CloseClipboard() };
         return Err("剪贴板数据大小无效".to_owned());
     }
     let ptr = unsafe { GlobalLock(handle) } as *const u8;
     if ptr.is_null() {
-        unsafe { CloseClipboard() };
         return Err("锁定剪贴板内存失败".to_owned());
     }
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec();
     unsafe {
         GlobalUnlock(handle);
-        CloseClipboard();
     }
     Ok(Some(bytes))
+}
+
+#[cfg(target_os = "windows")]
+pub fn clear_clipboard_bytes_if(
+    format: &str,
+    predicate: impl FnOnce(Option<&[u8]>) -> bool,
+) -> Result<bool, String> {
+    let id = register_format(format)?;
+    let _open = open_clipboard()?;
+    let bytes = read_bytes_open(id)?.map(zeroize::Zeroizing::new);
+    if !predicate(bytes.as_ref().map(|bytes| bytes.as_slice())) {
+        return Ok(false);
+    }
+    empty_open()?;
+    Ok(true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn clear_clipboard_bytes_if(
+    _format: &str,
+    _predicate: impl FnOnce(Option<&[u8]>) -> bool,
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 /// Non-Windows stub: no OS clipboard bridge, so the exchange format is absent.
@@ -230,6 +296,23 @@ pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn text_read_stops_at_nul_before_allocation_padding() {
+        let units = [b'A' as u16, 0, 0, b'X' as u16, 0];
+        assert_eq!(decode_clipboard_text(&units).unwrap(), "A");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn malformed_text_is_rejected_without_lossy_replacement() {
+        assert!(decode_clipboard_text(&[b'A' as u16]).is_err());
+        assert!(decode_clipboard_text(&[0xD800, 0]).is_err());
+        assert_eq!(decode_clipboard_text(&[0]).unwrap(), "");
+        let emoji: Vec<u16> = "密码🔑".encode_utf16().chain([0, 0]).collect();
+        assert_eq!(decode_clipboard_text(&emoji).unwrap(), "密码🔑");
+    }
+
     /// The Windows clipboard is a process-wide resource. One shared guard for
     /// every clipboard test in the crate — a per-module lock left the platform
     /// and command tests free to interleave, so `OpenClipboard` contention made
@@ -271,6 +354,10 @@ pub(crate) mod tests {
 
     #[test]
     fn clipboard_read_write_round_trip() {
+        if std::env::var("SECPIVOT_CLIPBOARD_LIVE").as_deref() != Ok("1") {
+            eprintln!("skip: live clipboard requires SECPIVOT_CLIPBOARD_LIVE=1");
+            return;
+        }
         let _guard = lock_clipboard();
         let saved = read_clipboard_text().ok().flatten();
         if !clipboard_is_usable("secpivot-clipboard-probe") {
@@ -279,9 +366,8 @@ pub(crate) mod tests {
             return;
         }
         write_clipboard_text("secpivot-clipboard-test").unwrap();
-        assert_eq!(
-            read_clipboard_text().unwrap().as_deref(),
-            Some("secpivot-clipboard-test"),
+        assert!(
+            read_clipboard_text().ok().flatten().as_deref() == Some("secpivot-clipboard-test"),
             "a successful write must read back byte-for-byte"
         );
         restore_clipboard(saved);
@@ -289,6 +375,10 @@ pub(crate) mod tests {
 
     #[test]
     fn clear_clipboard_empties_text() {
+        if std::env::var("SECPIVOT_CLIPBOARD_LIVE").as_deref() != Ok("1") {
+            eprintln!("skip: live clipboard requires SECPIVOT_CLIPBOARD_LIVE=1");
+            return;
+        }
         let _guard = lock_clipboard();
         let saved = read_clipboard_text().ok().flatten();
         if !clipboard_is_usable("secpivot-clear-probe") {

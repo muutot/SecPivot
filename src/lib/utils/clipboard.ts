@@ -45,41 +45,33 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
   // `lastCopiedText` while this wipe was awaiting, and that newer copy owns
   // its own timer, so it must keep its baseline.
   const owned = lastCopiedText;
+  if (owned === null) return;
   /** Drop the plaintext once our own copy is gone from the clipboard. The
    * backend zeroizes its holding copy; the renderer had no equivalent, so the
    * password used to sit in this module global until the process exited. */
   const releaseOwnership = (): void => {
     if (lastCopiedText === owned) lastCopiedText = null;
   };
-  if (!isTauriRuntime()) {
-    // Browser demo: no backend read-back. Compare via the Web Clipboard API
-    // when readable so an unrelated copy made while the timer was pending is
-    // never destroyed; fall back to clearing only when unreadable.
-    try {
-      const read = (navigator.clipboard as Clipboard | undefined)?.readText;
-      if (read) {
-        const current = await read.call(navigator.clipboard);
-        if (owned !== null && current !== owned) return;
-      }
-      await copyRaw("");
-      releaseOwnership();
-    } catch {
-      // clipboard unavailable; nothing to clear
-    }
-    return;
-  }
   try {
-    const current = await invoke<string | null>("clipboard_read_text");
-    if (current !== null && owned !== null && current === owned) {
-      await invoke("clipboard_clear");
-      releaseOwnership();
+    if (isTauriRuntime()) {
+      const cleared = await invoke<boolean | null>("clipboard_clear_if_matches", { text: owned });
+      if (cleared !== null) return;
     }
+    // Platforms without the native bridge need a readable clipboard before
+    // any conditional wipe; an unavailable read is never permission to clear.
+    const read = navigator.clipboard?.readText;
+    if (!read) return;
+    const current = await read.call(navigator.clipboard);
+    if (current !== owned || lastCopiedText !== owned) return;
+    await copyRaw("");
   } catch {
     // Read failed (e.g. the clipboard is briefly locked by another process):
     // ownership cannot be verified, so never blind-clear. Destroying unknown
     // clipboard content is worse than leaving ours in place — the backend
     // wipe scheduled at copy time remains the safety net and re-verifies
     // ownership server-side.
+  } finally {
+    releaseOwnership();
   }
 }
 

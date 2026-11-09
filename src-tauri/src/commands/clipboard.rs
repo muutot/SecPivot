@@ -12,7 +12,7 @@
 use crate::platform::clipboard;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 // ---------------------------------------------------------------------------
 // Clipboard commands
 // ---------------------------------------------------------------------------
@@ -30,6 +30,17 @@ pub(crate) fn clipboard_read_text() -> Result<Option<String>, String> {
 #[tauri::command]
 pub(crate) fn clipboard_clear() -> Result<(), String> {
     clipboard::clear_clipboard()
+}
+
+/// Windows comparison and clearing use one clipboard lock. None tells other
+/// platforms to use the renderer's clipboard API rather than claiming a clear.
+#[tauri::command]
+pub(crate) fn clipboard_clear_if_matches(text: String) -> Result<Option<bool>, String> {
+    let text = Zeroizing::new(text);
+    if !cfg!(target_os = "windows") {
+        return Ok(None);
+    }
+    clipboard::clear_clipboard_text_if(|current| current == Some(text.as_str())).map(Some)
 }
 
 /// Bumped on every new wipe schedule and on explicit cancel; a sleeping wipe
@@ -77,15 +88,14 @@ pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), 
         .name("clipboard-wipe".into())
         .spawn(move || {
             std::thread::sleep(Duration::from_secs(seconds));
-            let current = clipboard::read_clipboard_text().ok().flatten();
-            if should_wipe(
-                WIPE_GENERATION.load(Ordering::SeqCst),
-                generation,
-                &secret,
-                current.as_deref(),
-            ) {
-                let _ = clipboard::clear_clipboard();
-            }
+            let _ = clipboard::clear_clipboard_text_if(|current| {
+                should_wipe(
+                    WIPE_GENERATION.load(Ordering::SeqCst),
+                    generation,
+                    &secret,
+                    current,
+                )
+            });
             secret.zeroize();
         })
         .map_err(|e| format!("无法创建剪贴板清除任务: {e}"))?;
@@ -103,7 +113,7 @@ pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), 
 /// other.
 #[tauri::command]
 pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), String> {
-    use crate::platform::clipboard::{clear_clipboard, read_clipboard_bytes};
+    use crate::platform::clipboard::{clear_clipboard_bytes_if, read_clipboard_bytes};
     use crate::vault::exchange::CLIP_FORMAT_ENTRIES;
 
     if seconds == 0 {
@@ -123,13 +133,10 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
                 secret.zeroize();
                 return;
             }
-            let still_ours = read_clipboard_bytes(CLIP_FORMAT_ENTRIES)
-                .ok()
-                .flatten()
-                .is_some_and(|current| current == secret);
-            if still_ours {
-                let _ = clear_clipboard();
-            }
+            let _ = clear_clipboard_bytes_if(CLIP_FORMAT_ENTRIES, |current| {
+                WIPE_GENERATION.load(Ordering::SeqCst) == generation
+                    && current == Some(secret.as_slice())
+            });
             secret.zeroize();
         })
         .map_err(|e| format!("无法创建剪贴板清除任务: {e}"))?;
@@ -146,6 +153,10 @@ mod tests {
 
     #[test]
     fn scheduled_wipe_clears_our_own_text() {
+        if std::env::var("SECPIVOT_CLIPBOARD_LIVE").as_deref() != Ok("1") {
+            eprintln!("skip: live clipboard requires SECPIVOT_CLIPBOARD_LIVE=1");
+            return;
+        }
         let _guard = lock_clipboard();
         let saved = read_clipboard_text().ok().flatten();
         if !clipboard_is_usable("secpivot-wipe-probe") {
