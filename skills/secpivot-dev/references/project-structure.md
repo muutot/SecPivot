@@ -196,6 +196,11 @@ persistable grants, display names in `general.recentFileNames`, and
 `webpki-root-certs` via `src-tauri/src/net.rs`. Lifecycle locking, touch UX, and
 real-device behavior remain incomplete — see `docs/android.md`.
 
+The Android capability binds `saf:default` to `windows: ["main"]`; Tauri has no
+`screens` capability field. `src-tauri/tests/android_acl.rs` resolves the generated
+plugin manifests for Android on any host and verifies picker access from the local
+main window, isolation from other windows/remote pages, and exclusion on desktop/iOS.
+
 ## Persistent layout
 
 ```text
