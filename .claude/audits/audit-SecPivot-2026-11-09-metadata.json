@@ -22,7 +22,7 @@
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "a2b0ddf",
+  "remediation_checkpoint": "51f4113",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -32,7 +32,9 @@
     "SP-06",
     "SP-07",
     "SP-08",
-    "SP-09"
+    "SP-09",
+    "SP-10",
+    "SP-13"
   ],
   "partially_remediated_findings": ["SP-14"],
   "supplemental_findings": [
@@ -47,16 +49,31 @@
       "confidence": "Confirmed",
       "commit": "a2b0ddf",
       "status": "red-to-green regression and KDBX save/reopen passed"
+    },
+    {
+      "area": "Browser demo session identity missing before first snapshot",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "commit": "e53e5ef",
+      "status": "real service lifecycle red-to-green; fresh browser template regression passed"
+    },
+    {
+      "area": "Nested group template menu drops status and callback props",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "51f4113",
+      "status": "browser set/unset page callbacks passed; dark/light/custom 1100/720/420 screenshots inspected"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "42d2f1a",
-    "frontend_tests": 210,
-    "rust_unit_tests": 465,
+    "checkpoint": "51f4113",
+    "log": "verify-template-menu-final.log",
+    "frontend_tests": 211,
+    "rust_unit_tests": 473,
     "android_acl_tests": 2,
-    "subsequent_backend_gate": {
+    "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
       "result": "passed",
       "rust_unit_tests": 466,
@@ -67,7 +84,14 @@
     "limitations": [
       "Android APK build and device I/O not run",
       "macOS/Linux keyring runtime not run",
-      "Native KeePass plaintext XML import not run"
+      "Native KeePass plaintext XML import not run",
+      "Live S3 signature validation not run; local MinIO unavailable",
+      "CSP websocket probe is a browser test, not native Tauri dev"
     ]
-  }
+  },
+  "reverification_notes": [
+    "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
+    "Initial template-menu integration failed because finite pagination mock expired; after 7ebe497 the complete verify passed",
+    "Supplemental findings do not change baseline finding counts or scores"
+  ]
 }

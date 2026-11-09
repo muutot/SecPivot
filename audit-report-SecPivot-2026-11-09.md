@@ -337,11 +337,11 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
   - Function / Module: `devCsp`
   - Relevant behavior: devUrl/Vite 为 14200，connect-src 放行 1420。
 - Problem: 开发 CSP 连接端口与 Vite 不一致。
-- Why it matters: 桌面开发热更新 WebSocket 被 CSP 拦截。
-- Realistic failure scenario: 运行 Tauri dev 并修改组件。
+- Why it matters: 同源 HMR 可由 `self` 放行；当 localhost 页面回退连接 Vite 公告的 `127.0.0.1:14200` 地址时，旧允许列表会拦截该 WebSocket。复核已收窄原先“热更新必然被拦截”的描述。
+- Realistic failure scenario: 运行 dev，主 WebSocket 不可用后客户端尝试数字地址回退；原生 Tauri 上是否进入此分支尚未实测。
 - Minimal fix: 开发 CSP 精确允许实际 Vite HTTP/WS 端口。
 - Better long-term fix: 配置端口集中校验。
-- Regression test suggestion: 静态配置契约匹配；Tauri dev 热更新需桌面运行证据。
+- Regression test suggestion: 真实 Vite 服务下分别验证同源 HMR 和数字地址连接，观察 CSP violation；原生 Tauri dev 热更新仍需桌面运行证据。
 - Estimated effort: 15–30 分钟
 
 ### Finding: SP-14 基线格式门失败与维护导航陈旧
@@ -657,18 +657,20 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 
 评分、统计和问题位置保留 `b7c5d9f` 修复前快照；下表单独记录已落实的改动。没有将原生设备未测行为标记为验证完成。
 
-| 发现          | 修复提交             | 直接验证                                                                                                               | 剩余边界                                                      |
-| ------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| SP-01         | `1d3eef7`            | 远端上传后镜像失败仍采纳新密钥/hash；使用新密钥重开上传字节，后续保存不误报冲突；健康镜像清除提示                      | 真云端及原生 UI 需复测                                        |
-| SP-02         | `00f0779`            | 不可读文档零次写入；部分写入回滚；回滚读回必须相等；流读取最多分配 limit+1                                             | Android provider I/O、非普通文件描述符同步行为尚需真机验证    |
-| SP-03         | `3e18ad5`            | 前后端使用官方 PlainXml 原文与 ProtectInMemory；六项真实 DOMParser 回归涵盖兼容旧 SecPivot、拒绝外部加密格式及无效编码 | 原生 KeePass 导入未完成，TODO 保留部分完成                    |
-| SP-04         | `1f085b8`、`fcee069` | 48 个 config 测试通过，涵盖传输/数据根地址隔离；clippy 测试模块位置已修正                                              | macOS/Linux 原生 keyring 迁移未实测                           |
-| SP-05         | `a562570`            | 原子解析助手的成功/失败测试；浏览器失败保留草稿、成功应用和清空选择；过期操作失效守卫                                  | browser activeSessionId 缺失仍需独立修复；桌面 IPC 未真机验证 |
-| SP-06         | `140fd7c`            | 初始 UUID 库存独立于展开集；浏览器确认折叠子组隐藏                                                                     | 仅使用合成库                                                  |
-| SP-07         | `a74fc03`            | 根层和递归渲染均用排序后子组；浏览器确认回收站位于最后                                                                 | 仅使用合成库                                                  |
-| SP-08         | `de8d0fa`            | 浏览器确认快速 Escape 仅收起下拉、编辑器保留、焦点回到触发器；顶层模态拥有键盘处理                                     | 原生 WebView 需复测                                           |
-| SP-09         | `42d2f1a`            | 保留原生 OTP 字段名、受保护自定义字段和过期时间；第七项浏览器往返回归及真实 KDBX 保存重开通过                          | 标准字段的全部属性及第三方原生导入仍需独立验证                |
-| SP-14（部分） | `fa2bab1`            | 纠正项目地图与远端凭据说明；格式门禁恢复通过                                                                           | 其余过期文档及主题 token 仍需逐项核实                         |
+| 发现          | 修复提交             | 直接验证                                                                                                                | 剩余边界                                                     |
+| ------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| SP-01         | `1d3eef7`            | 远端上传后镜像失败仍采纳新密钥/hash；使用新密钥重开上传字节，后续保存不误报冲突；健康镜像清除提示                       | 真云端及原生 UI 需复测                                       |
+| SP-02         | `00f0779`            | 不可读文档零次写入；部分写入回滚；回滚读回必须相等；流读取最多分配 limit+1                                              | Android provider I/O、非普通文件描述符同步行为尚需真机验证   |
+| SP-03         | `3e18ad5`            | 前后端使用官方 PlainXml 原文与 ProtectInMemory；六项真实 DOMParser 回归涵盖兼容旧 SecPivot、拒绝外部加密格式及无效编码  | 原生 KeePass 导入未完成，TODO 保留部分完成                   |
+| SP-04         | `1f085b8`、`fcee069` | 48 个 config 测试通过，涵盖传输/数据根地址隔离；clippy 测试模块位置已修正                                               | macOS/Linux 原生 keyring 迁移未实测                          |
+| SP-05         | `a562570`、`e53e5ef` | 原子解析助手及浏览器失败/成功/清空与过期守卫通过；演示库首个状态回调已获得会话标识                                      | 桌面 IPC 未真机验证                                          |
+| SP-06         | `140fd7c`            | 初始 UUID 库存独立于展开集；浏览器确认折叠子组隐藏                                                                      | 仅使用合成库                                                 |
+| SP-07         | `a74fc03`            | 根层和递归渲染均用排序后子组；浏览器确认回收站位于最后                                                                  | 仅使用合成库                                                 |
+| SP-08         | `de8d0fa`            | 浏览器确认快速 Escape 仅收起下拉、编辑器保留、焦点回到触发器；顶层模态拥有键盘处理                                      | 原生 WebView 需复测                                          |
+| SP-09         | `42d2f1a`            | 保留原生 OTP 字段名、受保护自定义字段和过期时间；第七项浏览器往返回归及真实 KDBX 保存重开通过                           | 标准字段的全部属性及第三方原生导入仍需独立验证               |
+| SP-10         | `a5cded1`、`7ebe497` | 两页真实 HTTP 请求先红后绿；保留 token/键名的空格、中文、实体和 CDATA；异常后页、整体超时、对象/页数/响应大小上限均通过 | 当前无 MinIO 服务，真实服务端验签未验证                      |
+| SP-13         | `7c53ef8`            | 浏览器与真实 Vite 服务：旧配置同源 HMR 可用，数字地址回退被拒；修复后两者均可连接，零 connect-src violation             | 未运行原生 Tauri dev；探针隔离了自动处理的 inline nonce/hash |
+| SP-14（部分） | `fa2bab1`            | 纠正项目地图与远端凭据说明；格式门禁恢复通过                                                                            | 其余过期文档及主题 token 仍需逐项核实                        |
 
 此前 `1d3eef7` 的完整 `npm run verify` 通过（前端 208、Rust 463）。本轮完整门禁首次因凭据测试模块位置触发 clippy 失败，`fcee069` 调整后已重新运行完整 `npm run verify` 并通过：格式、Svelte check 零错误警告、150 键设置契约、生产构建、前端 208、Rust 单元测试 464 + ACL 集成测试 2、clippy `-D warnings` 均通过。验证日志位于本任务 visualization 目录的 `verify-after-android-acl.log`。审计 metadata 及两份历史 metadata 仅移除 JSON 尾逗号，全部通过严格 JSON 解析，Prettier override 防止后续重新生成无效 JSON。
 
@@ -678,4 +680,12 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 
 XML 两个提交的完整 `npm run verify` 均通过；最新完整门禁日志 `verify-xml-fidelity.log` 包含前端 210、Rust 单元测试 465 + ACL 集成测试 2、格式、Svelte check、150 键契约、构建及 clippy。随后 HOTP 安全修复通过完整后端门禁（Rust 466 + ACL 2、clippy、格式）；没有将该后端结果表述为重新运行了全部前端门禁。原生 KeePass portable 下载返回 HTML 而非 ZIP，未执行任何下载文件；原生互操作验证仍缺失。
 
-未修复项仍为 SP-10、SP-11、SP-12、SP-13；SP-14 部分修复，SP-15 保持 Suspected。竞品差距、XML 原生互操作、剪贴板生命周期、分页及签名隔离继续处理；本阶段不承诺完整语义覆盖或零 bug。
+新增演示会话问题：`refreshTabs` 只写 tab store 的 `browser`，内部 `activeSessionId` 仍为 null，模板及视图守卫无法开始。严重性 Low，状态 Confirmed；真实服务模块测试先在首次状态回调复现 null，`e53e5ef` 在 refresh/open/create 首次发布前设置标识，close/lock 发布 null 前清除。回归涵盖全部这些生命周期路径；新启动的开发服务上，无 getter 替身的模板失败/成功/清空及焦点回归通过。估计修复工作量 30–60 分钟。此问题不混入修复前统计，且不作为桌面持久化证据。
+
+新增嵌套模板菜单问题：`GroupNode` 递归未传递 `templatesGroup` / `ontemplates`，已设置的深层模板组显示“设为”而不是“取消”，操作也不触发 page 回调。严重性 Medium，状态 Confirmed；浏览器深层合成分组先复现错误标签，`51f4113` 补传两个属性后，设为/取消的实际 page 回调和 patch 均通过。探针对浏览器不支持的数据库设置持久化做显式替身；未将其当成 KDBX 证据。深色/浅色 1100×720、自定义主题 720×720、深色 420×720 的菜单均在视口内，截图已检查，未新增 CSS/token。估计修复工作量 15–30 分钟。此问题不混入修复前统计。
+
+CSP 复核同时区分测试浏览器的本地网络访问授权与产品 CSP：授权前浏览器拒绝本地 WebSocket，授权后同源 HMR 在旧配置就可工作；对数字地址的显式回退连接仍有确定的 CSP 拒绝，修复后放行。报告已收窄 SP-13 的失败场景，未声称所有旧配置的主 HMR 都失败。
+
+`a5cded1` 完整门禁通过（前端 210、Rust 473 + ACL 2）。后续整合门禁曾因分页 mock 的 5 秒寿命提前结束失败；`7ebe497` 让有限 mock 等待范围覆盖客户端总超时并增加错误诊断后，已重新完整运行通过。最新日志 `verify-template-menu-final.log` 对应 `51f4113`：格式、Svelte check 零错误警告、150 键契约、构建、前端 211、Rust 473 + ACL 2、clippy `-D warnings` 全部通过。
+
+未修复项仍为 SP-11、SP-12；SP-14 部分修复，SP-15 保持 Suspected。竞品差距、XML 原生互操作、剪贴板生命周期及签名隔离继续处理；本阶段不承诺完整语义覆盖或零 bug。
