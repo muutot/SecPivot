@@ -40,6 +40,11 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 ## Browser vs desktop truth
 
+- Offline S3/WebDAV HTTP tests disable environment/system proxies on their
+  shared client. Otherwise a Windows system proxy can relay loopback fixtures
+  and return HTTP 502 despite the local peer always replying 200. This is a
+  test-only setting; production respects the user's proxy configuration.
+
 - Machine-readable audit metadata under `.claude/audits/*.json` stays strict JSON.
   The Prettier override disables trailing commas there; verify it with a JSON
   parser because the repository's general `jsonc` formatting accepts them.
