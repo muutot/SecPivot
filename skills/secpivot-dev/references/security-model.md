@@ -35,8 +35,15 @@ process-monotonic `requestId` on proof/replacement and connection exit, includin
 worker exit after service stop. The renderer ignores old/duplicate shows and cannot
 reopen an ended attempt from delayed delivery. Backend event payloads borrow the
 temporary `Zeroizing` password for synchronous serialization; begin failure and
-callback unwind also wipe that buffer. This does not prove JavaScript heap
-zeroization or immediately cancel an idle prompt on vault lock/session switch.
+callback unwind also wipe that buffer. `VaultSessions` ends registered active
+lifetime signals on successful open/create adoption, active close, lock or tab
+switch. RPC prompt leases subscribe while the active vault mutex is held, so an
+idle connection's prompt ends without another setup message. Failed/idempotent
+transitions and parked-tab close leave the current prompt alone. An ended lease
+also rejects proof after A→B→A; matching the old session id again cannot revive
+that attempt. Observer callbacks run after registry/observer guards are released,
+retain no secret, and cannot poison the active mutex on unwind. This does not
+prove JavaScript heap zeroization or native event delivery on every target.
 
 RPC connection keys prove frame integrity, but do not outlive host authorization.
 Read dispatch and write preparation revalidate the connection's username and

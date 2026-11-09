@@ -16,6 +16,8 @@ mod persist;
 mod security;
 mod serialize;
 mod session;
+#[cfg(desktop)]
+mod session_end;
 mod sessions;
 mod temp_attachments;
 #[cfg(test)]
@@ -26,6 +28,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(desktop)]
+pub(crate) use self::session_end::SessionEndSignal;
 use crate::remote::RemoteStorage;
 
 pub(crate) use self::helpers::{entry_has_otp, recycle_bin_id};

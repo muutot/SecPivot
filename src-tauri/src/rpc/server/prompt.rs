@@ -1,22 +1,36 @@
 //! A connection owns its visible SRP attempt, but never its plaintext password.
 
-pub(super) struct PromptLease {
-    request_id: String,
-    on_end: Box<dyn Fn(&str) + Send>,
-}
+use crate::vault::{SessionEndSignal, VaultSessions};
+use std::sync::Arc;
+
+pub(super) struct PromptLease(Arc<SessionEndSignal>);
 
 impl PromptLease {
+    #[cfg(test)]
+    pub(super) fn from_signal(signal: Arc<SessionEndSignal>) -> Self {
+        Self(signal)
+    }
+    #[cfg(test)]
     pub(super) fn new(request_id: String, on_end: impl Fn(&str) + Send + 'static) -> Self {
-        Self {
-            request_id,
-            on_end: Box::new(on_end),
-        }
+        Self(SessionEndSignal::new(move || on_end(&request_id)))
+    }
+
+    pub(super) fn watch(
+        vaults: &VaultSessions,
+        request_id: String,
+        on_end: impl Fn(&str) + Send + 'static,
+    ) -> Self {
+        Self(vaults.watch_active_end(move || on_end(&request_id)))
+    }
+
+    pub(super) fn is_active(&self) -> bool {
+        self.0.is_pending()
     }
 }
 
 impl Drop for PromptLease {
     fn drop(&mut self) {
-        (self.on_end)(&self.request_id);
+        self.0.finish();
     }
 }
 

@@ -708,6 +708,191 @@ fn replacement_setup_ends_the_old_prompt_before_showing_the_new_password() {
 }
 
 #[test]
+fn idle_srp_prompt_ends_on_active_vault_transition() {
+    let mut failures = Vec::new();
+    for transition in ["lock", "close", "switch", "open"] {
+        let dir = tempfile::TempDir::new().unwrap();
+        let vaults = VaultSessions::default();
+        let mut host = VaultSession::default();
+        let first = vaults
+            .open(&mut host, |fresh| {
+                fresh.create(
+                    &dir.path().join("first.kdbx"),
+                    "synthetic-master",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    None,
+                )
+            })
+            .unwrap()
+            .session_id;
+        vaults
+            .open(&mut host, |fresh| {
+                fresh.create(
+                    &dir.path().join("second.kdbx"),
+                    "synthetic-master",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    None,
+                )
+            })
+            .unwrap();
+        let mut conn = Conn::default();
+        let current_id = vaults.active_id().unwrap();
+        let _proof = begin_session_srp(&mut conn, &mut host, &current_id);
+        let ended = Arc::new(Mutex::new(Vec::new()));
+        let records = Arc::clone(&ended);
+        conn.prompt = Some(prompt::PromptLease::watch(
+            &vaults,
+            "idle-attempt".into(),
+            move |id| {
+                records.lock().unwrap().push(id.to_owned());
+            },
+        ));
+        match transition {
+            "lock" => vaults.close_all(&mut host, true).unwrap(),
+            "close" => {
+                vaults.close(&mut host, None).unwrap();
+            }
+            "switch" => {
+                vaults.switch_active(&mut host, &first).unwrap();
+            }
+            "open" => {
+                vaults
+                    .open(&mut host, |fresh| {
+                        fresh.create(
+                            &dir.path().join("third.kdbx"),
+                            "synthetic-master",
+                            "Aes",
+                            "Aes256",
+                            "None",
+                            None,
+                        )
+                    })
+                    .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        // Release the observation guard before any failing assertion/unwind.
+        let notifications = ended.lock().unwrap().clone();
+        if notifications != ["idle-attempt"] {
+            failures.push(transition);
+        }
+        drop(conn);
+        assert_eq!(*ended.lock().unwrap(), ["idle-attempt"]);
+    }
+    assert!(
+        failures.is_empty(),
+        "idle prompts survived active transitions: {failures:?}"
+    );
+}
+
+#[test]
+fn ended_srp_attempt_cannot_authorize_after_revisiting_the_original_tab() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let vaults = VaultSessions::default();
+    let mut host = VaultSession::default();
+    let first = vaults
+        .open(&mut host, |fresh| {
+            fresh.create(
+                &dir.path().join("first.kdbx"),
+                "synthetic-master",
+                "Aes",
+                "Aes256",
+                "None",
+                None,
+            )
+        })
+        .unwrap()
+        .session_id;
+    let second = vaults
+        .open(&mut host, |fresh| {
+            fresh.create(
+                &dir.path().join("second.kdbx"),
+                "synthetic-master",
+                "Aes",
+                "Aes256",
+                "None",
+                None,
+            )
+        })
+        .unwrap()
+        .session_id;
+    vaults.switch_active(&mut host, &first).unwrap();
+    let mut conn = Conn::default();
+    let proof = begin_session_srp(&mut conn, &mut host, &first);
+    conn.prompt = Some(prompt::PromptLease::watch(
+        &vaults,
+        "attempt".into(),
+        |_| {},
+    ));
+    vaults.switch_active(&mut host, &second).unwrap();
+    vaults.switch_active(&mut host, &first).unwrap();
+    let reply =
+        dispatch_setup_for_session(&mut conn, &proof, &mut host, Some(&first), &mut |_, _| {})
+            .unwrap();
+    assert_eq!(
+        reply.error.as_ref().map(|error| error.code.as_str()),
+        Some("AUTH_FAILED")
+    );
+    assert!(host.rpc_keys.is_empty());
+    assert!(conn.srp.is_none());
+}
+
+#[test]
+fn another_setup_message_cannot_discard_cancellation_and_revive_old_srp_state() {
+    let mut conn = Conn::default();
+    let mut host = FakeHost::open();
+    let (a, secret_a) = client_ephemeral();
+    let mut password = String::new();
+    let reply = dispatch_setup_for_session(
+        &mut conn,
+        &identify_to_server("client", &a),
+        &mut host,
+        Some("session"),
+        &mut |pw, _| password = pw.into(),
+    )
+    .unwrap();
+    let srp = reply.srp.unwrap();
+    let (m, _) = client_proof(&srp.s.unwrap(), &srp.b.unwrap(), &password, &a, &secret_a);
+    let signal = crate::vault::SessionEndSignal::new(|| {});
+    // A production topology event already ended this lease before the next frame.
+    conn.prompt = Some(prompt::PromptLease::from_signal(Arc::clone(&signal)));
+    signal.finish();
+    host.keys.insert("stored-client".into(), vec![7; 32]);
+    let mut key_start = Envelope::setup();
+    key_start.key = Some(KeyMessage {
+        username: Some("stored-client".into()),
+        ..Default::default()
+    });
+    let key_reply = dispatch_setup_for_session(
+        &mut conn,
+        &key_start,
+        &mut host,
+        Some("session"),
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert!(key_reply.error.is_none());
+    let reply = dispatch_setup_for_session(
+        &mut conn,
+        &proof_to_server(&m),
+        &mut host,
+        Some("session"),
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(
+        reply.error.as_ref().map(|error| error.code.as_str()),
+        Some("AUTH_FAILED")
+    );
+    assert!(conn.session_key.is_none());
+    assert!(conn.srp.is_none());
+}
+
+#[test]
 fn pending_srp_proof_is_bound_to_the_original_registry_session() {
     for reopen in [false, true] {
         let dir = tempfile::TempDir::new().unwrap();

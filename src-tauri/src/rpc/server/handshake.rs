@@ -56,16 +56,22 @@ pub(crate) fn dispatch_setup_for_session(
     session_id: Option<&str>,
     side_channel: &mut dyn FnMut(&str, u64),
 ) -> Option<Envelope> {
-    drop(conn.prompt.take());
     let stage = env.srp.as_ref().and_then(|srp| srp.stage.as_deref());
-    if stage == Some("proofToServer")
-        && (session_id.is_none() || conn.srp_session.as_deref() != session_id)
-    {
+    let cancelled = conn
+        .prompt
+        .as_ref()
+        .is_some_and(|prompt| !prompt.is_active());
+    drop(conn.prompt.take());
+    let wrong_session = stage == Some("proofToServer")
+        && (session_id.is_none() || conn.srp_session.as_deref() != session_id);
+    if cancelled || wrong_session {
         conn.srp = None;
         conn.srp_a = None;
         conn.srp_expiry = None;
         conn.srp_session = None;
-        return Some(setup_failure("AUTH_FAILED"));
+        if stage == Some("proofToServer") {
+            return Some(setup_failure("AUTH_FAILED"));
+        }
     }
     let reply = dispatch_setup(conn, env, host, side_channel);
     if stage == Some("identifyToServer") && conn.srp.is_some() {

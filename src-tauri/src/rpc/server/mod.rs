@@ -571,13 +571,16 @@ fn reply_setup(
                             + 1)
                         .to_string();
                         let end_app = app.clone();
-                        new_prompt =
-                            Some(prompt::PromptLease::new(request_id.clone(), move |id| {
+                        new_prompt = Some(prompt::PromptLease::watch(
+                            &vaults,
+                            request_id.clone(),
+                            move |id| {
                                 let _ = end_app.emit(
                                     SIDE_CHANNEL_END_EVENT,
                                     SideChannelEnded { request_id: id },
                                 );
-                            }));
+                            },
+                        ));
                         let _ = app.emit(
                             SIDE_CHANNEL_EVENT,
                             SideChannelRequest {

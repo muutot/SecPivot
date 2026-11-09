@@ -135,7 +135,12 @@ it cannot erase a restarted listener's records. Association prompts do not yet
 consume a cancellation event. RPC SRP prompts consume correlated
 `rpc-side-channel-ended` events from `rpc/server/prompt.rs`: each connection owns
 a secret-free attempt lease, ended at the next setup message or connection drop.
-Lock/session-switch cancellation for idle prompts remains pending.
+`vault/session_end.rs` supplies weak one-shot active-lifetime observers registered
+by RPC leases. Successful open/create adoption, active close, lock and switch
+end them centrally in `VaultSessions`, outside registry/observer guards and
+while the caller still holds the active vault mutex. No per-command hook can be
+missed by local or remote adoption; failed/idempotent changes and parked close
+do not end the current lifetime. Callback unwind is contained.
 
 `rpc/server/handshake.rs` validates cached connection keys against live host
 authorization before read dispatch and stored-key proof completion. Its
