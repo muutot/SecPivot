@@ -7,7 +7,14 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
-import { buildCsv, parseCsv, parseCsvRows, CsvParseError, type CsvRow } from "$lib/utils/csv";
+import {
+  buildCsv,
+  parseCsv,
+  parseCsvRows,
+  CsvParseError,
+  CsvFavoriteError,
+  type CsvRow,
+} from "$lib/utils/csv";
 import { buildKeePassXml, parseKdbxXml, type XmlExportRow } from "$lib/utils/kdbx-xml";
 import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
 import {
@@ -50,6 +57,7 @@ export type IoHost = {
  *  1Password importers. */
 export type ImportEntry = {
   qualityCheck?: boolean;
+  favorite?: boolean;
   group: string;
   title: string;
   username: string;
@@ -127,6 +135,7 @@ export function csvToImportEntries(text: string, language: Language = lang()): I
     return parseCsvRows(parseCsv(text)).map((row) => ({ ...row, customFields: [] }));
   } catch (error) {
     if (error instanceof CsvParseError) throw new Error(t(language, "error.invalidCsv"));
+    if (error instanceof CsvFavoriteError) throw new Error(t(language, "error.invalidCsvFavorite"));
     throw error;
   }
 }
@@ -143,6 +152,7 @@ export function xmlToImportEntries(text: string, lang: Language): ImportEntry[] 
 export function importRowsToEntries(rows: ImportRow[]): ImportEntry[] {
   return rows.map((row) => ({
     qualityCheck: row.qualityCheck,
+    favorite: row.favorite,
     group: row.group,
     title: row.title,
     username: row.username,
@@ -304,6 +314,7 @@ export async function importEntries(
     }
     const inputs: ImportEntryInput[] = entries.map((entry) => ({
       qualityCheck: entry.qualityCheck,
+      favorite: entry.favorite,
       groupUuid: groupCache.get(entry.group)!,
       title: entry.title,
       username: entry.username,

@@ -291,34 +291,34 @@ impl VaultSession {
     /// dirty flag and snapshot — the CSV/XML importer calls this once instead
     /// of round-tripping one IPC per row.
     pub fn add_entries(&mut self, inputs: &[EntryInput]) -> Result<VaultState, String> {
-        let inputs: Vec<_> = inputs.iter().map(|input| (input, None)).collect();
-        self.add_entries_with_quality(&inputs)
+        let inputs: Vec<_> = inputs.iter().map(|input| (input, None, None)).collect();
+        self.add_entries_with_metadata(&inputs)
     }
 
     pub fn import_entries(&mut self, inputs: &[ImportEntryInput]) -> Result<VaultState, String> {
         let inputs: Vec<_> = inputs
             .iter()
-            .map(|row| (&row.input, row.quality_check))
+            .map(|row| (&row.input, row.quality_check, row.favorite))
             .collect();
-        self.add_entries_with_quality(&inputs)
+        self.add_entries_with_metadata(&inputs)
     }
 
-    fn add_entries_with_quality(
+    fn add_entries_with_metadata(
         &mut self,
-        inputs: &[(&EntryInput, Option<bool>)],
+        inputs: &[(&EntryInput, Option<bool>, Option<bool>)],
     ) -> Result<VaultState, String> {
         if inputs.is_empty() {
             return self.snapshot_without_icons();
         }
         let payloads: Vec<Vec<AttachmentPayload>> = inputs
             .iter()
-            .map(|(input, _)| decode_attachments(&input.attachments))
+            .map(|(input, _, _)| decode_attachments(&input.attachments))
             .collect::<Result<_, _>>()?;
         // Validate every target group up-front so a bad group aborts the
         // whole batch before any entry is inserted (no partial import).
         {
             let db = self.require_db()?;
-            for (input, _) in inputs {
+            for (input, _, _) in inputs {
                 if input.group_uuid != ROOT_GROUP_UUID {
                     let group_id = parse_group_id(&input.group_uuid)?;
                     db.group(group_id)
@@ -328,7 +328,7 @@ impl VaultSession {
         }
         {
             let db = self.require_db_mut()?;
-            for ((input, quality_check), payload) in inputs.iter().zip(&payloads) {
+            for ((input, quality_check, favorite), payload) in inputs.iter().zip(&payloads) {
                 let mut group = if input.group_uuid == ROOT_GROUP_UUID {
                     db.root_mut()
                 } else {
@@ -342,6 +342,12 @@ impl VaultSession {
                 }
                 write_fields(&mut entry, input);
                 sync_custom_fields(&mut entry, &input.custom_fields);
+                if favorite == &Some(true) {
+                    entry.fields.insert(
+                        FIELD_FAVORITE.to_owned(),
+                        Value::Unprotected(FIELD_FAVORITE_TRUE.to_owned()),
+                    );
+                }
                 sync_attachments(&mut entry, &input.attachments, payload);
             }
         }

@@ -1052,6 +1052,7 @@ export const vault: VaultStore = {
           uuid: newUuid(),
           groupUuid: input.groupUuid,
           qualityCheck: input.qualityCheck ?? true,
+          favorite: input.favorite ?? false,
           title: input.title,
           username: input.username,
           password: input.password,

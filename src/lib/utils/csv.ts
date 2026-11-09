@@ -46,6 +46,14 @@ export class CsvParseError extends Error {
   }
 }
 
+/** Invalid explicit favorite cell; never includes the source cell value. */
+export class CsvFavoriteError extends Error {
+  constructor() {
+    super("Invalid CSV favorite flag");
+    this.name = "CsvFavoriteError";
+  }
+}
+
 /** Parse quoted CSV text (optional UTF-8 BOM, CRLF/LF/CR records).
  * Reject malformed quotes before returning any rows. */
 export function parseCsv(text: string): string[][] {
@@ -110,9 +118,10 @@ export interface ImportCsvRow {
   url: string;
   notes: string;
   totp: string;
+  favorite?: boolean;
 }
 
-const HEADERS = ["group", "title", "username", "password", "url", "notes", "totp"];
+const HEADERS = ["group", "title", "username", "password", "url", "notes", "totp", "favorite"];
 /** LastPass CSV export uses different column names for three fields. */
 const HEADER_ALIASES: Record<string, string> = {
   name: "title",
@@ -177,6 +186,13 @@ export function parseCsvRows(raw: string[][]): ImportCsvRow[] {
           notes: cells[5] ?? "",
           totp: cells[6] ?? "",
         };
+    // Only a named column defines the flag; legacy positional formats do not.
+    if (cols && cols[7] >= 0) {
+      const flag = pick(7).trim().toLowerCase();
+      if (flag === "true" || flag === "1") row.favorite = true;
+      else if (flag === "false" || flag === "0") row.favorite = false;
+      else if (flag !== "") throw new CsvFavoriteError();
+    }
     if (!row.title && !row.username && !row.password && !row.url && !row.notes && !row.totp)
       continue;
     rows.push(row);

@@ -309,3 +309,95 @@ test("the actual XML page handler discards an old picker before parsing or feedb
   assert.equal(calls.length, 0);
   assert.equal(f.notices.length, 0);
 });
+
+test("CSV export and structured favorite flags survive the actual bulk import wire", async () => {
+  calls.length = 0;
+  const base = {
+    group: "",
+    title: "Synthetic favorite",
+    username: "",
+    password: "",
+    url: "",
+    notes: "",
+    customFields: [],
+  };
+  const sessionView = new SessionViewGuard();
+  sessionView.activate("favorite-owner");
+  const host = {
+    sessionView,
+    operations: new LatestOperationGuard(),
+    setBusy: () => {},
+    currentState: () => state,
+    notify: () => {},
+  };
+  await importEntries(
+    host,
+    importRowsToEntries([{ ...base, favorite: true }, { ...base, favorite: false }, base]),
+    sessionView.capture(),
+    null,
+  );
+  assert.deepEqual(
+    calls.find((c) => c.command === "import_entries").args.inputs.map((i) => i.favorite),
+    [true, false, undefined],
+  );
+  calls.length = 0;
+  await importEntries(
+    host,
+    csvToImportEntries("Title,Favorite\r\nFavorite,true\r\nOrdinary,false\r\n"),
+    sessionView.capture(),
+    null,
+  );
+  assert.deepEqual(
+    calls.find((c) => c.command === "import_entries").args.inputs.map((i) => i.favorite),
+    [true, false],
+  );
+});
+
+test("browser bulk import retains favorite metadata without rewriting ordinary edits", async () => {
+  const native = globalThis.__TAURI_INTERNALS__;
+  delete globalThis.__TAURI_INTERNALS__;
+  try {
+    await vault.open("synthetic-favorite-browser.kdbx", "synthetic-master");
+    const row = {
+      groupUuid: "root",
+      title: "Favorite import metadata",
+      username: "",
+      password: "",
+      url: "",
+      notes: "",
+    };
+    const result = await vault.addEntries([
+      { ...row, favorite: true },
+      { ...row, favorite: false },
+      row,
+    ]);
+    const entries = result.root.entries.filter((e) => e.title === row.title);
+    assert.deepEqual(
+      entries.map((e) => Boolean(e.favorite)),
+      [true, false, false],
+    );
+    await vault.updateEntry(entries[0].uuid, { ...row, notes: "changed" });
+    let current;
+    const stop = vault.subscribe((v) => (current = v));
+    stop();
+    assert.equal(current.root.entries.find((e) => e.uuid === entries[0].uuid).favorite, true);
+    await vault.closeAll();
+  } finally {
+    globalThis.__TAURI_INTERNALS__ = native;
+  }
+});
+
+test("invalid CSV favorites fail before rows with localized content-free feedback", () => {
+  for (const language of ["en", "zh-CN"]) {
+    assert.throws(
+      () =>
+        csvToImportEntries(
+          "Title,Favorite\nEarlier,true\nSynthetic,synthetic-sensitive-flag\n",
+          language,
+        ),
+      (error) =>
+        error.message === t(language, "error.invalidCsvFavorite") &&
+        !error.message.includes("synthetic-sensitive-flag"),
+    );
+  }
+});

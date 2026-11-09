@@ -139,6 +139,18 @@ success default. Kinds are assigned at the branch, never inferred from translate
 text. The existing TipsHost danger palette renders errors; view/busy guards and
 backend result contracts remain unchanged.
 
+Favorite import metadata is optional on `ImportRow`, `io.ImportEntry`, and
+`ImportEntryInput`; the mapper and bulk IPC preserve it. Bitwarden accepts only
+boolean `favorite` when present. The native batch validates every group/payload
+before setting the existing `SecPivot.Favorite=true` field at creation; false/
+absent keep the non-favorite default. Browser creation mirrors it. Ordinary
+entry edits have no favorite input and preserve the current flag.
+CSV recognizes an explicit Favorite header, including reordered columns. It
+accepts case-insensitive true/false and numeric 1/0, with an empty cell meaning
+unspecified; invalid cells fail the whole conversion with localized content-free
+feedback. Legacy positional rows have no inferred favorite field. Own CSV
+exports retain their header and true/false output; XML/1PIF behavior is unchanged.
+
 ## Config contract
 
 `config.rs` persists `conf/config.json` under the data root resolved by `config::resolve_data_dir`: portable mode (a `portable.flag` marker or a legacy `conf/config.json` beside the executable) keeps everything next to the executable so the folder travels as one unit; otherwise the per-user app-data dir is used (installed builds must not write into `Program Files`). The `app_info` command exposes `{ portable, configPath, dataDir }` to the About panel. The Rust `AppConfig` serde shape mirrors the frontend `AppSettings` (`src/lib/types/settings.ts`):

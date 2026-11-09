@@ -38,6 +38,8 @@ pub struct ImportRow {
     pub custom_fields: Vec<ImportCustomField>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality_check: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favorite: Option<bool>,
 }
 
 /// Parse an unencrypted Bitwarden `.json` export. Official item types 1–8 are
@@ -90,6 +92,11 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         if !(1..=8).contains(&kind) {
             return Err(invalid());
         }
+        let favorite = match item.get("favorite") {
+            None => None,
+            Some(serde_json::Value::Bool(value)) => Some(*value),
+            Some(_) => return Err(invalid()),
+        };
         let title = item
             .get("name")
             .and_then(serde_json::Value::as_str)
@@ -192,6 +199,7 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             totp: if totp.is_empty() { None } else { Some(totp) },
             custom_fields,
             quality_check: Some(kind == 1),
+            favorite,
         });
     }
     Ok(rows)
