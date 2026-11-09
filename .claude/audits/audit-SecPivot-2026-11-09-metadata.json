@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S34; historical supplemental tracking notes excluded",
-    "total": 45,
-    "confirmed": 45,
+    "scope": "15 baseline cards plus SP-S05 through SP-S35; historical supplemental tracking notes excluded",
+    "total": 46,
+    "confirmed": 46,
     "suspected": 0,
     "by_severity": {
-      "High": 10,
+      "High": 11,
       "Medium": 26,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "ed5a86d",
+  "remediation_checkpoint": "1a146c2",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -66,6 +66,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S35",
+      "area": "Empty KPRPC regex placeholders broaden browser and auto-type matching",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "0ab8e2b",
+      "commit": "1a146c2",
+      "status": "Confirmed and remediated. Reopened synthetic KDBX returned one unrelated credential through each Bridge/RPC adapter and one auto-type candidate before repair. Official pinned KPRPC guards empty regex; independent .NET oracle corroborates. Shared empty-only guard preserves whitespace and explicit wildcards; six targeted tests and full verify 316/567/ACL2 passed. Native extension/device/OS auto-type not exercised; regex dialect and oversized blocks remain pending."
+    },
     {
       "area": "Android SAF ACL",
       "commit": "e5e3c4e",

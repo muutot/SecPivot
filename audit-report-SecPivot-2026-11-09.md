@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S34；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S35；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 10     | 10        | 0         |
+| High      | 11     | 11        | 0         |
 | Medium    | 26     | 26        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **45** | **45**    | **0**     |
+| **Total** | **46** | **46**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1975,3 +1975,30 @@ reordered flags、structured mapper→bulk IPC、browser bulk 以及非法 cell
 最初 deletedDate 怀疑；密码历史确实在官方 JSON 输出，当前 mapper 未
 保留，继续独立审查。完整 URI、集合/历史/ZIP、其他系统及 UI、手机
 v1.6.5 Save As APK/设备验证仍未完成，目标 active。
+
+### Finding: SP-S35 KPRPC 空正则放宽为全站匹配（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Data integrity / Concurrency boundaries
+- Status: Confirmed
+- Affected area: Bridge/RPC/auto-type URL allow and block regex rules
+- Evidence:
+  - File: `src-tauri/src/vault/helpers.rs:211`、`src-tauri/src/vault/helpers.rs:258`、`src-tauri/src/vault/helpers.rs:420`、`src-tauri/src/vault/helpers.rs:475`（`0ab8e2b` 修复前）
+  - Function / Module: regex_matches / kprpc_matches_url / walk_match / walk_match_candidates
+  - Relevant behavior: shared helper 把空字符串交给 Rust regex；空表达式匹配每个输入，空 allow 列表项覆盖原 host 约束，空 block 又会阻止全部合法匹配。官方 KPRPC 在调用 Regex.IsMatch 前先排除空表达式。
+  - Reproduction: 真实合成 KDBX 写入并重开后，在主网址 authorized.example、regExURLs=[""] 下，不相关 unrelated.example.net 的 Bridge/RPC 与无关窗口 auto-type candidates 计数均为 1，期望均为 0；`kprpc-empty-regex-red-complete.log` 显示 (1,1,1)。空 block 回归使合法 host 查询无条目，原始 corrected log 显示 0/1 差异。未执行 OS 按键/扩展/共享剪贴板，也未读取真实密码库。
+  - Independent reference: pinned KeePassRPC dc0a59b60b3ac21da9944bc5b98fe96e706af80a，KeePassRPCService.JSONRPC.cs:873/924、1334/1385 使用 !String.IsNullOrEmpty；`kprpc-empty-official-jsonrpc.cs` 与先前公开来源 hash 一致。`kprpc-empty-dotnet-oracle.json` 实际 .NET 复核 raw empty=true、官方 guard=false，单空格及明确 .* 对照保留。
+- Problem: 来自现有 KDBX 的空占位 regex 被解释为全局允许，使条目出现在并不属于其网址的查询/自动输入目标中。
+- Why it matters: 浏览器匹配承担秘密返回的范围限制；实际 host 回归已经返回一个合成 credential，属于已复现匹配范围扩张，不声称已存在远端利用或真实用户秘密泄漏。
+- Realistic failure scenario: 在 KeePass/外部编辑工具生成的 KPRPC config 中残留空列表项；官方插件忽略它，SecPivot 却把该项当作全站规则。
+- Minimal fix: 在共享 regex helper 排除真正空表达式，所有三类匹配入口同步生效；不 trim 有意义空白、不修改明确 wildcard/非空有效规则。
+- Better long-term fix: 独立复核 .NET/Rust regex 方言、oversize block 行为、规则列表解析和多网址请求优先级，不能以本项修复声称全部正则互操作完成。
+- Regression test suggestion: 重开 KDBX、两种 Domain 配置下无关 Bridge/RPC/auto-type 不匹配，空 block 不吞合法条目；非空空格、.*、invalid regex 和既有 block/allow 优先级仍受覆盖。
+- Estimated effort: 0.5–1 小时（共享边界及真实 host 回归）
+
+`1a146c2` 已修复共享空表达式边界。最终针对性 6 项回归全部通过，完整
+`verify-kprpc-empty-regex.log` exit 0：316 frontend、567 Rust、ACL 2；
+默认跳过四个原生剪贴板 live body。更新了匹配契约、安全边界和模块引用，
+原始基线与评分保持不变。正则方言、过大 block、多网址请求、完整迁移、
+其余系统/UI 与手机 v1.6.5 的新 APK/真机另存为仍待验证，目标 active。
