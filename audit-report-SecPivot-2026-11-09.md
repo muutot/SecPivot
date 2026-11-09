@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S17；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S18；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 19     | 19        | 0         |
+| Medium    | 20     | 20        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **28** | **28**    | **0**     |
+| **Total** | **29** | **29**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1200,3 +1200,51 @@ project-structure 和 partial TODO。没有 CSS/markup 改动，也没有使用�
 `f3aab3d` 为本地 OpenIdea 目录增加 Git/Prettier 忽略，命令证明 ignored=true，
 维护流程同步了保留用户元数据的规则。最终全仓格式门恢复通过；该工具边界
 修正不改变上述应用回归结果或发现统计，既有 `.trae/` 仍保留原样。
+
+### Finding: SP-S18 XML 导出改变回车凭据并允许无法解析的字符（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Stability / Testing
+- Status: Confirmed
+- Affected area: desktop and browser PlainXml export text encoding
+- Evidence:
+  - File: `src/lib/utils/kdbx-xml.ts:163`、`src-tauri/src/vault/security.rs:1118`（`8c7e7a6` 修复前源码）
+  - Function / Module: `escapeXml` / `export_xml_content`
+  - Relevant behavior: XML 转义复用 HTML 字符替换，原样写出回车及 XML 1.0 无法表示的控制字符。读取器按规范把 CR/CRLF 变为 LF，或拒绝非法文档。
+  - Reproduction: 真实 Chromium DOMParser 读回实际 browser builder 输出时，合成密码和受保护字段的回车丢失，6 种非法 scalar 使整个文档出现 parsererror，2 种孤立代理字符在 DOM 边界被替换。两项 Rust 回归先保存重开合成 KDBX，证明秘密仍完整，然后实际导出并用 quick-xml 解码；回车变 LF，非法秘密导出错误地成功。见 `xml-character-browser-red.log`、`xml-character-backend-red-retry.log`；旧普通 XML 回归仍通过。
+- Problem: 成功导出的 XML 可能不含原凭据，或完全无法被标准 XML 读取器打开。
+- Why it matters: 迁移后认证失败或无法导入；未观察原 KDBX 被破坏，属于特殊字符触发的导出保真问题，按 Medium 记录。
+- Realistic failure scenario: 从其他来源保存含回车或隐藏控制字符的密码/受保护字段，再通过 XML 迁移到另一客户端。
+- Minimal fix: XML 专用转义用字符引用保留 CR；导出前拒绝 XML 1.0 无法表示的字符，返回不含字段内容的明确错误，目标文件和原凭据保持完整。不能直接套用会删除字符的兼容过滤到凭据上。
+- Better long-term fix: 继续真实 KeePass/Android 导入互操作；不把 XML 导出当成附件、历史、原生分组属性的完整备份。
+- Regression test suggestion: KDBX 保存重开 → XML 编码/解码保留 CR/CRLF、TAB、Unicode；非法密码/受保护字段使导出失败并保留旧目标，覆盖名称/分组/普通值与孤立 UTF-16 代理字符；真实 DOMParser 独立验证。
+- Estimated effort: 1–2 小时（编码边界与回归）；原生客户端互操作另计
+
+官方 KeePass `KdbxFile.Write.cs` 与 `StrUtil.SafeXmlString` 的公开源码已核对：
+PlainXml 使用 `ProtectInMemory`，并过滤无法表示的 XML 字符。本修复采纳
+XML 字符边界，对凭据采用明确拒绝以保留原值，不声明与官方的删除行为相同。
+首轮 Rust 编译发生主机内存耗尽；原命令与源码未改变的重试执行到两项预期
+失败，前次编译错误不算应用复现。
+
+`a90394d` 已修复 SP-S18：前后端 XML 专用转义保留 CR；无法表示的字符
+在文件写入前拒绝，错误不带字段内容。浏览器 builder 接收可选语言参数，
+页面脚本传入当前 UI 语言；CSS/markup 不变。Rust 中间文档在成功交接前与
+验证失败时由 Zeroizing 托管，导出命令保留既有零化写入边界。
+
+两项前端回归与两项 Rust 回归先红后绿，原 XML 回归仍通过；后端绿测额外
+分别覆盖非法 password 与单独非法受保护 PIN，在 6 种字符下保存重开后
+拒绝写出，证明旧目标和两种原值保持完整。实际 Chromium DOMParser 绿测
+保留 CR/CRLF、TAB 和有效 Unicode，8 种非法输入均由 builder 拒绝。
+证据为 `xml-character-frontend-green.log`、`xml-character-backend-green.log`、
+`xml-character-browser-green.log`；参考源码摘要在
+`xml-character-reference-provenance.json`。
+
+完整 `npm run verify`（`verify-xml-character-fidelity.log`）通过：格式、
+Svelte check、150 键合同、构建、前端 **288**、Rust **538 + ACL 2** 和 clippy。
+documentation currency gate 同步 data-contracts/security-model 与 partial TODO。
+当前卡片 **29**（High 5 / Medium 20 / Low 4，全部 Confirmed），原始基线不变。
+此验证使用合成库和浏览器夹具，没有真实用户库、OS 剪贴板或原生 KeePass
+运行；Android 选择器创建文档的副作用和 provider 行为尚未实测。
+手机 v1.6.5 的 `plugin:safe|create_document not allowed by ACL` 仍需新 APK
+和设备回归，源码 `saf` 与报错 `safe` 的差异未查明；整体审计目标继续 active。

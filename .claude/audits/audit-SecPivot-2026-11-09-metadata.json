@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S17; historical supplemental tracking notes excluded",
-    "total": 28,
-    "confirmed": 28,
+    "scope": "15 baseline cards plus SP-S05 through SP-S18; historical supplemental tracking notes excluded",
+    "total": 29,
+    "confirmed": 29,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 19,
+      "Medium": 20,
       "Low": 4
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "7afcd81",
+  "remediation_checkpoint": "a90394d",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -205,15 +205,24 @@
       "source_checkpoint": "4aac415",
       "commit": "7afcd81",
       "status": "Four real command/ImportRow wire/bulk mutation/KDBX reopen regressions failed before remediation: reserved and blank custom values lost, duplicate values dropped, HmacOtp shadowed login.totp as HOTP, KPRPC JSON expanded match URLs. OverrideURL string-label control did not activate the separate native attribute. Shared source-prefixed unique allocator preserves names/values/protected flags, including null/missing labels; original 1PIF behavior retained. Thirteen targeted import tests and final full host gate passed; linked fields, multi-URI, org collections, typed items and native export fidelity pending."
+    },
+    {
+      "id": "SP-S18",
+      "area": "PlainXml text normalization changes credentials and allows unrepresentable XML characters",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "8c7e7a6",
+      "status": "Two frontend and two backend regressions failed on baseline 8c7e7a6. Real Chromium DOMParser changed CR/CRLF in passwords/protected fields, rejected six invalid XML scalars and replaced two isolated surrogates. Backend saved/reopened synthetic KDBX with intact secrets, then XML decoding normalized CR and invalid export reported success. First baseline compilation hit host memory exhaustion; unchanged retry reached the expected failures. Fix preserves CR references, rejects unrepresentable characters before backend destination writes, retains original secrets/old targets, localizes browser errors and zeroizes intermediate Rust XML. Green backend covers password and separately protected PIN for all six scalars; targeted frontend/backend and real DOMParser passed. Full host verify passed 288 frontend/538 Rust/ACL2; native client and Android provider/picker runtime pending.",
+      "commit": "a90394d"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "7afcd81",
-    "log": "verify-bitwarden-field-retention.log",
-    "frontend_tests": 286,
-    "rust_unit_tests": 536,
+    "checkpoint": "a90394d",
+    "log": "verify-xml-character-fidelity.log",
+    "frontend_tests": 288,
+    "rust_unit_tests": 538,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -272,6 +281,7 @@
     "c42ea09 bounds main/cascade menus with existing theme and scrollbar tokens, preserves compact geometry, uses fixed cascades outside parent scroll clipping and cleans observers/listeners. Production component and actual page browser synthetic regressions passed, full verify 286 frontend/530 Rust/ACL2. Initial runtime-import, wrong localized labels/settings API and fixed callback-count harness mistakes excluded. No native Android WebView or keyboard/visual viewport validation; original baseline unchanged.",
     "0f07b47 validates encrypted/passwordProtected before mapping any items, rejects true and nonboolean markers with content-free errors, retains absent/false legacy plaintext, and zeroizes incoming command text. Independent six public export fixtures prove boundary; temporary probe and external fixture references removed before commit. First full verification failed during LLVM/PowerShell host memory exhaustion, no cargo/rustc remained at initial recheck; unchanged source/command retry passed 286 frontend/532 Rust/ACL2. TODO full Bitwarden compatibility remains partial for custom-name/linked-field/URI/native export evidence.",
     "7afcd81 shares import/fields.rs unique source-prefixed allocator between Bitwarden and 1PIF, preserves all reserved/blank/null/missing/duplicate custom values and protection flags after KDBX reopen, and prevents external labels becoming native OTP/KPRPC controls. Four clean baseline tests failed; thirteen targeted imports passed, final full verify 286 frontend/536 Rust/ACL2. Standard password preserved even before repair; OverrideURL string control was not misreported as native-attribute activation. No user vault, export, OS clipboard, CSS/markup or actual extension/Android runtime used. Bitwarden full compatibility TODO stays partial. New unrelated .openidea and existing .trae were left untouched.",
-    "Post-report formatting encountered newly created unrelated .openidea/changelists.json. f3aab3d excludes local OpenIdea metadata from Git/Prettier without reading or modifying its contents; git check-ignore and prettier file-info confirm the rule and final full format passes. Existing .trae preserved. This tooling boundary is not a new application finding and does not alter 7afcd81 application verification."
+    "Post-report formatting encountered newly created unrelated .openidea/changelists.json. f3aab3d excludes local OpenIdea metadata from Git/Prettier without reading or modifying its contents; git check-ignore and prettier file-info confirm the rule and final full format passes. Existing .trae preserved. This tooling boundary is not a new application finding and does not alter 7afcd81 application verification.",
+    "a90394d preserves XML CR via numeric references and rejects XML 1.0 unrepresentable characters without changing stored credentials. Two frontend/two KDBX round-trip regressions failed before repair, plus actual Chromium DOMParser behavior. First baseline compilation hit host memory exhaustion; unchanged retry reached expected failures. Full verify passed 288 frontend/538 Rust/ACL2. Docs currency updates contract/security and partial XML TODO; page change is script-only locale wiring. Synthetic vaults only, no user vault/clipboard/native KeePass/Android APK-device evidence. Original b7c5d9f baseline unchanged; overall goal remains active."
   ]
 }
