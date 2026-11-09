@@ -106,4 +106,34 @@ describe("parseCsvRows", () => {
       assert.equal(decoded[index + 1][1], index < 6 ? "'" + values[index] : values[index]);
     }
   });
+
+  it("rejects malformed quotes without returning partial rows or exposing field contents", () => {
+    const marker = "synthetic-sensitive-marker";
+    for (const text of [
+      `Group,Title\r\n,valid\r\n,"${marker}`,
+      `Group,Title\r\n,"${marker}"junk\r\n`,
+      `Group,Title\r\n,${marker}"tail\r\n`,
+    ]) {
+      assert.throws(
+        () => parseCsv(text),
+        (error) => error instanceof Error && !error.message.includes(marker),
+      );
+    }
+  });
+
+  it("preserves empty quoted fields, escaped quotes, multiline text and record boundaries", () => {
+    assert.deepEqual(parseCsv('""'), [[""]]);
+    assert.deepEqual(parseCsv('\uFEFF"a,b","one\r\ntwo","a""b"\r\n,,\r\n'), [
+      ["a,b", "one\r\ntwo", 'a"b'],
+      ["", "", ""],
+    ]);
+    assert.deepEqual(parseCsv("a,b\rc,d\r"), [
+      ["a", "b"],
+      ["c", "d"],
+    ]);
+    assert.deepEqual(parseCsv(" a , b \nlast,"), [
+      [" a ", " b "],
+      ["last", ""],
+    ]);
+  });
 });

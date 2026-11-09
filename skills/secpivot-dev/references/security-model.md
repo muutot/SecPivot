@@ -8,6 +8,11 @@ outside RFC quotes or remove literal input apostrophes on import. Guarding alter
 the exported field value; the wire regressions prove column and guarded-value
 fidelity, not native spreadsheet execution behavior or lossless migration.
 
+CSV import rejects malformed quoting for the whole document before submitting
+entries. Parser errors carry no field contents; IO translates them and the page
+reports only in the initiating view. It never repairs ambiguous malformed CSV by
+discarding quotes or concatenating records, and never strips literal apostrophes.
+
 `util::atomic_write` creates a unique random sibling per write with `create_new`
 and owner-only permissions on Unix, flushes the same writable handle, then
 renames it onto the target. Cleanup only removes that operation's own file;

@@ -38,13 +38,30 @@ export function buildCsv(rows: CsvRow[]): string {
   return `\uFEFF${body}\r\n`;
 }
 
-/** Parse RFC 4180 CSV text (optional UTF-8 BOM, quoted cells, CRLF/LF endings). */
+/** Content-free syntax error; import callers translate it for the UI. */
+export class CsvParseError extends Error {
+  constructor() {
+    super("Invalid CSV quoting");
+    this.name = "CsvParseError";
+  }
+}
+
+/** Parse quoted CSV text (optional UTF-8 BOM, CRLF/LF/CR records).
+ * Reject malformed quotes before returning any rows. */
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
   let inQuotes = false;
+  let closedQuote = false;
+  let fieldStarted = false;
+  const finishCell = () => {
+    row.push(cell);
+    cell = "";
+    closedQuote = false;
+    fieldStarted = false;
+  };
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (inQuotes) {
@@ -54,26 +71,32 @@ export function parseCsv(text: string): string[][] {
           i++;
         } else {
           inQuotes = false;
+          closedQuote = true;
         }
       } else {
         cell += ch;
       }
-    } else if (ch === '"') {
-      inQuotes = true;
     } else if (ch === ",") {
-      row.push(cell);
-      cell = "";
-    } else if (ch === "\n") {
-      row.push(cell);
+      finishCell();
+    } else if (ch === "\n" || ch === "\r") {
+      finishCell();
       rows.push(row);
       row = [];
-      cell = "";
-    } else if (ch !== "\r") {
+      if (ch === "\r" && src[i + 1] === "\n") i++;
+    } else if (closedQuote) {
+      throw new CsvParseError();
+    } else if (ch === '"') {
+      if (fieldStarted) throw new CsvParseError();
+      inQuotes = true;
+      fieldStarted = true;
+    } else {
       cell += ch;
+      fieldStarted = true;
     }
   }
-  if (cell.length > 0 || row.length > 0) {
-    row.push(cell);
+  if (inQuotes) throw new CsvParseError();
+  if (fieldStarted || row.length > 0) {
+    finishCell();
     rows.push(row);
   }
   return rows;

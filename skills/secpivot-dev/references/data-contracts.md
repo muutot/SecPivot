@@ -8,6 +8,14 @@ in imported text and literal source apostrophes must not be stripped. Native
 file and frontend wire regressions cover all six guarded prefixes and ordinary
 quoted values; independent Python stdlib CSV reads corroborate their boundaries.
 
+`parseCsv` preserves BOM-free text, quoted empty fields, escaped quotes and
+embedded CR/LF; CRLF, LF and CR delimit records outside quotes. Malformed quote
+placement, trailing text after a closing quote and unterminated quotes throw
+`CsvParseError` before any rows return. `io.csvToImportEntries(text, language?)`
+translates that content-free error with the current locale by default. The main
+CSV handler catches it under the captured view and stops before group creation
+or batch IPC. It also discards an obsolete picker completion before parsing.
+
 New-entry templates resolve all hidden password, OTP and protected-field values
 atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
 show an error. Component destruction or a session/path change invalidates pending
