@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-11-09",
+  "commit": "b7c5d9f",
+  "modes": ["full"],
+  "scope": "entire first-party SecPivot repository",
+  "overall_score": 6.1,
+  "dimension_scores": {
+    "security": 6.5,
+    "stability": 5.5,
+    "performance": 7,
+    "testing": 6,
+    "maintainability": 6.5,
+    "design": 6,
+    "release": 5.5,
+  },
+  "finding_counts_by_severity": {
+    "High": 4,
+    "Medium": 8,
+    "Low": 3,
+  },
+  "confirmed": 14,
+  "suspected": 1,
+  "report_path": "audit-report-SecPivot-2026-11-09.md",
+  "stage": "before remediation",
+}
