@@ -212,6 +212,9 @@ Tip body text uses `--text-primary` for legible dark/light/custom feedback.
 Success/error identity stays in the existing tinted background and border;
 do not lighten semantic colors with white for small message text. Measure the
 rendered foreground/background contrast, not only the raw theme palette.
+The fixed tip host stays content-sized up to 560px and the viewport minus
+24px. Individual messages respect that width and wrap long filenames/URLs;
+keep the existing 6px/12px padding, 11px secondary font and centered position.
 
 ## Fixed layer order
 

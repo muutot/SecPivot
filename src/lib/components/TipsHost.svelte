@@ -26,12 +26,16 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    width: max-content;
+    max-width: min(560px, calc(100vw - 24px));
     transform: translateX(-50%);
     pointer-events: none;
   }
 
   .tip {
     margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     padding: 6px 12px;
     border: 1px solid color-mix(in srgb, var(--success-color) 40%, transparent);
     border-radius: var(--settings-feedback-radius, 7px);
