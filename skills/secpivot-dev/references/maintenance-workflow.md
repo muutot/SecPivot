@@ -7,6 +7,7 @@ Read this before any repository change. It is the operating contract for every e
 - Work in `B:\Program\Project\SecPivot` unless told otherwise. The sibling projects (`clipboard`, `MuuPass`) are read-only references for style and conventions; never edit them during SecPivot work.
 - Treat `clipboard` as the style source of truth for the approved visual language. `MuuPass` is the reference for KeePass domain behavior (TOTP, KDF choices, auto-type). Borrow patterns, do not copy implementation wholesale.
 - Preserve unrelated user changes. Inspect `git status --short --branch` before starting and re-inspect before committing.
+- OpenIdea's local `.openidea/` metadata stays out of Git and Prettier. If local editor metadata appears during a check, preserve its contents and verify the ignore rule rather than formatting or deleting the user's files.
 
 ## Task loop
 
