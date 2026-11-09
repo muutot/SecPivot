@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05、SP-S06；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05、SP-S06、SP-S07；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 4      | 4         | 0         |
-| Medium    | 10     | 10        | 0         |
+| Medium    | 11     | 11        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **17** | **17**    | **0**     |
+| **Total** | **18** | **18**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05、SP-S06 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05、SP-S06、SP-S07 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -780,3 +780,25 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 3–5 小时
 
 `9a994d3` 已修复 SP-S06。32 条 socket 的 native `shutdown(Both)` 均返回成功，但 Windows 已阻塞的 recv 在 peer 被释放前仍未退出，见 `browser-shutdown-sockets-probe.log`；因此撤回“仅关闭克隆 socket 就能及时结束 worker”的假设，以短 native poll 加取消检查解决。同一旧连接回归修复后得到 EOF。最新完整 `npm run verify` 日志 `verify-browser-shutdown.log`：格式、Svelte check、150 键契约、构建、前端 **223**、Rust **502 + ACL 2**、clippy `-D warnings` 全部通过。维护引用同步停机、锁顺序、可取消流和提交边界；没有新增可勾选的完整 Android/发布 TODO。前端已显示的提示仍无取消事件，手机 v1.6.5 的新 APK/选择器/云端 provider、真实剪贴板和第三方 XML 互操作仍待目标验证，整体目标保持进行中。
+
+### Finding: SP-S07 旧审批结果覆盖新弹窗的操作状态（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Frontend State / Accessibility
+- Status: Confirmed（源代码修复已验证）
+- Affected area: Browser association prompt
+- Evidence:
+  - File: `src/lib/components/BridgeApprovalPrompt.svelte`（`b69b972` 修复前源码）
+  - Function / Module: `decide` / association event / dismissal timer / mount cleanup
+  - Relevant behavior: `bridge_approve` 返回后直接更新全局 outcome/busy 并定时清空 pending，没有核对返回结果属于当前弹窗。新事件能在旧请求处理中替换 pending；销毁时也没有使旧结果失效。
+  - Reproduction: `tests/bridge-approval.test.mjs` 编译并执行完整生产组件 script，仅替换 Svelte state、event、IPC 和 timer 环境。旧 A 成功后 B 得到 `outcome=ok`，旧 A 失败后正在提交的 B 得到 `busy=false`，卸载后仍安装一个 timer；四项断言在修复前实际失败，见 `bridge-approval-race-red.log`。首次测试脚手架曾因 TypeScript 的空 export 标记不能在 VM 中执行而失败；该语法失败不是缺陷证据，修正脚手架后才记录状态断言。
+- Problem: 新审批显示旧审批的授权/过期结果，操作状态提前释放，或被旧关闭回调删除。
+- Why it matters: 可见客户端与反馈不一致，用户无法可靠确认自己正在处理哪个关联请求；这是 renderer 状态错误，未证明后台将 A 的 key 绑定到 B。
+- Realistic failure scenario: 本地扩展短时间提出 A、B 两个关联请求，用户处理 A 时 B 到达；A 的异步响应晚到，B 被标为已授权或提前关闭。
+- Minimal fix: 在 invoke 前捕获 request 对象，成功、失败、finally 与关闭回调只对同一当前对象生效；卸载清空 pending 和状态，取消 timer，并拒绝晚到事件。后端 token、会话和监听代次校验仍独立保留。
+- Better long-term fix: 为等待/结束提示接入按请求身份的后台失效事件，并复核 SRP 提示的过期、锁定和连接结束清理。
+- Regression test suggestion: 四条生产脚本回归覆盖旧成功、旧失败遇到新 busy、卸载晚到结果、失效 timer 回调。Edge 实际挂载组件并注入合成 IPC，点击 A→B 后让 A 失败，验证 B 按钮仍 disabled 且不显示 A 错误；B 完成后提出 C，经过旧 1.4 s deadline 后 C 仍可操作；卸载移除 modal，无 pageerror。1100/420 宽度截图已检查，见 `bridge-approval-render.log`。没有运行原生 Tauri/真实扩展或共享 OS clipboard。
+- Estimated effort: 1–2 小时
+
+`2303a0d` 已修复 SP-S07，仅调整 script 的请求所有权，未改 markup/CSS；data-contracts 已同步。最新完整 `npm run verify` 日志 `verify-bridge-approval-identity.log`：格式、Svelte check、150 键契约、生产构建、前端 **227**、Rust **502 + ACL 2**、clippy `-D warnings` 全部通过。报告当前详细卡片共 18 项，原始 15 项与 6.1 分基线保持不变。服务停止/锁定/超时的提示失效、SRP 秘密释放、剪贴板并发写入、SAF provider 同步及真实 Android APK/第三方 XML 互操作继续处理；完整语义覆盖仍未完成。

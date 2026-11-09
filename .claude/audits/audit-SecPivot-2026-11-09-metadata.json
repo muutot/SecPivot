@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 and SP-S06; historical supplemental tracking notes excluded",
-    "total": 17,
-    "confirmed": 17,
+    "scope": "15 baseline cards plus SP-S05, SP-S06 and SP-S07; historical supplemental tracking notes excluded",
+    "total": 18,
+    "confirmed": 18,
     "suspected": 0,
-    "by_severity": { "High": 4, "Medium": 10, "Low": 3 }
+    "by_severity": { "High": 4, "Medium": 11, "Low": 3 }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "9a994d3",
+  "remediation_checkpoint": "2303a0d",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -97,14 +97,22 @@
       "confidence": "Confirmed",
       "commit": "9a994d3",
       "status": "shared-loop socket echoed a new request after listener join before the fix; generation cancellation, Windows polling, approval/queued request, fragmented read, timeout and permit regressions plus full verify passed; visible prompt cancellation remains pending"
+    },
+    {
+      "id": "SP-S07",
+      "area": "Old association approval completion overwrites a replacement prompt and its busy/dismissal state",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "2303a0d",
+      "status": "four production component-script state regressions failed before the fix and passed after; rendered Edge A/B/C synthetic IPC and 1100/420 screenshots passed; request identity now gates success/failure/finally/timer/unmount"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "9a994d3",
-    "log": "verify-browser-shutdown.log",
-    "frontend_tests": 223,
+    "checkpoint": "2303a0d",
+    "log": "verify-bridge-approval-identity.log",
+    "frontend_tests": 227,
     "rust_unit_tests": 502,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -144,6 +152,7 @@
     "Initial 75ms unoptimized short-header probe did not reproduce the RPC race; optimized exact-source probe reproduced it, and the repository regression uses a 1KiB partial header with a bounded 250ms delayed completion",
     "9a994d3 cancels listener generations, registered sockets and approval waiters; old requests revalidate after acquiring the vault mutex; RPC durable completion still adopts committed storage results",
     "Windows shutdown of all 32 socket clones returned success but blocked recv remained pending until peers dropped; native 100ms polls with logical read deadlines fixed shutdown without shortening protocol timeouts",
-    "Frontend already-visible association/SRP prompts have no cancellation event yet; admitted-work test models permit retention rather than an actual storage commit interrupted by stop"
+    "Frontend already-visible association/SRP prompts have no cancellation event yet; admitted-work test models permit retention rather than an actual storage commit interrupted by stop",
+    "2303a0d binds association IPC completion and dismissal to the current request; four script regressions red-to-green and a real rendered synthetic IPC test passed; script harness's initial empty-export syntax failure was corrected before recording state evidence"
   ]
 }
