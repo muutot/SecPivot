@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S31；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S32；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
 | Medium    | 25     | 25        | 0         |
-| Low       | 7      | 7         | 0         |
+| Low       | 8      | 8         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **42** | **42**    | **0**     |
+| **Total** | **43** | **43**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1834,3 +1834,44 @@ A→B→A 旧视图静默对照通过。相邻 IO tests **38** 通过。
 运行探针。仅合成库/模拟 IPC，全新 profile；无真实库/OS 剪贴板/设备。
 当前卡片 **42**（High 10 / Medium 25 / Low 7），基线 15 项/6.1 分不变。
 浅色对比度、其他系统/UI 覆盖及手机 v1.6.5 另存为 APK/真机仍待验证。
+
+### Finding: SP-S32 浅色提示文字对比度不足（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Accessibility / Design
+- Status: Confirmed
+- Affected area: global TipsHost success/error text
+- Evidence:
+  - File: `src/lib/components/TipsHost.svelte:46`、`src/lib/components/TipsHost.svelte:55`、`src/lib/types/theme.ts:69`（`c4adb66` 修复前）
+  - Function / Module: `.tip` / `.tip.error` semantic text color mixes
+  - Relevant behavior: 11px 正文把 success/danger 色与 20% 白混合，浅色 surface 上进一步变浅；正文被固定调亮而没有使用主题正文 token。
+  - Reproduction: `tip-contrast-red.log` 从实际 Edge getComputedStyle 读取 sRGB 文字与不透明背景，按 WCAG 相对亮度计算，18 组中 12 组低于普通正文 4.5:1：light error 3.13、light success 2.59，custom error 3.62、success 3.38。dark 对照通过；三窗口尺寸结果一致。实际 CSV/XML 失败及合法导入，未读取用户库。
+- Problem: 浅色主题下消息较难阅读，短暂显示的错误原因尤其容易漏读。
+- Why it matters: 这是可访问性及可读性问题，不声称密码泄漏或功能无法执行。
+- Realistic failure scenario: 用户在浅色主题、390px 窗口中读取多行中文导入错误，颜色对比不足且提示短暂。
+- Minimal fix: 正文复用 `--text-primary`，成功/错误身份继续由现有语义背景、边框与文字内容体现，不增加 token 或尺寸。
+- Better long-term fix: 在其他短时反馈中复核语义色的对比度，同时独立检查自定义颜色组合；无法保证用户自选低对比度主题。
+- Regression test suggestion: 真实 dark/light/custom 的 success/error 正文至少 4.5:1，保持尺寸、种类及窄屏反馈正确；type/build 不能代替颜色测量。
+- Estimated effort: 0.5–1 小时（两处颜色和三主题运行复核）
+
+### SP-S32 修复与独立复核（2026-11-10）
+
+`34b6768` 仅将 TipsHost 正文改为既有 `--text-primary`，删除 error 的
+平行文字色覆盖。背景、边框、字体、间距、定时及 TipKind 都保留。
+只读 sibling clipboard 的 Toast 正文也是 primary token，借鉴其语义
+边框/背景分工，未复制更大的 toast 尺寸或修改 sibling。
+
+`tip-contrast-red.log` 18 组有 12 组不满足 4.5:1；green 18 组全部通过，
+全部组合最小约 12.53:1，正文不再固定混白。18 张 green 截图及
+`tip-contrast-contact-sheet.png` 已检查，真实 CSV/XML 拒绝及成功导入
+仍正确，pageerror=0，独立 Vite 已停止。宽度测量字段与 viewport 分开
+记录；此前 severity 日志的 width 字段被元素宽度覆盖，截图命名仍准确。
+
+`check-tip-contrast.log` check 零错误警告、`build-tip-contrast.log` build
+终态 exit 0，format:check 通过；样式低影响使用外部运行测量，未新增
+永久实现镜像测试。文档 currency gate 同步 css-theming；现有完整门禁
+checkpoint 是 `414e049`，未伪称本 CSS 提交已有全套 Rust 运行证据。
+仅合成 demo 库，原生/设备和用户自选低对比度主题不在本次保证范围。
+当前卡片 **43**（High 10 / Medium 25 / Low 8），原始基线保持不变。
+长错误提示窄屏边界、其他系统/UI 和手机 Save As 真机验证继续。
