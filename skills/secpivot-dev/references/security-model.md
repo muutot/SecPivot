@@ -96,7 +96,7 @@ Lock happens on:
 - `lockAfterAction` immediately after a password copy;
 - focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open). TCATO suppresses this path while an open attempt is pending and while the backend-confirmed overlay exists; pending attempts hold independent leases, so one late failure cannot clear another attempt's confirmed overlay state and accidentally re-enable focus-loss locking.
 
-The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes every session by calling `vault.closeAll()` (which closes all open tabs and discards extracted temp attachments), and clears the clipboard first when `clearOnLock` is enabled. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes. The entry right-click menu's "Copy entry" action copies the whole entry (title, username, password, URL, notes, unprotected custom fields) as one labeled text block, so it resolves the password server-side through `get_entry_password`, consumes it under the same visible-view epoch guard as a plain password copy, and passes `sensitive = true` to `copyValue` — the clipboard wipe and `lockAfterAction` apply exactly as they do for the password alone. Protected custom-field values are never part of the text (the snapshot carries an empty value), matching the rest of the renderer surface.
+The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes every session by calling `vault.closeAll()` (which closes all open tabs and discards extracted temp attachments), and starts clipboard clearing when `clearOnLock` is enabled. Ownership invalidation is synchronous; vault closure and clipboard clearing run in parallel, so a pending Clipboard API write cannot delay session closure. The explicit clear waits behind already-started writes and cancels queued old copies, preventing a delayed write from restoring content after clearing. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes. The entry right-click menu's "Copy entry" action copies the whole entry (title, username, password, URL, notes, unprotected custom fields) as one labeled text block, so it resolves the password server-side through `get_entry_password`, consumes it under the same visible-view epoch guard as a plain password copy, and passes `sensitive = true` to `copyValue` — the clipboard wipe and `lockAfterAction` apply exactly as they do for the password alone. Protected custom-field values are never part of the text (the snapshot carries an empty value), matching the rest of the renderer surface.
 
 After lock, the frontend `vault` store is cleared and the UI shows the lock screen (`LockScreen.svelte`) when a last-database path is remembered (`rememberLastDatabase`); otherwise it returns to the welcome screen. The remembered path (`vault.remembered`) is set on open/create and cleared only via "use another database"; the password is never persisted or remembered.
 
@@ -156,8 +156,8 @@ never start a native worker. Renderer hashing results are rejected after explici
 Web Crypto unavailability never falls back to retaining plaintext. Native
 explicit clear returns false on unsupported platforms, allowing renderer clear.
 Legacy execCommand failure is reported and its textarea is emptied/removed in
-finally. External identical-copy ownership and concurrent write ordering
-remain pending; the entire clipboard lifecycle is not resolved.
+finally. External identical-copy ownership, cross-renderer write/IPC order and binary/text
+copy ordering remain pending; the entire clipboard lifecycle is not resolved.
 Tests that touch the actual OS clipboard require `SECPIVOT_CLIPBOARD_LIVE=1`;
 normal verification uses deterministic tests and leaves user clipboard untouched.
 
@@ -188,3 +188,13 @@ Binary attachments and folder hierarchy are rejected until supported. Parser
 errors disclose line numbers only, never the record, and incoming command text
 is zeroized after parsing. Imported secrets cross IPC only for the explicit
 import flow; this does not prove JavaScript heap zeroization or native exports.
+
+The renderer clipboard utility serializes its text writes, conditional native
+wipes and explicit clears through one promise queue. Idle writes still start
+synchronously after the caller view guard; queued outdated copies are skipped.
+A new copy releases old ownership immediately, and rejected writes cannot poison
+the queue. Browser read/digest waits stay outside it, revalidating ownership
+before their final queued clear. This establishes one renderer's operation order,
+not OS clipboard sequence ownership or cross-window atomicity. A stalled write
+may still delay clipboard clearing; lock closes vaults independently. Tests use
+synthetic API promises and no shared OS clipboard.

@@ -284,3 +284,11 @@ Treat these as integration points and avoid concurrent edits:
 ## Structure update rule
 
 When adding, removing, renaming, or moving a route/module/component/service, update this map and the focused reference that describes its contract. Describe stable ownership; do not add transient implementation notes or raw file listings that will immediately go stale.
+
+`src/lib/utils/clipboard.ts` owns a per-renderer promise queue for text copy,
+conditional native wipe and explicit clear. In-flight writes precede lock clear;
+old queued copies are epoch-cancelled. `security.ts::lockVault` starts session
+closure independently of that queue. Synthetic `clipboard-service.test.mjs`
+regressions cover write/lock order, rejection recovery, same-content conditional
+clear order and synchronous idle start. Cross-window/native binary order and
+external clipboard sequence ownership remain outside this queue.

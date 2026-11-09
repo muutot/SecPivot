@@ -289,3 +289,11 @@ entry writes, including `protected`. The real `io.ts` row mapping and batch IPC
 retain that flag. `parse_1pif` zeroizes its incoming command text on return and
 returns errors directly; parser DTOs omit `Debug` so accidental debugging cannot
 print imported secrets. Native 1Password export/client runtime is not verified.
+
+`utils/clipboard.ts` serializes same-renderer writes/conditional clears and drains
+already-started writes before an explicit clear. New copy/clear operations
+invalidate previous ownership synchronously; stale queued text copies are skipped.
+The queue starts idle work synchronously and recovers from rejection. It does not
+order native binary-copy commands or other windows/processes. `lockVault` starts
+`clearClipboard` and `vault.closeAll` together; closing/zeroizing sessions no
+longer waits for platform clipboard completion. No IPC schema changes.

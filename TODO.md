@@ -27,6 +27,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] Idle auto-lock timer driven by `autoLockMinutes` (`armIdleLock`/`installAutoLock`, `src/lib/services/security.ts`)
 - [x] Lock clears clipboard when `clearOnLock` (`lockVault`)
+- [~] 全剪贴板并发生命周期：同一 renderer 的写入/条件清理/锁定清空已串行，旧排队复制取消，锁定会话关闭不等待剪贴板写入；跨窗口/原生二进制复制顺序与外部相同内容复制的 OS ownership 仍待验证（SP-11）
 - [x] `lockAfterAction` after password copy (`copySensitive`, wired for password copies only)
 - [x] Frontend lock screen + reopen with remembered path only (`LockScreen.svelte`, `vault.remembered`)
 
