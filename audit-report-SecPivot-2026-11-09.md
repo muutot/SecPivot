@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S12；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S14；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 15     | 15        | 0         |
+| Medium    | 17     | 17        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **23** | **23**    | **0**     |
+| **Total** | **25** | **25**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1029,3 +1029,64 @@ Low 3，全部 Confirmed），原始 15 项/6.1 分不变。用户手机 v1.6.5 
 仍需包含 ACL 修复的新 APK 和真机选择器/provider 验证；本次不标记已解决。
 CSV/XML/HTML 导出与附件保存的 std::fs/桌面对话框链路仍待补齐；native XML、
 1PUX、跨 renderer 剪贴板、完整语义/界面覆盖继续推进，整体目标保持 active。
+
+### Finding: SP-S13 原子写入共用临时文件，正常并发保存大量失败（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data Integrity / Concurrency
+- Status: Confirmed（Windows 合成文件并发先红后绿；其他文件系统待验证）
+- Affected area: shared local atomic writer
+- Evidence:
+  - File: `src-tauri/src/util.rs:31`（`0de33c6` 修复前源码）
+  - Function / Module: `atomic_write` / `temp_sibling`
+  - Relevant behavior: 每次写入共用目标的固定 `.tmp`；遇到 AlreadyExists 删除该文件后重新创建，写入后再次按路径打开进行同步。一个操作可删除或替换另一个操作持有的临时文件。
+  - Reproduction: `atomic-parallel-probe.rs` 直接编译原 util 模块，对合成目标进行 120 轮、每轮三个 128 KiB 并发写入；360 次尝试中 353 次失败，见 `atomic-parallel-red.log`。未观察到混合/不完整目标内容，没有使用用户文件。
+- Problem: 临时文件缺少操作归属；并发写入因删除、共享及重命名冲突而失败，且最终同步的路径未必仍对应原写入句柄。
+- Why it matters: 配置等共享持久化用户能遇到正常保存失败；原子替换 helper 本身不能为并发调用提供可靠隔离。没有观察数据丢失或实际泄漏，不将潜在后果写成已发生事故。
+- Realistic failure scenario: 两个调用同时写入同一合成配置目标，一个正在写临时文件，另一个遇到临时文件已存在并试图删除它；Windows 上大量返回保存错误。
+- Minimal fix: 每次写入生成随机 128 位 nonce 的同目录临时文件，create_new 作为最终归属检查；始终写入并同步最初持有的句柄，仅清理本操作拥有的临时文件，Unix 权限也通过同一句柄设置。
+- Better long-term fix: 保持上层保存准入和 revision 顺序；原子文件替换不决定哪次业务修订应最后提交。补其他文件系统的并发、失败与权限验证。
+- Regression test suggestion: 同一目标 60 次并发真实写入全部成功，最终是一个完整载荷，目录无临时残留；预置 legacy `.tmp` 内容不得被删除或改写；失败路径保留目标。
+- Estimated effort: 1–2 小时（源码与主机复核）；其他系统验证另计
+
+`a890eb1` 已修复 SP-S13。完整门禁日志 `verify-atomic-siblings.log`：前端
+**263**、Rust **527 + ACL 2**、格式、Svelte check、150 键契约、构建和 clippy
+全通过。security-model 和 PITFALLS 同步临时文件归属与平台限制。一次针对性
+Rust 编译因 LLVM 内存不足失败，同源码/同命令重试及完整门禁通过；未归因为
+应用内存耗尽，也未终止用户应用。并发证据不证明用户数据损坏。
+
+### Finding: SP-S14 移动端明文导出与附件保存缺少 SAF 选择和 URI 写入（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Backend API / Data Integrity
+- Status: Confirmed（生产 handler/服务与主机写入回归通过；手机/provider 待验证）
+- Affected area: CSV/XML/emergency HTML exports and both attachment-save entry points
+- Evidence:
+  - File: `src/routes/+page.svelte:874`、`src/lib/components/EntryDetail.svelte:464`、`src/lib/components/AttachmentPreviewDialog.svelte:105`、`src-tauri/src/vault/persist.rs:496`（`a890eb1` 修复前源码）
+  - Function / Module: `handleExportCsv` / `handleExportXml` / `confirmExportEmergency` / `saveAttachment` / `saveToDisk` / export writers
+  - Relevant behavior: 五条 Tauri 保存入口均直接调用桌面 dialog save；后端明文/附件 writer 直接 std::fs::write，无法处理 Android content URI。数据库另存为已有独立 SAF adapter，导出未接入。
+  - Reproduction: `tests/io-export.test.mjs` 提取并执行五个原生产 handler，使用真实 io/saf/vault 服务，以 navigator、invoke 和 UI globals 为合成边界。修复前 5 项 SAF 入口断言失败，5 项既有过期视图保护通过，见 `mobile-export-picker-red.log`；不把最初 harness 缺少 detailSessionId 的错误算作产品发现。
+- Problem: 手机无法通过这些菜单完成原生导出/附件保存；仅修复数据库另存为的 ACL 仍不补齐这些独立保存路径。
+- Why it matters: 常用备份、应急单和附件提取工作流有明确平台接线缺口。源码证据和模拟 Android 不能证明特定手机文件提供商的运行结果。
+- Realistic failure scenario: 手机从 CSV/XML/应急单导出或两处附件菜单点击保存，旧入口调用桌面对话框；即便提供 content URI，旧 writer 也把它当本地文件路径。
+- Minimal fix: `io.pickSaveFile` 在 Android 按导出 MIME 调用 SAF create，desktop 保留 save options；五个 handler 保留原 view guard 和会话身份。统一 named writer 复用本地原子替换或 URI 写后校验/已验证回滚，命令明文与回滚副本在返回时零化。
+- Better long-term fix: 真机验证 local/cloud provider 的选择、取消、覆盖、readback、授权撤销和错误恢复；检查 pipe descriptor 的同步语义。当前仍沿用既有 URI 事务，不宣称 SAF 原子覆盖。
+- Regression test suggestion: 23 项前端回归覆盖五条真实 handler 的 SAF MIME/URI/session、取消、A→B→A、desktop options，CSV/XML 拒绝明文确认、应急密码 opt-in 快照和 KDBX 默认过滤；三项 Rust 回归覆盖 BOM/CRLF/Unicode/二进制字节、失败目标保留/无临时残留及 unreadable/partial-write URI 故障回滚。
+- Estimated effort: 2–3 小时（源码、跨层回归和主机门禁）；真机复测另计
+
+`7a09b17` 已提交 SP-S14，未改 Kotlin、markup 或 CSS。导出 URI 不写最近数据库；
+临时 payload、旧内容及 readback buffer 使用 Zeroizing，失败的 capped read 也
+零化。完整门禁日志 `verify-mobile-export-saf.log`：格式、Svelte check、150 键
+契约、构建、前端 **286**、Rust **530 + ACL 2**、clippy 全通过；最后文档修改
+后的格式检查也通过。documentation currency gate 同步 data-contracts、
+security-model、project-structure 和 docs/android.md，纠正陈旧 1PIF 格式说明。
+
+当前详细卡片 **25**（High 5 / Medium 17 / Low 3，全部 Confirmed），原始
+15 项/6.1 分不变。用户手机安装 **v1.6.5**，报告的
+`plugin:safe|create_document not allowed by ACL` 与源码 `plugin:saf` 的拼写
+差异仍未独立确认；`e5e3c4e` 的 windows ACL 修复已在主机验证，但本任务没有
+构建/安装/发布替代 APK，没有手机选择器或云端 provider 运行证据，手机另存为
+不标记已解决。provider pipe/sync、native XML、现代 1PUX、跨 renderer 剪贴板、
+完整语义覆盖与渲染 UI 审查仍在推进，整体目标保持 active。

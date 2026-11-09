@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S12; historical supplemental tracking notes excluded",
-    "total": 23,
-    "confirmed": 23,
+    "scope": "15 baseline cards plus SP-S05 through SP-S14; historical supplemental tracking notes excluded",
+    "total": 25,
+    "confirmed": 25,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 15,
+      "Medium": 17,
       "Low": 3
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "288b224",
+  "remediation_checkpoint": "7a09b17",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -160,15 +160,33 @@
       "source_checkpoint": "825d15b",
       "commit": "288b224",
       "status": "three actual-service baseline assertions failed; six picker tests and bounded reader/name/UTF-8 checks passed; full host verify passed; Android APK/provider runtime and text/attachment exports remain pending"
+    },
+    {
+      "id": "SP-S13",
+      "area": "Concurrent atomic writes share and delete fixed temporary siblings",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "0de33c6",
+      "commit": "a890eb1",
+      "status": "Exact baseline util module probe observed 353 failures in 360 synthetic concurrent attempts with zero mixed/partial targets; independent nonce/create_new handles fix verified by 60 concurrent writes, legacy sibling preservation and full host gate; other filesystems pending"
+    },
+    {
+      "id": "SP-S14",
+      "area": "Android plaintext exports and both attachment saves lack SAF pickers and URI writers",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "a890eb1",
+      "commit": "7a09b17",
+      "status": "Five actual production handler SAF assertions failed before remediation, five stale guards already passed; shared MIME-aware picker and named atomic/verified URI writer now used; 23 frontend and three Rust checks plus full gate passed; no native APK/device/provider validation"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "288b224",
-    "log": "verify-text-import-saf.log",
-    "frontend_tests": 263,
-    "rust_unit_tests": 525,
+    "checkpoint": "7a09b17",
+    "log": "verify-mobile-export-saf.log",
+    "frontend_tests": 286,
+    "rust_unit_tests": 530,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -221,6 +239,8 @@
     "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests",
     "79f48c8 orders same-renderer text writes and conditional/explicit clears; first two real-module regressions failed before source remediation. A third intermediate-fix regression caught delayed vault close while awaiting pending writes; closeAll now starts independently. Six new frontend regressions passed; full verify 249 frontend, 522 Rust, ACL 2. SP-11 remains partial for cross-window/native binary/external sequence ownership.",
     "a02c759 admits lock-after-copy only for completed current copy and continuous active-id/path view; ownership rechecked inside topology queue before backend close. Four old service regressions failed, eight final tests passed including cancellation/queued open/A-B-A/current/failure/browser path/no Web Crypto. One transient Node Zone Allocation failure on npm check was followed by unchanged-code check and full verify success; no application OOM attribution. Native multi-window behavior remains pending.",
-    "288b224 routes Android text imports through the existing SAF picker and bounded file adapter, preserving default KDBX filters and using provider display names only for URI format checks. Native picker completion checks view before plaintext read; A-B-A regressions failed on both Android/Windows seams before remediation. Six real-service picker tests and three new Rust checks passed, full verify 263 frontend/525 Rust/ACL2. Shared capped-reader growth test uses a real temporary file; old read_text_file race not separately reproduced. No Kotlin changes, native APK/device validation, user vaults or OS clipboard access; mobile export/attachment writer paths remain pending."
+    "288b224 routes Android text imports through the existing SAF picker and bounded file adapter, preserving default KDBX filters and using provider display names only for URI format checks. Native picker completion checks view before plaintext read; A-B-A regressions failed on both Android/Windows seams before remediation. Six real-service picker tests and three new Rust checks passed, full verify 263 frontend/525 Rust/ACL2. Shared capped-reader growth test uses a real temporary file; old read_text_file race not separately reproduced. No Kotlin changes, native APK/device validation, user vaults or OS clipboard access; mobile export/attachment writer paths remain pending.",
+    "a890eb1 uses per-operation 128-bit nonce temporary siblings, create_new ownership, exact original sync handle and operation-owned cleanup. Baseline 360 concurrent synthetic attempts had 353 errors but no observed corruption; full verify 263 frontend/527 Rust/ACL2. One LLVM compilation OOM retry with unchanged source/command passed; no product OOM claim.",
+    "7a09b17 routes five native export/attachment entry points through io.pickSaveFile and named local atomic/URI verified rollback writers; guards, plaintext confirmation and emergency opt-in snapshot preserved, KDBX MIME defaults unchanged and exports never remembered as vaults. Baseline clean handler red evidence 5 failures/5 passes; initial VM harness and stale structural regex errors excluded. Full verify 286 frontend/530 Rust/ACL2, final documentation format passed. No Kotlin, CSS/markup, new APK/device/provider or OS clipboard evidence."
   ]
 }
