@@ -1,7 +1,13 @@
 <script lang="ts">
   import type { VaultGroup } from "$lib/types/vault";
   import { untrack } from "svelte";
-  import { buildEntryCounts, findBinGroup, orderedChildren, totalExcludingBin } from "$lib/utils/tree";
+  import {
+    buildEntryCounts,
+    buildVaultTreeIndex,
+    findBinGroup,
+    orderedChildren,
+    totalExcludingBin,
+  } from "$lib/utils/tree";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -92,7 +98,8 @@
 
   const lang = $derived(s.general.language);
 
-  let knownUuids = new Set(initialExpanded);
+  // Collapsed groups already exist too; only genuinely new UUIDs auto-expand.
+  let knownUuids = new Set(buildVaultTreeIndex(initialRoot).groupByUuid.keys());
 
   function toggleGroup(uuid: string): void {
     const next = new Set(expanded);

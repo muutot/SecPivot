@@ -2,6 +2,10 @@
 
 This reference is a source map, not a substitute for reading the current files. Update this map when ownership or entry points change.
 
+`GroupTree` initializes known UUIDs from every initial group independently of
+persisted expansion flags; existing collapsed groups must never auto-expand as
+if they were newly inserted groups.
+
 ## Runtime surfaces
 
 | Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                                                                                                          |
