@@ -62,7 +62,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 主密钥变更 (`change_master_key`, 支持密码/密钥文件与 Aes/Argon2id/Argon2、解密验证、会话保持)
 - [x] 回收站 (条目/分组删除移入回收站,恢复条目/分组,清空回收站,跨重开持久化)
 - [x] 条目过期提醒 (打开库时 flash 过期数量,列表过期标记,详情过期状态)
-- [x] 条目历史版本 (每次修改自动快照,查看/恢复,最多保留 10 版)
+- [~] 条目历史版本（修改快照、查看/字段恢复及保留限制已实现；附件所有权与 KDBX 二进制序号修复经原生保存重开回归复核，SP-S38/SP-S39；完整附件恢复仍待实现/验证，不把字段恢复视作整条目恢复）
 - [x] 条目/分组图标与颜色标记 (KeePass 内置图标 0–68 + `#RRGGBB` 颜色,树/列表/详情/编辑器)
 - [x] 条目拖拽移动分组 + 多选批量删除
 - [x] 全局 Auto-Type 热键 (`tauri-plugin-global-shortcut`,按前台窗口标题匹配条目网址域名/标题,回收站条目不参与;设置项 `globalAutoTypeShortcut`)

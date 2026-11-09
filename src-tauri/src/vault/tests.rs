@@ -1476,6 +1476,289 @@ fn entry_history_tracks_versions_and_restores() {
 }
 
 #[test]
+fn historical_attachment_bytes_survive_entry_replacement() {
+    assert_historical_attachment_survives_mutation("update");
+}
+
+#[test]
+fn historical_attachment_bytes_survive_entry_removal() {
+    assert_historical_attachment_survives_mutation("remove");
+}
+
+#[test]
+fn historical_attachment_bytes_survive_detail_replacement() {
+    assert_historical_attachment_survives_mutation("add");
+}
+
+#[test]
+fn attachment_history_reindex_reclaims_only_deleted_versions() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic versions", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"version-1")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for bytes in [b"version-2", b"version-3"] {
+        input.attachments[0].data = Some(BASE64.encode(bytes));
+        session.update_entry(&uuid, &input).unwrap();
+    }
+    assert_eq!(session.require_db().unwrap().num_attachments(), 3);
+    session.delete_entry_history(&uuid, 0).unwrap();
+    let db = session.require_db().unwrap();
+    assert_eq!(db.num_attachments(), 2);
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    let historical = entry.historical(0).unwrap();
+    let old = historical.attachment_by_name("synthetic.txt").unwrap();
+    assert_eq!(old.get().as_slice(), b"version-1");
+    assert_eq!(old.entries(true).count(), 1);
+    assert_eq!(
+        old.entries(true).next().unwrap().get_title(),
+        Some("Synthetic versions")
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    session.clear_all_history().unwrap();
+    assert_eq!(session.require_db().unwrap().num_attachments(), 1);
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.require_db().unwrap().num_attachments(), 1);
+}
+
+#[test]
+fn sparse_attachment_ids_preserve_other_entries_after_recycle_bin_cleanup() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut ids = Vec::new();
+    for title in ["First synthetic", "Delete synthetic", "Last synthetic"] {
+        let mut input = entry_input(ROOT_GROUP_UUID, title, "", "", "");
+        input.attachments = vec![AttachmentInput {
+            name: "synthetic.txt".into(),
+            data: Some(BASE64.encode(title.as_bytes())),
+        }];
+        let state = session.add_entry(&input).unwrap();
+        ids.push(
+            state
+                .root
+                .entries
+                .iter()
+                .find(|entry| entry.title == title)
+                .unwrap()
+                .uuid
+                .clone(),
+        );
+    }
+    session.delete_entries(&[ids[1].clone()]).unwrap();
+    session.empty_recycle_bin().unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let entry = session
+        .require_db()
+        .unwrap()
+        .entry(parse_entry_id(&ids[2]).unwrap())
+        .unwrap();
+    let attachment = entry.attachment_by_name("synthetic.txt");
+    assert!(
+        attachment.is_some(),
+        "cleanup of another entry lost this attachment after reopen"
+    );
+    assert_eq!(attachment.unwrap().get().as_slice(), b"Last synthetic");
+}
+
+#[test]
+fn missing_attachment_reference_rejects_save_without_replacing_the_old_file() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic missing ref", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"synthetic bytes")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let id = parse_entry_id(&state.root.entries[0].uuid).unwrap();
+    session.save().unwrap();
+    let before = std::fs::read(&path).unwrap();
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db.entry_mut(id).unwrap();
+        let snapshot = (*entry).clone();
+        entry.remove_attachment_by_name("synthetic.txt");
+        // A corrupt imported/legacy record can retain a reference to missing data.
+        *entry = snapshot;
+    }
+    let error = session.save().unwrap_err();
+    assert!(error.contains("missing attachment"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn unreferenced_header_attachment_survives_open_and_unrelated_edit() {
+    let mut db = keepass::Database::new();
+    let id = {
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.add_attachment(
+            "synthetic.txt",
+            keepass::db::Value::protected(b"synthetic orphan".to_vec()),
+        );
+        entry.id()
+    };
+    let mut clone = {
+        let mut entry = db.entry_mut(id).unwrap();
+        let mut tracked = entry.track_changes();
+        let mut current = tracked.as_mut();
+        current.remove_attachment_by_name("synthetic.txt");
+        current.database_mut().clone()
+    };
+    let key = || DatabaseKey::new().with_password("synthetic-only");
+    let mut bytes = Vec::new();
+    clone.save(&mut bytes, key()).unwrap();
+    clone = keepass::Database::open(&mut std::io::Cursor::new(bytes), key()).unwrap();
+    assert_eq!(
+        clone.num_attachments(),
+        1,
+        "open must not silently sweep orphan header content"
+    );
+    clone
+        .entry_mut(id)
+        .unwrap()
+        .edit_tracking(|tracked| tracked.set_unprotected(FIELD_TITLE, "Synthetic edit"));
+    assert_eq!(
+        clone.num_attachments(),
+        1,
+        "unrelated edit must not sweep another payload"
+    );
+}
+
+#[test]
+fn attachment_history_count_limit_keeps_latest_snapshot_bytes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    session.require_db_mut().unwrap().meta.history_max_items = Some(1);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic cap", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"version-1")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for bytes in [b"version-2", b"version-3"] {
+        input.attachments[0].data = Some(BASE64.encode(bytes));
+        session.update_entry(&uuid, &input).unwrap();
+    }
+    let db = session.require_db().unwrap();
+    assert_eq!(db.num_attachments(), 2);
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    assert_eq!(entry.history.as_ref().unwrap().get_entries().len(), 1);
+    let historical = entry.historical(0).unwrap();
+    let old = historical.attachment_by_name("synthetic.txt").unwrap();
+    assert_eq!(old.get().as_slice(), b"version-2");
+    assert_eq!(old.entries(true).count(), 1);
+}
+
+#[test]
+fn attachment_history_lease_survives_reindex_and_does_not_transfer_to_a_clone() {
+    let mut db = keepass::Database::new();
+    let id = {
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.add_attachment(
+            "synthetic.txt",
+            keepass::db::Value::protected(b"synthetic-old".to_vec()),
+        );
+        entry.id()
+    };
+    {
+        let mut entry = db.entry_mut(id).unwrap();
+        let mut tracked = entry.track_changes();
+        let mut current = tracked.as_mut();
+        current.remove_attachment_by_name("synthetic.txt");
+        current.reindex_attachment_history();
+        assert_eq!(
+            current.as_ref().database().num_attachments(),
+            1,
+            "pending snapshot must keep old binary alive"
+        );
+        let mut clone = current.database_mut().clone();
+        clone.reindex_attachment_history();
+        assert_eq!(clone.num_attachments(), 0, "clone owns no original guard");
+    }
+    assert_eq!(db.num_attachments(), 1);
+    let entry = db.entry(id).unwrap();
+    let history = entry.historical(0).unwrap();
+    assert_eq!(
+        history
+            .attachment_by_name("synthetic.txt")
+            .unwrap()
+            .get()
+            .as_slice(),
+        b"synthetic-old"
+    );
+    let mut entry = db.entry_mut(id).unwrap();
+    entry.history = None;
+    entry.reindex_attachment_history();
+    assert_eq!(db.num_attachments(), 0, "lease released after drop");
+}
+
+fn assert_historical_attachment_survives_mutation(operation: &str) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic old", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"synthetic old attachment")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    input.title = "Synthetic new".into();
+    input.attachments = if operation == "remove" {
+        Vec::new()
+    } else {
+        vec![AttachmentInput {
+            name: "synthetic.txt".into(),
+            data: Some(BASE64.encode(b"synthetic new attachment")),
+        }]
+    };
+    if operation == "add" {
+        session.add_attachments(&uuid, &input.attachments).unwrap();
+    } else {
+        session.update_entry(&uuid, &input).unwrap();
+    }
+    let old_data_present = |session: &VaultSession| {
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&uuid).unwrap())
+            .unwrap();
+        let history = entry.historical(0).unwrap();
+        history
+            .attachment_by_name("synthetic.txt")
+            .is_some_and(|data| data.get().as_slice() == b"synthetic old attachment")
+    };
+    let memory_ok = old_data_present(&session);
+    let saved = session.save().is_ok();
+    let reopened_ok = if saved {
+        session.close();
+        session.open(&path, "master-password", None).is_ok() && old_data_present(&session)
+    } else {
+        false
+    };
+    assert_eq!(
+        (memory_ok, saved, reopened_ok),
+        (true, true, true),
+        "history attachment lost in {operation}: memory/save/reopen"
+    );
+}
+
+#[test]
 fn entry_history_covers_all_snapshot_fields() {
     let dir = TempDir::new().unwrap();
     let (mut session, _path) = create_session(&dir);

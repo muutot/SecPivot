@@ -341,3 +341,12 @@ including values for empty prior passwords. Their plaintext exists only in the
 explicit import/reveal flow; normal vault snapshots remain masked. A source
 custom label cannot overwrite the archive, and parser errors contain only the
 record index. Password-only source history is not a complete native snapshot.
+
+Attachment mutations retain protected historical binary data through a lease
+owned by the originating EntryTrack; clones inherit no active leases. Removal
+and history cleanup respect current/historical/other-entry ownership. Neither
+loading a vault nor an unrelated edit silently sweeps orphan header content.
+KDBX4 serialization shares one dense header/ref map and rejects missing binary
+data before replacing the destination. The audited local keepass patch preserves
+the original version/license/provenance; it is not proof of native client or
+Android provider interoperability, nor of complete history restoration.

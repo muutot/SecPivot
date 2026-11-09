@@ -101,6 +101,11 @@ block-padding = "0.4"
 [dev-dependencies]
 tempfile = "3"
 
+# Upstream 0.13.22 loses attachment ownership during tracked edits; retain the
+# pinned crate with a documented local reference-management patch.
+[patch.crates-io]
+keepass = { path = "vendor/keepass-0.13.22" }
+
 # Dev-profile tuning for the fastest possible local `tauri dev` builds:
 # - dependencies stay unoptimized (opt-level 0) with no debug symbols, so the
 #   existing cached artifacts are reused and compile/link is as fast as possible.
