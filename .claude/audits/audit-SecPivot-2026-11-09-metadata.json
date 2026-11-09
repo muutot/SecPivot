@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S36; historical supplemental tracking notes excluded",
-    "total": 47,
-    "confirmed": 47,
+    "scope": "15 baseline cards plus SP-S05 through SP-S37; historical supplemental tracking notes excluded",
+    "total": 48,
+    "confirmed": 48,
     "suspected": 0,
     "by_severity": {
       "High": 11,
-      "Medium": 27,
+      "Medium": 28,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "d3b3264",
+  "remediation_checkpoint": "17dd196",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -66,6 +66,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S37",
+      "area": "Bitwarden JSON silently discards official source password history",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "9c9168b",
+      "commit": "17dd196",
+      "status": "Confirmed and remediated for protected source fidelity. Corrected native command/wire/bulk/KDBX baseline had three failures and one empty-source control pass. Unique protected JSON archive now preserves order, duplicate/empty passwords, optional timestamps and unknown keys; malformed structure rejects the whole parse without source values in errors. Four targeted tests and full verify 316/573/ACL2 passed. Source lacks complete old entries, so no fabricated native history; native history UI, real Bitwarden export, per-URI/collections/ZIP and Android device verification remain pending."
+    },
     {
       "id": "SP-S36",
       "area": "Rejected entry color mutates other flags without dirty/revision or snapshot invalidation",

@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S36；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S37；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 11     | 11        | 0         |
-| Medium    | 27     | 27        | 0         |
+| Medium    | 28     | 28        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **47** | **47**    | **0**     |
+| **Total** | **48** | **48**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2029,3 +2029,36 @@ v1.6.5 Save As APK/设备验证仍未完成，目标 active。
 原始库、缓存及重开均保持拒绝操作之前的属性，合法/缺省/清空继续通过。
 数据契约及模块引用同步，四个原生剪贴板 live body 默认未执行。
 原始审计基线不改写；完整迁移、其他系统/UI 和 Android 真机另存为仍待验证。
+
+### Finding: SP-S37 Bitwarden 官方密码历史导入后静默丢失（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Privacy / Migration compatibility
+- Status: Confirmed
+- Affected area: Bitwarden JSON parser and imported credential source history
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:49`、`src-tauri/src/vault/import.rs:192`（`9c9168b` 修复前）
+  - Function / Module: parse_bitwarden_json / ImportRow / import_entries
+  - Relevant behavior: 解析器映射 login/fields/typed values/favorite，却完全忽略 passwordHistory；无效 history 也被当作导入成功。
+  - Reproduction: 实际 parse command→ImportRow JSON→ImportEntryInput→原生 bulk→保存重开的合成库没有任何源密码历史；同名 custom field 控制保留，但源历史仍丢失。`bitwarden-history-red-corrected.log` exit 101，3 fail/1 pass；最初测试缺少 mutable binding 的编译错误属于 fixture，未计作产品失败。
+  - Independent reference: 官方 Bitwarden clients 固定 commit `1a8bdbfe625bff90a9c0cabef2002e37f6038fa1`，cipher.export.ts:290–291 将 passwordHistory 映射至导出，password-history.export.ts:27–38 包含 password/lastUsedDate；证据 provenance 保存路径与 SHA256。keepass 0.13.22 History 存完整 Entry，源格式并未提供完整旧条目，不应虚构旧版本。
+- Problem: 用户迁移正常未加密 JSON 时旧密码和对应时间全部消失，成功提示无法反映数据不完整。
+- Why it matters: 旧密码可能用于恢复或核对历史变更；源文件存在这些数据，丢失属于已确认迁移保真缺陷。未使用真实用户库或真实 Bitwarden 导出运行。
+- Realistic failure scenario: 将含非空 passwordHistory 的官方格式 JSON 导入并保存，然后删除源文件，旧密码记录无法在目标库中找回。
+- Minimal fix: 将非空源数组以唯一 source-prefixed 受保护 custom field 归档，保留顺序/重复/时间/附加字段；整份拒绝无效结构，错误不含秘密。空/缺省/null 不添加无用字段。
+- Better long-term fix: 提供明确的源密码历史查看/恢复界面；原生完整 Entry history 需要独立语义方案，当前归档不能冒充已经支持原生历史迁移。
+- Regression test suggestion: 真实命令/wire/bulk/重开保持 Unicode、重复、空旧值和可选时间；同名字段不覆盖，DTO 不包含旧秘密，空源与无效混合文件有明确边界。
+- Estimated effort: 1–2 小时（受保护归档和 KDBX 回归）；原生历史交互另行估算
+
+`17dd196` 已将非空源历史保存在唯一受保护字段；4 项针对性回归通过，
+完整 `verify-bitwarden-history.log` exit 0：316 frontend、573 Rust、ACL 2。
+归档保留源数据，正常快照没有旧密码；没有添加新的 DTO/IPC 或模拟完整
+历史版本。contract/security/module 引用与 partial TODO 同步，未复核成
+完整 Bitwarden 兼容。四个原生剪贴板 live body 默认跳过；初始 fixture
+编译失败已与有效 red 证据区分。原始基线与评分不变，目标仍 active。
+
+后续继续检查原生历史的附件恢复、其他 mutation 的错误后副作用、完整
+逐 URI/集合/ZIP/1PUX、KDF/剪贴板生命周期及其余系统/UI 覆盖。手机
+v1.6.5 云端库另存为的 ACL 源码修复已有 host tests，但没有新版 APK
+与 Android provider/选择器真机结果，不能标记已恢复。
