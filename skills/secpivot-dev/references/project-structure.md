@@ -15,6 +15,11 @@ the event has not already been consumed by a child control.
 
 ## Runtime surfaces
 
+Release signing runs in `sign-android`, a clean Linux job with no checkout or
+build code. `android` uploads only unsigned APKs; the signer validates both
+64-bit ABIs and signatures before `publish-android` uploads them. Windows
+release notes travel with the build artifact, so `publish` has no checkout.
+
 | Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                                                                                                          |
 | ------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Main desktop window | `src/routes/+page.svelte`                                                                           | Welcome/unlock, group tree, entry list, detail, search, editor dialogs, status                                                                                                                                                                                                          |

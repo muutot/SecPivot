@@ -61,6 +61,14 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+Android release keystore/passwords are scoped only to the inline signing step
+of the separate `sign-android` job. Build jobs receive no signing secrets;
+signing/publishing jobs never check out or run build sources. The keystore
+lives in a private runner temp directory with exit/signal cleanup. Password
+arguments use `env:` references; final staged APK signatures and exact native
+ABI contents are verified before checksums/upload. Synthetic shell tests prove
+control flow and cleanup, not genuine APK signatures or CI execution.
+
 Windows conditional clipboard wipes use `clipboard_clear_if_matches` and the
 platform `clear_clipboard_text_if` / `clear_clipboard_bytes_if` helpers. Each
 holds a single `OpenClipboard` guard across read, ownership/generation checks
