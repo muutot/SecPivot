@@ -1269,7 +1269,8 @@
 
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
-    if (isTcatoOverlay || !currentVault) return;
+    if (event.defaultPrevented || isTcatoOverlay || !currentVault || $activeContextMenu !== null)
+      return;
     // Close the group icon picker with Escape (mirrors the group modal input).
     if (event.key === "Escape") {
       if (groupIconDialogUuid && !groupIconSaving) {

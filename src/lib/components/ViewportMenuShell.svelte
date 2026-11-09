@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { onMount, type Snippet } from "svelte";
+  import { attachMenuKeyboard } from "$lib/utils/menu-keyboard";
 
   interface Props {
     x: number;
@@ -8,10 +9,20 @@
     ariaLabel: string;
     role?: string;
     modifier?: string;
+    navigateSubmenu?: (event: KeyboardEvent) => boolean;
     children?: Snippet;
   }
 
-  let { x, y, onclose, ariaLabel, role = "menu", modifier = "", children }: Props = $props();
+  let {
+    x,
+    y,
+    onclose,
+    ariaLabel,
+    role = "menu",
+    modifier = "",
+    navigateSubmenu,
+    children,
+  }: Props = $props();
 
   let menuEl = $state<HTMLDivElement>();
   /** `null` until the first measured clamp pass. */
@@ -38,21 +49,15 @@
     };
   });
 
-  function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onclose();
-    }
-  }
-
-  function handleClickOutside(event: MouseEvent): void {
-    if (menuEl && !menuEl.contains(event.target as Node)) {
-      onclose();
-    }
-  }
+  onMount(() => {
+    if (menuEl)
+      return attachMenuKeyboard(
+        menuEl,
+        () => onclose(),
+        (event) => navigateSubmenu?.(event) ?? false,
+      );
+  });
 </script>
-
-<svelte:window onkeydown={handleKeydown} onclick={handleClickOutside} />
 
 <div
   class="viewport-menu"
@@ -62,6 +67,7 @@
   style:top="{posY ?? y}px"
   {role}
   aria-label={ariaLabel}
+  tabindex="-1"
 >
   {#if children}{@render children()}{/if}
 </div>
