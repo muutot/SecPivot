@@ -215,6 +215,12 @@ errors disclose line numbers only, never the record, and incoming command text
 is zeroized after parsing. Imported secrets cross IPC only for the explicit
 import flow; this does not prove JavaScript heap zeroization or native exports.
 
+Bitwarden's plaintext import rejects account/password-encrypted exports before
+mapping items. Encryption markers must be boolean when present; absent markers
+remain compatible with legacy plaintext. The command's temporary input string
+is zeroized on return, as with 1PIF. This protects the format boundary, not a new
+decryptor, and does not prove imported data's full fidelity or JS heap erasure.
+
 The renderer clipboard utility serializes its text writes, conditional native
 wipes and explicit clears through one promise queue. Idle writes still start
 synchronously after the caller view guard; queued outdated copies are skipped.

@@ -310,9 +310,17 @@ Split across `src-tauri/src/rpc/{mod,dto,srp,keys,dispatch}.rs` (pure protocol: 
 
 Structured-import `ImportRow.customFields` uses the same `CustomField` shape as
 entry writes, including `protected`. The real `io.ts` row mapping and batch IPC
-retain that flag. `parse_1pif` zeroizes its incoming command text on return and
+retain that flag. `parse_1pif` and `parse_bitwarden_json` zeroize their incoming command text on return and
 returns errors directly; parser DTOs omit `Debug` so accidental debugging cannot
 print imported secrets. Native 1Password export/client runtime is not verified.
+
+Bitwarden imports accept plaintext only. Before reading items, the parser
+validates `encrypted` and `passwordProtected`: true rejects with a plaintext
+export instruction, present non-booleans reject as invalid, and false/absent
+preserve legacy plaintext compatibility. Account-encrypted exports have the
+same items envelope and must never be treated as decrypted credentials. Native
+client exports, linked-field/custom-name retention and multi-URI fidelity still
+need separate verification; this boundary does not implement decryption.
 
 `utils/clipboard.ts` serializes same-renderer writes/conditional clears and drains
 already-started writes before an explicit clear. New copy/clear operations

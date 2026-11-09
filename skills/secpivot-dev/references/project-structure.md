@@ -308,3 +308,8 @@ for exports and both attachment-save components, retaining caller view guards.
 its tests cover exact local bytes and failed destination preservation, while
 `tests/io-export.test.mjs` runs production page/component handlers with synthetic
 platform invokes. This is not Android provider/runtime verification.
+
+Bitwarden JSON import rejects true or invalid encryption markers before item
+mapping; account-encrypted files share the plaintext envelope and require this
+gate. Its command zeroizes incoming text. Custom-field/linked-field/multi-URI
+fidelity and actual client exports remain separate pending work.

@@ -506,11 +506,12 @@ mod text_import_tests {
     }
 }
 
-/// Parse a Bitwarden `.json` export into normalized import rows. Strict:
+/// Parse an unencrypted Bitwarden `.json` export into normalized import rows. Strict:
 /// malformed documents fail; cards/identities are skipped, logins and secure
 /// notes map to rows (folders become the group path).
 #[tauri::command]
 pub(crate) fn parse_bitwarden_json(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
+    let text = zeroize::Zeroizing::new(text);
     crate::vault::parse_bitwarden_json(&text)
 }
 
