@@ -14,6 +14,24 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// A successful authoritative commit can carry a failed optional mirror.
+/// Callers must adopt its hash/key and surface the warning, never retry as if
+/// the upload had failed.
+#[derive(Debug)]
+pub(crate) struct PersistOutcome {
+    pub hash: [u8; 32],
+    pub mirror_warning: Option<String>,
+}
+
+impl From<[u8; 32]> for PersistOutcome {
+    fn from(hash: [u8; 32]) -> Self {
+        Self {
+            hash,
+            mirror_warning: None,
+        }
+    }
+}
+
 pub(crate) enum SaveTarget {
     Local(PathBuf),
     Remote {
@@ -35,7 +53,7 @@ pub(crate) const REMOTE_CHANGED_MARKER: &str = crate::remote::REMOTE_CONFLICT_MA
 
 /// Result of a remote open/create: database, keyfile bytes, normalized key and
 /// the SHA-256 of the remote file bytes (the sync base hash).
-type PreparedRemote = (Database, Option<Vec<u8>>, String, [u8; 32]);
+type PreparedRemote = (Database, Option<Vec<u8>>, String, PersistOutcome);
 
 /// Everything `persist_save` needs. `password`/`keyfile` are clones so the
 /// KDF can run without the lock; both are zeroized after use. `revision`
@@ -89,6 +107,7 @@ pub(crate) struct RemoteRefreshResult {
 pub(crate) struct RemoteMergeResult {
     pub db: Database,
     pub base_hash: [u8; 32],
+    pub mirror_warning: Option<String>,
 }
 
 /// Classified remote-merge failure. Only persistence failures should count
@@ -198,7 +217,12 @@ pub(crate) fn prepare_remote_open(
             backup_template,
         )?;
     }
-    Ok((db, keyfile_bytes, key, crate::crypto::sha256_bytes(&data)))
+    Ok((
+        db,
+        keyfile_bytes,
+        key,
+        crate::crypto::sha256_bytes(&data).into(),
+    ))
 }
 
 /// Lock-free half of `create_remote`: build the database, run the KDF,
@@ -232,16 +256,28 @@ pub(crate) fn prepare_remote_create(
     storage
         .put(&key, &buffer)
         .map_err(|e| format!("上传远程文件失败: {e}"))?;
-    if mode == RemoteMode::SaveLocal {
+    let mirror_warning = if mode == RemoteMode::SaveLocal {
         write_local_copy(
             local_dir,
             &remote_key_basename(&key),
             &buffer,
             backup_count,
             backup_template,
-        )?;
-    }
-    Ok((db, keyfile_bytes, key, crate::crypto::sha256_bytes(&buffer)))
+        )
+        .err()
+        .map(|e| format!("远程已保存，本地副本更新失败: {e}"))
+    } else {
+        None
+    };
+    Ok((
+        db,
+        keyfile_bytes,
+        key,
+        PersistOutcome {
+            hash: crate::crypto::sha256_bytes(&buffer),
+            mirror_warning,
+        },
+    ))
 }
 
 /// Serialize `db` with `key` and persist it to the given target. Runs
@@ -251,7 +287,7 @@ pub(crate) fn persist_snapshot(
     key: &DatabaseKey,
     target: &SaveTarget,
     force: bool,
-) -> Result<[u8; 32], String> {
+) -> Result<PersistOutcome, String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key.clone())
         .map_err(|e| format!("序列化数据库失败: {e}"))?;
@@ -305,7 +341,7 @@ pub(crate) fn persist_snapshot(
                     .put(key, &buffer)
                     .map_err(|e| format!("上传远程文件失败: {e}"))?;
             }
-            if *mode == RemoteMode::SaveLocal {
+            let mirror_warning = if *mode == RemoteMode::SaveLocal {
                 write_local_copy(
                     local_dir,
                     &remote_key_basename(key),
@@ -313,26 +349,32 @@ pub(crate) fn persist_snapshot(
                     *backup_count,
                     backup_template,
                 )
-                .map_err(|e| format!("保存本地副本失败: {e}"))?;
-            }
-            Ok(crate::crypto::sha256_bytes(&buffer))
+                .err()
+                .map(|e| format!("远程已保存，本地副本更新失败: {e}"))
+            } else {
+                None
+            };
+            Ok(PersistOutcome {
+                hash: crate::crypto::sha256_bytes(&buffer),
+                mirror_warning,
+            })
         }
         SaveTarget::Local(path) => {
             write_database_bytes(path, &buffer)?;
-            Ok(crate::crypto::sha256_bytes(&buffer))
+            Ok(crate::crypto::sha256_bytes(&buffer).into())
         }
     }
 }
 
 /// Full lock-free save: derive the session key (KDF), then serialize and
 /// persist. Secret clones are zeroized afterwards.
-pub(crate) fn persist_save(job: SaveJob) -> Result<[u8; 32], String> {
+pub(crate) fn persist_save(job: SaveJob) -> Result<PersistOutcome, String> {
     persist_save_with_db(job).map(|(_, hash)| hash)
 }
 
 /// Persist a save job and return its database snapshot for a later locked
 /// adoption step. Secret clones are wiped even when key construction fails.
-pub(crate) fn persist_save_with_db(job: SaveJob) -> Result<(Database, [u8; 32]), String> {
+pub(crate) fn persist_save_with_db(job: SaveJob) -> Result<(Database, PersistOutcome), String> {
     let result = (|| {
         let key = build_database_key(&job.password, job.keyfile.as_deref())?;
         let hash = persist_snapshot(&job.db, &key, &job.target, job.force)?;
@@ -353,7 +395,7 @@ pub(crate) fn persist_change(
     password: &str,
     keyfile: Option<&[u8]>,
     target: &SaveTarget,
-) -> Result<[u8; 32], String> {
+) -> Result<PersistOutcome, String> {
     let key = build_database_key(password, keyfile)?;
     persist_snapshot(db, &key, target, false)
 }
@@ -438,7 +480,8 @@ pub(crate) fn persist_remote_merge(
         })?;
         Ok(RemoteMergeResult {
             db: merged,
-            base_hash,
+            base_hash: base_hash.hash,
+            mirror_warning: base_hash.mirror_warning,
         })
     })();
     let mut password = job.password;

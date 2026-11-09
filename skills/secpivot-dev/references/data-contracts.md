@@ -5,6 +5,12 @@ atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
 show an error. Component destruction or a session/path change invalidates pending
 template completion; the selector is create-only and blank resets template fields.
 
+Persistence returns `PersistOutcome { hash, mirror_warning }`: once the remote
+upload commits, failure of its optional local mirror is a warning, never a failed
+upload. Save, key change, settings rewrite, creation, merge and RPC completion
+adopt the committed hash/key and expose `VaultState.mirrorWarning` (null clears it).
+Even a stale merge completion advances the remote base while preserving live edits.
+
 This reference defines the frontend ↔ backend contract. Update it together with any change to IPC commands, serde types, config schema, or vault serialization.
 
 ## Config contract

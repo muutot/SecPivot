@@ -213,6 +213,7 @@ export const en: Record<I18nKey, string> = {
   "editor.createTitle": "New entry",
   "editor.template": "Template",
   "editor.templateNone": "Blank entry",
+  "page.mirrorWarning": "Remote saved · mirror failed",
   "editor.templateLoadFailed":
     "Unable to load the complete template. Your draft was kept; try again.",
   "editor.batchEdit": "Batch edit {count} entries",

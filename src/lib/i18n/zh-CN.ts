@@ -207,6 +207,7 @@ export const zhCN = {
   "editor.createTitle": "新建条目",
   "editor.template": "模板",
   "editor.templateNone": "空白条目",
+  "page.mirrorWarning": "远程已保存 · 副本更新失败",
   "editor.templateLoadFailed": "无法完整读取模板，已保留当前草稿，请重试。",
   "editor.batchEdit": "批量编辑 {count} 个条目",
   "editor.batchEdit_one": "批量编辑 1 个条目",

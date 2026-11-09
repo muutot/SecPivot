@@ -6094,6 +6094,82 @@ fn seed_remote_storage(dir: &TempDir) -> (crate::remote::MemoryStorage, std::pat
 }
 
 #[test]
+fn committed_remote_key_change_survives_local_mirror_failure() {
+    let dir = TempDir::new().unwrap();
+    let (storage, _) = seed_remote_storage(&dir);
+    let blocked = dir.path().join("not-a-directory");
+    std::fs::write(&blocked, b"fixture").unwrap();
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            Arc::new(storage.clone()),
+            "vaults/seed.kdbx",
+            "pw",
+            None,
+            RemoteMode::InMemory,
+            &blocked,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session.remote.as_mut().unwrap().mode = RemoteMode::SaveLocal;
+    let state = session
+        .change_master_key("new-synthetic-key", None)
+        .unwrap();
+    assert!(state
+        .mirror_warning
+        .as_deref()
+        .unwrap()
+        .contains("远程已保存"));
+    assert!(!state.dirty);
+    assert!(!state.read_only);
+    let bytes = storage.get("vaults/seed.kdbx").unwrap();
+    assert_eq!(
+        session.remote.as_ref().unwrap().base_hash,
+        crate::crypto::sha256_bytes(&bytes)
+    );
+    let key = DatabaseKey::new().with_password("new-synthetic-key");
+    assert!(keepass::Database::parse(&bytes, key).is_ok());
+    // A repeated save uses the new key/base, instead of becoming a conflict.
+    assert!(session.save().unwrap().mirror_warning.is_some());
+    session.remote.as_mut().unwrap().local_dir = dir.path().join("healthy-mirror");
+    assert!(session.save().unwrap().mirror_warning.is_none());
+    assert!(dir.path().join("healthy-mirror/seed.kdbx").exists());
+}
+
+#[test]
+fn committed_remote_creation_is_adopted_when_mirror_fails() {
+    let dir = TempDir::new().unwrap();
+    let blocked = dir.path().join("not-a-directory");
+    std::fs::write(&blocked, b"fixture").unwrap();
+    let storage = crate::remote::MemoryStorage::default();
+    let mut session = VaultSession::default();
+    let state = session
+        .create_remote(
+            Arc::new(storage.clone()),
+            "created.kdbx",
+            "synthetic-key",
+            "Aes",
+            "Aes256",
+            "None",
+            None,
+            RemoteMode::SaveLocal,
+            &blocked,
+            3,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    assert!(state.mirror_warning.is_some());
+    assert!(session.is_open());
+    assert!(session.save().is_ok());
+    let bytes = storage.get("created.kdbx").unwrap();
+    assert_eq!(
+        session.remote.as_ref().unwrap().base_hash,
+        crate::crypto::sha256_bytes(&bytes)
+    );
+}
+
+#[test]
 fn remote_open_save_round_trip_via_memory_storage() {
     let dir = TempDir::new().unwrap();
     let (storage, _) = seed_remote_storage(&dir);

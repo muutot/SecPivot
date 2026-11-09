@@ -152,6 +152,8 @@ export interface VaultState {
   /** True after repeated save failures: the write path is disabled until a
    *  save-as to a writable location resets it. */
   readOnly: boolean;
+  /** Remote commit succeeded, optional local mirror failed. */
+  mirrorWarning?: string | null;
   modifiedAt: string;
   /** Monotonic session edit revision; every mutation bumps it. */
   revision: number;

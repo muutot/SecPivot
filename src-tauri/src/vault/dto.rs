@@ -213,6 +213,8 @@ pub struct VaultState {
     /// True after several consecutive save failures: the write path is
     /// disabled until the user saves-as to a writable location.
     pub read_only: bool,
+    /// Authoritative remote commit succeeded, but its optional mirror failed.
+    pub mirror_warning: Option<String>,
     pub modified_at: String,
     /// Monotonic session edit revision; incremented by every mutation and
     /// exposed so the renderer can order/merge snapshots and later apply
