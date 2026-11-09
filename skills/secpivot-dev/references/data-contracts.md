@@ -319,8 +319,13 @@ validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent
 preserve legacy plaintext compatibility. Account-encrypted exports have the
 same items envelope and must never be treated as decrypted credentials. Native
-client exports, linked-field/custom-name retention and multi-URI fidelity still
-need separate verification; this boundary does not implement decryption.
+client exports, linked-field and multi-URI fidelity still need separate
+verification; this boundary does not implement decryption. Bitwarden custom
+labels use a source prefix and unique suffixes through `import/fields.rs` so
+reserved/blank/duplicate labels retain their values without becoming native OTP
+or plugin configuration. Missing/null labels use `Field`. 1PIF uses the same
+allocator with its existing `1Password` prefix. KDBX save/reopen tests exercise
+value/protection retention and native OTP/URL semantics.
 
 `utils/clipboard.ts` serializes same-renderer writes/conditional clears and drains
 already-started writes before an explicit clear. New copy/clear operations

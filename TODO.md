@@ -150,7 +150,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 附件内存预览：`preview_attachment` 返回文本/图片 data URL（2 MiB 截断上限，其余为二进制提示），EntryDetail 附件预览对话框；不落盘
 - [x] 附件临时打开：`open_attachment_temp`（受控随机临时目录 + token）+ `cleanup_attachment_temp`（丢弃/锁定清理，`close_all_vaults` 联动）+ 预览对话框两步确认后 `openPath`
 - [x] 附件导入修改：`import_attachment_from_temp` 仅允许 token 注册的临时文件写回附件（64 MiB 上限，成功后清理），预览对话框「导入修改/丢弃修改」
-- [~] 导入·Bitwarden JSON：login/secure note、folder→分组、URI/自定义字段/TOTP 已接线；账号/密码加密标记在映射前明确拒绝，legacy 无标记与 false 明文保留。官方公开账号加密 v1/v2 与明文夹具已复核；自定义字段保真、链接字段、多 URI、真实客户端导出仍需继续验证（SP-S16），不以基础 parser 测试标完整兼容
+- [~] 导入·Bitwarden JSON：login/secure note、folder→分组、URI/自定义字段/TOTP 已接线；账号/密码加密标记在映射前明确拒绝，legacy 无标记与 false 明文保留。官方公开账号加密 v1/v2 与明文夹具已复核；自定义字段增加来源前缀与唯一名称，KDBX 重开验证保留值/保护标记并不误激活原生 OTP/KPRPC 配置。链接字段、多 URI、真实客户端导出仍需继续验证（SP-S16/SP-S17），不以基础 parser 测试标完整兼容
 - [~] 导入·1Password/LastPass：LastPass CSV 别名（`name`/`extra`/`grouping`）已接线；1PIF 已修正为真实 standard/Windows JSON-line，覆盖登录/笔记、隐藏字段、OTP、多网址与合成 KDBX 保存重开；分组层级/二进制附件明确拒绝，历史和未映射安全内容保存为受保护 JSON 字段，尚非原生历史迁移；真实 1Password 导出运行验证仍缺失，完整兼容不标完成（SP-S10）
 - [ ] 导入·1Password 1PUX：官方格式是未加密 ZIP，包含 `export.attributes`、`export.data` 和 `files/`；须实现有界解压、账号/库/字段与附件迁移、秘密保护及对应验证，不以 legacy 1PIF 或菜单入口代替完成
 - [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认

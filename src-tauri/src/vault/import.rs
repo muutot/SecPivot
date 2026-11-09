@@ -5,9 +5,12 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
+mod fields;
 mod onepassword;
 pub use onepassword::parse_1pif;
 
+#[cfg(test)]
+mod bitwarden_tests;
 #[cfg(test)]
 mod onepassword_tests;
 
@@ -130,25 +133,29 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
                 .to_owned();
         }
 
+        let mut names = fields::FieldNames::new("Bitwarden");
         let custom_fields = item
             .get("fields")
             .and_then(serde_json::Value::as_array)
             .map(|fields| {
                 fields
                     .iter()
-                    .filter_map(|field| {
-                        let name = field.get("name")?.as_str()?.to_owned();
+                    .filter(|field| field.is_object())
+                    .map(|field| {
+                        let name = field
+                            .get("name")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("");
                         let value = field
                             .get("value")
                             .and_then(serde_json::Value::as_str)
                             .unwrap_or("")
                             .to_owned();
-                        Some(ImportCustomField {
+                        names.field(
                             name,
                             value,
-                            protected: field.get("type").and_then(serde_json::Value::as_i64)
-                                == Some(1),
-                        })
+                            field.get("type").and_then(serde_json::Value::as_i64) == Some(1),
+                        )
                     })
                     .collect()
             })
@@ -205,7 +212,7 @@ mod tests {
         assert_eq!(rows[0].url, "https://github.com");
         assert!(rows[0].totp.as_deref().unwrap().starts_with("otpauth://"));
         assert_eq!(rows[0].custom_fields.len(), 2);
-        assert_eq!(rows[0].custom_fields[0].name, "PIN");
+        assert_eq!(rows[0].custom_fields[0].name, "Bitwarden PIN");
         assert!(!rows[0].custom_fields[0].protected);
         assert!(rows[0].custom_fields[1].protected);
         assert_eq!(rows[1].title, "Wifi");
