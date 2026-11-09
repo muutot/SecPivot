@@ -116,7 +116,8 @@ pub(crate) fn read_keyfile(keyfile: Option<&Path>) -> Result<Option<Vec<u8>>, St
                     return Err("密钥文件超过 10 MiB 上限".to_owned());
                 }
             }
-            let bytes = super::file_io::read(keyfile_path, "密钥文件")?;
+            let bytes =
+                super::file_io::read_with_limit(keyfile_path, "密钥文件", MAX_KEYFILE_BYTES)?;
             if bytes.len() as u64 > MAX_KEYFILE_BYTES {
                 return Err("密钥文件超过 10 MiB 上限".to_owned());
             }

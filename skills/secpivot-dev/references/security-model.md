@@ -56,6 +56,12 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+Vault and keyfile reads are bounded while streaming (512 MiB and 10 MiB),
+including document URIs. SAF saves must read the previous bytes successfully
+before any truncation, and both save and rollback verify the bytes read back.
+Windows tests exercise the shared transaction helper; native provider behavior
+still requires Android device verification.
+
 - Targeted tests for lock/clear/session semantics (Rust).
 - Confirm no password reaches `config.json`, logs, or the `VaultState`/`VaultEntry` payload by construction and test. Same for protected custom-field values (only the `protected` flag is serialized; `get_custom_field_value` resolves them on demand).
 - Browser fallback changes are UI-only; do not claim desktop security behavior from them.
