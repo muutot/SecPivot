@@ -124,24 +124,6 @@ fn decrypt_profile_creds(name: &str, settings: &mut RemoteSettings) {
         crate::platform::remote_secret::load(&settings.secret_key, &format!("{name}/secretKey"));
 }
 
-#[cfg(test)]
-mod credential_namespace_tests {
-    use super::*;
-
-    #[test]
-    fn namespace_separates_transports_and_data_roots() {
-        let first = tempfile::TempDir::new().unwrap();
-        let second = tempfile::TempDir::new().unwrap();
-        let s3 = credential_namespace(first.path(), "s3/config_1");
-        assert_ne!(s3, credential_namespace(first.path(), "webdav/config_1"));
-        assert_ne!(s3, credential_namespace(second.path(), "s3/config_1"));
-        assert_eq!(
-            s3,
-            credential_namespace(&first.path().join("."), "s3/config_1")
-        );
-    }
-}
-
 fn encrypt_profile_creds(name: &str, settings: &mut RemoteSettings) -> Result<(), String> {
     settings.access_key =
         crate::platform::remote_secret::store(&settings.access_key, &format!("{name}/accessKey"))?;
@@ -272,5 +254,23 @@ impl ConfigStore {
             .find(|profile| profile.path() == path)
             .ok_or_else(|| format!("远程配置不存在: {path}"))?;
         Ok((profile.path(), profile.settings.clone()))
+    }
+}
+
+#[cfg(test)]
+mod credential_namespace_tests {
+    use super::*;
+
+    #[test]
+    fn namespace_separates_transports_and_data_roots() {
+        let first = tempfile::TempDir::new().unwrap();
+        let second = tempfile::TempDir::new().unwrap();
+        let s3 = credential_namespace(first.path(), "s3/config_1");
+        assert_ne!(s3, credential_namespace(first.path(), "webdav/config_1"));
+        assert_ne!(s3, credential_namespace(second.path(), "s3/config_1"));
+        assert_eq!(
+            s3,
+            credential_namespace(&first.path().join("."), "s3/config_1")
+        );
     }
 }
