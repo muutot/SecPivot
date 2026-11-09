@@ -18,7 +18,7 @@ use keepass::Database;
 use uuid::Uuid;
 
 use super::entries::{history_limits, snapshot_sizes};
-use super::persist::{persist_save_with_db, SaveJob};
+use super::persist::{persist_save_with_db, PersistOutcome, SaveJob};
 use super::serialize::{trim_entry_history, trim_entry_history_by_size};
 
 #[derive(Clone)]
@@ -48,7 +48,7 @@ pub(crate) struct RpcWriteResult {
     persisted_login: RpcLogin,
     persisted_database: RpcDatabase,
     revision: u64,
-    new_hash: [u8; 32],
+    new_hash: PersistOutcome,
 }
 
 impl RpcWriteResult {
@@ -339,10 +339,7 @@ impl VaultSession {
             new_hash,
         } = result;
         let concurrent = self.revision != revision;
-        self.note_save_success();
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = new_hash;
-        }
+        self.adopt_persisted(new_hash);
         if !concurrent {
             self.db = Some(db);
         } else if apply_rpc_write(self.require_db_mut().map_err(rpc_write_error)?, &operation)

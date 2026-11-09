@@ -146,6 +146,12 @@
   const showWindowControls = isTauriRuntime() && !isMobile();
 
   let currentVault = $state<VaultState | null>(null);
+  let lastMirrorWarning: string | null = null;
+  $effect(() => {
+    const warning = currentVault?.mirrorWarning ?? null;
+    if (warning && warning !== lastMirrorWarning) flash(warning);
+    lastMirrorWarning = warning;
+  });
   let currentVaultSessionId = $state<string | null>(null);
   let activeSessionId = $state<string | null>(null);
   /** Database-level recycle-bin flag of the visible session; drives the
@@ -2054,6 +2060,15 @@
             <span class="status-dirty"
               ><i></i>{t(settings.general.language, "page.unsavedChanges")}</span
             >
+          {/if}
+          {#if currentVault.mirrorWarning}
+            <span
+              class="status-dirty"
+              title={currentVault.mirrorWarning}
+              aria-label={currentVault.mirrorWarning}
+            >
+              <i></i>{t(settings.general.language, "page.mirrorWarning")}
+            </span>
           {/if}
         </span>
         <span class="status-right">

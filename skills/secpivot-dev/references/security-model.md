@@ -62,6 +62,10 @@ before any truncation, and both save and rollback verify the bytes read back.
 Windows tests exercise the shared transaction helper; native provider behavior
 still requires Android device verification.
 
+An authoritative remote upload is committed before its optional local mirror.
+Mirror failures retain the new session key and remote hash and surface a warning;
+they never count as repeated upload failures or leave the session using an old key.
+
 - Targeted tests for lock/clear/session semantics (Rust).
 - Confirm no password reaches `config.json`, logs, or the `VaultState`/`VaultEntry` payload by construction and test. Same for protected custom-field values (only the `protected` flag is serialized; `get_custom_field_value` resolves them on demand).
 - Browser fallback changes are UI-only; do not claim desktop security behavior from them.

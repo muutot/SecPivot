@@ -224,6 +224,7 @@ pub struct VaultSession {
     /// Consecutive failed save attempts; reaching the read-only limit disables
     /// the write path until a successful save/save-as resets it.
     save_failures: u32,
+    mirror_warning: Option<String>,
     modified_at: String,
     remote: Option<RemoteTarget>,
     revision: u64,

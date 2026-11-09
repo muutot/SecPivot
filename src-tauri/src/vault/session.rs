@@ -6,8 +6,8 @@ use super::helpers::{
 };
 use super::persist::{
     persist_change, persist_save, persist_save_with_db, prepare_local_create, prepare_local_open,
-    prepare_remote_create, prepare_remote_open, read_keyfile, RemoteMergeJob, RemoteMergeResult,
-    RemoteRefreshJob, RemoteRefreshResult, SaveJob, SaveTarget,
+    prepare_remote_create, prepare_remote_open, read_keyfile, PersistOutcome, RemoteMergeJob,
+    RemoteMergeResult, RemoteRefreshJob, RemoteRefreshResult, SaveJob, SaveTarget,
 };
 use super::serialize::{build_group_tree, custom_data_entries, icon_to_data_url, now_iso};
 use super::*;
@@ -262,6 +262,7 @@ impl VaultSession {
         self.dirty = false;
         self.modified_at.clear();
         self.remote = None;
+        self.mirror_warning = None;
         self.cached_snapshot = None;
         self.pending_autotype_window = None;
         self.tcato_last_window.clear();
@@ -427,8 +428,10 @@ impl VaultSession {
         local_dir: &Path,
         backup_count: usize,
         backup_template: &str,
-        base_hash: [u8; 32],
+        base_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
+        let outcome = base_hash.into();
+        self.mirror_warning = outcome.mirror_warning;
         self.remote = Some(RemoteTarget {
             storage,
             key: key.to_owned(),
@@ -436,7 +439,7 @@ impl VaultSession {
             local_dir: local_dir.to_path_buf(),
             backup_count,
             backup_template: backup_template.to_owned(),
-            base_hash,
+            base_hash: outcome.hash,
         });
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         wipe_replaced_password(&mut self.password, password);
@@ -462,6 +465,7 @@ impl VaultSession {
         self.dirty = false;
         self.modified_at = now_iso();
         self.remote = None;
+        self.mirror_warning = None;
         // Same as adopt_remote: opening a different database resets the
         // consecutive-save-failure counter for the previous target.
         self.save_failures = 0;
@@ -500,6 +504,15 @@ impl VaultSession {
         self.save_failures = self.save_failures.saturating_add(1);
         // The read-only flag lives in the snapshot; invalidate the cache so
         // the next `state()` reflects it.
+        self.cached_snapshot = None;
+    }
+
+    pub(crate) fn adopt_persisted(&mut self, outcome: PersistOutcome) {
+        self.note_save_success();
+        if let Some(remote) = self.remote.as_mut() {
+            remote.base_hash = outcome.hash;
+        }
+        self.mirror_warning = outcome.mirror_warning;
         self.cached_snapshot = None;
     }
 
@@ -563,6 +576,7 @@ impl VaultSession {
             root: build_group_tree(db),
             dirty: self.dirty,
             read_only: self.is_read_only(),
+            mirror_warning: self.mirror_warning.clone(),
             modified_at: self.modified_at.clone(),
             revision: self.revision,
             custom_icons: include_icons.then(|| {
@@ -669,12 +683,9 @@ impl VaultSession {
         patch: &DatabaseSettingsPatch,
         revision: u64,
         persisted_db: Database,
-        new_hash: [u8; 32],
+        new_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
-        self.note_save_success();
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = new_hash;
-        }
+        self.adopt_persisted(new_hash.into());
         if self.revision == revision {
             self.db = Some(persisted_db);
             self.mark_dirty();
@@ -703,6 +714,7 @@ impl VaultSession {
         // A successful refresh re-syncs with the remote, so reset the
         // consecutive-save-failure counter like the other success paths.
         self.note_save_success();
+        self.mirror_warning = None;
         self.db = Some(result.db);
         self.dirty = false;
         self.revision += 1;
@@ -744,6 +756,10 @@ impl VaultSession {
         revision: u64,
         result: RemoteMergeResult,
     ) -> Result<VaultState, String> {
+        self.adopt_persisted(PersistOutcome {
+            hash: result.base_hash,
+            mirror_warning: result.mirror_warning,
+        });
         if self.revision != revision {
             return Err(
                 "远程合并期间数据库已发生修改；远程已保存合并结果，请重新同步本地更改".to_owned(),
@@ -754,10 +770,7 @@ impl VaultSession {
         self.revision += 1;
         self.modified_at = now_iso();
         self.cached_snapshot = None;
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = result.base_hash;
-        }
-        self.note_save_success();
+
         self.snapshot()
     }
 
@@ -772,6 +785,7 @@ impl VaultSession {
         self.note_save_success();
         self.path = Some(path.to_string_lossy().into_owned());
         self.remote = None;
+        self.mirror_warning = None;
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -806,12 +820,9 @@ impl VaultSession {
     pub(crate) fn complete_save(
         &mut self,
         revision: u64,
-        new_hash: [u8; 32],
+        new_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
-        self.note_save_success();
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = new_hash;
-        }
+        self.adopt_persisted(new_hash.into());
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -827,12 +838,9 @@ impl VaultSession {
         password: String,
         keyfile: Option<Vec<u8>>,
         revision: u64,
-        new_hash: [u8; 32],
+        new_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
-        self.note_save_success();
-        if let Some(remote) = self.remote.as_mut() {
-            remote.base_hash = new_hash;
-        }
+        self.adopt_persisted(new_hash.into());
         // Swapping to the new master password must wipe the old one from
         // memory instead of letting it drop unzeroed.
         if let Some(mut old) = self.password.take() {
