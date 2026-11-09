@@ -18,7 +18,13 @@
       }
     },
     {
-      "files": ["package.json", ".prettierrc.json", "src-tauri/*.json", "src-tauri/**/*.json"],
+      "files": [
+        "package.json",
+        ".prettierrc.json",
+        "src-tauri/*.json",
+        "src-tauri/**/*.json",
+        ".claude/audits/*.json"
+      ],
       "options": {
         "trailingComma": "none"
       }

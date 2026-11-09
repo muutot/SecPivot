@@ -11,15 +11,36 @@
     "testing": 6,
     "maintainability": 6.5,
     "design": 6,
-    "release": 5.5,
+    "release": 5.5
   },
   "finding_counts_by_severity": {
     "High": 4,
     "Medium": 8,
-    "Low": 3,
+    "Low": 3
   },
   "confirmed": 14,
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
-  "stage": "before remediation",
+  "stage": "baseline snapshot with remediation evidence",
+  "remediation_checkpoint": "fcee069",
+  "remediated_findings": ["SP-01", "SP-02", "SP-04", "SP-05", "SP-06", "SP-07", "SP-08"],
+  "partially_remediated_findings": ["SP-14"],
+  "supplemental_findings": [
+    {
+      "area": "Android SAF ACL",
+      "commit": "e5e3c4e",
+      "status": "source fix and host ACL tests passed; APK/device verification pending"
+    }
+  ],
+  "verification": {
+    "command": "npm run verify",
+    "result": "passed",
+    "frontend_tests": 208,
+    "rust_unit_tests": 464,
+    "android_acl_tests": 2,
+    "limitations": [
+      "Android APK build and device I/O not run",
+      "macOS/Linux keyring runtime not run"
+    ]
+  }
 }

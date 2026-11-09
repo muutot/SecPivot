@@ -17,14 +17,14 @@
     "testing": 7.5,
     "maintainability": 7.0,
     "design": 7.5,
-    "release": 5.5,
+    "release": 5.5
   },
   "finding_counts": {
     "critical": 0,
     "high": 3,
     "medium": 10,
     "low": 7,
-    "info": 0,
+    "info": 0
   },
   "top_risks": [
     "手动 dispatch 可用非标签提交的产物覆盖已发布 release (High)",
@@ -33,7 +33,7 @@
     "远程对象 key 可在 Windows 上逃逸本地镜像目录 (Medium)",
     "Gradle 仓库补丁脚本在真实模板形态下自证无效 (Medium)",
     "release.mjs --regenerate 在 RELEASE.md 门禁之前改写历史 (Medium)",
-    "verify 不阻塞 Windows 产物进入 draft release (Medium)",
+    "verify 不阻塞 Windows 产物进入 draft release (Medium)"
   ],
   "rejected_candidates": [
     "重命名远程配置丢失凭据 — 实为前端显式提示的设计行为",
@@ -41,7 +41,7 @@
     "config.json 缺少所有者权限 — store.rs:100 已 set_permissions(0o600)",
     "CI action 未 SHA 固定 / 缺少 rust-toolchain / 缺少校验和 — 上一轮已修复",
     "bridge 关联请求无限流 — AssociateRateLimiter 已存在",
-    "ModalShell 无焦点陷阱 — 已实现焦点捕获与初始焦点管理",
+    "ModalShell 无焦点陷阱 — 已实现焦点捕获与初始焦点管理"
   ],
   "lint_status": "OK",
   "remediation": {
@@ -65,14 +65,14 @@
       "F-15 atomic write keeps owner-only permissions (30a3958)",
       "F-17 build job holds no write token (ff84112)",
       "F-18 verify gates the Windows artifacts (ff84112)",
-      "F-19 non-persistable documents stay out of the recent files (a8d3c5f)",
+      "F-19 non-persistable documents stay out of the recent files (a8d3c5f)"
     ],
     "partial": [
-      "F-4 Windows artifacts: checksums exist, Authenticode needs a certificate, provenance attestation needs a SHA-pinned action",
+      "F-4 Windows artifacts: checksums exist, Authenticode needs a certificate, provenance attestation needs a SHA-pinned action"
     ],
     "deferred": [
       "F-16 random_bytes panics when the OS entropy source fails (Low, desktop bridge/RPC nonce paths only)",
-      "F-20 +page.svelte is still a 2620-line god component (structural refactor, 2-3 days)",
-    ],
-  },
+      "F-20 +page.svelte is still a 2620-line god component (structural refactor, 2-3 days)"
+    ]
+  }
 }

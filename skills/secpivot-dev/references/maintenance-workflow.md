@@ -40,6 +40,10 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 ## Browser vs desktop truth
 
+- Machine-readable audit metadata under `.claude/audits/*.json` stays strict JSON.
+  The Prettier override disables trailing commas there; verify it with a JSON
+  parser because the repository's general `jsonc` formatting accepts them.
+
 - The browser (`npm run dev` outside Tauri) runs a demo-vault fallback stored in `localStorage`. It is a UI-development surface only.
 - Desktop KDBX read/write behavior is defined only by the Rust backend (`keepass` crate) and its tests. Never check a desktop TODO from browser-only evidence.
 - When verifying a Tauri contract, keep command names, Rust argument/result types, frontend `invoke` arguments, serde casing, and error strings aligned.
