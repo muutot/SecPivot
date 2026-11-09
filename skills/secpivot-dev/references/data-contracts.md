@@ -1,5 +1,10 @@
 # Data Contracts
 
+New-entry templates resolve all hidden password, OTP and protected-field values
+atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
+show an error. Component destruction or a session/path change invalidates pending
+template completion; the selector is create-only and blank resets template fields.
+
 This reference defines the frontend ↔ backend contract. Update it together with any change to IPC commands, serde types, config schema, or vault serialization.
 
 ## Config contract

@@ -1,4 +1,34 @@
-import type { VaultEntry, VaultGroup } from "$lib/types/vault";
+import type { CustomField, VaultEntry, VaultGroup } from "$lib/types/vault";
+
+/** Resolve every hidden value before a template can replace the editor draft.
+ * A missing protected field/OTP is a failed read, never an empty default. */
+export async function resolveTemplateSecrets(
+  entry: VaultEntry,
+  readers: {
+    password: () => Promise<string>;
+    totp: () => Promise<string | null>;
+    field: (name: string) => Promise<string | null>;
+  },
+): Promise<{ password: string; totp: string; customFields: CustomField[] }> {
+  const [password, totp, customFields] = await Promise.all([
+    readers.password(),
+    entry.hasTotp
+      ? readers.totp().then((value) => {
+          if (value === null) throw new Error("Template OTP is unavailable");
+          return value;
+        })
+      : Promise.resolve(entry.totp ?? ""),
+    Promise.all(
+      (entry.customFields ?? []).map(async (field) => {
+        if (!field.protected) return { ...field };
+        const value = await readers.field(field.name);
+        if (value === null) throw new Error("Template protected field is unavailable");
+        return { ...field, value };
+      }),
+    ),
+  ]);
+  return { password, totp, customFields };
+}
 
 /**
  * Entries offered as new-entry templates: the direct children of the

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { get } from "svelte/store";
+  import { onDestroy } from "svelte";
   import type {
     EntryInput,
     EntryPatch,
@@ -19,6 +20,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { shortestMatchable } from "$lib/utils/match-url";
   import { runExclusiveTask } from "$lib/utils/session-state";
+  import { resolveTemplateSecrets } from "$lib/utils/templates";
   import { KEEPASS_COLORS, KEEPASS_ICON_CHOICES, keepassIconName } from "$lib/utils/keepass-icons";
   import GroupPicker from "$lib/components/GroupPicker.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
@@ -598,6 +600,23 @@
   /** True while the template's snapshot-hidden values (password, TOTP seed,
    *  protected custom fields) are being fetched; the save gate stays closed. */
   let templateLoading = $state(false);
+  let templateError = $state("");
+  let templateOperation = 0;
+  let templateAlive = true;
+  let appliedTemplateUuid = "";
+  const editorSessionId = vault.getActiveSessionId();
+  const editorPath = get(vault)?.path;
+  const unsubscribeTemplateSession = vault.subscribe((state) => {
+    if (vault.getActiveSessionId() !== editorSessionId || state?.path !== editorPath) {
+      templateOperation += 1;
+      templateLoading = false;
+    }
+  });
+  onDestroy(() => {
+    templateAlive = false;
+    templateOperation += 1;
+    unsubscribeTemplateSession();
+  });
 
   /** Prefill the new entry from the selected template. Values hidden from the
    *  snapshot are fetched on demand (same pattern as the edit-mode effects
@@ -605,72 +624,67 @@
    *  snapshot and cannot be re-fetched wholesale. The target group stays the
    *  caller's choice, never the template's own group. */
   async function applyTemplate(uuid: string): Promise<void> {
+    if (mode !== "create" || saving) return;
+    const operation = ++templateOperation;
+    const current = () => templateAlive && operation === templateOperation;
+    templateError = "";
     templateUuid = uuid;
-    if (mode !== "create" || !uuid) return;
-    const template = templates.find((t) => t.uuid === uuid);
+    const template: VaultEntry | undefined = uuid
+      ? templates.find((t) => t.uuid === uuid)
+      : {
+          uuid: "",
+          groupUuid: targetGroupUuid,
+          title: "",
+          username: "",
+          password: "",
+          url: "",
+          notes: "",
+          hasTotp: false,
+          customFields: [],
+        };
     if (!template) return;
     const sessionId = vault.getActiveSessionId();
     templateLoading = true;
-    let fetchedPassword = template.password ?? "";
-    let fetchedTotp = template.totp ?? "";
-    const protectedValues = new Map<string, string>();
-    if (sessionId) {
-      try {
-        const fetches: Promise<void>[] = [
-          vault
-            .callInSession(sessionId, () => vault.getEntryPassword(uuid))
-            .then((value) => {
-              fetchedPassword = value;
-            }),
-        ];
-        if (template.hasTotp) {
-          fetches.push(
-            vault
-              .callInSession(sessionId, () => vault.getEntryTotp(uuid))
-              .then((value) => {
-                fetchedTotp = value ?? "";
-              }),
-          );
-        }
-        for (const field of template.customFields ?? []) {
-          if (!field.protected) continue;
-          fetches.push(
-            vault
-              .callInSession(sessionId, () => vault.getCustomFieldValue(uuid, field.name))
-              .then((value) => {
-                protectedValues.set(field.name, value ?? "");
-              }),
-          );
-        }
-        await Promise.all(fetches);
-      } catch {
-        // Snapshot-visible fields below are still applied; a failed secret
-        // fetch leaves the default (empty) value instead of blocking the form.
-      }
+    try {
+      if (uuid && !sessionId) throw new Error(t(lang, "error.sessionNotOpen"));
+      const resolved =
+        uuid && sessionId
+          ? await resolveTemplateSecrets(template, {
+              password: () => vault.callInSession(sessionId, () => vault.getEntryPassword(uuid)),
+              totp: () => vault.callInSession(sessionId, () => vault.getEntryTotp(uuid)),
+              field: (name) =>
+                vault.callInSession(sessionId, () => vault.getCustomFieldValue(uuid, name)),
+            })
+          : { password: "", totp: "", customFields: [] };
+      if (!current()) return;
+      title = template.title;
+      username = template.username;
+      password = resolved.password;
+      url = template.url;
+      notes = template.notes;
+      tags = template.tags ?? "";
+      overrideUrl = template.overrideUrl ?? "";
+      qualityCheck = template.qualityCheck ?? true;
+      foregroundHex = template.foregroundColor ?? "";
+      colorHex = template.color ?? "";
+      expiresLocal = template.expires ? toDateTimeInput(template.expires) : "";
+      iconIndex = template.icon ?? null;
+      iconTouched = true;
+      customIconSelected = false;
+      totp = resolved.totp;
+      customFields = resolved.customFields;
+      revealedCustomFields = new Set();
+      autoTypeEnabled = template.autoType?.enabled ?? true;
+      autoTypeDefaultSeq = template.autoType?.defaultSequence ?? "";
+      autoTypeAssociations = (template.autoType?.associations ?? []).map((a) => ({ ...a }));
+      appliedTemplateUuid = uuid;
+    } catch {
+      if (!current()) return;
+      templateUuid = appliedTemplateUuid;
+      templateError = t(lang, "editor.templateLoadFailed");
+    } finally {
+      if (current()) templateLoading = false;
     }
-    title = template.title;
-    username = template.username;
-    password = fetchedPassword;
-    url = template.url;
-    notes = template.notes;
-    tags = template.tags ?? "";
-    overrideUrl = template.overrideUrl ?? "";
-    qualityCheck = template.qualityCheck ?? true;
-    foregroundHex = template.foregroundColor ?? "";
-    colorHex = template.color ?? "";
-    expiresLocal = template.expires ? toDateTimeInput(template.expires) : "";
-    iconIndex = template.icon ?? null;
-    iconTouched = true;
-    customIconSelected = false;
-    totp = fetchedTotp;
-    customFields = (template.customFields ?? []).map((field) => ({
-      ...field,
-      value: field.protected ? (protectedValues.get(field.name) ?? field.value) : field.value,
-    }));
-    autoTypeEnabled = template.autoType?.enabled ?? true;
-    autoTypeDefaultSeq = template.autoType?.defaultSequence ?? "";
-    autoTypeAssociations = (template.autoType?.associations ?? []).map((a) => ({ ...a }));
-    templateLoading = false;
   }
 
   function submit(): void {
@@ -812,7 +826,12 @@
     </button>
   {/snippet}
   {#snippet children()}
-    <div class="editor-tabs" role="tablist" aria-label={t(lang, "editor.tabs")}>
+    <div
+      class="editor-tabs"
+      role="tablist"
+      inert={templateLoading}
+      aria-label={t(lang, "editor.tabs")}
+    >
       <button
         type="button"
         role="tab"
@@ -882,8 +901,8 @@
     </div>
 
     {#if activeTab === "fields"}
-      <div class="form-grid" role="tabpanel">
-        {#if !multi && templates.length > 0}
+      <div class="form-grid" role="tabpanel" inert={templateLoading}>
+        {#if mode === "create" && templates.length > 0}
           <label class="field template-row">
             <span>{t(lang, "editor.template")}</span>
             <Select
@@ -900,6 +919,9 @@
               ariaLabel={t(lang, "editor.template")}
             />
           </label>
+          {#if templateError}
+            <p class="generator-error" role="alert">{templateError}</p>
+          {/if}
         {/if}
         <label class="field">
           <span>{t(lang, "editor.title")}</span>
@@ -1018,7 +1040,7 @@
     {/if}
 
     {#if activeTab === "meta"}
-      <div class="form-grid" role="tabpanel">
+      <div class="form-grid" role="tabpanel" inert={templateLoading}>
         <label class="field">
           <span>{t(lang, "editor.totpSeed")}</span>
           <div class="totp-input-wrap">
@@ -1201,7 +1223,7 @@
     {/if}
 
     {#if !multi && activeTab === "autotype"}
-      <div class="autotype-section" role="tabpanel">
+      <div class="autotype-section" role="tabpanel" inert={templateLoading}>
         <div class="autotype-row">
           <span class="autotype-label">{t(lang, "editor.autotypeEnabled")}</span>
           <Toggle bind:checked={autoTypeEnabled} ariaLabel={t(lang, "editor.autotypeEnabled")} />
@@ -1252,7 +1274,7 @@
     {/if}
 
     {#if !multi && activeTab === "keyvault"}
-      <div class="form-grid" role="tabpanel">
+      <div class="form-grid" role="tabpanel" inert={templateLoading}>
         {#if kprpcProtected}
           <section class="field full">
             <p class="section-empty">
@@ -1390,7 +1412,7 @@
     {/if}
 
     {#if !multi && activeTab === "custom"}
-      <div class="form-grid" role="tabpanel">
+      <div class="form-grid" role="tabpanel" inert={templateLoading}>
         <section class="field full">
           {#if visibleCustomFields.length === 0}
             <p class="section-empty">{t(lang, "editor.noCustomFields")}</p>
@@ -1461,7 +1483,7 @@
     {/if}
 
     {#if !multi && activeTab === "attachments"}
-      <div class="form-grid" role="tabpanel">
+      <div class="form-grid" role="tabpanel" inert={templateLoading}>
         <section class="field full">
           {#if attachments.length === 0}
             <p class="section-empty">{t(lang, "editor.noAttachments")}</p>
