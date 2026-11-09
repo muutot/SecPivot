@@ -26,6 +26,8 @@
   let triggerEl: HTMLButtonElement | null = $state(null);
   let listEl: HTMLDivElement | null = $state(null);
   let pos = $state({ top: 0, left: 0, width: 0 });
+  const instanceId = $props.id();
+  const listId = $derived(`${id ?? instanceId}-list`);
 
   const selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? "");
 
@@ -61,10 +63,16 @@
   function choose(index: number): void {
     if (index < 0 || index >= options.length) return;
     closeMenu();
+    triggerEl?.focus();
     onchange(options[index].value);
   }
 
   function onTriggerKeydown(e: KeyboardEvent): void {
+    // Consume Escape even before the animation-frame list focus has landed.
+    if (open && e.key === "Escape") {
+      onListKeydown(e);
+      return;
+    }
     if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       if (!open) openMenu();
@@ -83,6 +91,7 @@
   function onListKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
       closeMenu();
       triggerEl?.focus();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -99,6 +108,7 @@
       choose(highlight);
     } else if (e.key === "Tab") {
       closeMenu();
+      triggerEl?.focus();
     }
   }
 
@@ -135,7 +145,7 @@
     aria-label={ariaLabel}
     aria-haspopup="listbox"
     aria-expanded={open}
-    aria-controls={open ? `${id ?? "select"}-list` : undefined}
+    aria-controls={open ? listId : undefined}
     {disabled}
     onclick={() => (open ? closeMenu() : openMenu())}
     onkeydown={onTriggerKeydown}
@@ -148,9 +158,11 @@
 
   {#if open}
     <div
-      id={`${id ?? "select"}-list`}
+      id={listId}
       class="select-list"
       role="listbox"
+      aria-label={ariaLabel}
+      aria-activedescendant={highlight >= 0 ? `${listId}-${highlight}` : undefined}
       tabindex="-1"
       bind:this={listEl}
       style="top:{pos.top}px; left:{pos.left}px; width:{pos.width}px;"
@@ -158,6 +170,7 @@
     >
       {#each options as option, i (option.value)}
         <button
+          id={`${listId}-${i}`}
           type="button"
           role="option"
           tabindex="-1"

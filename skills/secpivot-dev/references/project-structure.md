@@ -9,6 +9,10 @@ if they were newly inserted groups.
 Both root and recursive tree rendering use `orderedChildren` to place the
 recycle bin last without changing the database's stored child order.
 
+`Select` consumes its own Escape, restores trigger focus and uses an instance
+listbox ID. `ModalShell` handles keyboard events only for the top modal and when
+the event has not already been consumed by a child control.
+
 ## Runtime surfaces
 
 | Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                                                                                                          |
