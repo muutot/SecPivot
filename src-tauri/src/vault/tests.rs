@@ -7051,6 +7051,87 @@ fn update_entry_flags_rejects_invalid_foreground_color() {
 }
 
 #[test]
+fn update_entry_flags_invalid_color_does_not_set_other_flags() {
+    assert_invalid_color_preserves_flags("https://unrelated.example.net");
+}
+
+#[test]
+fn update_entry_flags_invalid_color_does_not_clear_other_flags() {
+    assert_invalid_color_preserves_flags("");
+}
+
+fn assert_invalid_color_preserves_flags(override_url: &str) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic flags",
+            "synthetic-user",
+            "synthetic-password",
+            "https://canonical.example",
+        ))
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    session
+        .update_entry_flags(
+            &uuid,
+            Some("https://authorized.example".into()),
+            Some(true),
+            Some("#123456".into()),
+        )
+        .unwrap();
+    session.save().unwrap();
+    let before = session.state().unwrap().unwrap();
+    let err = session
+        .update_entry_flags(
+            &uuid,
+            Some(override_url.into()),
+            Some(false),
+            Some("#zzzzzz".into()),
+        )
+        .unwrap_err();
+    assert_eq!(err, "前景色无效，应为 #RRGGBB");
+    let after = session.state().unwrap().unwrap();
+    let entry = &after.root.entries[0];
+    let cached_unchanged = entry.override_url.as_deref() == Some("https://authorized.example")
+        && entry.quality_check
+        && entry.foreground_color.as_deref() == Some("#123456");
+    let raw = session
+        .require_db()
+        .unwrap()
+        .entry(parse_entry_id(&uuid).unwrap())
+        .unwrap();
+    let memory_unchanged =
+        raw.override_url.as_deref() == Some("https://authorized.example") && raw.quality_check;
+    let state_unchanged = after.revision == before.revision && after.dirty == before.dirty;
+    let authorized = session.logins_for("https://authorized.example", None).len();
+    let unrelated = session
+        .logins_for("https://unrelated.example.net", None)
+        .len();
+    // An explicit save must not persist any part of a rejected update.
+    session.save().unwrap();
+    session.close();
+    let reopened = session.open(&path, "master-password", None).unwrap();
+    let entry = &reopened.root.entries[0];
+    let persisted_unchanged = entry.override_url.as_deref() == Some("https://authorized.example")
+        && entry.quality_check
+        && entry.foreground_color.as_deref() == Some("#123456");
+    assert_eq!(
+        (
+            cached_unchanged,
+            memory_unchanged,
+            state_unchanged,
+            authorized,
+            unrelated,
+            persisted_unchanged
+        ),
+        (true, true, true, 1, 0, true),
+        "rejected flags changed memory/matching/persistence"
+    );
+}
+
+#[test]
 fn remote_refresh_resets_save_failure_counter() {
     let dir = TempDir::new().unwrap();
     let (storage, _) = seed_remote_storage(&dir);

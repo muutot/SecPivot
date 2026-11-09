@@ -40,6 +40,10 @@ for Bridge/RPC and both auto-type scans. Host/KDBX regression tests distinguish
 empty placeholders from meaningful whitespace and explicit wildcards; the
 existing pattern/text/compiled-size bounds remain unchanged.
 
+`vault/entries.rs::update_entry_flags` validates color before writing any flags;
+its regressions compare raw entry, cached DTO, dirty/revision, browser matching
+and KDBX persistence for both rejected set and clear requests.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or

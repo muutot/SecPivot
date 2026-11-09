@@ -411,6 +411,16 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            // Validate before any write: an Err must not mutate matching flags
+            // while leaving the cached snapshot and dirty revision unchanged.
+            let parsed_color = match foreground_color.as_deref().map(str::trim) {
+                None => None,
+                Some("") => Some(None),
+                Some(color) => Some(Some(
+                    super::serialize::parse_color(Some(color))
+                        .ok_or_else(|| "前景色无效，应为 #RRGGBB".to_owned())?,
+                )),
+            };
             if let Some(value) = override_url {
                 let value = value.trim();
                 entry.override_url = if value.is_empty() {
@@ -422,15 +432,8 @@ impl VaultSession {
             if let Some(check) = quality_check {
                 entry.quality_check = check;
             }
-            if let Some(color) = foreground_color {
-                let trimmed = color.trim();
-                if trimmed.is_empty() {
-                    entry.foreground_color = None;
-                } else if let Some(parsed) = super::serialize::parse_color(Some(trimmed)) {
-                    entry.foreground_color = Some(parsed);
-                } else {
-                    return Err("前景色无效，应为 #RRGGBB".to_owned());
-                }
+            if let Some(color) = parsed_color {
+                entry.foreground_color = color;
             }
         }
         self.mark_dirty();
