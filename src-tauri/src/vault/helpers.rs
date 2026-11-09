@@ -11,7 +11,7 @@ use super::{
 };
 use crate::crypto::otp;
 use crate::platform::autotype;
-use crate::util::url_host;
+use crate::util::{url_authority, url_host};
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{Entry, EntryId, GroupId, GroupRef};
 use keepass::{Database, DatabaseKey};
@@ -166,20 +166,23 @@ fn url_matches_accuracy(
     min: MatchAccuracy,
     registrable: bool,
 ) -> bool {
-    let entry_host = url_host(entry_url).unwrap_or_default();
-    let request_host = url_host(request_url).unwrap_or_default();
-    if entry_host.is_empty() || request_host.is_empty() {
+    let Some(entry_authority) = url_authority(entry_url) else {
         return false;
-    }
+    };
+    let Some(request_authority) = url_authority(request_url) else {
+        return false;
+    };
+    let entry_host = &entry_authority.host;
+    let request_host = &request_authority.host;
     let host_equal = entry_host == request_host;
     let subdomain_cover = request_host.ends_with(&format!(".{entry_host}"))
         || entry_host.ends_with(&format!(".{request_host}"));
     match min {
         MatchAccuracy::Exact => entry_url == request_url,
-        MatchAccuracy::Hostname => host_equal,
+        MatchAccuracy::Hostname => entry_authority == request_authority,
         MatchAccuracy::Domain => {
             if registrable {
-                registrable_domain(&entry_host) == registrable_domain(&request_host)
+                registrable_domain(entry_host) == registrable_domain(request_host)
             } else {
                 host_equal || subdomain_cover
             }

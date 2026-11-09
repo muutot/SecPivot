@@ -9,28 +9,81 @@ use std::path::{Path, PathBuf};
 /// URLs remain supported. Invalid authorities and internal whitespace fail
 /// closed rather than guessing a credential destination.
 pub fn url_host(url: &str) -> Option<String> {
+    url_authority(url).map(|authority| authority.host)
+}
+
+/// Canonical host and the explicitly written numeric port. An omitted port
+/// remains None even for HTTP(S): strict KPRPC rules must not invent a port
+/// from a scheme, or erase an explicitly specified default port.
+#[derive(PartialEq, Eq)]
+pub(crate) struct UrlAuthority {
+    pub host: String,
+    pub port: Option<u16>,
+}
+
+pub(crate) fn url_authority(url: &str) -> Option<UrlAuthority> {
     let input = url.trim();
     if input.is_empty() || input.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return None;
     }
-    let parsed = if input.contains("://") {
-        url::Url::parse(input).ok()?
-    } else if input.starts_with("//") {
-        url::Url::parse(&format!("https:{input}")).ok()?
+    let scheme_end = input.find("://").filter(|&end| {
+        let scheme = &input[..end];
+        scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    });
+    let (parsed, rest, bare) = if let Some(end) = scheme_end {
+        (url::Url::parse(input).ok()?, &input[end + 3..], false)
+    } else if let Some(relative) = input.strip_prefix("//") {
+        (
+            url::Url::parse(&format!("https:{input}")).ok()?,
+            relative,
+            false,
+        )
     } else {
-        // Bare userinfo and opaque schemes are ambiguous; only an explicit
-        // hierarchical URL may carry credentials. Invalid host:port forms
-        // (including mailto:) are then rejected by the HTTP authority parser.
-        if input.contains('@') {
-            return None;
-        }
-        url::Url::parse(&format!("http://{input}")).ok()?
+        (
+            url::Url::parse(&format!("http://{input}")).ok()?,
+            input,
+            true,
+        )
     };
-    match parsed.host()? {
-        url::Host::Domain(domain) => Some(domain.to_ascii_lowercase()),
-        url::Host::Ipv4(address) => Some(address.to_string()),
-        url::Host::Ipv6(address) => Some(address.to_string()),
+    let host = match parsed.host()? {
+        url::Host::Domain(domain) => domain.to_ascii_lowercase(),
+        url::Host::Ipv4(address) => address.to_string(),
+        url::Host::Ipv6(address) => address.to_string(),
+    };
+    // URL parsing validates the authority and canonicalizes the host, but
+    // removes :443/:80/etc. Read only the original explicit port afterwards.
+    let special = matches!(
+        parsed.scheme(),
+        "http" | "https" | "ftp" | "ws" | "wss" | "file"
+    );
+    let rest = if special {
+        rest.trim_start_matches(['/', '\\'])
+    } else {
+        rest
+    };
+    let authority = rest
+        .split(|c| matches!(c, '/' | '?' | '#') || (special && c == '\\'))
+        .next()?;
+    if bare && authority.contains('@') {
+        return None;
     }
+    let authority = authority.rsplit('@').next()?;
+    let port_text = if authority.starts_with('[') {
+        authority[authority.find(']')? + 1..].strip_prefix(':')
+    } else {
+        authority.rsplit_once(':').map(|(_, port)| port)
+    };
+    if bare && port_text == Some("") {
+        return None;
+    }
+    let port = match port_text.filter(|port| !port.is_empty()) {
+        Some(port) => Some(port.parse().ok()?),
+        None => None,
+    };
+    Some(UrlAuthority { host, port })
 }
 
 /// Write `bytes` to `path` atomically: write to a unique sibling `.tmp` file, flush
@@ -101,6 +154,27 @@ fn temp_sibling(path: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_authority_matches_shared_rule_corpus() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/url-authorities.json"))
+                .unwrap();
+        for case in cases.as_array().unwrap() {
+            let input = case["input"].as_str().unwrap();
+            let actual = url_authority(input);
+            if let Some(host) = case["host"].as_str() {
+                let actual = actual.expect("supported authority must parse");
+                assert_eq!(actual.host, host);
+                assert_eq!(actual.port.map(u64::from), case["port"].as_u64());
+            } else {
+                assert!(
+                    actual.is_none(),
+                    "invalid authority must not produce a rule"
+                );
+            }
+        }
+    }
 
     #[test]
     fn url_host_uses_the_destination_authority() {

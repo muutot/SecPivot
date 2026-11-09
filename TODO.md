@@ -192,3 +192,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 菜单键盘操作
 
 - [x] 菜单焦点与逐层导航（SP-S22）：共享 shell 初始焦点、跳过禁用项的上下/Home/End、级联 Right/Enter/Space 与 Left/Esc 返回、根 Esc 归还焦点、Tab/Shift+Tab 正常继续；真实 Edge 组件和三主题 × 三窗口尺寸回归，外部点击/新弹窗/卸载所有权检查通过。主页面捕获快捷键尊重分组菜单所有权；闲置计时器捕获按键，已消费的导航仍刷新期限。原生 Android WebView 与屏幕阅读器仍待验证。
+
+## 审计补充 — 严格网址规则
+
+- [x] Hostname 显式端口边界（SP-S26）：主机与显式数值端口都必须相同，默认端口保留、省略不猜测；前端建议保留端口/IPv6 括号/IDNA。共享 27 条语料在 Rust/Node 通过，19 条支持地址的建议 alt 规则在实际合成 KDBX 保存重开后通过 Bridge/RPC，两种配置均隔离其他 authority；Domain 的宽松端口范围保留。真实扩展与原生 WebView 尚未验证。

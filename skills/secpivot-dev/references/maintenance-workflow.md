@@ -51,7 +51,8 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
   and return HTTP 502 despite the local peer always replying 200. This is a
   test-only setting; production respects the user's proxy configuration.
 
-- Machine-readable audit metadata under `.claude/audits/*.json` stays strict JSON.
+- Machine-readable audit metadata under `.claude/audits/*.json` and shared test
+  fixtures under `tests/fixtures/*.json` stay strict JSON.
   The Prettier override disables trailing commas there; verify it with a JSON
   parser because the repository's general `jsonc` formatting accepts them.
 

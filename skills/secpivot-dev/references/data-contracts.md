@@ -392,8 +392,15 @@ the existing url crate: userinfo is excluded, domains use canonical ASCII IDNA,
 and IP literals use normalized addresses (IPv6 without brackets). Bare host:port
 and protocol-relative URLs remain valid. Invalid authorities, internal whitespace
 and ambiguous bare userinfo return None; there is no new DTO/IPC/dependency.
-Existing host-tier consumers share this identity; port policy remains separate
-pending audit work.
+`util::url_authority` supplies that host plus an optional explicit numeric port.
+Hostname (`blockDomainOnlyMatch`) compares both, including explicitly written
+default ports; an omitted port stays None and no scheme default is invented.
+Domain deliberately retains its looser host/site scope across different ports.
+`match-url.ts` uses WHATWG URL validation and retains the same explicit port for
+Hostname suggestions, canonical ASCII IDNA and bracketed IPv6 for URL rules.
+The shared strict-JSON corpus under `tests/fixtures/url-authorities.json` covers
+both parsers and actual suggested alt rules after synthetic KDBX reopen.
+No public DTO/IPC/config/dependency changes are involved.
 
 KPRPC `blockHostnameOnlyMatch` selects Exact: after host validation, the complete
 URL strings must be identical, including scheme/path case/query/fragment/port.
