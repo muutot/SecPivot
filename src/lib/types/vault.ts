@@ -385,7 +385,7 @@ export interface ImportRow {
   url: string;
   notes: string;
   totp?: string;
-  customFields: { name: string; value: string }[];
+  customFields: CustomField[];
 }
 
 export interface TotpCode {

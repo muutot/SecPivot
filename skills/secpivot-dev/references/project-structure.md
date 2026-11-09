@@ -149,11 +149,14 @@ ids. `rpc/server/mod.rs::prepare_authorized_rpc_write` performs the same key
 validation after writer admission and before vault write preparation; blocking
 persistence and durable completion retain their existing lock-free handoff.
 
-The current `vault/import.rs::parse_1pif` implementation is incomplete (SP-S10):
-its self-defined star-prefixed block fixture does not match authentic 1Password
-JSON-line records, which currently produce zero rows. The module table describes
-that implementation, not verified format compatibility. Modern 1PUX is a separate
-unencrypted ZIP format and remains unimplemented; both TODO boundaries stay partial.
+`vault/import.rs` defines shared import DTOs and the Bitwarden parser;
+`vault/import/onepassword.rs` parses real standard/Windows JSON-line 1PIF.
+`onepassword_tests.rs` covers true schema, strict failures, concealment and
+serde → batch EntryInput → KDBX save/reopen. The frontend `io-import.test.mjs`
+exercises the real bulk IPC mapping with a fake backend boundary. 1PIF folders
+and binary attachments are refused rather than silently dropped; unmapped secure
+contents/history are preserved as protected JSON fields. Native client export
+verification remains missing and modern unencrypted 1PUX ZIP is unimplemented.
 
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending

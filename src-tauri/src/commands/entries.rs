@@ -494,7 +494,8 @@ pub(crate) fn parse_bitwarden_json(text: String) -> Result<Vec<crate::vault::Imp
 /// Parse a 1Password Interchange Format (`.1pif`) text export into rows.
 #[tauri::command]
 pub(crate) fn parse_1pif(text: String) -> Result<Vec<crate::vault::ImportRow>, String> {
-    Ok(crate::vault::parse_1pif(&text))
+    let text = zeroize::Zeroizing::new(text);
+    crate::vault::parse_1pif(&text)
 }
 
 /// KeePass `Entry → Data Exchange → Copy Entry (Encrypted|Unencrypted)`: put the
