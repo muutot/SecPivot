@@ -9,6 +9,7 @@
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface SideChannelRequest {
+    requestId: string;
     password: string;
     expiresInSecs: number;
   }
@@ -27,9 +28,14 @@
 
   const lang = $derived(s.general.language);
 
-  let unlisten: UnlistenFn | null = null;
+  let unlisten: UnlistenFn[] = [];
+  let newestRequest = 0n;
   let tick: ReturnType<typeof setInterval> | null = null;
   let deadline = 0;
+
+  function requestNumber(id: string): bigint | null {
+    return typeof id === "string" && /^[1-9]\d*$/.test(id) ? BigInt(id) : null;
+  }
 
   function stopTick(): void {
     if (tick !== null) {
@@ -64,21 +70,31 @@
     let cancelled = false;
     document.addEventListener("visibilitychange", refreshCountdown);
     window.addEventListener("focus", refreshCountdown);
+    const register = (stop: UnlistenFn): void => {
+      if (cancelled) stop();
+      else unlisten.push(stop);
+    };
     void listen<SideChannelRequest>("rpc-side-channel-request", (event) => {
       if (cancelled) return;
+      const id = requestNumber(event.payload.requestId);
+      if (id === null || id <= newestRequest) return;
+      newestRequest = id;
       pending = event.payload;
       copied = false;
       startCountdown(event.payload.expiresInSecs);
-    }).then((stop) => {
-      if (cancelled) {
-        stop();
-      } else {
-        unlisten = stop;
-      }
-    });
+    }).then(register);
+    void listen<{ requestId: string }>("rpc-side-channel-ended", (event) => {
+      if (cancelled) return;
+      const id = requestNumber(event.payload.requestId);
+      if (id === null) return;
+      // Retain only the latest nonsecret identity, including end-before-show.
+      if (id > newestRequest) newestRequest = id;
+      if (pending?.requestId === event.payload.requestId) close();
+    }).then(register);
     return () => {
       cancelled = true;
-      unlisten?.();
+      for (const stop of unlisten) stop();
+      unlisten = [];
       document.removeEventListener("visibilitychange", refreshCountdown);
       window.removeEventListener("focus", refreshCountdown);
       close();
