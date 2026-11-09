@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S27; historical supplemental tracking notes excluded",
-    "total": 38,
-    "confirmed": 38,
+    "scope": "15 baseline cards plus SP-S05 through SP-S28; historical supplemental tracking notes excluded",
+    "total": 39,
+    "confirmed": 39,
     "suspected": 0,
     "by_severity": {
       "High": 10,
       "Medium": 23,
-      "Low": 5
+      "Low": 6
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "19b6658",
+  "remediation_checkpoint": "6736799",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -295,15 +295,24 @@
       "source_checkpoint": "7cfe304",
       "commit": "19b6658",
       "status": "Confirmed and remediated. Frontend buildCsv and actual native VaultSession.export_csv each emitted eight synthetic rows with empty passwords. Independent Python stdlib csv.reader(strict=True) parsed 12 rows including header with inconsistent column counts and false guarded-value fidelity. Guard now precedes RFC quoting in both writers; independent read now returns nine rows of eight columns with all guarded values and literal apostrophes intact. One frontend wire and one native actual-file regression added. npm run verify passed with 304 frontend, 559 Rust and ACL2; two unrelated shared-clipboard tests explicitly filtered via an external Cargo runner. Private window-station creation was denied before launching checks; first gate failed one unrelated loopback resource error 10055, isolated recheck passed and final Rust tests ran serially. No test weakening, new IPC/settings/dependency/markup/CSS. Source apostrophes remain literal; formula guarding is not a lossless original-value migration. Native spreadsheet and Android device behavior remain unverified."
+    },
+    {
+      "id": "SP-S28",
+      "area": "Entry-exchange test bypasses explicit live clipboard opt-in",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "caaa454",
+      "commit": "6736799",
+      "status": "Confirmed and remediated. A temporary stop assertion before the first OS clipboard read was reached with SECPIVOT_CLIPBOARD_LIVE absent in the original Windows test; no clipboard I/O occurred. Final gate follows existing tests. With the stop retained, unset/0/true/empty return early and only 1 reaches the stop (expected exit101); removed instrumentation before final gate. Native product code and domain assertions unchanged. Full verify without external Cargo filtering passed: 304 frontend, 561 Rust harness, ACL2. All four live clipboard bodies return skip while opt-in unset; not native clipboard interoperability evidence. Maintenance/security references updated. Scope is developer verification, no reproduced actual user clipboard loss or production leakage."
     }
   ],
   "verification": {
-    "command": "npm run verify (RUST_TEST_THREADS=1; external Cargo runner filters two unrelated live clipboard tests)",
-    "result": "passed with explicit unrelated live-clipboard exclusions",
-    "checkpoint": "19b6658",
-    "log": "verify-csv-formula-quoting-complete.log",
+    "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
+    "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
+    "checkpoint": "6736799",
+    "log": "verify-exchange-live-optin.log",
     "frontend_tests": 304,
-    "rust_unit_tests": 559,
+    "rust_unit_tests": 561,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -334,18 +343,21 @@
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
     "rust_unit_tests_discovered": 561,
-    "rust_unit_tests_filtered": 2,
-    "excluded_live_tests": [
-      "vault::tests::entry_exchange_copy_then_paste_creates_a_new_entry",
-      "commands::clipboard::tests::scheduled_wipe_clears_our_own_text"
-    ],
+    "rust_unit_tests_filtered": 0,
+    "excluded_live_tests": [],
     "standard_csv_reader": {
       "result": "passed",
       "log": "csv-standard-reader-green.log",
       "rows_including_header": 9,
       "columns": 8,
       "probe_sha256": "92ba448da46549efce567324639af8ff2a8a325084227a1f8c28e351688c56b8"
-    }
+    },
+    "live_clipboard_bodies_not_exercised": [
+      "vault::tests::entry_exchange_copy_then_paste_creates_a_new_entry",
+      "commands::clipboard::tests::scheduled_wipe_clears_our_own_text",
+      "platform::clipboard::tests::clipboard_read_write_round_trip",
+      "platform::clipboard::tests::clear_clipboard_empties_text"
+    ]
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
@@ -392,6 +404,7 @@
     "1a3a680 repairs actual destination-host extraction without changing port/Exact policy. Two valid baseline red tests and independent WHATWG host results retained; three permanent unit/reopened-KDBX tests and full verify 299 frontend/555 Rust/ACL2 passed. Documentation currency updates shared helper, security and data references. Synthetic vaults only, no user vault or shared OS clipboard; native browser extension and Android APK/device remain unverified. Original baseline preserved, full goal still active.",
     "49a5be3 honors native complete Exact URL policy and preserves full frontend suggestion. Valid original red: ten wrong host matches and frontend query loss. Intermediate target/full gates failed legitimate uppercase-path Bridge URL; adapter pre-normalization repaired and request/submit regression passed. Final full verify 301 frontend/556 Rust/ACL2. Fixed official source dc0a59b60b3ac21da9944bc5b98fe96e706af80a; API quota and clone lazy-fetch failures were tooling only, pinned raw source obtained. Data/security/module documentation updated. Synthetic vaults only, no user vault/clipboard, native extension or Android APK/device evidence. Full goal remains active and mobile Save As unverified.",
     "8a7e939 preserves strict Hostname destination ports and usable frontend rules. Actual KDBX/host baseline eight wrong matches plus frontend port-loss failure retained. Four native and two frontend regressions cover 27 canonical authority cases, 19 suggested alt rules, explicit/default/omitted ports and Domain scope. First full gate clippy manual_strip failure corrected; final full verify 303 frontend/560 Rust/ACL2. Fixed KPRPC URLSummary snapshot hash recorded. Source @/:// in bare path/query are no longer misclassified. Only synthetic vaults; native extension and Android APK/device remain unverified. CSV formula quoting is the next independently unconfirmed candidate, not an extra issue count. Original baseline unchanged, goal active on 2026-11-10.",
-    "19b6658 fixes SP-S27 CSV cell boundaries without removing formula protection. Standard-library reader independently reproduced both writers and confirms guarded-value fidelity after fix. Initial station creation failed WinError5 without launching tests; initial gate loopback 10055 failure is retained, isolated check and serial final gate passed. Full check explicitly excludes two shared-clipboard tests, not reported as executed. One vault exchange test lacks the usual live opt-in and needs a separate audit unit. Original baseline/score remains unchanged; goal active and mobile v1.6.5 Save As still lacks APK/device evidence."
+    "19b6658 fixes SP-S27 CSV cell boundaries without removing formula protection. Standard-library reader independently reproduced both writers and confirms guarded-value fidelity after fix. Initial station creation failed WinError5 without launching tests; initial gate loopback 10055 failure is retained, isolated check and serial final gate passed. Full check explicitly excludes two shared-clipboard tests, not reported as executed. One vault exchange test lacks the usual live opt-in and needs a separate audit unit. Original baseline/score remains unchanged; goal active and mobile v1.6.5 Save As still lacks APK/device evidence.",
+    "6736799 fixes developer verification opt-in gap SP-S28 without any shared OS clipboard I/O. Safe temporary stop proved original reach and final flag control flow; stop removed. Full verify has no external test filters; 561 harness passes do not mean four opted-out native live bodies ran. Original baseline remains unchanged, goal active and mobile Save As still lacks APK/device evidence. CSV malformed quoting was independently reproduced through real conversion and mocked bulk IPC against stdlib reader, to be handled separately."
   ]
 }

@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S27；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S28；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
 | Medium    | 23     | 23        | 0         |
-| Low       | 5      | 5         | 0         |
+| Low       | 6      | 6         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **38** | **38**    | **0**     |
+| **Total** | **39** | **39**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1663,3 +1663,38 @@ documentation currency gate 更新数据/安全/模块引用与这一有限 TODO
 卡片 **38**（High 10 / Medium 23 / Low 5），原始 15 项/6.1 分不变。
 整体审计继续进行；CSV 导入严格性、逐 URI 迁移及其余语义/UI 覆盖
 继续核查，手机 v1.6.5 另存为仍缺新 APK/真机选择器验证。
+
+### Finding: SP-S28 条目交换测试绕过实际剪贴板显式开关（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Privacy / Testing / Documentation
+- Status: Confirmed
+- Affected area: Windows live entry-exchange test in the default verification suite
+- Evidence:
+  - File: `src-tauri/src/vault/tests.rs:46`、`src-tauri/src/platform/clipboard.rs:337`、`skills/secpivot-dev/references/security-model.md:199`（`caaa454` 修复前）
+  - Function / Module: `entry_exchange_copy_then_paste_creates_a_new_entry` / `clipboard_is_usable`
+  - Relevant behavior: 该 Windows 测试未经 SECPIVOT_CLIPBOARD_LIVE=1 检查即读取系统剪贴板，再调用会写入探针的 usability helper；同仓库其他实际剪贴板测试已要求该开关。仅共享进程 mutex 不能隔离用户/其他进程。
+  - Reproduction: 临时 assert stop point 放在第一处 OS 读取之前，移除环境开关后针对性 cargo test 仍到达停止点并失败；`exchange-live-optin-red.log` 留下安全的控制流证据。没有执行系统剪贴板读取/写入，不将推断的格式损失称为实际复现。
+- Problem: 普通 npm verify / cargo test 可意外读取并替换开发者剪贴板内容，违背现有默认验证边界。
+- Why it matters: clipboard_is_usable 写入探针；restore_clipboard 只保存/恢复文本，无法完整恢复图片及其他非文本格式。问题限于开发验证路径，未证明生产客户端隐私泄露，故评为 Low。
+- Realistic failure scenario: 开发者复制截图后运行普通验证，条目交换测试将系统剪贴板替换为测试数据；最后只恢复文本或清空，原截图无法从该 helper 恢复。
+- Minimal fix: 在任何 OS 剪贴板读取、锁/探针操作前应用现有显式开关，缺省及非 1 值返回内容无关的 skip 提示。
+- Better long-term fix: 实际剪贴板验证仅在用户明确开启、可丢弃的环境执行；保持内存化领域/调度回归覆盖，避免把返回 skip 的测试称为实际 OS 互操作通过。
+- Regression test suggestion: 读取前停止点证明缺省/0/true/空值均提前退出，1 到达停止点但不读取系统剪贴板；移除停止点后完整默认门禁无外部 runner 过滤通过。
+- Estimated effort: 0.5 小时（入口开关、控制流验证与文档边界）
+
+`6736799` 已修复 SP-S28。入口使用现有开关，在任何 shared clipboard
+读取/探针之前返回。临时停止点验证缺省、0、true、空值不进入；仅 1
+到达停止点并预期失败，仍未执行 OS 操作。日志
+`exchange-live-optin-unset-green.log`、`exchange-optin-control-flow.log`
+及四个值的独立日志保存该证据；临时 assertion 已移除。
+
+正式 `verify-exchange-live-optin.log` 无外部 Cargo runner/过滤器，
+RUST_TEST_THREADS=2 运行完成 exit 0：前端 **304**、Rust harness
+**561**、ACL **2**，格式、Svelte、150 键契约、构建与 clippy 通过。
+四个实际剪贴板测试的 body 因缺省开关提前 skip，这不是实际 OS
+互操作通过。维护/安全引用同步这个边界，没有改变产品剪贴板实现
+或任何领域断言。当前卡片 **39**（High 10 / Medium 23 / Low 6）；
+原始基线不变，完整审计继续。CSV 异常引号的转换/模拟 IPC 与独立
+标准 reader 已显示差异，将单独记录修复，不合并进此测试安全单元。
