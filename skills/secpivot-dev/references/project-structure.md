@@ -311,7 +311,7 @@ platform invokes. This is not Android provider/runtime verification.
 
 Bitwarden JSON import rejects true or invalid encryption markers before item
 mapping; account-encrypted files share the plaintext envelope and require this
-gate. Its command zeroizes incoming text. Linked-field/multi-URI
+gate. Its command zeroizes incoming text. Dynamic linked-field/multi-URI
 fidelity and actual client exports remain separate pending work.
 
 `vault/import/fields.rs` owns source-prefixed unique custom-label allocation for
@@ -326,3 +326,9 @@ calls `VaultSession::import_entries`, sharing validate-first insertion with
 `add_entries`; non-password records disable quality evaluation at creation.
 `io.ts` and the browser bulk fallback preserve this flag. Mixed metadata and
 failed-batch tests verify KDBX reopen/default behavior without real user data.
+
+`vault/import/bitwarden_links.rs` maps official login/card/identity linked IDs
+into protected snapshots for the existing custom-field allocator. It derives
+Identity FullName from source name parts and rejects unknown/malformed targets.
+`bitwarden_tests.rs` checks all target IDs, optional empty values, stale literals,
+invalid mixed documents and KDBX protection; dynamic linkage is not implemented.

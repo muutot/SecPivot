@@ -5,6 +5,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
+mod bitwarden_links;
 mod fields;
 mod onepassword;
 pub use onepassword::parse_1pif;
@@ -144,24 +145,27 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
                 fields
                     .iter()
                     .filter(|field| field.is_object())
-                    .map(|field| {
+                    .map(|field| -> Result<_, String> {
                         let name = field
                             .get("name")
                             .and_then(serde_json::Value::as_str)
                             .unwrap_or("");
-                        let value = field
-                            .get("value")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("")
-                            .to_owned();
-                        names.field(
-                            name,
-                            value,
-                            field.get("type").and_then(serde_json::Value::as_i64) == Some(1),
-                        )
+                        let field_type = field.get("type").and_then(serde_json::Value::as_i64);
+                        let value = if field_type == Some(3) {
+                            bitwarden_links::resolve(item, kind, field.get("linkedId"))
+                                .map_err(|()| invalid())?
+                        } else {
+                            field
+                                .get("value")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or("")
+                                .to_owned()
+                        };
+                        Ok(names.field(name, value, matches!(field_type, Some(1 | 3))))
                     })
-                    .collect()
+                    .collect::<Result<_, _>>()
             })
+            .transpose()?
             .unwrap_or_default();
 
         if let Some((section, display, string_keys)) = typed_section(kind) {

@@ -2,6 +2,181 @@ use crate::vault::{ImportEntryInput, VaultSession, FIELD_PASSWORD};
 use tempfile::TempDir;
 
 #[test]
+fn bitwarden_linked_card_identity_and_full_name_targets_follow_official_ids() {
+    for (kind, section, first_id, keys) in [
+        (
+            3,
+            "card",
+            300,
+            vec![
+                "cardholderName",
+                "expMonth",
+                "expYear",
+                "code",
+                "brand",
+                "number",
+            ],
+        ),
+        (
+            4,
+            "identity",
+            400,
+            vec![
+                "title",
+                "middleName",
+                "address1",
+                "address2",
+                "address3",
+                "city",
+                "state",
+                "postalCode",
+                "country",
+                "company",
+                "email",
+                "phone",
+                "ssn",
+                "username",
+                "passportNumber",
+                "licenseNumber",
+                "firstName",
+                "lastName",
+            ],
+        ),
+    ] {
+        let mut item = serde_json::json!({"type":kind,"name":"Synthetic links"});
+        let mut values = serde_json::Map::new();
+        for key in &keys {
+            values.insert(
+                (*key).to_owned(),
+                serde_json::json!(format!("synthetic-{key}")),
+            );
+        }
+        let mut fields: Vec<_> = keys.iter().enumerate().map(|(index, _)| serde_json::json!({"name":format!("Alias {index}"),"type":3,"linkedId":first_id+index,"value":"synthetic-stale-value"})).collect();
+        if kind == 4 {
+            values.insert("title".into(), serde_json::json!("\u{feff} Dr "));
+            values.insert("firstName".into(), serde_json::json!(" Synthetic "));
+            values.insert("middleName".into(), serde_json::json!(" \t "));
+            values.insert("lastName".into(), serde_json::json!(" Holder "));
+            fields.push(serde_json::json!({"name":"Full Name","type":3,"linkedId":418}));
+        }
+        item["fields"] = serde_json::json!(fields);
+        item[section] = serde_json::json!(values);
+        let (_dir, session, id) = imported(&serde_json::json!({"items":[item]}).to_string());
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        for (index, key) in keys.iter().enumerate() {
+            let stored = &entry.fields[&format!("Bitwarden Alias {index}")];
+            assert!(stored.is_protected());
+            assert_eq!(stored.get(), values[*key].as_str().unwrap());
+        }
+        if kind == 4 {
+            assert_eq!(
+                entry.fields["Bitwarden Full Name"].get(),
+                "Dr   Synthetic   Holder"
+            );
+        }
+    }
+    // Recognized optional targets may legitimately be absent/null/empty.
+    for value in [
+        None,
+        Some(serde_json::Value::Null),
+        Some(serde_json::json!("")),
+    ] {
+        let mut login = serde_json::json!({});
+        if let Some(value) = value {
+            login["password"] = value;
+        }
+        let text = serde_json::json!({"items":[{"type":1,"name":"Synthetic empty link","login":login,"fields":[{"name":"Alias","type":3,"linkedId":101}]}]}).to_string();
+        let (_dir, session, id) = imported(&text);
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        assert!(entry.fields["Bitwarden Alias"].is_protected());
+        assert_eq!(entry.fields["Bitwarden Alias"].get(), "");
+    }
+}
+
+#[test]
+fn bitwarden_linked_fields_resolve_typed_values_as_protected_import_snapshots() {
+    for (kind, section, values, linked_id, expected) in [
+        (
+            1,
+            "login",
+            serde_json::json!({"username":"synthetic-user","password":"synthetic-password\r\n"}),
+            101,
+            "synthetic-password\r\n",
+        ),
+        (
+            1,
+            "login",
+            serde_json::json!({"username":"synthetic-user"}),
+            100,
+            "synthetic-user",
+        ),
+        (
+            3,
+            "card",
+            serde_json::json!({"number":"00004242","code":"007"}),
+            305,
+            "00004242",
+        ),
+        (
+            4,
+            "identity",
+            serde_json::json!({"ssn":"000-00-0000"}),
+            412,
+            "000-00-0000",
+        ),
+    ] {
+        let mut item = serde_json::json!({"type":kind,"name":"Synthetic link","fields":[{"name":"Alias","type":3,"linkedId":linked_id,"value":null}]});
+        item[section] = values;
+        let text = serde_json::json!({"items":[item]}).to_string();
+        let (_dir, session, id) = imported(&text);
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        let alias = &entry.fields["Bitwarden Alias"];
+        assert!(
+            alias.is_protected(),
+            "linked credential alias was imported unprotected"
+        );
+        assert_eq!(alias.get(), expected, "linked alias lost its source value");
+    }
+}
+
+#[test]
+fn bitwarden_linked_fields_reject_unknown_or_malformed_targets_without_partial_rows() {
+    for linked_id in [
+        serde_json::json!(999),
+        serde_json::json!(305),
+        serde_json::json!("101"),
+        serde_json::Value::Null,
+    ] {
+        let text = serde_json::json!({"items":[{"type":2,"name":"valid"},{"type":1,"name":"synthetic-error-sentinel","login":{"password":"synthetic-error-sentinel"},"fields":[{"name":"alias","type":3,"linkedId":linked_id}]}]}).to_string();
+        let error = crate::commands::parse_bitwarden_json(text)
+            .err()
+            .expect("unresolved link was accepted as a blank field");
+        assert!(error.contains('2'));
+        assert!(!error.contains("synthetic-error-sentinel"));
+    }
+    for login in [
+        serde_json::json!({"password": 101}),
+        serde_json::json!("synthetic-error-sentinel"),
+    ] {
+        let text = serde_json::json!({"items":[{"type":2,"name":"valid"},{"type":1,"name":"synthetic-error-sentinel","login":login,"fields":[{"name":"alias","type":3,"linkedId":101}]}]}).to_string();
+        let error = crate::commands::parse_bitwarden_json(text)
+            .err()
+            .expect("malformed linked target was accepted");
+        assert!(error.contains('2'));
+        assert!(!error.contains("synthetic-error-sentinel"));
+    }
+}
+
+#[test]
 fn import_quality_metadata_is_atomic_and_survives_kdbx_reopen() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("synthetic-import-quality.kdbx");

@@ -261,4 +261,11 @@ Unknown nested extension values retain protected JSON. Types 2–8 disable nativ
 password-quality checks in the same validated batch insertion; login/default
 quality behavior remains enabled. Import-only metadata never changes ordinary
 full-field edit semantics. Schema tests use synthetic values; real exports,
-linked-field resolution, collections/history/attachments remain pending.
+dynamic linked-field behavior, collections/history/attachments remain pending.
+
+Bitwarden type-3 custom fields resolve official login/card/identity targets into
+protected import-time copies, including username aliases. Their raw field.value
+is not authoritative. Invalid/cross-type IDs and non-string target contents reject
+before any rows are published; errors disclose record numbers only. The snapshots
+remain masked in VaultState and survive KDBX save/reopen. This protects migrated
+values, without promising dynamic synchronization when an original field changes.
