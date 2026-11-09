@@ -29,6 +29,12 @@ recycle bin last without changing the database's stored child order.
 listbox ID. `ModalShell` handles keyboard events only for the top modal and when
 the event has not already been consumed by a child control.
 
+Import favorite metadata flows from Bitwarden/explicit CSV Favorite columns
+through IO/DTO into native and browser bulk creation. `bitwarden_tests.rs` covers
+command/wire/KDBX and batch rejection, while CSV/IO tests cover conversion and
+IPC/default/editor continuity. It uses the existing favorite field, not a new
+setting or ordinary-edit property.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or

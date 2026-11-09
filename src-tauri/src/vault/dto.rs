@@ -450,6 +450,7 @@ pub struct ImportEntryInput {
     #[serde(flatten)]
     pub input: EntryInput,
     pub quality_check: Option<bool>,
+    pub favorite: Option<bool>,
 }
 
 /// Partial entry update applied to several entries at once (batch editing).

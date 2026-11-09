@@ -137,3 +137,35 @@ describe("parseCsvRows", () => {
     ]);
   });
 });
+
+describe("CSV favorite migration", () => {
+  it("round-trips the own export flag and supports reordered explicit columns", () => {
+    const row = {
+      group: "",
+      title: "Synthetic",
+      username: "",
+      password: "",
+      url: "",
+      notes: "",
+      totp: "",
+    };
+    assert.deepEqual(
+      parseCsvRows(
+        parseCsv(
+          buildCsv([
+            { ...row, favorite: true },
+            { ...row, favorite: false },
+          ]),
+        ),
+      ).map((r) => r.favorite),
+      [true, false],
+    );
+    assert.deepEqual(
+      parseCsvRows(parseCsv("Favorite,Title\nTRUE,A\nfalse,B\n1,C\n0,D\n,E\n")).map(
+        (r) => r.favorite,
+      ),
+      [true, false, true, false, undefined],
+    );
+    assert.equal(parseCsvRows(parseCsv("Title,Notes\nLegacy,Note\n"))[0].favorite, undefined);
+  });
+});

@@ -331,6 +331,8 @@ export interface EntryInput {
 export interface ImportEntryInput extends EntryInput {
   /** Absent retains the KeePass default; non-password imports disable evaluation. */
   qualityCheck?: boolean;
+  /** Creation-only metadata; ordinary entry edits preserve the stored flag. */
+  favorite?: boolean;
 }
 
 /** Partial entry update applied to several entries at once (batch editing).
@@ -385,6 +387,7 @@ export interface GroupMeta {
 /** One normalized import row produced by the backend import parsers. */
 export interface ImportRow {
   qualityCheck?: boolean;
+  favorite?: boolean;
   group: string;
   title: string;
   username: string;

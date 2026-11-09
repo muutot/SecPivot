@@ -603,3 +603,117 @@ fn bitwarden_custom_labels_do_not_activate_native_url_settings() {
     }
     assert_eq!(failures, 0, "custom labels activated native URL matching");
 }
+
+#[test]
+fn bitwarden_favorites_survive_parser_wire_and_kdbx_reopen() {
+    for (source, expected) in [
+        (serde_json::json!(true), true),
+        (serde_json::json!(false), false),
+        (serde_json::Value::Null, false),
+    ] {
+        let mut item = serde_json::json!({"type":1,"name":"Synthetic favorite","login":{"password":"synthetic-password"},"fields":[{"name":"SecPivot.Favorite","value":"true","type":0}]});
+        if !source.is_null() {
+            item["favorite"] = source;
+        }
+        let text = serde_json::json!({"encrypted":false,"items":[item]}).to_string();
+        let (_dir, mut session, id) = imported(&text);
+        let state = session.state().unwrap().unwrap();
+        assert_eq!(
+            state.root.entries[0].favorite, expected,
+            "source favorite was discarded"
+        );
+        let db = session.require_db().unwrap();
+        let entry = db
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        assert_eq!(
+            entry.get(crate::vault::FIELD_FAVORITE) == Some(crate::vault::FIELD_FAVORITE_TRUE),
+            expected
+        );
+        assert!(
+            entry
+                .fields
+                .values()
+                .any(|f| f.get() == "true" && !f.is_protected()),
+            "source custom field was discarded"
+        );
+    }
+}
+
+#[test]
+fn bitwarden_favorite_requires_a_boolean_before_returning_any_rows() {
+    for favorite in [
+        serde_json::json!("true"),
+        serde_json::json!(1),
+        serde_json::json!({}),
+        serde_json::Value::Null,
+    ] {
+        let text=serde_json::json!({"items":[{"type":2,"name":"Earlier"},{"type":1,"name":"synthetic-content-marker","favorite":favorite}]}).to_string();
+        let result = crate::commands::parse_bitwarden_json(text);
+        assert!(result.is_err(), "invalid favorite silently accepted");
+        let error = result.err().unwrap();
+        assert!(error.contains("第 2 条"));
+        assert!(!error.contains("synthetic-content-marker"));
+    }
+}
+
+#[test]
+fn import_favorite_metadata_validates_the_batch_and_keeps_ordinary_edit_contract() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("favorite-batch.kdbx");
+    let row = |name: &str, favorite: Option<bool>| {
+        let mut wire = serde_json::json!({"groupUuid":"root","title":name,"username":"","password":"","url":"","notes":""});
+        if let Some(favorite) = favorite {
+            wire["favorite"] = serde_json::json!(favorite);
+        }
+        serde_json::from_value::<ImportEntryInput>(wire).unwrap()
+    };
+    let mut session = VaultSession::default();
+    session
+        .create(&path, "synthetic-master", "Aes", "Aes256", "None", None)
+        .unwrap();
+    let mut invalid = row("invalid", Some(false));
+    invalid.input.group_uuid = "invalid-group".into();
+    let before = session.state().unwrap().unwrap();
+    assert!(session
+        .import_entries(&[row("discarded", Some(true)), invalid])
+        .is_err());
+    let after = session.state().unwrap().unwrap();
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.dirty, before.dirty);
+    assert!(after.root.entries.is_empty());
+    let state = session
+        .import_entries(&[
+            row("favorite", Some(true)),
+            row("ordinary", Some(false)),
+            row("legacy", None),
+        ])
+        .unwrap();
+    assert_eq!(
+        state
+            .root
+            .entries
+            .iter()
+            .map(|e| e.favorite)
+            .collect::<Vec<_>>(),
+        [true, false, false]
+    );
+    let id = state.root.entries[0].uuid.clone();
+    let mut edit = row("edited", Some(false)).input;
+    edit.notes = "synthetic changed notes".into();
+    session.update_entry(&id, &edit).unwrap();
+    session.save().unwrap();
+    session.close();
+    let state = session.open(&path, "synthetic-master", None).unwrap();
+    assert_eq!(
+        state
+            .root
+            .entries
+            .iter()
+            .map(|e| e.favorite)
+            .collect::<Vec<_>>(),
+        [true, false, false],
+        "ordinary edit reset favorite"
+    );
+    assert!(serde_json::from_value::<ImportEntryInput>(serde_json::json!({"groupUuid":"root","title":"","username":"","password":"","url":"","notes":"","favorite":"false"})).is_err());
+}
