@@ -6056,17 +6056,12 @@ fn export_xml_writes_kepass_structure_and_escapes() {
     // Standard fields present; text values escaped.
     assert!(text.contains("<Key>Title</Key><Value>Git&amp;Hub</Value>"));
     assert!(text.contains("<Key>UserName</Key><Value>alice</Value>"));
-    // Password uses the KeePass Protected+Base64 convention.
-    assert!(text.contains(&format!(
-        "<Key>Password</Key><Value Protected=\"True\">{}</Value>",
-        BASE64.encode(b"s3cret")
-    )));
+    // KeePass PlainXml writes literal text with ProtectInMemory, while
+    // Protected denotes stream-encrypted data inside a KDBX container.
+    assert!(text.contains("<Key>Password</Key><Value ProtectInMemory=\"True\">s3cret</Value>"));
+    assert!(!text.contains(" Protected=\"True\""));
     assert!(text.contains("<Key>otp</Key><Value>JBSWY3DPEHPK3PXP</Value>"));
-    // Protected custom field is Base64 too.
-    assert!(text.contains(&format!(
-        "<Key>PIN</Key><Value Protected=\"True\">{}</Value>",
-        BASE64.encode(b"9999")
-    )));
+    assert!(text.contains("<Key>PIN</Key><Value ProtectInMemory=\"True\">9999</Value>"));
     // Entry UUID is Base64 of the raw 16 bytes and matches the snapshot UUID.
     let entry_uuid = entry_state.root.children[0]
         .entries
