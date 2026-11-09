@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S23; historical supplemental tracking notes excluded",
-    "total": 34,
-    "confirmed": 34,
+    "scope": "15 baseline cards plus SP-S05 through SP-S24; historical supplemental tracking notes excluded",
+    "total": 35,
+    "confirmed": 35,
     "suspected": 0,
     "by_severity": {
-      "High": 7,
+      "High": 8,
       "Medium": 22,
       "Low": 5
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "4dbe49c",
+  "remediation_checkpoint": "1a3a680",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -259,15 +259,24 @@
       "source_checkpoint": "10f9872",
       "commit": "4dbe49c",
       "status": "Confirmed. Actual parser command/wire/bulk import/KDBX reopen returned one synthetic credential through each Bridge/RPC host adapter for Never, Exact different path, Host different port and StartsWith outside prefix; a second URI was discarded and failed to match. Fixed reference export model/strategy source and official help independently corroborate expectations. Unsafe migration now fails the entire parse on explicit modes 0–5 or multiple nonempty URIs, malformed shapes and embedded whitespace. Four new negative/positive command and reopened-KDBX tests passed with existing imports. Full per-URI feature remains unimplemented; valid source files with these features are rejected. Existing lossy imports cannot be automatically repaired without source exports."
+    },
+    {
+      "id": "SP-S24",
+      "area": "Manual URL host extraction trusts userinfo rather than destination authority",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "daff215",
+      "commit": "1a3a680",
+      "status": "Confirmed and remediated. Two baseline regressions failed; synthetic reopened KDBX returned one credential through each host adapter for deceptive userinfo and invalid port in default and registrable modes. Independent Node WHATWG URL identifies the actual unrelated host. Existing url crate now parses canonical authority, excludes userinfo, normalizes IDNA/IP and rejects malformed authority/internal whitespace/ambiguous bare userinfo. Three permanent regressions cover negative and legitimate/canonical authority behavior. No new dependency, IPC, setting or UI. Port/Exact/regex policy and real extension behavior remain pending."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "4dbe49c",
-    "log": "verify-bitwarden-uri-gate.log",
+    "checkpoint": "1a3a680",
+    "log": "verify-url-authority.log",
     "frontend_tests": 299,
-    "rust_unit_tests": 552,
+    "rust_unit_tests": 555,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -339,6 +348,7 @@
     "Post-report formatting encountered newly created unrelated .openidea/changelists.json. f3aab3d excludes local OpenIdea metadata from Git/Prettier without reading or modifying its contents; git check-ignore and prettier file-info confirm the rule and final full format passes. Existing .trae preserved. This tooling boundary is not a new application finding and does not alter 7afcd81 application verification.",
     "a90394d preserves XML CR via numeric references and rejects XML 1.0 unrepresentable characters without changing stored credentials. Two frontend/two KDBX round-trip regressions failed before repair, plus actual Chromium DOMParser behavior. First baseline compilation hit host memory exhaustion; unchanged retry reached expected failures. Full verify passed 288 frontend/538 Rust/ACL2. Docs currency updates contract/security and partial XML TODO; page change is script-only locale wiring. Synthetic vaults only, no user vault/clipboard/native KeePass/Android APK-device evidence. Original b7c5d9f baseline unchanged; overall goal remains active.",
     "15248b5 repairs shared menu focus/navigation, instance cascade ARIA, guarded tick focus, pointer transitions, leaf default activation and scoped dismissal. Page window capture checks all activeContextMenu owners; real extracted baseline handler called a synthetic Save once while group owner was active, then final guard blocks and resumes correctly after close. Initial capture fixtures missing callback/modifier defaults excluded. Intermediate new menu consumption starved idle bubble listener; actual timer fake-clock regression failed, window capture now refreshes and preserves normal timeout/cleanup. Nine repository tests and complete production Edge regression passed; 18 dark/light/custom x three-size screenshots inspected. First contact-sheet tool runtime import/Edge-discovery failures were tooling only, standard Node succeeded. Full verify 299 frontend/548 Rust/ACL2. No CSS dimensions/colors changed, native Android APK/device and assistive technology remain pending.",
-    "4dbe49c closes SP-S23 unsafe URI import by rejecting unsupported documents rather than silently weakening source policy. Two temporary real-command/wire/host/reopened-KDBX probes failed for four restrictive modes and second URI loss; only counts were logged and the exact original test source was restored. Four permanent tests exercise explicit 0–5/mixed documents, multiple default URIs, twelve malformed shapes and six supported default/no-URI KDBX round trips; 19 targeted imports and full verify 299 frontend/552 Rust/ACL2 passed. Complete per-URI compatibility remains pending and current valid files using those features now reject. Fixed Bitwarden source 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 plus source hashes/official help snapshot recorded. No new DTO/IPC/matcher/setting/UI/dependency, user vault/clipboard/device or live extension exercised."
+    "4dbe49c closes SP-S23 unsafe URI import by rejecting unsupported documents rather than silently weakening source policy. Two temporary real-command/wire/host/reopened-KDBX probes failed for four restrictive modes and second URI loss; only counts were logged and the exact original test source was restored. Four permanent tests exercise explicit 0–5/mixed documents, multiple default URIs, twelve malformed shapes and six supported default/no-URI KDBX round trips; 19 targeted imports and full verify 299 frontend/552 Rust/ACL2 passed. Complete per-URI compatibility remains pending and current valid files using those features now reject. Fixed Bitwarden source 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 plus source hashes/official help snapshot recorded. No new DTO/IPC/matcher/setting/UI/dependency, user vault/clipboard/device or live extension exercised.",
+    "1a3a680 repairs actual destination-host extraction without changing port/Exact policy. Two valid baseline red tests and independent WHATWG host results retained; three permanent unit/reopened-KDBX tests and full verify 299 frontend/555 Rust/ACL2 passed. Documentation currency updates shared helper, security and data references. Synthetic vaults only, no user vault or shared OS clipboard; native browser extension and Android APK/device remain unverified. Original baseline preserved, full goal still active."
   ]
 }

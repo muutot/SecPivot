@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S23；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S24；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 7      | 7         | 0         |
+| High      | 8      | 8         | 0         |
 | Medium    | 22     | 22        | 0         |
 | Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **34** | **34**    | **0**     |
+| **Total** | **35** | **35**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1485,3 +1485,40 @@ metadata 同步 **34** 张 Confirmed 卡片（High 7 / Medium 22 / Low 5），
 原始 15 项/6.1 分基线保持不变。原生 Android APK/选择器/provider、
 真实扩展和屏幕阅读器未验证；完整逐 URI 模型、URL authority/端口/IDNA、
 其余迁移、KDF 基准及完整语义/UI 覆盖仍待继续，整体目标未完成。
+
+### Finding: SP-S24 手工主机提取把 URL 用户信息误判为凭据目的地（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Privacy / Testing
+- Status: Confirmed
+- Affected area: shared URL authority extraction and browser credential matching
+- Evidence:
+  - File: `src-tauri/src/util.rs:15`、`src-tauri/src/vault/helpers.rs:169`（`daff215` 修复前）
+  - Function / Module: `url_host` / `kprpc_matches_url` / BridgeHost / RpcHost
+  - Relevant behavior: 以冒号和路径切分 authority，未解析 userinfo，`https://bank.example:443@unrelated.test/login` 被提取成 bank.example；非法端口也被静默丢弃。
+  - Reproduction: 两项新增回归在原实现失败；`url-authority-unit-red.log` 确认主机错误，`url-authority-host-red.log` 在合成 KDBX 保存重开后，默认与可注册域两种配置分别对 userinfo 伪装网址、非法端口请求各返回 Bridge/RPC 一条凭据，共四组越界。探针只输出模式/数量，没有输出密码，没有调用用户库、共享剪贴板或真实扩展。
+  - Independent reference: 标准 Node WHATWG URL 解析输出保存在 `url-authority-reference.json`，该网址的 hostname 为 unrelated.test；正常用户名/密码不属于 host，国际化域名转换成 ASCII，IPv6 被规范化。规范：[WHATWG host parsing](https://url.spec.whatwg.org/#host-parsing)。
+- Problem: 不可信网址中的用户信息被当成授权主机，目的地识别与浏览器的实际 URL 解释不同。
+- Why it matters: 凭据匹配应以实际目的地主机为边界；当前合成后端实测证明错误返回，真实扩展如何构造请求尚未验证，按 High 的输入验证问题记录。
+- Realistic failure scenario: 已授权的浏览器客户端提交带有可信站名 userinfo 的网址，目的地属于另一个站点，后端仍返回可信站条目。
+- Minimal fix: 使用已有 url crate 解析 authority、IDNA 和 IP；支持既有无 scheme 主机/端口及协议相对地址，拒绝无主机、非法端口、内部空白和不透明 scheme，不增加依赖或 IPC。
+- Better long-term fix: 单独复核端口、Exact 路径、scheme、blocked/regex 规则和真实扩展调用，不以主机解析修复宣称整个自动填充授权已完成。
+- Regression test suggestion: 保留实际保存重开的两个 host 适配器负例与合法 userinfo 正例，补 IDNA/IPv6/协议相对地址/无 scheme 和非法 authority；完整验证既有匹配、自动填充、REF 与生成器。
+- Estimated effort: 1–2 小时（共享解析边界及回归）
+
+`1a3a680` 已修复 SP-S24。共享主机提取使用已有 url crate，正确排除
+userinfo、规范化 ASCII IDNA/IP，并保留无 scheme 主机/端口和协议相对
+地址；非法 authority/内部空白或控制字符/不透明地址不再猜测主机。
+没有新增依赖、IPC、配置或 UI。三个永久回归覆盖单元边界、两个 host
+适配器在合成 KDBX 重开后的越界负例/正常 userinfo，以及 IDNA/IPv6/
+无协议等价主机和其他主机隔离。原始两项红灯和独立 WHATWG 结果保留。
+
+`url-authority-unit-green.log` 的四项针对性测试、
+`url-authority-host-complete.log` 的两项实际 KDBX host 回归通过。
+完整 `verify-url-authority.log` 通过：前端 **299**、Rust **555 + ACL 2**、
+格式、Svelte check、150 键契约、生产构建与 clippy。
+documentation currency gate 同步数据/安全/结构引用；没有据此勾选
+整个自动填充或移动端 TODO。当前卡片 **35**（High 8 / Medium 22 / Low 5），
+原始 15 项/6.1 分基线不变。端口和 Exact 策略、regex/blocked 组合、
+真实扩展、Android APK/真机、完整迁移和语义/UI 覆盖仍待继续。
