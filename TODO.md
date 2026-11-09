@@ -27,6 +27,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] Idle auto-lock timer driven by `autoLockMinutes` (`armIdleLock`/`installAutoLock`, `src/lib/services/security.ts`)
 - [x] Lock clears clipboard when `clearOnLock` (`lockVault`)
+- [~] 复制后锁定归属：只有真正完成且仍属原连续可见数据库视图的敏感复制可触发锁定；topology 队列执行点再次校验，A→B→A、打开新库、取消、先排队 open 与 browser 固定 id 的路径切换均有实际服务图回归；正常当前复制与失败清理有对照（SP-S11，平台 API/IPC 为合成边界，原生多窗口归属尚待验证）
 - [~] 全剪贴板并发生命周期：同一 renderer 的写入/条件清理/锁定清空已串行，旧排队复制取消，锁定会话关闭不等待剪贴板写入；跨窗口/原生二进制复制顺序与外部相同内容复制的 OS ownership 仍待验证（SP-11）
 - [x] `lockAfterAction` after password copy (`copySensitive`, wired for password copies only)
 - [x] Frontend lock screen + reopen with remembered path only (`LockScreen.svelte`, `vault.remembered`)

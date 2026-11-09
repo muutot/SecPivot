@@ -112,7 +112,7 @@ interface VaultStore {
   ) => Promise<VaultState>;
   close: () => Promise<void>;
   /** Close every open session (lock path); `remembered` stays for quick-reopen. */
-  closeAll: () => Promise<void>;
+  closeAll: (whenCurrent?: () => boolean) => Promise<void>;
   save: (force?: boolean) => Promise<VaultState>;
   /** Download the remote vault's latest bytes and replace the session. */
   refreshRemote: () => Promise<VaultState>;
@@ -814,9 +814,13 @@ export const vault: VaultStore = {
   /** Lock-everything path shared by lock/idle/focus-loss: closes all backend
    *  sessions (zeroizing keys server-side) and discards every temp
    *  attachment directory. */
-  async closeAll(): Promise<void> {
+  async closeAll(whenCurrent?: () => boolean): Promise<void> {
     if (isTauriRuntime()) {
       return topologyQueue.enqueue(async () => {
+        // A copy follow-up may have queued behind open/switch. Admit it only
+        // while its original visible lifetime remains current. Manual lock
+        // omits the predicate and always closes every session.
+        if (whenCurrent && !whenCurrent()) return;
         // Capture every open vault path before the backend wipes the
         // sessions: when `rememberPassword` is disabled the OS-stored master
         // passwords must be dropped on lock, mirroring `close`/`closeTab`.
@@ -844,7 +848,9 @@ export const vault: VaultStore = {
         activeId.set(null);
       });
     }
+    if (whenCurrent && !whenCurrent()) return;
     await discardTempAttachments();
+    if (whenCurrent && !whenCurrent()) return;
     browserState = null;
     sessionStates.clear();
     iconCaches.clear();

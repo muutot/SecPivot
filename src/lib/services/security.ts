@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appSettings, isTauriRuntime } from "$lib/services/settings";
 import { vault } from "$lib/services/vault";
 import { clearClipboard, copyText } from "$lib/utils/clipboard";
-import { ActivityLeaseGuard } from "$lib/utils/session-state";
+import { ActivityLeaseGuard, KeyedViewGuard } from "$lib/utils/session-state";
 
 /**
  * Single lock path shared by the manual lock button, idle auto-lock, and
@@ -12,7 +12,10 @@ import { ActivityLeaseGuard } from "$lib/utils/session-state";
  * closes every open session without waiting for clipboard I/O; `remembered`
  * stays so the lock screen can offer a quick reopen.
  */
-export async function lockVault(options?: { preserveClipboard?: boolean }): Promise<void> {
+export async function lockVault(options?: {
+  preserveClipboard?: boolean;
+  whenCurrent?: () => boolean;
+}): Promise<void> {
   // `lockAfterAction` copies first and then locks: clearing here would wipe the
   // value that was just copied (the timed `clipboardClearSeconds` wipe stays
   // armed via `copyText`). All other lock paths clear as before.
@@ -20,7 +23,7 @@ export async function lockVault(options?: { preserveClipboard?: boolean }): Prom
     !options?.preserveClipboard && get(appSettings).security.clearOnLock
       ? clearClipboard()
       : Promise.resolve();
-  await Promise.all([clearing, vault.closeAll()]);
+  await Promise.all([clearing, vault.closeAll(options?.whenCurrent)]);
 }
 
 /**
@@ -38,11 +41,35 @@ export async function rememberCredential(path: string, password: string): Promis
   }
 }
 
-/** Copy a sensitive value (password) and lock immediately when `lockAfterAction` is on. */
+/** Lock after a completed password copy only in its original visible lifetime.
+ * Keep the nonsecret owner observers until queued lock admission finishes. */
 export async function copySensitive(value: string): Promise<void> {
-  await copyText(value);
-  if (get(appSettings).security.lockAfterAction) {
-    await lockVault({ preserveClipboard: true });
+  if (!get(appSettings).security.lockAfterAction) {
+    await copyText(value);
+    return;
+  }
+  const owner = new KeyedViewGuard();
+  const syncOwner = () => {
+    const id = get(vault.activeId);
+    const state = vault.get();
+    owner.activate(id && state ? JSON.stringify([id, state.path]) : null);
+  };
+  const stopActive = vault.activeId.subscribe(syncOwner);
+  const stopState = vault.subscribe(syncOwner);
+  const view = owner.capture();
+  const sessionId = get(vault.activeId);
+  const whenCurrent = () =>
+    view !== null &&
+    owner.isCurrent(view) &&
+    vault.getActiveSessionId() === sessionId &&
+    get(appSettings).security.lockAfterAction;
+  try {
+    await copyText(value, () => {
+      if (whenCurrent()) return lockVault({ preserveClipboard: true, whenCurrent });
+    });
+  } finally {
+    stopActive();
+    stopState();
   }
 }
 

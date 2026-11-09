@@ -198,3 +198,15 @@ before their final queued clear. This establishes one renderer's operation order
 not OS clipboard sequence ownership or cross-window atomicity. A stalled write
 may still delay clipboard clearing; lock closes vaults independently. Tests use
 synthetic API promises and no shared OS clipboard.
+
+Sensitive-copy lock follow-up is admitted by `copyText(text, afterCopy)` only
+for a successfully completed, still-current copy generation. `copySensitive`
+watches the published active id and vault path through `KeyedViewGuard`; A→B→A,
+close/reopen and the browser demo's fixed-id path change end the old lifetime.
+It also checks the internal active id and current lock-after-action setting.
+`VaultStore.closeAll(whenCurrent?)` rechecks the nonsecret predicate inside the
+topology queue before any backend close, so an earlier queued open cannot be
+closed by an old copy. Browser close rechecks after attachment cleanup. Manual
+lock omits the predicate. Observers are released on success/failure; aborted
+copies never lock, and failed renderer hashing retains native safety-net behavior.
+This is renderer admission evidence, not multi-window native authorization.
