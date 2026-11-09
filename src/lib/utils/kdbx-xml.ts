@@ -1,11 +1,13 @@
 /** Parser for KeePass 2.x XML export files (`File ▸ Export ▸ KeePass XML`).
  *  Walks the `<Root><Group>` tree, mapping nested groups to `A / B` paths and
  *  each entry's `String` fields to the fixed columns (Title/UserName/Password/
- *  URL/Notes) plus a TOTP seed (the `otp`/`TimeOtp`/`HmacOtp`/`SteamOtp` keys),
+ *  URL/Notes) plus the dedicated `otp` seed, preserving native OTP keys as
+ *  custom fields so their type, counter and protection flag survive,
  *  `<Times>` expiry (`<Expires>` + `<ExpiryTime>`), and any remaining
  *  non-standard `String`s as custom fields. */
 import type { Language } from "$lib/types/settings";
 import { t } from "$lib/i18n";
+import type { CustomField } from "$lib/types/vault";
 
 export interface XmlImportEntry {
   group: string;
@@ -17,7 +19,7 @@ export interface XmlImportEntry {
   totp: string;
   /** Raw `<ExpiryTime>` text, kept only when `<Expires>` is true; empty = no expiry. */
   expires: string;
-  customFields: { name: string; value: string }[];
+  customFields: CustomField[];
 }
 
 function childElements(el: Element): Element[] {
@@ -65,6 +67,7 @@ function parseEntry(entry: Element, group: string, lang: Language): XmlImportEnt
     if (!key) continue;
     const valueEl = childElements(child).find((e) => e.tagName === "Value");
     const protectedValue = valueEl?.getAttribute("Protected")?.toLowerCase() === "true";
+    const protectInMemory = valueEl?.getAttribute("ProtectInMemory")?.toLowerCase() === "true";
     const raw = valueEl?.textContent ?? "";
     const value = protectedValue ? decodeLegacySecPivotValue(raw, lang) : raw;
     switch (key) {
@@ -84,13 +87,10 @@ function parseEntry(entry: Element, group: string, lang: Language): XmlImportEnt
         out.notes = value;
         break;
       case "otp":
-      case "TimeOtp":
-      case "HmacOtp":
-      case "SteamOtp":
         if (!out.totp) out.totp = value;
         break;
       default:
-        out.customFields.push({ name: key, value });
+        out.customFields.push({ name: key, value, protected: protectedValue || protectInMemory });
     }
   }
   return out;
@@ -156,6 +156,8 @@ export interface XmlExportRow {
   url: string;
   notes: string;
   totp: string;
+  expires?: string;
+  customFields?: CustomField[];
 }
 
 function escapeXml(value: string): string {
@@ -211,6 +213,13 @@ export function buildKeePassXml(rows: XmlExportRow[]): string {
       writeField("URL", row.url, false);
       writeField("Notes", row.notes, false);
       if (row.totp) writeField("otp", row.totp, false);
+      for (const field of row.customFields ?? []) {
+        if (["Title", "UserName", "Password", "URL", "Notes", "otp"].includes(field.name)) continue;
+        writeField(field.name, field.value, field.protected === true);
+      }
+      xml += `<Times><Expires>${row.expires ? "True" : "False"}</Expires>`;
+      if (row.expires) xml += `<ExpiryTime>${escapeXml(row.expires)}</ExpiryTime>`;
+      xml += "</Times>";
       xml += "</Entry>";
     }
     for (const child of node.children.values()) walk(child);
