@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S42；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S43；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 31     | 31        | 0         |
+| Medium    | 32     | 32        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **53** | **53**    | **0**     |
+| **Total** | **54** | **54**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2241,3 +2241,46 @@ assets/tauri.conf.json 的 capabilities=[] 与 grant 名称字符串缺失，
 screens 而非 windows，接着核对框架解析/范围。没有构建、安装或发布
 新版 APK，手机系统选择器/provider 真机证据仍缺失；该研究不加入新
 Confirmed 卡片。原始基线与评分不变，目标 active。
+
+### Finding: SP-S43 设置的 JSON null 重置被当作空补丁（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Configuration / Backend API / Testing authenticity
+- Status: Confirmed
+- Affected area: DatabaseSettingsPatch nullable fields at Tauri JSON boundary
+- Evidence:
+  - File: `src-tauri/src/vault/dto.rs:346–368`、`src/lib/components/DatabaseSettingsDialog.svelte:107–115`、`src-tauri/src/vault/session.rs:24–39`、`src-tauri/src/vault/tests.rs:838–849`（`e11eeb3` 修复前）
+  - Function / Module: DatabaseSettingsPatch / save / update_database_settings / apply_database_meta_patch
+  - Relevant behavior: 四个 Option<Option<T>> 仅有 serde(default)，JSON null 被折叠为外层 None，is_empty 将全 null 补丁视作无操作。前端清空输入传 null，原 Rust 直接构造 Some(None) 测试绕过真实解码。
+  - Reproduction: 实际 DTO 从 JSON 的 historyMaxItems/historyMaxSize/recycleBinEnabled/entryTemplatesGroup:null 解码全为 None；`settings-null-wire-red.log` exit 101。已配置/保存重开的合成库提交这个实际 JSON 补丁后仍返回未修改状态，`settings-null-reset-native-red.log` exit 101。后者失败于 dirty 断言，修复前没有跑完其最终保存重开断言，控制流与解码结果支持 no-op 结论。
+  - Independent verification: 前端实际 save 的空输入分支明确生成 null；会话 metadata setter 只执行外层 Some，原 icon DTO 已使用专门解码器避免相同问题。新解码后的原生 metadata 与存储重加密组合均另行保存重开验证。
+- Problem: 用户清空历史数量/大小上限或模板组并保存，界面关闭但旧设置继续保留；显式 API recycle-bin 默认重置同样被忽略。
+- Why it matters: 成功反馈掩盖未执行的配置更新，实际 IPC 不满足声明契约；旧测试证明不了 null 线路。没有已发生秘密泄漏、数据库损坏或恶意攻击证据，因此 Medium。
+- Realistic failure scenario: 用户将历史版本上限输入清空以恢复默认，保存后再次打开设置，旧数字仍在；清空模板组无法解除模板绑定。
+- Minimal fix: 四个 nullable 字段用同一 typed 反序列化 helper 保留外层 Some；缺省仍 None，null 为 Some(None)，普通类型值为 Some(Some(value))，错误类型保持拒绝。
+- Better long-term fix: 所有声明三态/部分更新契约的测试都应至少穿过真实 JSON 解码和实际状态持久化。此轮搜索发现其他 Option<Option<T>> 仅 icon，已有独立 icon decoder；不引入宽泛的字符串/数字猜测转换。
+- Regression test suggestion: 缺省/null/普通值、四个字段的实际 wire 解码、错误类型、原生设置与 compression 重写组合保存重开、未涉及的 KDF/cipher 保持。
+- Estimated effort: 1–2 小时（nullable helper、native wire/KDBX 回归、契约与 TODO）
+
+`8887e2e` 已修复四个 nullable 设置的实际 wire 重置语义；3 项新增回归
+覆盖类型/缺省/null、12 种错误类型及 metadata-only/压缩重写组合保存
+重开。11 项设置相关检查通过；完整 `verify-settings-null-wire.log` exit 0：
+316 frontend、591 Rust、ACL 2，串行无外部过滤，四个剪贴板 live body
+默认跳过。data/security 引用与 TODO 的真实 JSON 证据已同步；没有新增
+DTO 字段、IPC/UI/依赖变化。本报告提交没有新的 reference 修改需要。
+
+手机 ACL 根因进一步复核：公开 v1.6.5 tag 指向
+`006b810a349f7c2358b9bb775e91091e7bba5bdb`，capability 使用 screens；
+同标签锁定的 tauri 2.11.5 / tauri-utils 2.9.3 只解析 windows/webviews。
+独立同版本 resolver 小项目 `saf-v1.6.5-source-resolver-check.log` 2 pass，
+旧写法的 create/open grants 均有空窗口/WebView 范围，当前写法允许 main。
+同版本 RuntimeAuthority::resolve_access 第 459–460 行明确要求至少一项
+窗口或 WebView glob 匹配，空范围不能授权。与经过 SHA256 校验的公开
+APK 调用 literal 一起，支持发行源 ACL 问题及当前源码修复；没有逆向
+验证 native binary 中的授权对象，也没有用户实际安装包哈希、真机选择器
+或 provider I/O。没有构建/安装新版 APK、验证签名或发布。初次 GitHub
+CLI 未登录已用公开 API 继续；未加引号的 PowerShell Git peel 参数错误
+已用确切引用重读，不用于产品结论。该研究复核既有 ACL 发现，不增加
+新卡片统计。后续历史提示文案、其他 mutation、缺省保留大小和剩余
+系统/UI/竞品迁移覆盖继续进行；原始基线与评分保持不变，目标 active。

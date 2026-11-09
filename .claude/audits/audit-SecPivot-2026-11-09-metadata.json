@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S42; historical supplemental tracking notes excluded",
-    "total": 53,
-    "confirmed": 53,
+    "scope": "15 baseline cards plus SP-S05 through SP-S43; historical supplemental tracking notes excluded",
+    "total": 54,
+    "confirmed": 54,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 31,
+      "Medium": 32,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "3530ee8",
+  "remediation_checkpoint": "8887e2e",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S43",
+      "area": "JSON null resets collapse into absent database-settings fields",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "e11eeb3",
+      "commit": "8887e2e",
+      "status": "Confirmed and remediated. Actual four-field DTO JSON decoding returned outer None, and native configured/reopened reset returned no dirty change before reaching its final save assertion. Existing Rust Some(None) tests bypassed IPC. Shared typed nullable decoder now preserves absence/null/value and rejects malformed types. Three new tests include metadata-only and compression rewrite reset/save/reopen; eleven targeted settings tests and full verify 316/591/ACL2 passed. No schema/UI/dependency change, real Tauri/device or user vault used."
+    },
     {
       "id": "SP-S42",
       "area": "External attachment reimport bypasses pre-edit history, timestamp and retention",
@@ -142,7 +151,7 @@
     {
       "area": "Android SAF ACL",
       "commit": "e5e3c4e",
-      "status": "source fix and host ACL tests passed; APK/device verification pending"
+      "status": "Source fix and host ACL tests passed; independent exact-version Tauri parser/resolver confirms release v1.6.5 screens field produces no window/webview scope and current windows field grants main. Public ARM64 APK hash matches release sums, contains plugin:saf create/open literals. APK build/install, native provider/runtime and installed-device artifact identity still unverified."
     },
     {
       "area": "Protected HOTP seed downgraded by counter advancement",
@@ -431,10 +440,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "3530ee8",
-    "log": "verify-external-attachment-snapshot.log",
+    "checkpoint": "8887e2e",
+    "log": "verify-settings-null-wire.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 588,
+    "rust_unit_tests": 591,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -464,7 +473,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 588,
+    "rust_unit_tests_discovered": 591,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -569,6 +578,26 @@
       "attachment_tests": 30,
       "scope": "Actual synthetic native KDBX save/reopen and session-bound temp-store reads; pre-edit bytes/restore, existing versions, modification time, cap 10/1/0 and byte budget",
       "limitations": "External editor and real Tauri command handler not run; other Entry mutations remain an audit boundary"
+    },
+    "settings_null_wire": {
+      "result": "passed",
+      "red_logs": ["settings-null-wire-red.log", "settings-null-reset-native-red.log"],
+      "green_log": "settings-null-wire-green.log",
+      "settings_tests": 11,
+      "scope": "Real DTO absence/null/value and wrong-type decoding; actual native settings/save/reopen with and without compression rewrite; metadata synthetic only",
+      "limitations": "Original native red stopped at dirty assertion, not final saved-reset assertions. No live Tauri IPC/device/rendered settings interaction."
+    },
+    "android_release_acl": {
+      "release_tag": "v1.6.5",
+      "tag_commit": "006b810a349f7c2358b9bb775e91091e7bba5bdb",
+      "apk_sha256": "754228d99d293363685c1045b09c3b707737825dcba44d740102736c99cc99be",
+      "library_sha256": "eb64275194f42b78b86e825778a7124bc684a09bc4fb4a92a97f5872fa92ac11",
+      "provenance": "secpivot-v1.6.5-apk-inspection.json",
+      "resolver_log": "saf-v1.6.5-source-resolver-check.log",
+      "resolver_tests": 2,
+      "framework": "release tauri 2.11.5 / tauri-utils 2.9.3",
+      "result": "Release screens property ignored -> empty window/webview patterns; pinned runtime predicate requires a matching pattern. Current windows scope passes for main.",
+      "limitations": "No APK install/build, native provider/runtime/signature validation, disassembled compiled authority or identity of the user-installed artifact."
     }
   },
   "reverification_notes": [
@@ -627,6 +656,7 @@
     "4fbc748 fixes SP-S38/SP-S39 together as one complete attachment invariant. Valid native history red had three failures; sparse-ID loss reproduced independently with original registry crate. First full gate had one S3 100-page fixture connection failure at page 82; unchanged isolated fixture and serial final full gate passed, without attributing the single failure to product or environment. Final verify 316/582/ACL2 and two dedicated dependency tests passed; four live clipboard bodies skipped. Early fixture compile failures and blanket rustfmt drift were corrected; 57 upstream files restored and provenance gate passed. Initial optional patch reconstruction had only CRLF differences on three files; explicit core.autocrlf=false fresh reconstruction verified all 60 hashes. Data/security/structure/maintenance references and partial history TODO synchronized. Full attachment restore, imports, remaining system/UI coverage and v1.6.5 mobile Save As APK/device remain pending; baseline b7c5d9f and 6.1 score unchanged.",
     "b5bec5c fixes SP-S40 native attachment-set restoration and corrects the existing green-test expectation that had required keeping newer attachments. Twenty-seven history tests passed; full verify 316/583/ACL2 exit 0, four native clipboard live bodies opted out. Original binary flags and empty/Unicode filenames survive save/reopen and undo with count limits 10/1. Contract/security references and partial history TODO updated. Intermediate strict-retention expectations exposed separate zero-count/minimum-one size behavior; no claim those cases are fixed here. New binary buffers stay within the session, no IPC schema/UI/vendor/dependency change. Baseline and score unchanged; full audit goal active, external attachment snapshots and mobile v1.6.5 Save As APK/device still pending.",
     "653ef66 fixes SP-S41 precise zero/positive history count and size limits while preserving negative unlimited and existing absence defaults. Three valid red regressions after real settings/save/reopen demonstrated retained superseded history; initial fixture omitted save and was excluded. Four new native tests and corrected old cap/minimum-one expectations, exact recursive budget and restore cap-zero case passed. Thirty-one targeted history tests and full verify 316/587/ACL2 passed; no external filters and four native clipboard live bodies disabled. References/data/security/DTO comments and partial TODO synchronized. Cleanup occurs only on existing tracked edit/restore paths and current data remains; no native client, Android provider/device, user vault, clipboard or secure filesystem erasure evidence. Baseline b7c5d9f and 6.1 score unchanged; overall goal active. Next separate candidates: external attachment import snapshots, settings wire null reset, absent-size default and remaining system/UI/migration coverage; v1.6.5 Save As source ACL fix still lacks APK/device.",
-    "3530ee8 fixes SP-S42 external attachment reimport history/timestamp/retention. Two valid red probes failed; thirty attachment checks and full verify 316/588/ACL2 passed with four clipboard live bodies opted out. Contract/security references and partial history TODO updated; no UI/dependency/IPC changes or native editor/user-vault/device/clipboard runtime. Public v1.6.5 ARM64 APK downloaded read-only with SHA256 754228d99d293363685c1045b09c3b707737825dcba44d740102736c99cc99be matching official release sums. Its library contains complete plugin:saf create/open literals, no plugin:safe create literal. Initial regex overcapture corrected; capabilities empty in asset config and missing grant-name strings alone are not denial proof. Release-tag capability source uses screens instead of windows; separate framework/source verification continues. No replacement APK built/installed/released. Baseline and score unchanged; overall goal active."
+    "3530ee8 fixes SP-S42 external attachment reimport history/timestamp/retention. Two valid red probes failed; thirty attachment checks and full verify 316/588/ACL2 passed with four clipboard live bodies opted out. Contract/security references and partial history TODO updated; no UI/dependency/IPC changes or native editor/user-vault/device/clipboard runtime. Public v1.6.5 ARM64 APK downloaded read-only with SHA256 754228d99d293363685c1045b09c3b707737825dcba44d740102736c99cc99be matching official release sums. Its library contains complete plugin:saf create/open literals, no plugin:safe create literal. Initial regex overcapture corrected; capabilities empty in asset config and missing grant-name strings alone are not denial proof. Release-tag capability source uses screens instead of windows; separate framework/source verification continues. No replacement APK built/installed/released. Baseline and score unchanged; overall goal active.",
+    "8887e2e fixes SP-S43 real JSON nullable settings decoder, preserving absence/null/value for four fields without widening value types. Two valid baseline probes failed; native red stopped at dirty, not final persistence assertions. Three new regressions include actual metadata-only and compression rewrite reset/save/reopen and wrong-type rejection. Eleven targeted settings tests and full verify 316/591/ACL2 passed, four live clipboard bodies skipped. Data/security references and TODO null evidence updated; no DTO schema/UI/dependency change. Independently pinned release tag 006b810 and Tauri 2.11.5/tauri-utils 2.9.3 confirm screens ignored and runtime window/webview OR predicate denies empty scope; standalone resolver tests 2 passed. Public APK hashes match release sums and complete saf literals, but no device/provider/build/install/compiled-authority/signature evidence. Initial gh auth unavailable used public API instead; unquoted PowerShell Git peel syntax corrected with exact quoted ref. Tooling errors not application findings. Baseline/score unchanged; full goal active."
   ]
 }
