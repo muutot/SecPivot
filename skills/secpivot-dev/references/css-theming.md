@@ -71,7 +71,7 @@ Use these variables for reusable surfaces, text, borders, controls, and status s
 | `--font-size-cardPreview` | `11px`             | card preview                                                                                                   |
 | `--font-mono`             | ui-monospace stack | monospace code/ids (client IDs, TOTP codes, side-channel passwords); do not hardcode font stacks in components |
 
-`settings-bootstrap.ts` applies these and the 20 theme variables at startup. Live settings panels must update the same contract; do not create alternate variable names for the same meaning.
+`settings-bootstrap.ts` applies these and the 21 theme variables at startup. Live settings panels must update the same contract; do not create alternate variable names for the same meaning.
 
 ## Settings semantic metrics
 
@@ -150,11 +150,17 @@ header/icon blocks, or footer layouts.
 ## Viewport menu
 
 `ViewportMenuShell.svelte` is the canonical viewport-fixed popover menu: it
-clamps to the window with an 8px margin, closes on Escape or click-outside,
+clamps to the window with an 8px margin on content/viewport resize, bounds its
+width and height and scrolls internally when the menu exceeds the viewport.
+It closes on Escape or click-outside,
 accepts role/aria label plus a `column-config` modifier for the bounded,
 scrollable column picker, and owns the elevated-surface styles in its scoped
 block. Items are composed from `templates/menu/MenuItem.svelte`; do not
 introduce a second fixed-menu surface or duplicate item base rules.
+`ContextMenu` cascades use viewport-fixed positioning to escape the scrollable
+parent's clipping, flip beside the anchor when space permits, clamp within the
+same margin and follow parent scroll/viewport resize. Long cascades scroll in
+their own surface. Reuse the existing surface, border and scrollbar tokens.
 
 ## CSS ownership decision
 

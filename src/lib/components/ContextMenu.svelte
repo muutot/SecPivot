@@ -50,33 +50,30 @@
     onaction(id);
   }
 
-  /** Flip a submenu to the left side of its anchor when it would otherwise
-   *  be clipped by the window's right edge. */
+  /** Fixed positioning keeps cascades outside the scrollable parent surface.
+   *  Reposition on parent scroll and viewport/content resize. */
   function submenuFlip(node: HTMLDivElement): { destroy(): void } {
     const flip = (): void => {
-      node.style.left = "calc(100% + 4px)";
-      node.style.right = "auto";
+      const anchor = node.parentElement?.getBoundingClientRect();
+      if (!anchor) return;
       const rect = node.getBoundingClientRect();
-      if (rect.right > window.innerWidth - 8) {
-        node.style.left = "auto";
-        node.style.right = "calc(100% + 4px)";
-      }
-      // Vertical clamp: keep the whole submenu inside the viewport.
-      const clamped = node.getBoundingClientRect();
-      if (clamped.bottom > window.innerHeight - 8) {
-        const anchor = node.parentElement as HTMLElement | null;
-        const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
-        node.style.top = `${Math.min(-4, window.innerHeight - 8 - (clamped.height + anchorTop))}px`;
-      }
+      const preferredX =
+        anchor.right + 4 + rect.width <= window.innerWidth - 8
+          ? anchor.right + 4
+          : anchor.left - rect.width - 4;
+      node.style.left = `${Math.min(Math.max(8, preferredX), Math.max(8, window.innerWidth - rect.width - 8))}px`;
+      node.style.top = `${Math.min(Math.max(8, anchor.top - 4), Math.max(8, window.innerHeight - rect.height - 8))}px`;
     };
     flip();
     const ro = new ResizeObserver(flip);
     ro.observe(node);
     window.addEventListener("resize", flip);
+    window.addEventListener("scroll", flip, true);
     return {
       destroy() {
         ro.disconnect();
         window.removeEventListener("resize", flip);
+        window.removeEventListener("scroll", flip, true);
       },
     };
   }
@@ -134,11 +131,15 @@
   }
 
   .submenu {
-    position: absolute;
-    top: -4px;
-    left: calc(100% + 4px);
-    z-index: 1;
-    min-width: 190px;
+    position: fixed;
+    z-index: 9999;
+    min-width: min(190px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
     padding: 4px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
