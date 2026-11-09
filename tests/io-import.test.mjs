@@ -148,13 +148,13 @@ test("CSV conversion rejects a whole malformed document with localized content-f
   }
 });
 
-function csvPageFixture(pick) {
+function importPageFixture(pick, handlerName = "handleImportCsv", overrides = {}) {
   calls.length = 0;
   const source = readFileSync(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
   const script = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
   const ast = ts.createSourceFile("page.ts", script, ts.ScriptTarget.Latest, true);
   const handler = ast.statements.find(
-    (node) => ts.isFunctionDeclaration(node) && node.name?.text === "handleImportCsv",
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === handlerName,
   );
   assert.ok(handler);
   const js = ts.transpileModule(handler.getText(ast), {
@@ -183,14 +183,15 @@ function csvPageFixture(pick) {
     runImportEntries: importEntries,
     pickImportFile: pick,
     flash: (message) => notices.push(message),
+    ...overrides,
   };
   runInNewContext(js, context);
-  return { context, sessionView, notices, run: () => context.handleImportCsv() };
+  return { context, sessionView, notices, run: () => context[handlerName]() };
 }
 
 test("the actual CSV page handler reports malformed quoting and preserves valid multiline fields", async () => {
   for (const text of ['Group,Title\r\n,valid\r\n,"truncated', 'Group,Title\r\n,"bad"junk']) {
-    const f = csvPageFixture(async () => text);
+    const f = importPageFixture(async () => text);
     await f.run();
     assert.equal(calls.length, 0, "malformed input must never create groups or submit entries");
     assert.equal(f.notices.length, 1);
@@ -200,7 +201,7 @@ test("the actual CSV page handler reports malformed quoting and preserves valid 
       "localized feedback must not add an English Error prefix",
     );
   }
-  const f = csvPageFixture(
+  const f = importPageFixture(
     async () =>
       'Group,Title,Username,Password,URL,Notes\r\n,"First,""quoted""",user,,https://synthetic.example,"one\r\ntwo"\r\n',
   );
@@ -215,7 +216,7 @@ test("the actual CSV page handler reports malformed quoting and preserves valid 
 
 test("the actual CSV page handler ignores an old picker completion after A to B to A", async () => {
   let release;
-  const f = csvPageFixture(
+  const f = importPageFixture(
     () =>
       new Promise((resolve) => {
         release = resolve;
@@ -226,6 +227,85 @@ test("the actual CSV page handler ignores an old picker completion after A to B 
   f.sessionView.activate("csv-owner");
   release('Group,Title\r\n,"truncated');
   await pending;
+  assert.equal(calls.length, 0);
+  assert.equal(f.notices.length, 0);
+});
+
+test("the actual XML page handler catches localized parser rejection before writes", async () => {
+  for (const reason of ["error.invalidXml", "error.encryptedKeepassXml"]) {
+    const message = t("zh-CN", reason);
+    const f = importPageFixture(async () => "synthetic rejected XML", "handleImportXml", {
+      xmlToImportEntries: () => {
+        throw new Error(message);
+      },
+    });
+    await f.run();
+    assert.equal(calls.length, 0);
+    assert.equal(f.notices.length, 1);
+    assert.ok(f.notices[0].includes(message));
+    assert.ok(!f.notices[0].includes("Error:"));
+  }
+});
+
+test("the actual XML page handler selects XML only and retains valid mapped fields", async () => {
+  const row = {
+    group: "",
+    title: "Synthetic XML",
+    username: "user",
+    password: "",
+    url: "",
+    notes: "one\r\ntwo",
+    totp: "",
+    customFields: [],
+  };
+  let pickedFilters;
+  const f = importPageFixture(
+    async (_host, _view, filters) => {
+      pickedFilters = filters;
+      return "synthetic valid XML";
+    },
+    "handleImportXml",
+    {
+      xmlToImportEntries: (text, language) => {
+        assert.equal(text, "synthetic valid XML");
+        assert.equal(language, "zh-CN");
+        return [row];
+      },
+    },
+  );
+  await f.run();
+  assert.deepEqual(
+    Array.from(pickedFilters, (filter) => Array.from(filter.extensions)),
+    [["xml"]],
+  );
+  const batch = calls.find((call) => call.command === "import_entries");
+  assert.ok(batch);
+  assert.equal(batch.args.inputs[0].notes, row.notes);
+  assert.equal(batch.args.inputs[0].title, row.title);
+});
+
+test("the actual XML page handler discards an old picker before parsing or feedback", async () => {
+  let release;
+  let parses = 0;
+  const f = importPageFixture(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    "handleImportXml",
+    {
+      xmlToImportEntries: () => {
+        parses++;
+        throw new Error("synthetic parser must not run");
+      },
+    },
+  );
+  const pending = f.run();
+  f.sessionView.activate("other-owner");
+  f.sessionView.activate("csv-owner");
+  release("synthetic obsolete XML");
+  await pending;
+  assert.equal(parses, 0);
   assert.equal(calls.length, 0);
   assert.equal(f.notices.length, 0);
 });

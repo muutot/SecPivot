@@ -156,6 +156,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认
 - [x] CSV 导出公式前缀先加入字段值，再执行 RFC 引号转义；前端和实际原生文件的六种前缀/逗号/引号/CRLF/原有撇号保持列边界与防护值，独立 Python CSV reader 复核通过（SP-S27）。此项不声称防护前缀可无损导回或真实表格软件执行验证。
 - [x] CSV 导入遇到未闭合/非法位置/引用后多余字符时整份拒绝，页面显示无字段内容的本地化错误并停止写入；合法 BOM/双引号/多行/空引用字段保真，实际页面 handler 与独立标准 writer 语料复核通过（SP-S29），不猜测修复历史损坏文件。
+- [x] XML 导入捕获现有 parser 的损坏/加密字段拒绝并显示本地化反馈；只提供 XML filter，过时选择结果不解析/不写入；真实浏览器文件选择与 DOMParser、页面 handler 验证通过（SP-S30），完整 XML 保真/原生互操作仍按原项目保持待验证。
 - [~] 导出·KeePass XML：`export_xml`（嵌套分组 UUID+名称、标准字段、otp 种子、自定义字段；密码/受保护字段按官方 PlainXml 原文转义 + `ProtectInMemory="True"`；CR 字符引用保留回车，无法表示的字符明确拒绝且不改原值/旧目标，SP-S18）。浏览器回退同边界；字段保真及原生互操作继续验证，明文确认对话框不变（`tests/kdbx-xml.test.mjs`、KDBX/真实 DOMParser 回归）
 - [x] 列表·密码列遮蔽与就地显示：快照新增 `hasPassword` 标志（值不出会话），密码列显示 `••••••` 遮蔽符，点击经 `get_entry_password` 就地显示（二次点击/移出/10 秒/卸载自动遮回，绑定当前会话视图）
 - [x] 数据库维护·相似密码检查：`similar_passwords` 服务端分析（编辑距离 ≤ 2 聚类、回收站排除、2000 条上限、密码不外传），`SimilarPasswordsDialog` 报告并可定位条目
