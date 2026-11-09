@@ -208,6 +208,11 @@ palettes in `TipsHost.svelte`. Pass `"error"` from explicit failure branches
 through page/flow callbacks; never select a color by parsing localized messages.
 The severity repair adds no CSS variables, declarations or layout changes.
 
+Tip body text uses `--text-primary` for legible dark/light/custom feedback.
+Success/error identity stays in the existing tinted background and border;
+do not lighten semantic colors with white for small message text. Measure the
+rendered foreground/background contrast, not only the raw theme palette.
+
 ## Fixed layer order
 
 | Layer                                                               | Current z-index |
