@@ -26,6 +26,13 @@ SecPivot stores credentials in standard KDBX 4.0 files. This reference documents
 
 ## Lock lifecycle
 
+The RPC side-channel renderer uses a wall-clock deadline, rechecked by interval,
+focus/visibility resume and before copying. Expiry dismisses the modal and drops
+its pending password reference; unmount and manual close do the same. Timer and
+copy completions are bound to the current request object, so old work cannot
+alter a replacement prompt. This does not cancel backend setup or prove JavaScript
+heap zeroization; connection/proof/lock/service cancellation events remain pending.
+
 RPC connection keys prove frame integrity, but do not outlive host authorization.
 Read dispatch and write preparation revalidate the connection's username and
 32-byte key against the current host under the vault mutex; `rpc_key` applies
