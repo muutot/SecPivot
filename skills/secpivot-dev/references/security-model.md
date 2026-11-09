@@ -352,7 +352,9 @@ the original version/license/provenance; it is not proof of native client or
 Android provider interoperability. History restore clones binary Values only
 inside the native session before mutation/retention, preserving protection flags
 and the pre-restore undo snapshot. The returned DTO has names/sizes only.
-External attachment edit snapshots remain a separate audit boundary.
+External attachment reimports record a tracked pre-edit snapshot and obey the
+same zero/negative/positive retention limits; historical binary bytes stay in
+the native session and encrypted KDBX. Temp tokens remain session-bound.
 
 A configured zero history count/size does not retain superseded passwords or
 attachments after tracked edits. Positive size ceilings also apply to a single
