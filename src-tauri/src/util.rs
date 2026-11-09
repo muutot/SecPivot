@@ -3,25 +3,34 @@
 
 use std::path::{Path, PathBuf};
 
-/// Lower-cased host of a URL, with scheme/port/path stripped.
-///
-/// Any `://` scheme is dropped, then the leading host portion up to the first
-/// of `/`, `:`, `?`, `#` is taken, trimmed, and lower-cased. Plain hostnames
-/// and `host:port` inputs pass through unchanged (everything after the host is
-/// a delimiter). Bracketed IPv6 literals (`[2001:db8::1]`,
-/// `[2001:db8::1]:8080`) resolve to the address inside the brackets — never
-/// the first `:` segment. Returns `None` when nothing remains, so callers can
-/// distinguish "no host" from a literal `""`.
+/// Canonical destination host, excluding userinfo, scheme, port and path.
+/// IDNA domains and IP literals use the URL parser's normalized identity;
+/// IPv6 is returned without brackets. Bare hosts/ports and protocol-relative
+/// URLs remain supported. Invalid authorities and internal whitespace fail
+/// closed rather than guessing a credential destination.
 pub fn url_host(url: &str) -> Option<String> {
-    let rest = url.split("://").nth(1).unwrap_or(url);
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = if let Some(bracketed) = authority.strip_prefix('[') {
-        bracketed.split(']').next().unwrap_or_default()
+    let input = url.trim();
+    if input.is_empty() || input.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return None;
+    }
+    let parsed = if input.contains("://") {
+        url::Url::parse(input).ok()?
+    } else if input.starts_with("//") {
+        url::Url::parse(&format!("https:{input}")).ok()?
     } else {
-        authority.split(':').next().unwrap_or_default()
+        // Bare userinfo and opaque schemes are ambiguous; only an explicit
+        // hierarchical URL may carry credentials. Invalid host:port forms
+        // (including mailto:) are then rejected by the HTTP authority parser.
+        if input.contains('@') {
+            return None;
+        }
+        url::Url::parse(&format!("http://{input}")).ok()?
     };
-    let host = host.trim().to_ascii_lowercase();
-    (!host.is_empty()).then_some(host)
+    match parsed.host()? {
+        url::Host::Domain(domain) => Some(domain.to_ascii_lowercase()),
+        url::Host::Ipv4(address) => Some(address.to_string()),
+        url::Host::Ipv6(address) => Some(address.to_string()),
+    }
 }
 
 /// Write `bytes` to `path` atomically: write to a unique sibling `.tmp` file, flush
@@ -92,6 +101,31 @@ fn temp_sibling(path: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_host_uses_the_destination_authority() {
+        for (input, expected) in [
+            (
+                "https://bank.example:443@unrelated.test/login",
+                "unrelated.test",
+            ),
+            ("https://name:password@bank.example/login", "bank.example"),
+            ("https://bücher.example/login", "xn--bcher-kva.example"),
+            ("https://[2001:0db8::1]:443/login", "2001:db8::1"),
+            ("//bank.example/login", "bank.example"),
+        ] {
+            assert_eq!(url_host(input).as_deref(), Some(expected));
+        }
+        for input in [
+            "https://[::1",
+            "https://bank.example:invalid/login",
+            "https://bank.example\n.unrelated.test/login",
+            "mailto:user@bank.example",
+            "https://",
+        ] {
+            assert!(url_host(input).is_none(), "invalid authority was accepted");
+        }
+    }
 
     #[test]
     fn url_host_strips_scheme_port_and_path() {

@@ -357,3 +357,9 @@ rejects multiple destinations or explicit source match modes until native
 per-URI policy support exists. Errors contain only record numbers and reason;
 the command returns no partial rows. `import/bitwarden_tests.rs` covers the
 negative command boundary plus supported default/no-URI KDBX round trips.
+
+`util.rs::url_host` owns canonical destination-host extraction through the
+existing url crate (userinfo exclusion, IDNA, IPv4/IPv6 and authority validation),
+shared by URL matching/title helpers. Its unit boundary and reopened synthetic
+KDBX Bridge/RPC tests cover spoofed userinfo, invalid authority and canonical
+host equivalence; no frontend or IPC surface is added.
