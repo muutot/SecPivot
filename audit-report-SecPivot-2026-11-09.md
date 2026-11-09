@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S33；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S34；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
-| Medium    | 25     | 25        | 0         |
+| Medium    | 26     | 26        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **44** | **44**    | **0**     |
+| **Total** | **45** | **45**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1920,3 +1920,58 @@ harness **561**、ACL **2**、格式/check/build/clippy 全通过；两线程，
 整个目标仍 active；逐 URI/regex 交互、迁移保真、KDF 校准、其他 UI
 及原生验证继续，手机 v1.6.5 云端另存为仍未有新 APK/真机证据。
 超长 stack 的高度/阅读时长尚未验证，不用本次横向边界替代。
+
+### Finding: SP-S34 迁移和本产品 CSV 导回丢失收藏标记（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Frontend state
+- Status: Confirmed
+- Affected area: Bitwarden JSON/CSV normalization and bulk import metadata
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:36`、`src-tauri/src/vault/dto.rs:449`、`src/lib/utils/csv.ts:138`、`src/lib/services/io.ts:142`、`src-tauri/src/vault/entries.rs:298`（`64a662c` 修复前）
+  - Function / Module: ImportRow / ImportEntryInput / parseCsvRows / importRowsToEntries / import_entries
+  - Relevant behavior: Bitwarden favorite 和自身 CSV 的 Favorite 输出没有对应导入字段；即使 parser 或外部调用传入 favorite，serde DTO、frontend mapper 和原生插入均丢弃，重新打开库全部变为非收藏。
+  - Reproduction: 三个 Rust red 回归在有效编译后失败：真实 parser→wire→KDBX 重开丢失、原生 bulk 丢失、非法 favorite 未拒绝。三个前端 red 回归分别覆盖 CSV writer→reader、结构化 mapper→bulk IPC 和 browser bulk。`import-favorite-rust-red-corrected.log` / `import-favorite-frontend-red.log`。早先测试未声明 mutable session 的 compile 错误不是产品证据。
+  - Independent reference: Bitwarden 固定 commit 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 的 CipherExport 定义/写出 boolean favorite；individual exporter CSV 写 1/null，JSON 保留 favorite。公开源码 SHA256 见 `bitwarden-export-metadata-provenance.json`；本产品 buildCsv/export_csv 也写 true/false 列。
+- Problem: 用户依赖的收藏筛选及标记在迁移或本产品 CSV 导回后消失，提示却报告导入成功。
+- Why it matters: 这是可复现的非秘密元数据丢失；密码、条目数量与保护旗标不因本问题而改变，不夸大为整个数据库损坏。
+- Realistic failure scenario: 导出 SecPivot 的一份含收藏条目 CSV，再导入新库，收藏过滤变为空；Bitwarden 迁移同样丢失 favorite=true。
+- Minimal fix: 以 optional favorite 导入元数据贯通 parser、TS mapping、IPC/native batch 和 browser，原子写入既有 SecPivot.Favorite；CSV 显式 Favorite header 保留标记，普通编辑不覆盖收藏。
+- Better long-term fix: 单独核查密码历史、组织集合、ZIP 附件和逐 URI；普通官方 JSON 排除 deletedDate 非空条目、ZIP 包含附件，不能把未导出的内容当 importer bug。
+- Regression test suggestion: true/false/absent 在 command/wire/KDBX 和 browser 保真，非法 boolean 在写入前拒绝，旧接口默认与普通编辑保持，失败 batch 不产生部分收藏条目。
+- Estimated effort: 1–2 小时（跨层导入 metadata 与真实 KDBX 回归）
+
+### SP-S34 修复与独立复核（2026-11-10）
+
+`ed5a86d` 将 optional favorite 从 Bitwarden/CSV parser，经 ImportRow、
+IO mapper、ImportEntryInput、import_entries 一直保留到既有 KDBX 收藏
+字段。Native/browser 都在创建时设置，旧 DTO 缺省和普通编辑保持原旗标；
+custom 标签继续来源前缀隔离。所有分组/附件仍在插入前验证，未绕过 batch
+原子边界。Bitwarden 显式 favorite 只接受 boolean；CSV 仅从显式 header
+读取 true/false（不分大小写）、1/0，空值未指定，非法值整份拒绝并显示
+中英本地化内容无敏感字段的提示。无新增设置、markup/CSS 或依赖。
+
+`import-favorite-rust-red-corrected.log` 的三个实际回归全部由失败转为
+通过；最初 fixture 少 mutable 修饰的编译失败独立排除。六个 targeted
+favorite tests green，KDBX 保存重开、普通编辑连续性、错误 batch 不写入
+和 false/absent/源 custom 名称对照均通过。前端 CSV 自身 writer→parser、
+reordered flags、structured mapper→bulk IPC、browser bulk 以及非法 cell
+共四项新增回归通过，原 CSV/OTP/protected-field/view 测试保留。
+
+全新 Edge 的 `import-favorite-browser.log` 真实菜单/chooser/FileReader
+确认非法 Favorite 不写入且不回显字段值，合法 true/false 两条的内存状态
+和收藏图标一致；760×520、390×720 截图已检查，pageerror=0，自有 Vite
+进程停止。仅合成库/字段，不作为真实 Bitwarden/Android 原生导出证据。
+
+完整 `verify-import-favorite.log` 终态 exit 0：前端 **316**、Rust harness
+**564**、ACL **2**、format/check/build/clippy 通过；两线程、无外部
+过滤，四个 live clipboard body 缺省 skip。文档 currency gate 更新
+数据/结构引用与当前 command 的旧“skip card”注释；TODO 只补 favorite
+证据，Bitwarden 全兼容仍为 partial。当前卡片 **45**（High 10 / Medium
+26 / Low 9），基线 15 项/6.1 分保持。
+
+固定官方来源还证实普通 JSON 排除回收站记录、ZIP 才含附件，已收窄
+最初 deletedDate 怀疑；密码历史确实在官方 JSON 输出，当前 mapper 未
+保留，继续独立审查。完整 URI、集合/历史/ZIP、其他系统及 UI、手机
+v1.6.5 Save As APK/设备验证仍未完成，目标 active。

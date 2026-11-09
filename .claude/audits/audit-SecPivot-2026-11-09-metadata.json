@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S33; historical supplemental tracking notes excluded",
-    "total": 44,
-    "confirmed": 44,
+    "scope": "15 baseline cards plus SP-S05 through SP-S34; historical supplemental tracking notes excluded",
+    "total": 45,
+    "confirmed": 45,
     "suspected": 0,
     "by_severity": {
       "High": 10,
-      "Medium": 25,
+      "Medium": 26,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "42b43cb",
+  "remediation_checkpoint": "ed5a86d",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -345,15 +345,23 @@
       "confidence": "Confirmed",
       "commit": "42b43cb",
       "status": "Nine actual global TipsHost baseline combinations overflow; nine bounded/wrapped combinations passed. Actual CSV/XML errors/success and 18 contrast/screenshot integration checks plus full verify passed. Stack height/duration unverified."
+    },
+    {
+      "id": "SP-S34",
+      "area": "Bitwarden and own CSV import lose favorite metadata",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "ed5a86d",
+      "status": "Three Rust and three frontend baseline red tests; creation-only flag preserved through command/wire/KDBX, CSV writer/parser and IO/browser. Four frontend regressions, six targeted Rust tests, real Edge chooser/icons and full gate passed; complete migration remains partial."
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "42b43cb",
-    "log": "verify-tip-wrap-integration.log",
-    "frontend_tests": 312,
-    "rust_unit_tests": 561,
+    "checkpoint": "ed5a86d",
+    "log": "verify-import-favorite.log",
+    "frontend_tests": 316,
+    "rust_unit_tests": 564,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -383,7 +391,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 561,
+    "rust_unit_tests_discovered": 564,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -444,6 +452,15 @@
       "integration_contact_sheet": "tip-wrap-integration-contact-sheet.png",
       "integration_screenshots": 18,
       "scope": "Fresh Edge global tip synthetic public strings and real CSV/XML demo import UI; native runtime, stack height/duration unverified"
+    },
+    "import_favorite": {
+      "result": "passed",
+      "native_red_log": "import-favorite-rust-red-corrected.log",
+      "native_green_log": "import-favorite-rust-green.log",
+      "browser_log": "import-favorite-browser.log",
+      "screenshots": ["import-favorite-760.png", "import-favorite-390.png"],
+      "reference_provenance": "bitwarden-export-metadata-provenance.json",
+      "scope": "Synthetic command/wire/KDBX reopen and fresh Edge CSV page; no native Bitwarden export/device or clipboard"
     }
   },
   "reverification_notes": [
@@ -497,6 +514,7 @@
     "3119cf0 fixes SP-S30 localized XML rejection before writes and discards old picker completions before parsing. Three handler red-to-green tests and actual Edge FileReader/DOMParser passed; full verify 312/561/ACL2 exit 0. Parser unchanged; four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline preserved; goal active and mobile v1.6.5 cloud Save As still lacks APK/device evidence.",
     "414e049 fixes SP-S31 explicit failure severity across page and IO/group/favicon/editor seams. Actual source probes, 38 adjacent IO tests and nine rendered Edge combinations passed; full verify 312/561/ACL2 exit 0. Default live clipboard bodies skipped; no new token or CSS geometry. External patch-script TypeScript resolution/trailing-comma faults corrected before final gate and not counted as product findings. Baseline unchanged, goal active; light contrast and mobile Save As APK/device remain pending.",
     "34b6768 fixes SP-S32 transient tip text contrast using existing primary text token. Independent Edge measured 12/18 baseline failures and 18/18 green passes, including actual import errors/success. Eighteen screenshots inspected; check/build/format passed; full gate remains at 414e049 until a later integration run. Original baseline unchanged, goal active; long-message geometry and Android Save As device/APK remain pending.",
-    "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending."
+    "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending.",
+    "ed5a86d fixes SP-S34 favorite loss across structured and CSV import, frontend metadata and native/browser bulk creation. Three native and three frontend red-to-green plus invalid localized CSV regression passed; six favorite Rust tests and real chooser/icon checks passed. Full verify 316/564/ACL2 exit 0 with four live clipboard bodies skipped. Source docs/TODO synchronized; original baseline preserved. Official JSON excludes trash and includes passwordHistory; attachments belong to ZIP, so initial deleted-item hypothesis is not promoted. Full migration/mobile Save As/remaining system/UI audit still active."
   ]
 }
