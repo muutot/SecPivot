@@ -14,19 +14,28 @@
   let { x, y, onclose, ariaLabel, role = "menu", modifier = "", children }: Props = $props();
 
   let menuEl = $state<HTMLDivElement>();
-  /** `null` until the first clamp pass; a clamped position of exactly 0 is
-   *  valid and must not fall back to the raw cursor coordinate. */
+  /** `null` until the first measured clamp pass. */
   let posX = $state<number | null>(null);
   let posY = $state<number | null>(null);
 
   $effect(() => {
-    if (menuEl) {
+    if (!menuEl) return;
+    const clamp = (): void => {
+      if (!menuEl) return;
       const rect = menuEl.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      posX = Math.min(x, Math.max(0, vw - rect.width - 8));
-      posY = Math.min(y, Math.max(0, vh - rect.height - 8));
-    }
+      posX = Math.min(Math.max(8, x), Math.max(8, vw - rect.width - 8));
+      posY = Math.min(Math.max(8, y), Math.max(8, vh - rect.height - 8));
+    };
+    clamp();
+    const observer = new ResizeObserver(clamp);
+    observer.observe(menuEl);
+    window.addEventListener("resize", clamp);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", clamp);
+    };
   });
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -61,7 +70,13 @@
   .viewport-menu {
     position: fixed;
     z-index: 9999;
-    min-width: 160px;
+    min-width: min(160px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
     padding: 4px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
@@ -70,8 +85,8 @@
   }
 
   .viewport-menu--column-config {
-    min-width: 190px;
-    max-width: 260px;
+    min-width: min(190px, calc(100vw - 16px));
+    max-width: min(260px, calc(100vw - 16px));
     max-height: 60vh;
     overflow: auto;
   }
