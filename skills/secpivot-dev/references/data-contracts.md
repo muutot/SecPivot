@@ -137,6 +137,11 @@ including browser host adapters and auto-type scoring. Nonempty whitespace and
 explicit wildcard patterns retain their meaning; existing compile/input limits
 and malformed-regex handling are unchanged.
 
+Native `update_entry_flags` validates the optional foreground color before
+writing any matching/quality/color attribute. An invalid color leaves the raw
+entry, cached snapshot, dirty flag and revision unchanged, including a later
+save/reopen. Existing absent/empty/valid values and target-error order remain.
+
 Main-window `flash(message, kind = "success")` forwards the existing TipKind.
 IO/group/favicon/editor notification seams accept `(message, kind?: TipKind)`;
 explicit failure branches pass `"error"`, while normal completion retains the
