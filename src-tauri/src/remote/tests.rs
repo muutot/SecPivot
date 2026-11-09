@@ -208,6 +208,16 @@ fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
     }
 }
 
+fn configure_s3_page_stream(stream: &std::net::TcpStream) {
+    // Windows accepted sockets inherit the listener's nonblocking mode.
+    // read_timeout alone does not change it: header reads can immediately
+    // return WouldBlock before reqwest sends any bytes.
+    stream.set_nonblocking(false).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+}
+
 /// Finite scripted HTTP peer: captures the actual encoded request target and
 /// exits even when a regression stops requesting pages early.
 fn spawn_s3_pages(
@@ -236,9 +246,7 @@ fn spawn_s3_pages(
                     Err(_) => return,
                 }
             };
-            stream
-                .set_read_timeout(Some(Duration::from_secs(1)))
-                .unwrap();
+            configure_s3_page_stream(&stream);
             let mut header = Vec::new();
             let mut byte = [0];
             while header.len() < 16 * 1024 && !header.ends_with(b"\r\n\r\n") {
@@ -258,6 +266,32 @@ fn spawn_s3_pages(
         }
     });
     (addr, rx)
+}
+
+#[test]
+fn s3_page_fixture_waits_for_delayed_request_bytes() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let mut sender = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    let (mut stream, _) = listener.accept().unwrap();
+    configure_s3_page_stream(&stream);
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        let mut byte = [0];
+        ready_tx.send(()).unwrap();
+        let result = stream.read_exact(&mut byte);
+        (result, byte)
+    });
+    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    sender.write_all(b"A").unwrap();
+    let (result, byte) = reader.join().unwrap();
+    assert!(
+        result.is_ok(),
+        "accepted fixture stream must wait for request bytes: {result:?}"
+    );
+    assert_eq!(byte, [b'A']);
 }
 
 #[test]

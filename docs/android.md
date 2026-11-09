@@ -52,7 +52,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 > 验证状态（2026-11-09，SAF ACL）：
 >
-> - 真机反馈“另存为失败: Command plugin:saf|create_document not allowed by ACL”，选择器未启动。根因是 Android capability 误用 `screens`，Tauri 会忽略该字段，导致 `saf:default` 没有匹配主窗口。已改为 `windows: ["main"]`。
+> - 用户原始反馈“另存为失败: Command plugin:safe|create_document not allowed by ACL”，选择器未启动。当前源码注册/调用的是 `saf`，反馈中 `safe` 的拼写差异仍需安装包或原始设备日志核实。源码另有已确认权限问题：Android capability 误用 `screens`，Tauri 会忽略该字段，导致 `saf:default` 没有匹配主窗口；已改为 `windows: ["main"]`。
 > - `src-tauri/tests/android_acl.rs` 使用 Tauri 实际 ACL 解析器和构建生成的插件权限清单，在 Windows host 上按 Android target 复现修复前拒绝、验证修复后打开/新建命令可用于本地主窗口，并验证不授权其他窗口、远程网页或桌面/iOS。
 > - ACL 修复需重新构建安装 APK 后生效；系统选择器及提供商写入仍需真机复测。
 

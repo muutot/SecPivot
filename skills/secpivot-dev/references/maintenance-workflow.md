@@ -40,6 +40,11 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 ## Browser vs desktop truth
 
+- Windows accepted sockets inherit a nonblocking listener's mode. A blocking
+  HTTP fixture must explicitly call `set_nonblocking(false)` before reading;
+  setting a read timeout alone still permits immediate `WouldBlock`. Verify
+  this with delayed request bytes, not only clients that send immediately.
+
 - Offline S3/WebDAV HTTP tests disable environment/system proxies on their
   shared client. Otherwise a Windows system proxy can relay loopback fixtures
   and return HTTP 502 despite the local peer always replying 200. This is a
