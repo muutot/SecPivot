@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S22；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S23；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 6      | 6         | 0         |
+| High      | 7      | 7         | 0         |
 | Medium    | 22     | 22        | 0         |
 | Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **33** | **33**    | **0**     |
+| **Total** | **34** | **34**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1437,3 +1437,51 @@ documentation currency gate 同步主题/模块/安全引用，TODO 仅勾选已
 原始基线统计和 6.1 分保持不变。原生 Android WebView/屏幕阅读器、
 手机 v1.6.5 另存为的新 APK/真机、URI 模式/authority/端口/IDNA、其余
 竞品迁移、KDF 基准及完整文件语义/UI 覆盖仍待继续，整体目标未完成。
+
+### Finding: SP-S23 Bitwarden 导入丢失逐网址匹配限制和后续网址（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Privacy / Data Integrity / Testing
+- Status: Confirmed
+- Affected area: Bitwarden login URI import and browser credential matching
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:143`、`src-tauri/src/vault/helpers.rs:255`（`10f9872` 修复前）
+  - Function / Module: `parse_bitwarden_json` / `kprpc_matches_url`
+  - Relevant behavior: uris 只取首个字符串 uri，不读取 match；存成普通 URL 后走本机默认匹配，后续 URI 和其规则没有保存。
+  - Reproduction: `bitwarden-uri-modes-probe.rs` 使用真实 parser command → ImportRow wire → import_entries → 合成 KDBX 保存重开。Never(5) 同网址、Exact(3) 不同路径、Host(1) 不同端口、StartsWith(2) 不同前缀路径，在 BridgeHost/RpcHost 每次均返回一条合成凭据；探针只输出模式及数量，未输出密码，见 `bitwarden-uri-mode-red.log`。双网址例中保存后只有一条 URL，第一个网址各返回 1，第二个各返回 0，见 `bitwarden-multi-uri-red.log`。临时测试已按字节恢复，证据文件留在审计目录。
+  - Independent reference: 固定 Bitwarden commit `1a8bdbfe625bff90a9c0cabef2002e37f6038fa1` 的 LoginUriExport 保留 uri/match，domain-service 定义 Domain=0、Host=1、StartsWith=2、Exact=3、Regex=4、Never=5；Never 明确不提供 autofill，Host 比较指定端口。源码摘要见 `bitwarden-uri-reference-provenance.json`；[官方 URI 匹配文档](https://bitwarden.com/help/uri-match-detection/) 下载 SHA-256 为 566092ea119db35386803d722a420cc92d78b2e965fc079716aa14967b62589c。
+- Problem: 导入把用户的禁用/严格目的地策略改为默认宽松匹配，并静默删去其他网址，产生凭据返回边界和迁移完整性问题。
+- Why it matters: 用户在源客户端禁止自动填充或限制到精确页面后，迁移不应自动开放。证据限合成库中的实际 host 适配器，没有真实浏览器扩展外传或用户库读取，按 High 的策略丢失记录。
+- Realistic failure scenario: 将银行或管理后台条目设为 Never 后导入，浏览器请求该网址又得到条目；Exact 页面限制也不能阻止不同路径查询。
+- Minimal fix: 在实现有保真性的逐 URI 策略前，对多个有效网址及显式匹配模式明确拒绝整份导入，错误只包含记录编号/不支持原因；不产生弱化条目或部分结果。
+- Better long-term fix: 设计原生逐网址规则，保留所有 URI 和模式，覆盖大小写/端口/IDNA/PSL/正则与编辑生命周期，再开放对应导入；现有全条目的 KPRPC accuracy/regex 不能直接表达混合策略。
+- Regression test suggestion: 0–5 显式模式、多网址、混合有效/不支持记录、非法模式/URI 类型均不返回可导入部分行；缺省/null 模式的单网址和无网址继续保存重开，既有类型/字段/链接/TOTP 回归保持通过；后续完整规则实现须运行同一 host 边界探针。
+- Estimated effort: 1–2 小时（拒绝边界及回归）；完整逐网址规则与原生互操作另计
+
+`4dbe49c` 关闭了 SP-S23 的不安全导入路径。新增 `default_login_uri`，最多
+接受一个非空网址，且 match 必须缺省/null；显式模式 0–5 或多个有效
+网址返回明确不支持错误，整份解析不给出部分 rows。非法 URI/mode 类型
+和 URI 内部空白也拒绝，避免单个错误字符串在原生空白分隔 URL 字段中
+变成多个目的地。无网址、缺省/null/空 URI 集合和单个默认网址继续支持。
+没有新 IPC/DTO、匹配配置、UI 或依赖变更，后端常规 matcher 保持原行为。
+
+这项修正是安全的格式拒绝边界；**完整逐 URI 功能尚未实现**，包含多个
+网址或显式模式的标准 Bitwarden 文件现在不能导入，TODO 保持部分完成。
+既有导入已丢失的网址/策略不能从当前 KDBX 自动恢复，须保留原始导出
+以备完整迁移。没有检查或修改用户库，也没有建议通过删改规则绕过检查。
+
+四项新增回归覆盖 0–5 模式、有效/不支持混合文件、多个默认网址、十二种
+非法结构、内容不进入错误，以及六种支持的单/无网址实际 command→wire→
+KDBX 保存重开。`bitwarden-uri-gate-green.log` 的 **19** 项针对性测试通过，
+包括现有类型、链接、自定义标签、OTP/匹配、原子 quality metadata。
+正式 `npm run verify` 的 `verify-bitwarden-uri-gate.log` 通过：前端 **299**、
+Rust **552 + ACL 2**、格式、Svelte check、150 键合同、生产构建和 clippy。
+临时 host 探针已按原字节撤下；该探针保留四种限制被放宽和第二网址丢失
+的有效红灯证据，不在最终测试套件中留下预期失败测试。
+
+documentation currency gate 更新数据/模块/安全引用与局部 TODO；报告和
+metadata 同步 **34** 张 Confirmed 卡片（High 7 / Medium 22 / Low 5），
+原始 15 项/6.1 分基线保持不变。原生 Android APK/选择器/provider、
+真实扩展和屏幕阅读器未验证；完整逐 URI 模型、URL authority/端口/IDNA、
+其余迁移、KDF 基准及完整语义/UI 覆盖仍待继续，整体目标未完成。
