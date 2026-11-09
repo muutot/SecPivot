@@ -4237,6 +4237,41 @@ fn hotp_code_advances_counter_and_writes_back() {
     assert!(mtime > pinned);
 }
 
+#[test]
+fn protected_hotp_counter_advance_keeps_seed_masked_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let input: EntryInput = serde_json::from_value(serde_json::json!({
+        "groupUuid": "root", "title": "Protected HOTP", "username": "", "password": "",
+        "url": "", "notes": "", "customFields": [{
+            "name": "HmacOtp", "value": "JBSWY3DPEHPK3PXP:6:42", "protected": true
+        }], "attachments": []
+    }))
+    .unwrap();
+    let state = session.add_entry(&input).unwrap();
+    let uuid = &state.root.entries[0].uuid;
+    let first = session.totp_code(uuid).unwrap();
+    assert_eq!(first.kind, "hotp");
+    assert_eq!(first.counter, Some(42));
+    let current = session.state().unwrap().unwrap();
+    let field = &current.root.entries[0].custom_fields[0];
+    assert!(
+        field.protected,
+        "counter advancement must preserve field protection"
+    );
+    assert!(
+        field.value.is_empty(),
+        "a code request must never expose the seed in a snapshot"
+    );
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "master-password", None).unwrap();
+    let current = reopened.state().unwrap().unwrap();
+    assert!(current.root.entries[0].custom_fields[0].protected);
+    assert!(current.root.entries[0].custom_fields[0].value.is_empty());
+    assert_eq!(reopened.totp_code(uuid).unwrap().counter, Some(43));
+}
+
 /// A Steam guard entry yields a 5-character code from the Steam alphabet
 /// with a live countdown (time-based).
 #[test]

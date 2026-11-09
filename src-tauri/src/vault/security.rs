@@ -163,7 +163,18 @@ impl VaultSession {
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            entry.set(FIELD_HMAC_OTP, Value::unprotected(next));
+            let protected = entry
+                .fields
+                .get(FIELD_HMAC_OTP)
+                .is_some_and(Value::is_protected);
+            entry.set(
+                FIELD_HMAC_OTP,
+                if protected {
+                    Value::protected(next)
+                } else {
+                    Value::unprotected(next)
+                },
+            );
             entry.times.last_modification = Some(Times::now());
         }
         self.mark_dirty();
