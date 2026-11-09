@@ -401,7 +401,8 @@ impl VaultSession {
     /// fields (same pattern as `update_entry_autotype`). `override_url` is
     /// tri-state: absent keeps the current value, an empty string clears it,
     /// a non-empty string sets it (trimmed). `quality_check` sets the KDBX
-    /// per-entry password-quality flag when present.
+    /// per-entry password-quality flag when present. Actual changes refresh
+    /// the entry modification time for merge; normalized no-ops keep it.
     pub fn update_entry_flags(
         &mut self,
         uuid: &str,
@@ -423,19 +424,27 @@ impl VaultSession {
                         .ok_or_else(|| "前景色无效，应为 #RRGGBB".to_owned())?,
                 )),
             };
+            let mut changed = false;
             if let Some(value) = override_url {
                 let value = value.trim();
-                entry.override_url = if value.is_empty() {
+                let override_url = if value.is_empty() {
                     None
                 } else {
                     Some(value.to_owned())
                 };
+                changed |= entry.override_url != override_url;
+                entry.override_url = override_url;
             }
             if let Some(check) = quality_check {
+                changed |= entry.quality_check != check;
                 entry.quality_check = check;
             }
             if let Some(color) = parsed_color {
+                changed |= entry.foreground_color != color;
                 entry.foreground_color = color;
+            }
+            if changed {
+                entry.times.last_modification = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -1268,7 +1277,8 @@ impl VaultSession {
     }
 
     /// Replace an entry's Auto-Type configuration (enabled flag, default
-    /// sequence, and window associations) in one write.
+    /// sequence, and window associations) in one write. Actual changes refresh
+    /// the entry modification time for merge; normalized no-ops keep it.
     pub fn update_entry_autotype(
         &mut self,
         uuid: &str,
@@ -1278,7 +1288,7 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            entry.autotype = Some(AutoType {
+            let autotype = Some(AutoType {
                 enabled: input.enabled,
                 default_sequence: normalize_optional_sequence(input.default_sequence.as_deref()),
                 data_transfer_obfuscation: DataTransferObfuscation::None,
@@ -1291,6 +1301,10 @@ impl VaultSession {
                     })
                     .collect(),
             });
+            if entry.autotype != autotype {
+                entry.autotype = autotype;
+                entry.times.last_modification = Some(Times::now());
+            }
         }
         self.mark_dirty();
         self.snapshot_without_icons()

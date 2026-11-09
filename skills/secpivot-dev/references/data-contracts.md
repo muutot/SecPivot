@@ -142,6 +142,16 @@ writing any matching/quality/color attribute. An invalid color leaves the raw
 entry, cached snapshot, dirty flag and revision unchanged, including a later
 save/reopen. Existing absent/empty/valid values and target-error order remain.
 
+`update_entry_flags` and `update_entry_autotype` refresh the entry's
+`Times.last_modification` with `Times::now()` when normalized attributes change,
+so an old timestamp does not obstruct a standalone edit's merge. Repeated
+equal values retain the timestamp. Their existing dirty/revision and history
+behavior stays intact; the editor's primary full-field write still creates its
+pre-edit snapshot before the attribute follow-ups. This does not establish
+atomicity or complete history for every standalone attribute command.
+Times retain KDBX second precision; same-second divergence is a separate
+merge boundary, not a monotonic timestamp guarantee.
+
 Bitwarden nonempty `passwordHistory` arrays are archived as a uniquely named,
 protected `Bitwarden Password History` custom field. The source JSON preserves
 order, duplicates, empty passwords, optional/null string dates and extra keys;

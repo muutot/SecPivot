@@ -9445,6 +9445,100 @@ fn empty_override_url_falls_back_to_url_field() {
 }
 
 #[test]
+fn entry_flags_edit_advances_time_and_merges_after_reopen() {
+    assert_attribute_edit_advances_time_and_merges(false);
+}
+
+#[test]
+fn entry_autotype_edit_advances_time_and_merges_after_reopen() {
+    assert_attribute_edit_advances_time_and_merges(true);
+}
+
+fn apply_synthetic_attribute_edit(session: &mut VaultSession, uuid: &str, autotype: bool) {
+    if autotype {
+        session
+            .update_entry_autotype(
+                uuid,
+                &EntryAutoTypeInput {
+                    enabled: false,
+                    default_sequence: Some(" {USERNAME} ".into()),
+                    associations: vec![AutoTypeAssociationDto {
+                        window: " Synthetic* ".into(),
+                        sequence: "{TAB}".into(),
+                    }],
+                },
+            )
+            .unwrap();
+    } else {
+        session
+            .update_entry_flags(
+                uuid,
+                Some(" https://synthetic.example/override ".into()),
+                Some(false),
+                Some(" #123456 ".into()),
+            )
+            .unwrap();
+    }
+}
+
+fn assert_attribute_edit_advances_time_and_merges(autotype: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic attributes",
+            "",
+            "",
+            "",
+        ))
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(10));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    apply_synthetic_attribute_edit(&mut session, &uuid, autotype);
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let current = session.require_db().unwrap();
+    // An unchanged copy of the same vault must not conflict with one actual
+    // edit just because the attribute path forgot LastModificationTime.
+    for (local, remote) in [(&baseline, current), (current, &baseline)] {
+        let result = merge_databases(local, remote);
+        assert!(result.is_ok(), "one-sided attribute edit must merge");
+        let merged = result.unwrap();
+        let entry = merged.entry(id).unwrap();
+        let expected = current.entry(id).unwrap();
+        assert!(entry.autotype == expected.autotype);
+        assert!(entry.override_url == expected.override_url);
+        assert_eq!(entry.quality_check, expected.quality_check);
+        assert!(entry.foreground_color == expected.foreground_color);
+    }
+    assert!(current.entry(id).unwrap().times.last_modification > Some(merge_ts(10)));
+    // Repeating the normalized values must not make an unchanged record look
+    // newer. Pin its timestamp so wall-clock precision cannot hide a rewrite.
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    apply_synthetic_attribute_edit(&mut session, &uuid, autotype);
+    assert_eq!(
+        session
+            .require_db()
+            .unwrap()
+            .entry(id)
+            .unwrap()
+            .times
+            .last_modification,
+        Some(merge_ts(20))
+    );
+}
+
+#[test]
 fn update_entry_flags_round_trips_override_url_and_quality_check() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);
