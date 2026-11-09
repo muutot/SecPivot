@@ -11,6 +11,11 @@ upload. Save, key change, settings rewrite, creation, merge and RPC completion
 adopt the committed hash/key and expose `VaultState.mirrorWarning` (null clears it).
 Even a stale merge completion advances the remote base while preserving live edits.
 
+Remote OS-keyring field addresses include a hash of the canonical data root and
+the full `kind/name` profile path. S3/WebDAV names and portable installations
+cannot overwrite one another; legacy embedded keyring references still load and
+are migrated to the scoped address on save. Windows DPAPI inline values are unchanged.
+
 This reference defines the frontend ↔ backend contract. Update it together with any change to IPC commands, serde types, config schema, or vault serialization.
 
 ## Config contract
