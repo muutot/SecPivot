@@ -38,21 +38,36 @@ const MAX_LOCAL_FILE_BYTES: u64 = 512 * 1024 * 1024;
 /// Read a vault or keyfile, resolving mobile document URIs via the fs plugin.
 /// `what` names the file type in user-facing error messages.
 pub(crate) fn read(path: &Path, what: &str) -> Result<Vec<u8>, String> {
+    read_with_limit(path, what, MAX_LOCAL_FILE_BYTES)
+}
+
+pub(crate) fn read_with_limit(path: &Path, what: &str, limit: u64) -> Result<Vec<u8>, String> {
     #[cfg(mobile)]
     if is_document_uri(path) {
-        return read_uri(path, what);
+        return read_uri(path, what, limit);
     }
     if !is_document_uri(path) {
         if let Ok(meta) = std::fs::metadata(path) {
-            if meta.len() > MAX_LOCAL_FILE_BYTES {
-                return Err(format!(
-                    "{what}超过 {} MiB 上限",
-                    MAX_LOCAL_FILE_BYTES / 1024 / 1024
-                ));
+            if meta.len() > limit {
+                return Err(format!("{what}超过 {} MiB 上限", limit / 1024 / 1024));
             }
         }
     }
-    std::fs::read(path).map_err(|e| format!("无法读取{what}: {e}"))
+    let file = std::fs::File::open(path).map_err(|e| format!("无法读取{what}: {e}"))?;
+    read_capped(file, what, limit)
+}
+
+fn read_capped(reader: impl std::io::Read, what: &str, limit: u64) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    reader
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("无法读取{what}: {e}"))?;
+    if bytes.len() as u64 > limit {
+        return Err(format!("{what}超过 {} MiB 上限", limit / 1024 / 1024));
+    }
+    Ok(bytes)
 }
 
 /// Write a vault file. Desktop paths keep the atomic temp-and-rename behavior;
@@ -74,28 +89,24 @@ fn document_path(path: &Path) -> Result<tauri_plugin_fs::FilePath, String> {
 }
 
 #[cfg(mobile)]
-fn read_uri(path: &Path, what: &str) -> Result<Vec<u8>, String> {
+fn read_uri(path: &Path, what: &str, limit: u64) -> Result<Vec<u8>, String> {
     let app = APP
         .get()
         .ok_or_else(|| format!("无法读取{what}: 应用尚未初始化"))?;
-    read_uri_with(app, path, what)
+    read_uri_with(app, path, what, limit)
 }
 
 #[cfg(mobile)]
-fn read_uri_with(app: &AppHandle, path: &Path, what: &str) -> Result<Vec<u8>, String> {
-    use std::io::Read;
+fn read_uri_with(app: &AppHandle, path: &Path, what: &str, limit: u64) -> Result<Vec<u8>, String> {
     use tauri_plugin_fs::FsExt;
 
     let mut options = tauri_plugin_fs::OpenOptions::new();
     options.read(true);
-    let mut file = app
+    let file = app
         .fs()
         .open(document_path(path)?, options)
         .map_err(|e| format!("无法读取{what}: {e}"))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
-        .map_err(|e| format!("无法读取{what}: {e}"))?;
-    Ok(bytes)
+    read_capped(file, what, limit)
 }
 
 /// Write the document content in place, truncating the target first.
@@ -112,67 +123,141 @@ fn write_uri_with(app: &AppHandle, path: &Path, bytes: &[u8]) -> Result<(), Stri
         .map_err(|e| format!("写入数据库失败: {e}"))?;
     file.write_all(bytes)
         .map_err(|e| format!("写入数据库失败: {e}"))?;
-    let _ = file.sync_all();
+    file.sync_all().map_err(|e| format!("写入数据库失败: {e}"))
+}
+
+/// SAF cannot rename: refuse to truncate unless the old content was read.
+/// A rollback is reported successful only after its bytes are read back.
+#[cfg(any(mobile, test))]
+fn write_verified(
+    bytes: &[u8],
+    mut read: impl FnMut() -> Result<Vec<u8>, String>,
+    mut write: impl FnMut(&[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    let previous = read().map_err(|e| format!("无法读取原数据库，已取消写入: {e}"))?;
+    let result = write(bytes).and_then(|()| {
+        if read()? == bytes {
+            Ok(())
+        } else {
+            Err("写入内容校验不一致".to_owned())
+        }
+    });
+    if let Err(error) = result {
+        let restored = write(&previous)
+            .and_then(|()| read())
+            .is_ok_and(|stored| stored == previous);
+        let note = if restored {
+            "已回滚到上一次内容"
+        } else {
+            "回滚失败，请重新选择数据库文件"
+        };
+        return Err(format!("写入数据库失败: {error}，{note}"));
+    }
     Ok(())
 }
 
-/// Put the previous content back after a failed write.
-///
-/// `None` means there was nothing to restore (the document was empty or
-/// unreadable before the write), `Some(true)` means the previous content is
-/// back, `Some(false)` means the provider is still broken and the caller must
-/// tell the user to re-pick the file.
-#[cfg(mobile)]
-fn restore_uri(app: &AppHandle, path: &Path, previous: Option<&[u8]>) -> Option<bool> {
-    let previous = previous?;
-    Some(write_uri_with(app, path, previous).is_ok())
-}
-
-/// Message suffix describing the rollback outcome.
-#[cfg(mobile)]
-fn rollback_note(restored: Option<bool>) -> &'static str {
-    match restored {
-        None => "，文档此前为空，未覆盖已有内容",
-        Some(true) => "，已回滚到上一次内容",
-        Some(false) => "，且回滚失败，请重新选择数据库文件",
-    }
-}
-
-/// Write a mobile document.
-///
-/// SAF has no rename, so the document can only be rewritten in place and the
-/// write truncates the target first: a provider error halfway through would
-/// leave the user with an empty or half-written database and no other copy.
-/// The write is therefore transactional at the application level: the current
-/// content is read first, the new content is written, the stored bytes are
-/// read back and compared, and any failure rolls the previous content back.
-/// A provider that serves a stale copy makes the verification fail; the
-/// rollback then keeps the previous database intact and the save is reported
-/// as failed instead of silently losing data.
 #[cfg(mobile)]
 fn write_uri(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let app = APP
         .get()
         .ok_or_else(|| "写入数据库失败: 应用尚未初始化".to_owned())?;
-    let previous = read_uri_with(app, path, "数据库文件").ok();
-    match write_uri_with(app, path, bytes) {
-        Ok(()) => match read_uri_with(app, path, "数据库文件") {
-            Ok(stored) if stored == bytes => Ok(()),
-            Ok(_) => {
-                let restored = restore_uri(app, path, previous.as_deref());
-                Err(format!(
-                    "写入数据库失败: 写入内容校验不一致{}",
-                    rollback_note(restored)
-                ))
+    write_verified(
+        bytes,
+        || read_uri_with(app, path, "数据库文件", MAX_LOCAL_FILE_BYTES),
+        |data| write_uri_with(app, path, data),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn capped_read_stops_at_limit_plus_one() {
+        struct Counted<'a>(&'a Cell<usize>);
+        impl std::io::Read for Counted<'_> {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                buffer.fill(1);
+                self.0.set(self.0.get() + buffer.len());
+                Ok(buffer.len())
             }
-            Err(e) => {
-                let restored = restore_uri(app, path, previous.as_deref());
-                Err(format!("写入数据库失败: {e}{}", rollback_note(restored)))
-            }
-        },
-        Err(e) => {
-            let restored = restore_uri(app, path, previous.as_deref());
-            Err(format!("{e}{}", rollback_note(restored)))
         }
+        let count = Cell::new(0);
+        assert!(read_capped(Counted(&count), "fixture", 8).is_err());
+        assert_eq!(count.get(), 9);
+        assert_eq!(
+            read_capped(&b"12345678"[..], "fixture", 8).unwrap(),
+            b"12345678"
+        );
+    }
+
+    #[test]
+    fn unreadable_document_is_never_truncated() {
+        let writes = Cell::new(0);
+        let result = write_verified(
+            b"new",
+            || Err("provider failed".into()),
+            |_| {
+                writes.set(writes.get() + 1);
+                Ok(())
+            },
+        );
+        assert!(result.unwrap_err().contains("已取消写入"));
+        assert_eq!(writes.get(), 0);
+    }
+
+    #[test]
+    fn partial_write_restores_previous_bytes_and_empty_document_can_be_created() {
+        let stored = RefCell::new(b"previous".to_vec());
+        let writes = Cell::new(0);
+        let error = write_verified(
+            b"new",
+            || Ok(stored.borrow().clone()),
+            |data| {
+                writes.set(writes.get() + 1);
+                if writes.get() == 1 {
+                    *stored.borrow_mut() = b"partial".to_vec();
+                    Err("partial failure".into())
+                } else {
+                    *stored.borrow_mut() = data.to_vec();
+                    Ok(())
+                }
+            },
+        )
+        .unwrap_err();
+        assert!(error.contains("已回滚"));
+        assert_eq!(*stored.borrow(), b"previous");
+        stored.borrow_mut().clear();
+        write_verified(
+            b"new",
+            || Ok(stored.borrow().clone()),
+            |data| {
+                *stored.borrow_mut() = data.to_vec();
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(*stored.borrow(), b"new");
+    }
+
+    #[test]
+    fn rollback_success_requires_readback_verification() {
+        let reads = Cell::new(0);
+        let error = write_verified(
+            b"new",
+            || {
+                reads.set(reads.get() + 1);
+                Ok(if reads.get() == 1 {
+                    b"previous".to_vec()
+                } else {
+                    b"wrong".to_vec()
+                })
+            },
+            |_| Ok(()),
+        )
+        .unwrap_err();
+        assert!(error.contains("回滚失败"));
+        assert!(!error.contains("已回滚"));
     }
 }
