@@ -443,6 +443,15 @@ pub struct EntryInput {
     pub attachments: Vec<AttachmentInput>,
 }
 
+/// Import-only metadata stays out of ordinary full-field rewrites.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportEntryInput {
+    #[serde(flatten)]
+    pub input: EntryInput,
+    pub quality_check: Option<bool>,
+}
+
 /// Partial entry update applied to several entries at once (batch editing).
 /// An absent field leaves the entry untouched; the `clear_*` flags explicitly
 /// clear optional values. Passwords never enter the log or config.

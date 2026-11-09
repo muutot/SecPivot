@@ -291,18 +291,34 @@ impl VaultSession {
     /// dirty flag and snapshot — the CSV/XML importer calls this once instead
     /// of round-tripping one IPC per row.
     pub fn add_entries(&mut self, inputs: &[EntryInput]) -> Result<VaultState, String> {
+        let inputs: Vec<_> = inputs.iter().map(|input| (input, None)).collect();
+        self.add_entries_with_quality(&inputs)
+    }
+
+    pub fn import_entries(&mut self, inputs: &[ImportEntryInput]) -> Result<VaultState, String> {
+        let inputs: Vec<_> = inputs
+            .iter()
+            .map(|row| (&row.input, row.quality_check))
+            .collect();
+        self.add_entries_with_quality(&inputs)
+    }
+
+    fn add_entries_with_quality(
+        &mut self,
+        inputs: &[(&EntryInput, Option<bool>)],
+    ) -> Result<VaultState, String> {
         if inputs.is_empty() {
             return self.snapshot_without_icons();
         }
         let payloads: Vec<Vec<AttachmentPayload>> = inputs
             .iter()
-            .map(|input| decode_attachments(&input.attachments))
+            .map(|(input, _)| decode_attachments(&input.attachments))
             .collect::<Result<_, _>>()?;
         // Validate every target group up-front so a bad group aborts the
         // whole batch before any entry is inserted (no partial import).
         {
             let db = self.require_db()?;
-            for input in inputs {
+            for (input, _) in inputs {
                 if input.group_uuid != ROOT_GROUP_UUID {
                     let group_id = parse_group_id(&input.group_uuid)?;
                     db.group(group_id)
@@ -312,7 +328,7 @@ impl VaultSession {
         }
         {
             let db = self.require_db_mut()?;
-            for (input, payload) in inputs.iter().zip(&payloads) {
+            for ((input, quality_check), payload) in inputs.iter().zip(&payloads) {
                 let mut group = if input.group_uuid == ROOT_GROUP_UUID {
                     db.root_mut()
                 } else {
@@ -321,6 +337,9 @@ impl VaultSession {
                         .ok_or_else(|| "目标分组不存在".to_owned())?
                 };
                 let mut entry = group.add_entry();
+                if let Some(check) = quality_check {
+                    entry.quality_check = *check;
+                }
                 write_fields(&mut entry, input);
                 sync_custom_fields(&mut entry, &input.custom_fields);
                 sync_attachments(&mut entry, &input.attachments, payload);

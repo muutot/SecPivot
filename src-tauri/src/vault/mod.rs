@@ -162,9 +162,9 @@ pub use self::dto::{
     DuplicatePasswords, EntryAutoTypeConfig, EntryAutoTypeInput, EntryInput, EntryPatch,
     EntryStorage, ExpiredEntry, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport,
     GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput, HibpProgress, HistoryCleanResult,
-    HistoryDiff, HistoryItemChange, HistoryVersion, MutationDelta, SecurityReport, SessionInfo,
-    SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode, VaultEntry, VaultGroup,
-    VaultOpenResult, VaultState, WeakEntry, WritableDatabaseCipher,
+    HistoryDiff, HistoryItemChange, HistoryVersion, ImportEntryInput, MutationDelta,
+    SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode,
+    VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry, WritableDatabaseCipher,
 };
 
 pub use self::breach::BreachFinding;

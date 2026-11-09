@@ -17,7 +17,7 @@ import {
   type SessionViewToken,
 } from "$lib/utils/session-state";
 import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
-import type { CustomField, EntryInput, ImportRow, VaultState } from "$lib/types/vault";
+import type { CustomField, ImportEntryInput, ImportRow, VaultState } from "$lib/types/vault";
 import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
 import { isAndroid, isTauriRuntime, appSettings } from "$lib/services/settings";
@@ -48,6 +48,7 @@ export type IoHost = {
 /** Normalized import row shared by the CSV, KeePass-XML, Bitwarden and
  *  1Password importers. */
 export type ImportEntry = {
+  qualityCheck?: boolean;
   group: string;
   title: string;
   username: string;
@@ -135,6 +136,7 @@ export function xmlToImportEntries(text: string, lang: Language): ImportEntry[] 
 /** Shared row mapping for the JSON-based importers (Bitwarden, 1Password). */
 export function importRowsToEntries(rows: ImportRow[]): ImportEntry[] {
   return rows.map((row) => ({
+    qualityCheck: row.qualityCheck,
     group: row.group,
     title: row.title,
     username: row.username,
@@ -293,7 +295,8 @@ export async function importEntries(
         groupCache.set(entry.group, groupUuid);
       }
     }
-    const inputs: EntryInput[] = entries.map((entry) => ({
+    const inputs: ImportEntryInput[] = entries.map((entry) => ({
+      qualityCheck: entry.qualityCheck,
       groupUuid: groupCache.get(entry.group)!,
       title: entry.title,
       username: entry.username,

@@ -105,6 +105,7 @@ fn parse_record(record: Record) -> Result<ImportRow, ()> {
         return Err(());
     }
     let mut row = ImportRow {
+        quality_check: None,
         group: String::new(),
         title,
         username: String::new(),
