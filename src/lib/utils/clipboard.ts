@@ -1,130 +1,149 @@
 import { get } from "svelte/store";
-import { appSettings } from "$lib/services/settings";
-import { isTauriRuntime } from "$lib/services/settings";
+import { appSettings, isTauriRuntime } from "$lib/services/settings";
 import { invoke } from "@tauri-apps/api/core";
 
-let clearTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** Text this session last copied via `copyText`, used to make sure the
- * scheduled wipe only clears our own content, never something the user
- * copied in another app while the timer was pending. */
-let lastCopiedText: string | null = null;
-
-export async function copyText(text: string): Promise<void> {
-  try {
-    await copyRaw(text);
-  } catch (e) {
-    // A failed write must not leave the plaintext as the ownership baseline.
-    lastCopiedText = null;
-    throw e;
-  }
-  lastCopiedText = text;
-  scheduleClipboardClear(text);
+interface ClipboardOwnership {
+  fingerprint: Uint8Array;
 }
 
-export function scheduleClipboardClear(text: string): void {
-  const seconds = get(appSettings).security.clipboardClearSeconds;
+let clearTimer: ReturnType<typeof setTimeout> | null = null;
+let lastCopy: ClipboardOwnership | null = null;
+let operationEpoch = 0;
+
+function releaseOwnership(owned: ClipboardOwnership | null): void {
+  if (!owned) return;
+  if (lastCopy === owned) lastCopy = null;
+  owned.fingerprint.fill(0);
+}
+
+function cancelRendererTimer(): void {
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = null;
-  if (seconds <= 0) return;
-  clearTimer = setTimeout(() => void clearClipboardIfUnchanged(), seconds * 1000);
-  if (isTauriRuntime()) {
-    // Backend safety net: clears even when this renderer dies before its
-    // timer fires. Best-effort — a scheduling failure just leaves the
-    // renderer timer in charge. The backend re-verifies ownership before
-    // wiping, so a superseded or already-replaced clipboard stays untouched.
-    void invoke("clipboard_schedule_wipe", { text, seconds }).catch(() => {});
+}
+
+async function fingerprintText(text: string): Promise<Uint8Array> {
+  const bytes = new TextEncoder().encode(text);
+  try {
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  } finally {
+    bytes.fill(0);
   }
 }
 
-/** Wipe the clipboard only when it still holds the text we copied. If the
- * user has since copied something else (or the clipboard is unreadable /
- * non-text), leave it alone — the app must never destroy unrelated data. */
-export async function clearClipboardIfUnchanged(): Promise<void> {
-  // Snapshot the ownership token: a concurrent `copyText` may have replaced
-  // `lastCopiedText` while this wipe was awaiting, and that newer copy owns
-  // its own timer, so it must keep its baseline.
-  const owned = lastCopiedText;
-  if (owned === null) return;
-  /** Drop the plaintext once our own copy is gone from the clipboard. The
-   * backend retains only a zeroizing fingerprint; the renderer had no equivalent, so the
-   * password used to sit in this module global until the process exited. */
-  const releaseOwnership = (): void => {
-    if (lastCopiedText === owned) lastCopiedText = null;
-  };
+export async function copyText(text: string): Promise<void> {
+  const epoch = ++operationEpoch;
+  try {
+    // Write starts without a new await before the consumer's view guard.
+    await copyRaw(text);
+  } catch (error) {
+    if (epoch === operationEpoch) releaseOwnership(lastCopy);
+    throw error;
+  }
+  if (epoch !== operationEpoch) return;
+  cancelRendererTimer();
+  releaseOwnership(lastCopy);
+  const seconds = get(appSettings).security.clipboardClearSeconds;
+  if (isTauriRuntime()) {
+    // Also send zero: it supersedes an earlier backend timer. The backend
+    // zeroizes this short-lived input and retains only its fingerprint.
+    void invoke("clipboard_schedule_wipe", { text, seconds }).catch(() => {});
+  }
+  if (seconds <= 0) return;
+  try {
+    const fingerprint = await fingerprintText(text);
+    if (epoch !== operationEpoch) {
+      fingerprint.fill(0);
+      return;
+    }
+    const owned = { fingerprint };
+    lastCopy = owned;
+    clearTimer = setTimeout(() => void clearOwnedClipboard(owned), seconds * 1000);
+  } catch {
+    // No Web Crypto means no renderer baseline, never a retained plaintext
+    // fallback. The native scheduled wipe remains available on Windows.
+  }
+}
+
+/** Clear only the copy owned by this timer. Object identity distinguishes
+ * separate copies even when their contents are identical. */
+async function clearOwnedClipboard(owned: ClipboardOwnership): Promise<void> {
+  if (lastCopy !== owned) return;
   try {
     if (isTauriRuntime()) {
-      const cleared = await invoke<boolean | null>("clipboard_clear_if_matches", { text: owned });
+      const cleared = await invoke<boolean | null>("clipboard_clear_if_matches", {
+        fingerprint: Array.from(owned.fingerprint),
+      });
       if (cleared !== null) return;
     }
-    // Platforms without the native bridge need a readable clipboard before
-    // any conditional wipe; an unavailable read is never permission to clear.
+    // The Web Clipboard API has no atomic compare-and-clear. Require a
+    // successful read, then revalidate ownership after every async step.
     const read = navigator.clipboard?.readText;
     if (!read) return;
     const current = await read.call(navigator.clipboard);
-    if (current !== owned || lastCopiedText !== owned) return;
-    await copyRaw("");
+    if (lastCopy !== owned) return;
+    const fingerprint = await fingerprintText(current);
+    try {
+      if (lastCopy !== owned || !fingerprint.every((byte, i) => byte === owned.fingerprint[i])) {
+        return;
+      }
+      await copyRaw("");
+    } finally {
+      fingerprint.fill(0);
+    }
   } catch {
-    // Read failed (e.g. the clipboard is briefly locked by another process):
-    // ownership cannot be verified, so never blind-clear. Destroying unknown
-    // clipboard content is worse than leaving ours in place — the backend
-    // wipe scheduled at copy time remains the safety net and re-verifies
-    // ownership server-side.
+    // Unreadable clipboard content must never be blindly cleared.
   } finally {
-    releaseOwnership();
+    releaseOwnership(owned);
   }
 }
 
-/**
- * Schedule the backend wipe for a KeePass entry-exchange payload
- * (`Entry → Data Exchange → Copy Entry`). The payload is a *binary* clipboard
- * format, so the text wipe above can neither see nor clear it; both variants
- * carry plaintext field values, so it needs its own timer. The backend keeps
- * only a zeroizing fingerprint and clears only when the clipboard matches our
- * bytes, so unrelated content copied meanwhile is never destroyed.
- */
+export async function clearClipboardIfUnchanged(): Promise<void> {
+  const owned = lastCopy;
+  if (owned) await clearOwnedClipboard(owned);
+}
+
+/** Schedule native clearing of the secret-bearing binary entry format. */
 export async function scheduleExchangeWipe(): Promise<void> {
+  operationEpoch += 1;
+  cancelRendererTimer();
+  releaseOwnership(lastCopy);
   const seconds = get(appSettings).security.clipboardClearSeconds;
-  if (seconds <= 0) return;
   if (isTauriRuntime()) {
     try {
       await invoke("clipboard_schedule_exchange_wipe", { seconds });
     } catch {
-      // best-effort only: the payload simply stays until the user copies again
+      // best-effort; never fall back to text for a binary payload
     }
   }
 }
 
-/** Immediately wipe the clipboard (used by lock when `clearOnLock` is enabled)
- *  and drop all in-memory traces of what this session copied: the scheduled
- *  wipe timer and the remembered text, so the password string does not outlive
- *  the lock. */
+/** Lock-time clearing invalidates outstanding renderer ownership work. */
 export async function clearClipboard(): Promise<void> {
-  if (clearTimer) clearTimeout(clearTimer);
-  clearTimer = null;
-  lastCopiedText = null;
+  operationEpoch += 1;
+  cancelRendererTimer();
+  releaseOwnership(lastCopy);
   if (isTauriRuntime()) {
-    // Cancel any pending backend wipe: after an explicit clear it must not
-    // fire later and destroy content the user copied in another app.
-    void invoke("clipboard_cancel_scheduled_wipe").catch(() => {});
+    try {
+      await invoke("clipboard_cancel_scheduled_wipe");
+    } catch {
+      // Continue with explicit clearing even if cancellation is unavailable.
+    }
   }
   try {
     if (isTauriRuntime()) {
-      await invoke("clipboard_clear");
-      return;
+      const cleared = await invoke<boolean>("clipboard_clear");
+      if (cleared) return;
     }
     await copyRaw("");
   } catch {
     try {
       await copyRaw("");
     } catch {
-      // clipboard unavailable; nothing to clear
+      // Clipboard access unavailable; locking still closes the vault.
     }
   }
 }
 
-/** Best-effort write: modern async Clipboard API, falling back to a hidden
- *  textarea + `execCommand("copy")` when unavailable. */
 async function copyRaw(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -134,8 +153,12 @@ async function copyRaw(text: string): Promise<void> {
   textarea.value = text;
   textarea.style.position = "fixed";
   textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
+  try {
+    document.body.appendChild(textarea);
+    textarea.select();
+    if (!document.execCommand("copy")) throw new Error("复制失败");
+  } finally {
+    textarea.value = "";
+    textarea.remove();
+  }
 }

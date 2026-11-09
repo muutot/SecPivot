@@ -25,22 +25,26 @@ pub(crate) fn clipboard_read_text() -> Result<Option<String>, String> {
     clipboard::read_clipboard_text()
 }
 
-/// Empty the clipboard. The frontend calls this only after verifying the
-/// clipboard still holds our own text (or on lock with `clearOnLock`).
+/// Explicit clear on lock. False means no native bridge and requires the
+/// renderer Clipboard API; never report a non-Windows no-op as success.
 #[tauri::command]
-pub(crate) fn clipboard_clear() -> Result<(), String> {
-    clipboard::clear_clipboard()
+pub(crate) fn clipboard_clear() -> Result<bool, String> {
+    if !cfg!(target_os = "windows") {
+        return Ok(false);
+    }
+    clipboard::clear_clipboard().map(|()| true)
 }
 
 /// Windows comparison and clearing use one clipboard lock. None tells other
 /// platforms to use the renderer's clipboard API rather than claiming a clear.
 #[tauri::command]
-pub(crate) fn clipboard_clear_if_matches(text: String) -> Result<Option<bool>, String> {
-    let text = Zeroizing::new(text);
+pub(crate) fn clipboard_clear_if_matches(fingerprint: [u8; 32]) -> Result<Option<bool>, String> {
+    let fingerprint = WipeFingerprint(Zeroizing::new(fingerprint));
     if !cfg!(target_os = "windows") {
         return Ok(None);
     }
-    clipboard::clear_clipboard_text_if(|current| current == Some(text.as_str())).map(Some)
+    clipboard::clear_clipboard_text_if(|current| fingerprint.matches(current.map(str::as_bytes)))
+        .map(Some)
 }
 
 /// Bumped on every new wipe schedule and on explicit cancel; a sleeping wipe
@@ -90,16 +94,16 @@ pub(crate) fn clipboard_cancel_scheduled_wipe() {
 /// fingerprint of the copied text and clear the clipboard after `seconds` if
 /// it still matches. The renderer timer stays primary (faster
 /// and works in the browser demo); this survives webview death. Scheduling
-/// with `seconds == 0` is a no-op (clear-on-copy disabled).
+/// with `seconds == 0` cancels an older schedule (clear-on-copy disabled).
 #[tauri::command]
 pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), String> {
     let text = Zeroizing::new(text);
+    let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     if seconds == 0 {
         return Ok(());
     }
     let fingerprint = WipeFingerprint::from_bytes(text.as_bytes());
     drop(text);
-    let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::Builder::new()
         .name("clipboard-wipe".into())
         .spawn(move || {
@@ -133,6 +137,7 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
     use crate::platform::clipboard::{clear_clipboard_bytes_if, read_clipboard_bytes};
     use crate::vault::exchange::CLIP_FORMAT_ENTRIES;
 
+    let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     if seconds == 0 {
         return Ok(());
     }
@@ -143,7 +148,6 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
     let ours = Zeroizing::new(ours);
     let fingerprint = WipeFingerprint::from_bytes(ours.as_slice());
     drop(ours);
-    let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::Builder::new()
         .name("clipboard-exchange-wipe".into())
         .spawn(move || {
@@ -246,7 +250,12 @@ mod tests {
     }
 
     #[test]
-    fn zero_seconds_is_a_no_op() {
+    fn zero_seconds_does_not_start_a_wipe() {
+        let before = WIPE_GENERATION.load(Ordering::SeqCst);
         assert!(clipboard_schedule_wipe("x".into(), 0).is_ok());
+        assert!(WIPE_GENERATION.load(Ordering::SeqCst) > before);
+        let before = WIPE_GENERATION.load(Ordering::SeqCst);
+        assert!(clipboard_schedule_exchange_wipe(0).is_ok());
+        assert!(WIPE_GENERATION.load(Ordering::SeqCst) > before);
     }
 }
