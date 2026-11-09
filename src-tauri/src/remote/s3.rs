@@ -14,8 +14,14 @@ use crate::config::RemoteSettings;
 use crate::crypto::{hex, hmac_sha256, sha256_bytes};
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::time::Duration;
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 use url::Url;
+
+const MAX_LIST_PAGE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_LIST_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_LIST_OBJECTS: usize = 10_000;
+const MAX_LIST_PAGES: usize = 100;
 // ---------------------------------------------------------------------------
 // S3 transport (SigV4 over blocking reqwest/rustls, path-style)
 // ---------------------------------------------------------------------------
@@ -207,9 +213,9 @@ impl S3Storage {
         for (name, value) in extra_headers {
             request = request.header(*name, *value);
         }
-        let list_timeout = self.list_timeout;
+        let is_list = query.iter().any(|(key, _)| *key == "list-type");
         request.send().map_err(|e| {
-            if e.is_timeout() && timeout == list_timeout {
+            if e.is_timeout() && is_list {
                 "S3 列表请求超时，请检查网络与服务地址".to_owned()
             } else if e.is_timeout() {
                 "S3 传输超时，请检查网络与服务地址".to_owned()
@@ -231,22 +237,54 @@ impl RemoteStorage for S3Storage {
     fn list(&self, prefix: &str) -> Result<Vec<RemoteObject>, String> {
         let path = format!("/{}", self.bucket);
         let prefix = prefix.trim_start_matches('/');
-        let response = self.send(
-            "GET",
-            &path,
-            &[("list-type", "2"), ("prefix", prefix)],
-            b"",
-            self.list_timeout,
-            &[],
-        )?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(format!("S3 列表失败: HTTP {status}"));
+        let started = Instant::now();
+        let mut objects = Vec::new();
+        let mut continuation = None::<String>;
+        let mut seen_tokens = HashSet::new();
+        let mut total_bytes = 0;
+        for _ in 0..MAX_LIST_PAGES {
+            let remaining = self.list_timeout.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err("S3 列表请求超时，请缩小对象前缀或检查网络".to_owned());
+            }
+            let mut query = vec![("list-type", "2"), ("prefix", prefix)];
+            if let Some(token) = continuation.as_deref() {
+                query.push(("continuation-token", token));
+            }
+            let response = self.send("GET", &path, &query, b"", remaining, &[])?;
+            let status = response.status();
+            if !status.is_success() {
+                return Err(format!("S3 列表失败: HTTP {status}"));
+            }
+            let bytes = super::read_response_capped(
+                response,
+                MAX_LIST_PAGE_BYTES.min(MAX_LIST_TOTAL_BYTES - total_bytes),
+                "S3 列表响应",
+            )?;
+            total_bytes += bytes.len() as u64;
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| "S3 列表响应不是有效的 UTF-8".to_owned())?;
+            let page = parse_list_v2(text, MAX_LIST_OBJECTS - objects.len())?;
+            if started.elapsed() >= self.list_timeout {
+                return Err("S3 列表请求超时，请缩小对象前缀或检查网络".to_owned());
+            }
+            objects.extend(page.objects);
+            if !page.truncated {
+                return Ok(objects);
+            }
+            let token = page
+                .next_token
+                .filter(|token| !token.is_empty())
+                .ok_or_else(|| "S3 列表已截断但缺少后续分页标记，请检查服务端".to_owned())?;
+            if !seen_tokens.insert(token.clone()) {
+                return Err("S3 列表返回重复分页标记，请检查服务端".to_owned());
+            }
+            if objects.len() == MAX_LIST_OBJECTS || total_bytes == MAX_LIST_TOTAL_BYTES {
+                return Err("S3 列表超过容量上限，请缩小对象前缀".to_owned());
+            }
+            continuation = Some(token);
         }
-        let text = response
-            .text()
-            .map_err(|e| format!("S3 列表响应读取失败: {e}"))?;
-        parse_list_v2(&text)
+        Err("S3 列表超过分页上限，请缩小对象前缀".to_owned())
     }
 
     fn get(&self, key: &str) -> Result<Vec<u8>, String> {
@@ -336,62 +374,130 @@ impl S3Storage {
     }
 }
 
-/// Parse a `ListBucketResult` (ListObjectsV2) body into objects.
-fn parse_list_v2(body: &str) -> Result<Vec<RemoteObject>, String> {
+struct ListPage {
+    objects: Vec<RemoteObject>,
+    truncated: bool,
+    next_token: Option<String>,
+}
+
+/// Read one simple XML value without trimming keys/tokens or losing entity
+/// events. Unknown entities and nested markup are not valid S3 field values.
+fn read_list_value(reader: &mut Reader<&[u8]>) -> Result<String, String> {
+    let mut value = String::new();
+    loop {
+        match reader
+            .read_event()
+            .map_err(|e| format!("S3 列表解析失败: {e}"))?
+        {
+            Event::Text(text) => value.push_str(&text.xml10_content().map_err(|e| e.to_string())?),
+            Event::CData(text) => value.push_str(&text.xml10_content().map_err(|e| e.to_string())?),
+            Event::GeneralRef(reference) => {
+                let entity = format!("&{};", reference.decode().map_err(|e| e.to_string())?);
+                value.push_str(&quick_xml::escape::unescape(&entity).map_err(|e| e.to_string())?);
+            }
+            Event::End(_) => return Ok(value),
+            Event::Comment(_) => {}
+            _ => return Err("S3 列表字段包含无效 XML 内容".to_owned()),
+        }
+    }
+}
+
+/// Parse a bounded ListObjectsV2 page, including its continuation contract.
+fn parse_list_v2(body: &str, object_budget: usize) -> Result<ListPage, String> {
     let mut reader = Reader::from_str(body);
-    reader.config_mut().trim_text(true);
     let mut objects = Vec::new();
-    let mut in_contents = false;
-    let mut current = String::new();
+    let mut stack = Vec::<Vec<u8>>::new();
+    let mut saw_root = false;
+    let mut truncated = None;
+    let mut next_token = None;
     let mut key = None;
     let mut size = None;
     let mut modified = None;
-
     loop {
         match reader.read_event() {
             Err(e) => return Err(format!("S3 列表解析失败: {e}")),
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
-                current = String::from_utf8_lossy(e.local_name().as_ref())
-                    .into_owned()
-                    .to_ascii_lowercase();
-                if current == "contents" {
-                    in_contents = true;
+                let name = e.local_name().as_ref().to_vec();
+                if stack.is_empty() {
+                    if saw_root || name != b"ListBucketResult" {
+                        return Err("S3 响应不是有效的 ListBucketResult 列表".to_owned());
+                    }
+                    saw_root = true;
+                } else if stack.len() == 1 && name == b"IsTruncated" {
+                    if truncated.is_some() {
+                        return Err("S3 列表包含重复截断状态".to_owned());
+                    }
+                    truncated = Some(match read_list_value(&mut reader)?.trim() {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err("S3 列表截断状态无效".to_owned()),
+                    });
+                    continue;
+                } else if stack.len() == 1 && name == b"NextContinuationToken" {
+                    if next_token.is_some() {
+                        return Err("S3 列表包含重复分页标记".to_owned());
+                    }
+                    next_token = Some(read_list_value(&mut reader)?);
+                    continue;
+                } else if stack.len() == 1 && name == b"Contents" {
                     key = None;
                     size = None;
                     modified = None;
-                }
-            }
-            Ok(Event::Text(t)) => {
-                if in_contents {
-                    let text = t.xml10_content().unwrap_or_default().trim().to_owned();
-                    match current.as_str() {
-                        "key" => key = Some(text),
-                        "size" => size = text.parse().ok(),
-                        "lastmodified" => modified = Some(text),
+                } else if stack.len() == 2 && stack[1] == b"Contents" {
+                    match name.as_slice() {
+                        b"Key" => {
+                            key = Some(read_list_value(&mut reader)?);
+                            continue;
+                        }
+                        b"Size" => {
+                            size = Some(
+                                read_list_value(&mut reader)?
+                                    .trim()
+                                    .parse::<usize>()
+                                    .map_err(|_| "S3 对象大小无效".to_owned())?,
+                            );
+                            continue;
+                        }
+                        b"LastModified" => {
+                            modified = Some(read_list_value(&mut reader)?);
+                            continue;
+                        }
                         _ => {}
                     }
                 }
+                if stack.len() >= 128 {
+                    return Err("S3 列表 XML 嵌套过深".to_owned());
+                }
+                stack.push(name);
             }
             Ok(Event::End(e)) => {
-                let name = String::from_utf8_lossy(e.local_name().as_ref())
-                    .into_owned()
-                    .to_ascii_lowercase();
-                if name == "contents" && in_contents {
-                    if let Some(key) = key.as_deref() {
-                        objects.push(RemoteObject {
-                            key: key.trim_start_matches('/').to_owned(),
-                            size: size.unwrap_or(0),
-                            modified: modified.clone(),
-                        });
+                if stack.len() == 2 && e.local_name().as_ref() == b"Contents" {
+                    if objects.len() >= object_budget {
+                        return Err("S3 列表超过对象数量上限，请缩小对象前缀".to_owned());
                     }
-                    in_contents = false;
-                } else {
-                    current.clear();
+                    let key = key
+                        .take()
+                        .filter(|key| !key.is_empty())
+                        .ok_or_else(|| "S3 列表对象缺少有效键名".to_owned())?;
+                    objects.push(RemoteObject {
+                        key,
+                        size: size.unwrap_or(0),
+                        modified: modified.take(),
+                    });
                 }
+                stack.pop();
             }
+            Ok(Event::DocType(_)) => return Err("S3 列表不允许 DTD".to_owned()),
             Ok(_) => {}
         }
     }
-    Ok(objects)
+    if !saw_root || !stack.is_empty() {
+        return Err("S3 响应不是完整的 ListBucketResult 列表".to_owned());
+    }
+    Ok(ListPage {
+        objects,
+        truncated: truncated.ok_or_else(|| "S3 列表缺少截断状态".to_owned())?,
+        next_token,
+    })
 }

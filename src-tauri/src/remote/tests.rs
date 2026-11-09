@@ -208,6 +208,181 @@ fn mock_config(addr: std::net::SocketAddr) -> RemoteSettings {
     }
 }
 
+/// Finite scripted HTTP peer: captures the actual encoded request target and
+/// exits even when a regression stops requesting pages early.
+fn spawn_s3_pages(
+    pages: Vec<(Duration, String)>,
+) -> (std::net::SocketAddr, std::sync::mpsc::Receiver<String>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        for (delay, body) in pages {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= deadline {
+                            return;
+                        }
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(_) => return,
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let mut header = Vec::new();
+            let mut byte = [0];
+            while header.len() < 16 * 1024 && !header.ends_with(b"\r\n\r\n") {
+                if stream.read_exact(&mut byte).is_err() {
+                    return;
+                }
+                header.push(byte[0]);
+            }
+            let request = String::from_utf8(header).unwrap();
+            let _ = tx.send(request.lines().next().unwrap().to_owned());
+            std::thread::sleep(delay);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    (addr, rx)
+}
+
+#[test]
+fn s3_list_follows_pages_and_preserves_encoded_token_and_keys() {
+    let first = r#"<ListBucketResult><IsTruncated>true</IsTruncated>
+        <NextContinuationToken> +/=&amp;雪 </NextContinuationToken>
+        <Contents><Key>vaults/a.kdbx</Key><Size>3</Size></Contents></ListBucketResult>"#;
+    let second = r#"<ListBucketResult><IsTruncated>false</IsTruncated>
+        <Contents><Key>vaults/ a&amp;b&#x20;<![CDATA[雪.kdbx ]]></Key><Size>4</Size></Contents></ListBucketResult>"#;
+    let (addr, requests) = spawn_s3_pages(vec![
+        (Duration::ZERO, first.into()),
+        (Duration::ZERO, second.into()),
+    ]);
+    let storage = S3Storage::with_timeouts(
+        &mock_config(addr),
+        Duration::from_secs(3),
+        Duration::from_secs(3),
+    )
+    .unwrap();
+    let objects = storage.list("vaults/").unwrap();
+    assert_eq!(
+        objects.len(),
+        2,
+        "a truncated first page is not the whole list"
+    );
+    assert_eq!(objects[1].key, "vaults/ a&b 雪.kdbx ");
+    assert_eq!(objects[1].size, 4);
+    assert_eq!(
+        requests.recv().unwrap(),
+        "GET /test-bucket?list-type=2&prefix=vaults%2F HTTP/1.1"
+    );
+    assert_eq!(requests.recv().unwrap(), "GET /test-bucket?continuation-token=%20%2B%2F%3D%26%E9%9B%AA%20&list-type=2&prefix=vaults%2F HTTP/1.1");
+}
+
+#[test]
+fn s3_list_rejects_missing_and_cyclic_continuation_tokens() {
+    let missing = "<ListBucketResult><IsTruncated>true</IsTruncated></ListBucketResult>";
+    let (addr, _) = spawn_s3_pages(vec![(Duration::ZERO, missing.into())]);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("缺少后续分页标记"));
+
+    let page = |token| {
+        format!("<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>{token}</NextContinuationToken></ListBucketResult>")
+    };
+    let (addr, requests) = spawn_s3_pages(vec![
+        (Duration::ZERO, page("A")),
+        (Duration::ZERO, page("B")),
+        (Duration::ZERO, page("A")),
+    ]);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("重复分页标记"));
+    assert_eq!(requests.try_iter().count(), 3);
+}
+
+#[test]
+fn s3_list_later_invalid_page_never_returns_a_partial_list() {
+    let first = "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>A</NextContinuationToken><Contents><Key>first.kdbx</Key></Contents></ListBucketResult>";
+    let (addr, requests) = spawn_s3_pages(vec![
+        (Duration::ZERO, first.into()),
+        (Duration::ZERO, "<html>Service unavailable</html>".into()),
+    ]);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("ListBucketResult"));
+    assert_eq!(requests.try_iter().count(), 2);
+}
+
+#[test]
+fn s3_list_uses_one_deadline_across_pages() {
+    let first = "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>A</NextContinuationToken></ListBucketResult>";
+    let (addr, requests) = spawn_s3_pages(vec![
+        (Duration::from_millis(180), first.into()),
+        (Duration::from_millis(300), LIST_V2_XML.into()),
+    ]);
+    let storage = S3Storage::with_timeouts(
+        &mock_config(addr),
+        Duration::from_millis(400),
+        Duration::from_secs(3),
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    assert!(
+        storage.list("").is_err(),
+        "the timeout must not reset at each page"
+    );
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert_eq!(requests.try_iter().count(), 2);
+}
+
+#[test]
+fn s3_list_bounds_object_count_and_page_bytes() {
+    let body = format!(
+        "<ListBucketResult><IsTruncated>false</IsTruncated>{}</ListBucketResult>",
+        "<Contents><Key>a.kdbx</Key></Contents>".repeat(10_001)
+    );
+    let (addr, _) = spawn_s3_pages(vec![(Duration::ZERO, body)]);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("对象数量上限"));
+
+    let (addr, _) = spawn_s3_pages(vec![(Duration::ZERO, " ".repeat(8 * 1024 * 1024 + 1))]);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("8 MiB 上限"));
+}
+
+#[test]
+fn s3_list_bounds_pages_even_when_empty_tokens_keep_changing() {
+    let pages = (0..100).map(|i| (Duration::ZERO, format!(
+        "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>t{i}</NextContinuationToken></ListBucketResult>"
+    ))).collect();
+    let (addr, requests) = spawn_s3_pages(pages);
+    let storage = S3Storage::new(&mock_config(addr)).unwrap();
+    assert!(storage.list("").unwrap_err().contains("分页上限"));
+    assert_eq!(requests.try_iter().count(), 100);
+}
+
+#[test]
+fn s3_list_rejects_malformed_xml_instead_of_showing_an_empty_bucket() {
+    for body in [
+        "<ListBucketResult><IsTruncated>false</IsTruncated>",
+        "<ListBucketResult><IsTruncated>maybe</IsTruncated></ListBucketResult>",
+        "<ListBucketResult></ListBucketResult>",
+        "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>a&unknown;b</Key></Contents></ListBucketResult>",
+    ] {
+        let (addr, _) = spawn_s3_pages(vec![(Duration::ZERO, body.into())]);
+        let storage = S3Storage::new(&mock_config(addr)).unwrap();
+        assert!(storage.list("").is_err(), "invalid response must not succeed: {body}");
+    }
+}
+
 #[test]
 fn unknown_storage_kind_is_rejected() {
     // A typo'd kind must fail fast instead of silently building an S3 client
