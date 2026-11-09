@@ -20,9 +20,16 @@
   },
   "confirmed": 14,
   "suspected": 1,
+  "current_issue_card_counts": {
+    "scope": "15 baseline cards plus SP-S05; historical supplemental tracking notes excluded",
+    "total": 16,
+    "confirmed": 16,
+    "suspected": 0,
+    "by_severity": { "High": 4, "Medium": 9, "Low": 3 }
+  },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "c7e7333",
+  "remediation_checkpoint": "d4e72ce",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -35,9 +42,19 @@
     "SP-09",
     "SP-10",
     "SP-12",
-    "SP-13"
+    "SP-13",
+    "SP-15"
   ],
   "partially_remediated_findings": ["SP-11", "SP-14"],
+  "reverified_findings": {
+    "SP-15": {
+      "baseline_status": "Suspected",
+      "current_status": "Confirmed",
+      "commit": "c97a894",
+      "evidence": "64 incomplete HTTP requests retained 64 workers in an isolated socket fixture before the fix; production admission budget limited the same fixture to 32; shared listener restart/refusal/recovery and handler unwind tests passed",
+      "limitations": "No process memory exhaustion or live Tauri/extension denial-of-service reproduction; stopping existing handlers/approvals remains a separate lifecycle review"
+    }
+  },
   "supplemental_findings": [
     {
       "area": "Android SAF ACL",
@@ -64,15 +81,23 @@
       "confidence": "Confirmed",
       "commit": "51f4113",
       "status": "browser set/unset page callbacks passed; dark/light/custom 1100/720/420 screenshots inspected"
+    },
+    {
+      "id": "SP-S05",
+      "area": "RPC repeated peeks misclassify incomplete and larger WebSocket upgrade headers",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "d4e72ce",
+      "status": "exact optimized classifier extraction failed on fragmented input before the fix and passed after; four real-socket regressions and full verify passed"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "c7e7333",
-    "log": "verify-clipboard-reservations.log",
+    "checkpoint": "d4e72ce",
+    "log": "verify-rpc-fragmented-head.log",
     "frontend_tests": 223,
-    "rust_unit_tests": 484,
+    "rust_unit_tests": 492,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -105,6 +130,9 @@
     "d8398f6 replaces per-copy sleeper threads with one latest-deadline worker; 1000 replacement/drop, cancel, deadline and in-flight generation tests passed",
     "c7e7333 reserves backend generations before fingerprint/read/worker preparation; cancel-before-first-worker, cancel-during-preparation and out-of-order preparation/drop regressions passed after the old install-after-cancel sequence failed",
     "SP-11 remains partial: concurrent renderer write/cross-process IPC ordering and external identical-copy sequence ownership remain unverified; backend initialization/cancel interleaving is fixed",
-    "Private Windows clipboard isolation probe failed at CreateWindowStation with error 5 before any OpenClipboard; null-HWND native write candidate not promoted to Confirmed"
+    "Private Windows clipboard isolation probe failed at CreateWindowStation with error 5 before any OpenClipboard; null-HWND native write candidate not promoted to Confirmed",
+    "SP-15 now Confirmed and remediated for worker amplification: c97a894 shares admission policy with 32 workers per service, drops excess sockets before spawning and retains capacity across listener restarts; baseline counts remain 14 Confirmed / 1 Suspected",
+    "d4e72ce fixes fragmented/beyond-2KiB RPC header classification using fresh bounded peek snapshots, header-only Upgrade parsing and a partial-head deadline; coalesced frame bytes do not consume the header limit",
+    "Initial 75ms unoptimized short-header probe did not reproduce the RPC race; optimized exact-source probe reproduced it, and the repository regression uses a 1KiB partial header with a bounded 250ms delayed completion"
   ]
 }

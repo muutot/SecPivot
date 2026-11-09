@@ -34,6 +34,19 @@
 
 ### Finding Statistics
 
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+
+| Severity  | Count  | Confirmed | Suspected |
+| --------- | ------ | --------- | --------- |
+| Critical  | 0      | 0         | 0         |
+| High      | 4      | 4         | 0         |
+| Medium    | 9      | 9         | 0         |
+| Low       | 3      | 3         | 0         |
+| Info      | 0      | 0         | 0         |
+| **Total** | **16** | **16**    | **0**     |
+
+#### 原始基线统计（保持不变）
+
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
@@ -96,6 +109,8 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 | SP-12 | Medium   | Android 构建与签名共享 runner，发布 checkout 未锁定      |
 
 ## 4. Detailed Findings
+
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -368,7 +383,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 - Severity: Medium
 - Confidence: Medium
 - Category: Concurrency
-- Status: Suspected
+- Status: Confirmed（基线为 Suspected；`c97a894` 隔离压测复核确认并修复线程放大，详见补充证据）
 - Affected area: accept loops / connection handling
 - Evidence:
   - File: `src-tauri/src/bridge/server.rs; src-tauri/src/rpc/server/mod.rs`（相对仓库根，审计基线）
@@ -717,3 +732,29 @@ SP-12 已落实源代码修复：`android` 仅构建并上传未签名 APK；独
 `c7e7333` 修复后端准备阶段与取消的交错：原实现先准备摘要/创建工作线程，再在安装任务时递增代次；首次初始化尚未发布时，取消通过 `OnceLock.get()` 看不到调度器，旧请求随后可以重新安装任务。针对原调度器执行“旧请求准备中 → 取消 → 旧请求安装”的回归实际失败，提示 `a cancelled request installed a new wipe`。修复将无工作线程的调度状态与线程创建分离；文本/整条目命令在摘要、原生读取和线程创建前预留代次，安装时在同一调度锁内核对代次。取消始终更新调度状态，尚未创建线程也有效。三项新增回归覆盖准备中取消、首次线程启动前取消，以及较旧准备晚完成时拒绝安装并立即释放其摘要。此处证明的是后端代次预留后的顺序，不等于 renderer 并发写入或跨进程 IPC 的调用顺序；SP-11 继续部分修复。
 
 最新完整 `npm run verify` 对应 `c7e7333`，日志 `verify-clipboard-reservations.log`：格式、Svelte check、150 键契约、生产构建、前端 **223**、Rust **484 + ACL 2**、clippy `-D warnings` 全部通过。首次全门禁在 clippy 的单位值映射风格检查失败，修正后完整重跑通过。真实 OS 剪贴板测试仍未启用，Android 新 APK、设备选择器与云端 provider I/O 仍未验证；基线评分与 15 项发现统计不变。
+
+SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线程放大。隔离的 `127.0.0.1:0` socket fixture 调用真实 HTTP 解析器，64 条未完成请求在原线程接入方式下同时保留 64 个处理线程，预算断言实际失败（`bridge-connection-pressure-red.log`）；接入生产预算后同一 fixture 只启动 32 个线程。HTTP/RPC 均使用 `loopback.rs` 的共享接入策略，每服务最多 32 个处理线程（同时启用两者共 64），超额连接在创建线程前释放且不排队。预算保存在 managed 服务状态中，旧线程在监听器重启后继续占用自己的许可；实际共享 accept loop 回归验证了重启时拒绝新连接、旧连接关闭后的接入恢复与真实 socket 回显，另验证了 handler unwind 释放许可及 stop 通道断开退出。该证据证明线程放大和接入预算，未制造系统内存耗尽，也未运行完整 Tauri/浏览器扩展拒绝服务场景。原始 14 Confirmed + 1 Suspected 统计仍保留为审计基线，卡片 Status 与 metadata 明确记录当前复核状态。
+
+`c97a894` 的完整 `npm run verify` 日志 `verify-browser-connection-budget.log`：格式、Svelte check、150 键契约、构建、前端 **223**、Rust **488 + ACL 2**、clippy 全部通过。停止监听器仍不等于撤销既有处理线程或审批；源码注释与维护参考已纠正此前“等待监听线程就已关闭所有连接”的误述，完整停机生命周期继续复核。
+
+### Finding: SP-S05 RPC 重复 peek 导致合法 WebSocket 请求头误分类（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Backend API
+- Status: Confirmed（源代码修复已验证）
+- Affected area: KeePassRPC WebSocket upgrade detection
+- Evidence:
+  - File: `src-tauri/src/rpc/server/mod.rs`（`c97a894` 修复前源码）
+  - Function / Module: `is_websocket_upgrade` / `serve_connection`
+  - Relevant behavior: `peek` 每次从相同未消费位置读取，旧实现却重复追加到 head；仅能观察前 2 KiB，并可因累计长度达到上限提前认定是普通 HTTP。普通请求路径随后发送 404。
+  - Exact-source probe: 从源码提取完整分类函数，`rustc -O --test` 在隔离 socket 分段写入合法请求头，返回 `Some(false)` 早于完整头到达，断言实际失败（`rpc-fragmented-head-red.log`）；修复后同一探针通过（`rpc-fragmented-head-green.log`）。最初未优化的短请求头 75 ms 探针未复现，未把该次通过当作缺陷证据。
+- Problem: 合法分段握手或 Upgrade 位于前 2 KiB 之外的请求被误认为端口探测；正文中的相同文本也可能误导旧分类。
+- Why it matters: 本机扩展收到错误响应后无法建立凭据服务连接，表现为间歇握手失败。
+- Realistic failure scenario: 扩展或网络栈分段发送 HTTP 头，第一段没有 Upgrade；或者合法附加头把 Upgrade 推到前 2 KiB 之后。
+- Minimal fix: 使用新 peek 快照替换旧观测，等待实际头终止符，仅解析头内 Upgrade 字段；64 KiB 限制只针对请求头，保留全部未消费字节供 tungstenite 读取；不完整头观察设截止时间并短暂让出线程。
+- Better long-term fix: 完整停机取消与握手总耗时控制一并约束服务生命周期，必要时采用保留预读字节的流适配器。
+- Regression test suggestion: 已加入四项真实 socket 回归：1 KiB 首段延迟补全且字节仍可完整读取、4 KiB 头与大小写/制表符、头外伪 Upgrade/超限头，以及请求头与 65,535 字节合法帧同时到达。既有真实 WS 往返与 404/CORS 探测继续通过。
+- Estimated effort: 1–2 小时
+
+`d4e72ce` 已修复 SP-S05。最新完整门禁日志 `verify-rpc-fragmented-head.log`：格式、Svelte check、150 键契约、生产构建、前端 **223**、Rust **492 + ACL 2**、clippy `-D warnings` 全部通过。原生扩展、Android APK/provider、真实剪贴板、XML 第三方导入与竞品能力补齐仍有未完成验证；整体目标保持进行中。补充发现不改变原始 15 项发现和 6.1 分基线。
