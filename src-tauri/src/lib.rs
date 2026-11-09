@@ -490,6 +490,7 @@ pub fn run() {
             commands::parse_1pif,
             commands::clipboard_read_text,
             commands::clipboard_clear,
+            commands::clipboard_clear_if_matches,
             commands::clipboard_schedule_wipe,
             commands::clipboard_schedule_exchange_wipe,
             commands::clipboard_cancel_scheduled_wipe,

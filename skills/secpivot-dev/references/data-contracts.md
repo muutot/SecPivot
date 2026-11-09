@@ -246,5 +246,10 @@ Split across `src-tauri/src/rpc.rs` (pure protocol: SRP-6a math, key-auth challe
 
 ## Cross-cutting gates
 
+- `clipboard_clear_if_matches({ text })` returns `boolean | null`: Windows
+  compares and clears under one clipboard lock; null means no native bridge.
+  Its temporary expected text is zeroized. The renderer ownership check drops
+  its remembered text after success, foreign/non-text content or read failure.
+
 - Command names, arg names, serde casing (camelCase), error strings, and tests must stay aligned across `invoke` calls and Rust handlers.
 - A new mutation requires: Rust handler + test, frontend `vault.ts` method, UI wiring, and this reference update.

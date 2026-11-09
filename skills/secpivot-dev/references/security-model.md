@@ -61,6 +61,18 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+Windows conditional clipboard wipes use `clipboard_clear_if_matches` and the
+platform `clear_clipboard_text_if` / `clear_clipboard_bytes_if` helpers. Each
+holds a single `OpenClipboard` guard across read, ownership/generation checks
+and `EmptyClipboard`, so another process cannot replace content between them.
+Text reads stop at the first UTF-16 NUL and reject missing terminators, invalid
+UTF-16 or allocations over 4 MiB; custom-format reads retain the 64 MiB cap.
+Read copies are zeroized after comparison. A non-Windows conditional IPC result
+is null; the renderer uses a readable Clipboard API and never blind-clears on
+read failure. Browser read/write still cannot provide a native atomic compare.
+Tests that touch the actual OS clipboard require `SECPIVOT_CLIPBOARD_LIVE=1`;
+normal verification uses deterministic tests and leaves user clipboard untouched.
+
 HOTP counter advancement preserves the existing `HmacOtp` protected flag.
 A code request must not turn a protected seed into a plaintext custom-field
 snapshot. The regression verifies masking and the next counter after save/reopen.
