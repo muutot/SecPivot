@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S20；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S21；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 5      | 5         | 0         |
+| High      | 6      | 6         | 0         |
 | Medium    | 22     | 22        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **31** | **31**    | **0**     |
+| **Total** | **32** | **32**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1336,3 +1336,48 @@ FullName 保留姓名部分内部空白，仅按 JavaScript trim 规则处理组
 客户端导出、共享剪贴板、手机 APK 或 provider 运行证据。多 URI 匹配
 模式、组织集合/历史/附件、1PUX、KDF 基准、其余生命周期和完整 UI/文件
 语义覆盖仍待继续，整体目标未完成。
+
+### Finding: SP-S21 注册域匹配跨越共享托管和通配公共后缀边界（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Privacy / Backend API / Testing
+- Status: Confirmed
+- Affected area: opt-in browser bridge/RPC registrable-domain credential matching
+- Evidence:
+  - File: `src-tauri/src/vault/helpers.rs:208`（`808a0df` 修复前）
+  - Function / Module: `MULTI_LABEL_SUFFIX` / `registrable_domain` / `url_matches_accuracy`
+  - Relevant behavior: 用固定的多标签后缀表加“最后两标签”回退替代完整 PSL；遗漏 PRIVATE 后缀和 wildcard 规则，把不同租户约化到同一共享域。`kprpc_matches_url` 经 BridgeHost.logins_for 和 RpcHost.find_logins 用于返回真实凭据。
+  - Reproduction: 真实合成 KDBX 保存重开，开启 matchByRegistrableDomain，对 github.io、blogspot.com、azurewebsites.net、com.ar、tenant.ck、tenant.kawasaki.jp 六个独立租户边界发起请求，Bridge 和 RPC 每次均返回一条原租户凭据；同站子域正例和 www.ck/city.kawasaki.jp 例外正例仍通过。见 `psl-boundary-red-final.log`。初版夹具用了错误的重开口令，修正后才取得产品行为证据；`psl-boundary-red.log` 不作为产品复现。
+  - Independent reference: [Mozilla Public Suffix List](https://publicsuffix.org/list/public_suffix_list.dat)，下载版本 2026-11-08_13-21-08_UTC、提交 7a21dc3491d43db036124fdd6a3a77d1cc44ad8a，明确包含上述三项私人后缀、com.ar、_.ck、_.kawasaki.jp 及例外规则；参考文件 SHA-256 为 dc00ceb7bb9256c41506b12a863db6a4b1c6021771eeccf5e073827750ac4b74。
+- Problem: 已授权浏览器客户端查询另一个共享托管租户的网址，会收到原租户凭据候选，违反注册域匹配本应保留的站点边界。
+- Why it matters: 恶意站点可使用公共托管服务获取同后缀的独立子域；该选项允许同站子域共享凭据，不应允许不同租户共享。功能默认关闭、需已授权客户端且未运行真实扩展/网络外传，按 High 的目的地验证问题记录。
+- Realistic failure scenario: 为 vault-owner.github.io 保存登录信息，开启注册域匹配后访问 other-owner.github.io；后端将原登录名和密码列入可用条目。
+- Minimal fix: 用包含 ICANN、PRIVATE、wildcard 和 exception 的维护版静态 PSL 替代手工子集；IP、单标签、无法提取注册域的主机保留完整主机边界，不将两个失败解析结果视为同域。
+- Better long-term fix: 定期更新固定 PSL 依赖及安全回归；独立复核 URL authority、端口、IDNA、显式严格规则和原生扩展调用，不能以本项修复宣称整个自动填充授权已完整验证。
+- Regression test suggestion: 六类不同租户经实际 Bridge/RPC 和 KDBX 重开都无凭据；同注册域子域、PSL 例外、已有 IP/尾点/多标签后缀和默认关闭规则继续通过，补充无注册域/未知后缀控制。
+- Estimated effort: 1–2 小时（边界修复、依赖复核及主机回归）；真实浏览器验证另计
+
+`31206eb` 已修复 SP-S21。固定 `psl` 2.1.249 / `psl-types` 2.0.11 的静态
+Mozilla PSL 替代手工后缀子集，包含公共与私人后缀、通配及例外。域名切片
+直接借用，IP 与无法提取注册域的主机保留完整身份；只在既有 opt-in
+Domain 匹配分支生效。清单随二进制携带，查询不发送网络请求。
+
+六类错误租户在原代码经 Bridge/RPC 都返回凭据，修复后均拒绝；真实
+合成 KDBX 保存重开仍保持同站子域匹配。三个针对性回归覆盖私有/通配
+边界、例外、裸后缀、单标签、未知后缀及精确本机正例；原有 IP、尾点、
+多标签后缀及显式精度测试在完整门中继续通过。PSL 下载记录、库来源与
+SHA-256 见 `psl-reference-provenance.json`；两个 crate 包摘要与 Cargo.lock
+校验和一致。该依赖不含构建脚本，代码接口为 no_std 并禁止 unsafe。
+
+首次完整 `npm run verify` 已通过功能阶段，但 clippy 报 Windows 1455
+（宿主机分页文件不足，`verify-psl-boundaries.log`），不计为应用缺陷。
+不改源码的 `psl-clippy-retry.log` 重试通过；随后真正重跑完整门禁
+`verify-psl-boundaries-retry.log` 全部通过：前端 **290**、Rust **548 + ACL 2**、
+格式、Svelte check、150 键合同、生产构建及 clippy。TODO 在直接验证完成
+后才恢复勾选，documentation currency gate 同步数据、安全和模块引用。
+
+当前详细卡片 **32**（High 6 / Medium 22 / Low 4，全部 Confirmed）；原始
+基线统计/6.1 分不变。没有真实扩展、OS 剪贴板、用户库或 Android APK
+运行验证；未来后缀变化须更新固定清单。URI 匹配模式、authority/端口/
+IDNA、剩余竞品迁移、KDF 基准和界面/所有文件语义覆盖仍需继续。

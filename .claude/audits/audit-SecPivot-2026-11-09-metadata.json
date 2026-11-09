@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S20; historical supplemental tracking notes excluded",
-    "total": 31,
-    "confirmed": 31,
+    "scope": "15 baseline cards plus SP-S05 through SP-S21; historical supplemental tracking notes excluded",
+    "total": 32,
+    "confirmed": 32,
     "suspected": 0,
     "by_severity": {
-      "High": 5,
+      "High": 6,
       "Medium": 22,
       "Low": 4
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "78bb016",
+  "remediation_checkpoint": "31206eb",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -232,15 +232,24 @@
       "source_checkpoint": "1d3ddb4",
       "commit": "78bb016",
       "status": "Two real command/wire/KDBX baseline regressions failed. Official login/card/identity IDs now resolve protected import-time snapshots; full name follows source composition including JS trim semantics. All card/identity targets, optional empty values, stale literals, malformed/cross-type/unknown links and masked KDBX reopen verified. Twenty targeted import tests and final full verify passed; dynamic linkage/native export/device behavior remains pending."
+    },
+    {
+      "id": "SP-S21",
+      "area": "Opt-in registrable-domain matching crosses private hosting and wildcard suffix tenant boundaries",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "source_checkpoint": "808a0df",
+      "commit": "31206eb",
+      "status": "Synthetic KDBX saved/reopened: six unrelated tenants each received one credential through both actual BridgeHost/RpcHost adapters before repair. Complete pinned static PSL preserves ICANN/PRIVATE/wildcard/exception rules and full IP/nonregistrable identities. Three targeted tests and all existing matching controls passed. Initial red fixture used wrong reopen key and is excluded. First full verify stopped at clippy on host Windows 1455; unchanged stage retry and fresh full verify then passed. No native extension or credential transmission runtime evidence."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "78bb016",
-    "log": "verify-bitwarden-linked-fields.log",
+    "checkpoint": "31206eb",
+    "log": "verify-psl-boundaries-retry.log",
     "frontend_tests": 290,
-    "rust_unit_tests": 545,
+    "rust_unit_tests": 548,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
