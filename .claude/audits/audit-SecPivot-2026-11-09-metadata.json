@@ -22,7 +22,7 @@
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "51f4113",
+  "remediation_checkpoint": "39697a0",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -36,7 +36,7 @@
     "SP-10",
     "SP-13"
   ],
-  "partially_remediated_findings": ["SP-14"],
+  "partially_remediated_findings": ["SP-11", "SP-14"],
   "supplemental_findings": [
     {
       "area": "Android SAF ACL",
@@ -68,10 +68,10 @@
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "51f4113",
-    "log": "verify-template-menu-final.log",
-    "frontend_tests": 211,
-    "rust_unit_tests": 473,
+    "checkpoint": "39697a0",
+    "log": "verify-clipboard-atomic-final.log",
+    "frontend_tests": 212,
+    "rust_unit_tests": 475,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -86,12 +86,14 @@
       "macOS/Linux keyring runtime not run",
       "Native KeePass plaintext XML import not run",
       "Live S3 signature validation not run; local MinIO unavailable",
-      "CSP websocket probe is a browser test, not native Tauri dev"
+      "CSP websocket probe is a browser test, not native Tauri dev",
+      "Live OS clipboard tests opted out; deterministic tests do not prove native clipboard runtime"
     ]
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
-    "Initial template-menu integration failed because finite pagination mock expired; after 7ebe497 the complete verify passed",
+    "Retract mock-expiry attribution: later HTTP 502 peer differed from loopback fixture endpoint and system proxy was enabled; 2cb9449 disables proxies only in the test client and full verify passed",
+    "39697a0 atomically compares and clears Windows clipboard content; SP-11 lifecycle retention remains partially unresolved",
     "Supplemental findings do not change baseline finding counts or scores"
   ]
 }
