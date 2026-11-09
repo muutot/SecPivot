@@ -41,6 +41,13 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 ## Browser vs desktop truth
 
+- Every test that accesses the actual OS clipboard must check
+  `SECPIVOT_CLIPBOARD_LIVE=1` before any native read, write or usability probe.
+  A crate mutex does not isolate the user's clipboard from other processes.
+  Default verification leaves that opt-in unset; a returned skip is not evidence
+  of native clipboard interoperability. Live checks need an explicitly selected,
+  disposable environment rather than the developer's shared clipboard.
+
 - Windows accepted sockets inherit a nonblocking listener's mode. A blocking
   HTTP fixture must explicitly call `set_nonblocking(false)` before reading;
   setting a read timeout alone still permits immediate `WouldBlock`. Verify

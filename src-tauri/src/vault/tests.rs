@@ -40,10 +40,15 @@ fn create_session(dir: &TempDir) -> (VaultSession, std::path::PathBuf) {
 /// flag and the attachment. Uses the crate-wide clipboard guard and the
 /// usability probe shared with the platform/command tests: a private lock
 /// left this test free to interleave with them, and a headless station has
-/// no clipboard to assert against at all.
+/// no clipboard to assert against at all. Requires explicit live opt-in before
+/// any shared clipboard I/O, like the other native clipboard tests.
 #[test]
 #[cfg(target_os = "windows")]
 fn entry_exchange_copy_then_paste_creates_a_new_entry() {
+    if std::env::var("SECPIVOT_CLIPBOARD_LIVE").as_deref() != Ok("1") {
+        eprintln!("skip: live clipboard requires SECPIVOT_CLIPBOARD_LIVE=1");
+        return;
+    }
     use crate::platform::clipboard::tests::{
         clipboard_is_usable, lock_clipboard, restore_clipboard,
     };

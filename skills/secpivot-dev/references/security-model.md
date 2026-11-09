@@ -196,8 +196,12 @@ explicit clear returns false on unsupported platforms, allowing renderer clear.
 Legacy execCommand failure is reported and its textarea is emptied/removed in
 finally. External identical-copy ownership, cross-renderer write/IPC order and binary/text
 copy ordering remain pending; the entire clipboard lifecycle is not resolved.
-Tests that touch the actual OS clipboard require `SECPIVOT_CLIPBOARD_LIVE=1`;
-normal verification uses deterministic tests and leaves user clipboard untouched.
+All four native live clipboard tests require `SECPIVOT_CLIPBOARD_LIVE=1` before
+any OS read or probe, including vault entry exchange. Default verification leaves
+the flag unset and returns a content-free skip for these live bodies; their
+harness success does not prove actual clipboard interoperability. The clipboard
+mutex coordinates crate tests only, and text restoration cannot restore every
+foreign clipboard format. Live tests belong in an explicit disposable environment.
 
 HOTP counter advancement preserves the existing `HmacOtp` protected flag.
 A code request must not turn a protected seed into a plaintext custom-field
