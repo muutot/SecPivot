@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05、SP-S06、SP-S07；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S08；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 4      | 4         | 0         |
+| High      | 5      | 5         | 0         |
 | Medium    | 11     | 11        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **18** | **18**    | **0**     |
+| **Total** | **19** | **19**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05、SP-S06、SP-S07 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S08 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -802,3 +802,25 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 1–2 小时
 
 `2303a0d` 已修复 SP-S07，仅调整 script 的请求所有权，未改 markup/CSS；data-contracts 已同步。最新完整 `npm run verify` 日志 `verify-bridge-approval-identity.log`：格式、Svelte check、150 键契约、生产构建、前端 **227**、Rust **502 + ACL 2**、clippy `-D warnings` 全部通过。报告当前详细卡片共 18 项，原始 15 项与 6.1 分基线保持不变。服务停止/锁定/超时的提示失效、SRP 秘密释放、剪贴板并发写入、SAF provider 同步及真实 Android APK/第三方 XML 互操作继续处理；完整语义覆盖仍未完成。
+
+### Finding: SP-S08 RPC 缓存密钥越过会话授权失效边界（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Concurrency
+- Status: Confirmed（源代码修复已验证）
+- Affected area: KeePassRPC authorization lifetime, SRP proof and write admission
+- Evidence:
+  - File: `src-tauri/src/rpc/server/handshake.rs`、`rpc/server/mod.rs`、`vault/hosts.rs`（`936c8b0` 修复前源码）
+  - Function / Module: `dispatch_setup` / `dispatch_decoded_jsonrpc` / `reply_jsonrpc_write` / `VaultSession::rpc_key`
+  - Relevant behavior: JSON-RPC 仅用 `Conn.session_key` 解密并验 MAC，随后只检查 host 是否打开，没有查询会话中当前授权；`rpc_key` 的 lazy expiry 因而不会在既有连接请求时运行。写准备也没有重新验证。SRP proof 没有再次检查 vault open，stored-key proof 只验证此前缓存的 challenge secret，且 stage 1 未记录连接用户名。
+  - Red regressions: 在真实合成 KDBX 会话中设密钥已过期，旧连接仍返回 `GetAllDatabases` 响应；真实会话 close 后，已准备好的有效 SRP proof 仍注册 key，回复未带 `AUTH_FAILED`；移除 FakeHost 的当前 key 后，旧 challenge proof 仍成功，未带 `AUTH_RESTART`。三个断言实际失败，见 `rpc-authorization-lifetime-red.log`。该复现调用生产状态机和真实合成 vault，未运行真实浏览器扩展或 Tauri app socket handler。
+- Problem: 会话授权过期、撤销、替换或关闭不能约束缓存着旧密钥的连接；等待用户输入的证明也可能在锁库后创建新授权。
+- Why it matters: `rpc.sessionTimeoutSecs` 和会话隔离不再是有效访问边界。当前未授权主机仍可能经 `FindLogins` 暴露凭据，或接收 `AddLogin`/`UpdateLogin` 写入。旧 socket 能验 MAC 不等于当前 vault 仍授权它。
+- Realistic failure scenario: 曾获准的扩展保持连接，用户使授权过期或关闭原库、打开另一个库；扩展继续发送用旧 key 加密的请求。另一条路径是在用户锁库或切库前开始 SRP，迟到 proof 在新活动会话上完成。
+- Minimal fix: 在同一 vault mutex 内，读 dispatch 和写 prepare 核对连接 username/32 字节 key 与当前 host key，触发 lazy expiry；写检查放在持久化许可之后，避免排队越过失效。stored-key proof 重查其 captured identity/key，失效要求 `AUTH_RESTART`；fresh SRP proof 要求 open host 与原 stable session id。临时 key 比较副本/hex 和 challenge 处理副本采用 Zeroizing。
+- Better long-term fix: 为授权和提示统一记录明确的请求/会话身份，并补原生扩展的关闭、锁定、超时与重连端到端测试；继续复核已显示的 SRP 密码、半握手和单连接关闭清理。
+- Regression test suggestion: 七项新增回归覆盖真实库过期、锁后 proof、撤销 challenge、真实 registry 切库/lock-reopen 的 SRP 身份、新会话正常 SRP、配置保留 key 的锁定错误/解锁重用/同名 rotation/普通 close-reopen、等持久化许可期间到期，以及真实 Add/Update 持久化。过期测试补强为 `FindLogins`：先成功读取合成密码，再将授权置为过期，旧 frame 被拒绝且 key set 清空。已获准写作业在 prepare 后撤销 key，仍完成/adopt 并重开看到更新，证明未破坏持久化提交边界。保留 key 模式在 locked host 上仍可完成 stored-key proof，但数据请求只返回 -32000 锁定错误。
+- Estimated effort: 3–5 小时
+
+`b785fef` 已修复 SP-S08。最终完整 `npm run verify` 日志 `verify-rpc-authorization-lifetime-final.log`：格式、Svelte check、150 键契约、生产构建、前端 **227**、Rust **509 + ACL 2**、clippy `-D warnings` 全部通过。此前全门禁也通过，随后补强真实合成凭据请求的测试并完整重跑；未将原先仅数据库元数据的 red 复现描述成真实用户密码泄漏。security-model、data-contracts、project-structure 已同步当前授权和锁定重连语义，并纠正相关旧模块路径、404/CORS 与 setup read timeout 的陈旧说明。当前详细卡片 19 项，原始 15 项/6.1 分基线保持不变；frontend 提示失效和秘密释放、剪贴板并发、SAF provider I/O、新 Android APK及第三方 XML 互操作仍未完成，目标继续进行。

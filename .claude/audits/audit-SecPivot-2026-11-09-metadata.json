@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05, SP-S06 and SP-S07; historical supplemental tracking notes excluded",
-    "total": 18,
-    "confirmed": 18,
+    "scope": "15 baseline cards plus SP-S05 through SP-S08; historical supplemental tracking notes excluded",
+    "total": 19,
+    "confirmed": 19,
     "suspected": 0,
-    "by_severity": { "High": 4, "Medium": 11, "Low": 3 }
+    "by_severity": { "High": 5, "Medium": 11, "Low": 3 }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "2303a0d",
+  "remediation_checkpoint": "b785fef",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -105,15 +105,23 @@
       "confidence": "Confirmed",
       "commit": "2303a0d",
       "status": "four production component-script state regressions failed before the fix and passed after; rendered Edge A/B/C synthetic IPC and 1100/420 screenshots passed; request identity now gates success/failure/finally/timer/unmount"
+    },
+    {
+      "id": "SP-S08",
+      "area": "RPC connection and pending proof copies bypass expired/revoked/current-vault authorization",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "commit": "b785fef",
+      "status": "three production state-machine regressions failed before the fix, including real synthetic KDBX expiry and locked proof; seven new tests cover credential read expiry, registry session binding, queued write admission, retained-key locked/unlock behavior, rotation/close and durable Add/Update completion; full verify passed"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "2303a0d",
-    "log": "verify-bridge-approval-identity.log",
+    "checkpoint": "b785fef",
+    "log": "verify-rpc-authorization-lifetime-final.log",
     "frontend_tests": 227,
-    "rust_unit_tests": 502,
+    "rust_unit_tests": 509,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -153,6 +161,8 @@
     "9a994d3 cancels listener generations, registered sockets and approval waiters; old requests revalidate after acquiring the vault mutex; RPC durable completion still adopts committed storage results",
     "Windows shutdown of all 32 socket clones returned success but blocked recv remained pending until peers dropped; native 100ms polls with logical read deadlines fixed shutdown without shortening protocol timeouts",
     "Frontend already-visible association/SRP prompts have no cancellation event yet; admitted-work test models permit retention rather than an actual storage commit interrupted by stop",
-    "2303a0d binds association IPC completion and dismissal to the current request; four script regressions red-to-green and a real rendered synthetic IPC test passed; script harness's initial empty-export syntax failure was corrected before recording state evidence"
+    "2303a0d binds association IPC completion and dismissal to the current request; four script regressions red-to-green and a real rendered synthetic IPC test passed; script harness's initial empty-export syntax failure was corrected before recording state evidence",
+    "b785fef revalidates live host authorization for reads and writes after persistence admission, stored-key proof and stable-session SRP proof; retained RPC keys still authenticate while locked but data remains locked, and admitted writes still adopt durable results",
+    "SP-S08 initial expiry red test observed database metadata, not real user credentials; the strengthened regression successfully reads only a synthetic credential while authorized and rejects its frame after expiry; no live extension/Tauri socket handler or user vault was exercised"
   ]
 }
