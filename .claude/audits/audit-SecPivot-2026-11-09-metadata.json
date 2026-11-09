@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05; historical supplemental tracking notes excluded",
-    "total": 16,
-    "confirmed": 16,
+    "scope": "15 baseline cards plus SP-S05 and SP-S06; historical supplemental tracking notes excluded",
+    "total": 17,
+    "confirmed": 17,
     "suspected": 0,
-    "by_severity": { "High": 4, "Medium": 9, "Low": 3 }
+    "by_severity": { "High": 4, "Medium": 10, "Low": 3 }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "d4e72ce",
+  "remediation_checkpoint": "9a994d3",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -52,7 +52,7 @@
       "current_status": "Confirmed",
       "commit": "c97a894",
       "evidence": "64 incomplete HTTP requests retained 64 workers in an isolated socket fixture before the fix; production admission budget limited the same fixture to 32; shared listener restart/refusal/recovery and handler unwind tests passed",
-      "limitations": "No process memory exhaustion or live Tauri/extension denial-of-service reproduction; stopping existing handlers/approvals remains a separate lifecycle review"
+      "limitations": "No process memory exhaustion or live Tauri/extension denial-of-service reproduction; SP-S06 tracks the separately verified shutdown fix and remaining frontend prompt cancellation"
     }
   },
   "supplemental_findings": [
@@ -89,15 +89,23 @@
       "confidence": "Confirmed",
       "commit": "d4e72ce",
       "status": "exact optimized classifier extraction failed on fragmented input before the fix and passed after; four real-socket regressions and full verify passed"
+    },
+    {
+      "id": "SP-S06",
+      "area": "Stopping browser services leaves existing connections and association approvals active",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "9a994d3",
+      "status": "shared-loop socket echoed a new request after listener join before the fix; generation cancellation, Windows polling, approval/queued request, fragmented read, timeout and permit regressions plus full verify passed; visible prompt cancellation remains pending"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "d4e72ce",
-    "log": "verify-rpc-fragmented-head.log",
+    "checkpoint": "9a994d3",
+    "log": "verify-browser-shutdown.log",
     "frontend_tests": 223,
-    "rust_unit_tests": 492,
+    "rust_unit_tests": 502,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -133,6 +141,9 @@
     "Private Windows clipboard isolation probe failed at CreateWindowStation with error 5 before any OpenClipboard; null-HWND native write candidate not promoted to Confirmed",
     "SP-15 now Confirmed and remediated for worker amplification: c97a894 shares admission policy with 32 workers per service, drops excess sockets before spawning and retains capacity across listener restarts; baseline counts remain 14 Confirmed / 1 Suspected",
     "d4e72ce fixes fragmented/beyond-2KiB RPC header classification using fresh bounded peek snapshots, header-only Upgrade parsing and a partial-head deadline; coalesced frame bytes do not consume the header limit",
-    "Initial 75ms unoptimized short-header probe did not reproduce the RPC race; optimized exact-source probe reproduced it, and the repository regression uses a 1KiB partial header with a bounded 250ms delayed completion"
+    "Initial 75ms unoptimized short-header probe did not reproduce the RPC race; optimized exact-source probe reproduced it, and the repository regression uses a 1KiB partial header with a bounded 250ms delayed completion",
+    "9a994d3 cancels listener generations, registered sockets and approval waiters; old requests revalidate after acquiring the vault mutex; RPC durable completion still adopts committed storage results",
+    "Windows shutdown of all 32 socket clones returned success but blocked recv remained pending until peers dropped; native 100ms polls with logical read deadlines fixed shutdown without shortening protocol timeouts",
+    "Frontend already-visible association/SRP prompts have no cancellation event yet; admitted-work test models permit retention rather than an actual storage commit interrupted by stop"
   ]
 }

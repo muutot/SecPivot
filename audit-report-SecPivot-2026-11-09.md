@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05、SP-S06；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 4      | 4         | 0         |
-| Medium    | 9      | 9         | 0         |
+| Medium    | 10     | 10        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **16** | **16**    | **0**     |
+| **Total** | **17** | **17**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05、SP-S06 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -758,3 +758,25 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 1–2 小时
 
 `d4e72ce` 已修复 SP-S05。最新完整门禁日志 `verify-rpc-fragmented-head.log`：格式、Svelte check、150 键契约、生产构建、前端 **223**、Rust **492 + ACL 2**、clippy `-D warnings` 全部通过。原生扩展、Android APK/provider、真实剪贴板、XML 第三方导入与竞品能力补齐仍有未完成验证；整体目标保持进行中。补充发现不改变原始 15 项发现和 6.1 分基线。
+
+### Finding: SP-S06 关闭浏览器服务后旧连接仍能继续处理请求（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Security / Concurrency
+- Status: Confirmed（源代码修复已验证）
+- Affected area: KeePassHttp / KeePassRPC listener shutdown
+- Evidence:
+  - File: `src-tauri/src/loopback.rs`、`bridge/server.rs`、`rpc/server/mod.rs`（`90bc787` 修复前源码）
+  - Function / Module: `accept_loop` / `ServerHandle::stop` / request dispatch
+  - Relevant behavior: stop 仅退出并等待监听线程，已创建的 HTTP/WS worker 没有取消代次；连接和审批继续存活，重启也没有使旧请求失效。
+  - Real-socket reproduction: 调用真实共享 accept loop，连接建立后停止并 join listener，随后发送 `x`，仍得到 `write=Ok(()), read=Ok(1), byte=[120]`，断言实际失败，见 `browser-stop-existing-connection-red.log`。这是共享传输边界复现，未声称完整 Tauri/真实扩展读取了密码。
+- Problem: 用户关闭浏览器集成不能撤销已经存在的连接与待审批；旧请求可在关闭后继续进入协议处理。
+- Why it matters: 服务关闭设置与实际授权入口不一致，审批等待和连接许可还会占用资源。
+- Realistic failure scenario: 浏览器已连接，用户在设置中关闭集成；扩展继续沿用旧连接发送请求，或者关闭前的关联审批稍后得到允许。
+- Minimal fix: 每次启动创建独立 `ListenerLifetime`，stop 使代次失效、关闭注册 socket 并唤醒审批；协议处理在取得 vault mutex 后重查代次，与停止线性化；网络/存储 I/O 不持这些协议守卫。Windows 使用 100 ms native poll 的可取消流，保留较长逻辑读取超时。已获准的持久化 RPC 作业仍完成并采纳已提交结果，许可直到 worker 返回才释放。
+- Better long-term fix: 向前端发送按请求身份关联的失效事件，及时清除已显示的审批和 SRP 密码；另复核单连接强制关闭、握手总耗时和写超时。
+- Regression test suggestion: 已验证停止后旧 socket 不再回显、32 条空闲连接释放及重启恢复、待审批唤醒/旧代次不弹提示/不得注册旧 key、等 vault lock 的请求重查、事件 panic 不泄漏 token 或毒化 lifetime、不完整 WS 握手取消、跨三个 native poll 的分段读取、逻辑超时与获准作业直到完成仍保留许可。作业许可测试模拟获准工作，不能代替真实存储提交中 stop 的故障试验。
+- Estimated effort: 3–5 小时
+
+`9a994d3` 已修复 SP-S06。32 条 socket 的 native `shutdown(Both)` 均返回成功，但 Windows 已阻塞的 recv 在 peer 被释放前仍未退出，见 `browser-shutdown-sockets-probe.log`；因此撤回“仅关闭克隆 socket 就能及时结束 worker”的假设，以短 native poll 加取消检查解决。同一旧连接回归修复后得到 EOF。最新完整 `npm run verify` 日志 `verify-browser-shutdown.log`：格式、Svelte check、150 键契约、构建、前端 **223**、Rust **502 + ACL 2**、clippy `-D warnings` 全部通过。维护引用同步停机、锁顺序、可取消流和提交边界；没有新增可勾选的完整 Android/发布 TODO。前端已显示的提示仍无取消事件，手机 v1.6.5 的新 APK/选择器/云端 provider、真实剪贴板和第三方 XML 互操作仍待目标验证，整体目标保持进行中。
