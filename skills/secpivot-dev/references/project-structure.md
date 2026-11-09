@@ -318,3 +318,11 @@ fidelity and actual client exports remain separate pending work.
 Bitwarden and 1PIF. `import/bitwarden_tests.rs` exercises the real command, shared
 ImportRow wire fields, bulk mutation and KDBX save/reopen with synthetic data,
 checking reserved/blank/duplicate retention, masking and OTP/KPRPC semantics.
+
+`vault/import.rs` retains Bitwarden types 1–8 with protected typed fields and
+an optional quality flag. `vault/dto.rs::ImportEntryInput` adds import-only
+metadata to flattened EntryInput. The `commands/vault.rs::import_entries` wrapper
+calls `VaultSession::import_entries`, sharing validate-first insertion with
+`add_entries`; non-password records disable quality evaluation at creation.
+`io.ts` and the browser bulk fallback preserve this flag. Mixed metadata and
+failed-batch tests verify KDBX reopen/default behavior without real user data.

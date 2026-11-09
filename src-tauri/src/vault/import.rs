@@ -35,10 +35,12 @@ pub struct ImportRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub totp: Option<String>,
     pub custom_fields: Vec<ImportCustomField>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_check: Option<bool>,
 }
 
-/// Parse an unencrypted Bitwarden `.json` export. Login (type 1) and secure-note (type 2)
-/// items are imported; cards and identities are skipped. Folders become the
+/// Parse an unencrypted Bitwarden `.json` export. Official item types 1–8 are
+/// retained; specialized values become protected custom fields. Folders become the
 /// group path, the first URI becomes the URL, `login.totp` seeds TOTP, and
 /// custom fields round-trip as entry fields.
 pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
@@ -78,13 +80,14 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         .unwrap_or_default();
 
     let mut rows = Vec::new();
-    for item in items {
+    for (index, item) in items.iter().enumerate() {
+        let invalid = || format!("第 {} 条不是受支持的有效 Bitwarden 记录", index + 1);
         let kind = item
             .get("type")
             .and_then(serde_json::Value::as_i64)
             .unwrap_or(0);
-        if kind != 1 && kind != 2 {
-            continue;
+        if !(1..=8).contains(&kind) {
+            return Err(invalid());
         }
         let title = item
             .get("name")
@@ -134,7 +137,7 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         }
 
         let mut names = fields::FieldNames::new("Bitwarden");
-        let custom_fields = item
+        let mut custom_fields: Vec<ImportCustomField> = item
             .get("fields")
             .and_then(serde_json::Value::as_array)
             .map(|fields| {
@@ -161,6 +164,28 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             })
             .unwrap_or_default();
 
+        if let Some((section, display, string_keys)) = typed_section(kind) {
+            custom_fields.push(names.field("Item Type", display.to_owned(), false));
+            match item.get(section) {
+                None | Some(serde_json::Value::Null) => {}
+                Some(serde_json::Value::Object(values)) => {
+                    for (key, value) in values {
+                        let value = match value {
+                            serde_json::Value::Null => continue,
+                            serde_json::Value::String(value) => value.clone(),
+                            _ if string_keys.contains(&key.as_str()) => return Err(invalid()),
+                            value => value.to_string(),
+                        };
+                        let label = format!("{display} {}", field_label(key));
+                        // Financial/identity/private-key data belongs behind the
+                        // same explicit reveal boundary as hidden custom values.
+                        custom_fields.push(names.field(&label, value, true));
+                    }
+                }
+                Some(_) => return Err(invalid()),
+            }
+        }
+
         rows.push(ImportRow {
             group,
             title,
@@ -170,9 +195,132 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             notes,
             totp: if totp.is_empty() { None } else { Some(totp) },
             custom_fields,
+            quality_check: Some(kind == 1),
         });
     }
     Ok(rows)
+}
+
+/// Keys follow Bitwarden's public Export models. Unknown extensions remain
+/// protected data; they must not be guessed into native KeePass controls.
+fn typed_section(kind: i64) -> Option<(&'static str, &'static str, &'static [&'static str])> {
+    match kind {
+        3 => Some((
+            "card",
+            "Card",
+            &[
+                "cardholderName",
+                "brand",
+                "number",
+                "expMonth",
+                "expYear",
+                "code",
+            ],
+        )),
+        4 => Some((
+            "identity",
+            "Identity",
+            &[
+                "title",
+                "firstName",
+                "middleName",
+                "lastName",
+                "address1",
+                "address2",
+                "address3",
+                "city",
+                "state",
+                "postalCode",
+                "country",
+                "company",
+                "email",
+                "phone",
+                "ssn",
+                "username",
+                "passportNumber",
+                "licenseNumber",
+            ],
+        )),
+        5 => Some((
+            "sshKey",
+            "SSH",
+            &["privateKey", "publicKey", "keyFingerprint"],
+        )),
+        6 => Some((
+            "bankAccount",
+            "Bank Account",
+            &[
+                "bankName",
+                "nameOnAccount",
+                "accountType",
+                "accountNumber",
+                "routingNumber",
+                "branchNumber",
+                "pin",
+                "swiftCode",
+                "iban",
+                "bankContactPhone",
+            ],
+        )),
+        7 => Some((
+            "driversLicense",
+            "Driver License",
+            &[
+                "firstName",
+                "middleName",
+                "lastName",
+                "dateOfBirth",
+                "licenseNumber",
+                "issuingCountry",
+                "issuingState",
+                "issueDate",
+                "expirationDate",
+                "issuingAuthority",
+                "licenseClass",
+            ],
+        )),
+        8 => Some((
+            "passport",
+            "Passport",
+            &[
+                "surname",
+                "givenName",
+                "dateOfBirth",
+                "sex",
+                "birthPlace",
+                "nationality",
+                "issuingCountry",
+                "passportNumber",
+                "passportType",
+                "nationalIdentificationNumber",
+                "issuingAuthority",
+                "issueDate",
+                "expirationDate",
+            ],
+        )),
+        _ => None,
+    }
+}
+
+fn field_label(key: &str) -> String {
+    match key {
+        "ssn" => return "SSN".to_owned(),
+        "pin" => return "PIN".to_owned(),
+        "iban" => return "IBAN".to_owned(),
+        _ => {}
+    }
+    let mut label = String::new();
+    for (index, ch) in key.chars().enumerate() {
+        if index == 0 {
+            label.extend(ch.to_uppercase());
+        } else {
+            if ch.is_ascii_uppercase() {
+                label.push(' ');
+            }
+            label.push(ch);
+        }
+    }
+    label
 }
 
 #[cfg(test)]
@@ -180,7 +328,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bitwarden_json_parses_logins_secure_notes_and_skips_cards() {
+    fn bitwarden_json_parses_logins_secure_notes_and_cards() {
         let text = r#"{
           "encrypted": false,
           "folders": [{ "id": "f1", "name": "Work" }],
@@ -204,7 +352,7 @@ mod tests {
           ]
         }"#;
         let rows = parse_bitwarden_json(text).unwrap();
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].title, "GitHub");
         assert_eq!(rows[0].group, "Work");
         assert_eq!(rows[0].username, "octocat");
@@ -217,6 +365,11 @@ mod tests {
         assert!(rows[0].custom_fields[1].protected);
         assert_eq!(rows[1].title, "Wifi");
         assert!(rows[1].username.is_empty());
+        assert_eq!(rows[2].title, "Card");
+        assert!(rows[2]
+            .custom_fields
+            .iter()
+            .any(|field| field.value == "4111" && field.protected));
     }
 
     #[test]

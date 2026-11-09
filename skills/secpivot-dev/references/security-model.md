@@ -254,3 +254,11 @@ closed by an old copy. Browser close rechecks after attachment cleanup. Manual
 lock omits the predicate. Observers are released on success/failure; aborted
 copies never lock, and failed renderer hashing retains native safety-net behavior.
 This is renderer admission evidence, not multi-window native authorization.
+
+Bitwarden typed-item import protects financial/identity/private-key values as
+unique custom fields, masked in ordinary snapshots and preserved in KDBX.
+Unknown nested extension values retain protected JSON. Types 2–8 disable native
+password-quality checks in the same validated batch insertion; login/default
+quality behavior remains enabled. Import-only metadata never changes ordinary
+full-field edit semantics. Schema tests use synthetic values; real exports,
+linked-field resolution, collections/history/attachments remain pending.

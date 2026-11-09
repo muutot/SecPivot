@@ -327,6 +327,12 @@ export interface EntryInput {
   attachments?: AttachmentInput[];
 }
 
+/** Bulk import may supply quality metadata without changing ordinary edits. */
+export interface ImportEntryInput extends EntryInput {
+  /** Absent retains the KeePass default; non-password imports disable evaluation. */
+  qualityCheck?: boolean;
+}
+
 /** Partial entry update applied to several entries at once (batch editing).
  * An absent field leaves every target entry untouched — passwords of
  * unchanged fields are never fetched or re-sent. */
@@ -378,6 +384,7 @@ export interface GroupMeta {
 
 /** One normalized import row produced by the backend import parsers. */
 export interface ImportRow {
+  qualityCheck?: boolean;
   group: string;
   title: string;
   username: string;

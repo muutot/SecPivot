@@ -8,8 +8,8 @@ use crate::platform::autotype;
 use crate::platform::shield;
 use crate::vault;
 use crate::vault::{
-    AttachmentInput, EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, TotpCode,
-    VaultOpenResult, VaultSession, VaultSessions, VaultState,
+    AttachmentInput, EntryAutoTypeInput, EntryInput, EntryPatch, HistoryVersion, ImportEntryInput,
+    TotpCode, VaultOpenResult, VaultSession, VaultSessions, VaultState,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -580,13 +580,13 @@ pub(crate) fn import_entries(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
-    inputs: Vec<EntryInput>,
+    inputs: Vec<ImportEntryInput>,
 ) -> Result<VaultState, String> {
     with_vault_session(
         vaults.inner(),
         session.inner(),
         session_id.as_deref(),
-        |target| target.add_entries(&inputs),
+        |target| target.import_entries(&inputs),
     )
 }
 

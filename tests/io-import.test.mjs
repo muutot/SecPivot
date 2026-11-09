@@ -23,6 +23,7 @@ globalThis.__TAURI_INTERNALS__ = {
 const { importRowsToEntries, importEntries } = await import("../src/lib/services/io.ts");
 const { SessionViewGuard, LatestOperationGuard } =
   await import("../src/lib/utils/session-state.ts");
+const { vault } = await import("../src/lib/services/vault.ts");
 
 test("structured import retains protected flags and OTP through the real bulk IPC pipeline", async () => {
   const customFields = [
@@ -62,4 +63,66 @@ test("structured import retains protected flags and OTP through the real bulk IP
   assert.equal(call.args.inputs[0].password, row.password);
   assert.equal(call.args.inputs[0].url, row.url);
   assert.equal(notices.length, 1);
+});
+
+test("structured import preserves explicit quality flags and legacy defaults in each bulk row", async () => {
+  calls.length = 0;
+  const row = {
+    group: "",
+    title: "Synthetic",
+    username: "",
+    password: "",
+    url: "",
+    notes: "",
+    customFields: [],
+  };
+  const sessionView = new SessionViewGuard();
+  sessionView.activate("quality-owner");
+  await importEntries(
+    {
+      sessionView,
+      operations: new LatestOperationGuard(),
+      setBusy: () => {},
+      currentState: () => state,
+      notify: () => {},
+    },
+    importRowsToEntries([{ ...row, qualityCheck: false }, { ...row, qualityCheck: true }, row]),
+    sessionView.capture(),
+    null,
+  );
+  const call = calls.find((c) => c.command === "import_entries");
+  assert.ok(call);
+  assert.deepEqual(
+    call.args.inputs.map((input) => input.qualityCheck),
+    [false, true, undefined],
+  );
+});
+
+test("browser bulk import retains quality metadata with KeePass defaults", async () => {
+  const native = globalThis.__TAURI_INTERNALS__;
+  delete globalThis.__TAURI_INTERNALS__;
+  try {
+    await vault.open("synthetic-import-browser.kdbx", "synthetic-master");
+    const row = {
+      groupUuid: "root",
+      title: "Synthetic import metadata",
+      username: "",
+      password: "",
+      url: "",
+      notes: "",
+    };
+    const result = await vault.addEntries([
+      { ...row, qualityCheck: false },
+      { ...row, qualityCheck: true },
+      row,
+    ]);
+    const imported = result.root.entries.filter((entry) => entry.title === row.title);
+    assert.deepEqual(
+      imported.map((entry) => entry.qualityCheck),
+      [false, true, true],
+    );
+    await vault.closeAll();
+  } finally {
+    globalThis.__TAURI_INTERNALS__ = native;
+  }
 });

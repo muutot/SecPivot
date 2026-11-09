@@ -6,6 +6,7 @@ import type {
   VaultGroup,
   VaultEntry,
   EntryInput,
+  ImportEntryInput,
   EntryPatch,
   AttachmentInput,
   EntryFlags,
@@ -122,7 +123,7 @@ interface VaultStore {
   saveAs: (path: string, label?: VaultLabel) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
-  addEntries: (inputs: EntryInput[]) => Promise<VaultState>;
+  addEntries: (inputs: ImportEntryInput[]) => Promise<VaultState>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   updateEntryFlags: (uuid: string, flags: EntryFlags) => Promise<VaultState>;
   updateEntries: (uuids: string[], patch: EntryPatch) => Promise<VaultState>;
@@ -1039,7 +1040,7 @@ export const vault: VaultStore = {
     return result;
   },
 
-  async addEntries(inputs: EntryInput[]): Promise<VaultState> {
+  async addEntries(inputs: ImportEntryInput[]): Promise<VaultState> {
     if (isTauriRuntime()) {
       return invokeSessionState("import_entries", { inputs });
     }
@@ -1050,6 +1051,7 @@ export const vault: VaultStore = {
         pushEntry(group, {
           uuid: newUuid(),
           groupUuid: input.groupUuid,
+          qualityCheck: input.qualityCheck ?? true,
           title: input.title,
           username: input.username,
           password: input.password,
