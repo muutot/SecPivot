@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S35; historical supplemental tracking notes excluded",
-    "total": 46,
-    "confirmed": 46,
+    "scope": "15 baseline cards plus SP-S05 through SP-S36; historical supplemental tracking notes excluded",
+    "total": 47,
+    "confirmed": 47,
     "suspected": 0,
     "by_severity": {
       "High": 11,
-      "Medium": 26,
+      "Medium": 27,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "1a146c2",
+  "remediation_checkpoint": "d3b3264",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -66,6 +66,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S36",
+      "area": "Rejected entry color mutates other flags without dirty/revision or snapshot invalidation",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "2c42492",
+      "commit": "d3b3264",
+      "status": "Confirmed and remediated. Two synthetic native set/clear regressions prove stale cached DTO versus mutated raw entry, changed Bridge matching and persistence after an error. Color validation now precedes all writes while preserving target error order and tri-state semantics. Four targeted tests and full verify 316/569/ACL2 passed. Normal color-picker input is valid; no real UI/extension/device exploitation claimed."
+    },
     {
       "id": "SP-S35",
       "area": "Empty KPRPC regex placeholders broaden browser and auto-type matching",

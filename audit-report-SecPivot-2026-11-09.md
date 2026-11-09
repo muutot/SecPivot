@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S35；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S36；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 11     | 11        | 0         |
-| Medium    | 26     | 26        | 0         |
+| Medium    | 27     | 27        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **46** | **46**    | **0**     |
+| **Total** | **47** | **47**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2002,3 +2002,30 @@ v1.6.5 Save As APK/设备验证仍未完成，目标 active。
 默认跳过四个原生剪贴板 live body。更新了匹配契约、安全边界和模块引用，
 原始基线与评分保持不变。正则方言、过大 block、多网址请求、完整迁移、
 其余系统/UI 与手机 v1.6.5 的新 APK/真机另存为仍待验证，目标 active。
+
+### Finding: SP-S36 属性校验失败仍修改匹配规则且缓存隐藏改动（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Stability / Configuration
+- Status: Confirmed
+- Affected area: Native update_entry_flags validation and snapshot invalidation
+- Evidence:
+  - File: `src-tauri/src/vault/entries.rs:399`、`src-tauri/src/commands/vault.rs:613`（`2c42492` 修复前）
+  - Function / Module: VaultSession::update_entry_flags / update_entry_flags command
+  - Relevant behavior: 原生方法先写 override_url/quality_check，再校验 foreground_color；颜色无效返回 Err，未到 mark_dirty，不刷新缓存快照或 revision。
+  - Reproduction: 两个真实合成 KDBX 回归在合法属性保存后，提交新网址或清空网址、quality=false、无效颜色；都收到预期错误。直接 db.entry 检查已经改变，state() 却仍显示旧属性和 clean/revision。设置分支实际 Bridge 合法/无关网址计数变成 0/1，清空分支合法计数变为 0；显式保存并重开均保留拒绝请求的部分变更。`entry-flags-atomic-red-complete.log` exit 101，两项均失败；仅记录布尔与匹配计数。
+  - Independent verification: 对比缓存 DTO、原始 KDBX entry、实际 BridgeHost 查询及保存重开的四个观察面；初次仅检查缓存的测试恰好显示旧值，随后增加原始条目检查，排除仅展示问题。
+- Problem: 校验错误不是无副作用失败；实际匹配规则和质量开关发生未标脏改动，前端无法从错误或缓存察觉。
+- Why it matters: 用户收到失败反馈后仍可能把部分更改写入库；dirty/revision 不能代表真实内存状态。未复现真实秘密泄漏，也不把能调用合法属性编辑的 renderer 视为新的越权来源。
+- Realistic failure scenario: 原生命令收到带其他属性的无效颜色请求后，后续显式保存持久化未确认修改；当前编辑器颜色选择器通常只产生合法值，正常点击路径与真机 UI 未复现，故按受约束边界缺陷评为 Medium。
+- Minimal fix: 在取得目标条目后先完成可失败的颜色校验，再写任何属性；保留 UUID/条目错误顺序及 absent/empty/valid 三态语义。
+- Better long-term fix: 逐个复核其他 mutation 的校验先行、事务边界、缓存失效和错误后的持久化；本项不引入通用事务重写。
+- Regression test suggestion: 设置/清空两种失败分支同时检查 raw entry、缓存、dirty/revision、匹配与 KDBX 保存重开；既有合法/absent/clear/invalid-color tests 保持。
+- Estimated effort: 0.5–1 小时（局部校验顺序与持久化回归）
+
+`d3b3264` 已先校验颜色再写入属性；针对性 4 项全部通过，完整
+`verify-entry-flags-atomic.log` exit 0：316 frontend、569 Rust、ACL 2。
+原始库、缓存及重开均保持拒绝操作之前的属性，合法/缺省/清空继续通过。
+数据契约及模块引用同步，四个原生剪贴板 live body 默认未执行。
+原始审计基线不改写；完整迁移、其他系统/UI 和 Android 真机另存为仍待验证。
