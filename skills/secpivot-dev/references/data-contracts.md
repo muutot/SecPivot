@@ -75,6 +75,13 @@ Native `TimeOtp`, `HmacOtp`, `SteamOtp` and `steam` fields remain custom fields,
 including their protected flags; only `otp` uses the dedicated input. XML export
 writes actual OTP keys once and includes entry expiry. Browser export-row mapping
 copies custom fields and expiry instead of reducing XML to the CSV field set.
+XML export encodes CR as a character reference to preserve credentials through
+XML newline normalization. Both writers reject characters outside XML 1.0's
+Char production before destination I/O rather than deleting them. Browser
+`buildKeePassXml(rows, lang?)` uses the UI locale for its content-free error
+(default English for existing callers). Rust's intermediate document is
+Zeroizing, including failure paths; returned command content retains the existing
+zeroizing writer boundary. PlainXml still cannot represent every KDBX secret.
 
 ## Config contract
 

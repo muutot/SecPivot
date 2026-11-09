@@ -160,13 +160,32 @@ export interface XmlExportRow {
   customFields?: CustomField[];
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function escapeXml(value: string, lang: Language): string {
+  // XML 1.0 cannot encode these characters, even with numeric references.
+  // Refuse export rather than silently deleting part of a credential.
+  for (const char of value) {
+    const code = char.codePointAt(0)!;
+    if (!(
+      code === 9 ||
+      code === 10 ||
+      code === 13 ||
+      (code >= 0x20 && code <= 0xd7ff) ||
+      (code >= 0xe000 && code <= 0xfffd) ||
+      code >= 0x10000
+    )) {
+      throw new Error(t(lang, "error.invalidXmlExport"));
+    }
+  }
+  return (
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      // Literal CR/CRLF is normalized by XML readers; character references are not.
+      .replace(/\r/g, "&#13;")
+  );
 }
 
 interface XmlGroupNode {
@@ -179,7 +198,7 @@ interface XmlGroupNode {
  *  mirroring the desktop `export_xml` payload so both runtimes produce the
  *  same PlainXml format. Passwords are escaped plaintext with
  *  `ProtectInMemory="True"`, following the official KeePass XML writer. */
-export function buildKeePassXml(rows: XmlExportRow[]): string {
+export function buildKeePassXml(rows: XmlExportRow[], lang: Language = "en"): string {
   const root: XmlGroupNode = { name: "", entries: [], children: new Map() };
   for (const row of rows) {
     let node = root;
@@ -199,12 +218,12 @@ export function buildKeePassXml(rows: XmlExportRow[]): string {
   let xml =
     '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>';
   const writeField = (key: string, value: string, protect: boolean): void => {
-    xml += `<String><Key>${escapeXml(key)}</Key><Value${
+    xml += `<String><Key>${escapeXml(key, lang)}</Key><Value${
       protect ? ' ProtectInMemory="True"' : ""
-    }>${escapeXml(value)}</Value></String>`;
+    }>${escapeXml(value, lang)}</Value></String>`;
   };
   const walk = (node: XmlGroupNode): void => {
-    xml += `<Group><Name>${escapeXml(node.name)}</Name>`;
+    xml += `<Group><Name>${escapeXml(node.name, lang)}</Name>`;
     for (const row of node.entries) {
       xml += "<Entry>";
       writeField("Title", row.title, false);
@@ -218,7 +237,7 @@ export function buildKeePassXml(rows: XmlExportRow[]): string {
         writeField(field.name, field.value, field.protected === true);
       }
       xml += `<Times><Expires>${row.expires ? "True" : "False"}</Expires>`;
-      if (row.expires) xml += `<ExpiryTime>${escapeXml(row.expires)}</ExpiryTime>`;
+      if (row.expires) xml += `<ExpiryTime>${escapeXml(row.expires, lang)}</ExpiryTime>`;
       xml += "</Times>";
       xml += "</Entry>";
     }
