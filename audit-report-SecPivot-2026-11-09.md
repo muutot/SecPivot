@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S25；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S26；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 9      | 9         | 0         |
+| High      | 10     | 10        | 0         |
 | Medium    | 22     | 22        | 0         |
 | Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **36** | **36**    | **0**     |
+| **Total** | **37** | **37**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1565,3 +1565,52 @@ documentation currency gate 同步数据/安全/结构引用。当前卡片 **36
 Hostname 端口、frontend authority/建议地址、regex/blocked 组合、真实
 扩展与 Android APK/真机、其余迁移及完整语义/UI 覆盖仍待继续。
 整体目标保持进行中，未将手机 v1.6.5 另存为标为真机已解决。
+
+### Finding: SP-S26 Hostname 规则忽略显式端口且建议地址删去端口（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Privacy / Testing
+- Status: Confirmed
+- Affected area: host-and-port credential matching and frontend rule suggestions
+- Evidence:
+  - File: `src-tauri/src/vault/helpers.rs:179`、`src/lib/utils/match-url.ts:40`、`src/lib/i18n/zh-CN.ts:263`（`e98fecb` 修复前）
+  - Function / Module: `url_matches_accuracy` / `shortestMatchable` / Hostname
+  - Relevant behavior: blockDomainOnlyMatch=true 仅比较 url_host，端口已丢弃；“主机名+端口相同才匹配”的选项没有兑现，生成建议也只返回 host。
+  - Reproduction: `hostname_matching_preserves_explicit_port_boundaries` 通过实际合成 KDBX 保存重开，非默认端口变化、显式默认端口→省略、省略→显式默认端口、IPv6 端口变化，在默认和可注册域两种设置下通过 Bridge/RPC 各返回 1，共八组错误命中；相同 authority 不同路径的正例通过，见 `hostname-port-red.log`。前端对应回归 `hostname-suggestion-red.log` 显示 :8443 被丢弃。
+  - Independent reference: 固定 KeePassRPC commit `dc0a59b60b3ac21da9944bc5b98fe96e706af80a`，KeePassRPCService.cs:368–374 比较 HostnameAndPort，Hostname 不继续放宽；URLSummary 保留输入显式端口，省略端口不会根据 scheme 补入。`kprpc-url-match-core-reference.cs` 与本任务只读引用保存该证据。
+- Problem: 使用严格主机模式限制同站不同服务时，端口约束被静默移除；用户采纳的建议规则也不能保留该目的地限制。
+- Why it matters: 同一主机可在不同端口运行不同应用/管理界面，不能在严格策略下自动扩大凭据匹配范围。这里是合成适配器实测，不声称已发生真实扩展外传。
+- Realistic failure scenario: 凭据仅绑定 bank.example:8443 的管理服务，访问该主机的另一端口仍得到条目。
+- Minimal fix: 在已验证 canonical host 之上保留独立显式端口，Hostname 比较两者且不补猜 scheme 默认端口；前端建议保留相同端口并正确输出 IPv6 括号。
+- Better long-term fix: 用同一合成 authority 语料验证前后端规则，进一步核对 regex/blocked 组合、真实扩展输入与逐 URI 规则，保持 Domain 的明确宽松语义。
+- Regression test suggestion: 保留四类实际重开负例与相同 authority 正例；补 alt URL、默认/省略、userinfo、IPv6、IDNA、非法端口和前后端 authority 语料，继续运行 Exact/PSL 与默认域名匹配回归。
+- Estimated effort: 2–3 小时（前后端端口保真及回归）
+
+`8a7e939` 已修复 SP-S26。Hostname 比较 canonical host 与独立显式
+数值端口，含默认端口；省略保持 None，不因 scheme 补造端口。Domain
+继续采用明确的宽松主机/站点范围。前端建议使用 WHATWG URL 验证，并
+保留端口、ASCII IDNA 和 IPv6 括号，不能把严格规则变成无端口目的地。
+附 `kprpc-url-summary-reference.cs` 固定来源摘要 SHA-256
+c2325c3cce5f9f522ba2b4595797472a3c27a2989ff31fc3ae0d3408c4c0185f。
+
+共享 `tests/fixtures/url-authorities.json` 的 **27** 条语料在 Rust/Node
+通过，**19** 条支持地址的建议 alt 规则在实际合成 KDBX 保存重开后
+通过 Bridge/RPC、两种配置，并排除其他 authority。端口四类负例及
+相同 authority 正例修复通过，Domain 不同端口/协议对照继续通过。
+复核也保留了裸地址 path/query 中的 @ 或 ://，避免把它们误当 userinfo
+或 scheme；非法 authority/端口/内部控制字符仍拒绝。JSON 语料参与
+现有严格格式覆盖，Prettier 不加入 JSONC 尾逗号。
+
+`hostname-rule-integration.log`、`url-authority-corpus-{rust,frontend}.log`
+保留针对性证据。初轮完整门禁 `verify-hostname-port.log` 在行为测试
+通过后因 clippy 的 manual_strip 失败；改为 strip_prefix 后，正式
+`verify-hostname-port-complete.log` 全部通过：前端 **303**、Rust
+**560 + ACL 2**、格式、Svelte check、150 键契约、构建与 clippy。
+documentation currency gate 同步数据/安全/模块/维护引用，TODO 仅新增
+由这些直接证据覆盖的 Hostname 项；没有新 IPC/配置/依赖或 UI markup。
+
+截至 2026-11-10，当前卡片 **37**（High 10 / Medium 22 / Low 5），
+原始 15 项/6.1 分基线不变。完整逐 URI 迁移、regex/blocked 交互、
+原生扩展、Android APK/真机及剩余语义/UI 覆盖仍待继续；CSV 的公式
+防护与 RFC 引号组合进入下一轮独立验证，当前尚不计入正式发现。

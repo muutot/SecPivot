@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S25; historical supplemental tracking notes excluded",
-    "total": 36,
-    "confirmed": 36,
+    "scope": "15 baseline cards plus SP-S05 through SP-S26; historical supplemental tracking notes excluded",
+    "total": 37,
+    "confirmed": 37,
     "suspected": 0,
     "by_severity": {
-      "High": 9,
+      "High": 10,
       "Medium": 22,
       "Low": 5
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "49a5be3",
+  "remediation_checkpoint": "8a7e939",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -277,15 +277,24 @@
       "source_checkpoint": "b111065",
       "commit": "49a5be3",
       "status": "Confirmed and remediated. Reopened synthetic KDBX returned a credential through both host adapters for five complete-URL differences in default and registrable modes. Fixed KeePassRPC V1 mapping and BestMatchAccuracyForAnyURL independently require full string equality for Exact. Frontend suggestion also dropped query/fragment. Initial shared-branch-only fix failed legitimate Bridge URL because adapter lowercased the request; final adapter preserves original request/submit case. One native KDBX regression and two frontend suggestion regressions, full verify 301 frontend/556 Rust/ACL2 passed. No new dependency/IPC/setting/markup/CSS. Port/frontend authority/rule interaction and actual extension/device behavior remain pending."
+    },
+    {
+      "id": "SP-S26",
+      "area": "Hostname rules and frontend suggestions discard explicit destination ports",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "e98fecb",
+      "commit": "8a7e939",
+      "status": "Confirmed and remediated. Reopened synthetic KDBX returned a credential through both adapters for four port differences under two configurations; frontend suggestion dropped :8443. Fixed official HostnameAndPort reference independently corroborates explicit/default/omitted policy. Canonical authority now retains an optional explicit numeric port without guessing scheme defaults; frontend suggestions preserve ports and IPv6 brackets. Shared 27-case Rust/Node corpus and 19 supported suggested alt rules after KDBX reopen passed, plus Domain loose-scope control. First full gate only failed manual_strip clippy after behavior success; strip_prefix repaired it. Final full verify 303 frontend/560 Rust/ACL2. Strict JSON fixture formatting override and focused docs/TODO updated. No new DTO/IPC/setting/dependency/markup. Native extension, Android and complete per-URI/rule-interaction audit remain pending."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "49a5be3",
-    "log": "verify-exact-url-policy-complete.log",
-    "frontend_tests": 301,
-    "rust_unit_tests": 556,
+    "checkpoint": "8a7e939",
+    "log": "verify-hostname-port-complete.log",
+    "frontend_tests": 303,
+    "rust_unit_tests": 560,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -359,6 +368,7 @@
     "15248b5 repairs shared menu focus/navigation, instance cascade ARIA, guarded tick focus, pointer transitions, leaf default activation and scoped dismissal. Page window capture checks all activeContextMenu owners; real extracted baseline handler called a synthetic Save once while group owner was active, then final guard blocks and resumes correctly after close. Initial capture fixtures missing callback/modifier defaults excluded. Intermediate new menu consumption starved idle bubble listener; actual timer fake-clock regression failed, window capture now refreshes and preserves normal timeout/cleanup. Nine repository tests and complete production Edge regression passed; 18 dark/light/custom x three-size screenshots inspected. First contact-sheet tool runtime import/Edge-discovery failures were tooling only, standard Node succeeded. Full verify 299 frontend/548 Rust/ACL2. No CSS dimensions/colors changed, native Android APK/device and assistive technology remain pending.",
     "4dbe49c closes SP-S23 unsafe URI import by rejecting unsupported documents rather than silently weakening source policy. Two temporary real-command/wire/host/reopened-KDBX probes failed for four restrictive modes and second URI loss; only counts were logged and the exact original test source was restored. Four permanent tests exercise explicit 0–5/mixed documents, multiple default URIs, twelve malformed shapes and six supported default/no-URI KDBX round trips; 19 targeted imports and full verify 299 frontend/552 Rust/ACL2 passed. Complete per-URI compatibility remains pending and current valid files using those features now reject. Fixed Bitwarden source 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 plus source hashes/official help snapshot recorded. No new DTO/IPC/matcher/setting/UI/dependency, user vault/clipboard/device or live extension exercised.",
     "1a3a680 repairs actual destination-host extraction without changing port/Exact policy. Two valid baseline red tests and independent WHATWG host results retained; three permanent unit/reopened-KDBX tests and full verify 299 frontend/555 Rust/ACL2 passed. Documentation currency updates shared helper, security and data references. Synthetic vaults only, no user vault or shared OS clipboard; native browser extension and Android APK/device remain unverified. Original baseline preserved, full goal still active.",
-    "49a5be3 honors native complete Exact URL policy and preserves full frontend suggestion. Valid original red: ten wrong host matches and frontend query loss. Intermediate target/full gates failed legitimate uppercase-path Bridge URL; adapter pre-normalization repaired and request/submit regression passed. Final full verify 301 frontend/556 Rust/ACL2. Fixed official source dc0a59b60b3ac21da9944bc5b98fe96e706af80a; API quota and clone lazy-fetch failures were tooling only, pinned raw source obtained. Data/security/module documentation updated. Synthetic vaults only, no user vault/clipboard, native extension or Android APK/device evidence. Full goal remains active and mobile Save As unverified."
+    "49a5be3 honors native complete Exact URL policy and preserves full frontend suggestion. Valid original red: ten wrong host matches and frontend query loss. Intermediate target/full gates failed legitimate uppercase-path Bridge URL; adapter pre-normalization repaired and request/submit regression passed. Final full verify 301 frontend/556 Rust/ACL2. Fixed official source dc0a59b60b3ac21da9944bc5b98fe96e706af80a; API quota and clone lazy-fetch failures were tooling only, pinned raw source obtained. Data/security/module documentation updated. Synthetic vaults only, no user vault/clipboard, native extension or Android APK/device evidence. Full goal remains active and mobile Save As unverified.",
+    "8a7e939 preserves strict Hostname destination ports and usable frontend rules. Actual KDBX/host baseline eight wrong matches plus frontend port-loss failure retained. Four native and two frontend regressions cover 27 canonical authority cases, 19 suggested alt rules, explicit/default/omitted ports and Domain scope. First full gate clippy manual_strip failure corrected; final full verify 303 frontend/560 Rust/ACL2. Fixed KPRPC URLSummary snapshot hash recorded. Source @/:// in bare path/query are no longer misclassified. Only synthetic vaults; native extension and Android APK/device remain unverified. CSV formula quoting is the next independently unconfirmed candidate, not an extra issue count. Original baseline unchanged, goal active on 2026-11-10."
   ]
 }
