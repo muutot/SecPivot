@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S18；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S19；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 20     | 20        | 0         |
+| Medium    | 21     | 21        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **29** | **29**    | **0**     |
+| **Total** | **30** | **30**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1248,3 +1248,48 @@ documentation currency gate 同步 data-contracts/security-model 与 partial TOD
 运行；Android 选择器创建文档的副作用和 provider 行为尚未实测。
 手机 v1.6.5 的 `plugin:safe|create_document not allowed by ACL` 仍需新 APK
 和设备回归，源码 `saf` 与报错 `safe` 的差异未查明；整体审计目标继续 active。
+
+### Finding: SP-S19 Bitwarden 导入静默丢弃卡片、身份及其他专属类型（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Backend API / Testing
+- Status: Confirmed
+- Affected area: Bitwarden item type filtering and specialized fields
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:85`（`abd9008` 修复前源码）
+  - Function / Module: `parse_bitwarden_json`
+  - Relevant behavior: `type != 1 && type != 2` 直接 continue，返回成功但没有卡片、身份、SSH、银行账户、驾照或护照记录；未来未知类型与错误的专属内容也被该过滤掩盖。
+  - Reproduction: 三项真实 parser command / ImportRow wire / KDBX 回归在旧代码失败：Card 返回零条，混合正常与未知/错误专属类型返回成功，带嵌套扩展内容的 Card 也返回零条。见 `bitwarden-typed-records-red-final.log`。首轮夹具使用了不存在的 get_notes API，已改为真实 Notes getter；编译错误不算应用复现。
+  - Independent reference: Bitwarden 固定源码 `1a8bdbfe625bff90a9c0cabef2002e37f6038fa1` 的 cipher-type 和六种 Export 模型明确对应 3–8；[KeePassXC BitwardenReader](https://raw.githubusercontent.com/keepassxreboot/keepassxc/develop/src/format/BitwardenReader.cpp) 会创建身份/卡片条目并映射专属字段。来源摘要见 `bitwarden-typed-reference-provenance.json`；未复制第三方实现代码。
+- Problem: 界面报告导入完成，但源导出中的整类记录没有进入目标库。
+- Why it matters: 用户可能据此停止保管源导出，随后无法从目标库找到卡片号码、证件号或私钥；未观察源文件或已有 KDBX 损坏，按迁移边界的 Medium 问题记录。
+- Realistic failure scenario: 一个 Bitwarden 明文 JSON 同时含登录项与卡片/身份项；导入后只看到登录项，其他项目无错误提示地消失。
+- Minimal fix: 对官方 3–8 类型创建普通 KeePass 条目，用唯一来源名称映射专属字段并保护其内容；已知字符串字段校验类型，未知扩展内容以受保护 JSON 保留。未知 item type 或错误专属内容整次返回含记录序号、不含内容的错误，不返回部分成功。
+- Better long-term fix: 链接字段、多 URI 的匹配规则、组织集合、原生历史、附件及真正的 SSH/证件专属操作仍需分别迁移验证；不能以字段保留宣称所有竞品运行能力已支持。
+- Regression test suggestion: 对六种类型运行真实命令 → wire → bulk mutation → KDBX 保存重开，检查前导零、空白、私钥换行、专属值和保护标记、现有自定义字段；混合文件错误不返回前面的有效行；未知嵌套数据/名称碰撞仍保真。
+- Estimated effort: 2–3 小时（类型保留与 KDBX 验证）；完整竞品操作语义另计
+
+`00f8bbd` 已修复 SP-S19。六种专属类型通过真实 parser command → ImportRow
+wire → import_entries 共用批量写入 → KDBX 保存重开，保留前导零、空白、
+私钥 CRLF、所有专属值及保护标记；未知扩展内容受保护 JSON 保留，名称
+碰撞不丢值。类型 2–8 同批关闭密码质量检查，登录保持开启，缺少元数据
+保留 KeePass 默认；普通条目全字段编辑不修改该属性。
+
+实施复核另发现新卡片会被报告为空密码，且 renderer 丢弃导入质量标记；
+真实后端重开与前端 wire 两条回归先红后绿，见
+`bitwarden-quality-rust-red.log`、`bitwarden-quality-frontend-red.log`。
+混合 false/true/absent 经过 serde、批量写入及 KDBX 重开保留；无效分组
+让整批不写入、不改 revision/dirty，非布尔 metadata 拒绝。真实浏览器
+回退服务也保留质量标记。该问题属于本次类型迁移修复的语义边界，不另
+增加发现卡片。最终针对性导入测试 17 项通过；完整门禁日志
+`verify-bitwarden-typed-records.log` 包含前端 **290**、Rust **542 + ACL 2**、
+格式、Svelte check、150 键设置契约、构建和 clippy，全部通过。提交前
+补充文档后的完整格式门也通过。
+
+documentation currency gate 同步 data-contracts/security-model/project-structure
+及 partial TODO；稳定开发流程和主题变量没有变化。当前详细卡片 **30**
+（High 5 / Medium 21 / Low 4，全部 Confirmed）；原始基线统计/6.1 分不变。
+官方固定 Export 模型和 KeePassXC 映射用于独立来源复核，真实客户端的
+专属类型导出、Android APK/选择器/provider 及剩余字段迁移仍未验证；
+整体审计继续进行。

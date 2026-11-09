@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S18; historical supplemental tracking notes excluded",
-    "total": 29,
-    "confirmed": 29,
+    "scope": "15 baseline cards plus SP-S05 through SP-S19; historical supplemental tracking notes excluded",
+    "total": 30,
+    "confirmed": 30,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 20,
+      "Medium": 21,
       "Low": 4
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "a90394d",
+  "remediation_checkpoint": "00f8bbd",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -214,15 +214,24 @@
       "source_checkpoint": "8c7e7a6",
       "status": "Two frontend and two backend regressions failed on baseline 8c7e7a6. Real Chromium DOMParser changed CR/CRLF in passwords/protected fields, rejected six invalid XML scalars and replaced two isolated surrogates. Backend saved/reopened synthetic KDBX with intact secrets, then XML decoding normalized CR and invalid export reported success. First baseline compilation hit host memory exhaustion; unchanged retry reached the expected failures. Fix preserves CR references, rejects unrepresentable characters before backend destination writes, retains original secrets/old targets, localizes browser errors and zeroizes intermediate Rust XML. Green backend covers password and separately protected PIN for all six scalars; targeted frontend/backend and real DOMParser passed. Full host verify passed 288 frontend/538 Rust/ACL2; native client and Android provider/picker runtime pending.",
       "commit": "a90394d"
+    },
+    {
+      "id": "SP-S19",
+      "area": "Bitwarden typed records silently discarded and import quality metadata lost",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "abd9008",
+      "commit": "00f8bbd",
+      "status": "Three genuine baseline regressions failed on skipped typed records, mixed invalid records and nested collisions. Types 1–8 retained with protected unique typed fields; quality flag preserved atomically through import-only DTO and KDBX reopen. Intermediate backend empty-password report and frontend metadata loss independently reproduced and repaired; false/true/absent, invalid-batch preservation and browser fallback verified. Seventeen targeted import tests and full host verification passed; no authentic typed client export/device evidence."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "a90394d",
-    "log": "verify-xml-character-fidelity.log",
-    "frontend_tests": 288,
-    "rust_unit_tests": 538,
+    "checkpoint": "00f8bbd",
+    "log": "verify-bitwarden-typed-records.log",
+    "frontend_tests": 290,
+    "rust_unit_tests": 542,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
