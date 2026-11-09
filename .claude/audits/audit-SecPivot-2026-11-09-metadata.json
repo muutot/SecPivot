@@ -21,15 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S08; historical supplemental tracking notes excluded",
-    "total": 19,
-    "confirmed": 19,
+    "scope": "15 baseline cards plus SP-S05 through SP-S09; historical supplemental tracking notes excluded",
+    "total": 20,
+    "confirmed": 20,
     "suspected": 0,
-    "by_severity": { "High": 5, "Medium": 11, "Low": 3 }
+    "by_severity": {
+      "High": 5,
+      "Medium": 12,
+      "Low": 3
+    }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "b785fef",
+  "remediation_checkpoint": "22cd55d",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -113,14 +117,22 @@
       "confidence": "Confirmed",
       "commit": "b785fef",
       "status": "three production state-machine regressions failed before the fix, including real synthetic KDBX expiry and locked proof; seven new tests cover credential read expiry, registry session binding, queued write admission, retained-key locked/unlock behavior, rotation/close and durable Add/Update completion; full verify passed"
+    },
+    {
+      "id": "SP-S09",
+      "area": "Expired RPC side-channel password remains visible; stale copy and timer completions affect replacement prompts",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "22cd55d",
+      "status": "nine production component-script regressions failed before the fix and passed after; rendered Edge synthetic expiry/resume/copy/unmount and dark/light/custom 1100/420 passed; backend prompt cancellation remains pending"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "b785fef",
-    "log": "verify-rpc-authorization-lifetime-final.log",
-    "frontend_tests": 227,
+    "checkpoint": "22cd55d",
+    "log": "verify-rpc-prompt-renderer.log",
+    "frontend_tests": 236,
     "rust_unit_tests": 509,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -163,6 +175,7 @@
     "Frontend already-visible association/SRP prompts have no cancellation event yet; admitted-work test models permit retention rather than an actual storage commit interrupted by stop",
     "2303a0d binds association IPC completion and dismissal to the current request; four script regressions red-to-green and a real rendered synthetic IPC test passed; script harness's initial empty-export syntax failure was corrected before recording state evidence",
     "b785fef revalidates live host authorization for reads and writes after persistence admission, stored-key proof and stable-session SRP proof; retained RPC keys still authenticate while locked but data remains locked, and admitted writes still adopt durable results",
-    "SP-S08 initial expiry red test observed database metadata, not real user credentials; the strengthened regression successfully reads only a synthetic credential while authorized and rejects its frame after expiry; no live extension/Tauri socket handler or user vault was exercised"
+    "SP-S08 initial expiry red test observed database metadata, not real user credentials; the strengthened regression successfully reads only a synthetic credential while authorized and rejects its frame after expiry; no live extension/Tauri socket handler or user vault was exercised",
+    "22cd55d dismisses expired RPC prompts using a wall-clock deadline, releases pending references on close/unmount, refreshes on focus/visibility and copy, and gates timer/copy completion by request identity; JavaScript heap zeroization, backend prompt cancellation and delayed event delivery are not proven"
   ]
 }

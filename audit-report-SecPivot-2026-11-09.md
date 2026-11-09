@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S08；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S09；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 11     | 11        | 0         |
+| Medium    | 12     | 12        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **19** | **19**    | **0**     |
+| **Total** | **20** | **20**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S08 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S09 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -824,3 +824,25 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 3–5 小时
 
 `b785fef` 已修复 SP-S08。最终完整 `npm run verify` 日志 `verify-rpc-authorization-lifetime-final.log`：格式、Svelte check、150 键契约、生产构建、前端 **227**、Rust **509 + ACL 2**、clippy `-D warnings` 全部通过。此前全门禁也通过，随后补强真实合成凭据请求的测试并完整重跑；未将原先仅数据库元数据的 red 复现描述成真实用户密码泄漏。security-model、data-contracts、project-structure 已同步当前授权和锁定重连语义，并纠正相关旧模块路径、404/CORS 与 setup read timeout 的陈旧说明。当前详细卡片 19 项，原始 15 项/6.1 分基线保持不变；frontend 提示失效和秘密释放、剪贴板并发、SAF provider I/O、新 Android APK及第三方 XML 互操作仍未完成，目标继续进行。
+
+### Finding: SP-S09 RPC 配对密码过期仍显示，旧复制与计时回调污染新提示（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Security / Frontend State
+- Status: Confirmed（前端局部修复已验证；后端提示取消仍待处理）
+- Affected area: RPC side-channel modal expiry and asynchronous ownership
+- Evidence:
+  - File: `src/lib/components/RpcSideChannelPrompt.svelte`（`a0da9f6` 修复前源码）
+  - Function / Module: `startCountdown` / `copyPassword` / `onMount` cleanup
+  - Relevant behavior: 倒计时按 interval 回调次数减一，归零只停止 timer，`pending.password` 仍显示；unmount 也只停 timer，未释放 pending。复制 Promise 完成后直接设置全局 `copied`，旧 timer 同样直接修改当前 remaining。
+  - Red regressions: 执行完整生产组件 script，以隔离时钟、事件与剪贴板代替宿主环境。到期后 pending 未清、110 秒延迟只减一、timer 恢复前仍能复制、旧复制把 B 标为 copied、复制期间过期、旧 timer 改动 B、unmount 后旧事件/复制恢复状态、无效 TTL 显示、无 resume 检查共 9 项断言失败，见 `rpc-prompt-renderer-red.log`。这是合成密码和环境替身的前端证据，没有使用真实用户密码。
+- Problem: 一次性配对密码超过显示期限仍可在屏幕上读取；后台定时器延迟可进一步延长显示，且旧异步操作能覆盖新提示的操作状态。
+- Why it matters: 用户看到过期提示后仍暴露配对秘密，且新提示可能被误标记为已经复制，造成连接失败与误操作。后端 proof 的到期检查不能消除屏幕中的残留密码。
+- Realistic failure scenario: 用户打开配对提示后切换窗口或使设备休眠，恢复时 timer 尚未执行；密码继续显示。另一条路径是复制 A 后立即接到 B，A 的迟到复制完成让 B 的复制按钮被禁用。
+- Minimal fix: 使用墙钟 deadline，interval、focus/visibility resume、复制开始与完成都重新检查；过期关闭弹窗并释放 pending，关闭/unmount 同样清理。timer/copy 回调只在仍持有相同 request object 时更新状态，卸载后的队列事件不再接收。
+- Better long-term fix: 为每次后端 SRP attempt 引入关联身份及关闭事件，覆盖 proof、连接退出、锁定、切库与服务停用。当前 TTL 从 renderer 收到事件起算，未处理事件投递延迟；释放 JS 引用不等于证明堆内存被 zeroize。
+- Regression test suggestion: 9 项生产 script 回归修复后全部通过。真实 Edge 挂载当前 Svelte 组件，验证 A copy 完成不禁用 B、到期后 DOM 不含密码/弹窗、延迟 visibility resume、手动关闭和复制中 unmount；剪贴板与 IPC 均为替身。深色/浅色/自定义主题的 1100px/420px 截图已检查，弹窗未溢出且保持既有紧凑语义 token。
+- Estimated effort: 1–2 小时
+
+`22cd55d` 已修复 SP-S09 的前端范围。完整 `npm run verify` 日志 `verify-rpc-prompt-renderer.log`：格式、Svelte check 零错误警告、150 键契约、构建、前端 **236**、Rust **509 + ACL 2**、clippy 全部通过。渲染日志 `rpc-prompt-renderer-render.log` 与六张截图保存在本任务 artifacts 目录；未触碰真实库或 OS 剪贴板。security-model 和 data-contracts 同步了当前保证与未完成的取消边界，未新增完整生命周期/Android TODO 勾选。当前详细卡片 20 项；原始基线保持不变。后端 SRP 提示结束事件及零化失败路径、剪贴板并发、SAF provider、新 APK/设备及第三方 XML 互操作继续审查，整体目标未完成。
