@@ -132,6 +132,11 @@ and embedded whitespace reject as invalid rather than becoming native URL
 destinations. Missing/null/empty URI collections remain valid. No partial rows
 are returned or schema fields added; complete per-URI matching remains pending.
 
+KPRPC empty allow/block regex expressions are ignored by the shared matcher,
+including browser host adapters and auto-type scoring. Nonempty whitespace and
+explicit wildcard patterns retain their meaning; existing compile/input limits
+and malformed-regex handling are unchanged.
+
 Main-window `flash(message, kind = "success")` forwards the existing TipKind.
 IO/group/favicon/editor notification seams accept `(message, kind?: TipKind)`;
 explicit failure branches pass `"error"`, while normal completion retains the

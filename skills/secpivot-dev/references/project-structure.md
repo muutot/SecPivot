@@ -35,6 +35,11 @@ command/wire/KDBX and batch rejection, while CSV/IO tests cover conversion and
 IPC/default/editor continuity. It uses the existing favorite field, not a new
 setting or ordinary-edit property.
 
+`vault/helpers.rs::regex_matches` centrally ignores empty KPRPC expressions
+for Bridge/RPC and both auto-type scans. Host/KDBX regression tests distinguish
+empty placeholders from meaningful whitespace and explicit wildcards; the
+existing pattern/text/compiled-size bounds remain unchanged.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or

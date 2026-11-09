@@ -202,12 +202,12 @@ fn registrable_domain(host: &str) -> &str {
     psl::domain_str(host).unwrap_or(host)
 }
 
-/// Compile a user regex; malformed patterns simply never match (Kee ignores
+/// Compile a user regex; empty and malformed patterns never match (Kee ignores
 /// them too rather than failing the whole login lookup). Patterns come from
 /// vault content (shared/imported databases), so bound the compile: oversized
 /// patterns never match instead of burning CPU on every login lookup/hotkey.
 pub(crate) fn regex_matches(pattern: &str, text: &str) -> bool {
-    if pattern.len() > 256 || text.len() > 4096 {
+    if pattern.is_empty() || pattern.len() > 256 || text.len() > 4096 {
         return false;
     }
     regex::RegexBuilder::new(pattern)
