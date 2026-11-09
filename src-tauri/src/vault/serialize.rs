@@ -478,13 +478,13 @@ pub(crate) fn delete_history_entry(entry: &mut Entry, index: usize) -> bool {
 /// formula when the export is opened in Excel/LibreOffice, so a leading
 /// apostrophe forces text interpretation (formula-injection guard).
 pub(crate) fn escape_csv(value: &str) -> String {
-    let cell = if value.contains([',', '"', '\r', '\n']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_owned()
-    };
+    let mut cell = value.to_owned();
+    // The guard is part of the value, inside any RFC quotes.
     if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-        format!("'{cell}")
+        cell.insert(0, '\'');
+    }
+    if cell.contains([',', '"', '\r', '\n']) {
+        format!("\"{}\"", cell.replace('"', "\"\""))
     } else {
         cell
     }

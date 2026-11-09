@@ -10,12 +10,12 @@ export interface CsvRow {
 }
 
 function escapeCsv(value: string): string {
-  let cell = /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
   // Spreadsheet formula-injection guard: a leading =, +, -, @, tab or CR
   // would execute as a formula when the export is opened in Excel or
   // LibreOffice; a leading apostrophe forces text interpretation.
-  if (/^[=+\-@\t\r]/.test(value)) cell = `'${cell}`;
-  return cell;
+  // Guard the value before RFC quoting so separators stay inside the cell.
+  const cell = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /[",\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
 }
 
 /** Serialize entries as RFC 4180 CSV (CRLF, quoted cells, UTF-8 BOM). */

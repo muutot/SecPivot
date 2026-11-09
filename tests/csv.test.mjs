@@ -61,4 +61,49 @@ describe("parseCsvRows", () => {
     assert.ok(csv.includes("'-3"));
     assert.ok(csv.includes("'@cmd"));
   });
+
+  it("keeps guarded values within RFC quotes without changing column boundaries", () => {
+    const values = [
+      "=SUM(1,2)",
+      '+"quoted"',
+      "-first\r\nsecond",
+      "@one,two",
+      "\tone,two",
+      "\rone\r\ntwo",
+      'plain,"quoted"\r\nnext',
+      "'literal,apostrophe",
+    ];
+    const csv = buildCsv(
+      values.map((title) => ({
+        group: "",
+        title,
+        username: "user",
+        password: "",
+        url: "https://synthetic.example",
+        notes: "tail",
+        totp: "",
+        favorite: false,
+      })),
+    );
+    const cells = [
+      '"\'=SUM(1,2)"',
+      '"\'+""quoted"""',
+      '"\'-first\r\nsecond"',
+      '"\'@one,two"',
+      '"\'\tone,two"',
+      '"\'\rone\r\ntwo"',
+      '"plain,""quoted""\r\nnext"',
+      '"\'literal,apostrophe"',
+    ];
+    const expected =
+      "\uFEFFGroup,Title,Username,Password,URL,Notes,TOTP,Favorite\r\n" +
+      cells.map((cell) => `,${cell},user,,https://synthetic.example,tail,,false\r\n`).join("");
+    assert.equal(csv, expected);
+    const decoded = parseCsv(csv);
+    assert.equal(decoded.length, 9);
+    for (let index = 0; index < values.length; index++) {
+      assert.equal(decoded[index + 1].length, 8);
+      assert.equal(decoded[index + 1][1], index < 6 ? "'" + values[index] : values[index]);
+    }
+  });
 });

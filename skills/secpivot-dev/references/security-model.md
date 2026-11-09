@@ -2,6 +2,12 @@
 
 SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 
+Both CSV writers prepend the existing spreadsheet formula guard before quoting
+the cell, keeping commas/quotes/newlines inside it. Do not move that apostrophe
+outside RFC quotes or remove literal input apostrophes on import. Guarding alters
+the exported field value; the wire regressions prove column and guarded-value
+fidelity, not native spreadsheet execution behavior or lossless migration.
+
 `util::atomic_write` creates a unique random sibling per write with `create_new`
 and owner-only permissions on Unix, flushes the same writable handle, then
 renames it onto the target. Cleanup only removes that operation's own file;

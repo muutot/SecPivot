@@ -6005,6 +6005,59 @@ fn foreign_attributes_survive_edits_and_flags_round_trip() {
 }
 
 #[test]
+fn export_csv_keeps_guarded_cells_inside_rfc_quotes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let values = [
+        "=SUM(1,2)",
+        "+\"quoted\"",
+        "-first\r\nsecond",
+        "@one,two",
+        "\tone,two",
+        "\rone\r\ntwo",
+        "plain,\"quoted\"\r\nnext",
+        "'literal,apostrophe",
+    ];
+    for title in values {
+        session
+            .add_entry(&EntryInput {
+                group_uuid: ROOT_GROUP_UUID.to_owned(),
+                title: title.into(),
+                username: "user".into(),
+                password: "".into(),
+                url: "https://synthetic.example".into(),
+                notes: "tail".into(),
+                totp: None,
+                expires: None,
+                icon: Some(None),
+                color: None,
+                tags: None,
+                custom_fields: vec![],
+                attachments: vec![],
+            })
+            .unwrap();
+    }
+    let dest = dir.path().join("export.csv");
+    session.export_csv(dest.to_str().unwrap()).unwrap();
+    let text = std::fs::read_to_string(&dest).unwrap();
+    let expected = concat!(
+        "\u{FEFF}Group,Title,Username,Password,URL,Notes,TOTP,Favorite\r\n",
+        ",\"'=SUM(1,2)\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'+\"\"quoted\"\"\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'-first\r\nsecond\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'@one,two\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'\tone,two\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'\rone\r\ntwo\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"plain,\"\"quoted\"\"\r\nnext\",user,,https://synthetic.example,tail,,false\r\n",
+        ",\"'literal,apostrophe\",user,,https://synthetic.example,tail,,false\r\n",
+    );
+    assert!(
+        text == expected,
+        "exported cells must preserve guards, quotes and column boundaries"
+    );
+}
+
+#[test]
 fn export_csv_writes_escaped_rows_and_bom() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
