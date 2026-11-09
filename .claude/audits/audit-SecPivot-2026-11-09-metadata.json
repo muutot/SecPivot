@@ -33,7 +33,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "65e47cd",
+  "remediation_checkpoint": "8e050d8",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -124,17 +124,18 @@
       "severity": "Medium",
       "confidence": "Confirmed",
       "commit": "22cd55d",
-      "status": "nine production component-script regressions failed before the fix and passed after; rendered Edge synthetic expiry/resume/copy/unmount and dark/light/custom 1100/420 passed; backend prompt cancellation remains pending; correlated end lease now covers setup/proof/replacement and connection exit/unwind; five new frontend assertions failed on 22cd55d, all 15 pass now; three new backend regressions and rendered event ordering passed; idle lock/session-switch cancellation and JS heap zeroization remain pending",
-      "followup_commit": "65e47cd"
+      "status": "nine production component-script regressions failed before the fix and passed after; rendered Edge synthetic expiry/resume/copy/unmount and dark/light/custom 1100/420 passed; backend prompt cancellation remains pending; correlated end lease now covers setup/proof/replacement and connection exit/unwind; five new frontend assertions failed on 22cd55d, all 15 pass now; three new backend regressions and rendered event ordering passed; idle lock/session-switch cancellation and JS heap zeroization remain pending; active lifetime watchers now end idle prompts on successful topology transitions; cancelled SRP remains refused after A-B-A and interposed setup; six new Rust regressions passed; genuine Tauri/extension lifecycle delivery remains unverified",
+      "followup_commit": "65e47cd",
+      "active_lifetime_commit": "8e050d8"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "65e47cd",
-    "log": "verify-rpc-prompt-lifecycle.log",
+    "checkpoint": "8e050d8",
+    "log": "verify-rpc-active-lifetime-final.log",
     "frontend_tests": 242,
-    "rust_unit_tests": 512,
+    "rust_unit_tests": 518,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -178,6 +179,9 @@
     "b785fef revalidates live host authorization for reads and writes after persistence admission, stored-key proof and stable-session SRP proof; retained RPC keys still authenticate while locked but data remains locked, and admitted writes still adopt durable results",
     "SP-S08 initial expiry red test observed database metadata, not real user credentials; the strengthened regression successfully reads only a synthetic credential while authorized and rejects its frame after expiry; no live extension/Tauri socket handler or user vault was exercised",
     "22cd55d dismisses expired RPC prompts using a wall-clock deadline, releases pending references on close/unmount, refreshes on focus/visibility and copy, and gates timer/copy completion by request identity; JavaScript heap zeroization, backend prompt cancellation and delayed event delivery are not proven",
-    "65e47cd assigns monotonic attempt identities and sends correlated end on subsequent setup or connection lease drop; renderer rejects old/duplicate show and end-before-show; Zeroizing protects the temporary password on begin error/callback unwind and the event payload borrows it for synchronous Tauri serialization; no genuine Tauri/extension shutdown UI or post-deallocation memory measurement was performed"
+    "65e47cd assigns monotonic attempt identities and sends correlated end on subsequent setup or connection lease drop; renderer rejects old/duplicate show and end-before-show; Zeroizing protects the temporary password on begin error/callback unwind and the event payload borrows it for synchronous Tauri serialization; no genuine Tauri/extension shutdown UI or post-deallocation memory measurement was performed",
+    "8e050d8 centrally ends weak one-shot active-session observers outside registry/observer guards; fd8a08e baseline clean regressions confirm missing end for lock/active-close/switch/open and successful old proof after revisiting original tab; initial observation-mutex destructor panic and missed baseline adaptation compile failure are excluded from product evidence",
+    "Cancelled attempt followed by stored-key setup initially discarded the cancellation lease while retaining pending SRP; production regression failed, fixed by clearing all pending SRP state on any setup after cancellation; final full gate passed at 242 frontend, 518 Rust, ACL 2",
+    "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review"
   ]
 }
