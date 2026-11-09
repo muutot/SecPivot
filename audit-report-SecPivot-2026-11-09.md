@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S43；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S44；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
 | Medium    | 32     | 32        | 0         |
-| Low       | 9      | 9         | 0         |
+| Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **54** | **54**    | **0**     |
+| **Total** | **55** | **55**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2284,3 +2284,42 @@ CLI 未登录已用公开 API 继续；未加引号的 PowerShell Git peel 参�
 已用确切引用重读，不用于产品结论。该研究复核既有 ACL 发现，不增加
 新卡片统计。后续历史提示文案、其他 mutation、缺省保留大小和剩余
 系统/UI/竞品迁移覆盖继续进行；原始基线与评分保持不变，目标 active。
+
+### Finding: SP-S44 历史页固定数量提示与数据库保留设置冲突（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Documentation / UI / Configuration
+- Status: Confirmed
+- Affected area: EntryDetail history hint in Chinese and English
+- Evidence:
+  - File: `src/lib/i18n/zh-CN.ts:204`、`src/lib/i18n/en.ts:209`、`src/lib/components/EntryDetail.svelte:1352`（`34e466a` 修复前）；`src-tauri/src/vault/entries.rs:30–34/839–841`
+  - Function / Module: detail.historyHint / history_limits / restore_entry_version
+  - Relevant behavior: 两种语言都写死“最多 10 个版本”并保证恢复被记为新版本；实际数量/大小可配置，负数无限、零值禁用，恢复前快照也会按限额裁剪。
+  - Reproduction: headless Edge 挂载真实 EntryDetail，合成浏览器会话和 12 个 mock 历史条目；`history-hint-browser-red.log` 与 12 张 baseline 截图同时显示 12 行和“最多 10”提示。仅历史读取返回合成数据，页面组件和主题/语言服务为真实代码。
+  - Independent verification: 已通过的原生 SP-S41 数量/大小与 cap-zero restore 回归证明可配置语义；本项不把 browser mock 当作原生历史生成证据。
+- Problem: 提示错误地宣称固定上限和无条件恢复留档，与用户保存的数据库设置矛盾。
+- Why it matters: 用户难以判断保留设置和恢复后的可撤销范围；缺陷集中在辅助文案，不影响保存行为，因此 Low。
+- Realistic failure scenario: 数据库设置无限历史，列表超过 10 条仍提示最多 10；设置零历史后恢复一个旧版本，文案承诺的新快照实际不保留。
+- Minimal fix: 两种语言描述数据库数量与大小限制，并明确恢复前版本也受限制，沿用现有 history-hint 样式。
+- Better long-term fix: 涉及可配置行为的辅助文字与已验证域语义同步，避免将默认值当作固定限制。
+- Regression test suggestion: 真实组件在中英文、dark/light/custom、桌面/窄屏下显示新文字，保留超过默认数量的列表且无横向溢出；低影响文案修正不新增只断言相同字符串的镜像测试。
+- Estimated effort: 0.5–1 小时（文案、主题 gate、浏览器与文档验证）
+
+`a88ff62` 已修复中英文提示，css-theming 引用同步了可配置文案规则；
+没有 CSS/markup/token/IPC 改动。`history-hint-browser-green-fresh.log`
+12 组检查通过，三主题 × 两语言 × 1100×720/420×600 的 12 张截图
+已检查。check 零错误警告、build、316 frontend 和 format 均通过。
+最新完整 Rust/ACL 门仍为 `8887e2e`（591 Rust / ACL 2），本次只改
+文案，未重复声明原生验证。初次夹具错误使用不存在的 appSettings.update；
+修复后的 baseline 有效。文案改动后的热更新服务器出现组件未调用所
+mock 的 service（calls=0），重启同一开发服务器后的完整检查通过；
+失败日志保留，不计产品缺陷。截图合成的缺少 sharp 和 Python 默认编码
+错误改用 bundled Pillow/显式 UTF-8 修正，不用于产品结论。临时服务器
+均已通过自己的 session handle 停止；未访问用户库、系统剪贴板或安卓真机。
+没有相关完整 TODO 可新勾选。本次报告无需额外 reference 修改。
+
+当前详细卡片 **55**（Critical 1 / High 12 / Medium 32 / Low 10，全部
+Confirmed），基线 `b7c5d9f` 的 15 项/6.1 分保持。手机 v1.6.5 云端
+另存为的发行源 ACL 根因与当前源码修正已验证，替换包与真机/provider
+仍缺证；整体系统/竞品/界面审计继续，目标 active。
