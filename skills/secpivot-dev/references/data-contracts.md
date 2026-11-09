@@ -150,6 +150,17 @@ string password; invalid containers/records/date types reject the document
 with the existing content-free indexed error. Missing/null/empty history adds
 no field. Generic import custom-field IPC and native KDBX protection carry it.
 
+The pinned keepass 0.13.22 package is locally patched for attachment ownership
+and dense KDBX4 header references (see `src-tauri/vendor/KEEPASS_PATCH.md`).
+Tracked edits lease old binaries until the pre-edit snapshot is appended;
+deletion affects only the addressed entry version. History count/size trimming,
+single-version deletion and clear-all reindex references and reclaim only
+affected orphans. Loading reconstructs all reverse references without sweeping
+unreferenced header payloads. Serialization maps every current/history Binary
+Ref to the exact header order and rejects missing data before publication.
+The three history helpers now accept `EntryMut`, enabling ownership reindexing;
+the normal IPC contract is unchanged. Full attachment restore remains pending.
+
 Main-window `flash(message, kind = "success")` forwards the existing TipKind.
 IO/group/favicon/editor notification seams accept `(message, kind?: TipKind)`;
 explicit failure branches pass `"error"`, while normal completion retains the

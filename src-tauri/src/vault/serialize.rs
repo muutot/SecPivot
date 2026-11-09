@@ -397,7 +397,7 @@ pub(crate) fn history_cap(meta: &Meta) -> usize {
 /// Drop the oldest snapshots until the history fits within the cap. The
 /// crate exposes no mutable access to the history, so it is rebuilt with the
 /// newest `cap` snapshots preserved in their original order.
-pub(crate) fn trim_entry_history(entry: &mut Entry, cap: usize) {
+pub(crate) fn trim_entry_history(entry: &mut EntryMut<'_>, cap: usize) {
     if let Some(history) = entry.history.as_mut() {
         let current = history.get_entries();
         if current.len() <= cap {
@@ -409,6 +409,7 @@ pub(crate) fn trim_entry_history(entry: &mut Entry, cap: usize) {
             trimmed.add_entry(snapshot);
         }
         entry.history = Some(trimmed);
+        entry.reindex_attachment_history();
     }
 }
 
@@ -417,7 +418,11 @@ pub(crate) fn trim_entry_history(entry: &mut Entry, cap: usize) {
 /// `snapshot_sizes` carries each stored snapshot's own total (newest first),
 /// captured before the mutable entry borrow was taken. Snapshots are dropped
 /// from the tail (oldest first), matching KeePass's retention order.
-pub(crate) fn trim_entry_history_by_size(entry: &mut Entry, max_size: i64, snapshot_sizes: &[u64]) {
+pub(crate) fn trim_entry_history_by_size(
+    entry: &mut EntryMut<'_>,
+    max_size: i64,
+    snapshot_sizes: &[u64],
+) {
     if max_size <= 0 || snapshot_sizes.is_empty() {
         return;
     }
@@ -445,13 +450,14 @@ pub(crate) fn trim_entry_history_by_size(entry: &mut Entry, max_size: i64, snaps
             }
         }
         entry.history = Some(rebuilt);
+        entry.reindex_attachment_history();
     }
 }
 
 /// Remove one historical snapshot from an entry's history, keeping the order
 /// of the remaining snapshots. Returns `false` when the index is out of range
 /// or the entry has no history.
-pub(crate) fn delete_history_entry(entry: &mut Entry, index: usize) -> bool {
+pub(crate) fn delete_history_entry(entry: &mut EntryMut<'_>, index: usize) -> bool {
     let Some(history) = entry.history.as_mut() else {
         return false;
     };
@@ -470,6 +476,7 @@ pub(crate) fn delete_history_entry(entry: &mut Entry, index: usize) -> bool {
         rebuilt.add_entry(snapshot);
     }
     entry.history = Some(rebuilt);
+    entry.reindex_attachment_history();
     true
 }
 

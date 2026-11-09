@@ -867,6 +867,7 @@ impl VaultSession {
                 let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
                 if entry.history.take().is_some() {
                     cleared += 1;
+                    entry.reindex_attachment_history();
                 }
             }
         }

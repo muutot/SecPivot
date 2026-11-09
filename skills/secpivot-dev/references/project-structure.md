@@ -49,6 +49,15 @@ collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
 fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
+`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus three
+reviewed attachment/history/serialization patches. Cargo's local patch keeps
+the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
+the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
+Cargo wiring and the three patched files' formatting as part of `npm run verify`.
+The untouched upstream tree stays outside Prettier; owned patch files remain
+in the audit scope. Native vault tests cover the application boundary and two
+dependency-specific tests cover shared references and guard unwind.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or

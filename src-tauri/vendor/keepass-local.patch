@@ -1,0 +1,518 @@
+--- a/src/db/types/entry.rs
++++ b/src/db/types/entry.rs
+@@ -12,3 +12,3 @@
+-        fields, Attachment, AttachmentId, AutoType, Color, CustomDataItem, CustomIcon, CustomIconId,
+-        CustomIconMut, CustomIconNotFoundError, CustomIconRef, GroupId, GroupMut, GroupRef, History, Icon,
+-        Times, Value,
++        fields, Attachment, AttachmentId, AutoType, Color, CustomDataItem, CustomIcon,
++        CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, GroupId, GroupMut,
++        GroupRef, History, Icon, Times, Value,
+@@ -279 +279,4 @@
+-            (name.as_str(), AttachmentRef::new(self.database, attachment_id))
++            (
++                name.as_str(),
++                AttachmentRef::new(self.database, attachment_id),
++            )
+@@ -299 +302,5 @@
+-        let entry = self.database.entries.get(&self.id).expect("Entry not found");
++        let entry = self
++            .database
++            .entries
++            .get(&self.id)
++            .expect("Entry not found");
+@@ -385,0 +393,15 @@
++        let retained_attachments: Vec<_> = historical
++            .attachments
++            .values()
++            .copied()
++            .collect::<HashSet<_>>()
++            .into_iter()
++            .collect();
++        for attachment_id in &retained_attachments {
++            *self
++                .database
++                .pending_history_attachments
++                .entry(*attachment_id)
++                .or_default() += 1;
++        }
++
+@@ -390 +412,7 @@
+-        }
++            retained_attachments,
++        }
++    }
++
++    /// Refresh attachment ownership after directly rebuilding this entry's history.
++    pub fn reindex_attachment_history(&mut self) {
++        self.database.reindex_entry_attachments(self.id);
+@@ -434 +462,5 @@
+-    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
++    pub fn add_attachment(
++        &mut self,
++        name: impl Into<String>,
++        data: Value<Vec<u8>>,
++    ) -> AttachmentMut<'_> {
+@@ -437 +469,2 @@
+-        let entries: HashSet<(EntryId, Option<usize>)> = vec![(self.id, None)].into_iter().collect();
++        let entries: HashSet<(EntryId, Option<usize>)> =
++            vec![(self.id, self.history_index)].into_iter().collect();
+@@ -455,0 +489 @@
++        let history_index = self.history_index;
+@@ -458,0 +493,4 @@
++            let pinned = self
++                .database
++                .pending_history_attachments
++                .contains_key(&attachment_id);
+@@ -460 +498,3 @@
+-                attachment.entries.retain(|&(entry_id, _)| entry_id != id);
++                attachment
++                    .entries
++                    .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
+@@ -463 +503 @@
+-                if attachment.entries.is_empty() {
++                if attachment.entries.is_empty() && !pinned {
+@@ -474,0 +515 @@
++        let history_index = self.history_index;
+@@ -487,0 +529,4 @@
++        let pinned = self
++            .database
++            .pending_history_attachments
++            .contains_key(&attachment_id);
+@@ -489 +534,3 @@
+-            attachment.entries.retain(|&(entry_id, _)| entry_id != id);
++            attachment
++                .entries
++                .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
+@@ -492 +539 @@
+-            if attachment.entries.is_empty() {
++            if attachment.entries.is_empty() && !pinned {
+@@ -506,3 +553,5 @@
+-                custom_icon.entries.retain(|&(entry_id, entry_history_index)| {
+-                    !(entry_id == id && entry_history_index == history_index)
+-                });
++                custom_icon
++                    .entries
++                    .retain(|&(entry_id, entry_history_index)| {
++                        !(entry_id == id && entry_history_index == history_index)
++                    });
+@@ -522 +571,4 @@
+-    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
++    pub fn set_icon_custom(
++        &mut self,
++        custom_icon_id: CustomIconId,
++    ) -> Result<(), CustomIconNotFoundError> {
+@@ -631 +683,5 @@
+-        let entry = self.database.entries.remove(&self.id).expect("Entry not found");
++        let entry = self
++            .database
++            .entries
++            .remove(&self.id)
++            .expect("Entry not found");
+@@ -664 +720,5 @@
+-        let entry = self.database.entries.get(&self.id).expect("Entry not found");
++        let entry = self
++            .database
++            .entries
++            .get(&self.id)
++            .expect("Entry not found");
+@@ -680 +740,5 @@
+-        let entry = self.database.entries.get_mut(&self.id).expect("Entry not found");
++        let entry = self
++            .database
++            .entries
++            .get_mut(&self.id)
++            .expect("Entry not found");
+@@ -698,0 +763 @@
++    retained_attachments: Vec<AttachmentId>,
+@@ -758 +823,5 @@
+-    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
++    pub fn add_attachment(
++        &mut self,
++        name: impl Into<String>,
++        data: Value<Vec<u8>>,
++    ) -> AttachmentMut<'_> {
+@@ -781 +850,4 @@
+-    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
++    pub fn set_icon_custom(
++        &mut self,
++        custom_icon_id: CustomIconId,
++    ) -> Result<(), CustomIconNotFoundError> {
+@@ -820 +892,4 @@
+-        self.database.entries.get(&self.id).expect("Entry not found")
++        self.database
++            .entries
++            .get(&self.id)
++            .expect("Entry not found")
+@@ -827 +902,4 @@
+-        self.database.entries.get_mut(&self.id).expect("Entry not found")
++        self.database
++            .entries
++            .get_mut(&self.id)
++            .expect("Entry not found")
+@@ -839,0 +918,15 @@
++        for attachment_id in &self.retained_attachments {
++            if let Some(count) = self
++                .database
++                .pending_history_attachments
++                .get_mut(attachment_id)
++            {
++                *count -= 1;
++                if *count == 0 {
++                    self.database
++                        .pending_history_attachments
++                        .remove(attachment_id);
++                }
++            }
++        }
++        self.database.reindex_entry_attachments(self.id);
+@@ -875 +968,7 @@
+-            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
++            db.entry(entry_id)
++                .unwrap()
++                .history
++                .clone()
++                .unwrap()
++                .entries
++                .len(),
+@@ -879 +978,4 @@
+-        assert_eq!(db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(), "Entry 1");
++        assert_eq!(
++            db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(),
++            "Entry 1"
++        );
+@@ -885 +987,4 @@
+-                crate::db::Value::unprotected(format!("modified_{}", e.get(fields::USERNAME).unwrap())),
++                crate::db::Value::unprotected(format!(
++                    "modified_{}",
++                    e.get(fields::USERNAME).unwrap()
++                )),
+@@ -888 +993,4 @@
+-            e.add_attachment("Attachment 1", Value::protected(b"Attachment data".to_vec()));
++            e.add_attachment(
++                "Attachment 1",
++                Value::protected(b"Attachment data".to_vec()),
++            );
+@@ -894 +1002,7 @@
+-            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
++            db.entry(entry_id)
++                .unwrap()
++                .history
++                .clone()
++                .unwrap()
++                .entries
++                .len(),
+@@ -927 +1041,87 @@
+-}
++
++    #[test]
++    fn secpivot_shared_attachment_keeps_other_entry_and_history_alive() {
++        let mut db = Database::new();
++        let (first, attachment_id) = {
++            let mut root = db.root_mut();
++            let mut entry = root.add_entry();
++            let attachment_id = entry
++                .add_attachment("shared.txt", Value::protected(b"synthetic-old".to_vec()))
++                .id();
++            (entry.id(), attachment_id)
++        };
++        let second = db.root_mut().add_entry().id();
++        db.entries
++            .get_mut(&second)
++            .unwrap()
++            .attachments
++            .insert("shared.txt".into(), attachment_id);
++        db.attachments
++            .get_mut(&attachment_id)
++            .unwrap()
++            .entries
++            .insert((second, None));
++        db.entry_mut(first).unwrap().edit_tracking(|tracked| {
++            tracked
++                .as_mut()
++                .add_attachment("shared.txt", Value::protected(b"synthetic-new".to_vec()));
++        });
++        assert_eq!(db.num_attachments(), 2);
++        let entry = db.entry(first).unwrap();
++        let historical = entry.historical(0).unwrap();
++        assert_eq!(
++            historical
++                .attachment_by_name("shared.txt")
++                .unwrap()
++                .get()
++                .as_slice(),
++            b"synthetic-old"
++        );
++        assert_eq!(
++            db.attachment(attachment_id).unwrap().entries(true).count(),
++            2
++        );
++        db.entry_mut(second)
++            .unwrap()
++            .remove_attachment_by_name("shared.txt");
++        assert_eq!(
++            db.attachment(attachment_id).unwrap().entries(true).count(),
++            1
++        );
++        let mut entry = db.entry_mut(first).unwrap();
++        entry.history = None;
++        entry.reindex_attachment_history();
++        assert_eq!(db.num_attachments(), 1);
++    }
++
++    #[test]
++    fn secpivot_history_guard_unwind_preserves_the_original_binary() {
++        let mut db = Database::new();
++        let first = {
++            let mut root = db.root_mut();
++            let mut entry = root.add_entry();
++            entry.add_attachment("synthetic.txt", Value::protected(b"synthetic-old".to_vec()));
++            entry.id()
++        };
++        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++            db.entry_mut(first).unwrap().edit_tracking(|tracked| {
++                tracked
++                    .as_mut()
++                    .add_attachment("synthetic.txt", Value::protected(b"synthetic-new".to_vec()));
++                panic!("synthetic tracked edit failure");
++            });
++        }));
++        assert!(result.is_err());
++        assert!(db.pending_history_attachments.is_empty());
++        let entry = db.entry(first).unwrap();
++        let historical = entry.historical(0).unwrap();
++        assert_eq!(
++            historical
++                .attachment_by_name("synthetic.txt")
++                .unwrap()
++                .get()
++                .as_slice(),
++            b"synthetic-old"
++        );
++    }
++}
+--- a/src/db/types/mod.rs
++++ b/src/db/types/mod.rs
+@@ -25 +25,3 @@
+-pub use icon::{CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon};
++pub use icon::{
++    CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon,
++};
+@@ -36 +38 @@
+-#[derive(Debug, Clone, PartialEq, Eq)]
++#[derive(Debug, PartialEq, Eq)]
+@@ -50,0 +53,4 @@
++    /// Attachment leases held by not-yet-appended EntryTrack snapshots.
++    #[cfg_attr(feature = "serialization", serde(skip))]
++    pub(crate) pending_history_attachments: HashMap<AttachmentId, usize>,
++
+@@ -61,0 +68,17 @@
++}
++
++impl Clone for Database {
++    fn clone(&self) -> Self {
++        Self {
++            config: self.config.clone(),
++            meta: self.meta.clone(),
++            root: self.root,
++            attachments: self.attachments.clone(),
++            // Live guards borrow their original database; clones own no leases.
++            pending_history_attachments: HashMap::new(),
++            custom_icons: self.custom_icons.clone(),
++            entries: self.entries.clone(),
++            groups: self.groups.clone(),
++            deleted_objects: self.deleted_objects.clone(),
++        }
++    }
+@@ -91,0 +115 @@
++            pending_history_attachments: HashMap::new(),
+@@ -109,0 +134 @@
++            pending_history_attachments: HashMap::new(),
+@@ -141,0 +167,72 @@
++    }
++
++    /// Rebuild one entry's current/historical reverse references and collect
++    /// only attachments with no entry or in-flight history owner.
++    pub(crate) fn reindex_entry_attachments(&mut self, id: EntryId) {
++        let mut desired: HashMap<AttachmentId, Vec<Option<usize>>> = HashMap::new();
++        if let Some(entry) = self.entries.get(&id) {
++            for attachment_id in entry.attachments.values() {
++                desired.entry(*attachment_id).or_default().push(None);
++            }
++            if let Some(history) = &entry.history {
++                for (index, historical) in history.entries.iter().enumerate() {
++                    for attachment_id in historical.attachments.values() {
++                        desired.entry(*attachment_id).or_default().push(Some(index));
++                    }
++                }
++            }
++        }
++        let mut affected: std::collections::HashSet<_> = desired.keys().copied().collect();
++        for (attachment_id, attachment) in &mut self.attachments {
++            if attachment
++                .entries
++                .iter()
++                .any(|&(entry_id, _)| entry_id == id)
++            {
++                affected.insert(*attachment_id);
++            }
++            attachment.entries.retain(|&(entry_id, _)| entry_id != id);
++            if let Some(indices) = desired.get(attachment_id) {
++                for index in indices {
++                    attachment.entries.insert((id, *index));
++                }
++            }
++        }
++        let pending = &self.pending_history_attachments;
++        self.attachments.retain(|attachment_id, attachment| {
++            !affected.contains(attachment_id)
++                || !attachment.entries.is_empty()
++                || pending.contains_key(attachment_id)
++        });
++    }
++
++    /// Rebuild all reverse references after loading or bulk history changes.
++    pub fn reindex_attachment_history(&mut self) {
++        self.rebuild_attachment_references();
++        let pending = &self.pending_history_attachments;
++        self.attachments.retain(|attachment_id, attachment| {
++            !attachment.entries.is_empty() || pending.contains_key(attachment_id)
++        });
++    }
++
++    /// Load reconstructs ownership without silently deleting orphan header data.
++    pub(crate) fn rebuild_attachment_references(&mut self) {
++        for attachment in self.attachments.values_mut() {
++            attachment.entries.clear();
++        }
++        for (id, entry) in &self.entries {
++            for attachment_id in entry.attachments.values() {
++                if let Some(attachment) = self.attachments.get_mut(attachment_id) {
++                    attachment.entries.insert((*id, None));
++                }
++            }
++            if let Some(history) = &entry.history {
++                for (index, historical) in history.entries.iter().enumerate() {
++                    for attachment_id in historical.attachments.values() {
++                        if let Some(attachment) = self.attachments.get_mut(attachment_id) {
++                            attachment.entries.insert((*id, Some(index)));
++                        }
++                    }
++                }
++            }
++        }
+--- a/src/format/xml_db/mod.rs
++++ b/src/format/xml_db/mod.rs
+@@ -27 +27,2 @@
+-        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta, timestamp::Timestamp,
++        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta,
++        timestamp::Timestamp,
+@@ -62,5 +62,0 @@
+-    let kdbx = KeePassFile::db_to_xml(db, inner_encryptor)?;
+-    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
+-        .as_bytes()
+-        .to_vec();
+-
+@@ -73,0 +70,44 @@
++
++    // In-memory IDs may have gaps after deletion. KDBX4 binary Ref values
++    // address positions in this exact header array, not the original IDs.
++    let dense_ids: HashMap<usize, usize> = attachments
++        .iter()
++        .enumerate()
++        .map(|(dense, (id, _))| (*id, dense))
++        .collect();
++    let mut kdbx = KeePassFile::db_to_xml(db, inner_encryptor)?;
++    fn remap_entry(
++        entry: &mut entry::Entry,
++        dense: &HashMap<usize, usize>,
++    ) -> Result<(), DatabaseSaveError> {
++        for field in &mut entry.binary_fields {
++            field.value.value_ref = *dense.get(&field.value.value_ref).ok_or_else(|| {
++                std::io::Error::new(
++                    std::io::ErrorKind::InvalidData,
++                    "Entry references a missing attachment",
++                )
++            })?;
++        }
++        if let Some(history) = &mut entry.history {
++            for historical in &mut history.entries {
++                remap_entry(historical, dense)?;
++            }
++        }
++        Ok(())
++    }
++    fn remap_group(
++        group: &mut Group,
++        dense: &HashMap<usize, usize>,
++    ) -> Result<(), DatabaseSaveError> {
++        for child in &mut group.children {
++            match child {
++                group::GroupOrEntry::Group(group) => remap_group(group, dense)?,
++                group::GroupOrEntry::Entry(entry) => remap_entry(entry, dense)?,
++            }
++        }
++        Ok(())
++    }
++    remap_group(&mut kdbx.root.group, &dense_ids)?;
++    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
++        .as_bytes()
++        .to_vec();
+@@ -94 +134,2 @@
+-        let mut db = crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
++        let mut db =
++            crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
+@@ -154,3 +195,6 @@
+-        self.root
+-            .group
+-            .xml_to_db_handle(db.root_mut(), &attachments, &custom_icons, inner_decryptor)?;
++        self.root.group.xml_to_db_handle(
++            db.root_mut(),
++            &attachments,
++            &custom_icons,
++            inner_decryptor,
++        )?;
+@@ -159,0 +204 @@
++        db.rebuild_attachment_references();
+@@ -183,3 +228,6 @@
+-                    #[allow(clippy::indexing_slicing)] // We just checked that the index is in bounds
+-                    if let Some(crate::db::Icon::Custom(icon_id)) =
+-                        entry.history.as_ref().and_then(|h| h.entries[i].icon.as_ref())
++                    #[allow(clippy::indexing_slicing)]
++                    // We just checked that the index is in bounds
++                    if let Some(crate::db::Icon::Custom(icon_id)) = entry
++                        .history
++                        .as_ref()
++                        .and_then(|h| h.entries[i].icon.as_ref())
+@@ -211 +259,4 @@
+-    fn db_to_xml(db: &crate::db::Database, inner_cipher: &mut dyn Cipher) -> Result<Self, CryptographyError> {
++    fn db_to_xml(
++        db: &crate::db::Database,
++        inner_cipher: &mut dyn Cipher,
++    ) -> Result<Self, CryptographyError> {
+@@ -320 +371,4 @@
+-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
++            &[
++                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
++                0x0e, 0x0f
++            ]
+@@ -327 +381,2 @@
+-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
++            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
++            0x0e, 0x0f,
+@@ -338 +393,2 @@
+-                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
++                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S")
++                    .unwrap(),
+@@ -342 +398,2 @@
+-        let serialized = quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
++        let serialized =
++            quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
+@@ -373 +430,3 @@
+-        let mut cipher = crate::config::InnerCipherConfig::Plain.get_cipher(&[]).unwrap();
++        let mut cipher = crate::config::InnerCipherConfig::Plain
++            .get_cipher(&[])
++            .unwrap();
+@@ -376 +435,2 @@
+-        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects).unwrap();
++        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects)
++            .unwrap();
