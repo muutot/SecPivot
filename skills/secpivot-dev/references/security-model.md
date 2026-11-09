@@ -328,3 +328,10 @@ URL case; frontend Exact suggestions retain the same full input so the rule can
 match the actual requested URL. Existing explicit
 regex allow/block priority remains unchanged; this does not prove all rule
 interactions or native extension request construction.
+
+KPRPC regex helpers skip genuinely empty expressions, mirroring the official
+plugin's `IsNullOrEmpty` guard. An empty allow rule must not broaden a host
+constraint and an empty block must not hide legitimate matches. This shared
+boundary applies to Bridge/RPC and both auto-type scans. Do not trim meaningful
+whitespace patterns or discard an explicit wildcard. Other regex dialect and
+resource-limit behavior remain separate evidence gaps.

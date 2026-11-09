@@ -10527,3 +10527,112 @@ fn the_shipped_default_kdf_creates_a_reopenable_vault() {
         default_kdf
     );
 }
+
+#[test]
+fn empty_kprpc_allow_regex_does_not_grant_unrelated_browser_credentials() {
+    for registrable in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let id = entry_with_kprpc_config(
+            &mut session,
+            "Synthetic blank regex",
+            "https://authorized.example",
+            serde_json::json!({"version":1,"regExURLs":[""]}),
+        );
+        session.match_registrable_domain = registrable;
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        session.match_registrable_domain = registrable;
+        assert_eq!(
+            session.logins_for("https://authorized.example", None).len(),
+            1
+        );
+        let bridge = session.logins_for("https://unrelated.example.net/login", None);
+        let rpc = session.find_logins(
+            &["https://unrelated.example.net/login".to_owned()],
+            None,
+            None,
+            None,
+        );
+        let candidates = session
+            .autotype_match_candidates("Unrelated public window")
+            .unwrap_or_else(|e| {
+                assert_eq!(e, "没有找到匹配的条目");
+                Vec::new()
+            });
+        assert_eq!(
+            (bridge.len(), rpc.len(), candidates.len()),
+            (0, 0, 0),
+            "empty rule broadened Bridge/RPC/auto-type"
+        );
+        assert_eq!(
+            session
+                .autotype_match("Dashboard · authorized.example")
+                .unwrap(),
+            id
+        );
+        assert!(
+            session.autotype_match("Unrelated public window").is_err(),
+            "empty allow regex granted unrelated auto-type"
+        );
+    }
+}
+
+#[test]
+fn empty_kprpc_block_regex_does_not_hide_legitimate_matches() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let id = entry_with_kprpc_config(
+        &mut session,
+        "Synthetic blank block",
+        "https://authorized.example",
+        serde_json::json!({"version":1,"regExBlockedURLs":[""]}),
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let bridge = session.logins_for("https://authorized.example", None);
+    let rpc = session.find_logins(&["https://authorized.example".to_owned()], None, None, None);
+    let candidates = session
+        .autotype_match_candidates("Dashboard · authorized.example")
+        .unwrap_or_else(|e| {
+            assert_eq!(e, "没有找到匹配的条目");
+            Vec::new()
+        });
+    assert_eq!(
+        (bridge.len(), rpc.len(), candidates.len()),
+        (1, 1, 1),
+        "empty block rule vetoed legitimate Bridge/RPC/auto-type"
+    );
+    assert_eq!(
+        session
+            .autotype_match("Dashboard · authorized.example")
+            .unwrap(),
+        id
+    );
+}
+
+#[test]
+fn kprpc_regex_empty_guard_preserves_meaningful_whitespace_and_explicit_wildcards() {
+    assert!(!super::helpers::regex_matches(
+        "",
+        "https://unrelated.example"
+    ));
+    assert!(
+        super::helpers::regex_matches(" ", "Window with spaces"),
+        "whitespace pattern must not be trimmed away"
+    );
+    assert!(!super::helpers::regex_matches(
+        " ",
+        "https://unrelated.example"
+    ));
+    assert!(
+        super::helpers::regex_matches(".*", "https://unrelated.example"),
+        "explicit wildcard remains intentional"
+    );
+    assert!(!super::helpers::regex_matches(
+        "[",
+        "https://unrelated.example"
+    ));
+}
