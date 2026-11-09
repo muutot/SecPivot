@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S21; historical supplemental tracking notes excluded",
-    "total": 32,
-    "confirmed": 32,
+    "scope": "15 baseline cards plus SP-S05 through SP-S22; historical supplemental tracking notes excluded",
+    "total": 33,
+    "confirmed": 33,
     "suspected": 0,
     "by_severity": {
       "High": 6,
       "Medium": 22,
-      "Low": 4
+      "Low": 5
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "31206eb",
+  "remediation_checkpoint": "15248b5",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -241,14 +241,23 @@
       "source_checkpoint": "808a0df",
       "commit": "31206eb",
       "status": "Synthetic KDBX saved/reopened: six unrelated tenants each received one credential through both actual BridgeHost/RpcHost adapters before repair. Complete pinned static PSL preserves ICANN/PRIVATE/wildcard/exception rules and full IP/nonregistrable identities. Three targeted tests and all existing matching controls passed. Initial red fixture used wrong reopen key and is excluded. First full verify stopped at clippy on host Windows 1455; unchanged stage retry and fresh full verify then passed. No native extension or credential transmission runtime evidence."
+    },
+    {
+      "id": "SP-S22",
+      "area": "Viewport menus lack keyboard navigation, cascade semantics and focus restoration",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "954637f",
+      "commit": "15248b5",
+      "status": "Confirmed and remediated. Real Edge production column picker showed absent initial/Arrow/Home/End focus and BODY after Escape. Shared level-scoped keyboard ownership, cascade entry/return, Tab native traversal, action/outside/modal/unmount focus and guarded tick completion passed. Nine theme/viewport scenarios for both column and long cascades with 18 inspected screenshots. Original page capture dispatched synthetic Save while recursive group owner was active; final guard blocks it until close. Intermediate consumed-key idle deadline and pointer-transition focus failures repaired before commit. Nine deterministic frontend regressions plus full host gate passed; native WebView/assistive technology not exercised."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "31206eb",
-    "log": "verify-psl-boundaries-retry.log",
-    "frontend_tests": 290,
+    "checkpoint": "15248b5",
+    "log": "verify-menu-keyboard-complete.log",
+    "frontend_tests": 299,
     "rust_unit_tests": 548,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -268,7 +277,16 @@
       "Live OS clipboard tests opted out; deterministic tests do not prove native clipboard runtime",
       "Isolated signing workflow tested with synthetic Bash tool doubles; actual CI and APK signatures not exercised",
       "Native 1Password export/client runtime not run; 1PIF folder/attachment/native history migration and modern unencrypted 1PUX remain incomplete"
-    ]
+    ],
+    "menu_browser": {
+      "result": "passed",
+      "log": "menu-keyboard-green-complete.log",
+      "record": "menu-keyboard-green.json",
+      "screenshots": 18,
+      "contact_sheet": "menu-keyboard-contact-sheet.png",
+      "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
+      "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
+    }
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
@@ -309,6 +327,7 @@
     "0f07b47 validates encrypted/passwordProtected before mapping any items, rejects true and nonboolean markers with content-free errors, retains absent/false legacy plaintext, and zeroizes incoming command text. Independent six public export fixtures prove boundary; temporary probe and external fixture references removed before commit. First full verification failed during LLVM/PowerShell host memory exhaustion, no cargo/rustc remained at initial recheck; unchanged source/command retry passed 286 frontend/532 Rust/ACL2. TODO full Bitwarden compatibility remains partial for custom-name/linked-field/URI/native export evidence.",
     "7afcd81 shares import/fields.rs unique source-prefixed allocator between Bitwarden and 1PIF, preserves all reserved/blank/null/missing/duplicate custom values and protection flags after KDBX reopen, and prevents external labels becoming native OTP/KPRPC controls. Four clean baseline tests failed; thirteen targeted imports passed, final full verify 286 frontend/536 Rust/ACL2. Standard password preserved even before repair; OverrideURL string control was not misreported as native-attribute activation. No user vault, export, OS clipboard, CSS/markup or actual extension/Android runtime used. Bitwarden full compatibility TODO stays partial. New unrelated .openidea and existing .trae were left untouched.",
     "Post-report formatting encountered newly created unrelated .openidea/changelists.json. f3aab3d excludes local OpenIdea metadata from Git/Prettier without reading or modifying its contents; git check-ignore and prettier file-info confirm the rule and final full format passes. Existing .trae preserved. This tooling boundary is not a new application finding and does not alter 7afcd81 application verification.",
-    "a90394d preserves XML CR via numeric references and rejects XML 1.0 unrepresentable characters without changing stored credentials. Two frontend/two KDBX round-trip regressions failed before repair, plus actual Chromium DOMParser behavior. First baseline compilation hit host memory exhaustion; unchanged retry reached expected failures. Full verify passed 288 frontend/538 Rust/ACL2. Docs currency updates contract/security and partial XML TODO; page change is script-only locale wiring. Synthetic vaults only, no user vault/clipboard/native KeePass/Android APK-device evidence. Original b7c5d9f baseline unchanged; overall goal remains active."
+    "a90394d preserves XML CR via numeric references and rejects XML 1.0 unrepresentable characters without changing stored credentials. Two frontend/two KDBX round-trip regressions failed before repair, plus actual Chromium DOMParser behavior. First baseline compilation hit host memory exhaustion; unchanged retry reached expected failures. Full verify passed 288 frontend/538 Rust/ACL2. Docs currency updates contract/security and partial XML TODO; page change is script-only locale wiring. Synthetic vaults only, no user vault/clipboard/native KeePass/Android APK-device evidence. Original b7c5d9f baseline unchanged; overall goal remains active.",
+    "15248b5 repairs shared menu focus/navigation, instance cascade ARIA, guarded tick focus, pointer transitions, leaf default activation and scoped dismissal. Page window capture checks all activeContextMenu owners; real extracted baseline handler called a synthetic Save once while group owner was active, then final guard blocks and resumes correctly after close. Initial capture fixtures missing callback/modifier defaults excluded. Intermediate new menu consumption starved idle bubble listener; actual timer fake-clock regression failed, window capture now refreshes and preserves normal timeout/cleanup. Nine repository tests and complete production Edge regression passed; 18 dark/light/custom x three-size screenshots inspected. First contact-sheet tool runtime import/Edge-discovery failures were tooling only, standard Node succeeded. Full verify 299 frontend/548 Rust/ACL2. No CSS dimensions/colors changed, native Android APK/device and assistive technology remain pending."
   ]
 }

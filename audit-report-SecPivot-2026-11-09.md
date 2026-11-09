@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S21；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S22；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 6      | 6         | 0         |
 | Medium    | 22     | 22        | 0         |
-| Low       | 4      | 4         | 0         |
+| Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **32** | **32**    | **0**     |
+| **Total** | **33** | **33**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1381,3 +1381,59 @@ SHA-256 见 `psl-reference-provenance.json`；两个 crate 包摘要与 Cargo.lo
 基线统计/6.1 分不变。没有真实扩展、OS 剪贴板、用户库或 Android APK
 运行验证；未来后缀变化须更新固定清单。URI 匹配模式、authority/端口/
 IDNA、剩余竞品迁移、KDF 基准和界面/所有文件语义覆盖仍需继续。
+
+### Finding: SP-S22 菜单缺少键盘导航与关闭后的焦点恢复（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Accessibility / Design / Frontend State / Testing
+- Status: Confirmed
+- Affected area: shared viewport menu, column picker and context cascades
+- Evidence:
+  - File: `src/lib/components/ViewportMenuShell.svelte:43`、`src/lib/components/ContextMenu.svelte:109`（`954637f` 修复前）
+  - Function / Module: `handleKeydown` / MenuItem / cascade rendering
+  - Relevant behavior: shell 仅处理 bubble Escape，没有初始焦点、方向键/Home/End 导航或焦点恢复；级联只有 pointer/click 展开且未声明子菜单语义。
+  - Reproduction: headless Edge 挂载生产 ColumnConfigMenu，打开后焦点仍在合成 invoker，ArrowDown 不移动；手动聚焦首项后 ArrowDown/End 仍停在首项；Escape 关闭后 activeElement 为 BODY。见 `column-menu-keyboard-baseline.json` / `.log`。三主题 × 三尺寸的滚动和末项点击通过，未将这些正常路径记作缺陷；截图已检查。
+- Problem: 菜单声明为 ARIA menu，却不能按菜单键盘约定操作；关闭后用户丢失操作起点。
+- Why it matters: 仅使用键盘的用户难以定位和连续操作列配置、上下文及级联工具。未复现底层条目误操作或数据改变，按 Low 的交互缺陷记录。
+- Realistic failure scenario: 打开列配置后用方向键选择末项，焦点不进入菜单；手动 Tab 进入后按 Escape 退出，焦点落到 BODY。
+- Minimal fix: 共享焦点/键盘所有权，按当前菜单层导航并跳过 disabled；Esc/Tab 关闭归还焦点，级联左右键和逐层 Escape；外部点击/新弹窗不被恢复焦点覆盖。
+- Better long-term fix: 扩展原生 WebView、屏幕阅读器与手机软键盘验证，保留既有紧凑样式和主题 token。
+- Regression test suggestion: 真实组件 initial/Arrow/Home/End、disabled/wrap、Enter/Space、Tab/Shift+Tab、逐层 Escape、子菜单异步卸载、外部点击、新弹窗和卸载 listener；dark/light/custom 与窄窗口检查。
+- Estimated effort: 1–2 小时（共享行为与真实浏览器回归）；原生辅助技术验证另计
+
+`15248b5` 已修复 SP-S22。共享 `menu-keyboard.ts` 按当前菜单层处理焦点和
+上下/Home/End，跳过 disabled 并随键盘导航滚动。级联声明实例独立的
+menu/haspopup/expanded/controls 语义，Right/Enter/Space 进入子项，Left/Esc
+返回父项；根 Esc、Tab/Shift+Tab 和卸载按所有权归还焦点，外部点击与新
+弹窗保留自己的焦点。新增行为沿用现有全局 focus-visible 和主题 token，
+没有新增 CSS 配色/尺寸或 UI 重设计。
+
+完整真实组件回归 `menu-keyboard-green-complete.log` 检查 initial、disabled/
+wrap、逐层导航、叶项 Enter/Space、复选项不关闭、原生 Tab/Shift+Tab、
+关闭回调仅一次、外部点击/新弹窗、卸载和 tick 前关闭后的晚到子焦点。
+列菜单与长级联在 dark/light/custom × 1100×720、720×480、420×320 均在
+8px 边距内，End 可滚到末项并派发；18 张截图已通过检查图复核，pageerrors
+为空。键盘进入子菜单后鼠标移向相邻行的中间实现曾丢失焦点，见
+`menu-pointer-transition-red.log`；最终转移焦点后 Escape 继续可用。
+
+另补主页面早于 document 的 window capture 所有权检查，包含递归分组
+菜单。`menu-keyboard-capture-red-valid.log` 中，原 page handler 在合成
+group owner 打开时仍调用 Save 替身一次，最终打开时零次、关闭后一次。
+该测试不调用真实存储或证明条目误写；前两版夹具缺回调和 modifier 默认
+值的失败不作为产品证据。菜单消费按键带来的中间闲置计时回归
+`menu-idle-red.log` 也已修正：闲置 watcher 改用 window capture，真实
+timer 函数配合 fake clock 验证按键刷新期限、无活动仍锁定与 listener
+cleanup。九项持久化到仓库的 frontend 回归通过。
+
+最终完整门禁 `verify-menu-keyboard-complete.log` 通过：前端 **299**、
+Rust **548 + ACL 2**、格式、Svelte check、150 键合同、生产构建及 clippy。
+documentation currency gate 同步主题/模块/安全引用，TODO 仅勾选已经
+取得主机和浏览器证据的这项行为。截图拼图工具的首次模块导入/Edge
+路径探测失败属于检查工具问题，不计为应用缺陷；随后在标准 Node
+环境成功生成并检查 `menu-keyboard-contact-sheet.png`。
+
+当前详细卡片 **33**（High 6 / Medium 22 / Low 5，全部 Confirmed），
+原始基线统计和 6.1 分保持不变。原生 Android WebView/屏幕阅读器、
+手机 v1.6.5 另存为的新 APK/真机、URI 模式/authority/端口/IDNA、其余
+竞品迁移、KDF 基准及完整文件语义/UI 覆盖仍待继续，整体目标未完成。
