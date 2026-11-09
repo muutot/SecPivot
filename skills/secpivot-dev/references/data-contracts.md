@@ -221,7 +221,7 @@ Split across `src-tauri/src/bridge/{types,crypto,dispatch}.rs` for the pure prot
 - **`db_hash`**: SHA1 of (root group uuid ‖ recycle-bin group uuid) rendered as 40 lowercase hex chars — it changes whenever the vault structure changes, so browsers re-ask on identity changes.
 - **Verifier/HMAC**: per KeePassHttp, the request `Verifier` = AES-256-CBC(key, iv = request nonce bytes) encrypting the base64 string of those nonce bytes — the server decrypts it and compares against `base64(nonce)`. Every response carries a fresh random `Nonce` (used as the AES-CBC IV for its encrypted fields) and `Hmac` = HMAC-SHA256(key, response `Nonce` bytes ‖ response `Verifier` ciphertext bytes); a fresh `Verifier` is likewise derived under the new nonce. Both sides validate accordingly. Tests cover NIST SP 800-38A block 1, RFC 4231 case 2, tamper rejection, and encrypted round-trips (offline; no real-browser E2E evidence in this environment).
 
-Outside Tauri, `services/vault.ts` simulates the same commands on `demo-vault.ts` data persisted to `localStorage`. It is a UI-development surface only and must never be used as evidence for desktop KDBX behavior.
+Outside Tauri, `services/vault.ts` simulates the same commands on `demo-vault.ts` data persisted to `localStorage`. An open demo uses the synthetic `browser` session id, assigned before publishing the first snapshot (refresh/open/create); close and lock clear it before publishing null. The internal getter and tab stores thus agree and template/view guards can execute normally. It is a UI-development surface only and must never be used as evidence for desktop KDBX behavior.
 
 ### KeePassRPC bridge (Kee 4.x)
 
