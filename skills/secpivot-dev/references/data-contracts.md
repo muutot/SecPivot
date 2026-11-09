@@ -1,5 +1,13 @@
 # Data Contracts
 
+CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
+existing formula guard apostrophe to the field value before RFC 4180 quoting.
+Commas, quotes and CR/LF therefore remain within one cell. This preserves the
+guarded value, not an exact original-value round trip: an inserted guard stays
+in imported text and literal source apostrophes must not be stripped. Native
+file and frontend wire regressions cover all six guarded prefixes and ordinary
+quoted values; independent Python stdlib CSV reads corroborate their boundaries.
+
 New-entry templates resolve all hidden password, OTP and protected-field values
 atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
 show an error. Component destruction or a session/path change invalidates pending
