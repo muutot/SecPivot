@@ -47,7 +47,7 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
   const owned = lastCopiedText;
   if (owned === null) return;
   /** Drop the plaintext once our own copy is gone from the clipboard. The
-   * backend zeroizes its holding copy; the renderer had no equivalent, so the
+   * backend retains only a zeroizing fingerprint; the renderer had no equivalent, so the
    * password used to sit in this module global until the process exited. */
   const releaseOwnership = (): void => {
     if (lastCopiedText === owned) lastCopiedText = null;
@@ -80,7 +80,7 @@ export async function clearClipboardIfUnchanged(): Promise<void> {
  * (`Entry → Data Exchange → Copy Entry`). The payload is a *binary* clipboard
  * format, so the text wipe above can neither see nor clear it; both variants
  * carry plaintext field values, so it needs its own timer. The backend keeps
- * the zeroizing copy and clears only when the clipboard still holds exactly our
+ * only a zeroizing fingerprint and clears only when the clipboard matches our
  * bytes, so unrelated content copied meanwhile is never destroyed.
  */
 export async function scheduleExchangeWipe(): Promise<void> {

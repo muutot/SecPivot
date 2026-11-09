@@ -2,8 +2,8 @@
 //! backend-enforced scheduled wipe: a safety net that clears copied secrets
 //! even if the webview process dies before the renderer's JS timer fires.
 //!
-//! The wipe thread holds a zeroizing copy of the secret, sleeps for the
-//! configured interval, then verifies the clipboard still holds *our* text
+//! The wipe thread holds only a zeroizing fingerprint, sleeps for the
+//! configured interval, then verifies the clipboard still holds *our* content
 //! before clearing — the app must never destroy content the user copied in
 //! another app in the meantime. A newer schedule (or an explicit cancel)
 //! bumps a generation counter so superseded threads exit without touching
@@ -12,7 +12,7 @@
 use crate::platform::clipboard;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 // ---------------------------------------------------------------------------
 // Clipboard commands
 // ---------------------------------------------------------------------------
@@ -48,6 +48,20 @@ pub(crate) fn clipboard_clear_if_matches(text: String) -> Result<Option<bool>, S
 /// touch the clipboard.
 static WIPE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+/// A scheduled task must never retain the copied plaintext or entry payload.
+/// The short-lived source buffer is zeroized before the task is started.
+struct WipeFingerprint(Zeroizing<[u8; 32]>);
+
+impl WipeFingerprint {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        Self(Zeroizing::new(crate::crypto::sha256_bytes(bytes)))
+    }
+
+    fn matches(&self, current: Option<&[u8]>) -> bool {
+        current.is_some_and(|bytes| crate::crypto::sha256_bytes(bytes) == *self.0)
+    }
+}
+
 /// Whether a sleeping wipe thread may clear the clipboard.
 ///
 /// Pure so the generation contract is unit-testable: the end-to-end version of
@@ -57,14 +71,14 @@ static WIPE_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// `restore_clipboard` helper, destroy the developer's clipboard contents).
 ///
 /// `current` is what the clipboard holds right now; the wipe fires only when it
-/// still holds exactly this thread's own secret.
+/// still matches this thread's fingerprint.
 fn should_wipe(
     current_generation: u64,
     scheduled_generation: u64,
-    secret: &str,
-    current: Option<&str>,
+    fingerprint: &WipeFingerprint,
+    current: Option<&[u8]>,
 ) -> bool {
-    current_generation == scheduled_generation && current == Some(secret)
+    current_generation == scheduled_generation && fingerprint.matches(current)
 }
 /// Cancel every pending scheduled wipe (called on explicit clear / lock).
 #[tauri::command]
@@ -73,30 +87,34 @@ pub(crate) fn clipboard_cancel_scheduled_wipe() {
 }
 
 /// Backend safety net for the renderer's scheduled wipe: keep a zeroizing
-/// copy of the copied text and clear the clipboard after `seconds` if it
-/// still holds exactly that text. The renderer timer stays primary (faster
+/// fingerprint of the copied text and clear the clipboard after `seconds` if
+/// it still matches. The renderer timer stays primary (faster
 /// and works in the browser demo); this survives webview death. Scheduling
 /// with `seconds == 0` is a no-op (clear-on-copy disabled).
 #[tauri::command]
 pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), String> {
+    let text = Zeroizing::new(text);
     if seconds == 0 {
         return Ok(());
     }
+    let fingerprint = WipeFingerprint::from_bytes(text.as_bytes());
+    drop(text);
     let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
-    let mut secret = text;
     std::thread::Builder::new()
         .name("clipboard-wipe".into())
         .spawn(move || {
             std::thread::sleep(Duration::from_secs(seconds));
+            if WIPE_GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
             let _ = clipboard::clear_clipboard_text_if(|current| {
                 should_wipe(
                     WIPE_GENERATION.load(Ordering::SeqCst),
                     generation,
-                    &secret,
-                    current,
+                    &fingerprint,
+                    current.map(str::as_bytes),
                 )
             });
-            secret.zeroize();
         })
         .map_err(|e| format!("无法创建剪贴板清除任务: {e}"))?;
     Ok(())
@@ -107,8 +125,7 @@ pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), 
 /// clipboard format, so the text wipe above never sees it — and it carries
 /// plaintext field values in *both* variants (the encrypted one only adds a
 /// DPAPI wrapper), so it must be wiped just as a password is. The thread keeps
-/// a zeroizing copy of what we wrote and clears only when the clipboard still
-/// holds exactly those bytes, so content copied elsewhere is never destroyed.
+/// only a zeroizing fingerprint and clears only when the clipboard matches.
 /// Shares the text wipe's generation counter, so either schedule supersedes the
 /// other.
 #[tauri::command]
@@ -123,21 +140,25 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
         // Nothing of ours on the clipboard: nothing to wipe.
         return Ok(());
     };
+    let ours = Zeroizing::new(ours);
+    let fingerprint = WipeFingerprint::from_bytes(ours.as_slice());
+    drop(ours);
     let generation = WIPE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
-    let mut secret = ours;
     std::thread::Builder::new()
         .name("clipboard-exchange-wipe".into())
         .spawn(move || {
             std::thread::sleep(Duration::from_secs(seconds));
             if WIPE_GENERATION.load(Ordering::SeqCst) != generation {
-                secret.zeroize();
                 return;
             }
             let _ = clear_clipboard_bytes_if(CLIP_FORMAT_ENTRIES, |current| {
-                WIPE_GENERATION.load(Ordering::SeqCst) == generation
-                    && current == Some(secret.as_slice())
+                should_wipe(
+                    WIPE_GENERATION.load(Ordering::SeqCst),
+                    generation,
+                    &fingerprint,
+                    current,
+                )
             });
-            secret.zeroize();
         })
         .map_err(|e| format!("无法创建剪贴板清除任务: {e}"))?;
     Ok(())
@@ -195,18 +216,33 @@ mod tests {
     /// could ever clear it) — it could not detect the regression it claimed to.
     #[test]
     fn superseded_generation_never_wipes() {
+        let victim = WipeFingerprint::from_bytes(b"victim");
+        let other = WipeFingerprint::from_bytes(b"other");
         // First schedule is generation 1, second is 2. The first thread reads
         // the *current* generation when it wakes, so it is superseded and must
         // not clear — even though the clipboard still holds its own secret.
-        assert!(!should_wipe(2, 1, "victim", Some("victim")));
+        assert!(!should_wipe(2, 1, &victim, Some(b"victim")));
         // The surviving generation only wipes for its own exact secret.
-        assert!(!should_wipe(2, 2, "other", Some("victim")));
-        assert!(should_wipe(2, 2, "victim", Some("victim")));
+        assert!(!should_wipe(2, 2, &other, Some(b"victim")));
+        assert!(should_wipe(2, 2, &victim, Some(b"victim")));
         // Empty, non-text, or foreign content is never ours to clear.
-        assert!(!should_wipe(2, 2, "victim", None));
-        assert!(!should_wipe(2, 2, "victim", Some("someone-else")));
+        assert!(!should_wipe(2, 2, &victim, None));
+        assert!(!should_wipe(2, 2, &victim, Some(b"someone-else")));
         // An explicit cancel bumps the generation just like a new schedule.
-        assert!(!should_wipe(3, 2, "victim", Some("victim")));
+        assert!(!should_wipe(3, 2, &victim, Some(b"victim")));
+    }
+
+    #[test]
+    fn binary_fingerprint_preserves_exact_content_ownership() {
+        let ours = WipeFingerprint::from_bytes(&[0, 255, 0, 42]);
+        assert!(should_wipe(1, 1, &ours, Some(&[0, 255, 0, 42])));
+        assert!(!should_wipe(1, 1, &ours, Some(&[0, 255, 0, 43])));
+        assert!(!should_wipe(1, 1, &ours, Some(&[0, 255, 0, 42, 0])));
+        assert!(!should_wipe(2, 1, &ours, Some(&[0, 255, 0, 42])));
+        assert!(!should_wipe(1, 1, &ours, None));
+        let empty = WipeFingerprint::from_bytes(b"");
+        assert!(empty.matches(Some(b"")));
+        assert!(!empty.matches(None));
     }
 
     #[test]
