@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S30；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S31；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
 | Medium    | 25     | 25        | 0         |
-| Low       | 6      | 6         | 0         |
+| Low       | 7      | 7         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **41** | **41**    | **0**     |
+| **Total** | **42** | **42**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1791,3 +1791,46 @@ RUST_TEST_THREADS=2，无外部过滤，四个 live clipboard body 默认 skip�
 当前卡片 **41**（High 10 / Medium 25 / Low 6），原始 15 项/6.1 分不变。
 完整 XML 保真、原生互操作、其他系统与 UI 范围继续验证；手机 v1.6.5
 云端另存为仍缺新 APK/真机证据。
+
+### Finding: SP-S31 操作失败被显示为绿色成功提示（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Design / Frontend state / Accessibility
+- Status: Confirmed
+- Affected area: main-window failures, IO/group/editor notification seams
+- Evidence:
+  - File: `src/routes/+page.svelte:426`、`src/lib/services/io.ts:43`、`src/lib/services/group-flows.ts:24`、`src/lib/composables/useEntryEditor.svelte.ts:29`、`src/lib/components/TipsHost.svelte:60`（`ca8e9d7` 修复前）
+  - Function / Module: `flash` / `IoHost.notify` / `GroupFlowHost.notify` / `EntryEditorOptions.notify` / `TipsHost`
+  - Relevant behavior: 全局 TipKind 已区分 success/error，TipsHost 已有 danger token 样式；页面 flash 只转发文字，主页面失败和服务 notify 默认产生 success。真实 CSV 失败截图 `csv-import-feedback-dark.png` 呈绿色，文本仍正确。
+  - Reproduction: `tip-kind-red.log` 执行实际 flash、文件 picker 拒绝、batch IPC 拒绝、group rename 拒绝和 editor create 拒绝，五类预期 error 全部得到 success；成功默认及过时视图静默对照通过。仅合成输入及模拟 IPC，无用户库/原生剪贴板。
+- Problem: 失败提示使用成功颜色，与错误文字冲突，快速扫视时会误判操作结果。
+- Why it matters: 保存/导入等失败应有一致的错误反馈；文字仍包含失败说明，因此判为 Low，不声称数据损坏或权限绕过。
+- Realistic failure scenario: 云端另存为被 ACL 拒绝，提示虽写着失败但使用绿色成功样式。
+- Minimal fix: 传递已有 TipKind，在明确失败分支标记 error；成功默认保留，不通过翻译文本猜测类型。
+- Better long-term fix: 继续独立检查 warning/info、对比度及长消息窄屏布局；参考只读 sibling clipboard 的显式类型设计，不引入平行样式。
+- Regression test suggestion: 实际失败 seams 产生 error，正常完成仍为 success，旧视图不显示提示；真实 dark/light/custom 和窄屏检查现有 danger 样式。
+- Estimated effort: 1–2 小时（显式种类透传和运行复核）
+
+### SP-S31 修复与独立复核（2026-11-10）
+
+`414e049`在 page flash 和 IO/group/favicon/editor
+notify 类型中传递已有 TipKind，明确失败分支使用 error。没有按翻译文字
+推测类型，没有新 token/样式/布局。`tip-kind-red.log` 五类实际源模块
+失败得到 success，`tip-kind-green.log` 五类得到 error；成功默认和
+A→B→A 旧视图静默对照通过。相邻 IO tests **38** 通过。
+
+真实 Edge 的 `tip-kind-browser.log` 复核 CSV/XML 两类失败和成功导入，
+深色/浅色/自定义 × 1100×720、760×520、390×720 全部通过，无 pageerror；
+九张截图及 `tip-kind-contact-sheet.png` 已检查。浅色错误文本对比度另有
+独立问题（约 3.13:1），未混入本提交或误称已解决。外部修改脚本初次
+缺少 TypeScript 模块解析、又未处理调用尾逗号，均在格式检查中发现并
+修正；这些工具问题不计产品缺陷。
+
+`verify-tip-kind.log` 完整门禁终态 exit 0：前端 **312**、Rust harness
+**561**、ACL **2**、格式/check/build/clippy 通过；两线程、无外部
+过滤，四个 live clipboard body 缺省 skip。文档 currency gate 更新
+三份开发引用。未新增低影响样式的永久测试，复用既有行为测试和外部
+运行探针。仅合成库/模拟 IPC，全新 profile；无真实库/OS 剪贴板/设备。
+当前卡片 **42**（High 10 / Medium 25 / Low 7），基线 15 项/6.1 分不变。
+浅色对比度、其他系统/UI 覆盖及手机 v1.6.5 另存为 APK/真机仍待验证。

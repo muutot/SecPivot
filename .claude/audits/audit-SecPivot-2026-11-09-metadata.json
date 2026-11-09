@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S30; historical supplemental tracking notes excluded",
-    "total": 41,
-    "confirmed": 41,
+    "scope": "15 baseline cards plus SP-S05 through SP-S31; historical supplemental tracking notes excluded",
+    "total": 42,
+    "confirmed": 42,
     "suspected": 0,
     "by_severity": {
       "High": 10,
       "Medium": 25,
-      "Low": 6
+      "Low": 7
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "3119cf0",
+  "remediation_checkpoint": "414e049",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -321,13 +321,21 @@
       "confidence": "Confirmed",
       "commit": "3119cf0",
       "status": "Three actual extracted handler regressions failed before fix; actual fresh Edge chooser/FileReader/DOMParser rejected malformed and foreign encrypted fields with localized tips, zero pageerrors and unchanged synthetic vault; full verify passed"
+    },
+    {
+      "id": "SP-S31",
+      "area": "Main-window failure notifications default to successful green tips",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "commit": "414e049",
+      "status": "Five actual page/service/editor seams red-to-green; success/stale-view controls and nine-theme/viewport Edge checks passed; full verify passed; light text contrast tracked separately"
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "3119cf0",
-    "log": "verify-xml-import-feedback.log",
+    "checkpoint": "414e049",
+    "log": "verify-tip-kind.log",
     "frontend_tests": 312,
     "rust_unit_tests": 561,
     "android_acl_tests": 2,
@@ -389,6 +397,14 @@
       "green_browser_log": "xml-import-browser-green.log",
       "full_gate_log": "verify-xml-import-feedback.log",
       "scope": "Fresh headless Edge, independent Vite, synthetic empty vault; no native/Android/device or clipboard I/O"
+    },
+    "tip_severity": {
+      "result": "passed",
+      "source_probe": "tip-kind-green.log",
+      "browser_log": "tip-kind-browser.log",
+      "contact_sheet": "tip-kind-contact-sheet.png",
+      "screenshots": 9,
+      "scope": "Actual CSV/XML error and success UI, fresh Edge synthetic demo; native/Android/clipboard unverified"
     }
   },
   "reverification_notes": [
@@ -439,6 +455,7 @@
     "19b6658 fixes SP-S27 CSV cell boundaries without removing formula protection. Standard-library reader independently reproduced both writers and confirms guarded-value fidelity after fix. Initial station creation failed WinError5 without launching tests; initial gate loopback 10055 failure is retained, isolated check and serial final gate passed. Full check explicitly excludes two shared-clipboard tests, not reported as executed. One vault exchange test lacks the usual live opt-in and needs a separate audit unit. Original baseline/score remains unchanged; goal active and mobile v1.6.5 Save As still lacks APK/device evidence.",
     "6736799 fixes developer verification opt-in gap SP-S28 without any shared OS clipboard I/O. Safe temporary stop proved original reach and final flag control flow; stop removed. Full verify has no external test filters; 561 harness passes do not mean four opted-out native live bodies ran. Original baseline remains unchanged, goal active and mobile Save As still lacks APK/device evidence. CSV malformed quoting was independently reproduced through real conversion and mocked bulk IPC against stdlib reader, to be handled separately.",
     "e1f4bdd fixes SP-S29 malformed CSV and adds localized page feedback. Current source independently corroborated against stdlib writer/reader and actual headless Edge UI; temporary server stopped. Standard Error constructor supplied to VM fixture to match real application realm, and responsive locator constrained to visible row; preserved failed logs do not count as product defects. Full final verify 309/561/ACL2 passed with four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline/score unchanged. Goal remains active; XML errors, toast semantics, remaining native per-URI/migration/UI coverage and Android mobile Save As remain pending.",
-    "3119cf0 fixes SP-S30 localized XML rejection before writes and discards old picker completions before parsing. Three handler red-to-green tests and actual Edge FileReader/DOMParser passed; full verify 312/561/ACL2 exit 0. Parser unchanged; four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline preserved; goal active and mobile v1.6.5 cloud Save As still lacks APK/device evidence."
+    "3119cf0 fixes SP-S30 localized XML rejection before writes and discards old picker completions before parsing. Three handler red-to-green tests and actual Edge FileReader/DOMParser passed; full verify 312/561/ACL2 exit 0. Parser unchanged; four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline preserved; goal active and mobile v1.6.5 cloud Save As still lacks APK/device evidence.",
+    "414e049 fixes SP-S31 explicit failure severity across page and IO/group/favicon/editor seams. Actual source probes, 38 adjacent IO tests and nine rendered Edge combinations passed; full verify 312/561/ACL2 exit 0. Default live clipboard bodies skipped; no new token or CSS geometry. External patch-script TypeScript resolution/trailing-comma faults corrected before final gate and not counted as product findings. Baseline unchanged, goal active; light contrast and mobile Save As APK/device remain pending."
   ]
 }
