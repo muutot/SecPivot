@@ -73,8 +73,8 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented || !escapeScope.isTop()) return;
     if (closeOnEscape && event.key === "Escape") {
-      if (!escapeScope.isTop()) return;
       event.preventDefault();
       onclose?.();
       return;
