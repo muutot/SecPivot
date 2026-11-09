@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S15；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S16；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 17     | 17        | 0         |
+| Medium    | 18     | 18        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **26** | **26**    | **0**     |
+| **Total** | **27** | **27**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1124,3 +1124,37 @@ documentation currency gate 更新 css-theming 和 project-structure，没有增
 未验证 TODO 勾选。当前详细卡片 **26**（High 5 / Medium 17 / Low 4，全部
 Confirmed）；基线统计与 6.1 分保持不变。SAF 真机、新 APK、原生 XML、现代
 1PUX、跨窗口剪贴板与其他首方区域语义审查继续推进，整体目标保持 active。
+
+### Finding: SP-S16 Bitwarden 明文导入接受账号加密 JSON（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Backend API / Testing Authenticity
+- Status: Confirmed
+- Affected area: Bitwarden JSON parser command boundary
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:41`、`src-tauri/src/commands/entries.rs:513`（`2d5c9aa` 修复前源码）
+  - Function / Module: `parse_bitwarden_json`
+  - Relevant behavior: 解析 JSON 后直接读取 items 和 login 字段，未检查 encrypted/passwordProtected；账号加密导出保留相同外层结构，字符串值实际为密文。
+  - Reproduction: 两项新增主机回归在旧实现失败，已有 login/note 与 malformed 对照通过，见 `bitwarden-encryption-marker-red.log`。独立探针调用真实 Tauri command，加载 Bitwarden 官方公开夹具（readonly clone `1a8bdbfe625bff90a9c0cabef2002e37f6038fa1`）：empty-account、account v1、account v2 三种加密导出返回成功，v1/v2 各产生两条记录；password-protected 本就因缺少 items 被拒绝，两份明文夹具正常。见 `bitwarden-public-encryption-red.log`。夹具内容未复制进仓库，未读取用户导出文件或凭据。
+- Problem: 密文被误认为可直接迁移的凭据，导入流程能显示成功，却无法得到实际账号密码；畸形加密标记也会按明文解释。
+- Why it matters: 用户选错导出选项时获得错误的成功反馈，可能误信迁移已完成。未观察用户数据丢失、凭据外传或解密绕过，按 Medium 记录。
+- Realistic failure scenario: Bitwarden 导出 JSON 时选择账号限制加密，再在 SecPivot 选择“导入 Bitwarden”；旧 parser 返回包含密文字符串的登录条目，而非要求明文导出。
+- Minimal fix: 在条目映射前验证 encrypted/passwordProtected；任一为 true 拒绝，并明确提示选择未加密 JSON；存在但非布尔的标记失败。缺标记的 legacy 明文和 false 明文仍保留兼容。
+- Better long-term fix: 若未来支持加密导入，独立设计密码/KDF 解密边界，不能仅放行加密标记；继续审查明文自定义字段、链接字段、多 URL、组织分组与附件的保真。
+- Regression test suggestion: 主机测试账号加密、密码加密、不一致 true 标记、非布尔标记、无标记/false 明文、错误不回显密文；独立官方 v1/v2/empty/password-protected 和两份明文夹具调用真实命令验证边界。真客户端导出另行验证。
+- Estimated effort: 30–60 分钟（局部修复和针对性复核）；完整迁移保真另计
+
+`0f07b47` 已修复 SP-S16。四项常驻 parser 回归全部通过；六份官方公开夹具
+经真实命令独立复核，加密四份全部拒绝、明文两份保持成功。探针测试已移回
+本任务 artifacts，生产仓库未带绝对路径或外部夹具依赖。incoming command
+text 在返回时 Zeroizing 清理；未实现加密文件解密，也未承诺 JS 堆清除。
+
+最终完整门禁日志 `verify-bitwarden-encryption-boundary-retry.log`：格式、
+Svelte check、150 键契约、构建、前端 **286**、Rust **532 + ACL 2**、clippy
+全通过。首次门禁在 Rust 编译阶段遇到 LLVM/PowerShell 主机内存不足而终止；
+检查进程结束后，同源码、同验证命令重跑通过，未将其记录为应用运行时缺陷。
+documentation currency gate 同步三份合同/安全/结构引用；TODO 的 Bitwarden
+完整兼容状态降为 partial，保留自定义字段、链接字段、多 URI 与真实客户端
+导出的后续验证。报告当前详细卡片 **27**（High 5 / Medium 18 / Low 4，
+全部 Confirmed），原始 15 项与 6.1 分基线保持不变。

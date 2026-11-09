@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S15; historical supplemental tracking notes excluded",
-    "total": 26,
-    "confirmed": 26,
+    "scope": "15 baseline cards plus SP-S05 through SP-S16; historical supplemental tracking notes excluded",
+    "total": 27,
+    "confirmed": 27,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 17,
+      "Medium": 18,
       "Low": 4
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "c42ea09",
+  "remediation_checkpoint": "0f07b47",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -187,15 +187,24 @@
       "source_checkpoint": "2e36ade",
       "commit": "c42ea09",
       "status": "Actual Edge 420x320 menu was 358px high with no scroll and hidden Settings; live resize retained x932/y354, synthetic tall cascade top-394. Size bounds, scroll and resize-aware clamp now verified in nine theme/width screenshots, child23 and Settings actions, Escape/unmount and actual page More-to-settings flow. Android WebView and keyboard/column config follow-ups pending."
+    },
+    {
+      "id": "SP-S16",
+      "area": "Bitwarden plaintext parser accepts account-encrypted JSON as successful credential rows",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "2d5c9aa",
+      "commit": "0f07b47",
+      "status": "Two permanent marker regressions failed before repair. Exact official public fixtures at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 invoked real parser command: empty encrypted plus account v1/v2 accepted, latter each returned two rows; password-protected already rejected for missing items; two plaintext controls accepted. Fixed true/invalid encryption marker admission and zeroizing command input; six public fixture checks and four permanent parser tests passed; full host verify passed, native client export and fidelity pending."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "c42ea09",
-    "log": "verify-viewport-menus.log",
+    "checkpoint": "0f07b47",
+    "log": "verify-bitwarden-encryption-boundary-retry.log",
     "frontend_tests": 286,
-    "rust_unit_tests": 530,
+    "rust_unit_tests": 532,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -251,6 +260,7 @@
     "288b224 routes Android text imports through the existing SAF picker and bounded file adapter, preserving default KDBX filters and using provider display names only for URI format checks. Native picker completion checks view before plaintext read; A-B-A regressions failed on both Android/Windows seams before remediation. Six real-service picker tests and three new Rust checks passed, full verify 263 frontend/525 Rust/ACL2. Shared capped-reader growth test uses a real temporary file; old read_text_file race not separately reproduced. No Kotlin changes, native APK/device validation, user vaults or OS clipboard access; mobile export/attachment writer paths remain pending.",
     "a890eb1 uses per-operation 128-bit nonce temporary siblings, create_new ownership, exact original sync handle and operation-owned cleanup. Baseline 360 concurrent synthetic attempts had 353 errors but no observed corruption; full verify 263 frontend/527 Rust/ACL2. One LLVM compilation OOM retry with unchanged source/command passed; no product OOM claim.",
     "7a09b17 routes five native export/attachment entry points through io.pickSaveFile and named local atomic/URI verified rollback writers; guards, plaintext confirmation and emergency opt-in snapshot preserved, KDBX MIME defaults unchanged and exports never remembered as vaults. Baseline clean handler red evidence 5 failures/5 passes; initial VM harness and stale structural regex errors excluded. Full verify 286 frontend/530 Rust/ACL2, final documentation format passed. No Kotlin, CSS/markup, new APK/device/provider or OS clipboard evidence.",
-    "c42ea09 bounds main/cascade menus with existing theme and scrollbar tokens, preserves compact geometry, uses fixed cascades outside parent scroll clipping and cleans observers/listeners. Production component and actual page browser synthetic regressions passed, full verify 286 frontend/530 Rust/ACL2. Initial runtime-import, wrong localized labels/settings API and fixed callback-count harness mistakes excluded. No native Android WebView or keyboard/visual viewport validation; original baseline unchanged."
+    "c42ea09 bounds main/cascade menus with existing theme and scrollbar tokens, preserves compact geometry, uses fixed cascades outside parent scroll clipping and cleans observers/listeners. Production component and actual page browser synthetic regressions passed, full verify 286 frontend/530 Rust/ACL2. Initial runtime-import, wrong localized labels/settings API and fixed callback-count harness mistakes excluded. No native Android WebView or keyboard/visual viewport validation; original baseline unchanged.",
+    "0f07b47 validates encrypted/passwordProtected before mapping any items, rejects true and nonboolean markers with content-free errors, retains absent/false legacy plaintext, and zeroizes incoming command text. Independent six public export fixtures prove boundary; temporary probe and external fixture references removed before commit. First full verification failed during LLVM/PowerShell host memory exhaustion, no cargo/rustc remained at initial recheck; unchanged source/command retry passed 286 frontend/532 Rust/ACL2. TODO full Bitwarden compatibility remains partial for custom-name/linked-field/URI/native export evidence."
   ]
 }
