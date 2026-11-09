@@ -8,18 +8,19 @@ import { ActivityLeaseGuard } from "$lib/utils/session-state";
 
 /**
  * Single lock path shared by the manual lock button, idle auto-lock, and
- * `lockAfterAction`. Wipes the clipboard when `clearOnLock` is enabled, then
- * closes every open session (backend zeroizes the passwords); `remembered`
+ * `lockAfterAction`. Clears the clipboard when `clearOnLock` is enabled and
+ * closes every open session without waiting for clipboard I/O; `remembered`
  * stays so the lock screen can offer a quick reopen.
  */
 export async function lockVault(options?: { preserveClipboard?: boolean }): Promise<void> {
   // `lockAfterAction` copies first and then locks: clearing here would wipe the
   // value that was just copied (the timed `clipboardClearSeconds` wipe stays
   // armed via `copyText`). All other lock paths clear as before.
-  if (!options?.preserveClipboard && get(appSettings).security.clearOnLock) {
-    await clearClipboard();
-  }
-  await vault.closeAll();
+  const clearing =
+    !options?.preserveClipboard && get(appSettings).security.clearOnLock
+      ? clearClipboard()
+      : Promise.resolve();
+  await Promise.all([clearing, vault.closeAll()]);
 }
 
 /**

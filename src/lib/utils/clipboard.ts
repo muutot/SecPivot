@@ -9,6 +9,29 @@ interface ClipboardOwnership {
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 let lastCopy: ClipboardOwnership | null = null;
 let operationEpoch = 0;
+let writeTail: Promise<void> | null = null;
+
+/** Preserve this renderer's write order. Start an idle write synchronously so
+ * the caller's visible-view guard still immediately precedes Clipboard API use.
+ * A rejected write releases the queue without swallowing the caller's error. */
+function serializeWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = writeTail;
+  let result: Promise<T>;
+  try {
+    result = previous ? previous.then(operation) : operation();
+  } catch (error) {
+    result = Promise.reject(error);
+  }
+  const tail = result.then(
+    () => {},
+    () => {},
+  );
+  writeTail = tail;
+  void tail.then(() => {
+    if (writeTail === tail) writeTail = null;
+  });
+  return result;
+}
 
 function releaseOwnership(owned: ClipboardOwnership | null): void {
   if (!owned) return;
@@ -32,16 +55,15 @@ async function fingerprintText(text: string): Promise<Uint8Array> {
 
 export async function copyText(text: string): Promise<void> {
   const epoch = ++operationEpoch;
+  cancelRendererTimer();
+  releaseOwnership(lastCopy);
   try {
-    // Write starts without a new await before the consumer's view guard.
-    await copyRaw(text);
+    await serializeWrite(() => (epoch === operationEpoch ? copyRaw(text) : Promise.resolve()));
   } catch (error) {
     if (epoch === operationEpoch) releaseOwnership(lastCopy);
     throw error;
   }
   if (epoch !== operationEpoch) return;
-  cancelRendererTimer();
-  releaseOwnership(lastCopy);
   const seconds = get(appSettings).security.clipboardClearSeconds;
   if (isTauriRuntime()) {
     // Also send zero: it supersedes an earlier backend timer. The backend
@@ -70,8 +92,11 @@ async function clearOwnedClipboard(owned: ClipboardOwnership): Promise<void> {
   if (lastCopy !== owned) return;
   try {
     if (isTauriRuntime()) {
-      const cleared = await invoke<boolean | null>("clipboard_clear_if_matches", {
-        fingerprint: Array.from(owned.fingerprint),
+      const cleared = await serializeWrite(async () => {
+        if (lastCopy !== owned) return false;
+        return invoke<boolean | null>("clipboard_clear_if_matches", {
+          fingerprint: Array.from(owned.fingerprint),
+        });
       });
       if (cleared !== null) return;
     }
@@ -86,7 +111,7 @@ async function clearOwnedClipboard(owned: ClipboardOwnership): Promise<void> {
       if (lastCopy !== owned || !fingerprint.every((byte, i) => byte === owned.fingerprint[i])) {
         return;
       }
-      await copyRaw("");
+      await serializeWrite(() => (lastCopy === owned ? copyRaw("") : Promise.resolve()));
     } finally {
       fingerprint.fill(0);
     }
@@ -122,6 +147,12 @@ export async function clearClipboard(): Promise<void> {
   operationEpoch += 1;
   cancelRendererTimer();
   releaseOwnership(lastCopy);
+  // An already-started browser write cannot be cancelled. Drain it before the
+  // explicit clear, and invalidate queued copies synchronously above.
+  await serializeWrite(clearRawClipboard);
+}
+
+async function clearRawClipboard(): Promise<void> {
   if (isTauriRuntime()) {
     try {
       await invoke("clipboard_cancel_scheduled_wipe");

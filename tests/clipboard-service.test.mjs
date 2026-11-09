@@ -240,3 +240,163 @@ test("failed legacy copy reports failure and always removes the plaintext textar
     await clearClipboard();
   }
 });
+
+test("lock clears a clipboard write that was already pending when locking started", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const originalWrite = navigator.clipboard.writeText;
+  const pending = deferred();
+  navigator.clipboard.writeText = async (text) => {
+    if (text === "synthetic-pending-lock-copy") await pending.promise;
+    clipboardText = text;
+  };
+  try {
+    const copy = copyText("synthetic-pending-lock-copy");
+    const lockClear = clearClipboard();
+    await new Promise(setImmediate);
+    pending.resolve();
+    await Promise.all([copy, lockClear]);
+    assert.equal(clipboardText, "", "the delayed write must not restore a secret after lock clear");
+    calls.length = 0;
+    await clearClipboardIfUnchanged();
+    assert.deepEqual(calls, [], "the cancelled copy cannot install a later ownership timer");
+  } finally {
+    pending.resolve();
+    navigator.clipboard.writeText = originalWrite;
+    await clearClipboard();
+    mock.timers.reset();
+  }
+});
+
+test("a delayed earlier clipboard write cannot overwrite a later copy", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const originalWrite = navigator.clipboard.writeText;
+  const pending = deferred();
+  navigator.clipboard.writeText = async (text) => {
+    if (text === "synthetic-earlier-copy") await pending.promise;
+    clipboardText = text;
+  };
+  try {
+    const earlier = copyText("synthetic-earlier-copy");
+    const later = copyText("synthetic-later-copy");
+    await new Promise(setImmediate);
+    pending.resolve();
+    await Promise.all([earlier, later]);
+    assert.equal(clipboardText, "synthetic-later-copy");
+  } finally {
+    pending.resolve();
+    navigator.clipboard.writeText = originalWrite;
+    await clearClipboard();
+    mock.timers.reset();
+  }
+});
+
+test("locking cancels queued copies and closes vaults while the active write is pending", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const { lockVault } = await import("../src/lib/services/security.ts");
+  const { vault } = await import("../src/lib/services/vault.ts");
+  const originalWrite = navigator.clipboard.writeText;
+  const pending = deferred();
+  const writes = [];
+  let closed = false;
+  const close = mock.method(vault, "closeAll", async () => {
+    closed = true;
+  });
+  navigator.clipboard.writeText = async (text) => {
+    writes.push(text);
+    if (text === "synthetic-active-write") await pending.promise;
+    clipboardText = text;
+  };
+  appSettings.updateSecurity("clearOnLock", true);
+  try {
+    const active = copyText("synthetic-active-write");
+    const queued = copyText("synthetic-cancelled-write");
+    const locking = lockVault();
+    await new Promise(setImmediate);
+    assert.equal(closed, true, "vault closure must not wait for Clipboard API completion");
+    pending.resolve();
+    await Promise.all([active, queued, locking]);
+    assert.equal(clipboardText, "");
+    assert.equal(writes.includes("synthetic-cancelled-write"), false);
+  } finally {
+    pending.resolve();
+    navigator.clipboard.writeText = originalWrite;
+    close.mock.restore();
+    await clearClipboard();
+    appSettings.updateSecurity("clearOnLock", DEFAULT_SECURITY_SETTINGS.clearOnLock);
+    mock.timers.reset();
+  }
+});
+
+test("a failed pending write does not poison the next queued copy", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const originalWrite = navigator.clipboard.writeText;
+  const pending = deferred();
+  navigator.clipboard.writeText = async (text) => {
+    if (text === "synthetic-failed-write") {
+      await pending.promise;
+      throw new Error("synthetic-write-rejected");
+    }
+    clipboardText = text;
+  };
+  try {
+    const failure = assert.rejects(copyText("synthetic-failed-write"), /synthetic-write-rejected/);
+    const later = copyText("synthetic-after-failure");
+    pending.resolve();
+    await Promise.all([failure, later]);
+    assert.equal(clipboardText, "synthetic-after-failure");
+  } finally {
+    pending.resolve();
+    navigator.clipboard.writeText = originalWrite;
+    await clearClipboard();
+    mock.timers.reset();
+  }
+});
+
+test("an in-flight native wipe finishes before a newer identical renderer copy writes", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const originalInvoke = globalThis.__TAURI_INTERNALS__.invoke;
+  const pending = deferred();
+  const started = deferred();
+  globalThis.__TAURI_INTERNALS__.invoke = async (command, args) => {
+    if (command === "clipboard_clear_if_matches") {
+      started.resolve();
+      await pending.promise;
+      clipboardText = "";
+      return true;
+    }
+    return originalInvoke(command, args);
+  };
+  try {
+    await copyText("synthetic-identical-native-write");
+    const clearing = clearClipboardIfUnchanged();
+    await started.promise;
+    const later = copyText("synthetic-identical-native-write");
+    pending.resolve();
+    await Promise.all([clearing, later]);
+    assert.equal(clipboardText, "synthetic-identical-native-write");
+  } finally {
+    pending.resolve();
+    globalThis.__TAURI_INTERNALS__.invoke = originalInvoke;
+    await clearClipboard();
+    mock.timers.reset();
+  }
+});
+
+test("an idle copy starts the platform write synchronously after the consumer guard", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const originalWrite = navigator.clipboard.writeText;
+  let started = false;
+  navigator.clipboard.writeText = async (text) => {
+    started = true;
+    clipboardText = text;
+  };
+  try {
+    const copying = copyText("synthetic-immediate-write");
+    assert.equal(started, true);
+    await copying;
+  } finally {
+    navigator.clipboard.writeText = originalWrite;
+    await clearClipboard();
+    mock.timers.reset();
+  }
+});
