@@ -90,9 +90,7 @@ pub(crate) fn cancel_hibp(
     Ok(())
 }
 
-/// CSV/XML import cap (8 MiB): guards the read-text command against oversized
-/// files; the `.csv`/`.xml` extension whitelist stops arbitrary file
-/// exfiltration.
+/// Text import cap (8 MiB), enforced during reads as well as metadata preflight.
 const MAX_TEXT_IMPORT_BYTES: u64 = 8 * 1024 * 1024;
 
 /// Fetch one entry's password on demand; passwords are never part of `VaultState`.
@@ -457,14 +455,26 @@ pub(crate) fn export_xml(
     vault::write_csv_file(&path, &content)
 }
 
-/// Read a UTF-8 text file from a user-picked path (CSV / KeePass XML import).
-/// Only `.csv` and `.xml` files are accepted: the command must never serve as
-/// an arbitrary local file reader (e.g. for config.json, credentials, or other
-/// vaults).
+/// Read a user-picked UTF-8 CSV/XML/JSON/1PIF file. Document URIs use the
+/// provider display name for format validation; local paths use their actual
+/// extension. The name check is a format filter, not filesystem authorization.
 #[tauri::command]
-pub(crate) fn read_text_file(path: String) -> Result<String, String> {
+pub(crate) fn read_text_file(path: String, file_name: Option<String>) -> Result<String, String> {
     let path = Path::new(&path);
-    let allowed = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+    validate_text_import_path(path, file_name.as_deref())?;
+    let bytes = vault::file_io::read_with_limit(path, "导入文件", MAX_TEXT_IMPORT_BYTES)?;
+    String::from_utf8(bytes).map_err(|_| "导入文件不是有效的 UTF-8 文本".to_owned())
+}
+
+fn validate_text_import_path(path: &Path, file_name: Option<&str>) -> Result<(), String> {
+    let name = if vault::file_io::is_document_uri(path) {
+        Path::new(
+            file_name.ok_or_else(|| "无法确定文档类型，请重新选择有扩展名的导入文件".to_owned())?,
+        )
+    } else {
+        path
+    };
+    let allowed = name.extension().and_then(|e| e.to_str()).is_some_and(|e| {
         e.eq_ignore_ascii_case("csv")
             || e.eq_ignore_ascii_case("xml")
             || e.eq_ignore_ascii_case("json")
@@ -473,14 +483,24 @@ pub(crate) fn read_text_file(path: String) -> Result<String, String> {
     if !allowed {
         return Err("仅支持导入 .csv / .xml / .json / .1pif 文件".to_owned());
     }
-    let meta = std::fs::metadata(path).map_err(|e| format!("读取文件失败: {e}"))?;
-    if meta.len() > MAX_TEXT_IMPORT_BYTES {
-        return Err(format!(
-            "导入文件过大 (最大 {} MiB)",
-            MAX_TEXT_IMPORT_BYTES / 1024 / 1024
-        ));
+    Ok(())
+}
+
+#[cfg(test)]
+mod text_import_tests {
+    use super::*;
+
+    #[test]
+    fn document_type_uses_display_name_and_local_type_cannot_be_overridden() {
+        let uri = Path::new("content://synthetic/document/42");
+        for name in ["export.CSV", "export.xml", "export.json", "export.1pif"] {
+            assert!(validate_text_import_path(uri, Some(name)).is_ok());
+        }
+        assert!(validate_text_import_path(uri, None).is_err());
+        assert!(validate_text_import_path(uri, Some("export.kdbx")).is_err());
+        assert!(validate_text_import_path(Path::new("local.kdbx"), Some("export.csv")).is_err());
+        assert!(validate_text_import_path(Path::new("local.csv"), Some("export.kdbx")).is_ok());
     }
-    std::fs::read_to_string(path).map_err(|e| format!("读取文件失败: {e}"))
 }
 
 /// Parse a Bitwarden `.json` export into normalized import rows. Strict:
