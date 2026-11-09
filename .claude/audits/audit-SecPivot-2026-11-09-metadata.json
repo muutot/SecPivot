@@ -21,13 +21,13 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S09; historical supplemental tracking notes excluded",
-    "total": 20,
-    "confirmed": 20,
+    "scope": "15 baseline cards plus SP-S05 through SP-S10; historical supplemental tracking notes excluded",
+    "total": 21,
+    "confirmed": 21,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 12,
+      "Medium": 13,
       "Low": 3
     }
   },
@@ -127,6 +127,14 @@
       "status": "nine production component-script regressions failed before the fix and passed after; rendered Edge synthetic expiry/resume/copy/unmount and dark/light/custom 1100/420 passed; backend prompt cancellation remains pending; correlated end lease now covers setup/proof/replacement and connection exit/unwind; five new frontend assertions failed on 22cd55d, all 15 pass now; three new backend regressions and rendered event ordering passed; idle lock/session-switch cancellation and JS heap zeroization remain pending; active lifetime watchers now end idle prompts on successful topology transitions; cancelled SRP remains refused after A-B-A and interposed setup; six new Rust regressions passed; genuine Tauri/extension lifecycle delivery remains unverified",
       "followup_commit": "65e47cd",
       "active_lifetime_commit": "8e050d8"
+    },
+    {
+      "id": "SP-S10",
+      "area": "1Password legacy parser only accepts self-defined key blocks and ignores authentic JSON-line records",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "8e050d8",
+      "status": "exact production parser/helper extraction returned zero rows for two synthetic authentic-schema records; independent Bitwarden importer and public spec data confirmed JSON-line schema; source remediation pending, TODO downgraded"
     }
   ],
   "verification": {
@@ -182,6 +190,7 @@
     "65e47cd assigns monotonic attempt identities and sends correlated end on subsequent setup or connection lease drop; renderer rejects old/duplicate show and end-before-show; Zeroizing protects the temporary password on begin error/callback unwind and the event payload borrows it for synchronous Tauri serialization; no genuine Tauri/extension shutdown UI or post-deallocation memory measurement was performed",
     "8e050d8 centrally ends weak one-shot active-session observers outside registry/observer guards; fd8a08e baseline clean regressions confirm missing end for lock/active-close/switch/open and successful old proof after revisiting original tab; initial observation-mutex destructor panic and missed baseline adaptation compile failure are excluded from product evidence",
     "Cancelled attempt followed by stored-key setup initially discarded the cancellation lease while retaining pending SRP; production regression failed, fixed by clearing all pending SRP state on any setup after cancellation; final full gate passed at 242 frontend, 518 Rust, ACL 2",
-    "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review"
+    "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review",
+    "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending"
   ]
 }

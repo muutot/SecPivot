@@ -149,6 +149,12 @@ ids. `rpc/server/mod.rs::prepare_authorized_rpc_write` performs the same key
 validation after writer admission and before vault write preparation; blocking
 persistence and durable completion retain their existing lock-free handoff.
 
+The current `vault/import.rs::parse_1pif` implementation is incomplete (SP-S10):
+its self-defined star-prefixed block fixture does not match authentic 1Password
+JSON-line records, which currently produce zero rows. The module table describes
+that implementation, not verified format compatibility. Modern 1PUX is a separate
+unencrypted ZIP format and remains unimplemented; both TODO boundaries stay partial.
+
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
 fingerprint slot; replacement/cancel drops it immediately. Clipboard I/O runs

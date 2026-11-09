@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S09；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S10；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 12     | 12        | 0         |
+| Medium    | 13     | 13        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **20** | **20**    | **0**     |
+| **Total** | **21** | **21**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S09 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S10 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -655,7 +655,7 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 | [KeePass 官方 XML writer](https://raw.githubusercontent.com/dlech/KeePass2.x/master/KeePassLib/Serialization/KdbxFile.Write.cs) | PlainXml 原文加 ProtectInMemory；Default 内部格式 XOR 后 Base64    | 直接用于 SP-03 格式修复；不能沿用未加密 Base64 假设                      |
 | [KeePassXC 用户指南](https://keepassxc.org/docs/KeePassXC_UserGuide)                                                            | KDF 解密耗时校准、数据库报告、模板克隆、窗口自动输入、现代迁移格式 | 已有安全报告/模板/自动输入，优先补模板可靠性；KDF 校准是有价值未完成能力 |
 | [Bitwarden 导出](https://bitwarden.com/help/export-your-data/)                                                                  | JSON 明文/加密、CSV 有损、附件 ZIP                                 | 明确 XML/CSV 保真边界；附件迁移需独立完整性与安全设计                    |
-| [1Password 当前导出](https://support.1password.com/export/)                                                                     | 1Password 8 使用 1PUX 或 CSV                                       | 已有 legacy 1PIF 不能代表当前迁移完整；1PUX 列后续独立能力               |
+| [1Password 当前导出](https://support.1password.com/export/)                                                                     | 1Password 8 使用 1PUX 或 CSV                                       | 当前 1PIF parser 与真实 JSON-line 格式不符（SP-S10）；1PUX 仍为独立缺口  |
 | [KeeWeb](https://keeweb.info/)                                                                                                  | 紧凑离线界面、附件拖入、受保护字段                                 | 保留现有密集视觉，改善错误/焦点/排序，避免无关信息挤占主界面             |
 
 不引入用户已排除的任意插件体系、事件自动化或硬件密钥；不为“竞品有”而直接扩大秘密外传面。
@@ -858,3 +858,26 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 取消信号也限制后端 proof：已结束的 attempt 即使回到同一 stable sessionId 仍失败。复查修复中又用生产状态机确认“取消后先发 stored-key setup，再发旧 proof”会丢掉 lease 标记却保留 SRP 状态，见 `rpc-cancelled-interposed-setup-red.log`；因此任何收到取消的后续 setup 都先清空整份 pending SRP/a/expiry/session，再处理新的握手。六项新增回归覆盖四种真实库转移、原标签回访、插入 setup、失败/parked/idempotent 不误取消、通知在 registry guard 外且 callback panic 不损坏 active mutex、1000 次观察者释放无 owned callback 累积。最终完整 `npm run verify` 日志 `verify-rpc-active-lifetime-final.log`：格式、Svelte check、150 键契约、构建、前端 **242**、Rust **518 + ACL 2**、clippy 全通过；三份维护引用已同步。无 markup/CSS 变化；没有真实 Tauri/扩展的锁定弹窗端到端证据。详细卡片仍为 20 张、原始基线不变；APK/provider、JavaScript 堆/延迟事件、剪贴板并发与原生互操作等剩余范围继续处理。
 
 提供商复核新增来源：[AOSP ContentResolver](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/content/ContentResolver.java) 明确允许 exclusive read/write 返回 pipe/socket，`rw` 才要求可 seek 文件；本地 `tauri-plugin-fs 2.5.2` 的 Android Kotlin 用 `openAssetFileDescriptor`，Rust 直接将 detach 的 FD 转为 `File`，SecPivot 写模式为 `wt` 并无条件 `sync_all()`。这是非普通 FD 同步错误的源码/平台契约线索，尚未提升为 Android 实测结论。WSL 名称列表虽有 Ubuntu，但启动报 `ERROR_PATH_NOT_FOUND`（缺失 ext4.vhdx），Linux pipe/fsync 试验未运行，不将列表当作可用运行环境。官方 [1PUX 格式说明](https://support.1password.com/1pux-format/) 已成功取得，明确是未加密 ZIP，包含 `export.attributes`、`export.data` 与附件目录；TODO 中“ZIP/加密导出”的描述须纠正，并继续复核现有 legacy 1PIF 的真实兼容性。
+
+### Finding: SP-S10 1PIF 导入解析自造块格式，真实 JSON-line 导出返回零条（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Testing Authenticity
+- Status: Confirmed（尚未修复）
+- Affected area: 1Password legacy import, format compatibility and completion evidence
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:148`、`src-tauri/src/commands/entries.rs:496`、`src/routes/+page.svelte:1184`（当前 `8e050d8` 源码）
+  - Function / Module: `parse_1pif` / `finish_1pif_item` / `handleImportOnePassword`
+  - Relevant behavior: parser 忽略不以 `***` 开头的行，只处理 `***Key:value`；其唯一相关测试同样编造此格式。真实 1PIF 使用 JSON-line，每条记录包含 `typeName`、`secureContents` 等。生产 command 把空 Vec 当作解析成功，页面随后显示“没有可导入的条目”。
+  - Independent reference: [Bitwarden 1PIF importer](https://github.com/bitwarden/clients/blob/1a8bdbfe625bff90a9c0cabef2002e37f6038fa1/libs/importer/src/importers/onepassword/onepassword-1pif-importer.ts) 按行 `JSON.parse`，支持 standard `secureContents` 与 Windows `hmac/overview/details` 变体；对应公开 spec-data 也为 JSON-line。先前猜测文件 URL 的 404 和 GitHub API 限流不属于兼容性证据，最终以只读 shallow/no-checkout 参考 clone 的确定路径与 commit 核对。
+  - Reproduction: 精确抽取当前生产 parser 和 helper，仅移除 DTO serde 装饰，用独立 Rust probe 输入按上述真实 schema 构造的两个合成登录/笔记。函数返回 **0，预期 2**，断言实际失败，见 `onepassword-1pif-baseline-red.log`。未运行 1Password 原生导出或真实用户文件，没有把公开样本密码输出到报告。
+- Problem: 菜单及 TODO 声称的 legacy 1PIF 能力没有真实格式兼容性；用户正常导出后无法迁移，而现有测试可以保持全绿。
+- Why it matters: 迁移入口无法完成核心工作流，用户可能误以为空库或导出文件无条目。测试只验证自造格式，不能作为竞品互操作及功能完成证据。
+- Realistic failure scenario: 用户从旧版 1Password 导出 JSON-line 1PIF，选择导入；全部记录被忽略，页面报没有条目，登录凭据和笔记未迁入。
+- Minimal fix: 解析真实逐行 JSON standard/Windows 变体，严格处理坏记录并保持字段 designation、notes、URL、TOTP、分组与受保护字段语义；错误不能静默归零。更新 IPC 结果/错误、前端映射及真实 schema 合成回归；不要继续用 `***Key:value` 作为真实性测试。
+- Better long-term fix: 独立支持现代未加密 1PUX ZIP，做有界解压、账号/库/附件与各类字段迁移，采用官方 schema 和多个客户端样本复核。迁移全过程保留本地秘密边界，不为导入而发送凭据到第三方。
+- Regression test suggestion: JSON-line 登录/笔记、多条与 CRLF、损坏后续记录不得部分成功、standard 与 Windows variant、隐藏字段/TOTP/多 URL、分组/未知类型/回收状态；通过生产 import command 和合成 KDBX 保存重开复核最终字段。现代 1PUX 单独验证，不以 1PIF 修复代替。
+- Estimated effort: 2–4 小时（1PIF）；1PUX 另行估算
+
+TODO 的原“1Password/LastPass 已完成”已降为 partial，明确 LastPass 别名仍接线、1PIF 真实导出失败；1PUX 单列 pending 并纠正其未加密 ZIP 定义。data-contracts 和 project-structure 同步了真实缺口，没有在源码修复前宣称完成。当前详细卡片 **21**（全部 Confirmed，High 5 / Medium 13 / Low 3）；原始 15 项/6.1 分基线保持不变。最新应用完整门禁仍对应 `8e050d8`（前端242、Rust518、ACL2），它未覆盖真实 1PIF 格式，所以不抵消本项失败证据。报告 lint/严格 JSON/格式门另行验证本次文档，后续继续实现兼容修复及剩余审计。
