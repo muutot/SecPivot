@@ -178,3 +178,13 @@ they never count as repeated upload failures or leave the session using an old k
 - Targeted tests for lock/clear/session semantics (Rust).
 - Confirm no password reaches `config.json`, logs, or the `VaultState`/`VaultEntry` payload by construction and test. Same for protected custom-field values (only the `protected` flag is serialized; `get_custom_field_value` resolves them on demand).
 - Browser fallback changes are UI-only; do not claim desktop security behavior from them.
+
+1PIF import validates JSON-line records before publishing any rows. Concealed,
+password-type and guarded custom values stay protected through the shared import
+DTO and KDBX write. A concealed username stays a hidden custom field, never a
+public UserName snapshot. Unmapped secure fields/password history use protected
+JSON fields; duplicates/reserved names cannot overwrite or drop their values.
+Binary attachments and folder hierarchy are rejected until supported. Parser
+errors disclose line numbers only, never the record, and incoming command text
+is zeroized after parsing. Imported secrets cross IPC only for the explicit
+import flow; this does not prove JavaScript heap zeroization or native exports.
