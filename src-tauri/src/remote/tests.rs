@@ -219,7 +219,10 @@ fn spawn_s3_pages(
     let addr = listener.local_addr().unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        // The full Rust suite runs CPU-heavy KDF tests concurrently. Give the
+        // finite 100-page script longer than the client's 30 s total deadline,
+        // so mock shutdown cannot masquerade as a transport/pagination failure.
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
         for (delay, body) in pages {
             let mut stream = loop {
                 match listener.accept() {
@@ -365,7 +368,8 @@ fn s3_list_bounds_pages_even_when_empty_tokens_keep_changing() {
     ))).collect();
     let (addr, requests) = spawn_s3_pages(pages);
     let storage = S3Storage::new(&mock_config(addr)).unwrap();
-    assert!(storage.list("").unwrap_err().contains("分页上限"));
+    let error = storage.list("").unwrap_err();
+    assert!(error.contains("分页上限"), "unexpected error: {error}");
     assert_eq!(requests.try_iter().count(), 100);
 }
 
