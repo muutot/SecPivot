@@ -846,3 +846,7 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 1–2 小时
 
 `22cd55d` 已修复 SP-S09 的前端范围。完整 `npm run verify` 日志 `verify-rpc-prompt-renderer.log`：格式、Svelte check 零错误警告、150 键契约、构建、前端 **236**、Rust **509 + ACL 2**、clippy 全部通过。渲染日志 `rpc-prompt-renderer-render.log` 与六张截图保存在本任务 artifacts 目录；未触碰真实库或 OS 剪贴板。security-model 和 data-contracts 同步了当前保证与未完成的取消边界，未新增完整生命周期/Android TODO 勾选。当前详细卡片 20 项；原始基线保持不变。后端 SRP 提示结束事件及零化失败路径、剪贴板并发、SAF provider、新 APK/设备及第三方 XML 互操作继续审查，整体目标未完成。
+
+`65e47cd` 进一步补上同一问题的后端结束通知：每次配对拥有进程内递增的字符串 `requestId`，连接持有仅包含身份与事件回调的 `PromptLease`。后续 setup（proof 或替换）释放旧 lease；连接正常退出或 unwind 时同样释放，发送 `rpc-side-channel-ended { requestId }`。前端只关闭匹配提示，同时记录最新非秘密身份，拒绝旧/重复 show 和 end-before-show。旧源码 `22cd55d` 对新增前端验证 **5 失败 / 10 通过**，当前 **15 全通过**，见 `rpc-prompt-end-red.log`；没有把测试夹具的编译错误计为行为复现。三项后端新增回归覆盖连接退出/unwind、真实合成 KDBX proof 成功及 locked proof 失败的通知、替换 setup 在新密码 show 之前结束旧提示。此前停机机制会让 SRP worker 退出并释放 lease，但这轮没有真实 Tauri/扩展停机弹窗端到端证据。
+
+配对临时密码现用 `Zeroizing<String>`，只在 SRP pending 已建立后发出 show；begin 返回错误或 callback unwind 也受作用域析构保护。事件载荷借用密码，避免额外的 owned payload 克隆，并去掉 secret-bearing payload 的 Debug 派生。已核对本地 Tauri 2.11.5 的 `Emitter::emit` → manager `emit` → `EmitArgs::new` 同步序列化路径；这属于代码保证，没有测量回收后的内存。最新完整 `npm run verify` 日志 `verify-rpc-prompt-lifecycle.log`：格式、Svelte check、150 键契约、构建、前端 **242**、Rust **512 + ACL 2**、clippy 全通过。渲染日志 `rpc-prompt-lifecycle-render.log` 验证关联 end、旧 end、新旧 show 乱序、复制、过期/恢复/关闭/unmount，仍为合成 IPC/剪贴板。三份维护引用同步协议与所有权；详细卡片仍为 20 张。**空闲配对提示的锁定/切库即时取消、事件投递延迟、JS 堆零化、真实 Android 新 APK/provider 和第三方 XML 互操作仍未闭环**，目标继续进行。
