@@ -495,3 +495,12 @@ renderer `match-url.ts::shortestMatchable` returns the original trimmed URL for
 Exact suggestions; it never removes query/fragment or invents a scheme. There is
 no new setting or IPC. Tests cover both host adapters after KDBX reopen and the
 frontend suggestion value; native extension interoperability remains unverified.
+
+`DatabaseSettingsPatch` uses `dto::de_nullable_patch` for historyMaxItems,
+historyMaxSize, recycleBinEnabled and entryTemplatesGroup. Wire absence means
+keep, explicit JSON null means reset, and a typed value means set. The generic
+deserializer preserves outer Some for present null without accepting wrong
+value types. Metadata-only and re-encryption paths consume the same DTO; normal
+kdf/cipher/compression option semantics and the icon deserializer are unchanged.
+Native wire/save/reopen regressions cover the boundary; constructing Some(None)
+in Rust alone is not proof of the JSON IPC reset contract.

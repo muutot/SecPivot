@@ -362,3 +362,9 @@ oversized snapshot; there is no mandatory minimum-one exception. Negative
 limits remain unlimited. This is encrypted-vault retention, not secure erasure
 of filesystem blocks, backups, orphan input payloads or JavaScript memory.
 Metadata-only changes do not perform an eager database-wide history purge.
+
+Explicit metadata reset must survive JSON decoding: nullable history limits,
+recycle-bin policy and template-group fields preserve present null as a reset.
+Missing fields keep their values and malformed typed values fail before mutation.
+This enforces the requested configuration; it does not eagerly purge vault
+history or change KDF/cipher defaults.
