@@ -122,7 +122,7 @@ import-time snapshots through `import/bitwarden_links.rs`; Identity FullName
 follows source name-part composition. Optional absent/null targets become empty
 protected fields. Unknown/cross-type/non-integer IDs or malformed target values
 reject the whole parse. Stale field.value never overrides the linked target.
-Dynamic linkage after edits, URI matching modes, collections, history and
+Dynamic linkage after edits, URI matching modes, collections, native history and
 attachments remain separate migration work.
 
 Bitwarden URI import accepts at most one nonempty URI with absent/null `match`.
@@ -141,6 +141,14 @@ Native `update_entry_flags` validates the optional foreground color before
 writing any matching/quality/color attribute. An invalid color leaves the raw
 entry, cached snapshot, dirty flag and revision unchanged, including a later
 save/reopen. Existing absent/empty/valid values and target-error order remain.
+
+Bitwarden nonempty `passwordHistory` arrays are archived as a uniquely named,
+protected `Bitwarden Password History` custom field. The source JSON preserves
+order, duplicates, empty passwords, optional/null string dates and extra keys;
+it does not invent complete native entry versions. Every record requires a
+string password; invalid containers/records/date types reject the document
+with the existing content-free indexed error. Missing/null/empty history adds
+no field. Generic import custom-field IPC and native KDBX protection carry it.
 
 Main-window `flash(message, kind = "success")` forwards the existing TipKind.
 IO/group/favicon/editor notification seams accept `(message, kind?: TipKind)`;

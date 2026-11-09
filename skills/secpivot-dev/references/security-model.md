@@ -335,3 +335,9 @@ constraint and an empty block must not hide legitimate matches. This shared
 boundary applies to Bridge/RPC and both auto-type scans. Do not trim meaningful
 whitespace patterns or discard an explicit wildcard. Other regex dialect and
 resource-limit behavior remain separate evidence gaps.
+
+Bitwarden source password-history archives are always protected custom fields,
+including values for empty prior passwords. Their plaintext exists only in the
+explicit import/reveal flow; normal vault snapshots remain masked. A source
+custom label cannot overwrite the archive, and parser errors contain only the
+record index. Password-only source history is not a complete native snapshot.

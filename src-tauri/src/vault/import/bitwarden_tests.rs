@@ -477,6 +477,126 @@ fn imported(text: &str) -> (TempDir, VaultSession, String) {
 }
 
 #[test]
+fn bitwarden_password_history_survives_wire_and_kdbx_as_protected_source_data() {
+    let history = serde_json::json!([
+        {"password":"prior-synthetic-α", "lastUsedDate":"2025-03-01T10:20:30.456Z"},
+        {"password":"prior-synthetic-α", "lastUsedDate":"2024-03-01T10:20:30+08:00"},
+        {"password":"", "lastUsedDate":null},
+        {"password":"older-synthetic", "sourceExtension":{"label":"preserve"}}
+    ]);
+    let text = serde_json::json!({"encrypted":false,"items":[{
+        "type":1,"name":"Synthetic history", "passwordHistory":history,
+        "login":{"password":"current-synthetic"}
+    }]})
+    .to_string();
+    let (_dir, mut session, id) = imported(&text);
+    let state = session.state().unwrap().unwrap();
+    let field = state.root.entries[0]
+        .custom_fields
+        .iter()
+        .find(|field| field.name == "Bitwarden Password History");
+    assert!(field.is_some(), "source password history was discarded");
+    let field = field.unwrap();
+    assert!(field.protected);
+    assert!(field.value.is_empty());
+    let stored = session
+        .get_custom_field_value(&id, &field.name)
+        .unwrap()
+        .unwrap();
+    let stored: serde_json::Value = serde_json::from_str(&stored).unwrap();
+    assert_eq!(stored, history);
+    assert_eq!(
+        session.get_entry_password(&id).unwrap(),
+        "current-synthetic"
+    );
+    assert!(
+        session.get_entry_history(&id).unwrap().is_empty(),
+        "password-only source data must not invent full native entry versions"
+    );
+    let wire = serde_json::to_string(&state).unwrap();
+    assert!(!wire.contains("prior-synthetic"));
+    assert!(!wire.contains("older-synthetic"));
+}
+
+#[test]
+fn bitwarden_password_history_does_not_replace_a_colliding_custom_field() {
+    let (_dir, mut session, id) = imported(
+        r#"{"items":[{
+        "type":1,"name":"Synthetic collision",
+        "fields":[{"name":"Password History","value":"synthetic custom value","type":0}],
+        "passwordHistory":[{"password":"prior-synthetic","lastUsedDate":"2025-01-01T00:00:00Z"}]
+    }]}"#,
+    );
+    assert_eq!(
+        session
+            .get_custom_field_value(&id, "Bitwarden Password History")
+            .unwrap()
+            .as_deref(),
+        Some("synthetic custom value")
+    );
+    let state = session.state().unwrap().unwrap();
+    let archive = state.root.entries[0]
+        .custom_fields
+        .iter()
+        .find(|field| field.name == "Bitwarden Password History (2)");
+    assert!(
+        archive.is_some(),
+        "source archive lost after custom-label collision"
+    );
+    assert!(archive.unwrap().protected);
+    let value = session
+        .get_custom_field_value(&id, "Bitwarden Password History (2)")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&value).unwrap(),
+        serde_json::json!([{"password":"prior-synthetic","lastUsedDate":"2025-01-01T00:00:00Z"}])
+    );
+}
+
+#[test]
+fn bitwarden_password_history_rejects_malformed_values_for_the_whole_document() {
+    for history in [
+        serde_json::json!("synthetic-marker"),
+        serde_json::json!(1),
+        serde_json::json!({}),
+        serde_json::json!([null]),
+        serde_json::json!([{}]),
+        serde_json::json!([{"password":null}]),
+        serde_json::json!([{"password":7}]),
+        serde_json::json!([{"password":"synthetic-marker", "lastUsedDate":7}]),
+    ] {
+        let text = serde_json::json!({"items":[
+            {"type":1,"name":"Valid first"},
+            {"type":1,"name":"Invalid second", "passwordHistory":history}
+        ]})
+        .to_string();
+        let result = crate::commands::parse_bitwarden_json(text);
+        assert!(
+            result.is_err(),
+            "malformed source history was silently discarded"
+        );
+        let error = result.err().unwrap();
+        assert!(!error.contains("synthetic-marker"));
+        assert!(error.contains("第 2 条"));
+    }
+}
+
+#[test]
+fn bitwarden_password_history_empty_sources_add_no_archive() {
+    for item in [
+        serde_json::json!({"type":1}),
+        serde_json::json!({"type":1,"passwordHistory":null}),
+        serde_json::json!({"type":1,"passwordHistory":[]}),
+    ] {
+        let rows =
+            crate::commands::parse_bitwarden_json(serde_json::json!({"items":[item]}).to_string())
+                .unwrap();
+        assert!(rows[0].custom_fields.is_empty());
+    }
+}
+
+#[test]
 fn bitwarden_custom_reserved_and_blank_names_survive_kdbx_import() {
     let (_dir, session, id) = imported(
         r#"{"encrypted":false,"items":[{

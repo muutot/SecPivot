@@ -150,7 +150,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 附件内存预览：`preview_attachment` 返回文本/图片 data URL（2 MiB 截断上限，其余为二进制提示），EntryDetail 附件预览对话框；不落盘
 - [x] 附件临时打开：`open_attachment_temp`（受控随机临时目录 + token）+ `cleanup_attachment_temp`（丢弃/锁定清理，`close_all_vaults` 联动）+ 预览对话框两步确认后 `openPath`
 - [x] 附件导入修改：`import_attachment_from_temp` 仅允许 token 注册的临时文件写回附件（64 MiB 上限，成功后清理），预览对话框「导入修改/丢弃修改」
-- [~] 导入·Bitwarden JSON：类型 1–8（登录/笔记/卡片/身份/SSH/银行账户/驾照/护照）、folder→分组、缺省模式单 URI/自定义字段/TOTP 已接线；favorite boolean 贯通 parser/wire/原生 batch，收藏在 KDBX 重开后保持（SP-S34）；专属数据为受保护唯一字段，非登录记录导入即关闭密码质量检查，未知类型/错误专属值整批解析拒绝。加密标记与自定义标签冲突修复有官方公开加密夹具及合成 KDBX 复核（SP-S16/SP-S17/SP-S19）；链接字段已按官方编号保留为受保护导入快照（SP-S20）；显式 URI 模式 0–5/多个有效网址当前整份拒绝（SP-S23），避免静默放宽或丢失；动态链接、完整逐 URI 匹配、组织 collections/历史/附件和真实客户端导出仍待实现/验证，不标完整兼容。
+- [~] 导入·Bitwarden JSON：类型 1–8（登录/笔记/卡片/身份/SSH/银行账户/驾照/护照）、folder→分组、缺省模式单 URI/自定义字段/TOTP 已接线；favorite boolean 贯通 parser/wire/原生 batch，收藏在 KDBX 重开后保持（SP-S34）；源 passwordHistory 保留为唯一受保护 JSON 字段，顺序/重复/时间/同名冲突经真实 command/wire/KDBX 重开验证，尚非原生历史（SP-S37）；专属数据为受保护唯一字段，非登录记录导入即关闭密码质量检查，未知类型/错误专属值整批解析拒绝。加密标记与自定义标签冲突修复有官方公开加密夹具及合成 KDBX 复核（SP-S16/SP-S17/SP-S19）；链接字段已按官方编号保留为受保护导入快照（SP-S20）；显式 URI 模式 0–5/多个有效网址当前整份拒绝（SP-S23），避免静默放宽或丢失；动态链接、完整逐 URI 匹配、组织 collections/原生历史/附件和真实客户端导出仍待实现/验证，不标完整兼容。
 - [~] 导入·1Password/LastPass：LastPass CSV 别名（`name`/`extra`/`grouping`）已接线；1PIF 已修正为真实 standard/Windows JSON-line，覆盖登录/笔记、隐藏字段、OTP、多网址与合成 KDBX 保存重开；分组层级/二进制附件明确拒绝，历史和未映射安全内容保存为受保护 JSON 字段，尚非原生历史迁移；真实 1Password 导出运行验证仍缺失，完整兼容不标完成（SP-S10）
 - [ ] 导入·1Password 1PUX：官方格式是未加密 ZIP，包含 `export.attributes`、`export.data` 和 `files/`；须实现有界解压、账号/库/字段与附件迁移、秘密保护及对应验证，不以 legacy 1PIF 或菜单入口代替完成
 - [x] 导出·HTML 应急表/打印：`export_emergency_sheet`（离线可打印 HTML、HTML 转义、含密码需勾选并带警告横幅），CSV 导出增加明文安全确认

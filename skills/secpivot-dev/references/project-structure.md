@@ -44,6 +44,11 @@ existing pattern/text/compiled-size bounds remain unchanged.
 its regressions compare raw entry, cached DTO, dirty/revision, browser matching
 and KDBX persistence for both rejected set and clear requests.
 
+`vault/import.rs` retains Bitwarden source password history as a protected,
+collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
+fidelity, masking and batch rejection; no new DTO or fabricated native history
+snapshot is introduced.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or
