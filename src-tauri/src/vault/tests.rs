@@ -8968,6 +8968,61 @@ fn match_accuracy_exact_blocks_subdomains() {
 }
 
 #[test]
+fn exact_matching_preserves_complete_url_identity() {
+    let stored = "https://bank.example/Login?tenant=one#form";
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "Synthetic complete URL",
+        stored,
+        serde_json::json!({"version": 1, "blockHostnameOnlyMatch": true}),
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let mut unexpected = Vec::new();
+    for registrable in [false, true] {
+        session.match_registrable_domain = registrable;
+        assert_eq!(session.logins_for(stored, None).len(), 1);
+        assert_eq!(
+            session
+                .logins_for("https://unrelated.test", Some(stored))
+                .len(),
+            1
+        );
+        assert_eq!(
+            session
+                .find_logins(&[stored.to_owned()], None, None, None)
+                .len(),
+            1
+        );
+        for (case, request) in [
+            ("scheme", "http://bank.example/Login?tenant=one#form"),
+            ("path case", "https://bank.example/login?tenant=one#form"),
+            ("query", "https://bank.example/Login?tenant=two#form"),
+            ("fragment", "https://bank.example/Login?tenant=one#other"),
+            ("missing query", "https://bank.example/Login"),
+        ] {
+            let bridge = session.logins_for(request, None).len();
+            let rpc = session
+                .find_logins(&[request.to_owned()], None, None, None)
+                .len();
+            if bridge != 0 || rpc != 0 {
+                unexpected.push((registrable, case, bridge, rpc));
+            }
+            assert!(session
+                .logins_for("https://unrelated.test", Some(request))
+                .is_empty());
+        }
+    }
+    assert!(
+        unexpected.is_empty(),
+        "Exact URL policy was weakened: {unexpected:?}"
+    );
+}
+
+#[test]
 fn browser_matching_does_not_trust_userinfo_as_destination() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

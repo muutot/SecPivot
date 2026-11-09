@@ -300,4 +300,12 @@ host:port and protocol-relative addresses remain supported; malformed authoritie
 internal whitespace/control characters and bare userinfo are rejected. Browser
 credential tests exercise both host adapters after synthetic KDBX reopen in
 default and registrable-domain modes. This repairs host identity, not the
-separate port/Exact/regex policy or native extension authorization boundaries.
+separate port/regex policy or native extension authorization boundaries.
+
+Exact KPRPC URL matching requires identical complete strings after validating
+that both have a usable host. Scheme, path case, query, fragment and explicit
+port are never discarded by this policy. Bridge preserves original request/submit
+URL case; frontend Exact suggestions retain the same full input so the rule can
+match the actual requested URL. Existing explicit
+regex allow/block priority remains unchanged; this does not prove all rule
+interactions or native extension request construction.
