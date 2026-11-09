@@ -35,6 +35,7 @@
     if (!isTauriRuntime()) return;
     let cancelled = false;
     void listen<AssociateRequest>("bridge-associate-request", (event) => {
+      if (cancelled) return;
       if (dismissTimer) {
         clearTimeout(dismissTimer);
         dismissTimer = undefined;
@@ -53,6 +54,10 @@
     return () => {
       cancelled = true;
       unlisten?.();
+      pending = null;
+      busy = false;
+      outcome = null;
+      outcomeMsg = "";
       if (dismissTimer) {
         clearTimeout(dismissTimer);
         dismissTimer = undefined;
@@ -62,22 +67,28 @@
 
   async function decide(allowed: boolean): Promise<void> {
     if (!pending || busy) return;
+    const request = pending;
     busy = true;
     try {
-      await invoke("bridge_approve", { token: pending.token, allowed });
+      await invoke("bridge_approve", { token: request.token, allowed });
+      if (pending !== request) return;
       outcome = "ok";
       outcomeMsg = allowed ? t(lang, "approval.allowed") : t(lang, "approval.denied");
     } catch (e) {
+      if (pending !== request) return;
       outcome = "expired";
       outcomeMsg = String(e);
     } finally {
-      busy = false;
+      if (pending === request) busy = false;
     }
+    if (pending !== request) return;
     if (dismissTimer) clearTimeout(dismissTimer);
     dismissTimer = setTimeout(() => {
+      if (pending !== request) return;
       pending = null;
       outcome = null;
       outcomeMsg = "";
+      dismissTimer = undefined;
     }, 1400);
   }
 </script>
