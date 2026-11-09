@@ -60,6 +60,7 @@ const SIDE_CHANNEL_BYTES: usize = 8;
 /// on an already-buffered message cannot bound memory, so a local process could
 /// hand us a multi-gigabyte frame before the check ever ran.
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
+const MAX_HEAD_BYTES: usize = 64 * 1024;
 
 /// Event emitted to the frontend so the side-channel password can be shown.
 /// Payload: `{ password, expiresInSecs }` — never persisted, never logged.
@@ -323,18 +324,36 @@ const PROBE_404_RESPONSE: &[u8] = b"HTTP/1.1 404 Not Found\r\nAccess-Control-All
 /// client is asking for a WebSocket upgrade; nothing is consumed from the
 /// stream, so the head is still visible to tungstenite afterwards.
 fn is_websocket_upgrade(stream: &mut TcpStream) -> bool {
-    let mut head = Vec::new();
-    let mut buf = [0u8; 2048];
-    while !head.windows(4).any(|w| w == b"\r\n\r\n") && head.len() < 64 * 1024 {
-        match stream.peek(&mut buf) {
+    // Every peek starts at the same unread byte. Replace the snapshot instead
+    // of appending duplicates; keep the head/frame bytes for tungstenite.
+    let mut head = vec![0u8; MAX_HEAD_BYTES + 1];
+    let deadline = Instant::now() + HANDSHAKE_TIMEOUT;
+    loop {
+        let n = match stream.peek(&mut head) {
             Ok(0) => return false,
-            Ok(n) => head.extend_from_slice(&buf[..n]),
+            Ok(n) => n,
             Err(_) => return false,
+        };
+        if let Some(end) = head[..n].windows(4).position(|w| w == b"\r\n\r\n") {
+            if end + 4 > MAX_HEAD_BYTES {
+                return false;
+            }
+            return String::from_utf8_lossy(&head[..end])
+                .lines()
+                .skip(1)
+                .filter_map(|line| line.split_once(':'))
+                .any(|(name, value)| {
+                    name.eq_ignore_ascii_case("upgrade")
+                        && value.trim().eq_ignore_ascii_case("websocket")
+                });
         }
+        if n >= MAX_HEAD_BYTES || Instant::now() >= deadline {
+            return false;
+        }
+        // Nonempty peek data stays readable even when no new byte arrives.
+        // Avoid spinning while awaiting the remaining bounded request head.
+        std::thread::sleep(Duration::from_millis(5));
     }
-    String::from_utf8_lossy(&head)
-        .to_ascii_lowercase()
-        .contains("upgrade: websocket")
 }
 
 /// Serve one inbound connection: plain-HTTP port probes get Kee's expected
