@@ -267,7 +267,7 @@
       <span class="all-name">{t(lang, "group.allEntries")}</span>
       <span class="all-count">{total}</span>
     </button>
-    {#each root.children as child (child.uuid)}
+    {#each orderedChildren(root) as child (child.uuid)}
       <GroupNode
         group={child}
         depth={0}

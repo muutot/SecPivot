@@ -6,6 +6,9 @@ This reference is a source map, not a substitute for reading the current files. 
 persisted expansion flags; existing collapsed groups must never auto-expand as
 if they were newly inserted groups.
 
+Both root and recursive tree rendering use `orderedChildren` to place the
+recycle bin last without changing the database's stored child order.
+
 ## Runtime surfaces
 
 | Surface             | Entry point                                                                                         | Responsibility                                                                                                                                                                                                                                                                          |

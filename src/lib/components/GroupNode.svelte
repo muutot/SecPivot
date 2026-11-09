@@ -348,7 +348,7 @@
 </div>
 
 {#if isExpanded}
-  {#each group.children as child (child.uuid)}
+  {#each orderedChildren(group) as child (child.uuid)}
     <GroupNode
       group={child}
       depth={depth + 1}
