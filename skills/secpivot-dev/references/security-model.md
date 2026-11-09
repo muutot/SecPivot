@@ -82,8 +82,14 @@ read failure. Browser read/write still cannot provide a native atomic compare.
 Scheduled text and entry-exchange wipes share one worker and one pending
 deadline in `commands/clipboard/scheduler.rs`. Replacing/cancelling drops the
 pending 32-byte fingerprint immediately; an in-flight task rechecks generation
-before acquiring the clipboard and inside its native predicate. No clipboard
-I/O holds the scheduler mutex. Unsupported platforms never start a native worker. Renderer hashing results are rejected after explicit clear, and
+before acquiring the clipboard and inside its native predicate. Each command
+reserves its generation before fingerprinting, native reads or lazy worker
+creation, then installs only if that reservation is still current. Cancellation
+creates only scheduler state, never a worker, so first-worker initialization
+cannot hide a cancel and late preparation cannot supersede a newer request.
+This orders backend reservations, not renderer writes or IPC arrival across
+processes. No clipboard I/O holds the scheduler mutex. Unsupported platforms
+never start a native worker. Renderer hashing results are rejected after explicit clear, and
 Web Crypto unavailability never falls back to retaining plaintext. Native
 explicit clear returns false on unsupported platforms, allowing renderer clear.
 Legacy execCommand failure is reported and its textarea is emptied/removed in

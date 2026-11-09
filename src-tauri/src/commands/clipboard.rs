@@ -57,12 +57,22 @@ struct WipeTask {
     fingerprint: WipeFingerprint,
 }
 
-static WIPE_SCHEDULER: OnceLock<Result<Arc<LatestDeadline<WipeTask>>, String>> = OnceLock::new();
+static WIPE_SCHEDULER: OnceLock<Arc<LatestDeadline<WipeTask>>> = OnceLock::new();
+static WIPE_WORKER: OnceLock<Result<(), String>> = OnceLock::new();
 
-fn wipe_scheduler() -> Result<&'static Arc<LatestDeadline<WipeTask>>, String> {
-    WIPE_SCHEDULER
-        .get_or_init(|| LatestDeadline::start(perform_wipe).map(|(scheduler, _worker)| scheduler))
+fn wipe_scheduler() -> &'static Arc<LatestDeadline<WipeTask>> {
+    WIPE_SCHEDULER.get_or_init(LatestDeadline::new)
+}
+
+fn ensure_wipe_worker() -> Result<(), String> {
+    WIPE_WORKER
+        .get_or_init(|| {
+            wipe_scheduler()
+                .start_worker(perform_wipe)
+                .map(|_worker| ())
+        })
         .as_ref()
+        .copied()
         .map_err(Clone::clone)
 }
 
@@ -111,10 +121,7 @@ fn should_wipe(is_current: bool, fingerprint: &WipeFingerprint, current: Option<
 /// Cancel without creating a worker when no wipe has ever been scheduled.
 #[tauri::command]
 pub(crate) fn clipboard_cancel_scheduled_wipe() -> Result<(), String> {
-    match WIPE_SCHEDULER.get() {
-        Some(Ok(scheduler)) => scheduler.cancel(),
-        _ => Ok(()),
-    }
+    wipe_scheduler().cancel()
 }
 
 /// One shared worker survives renderer death. Zero seconds cancels an older
@@ -122,25 +129,32 @@ pub(crate) fn clipboard_cancel_scheduled_wipe() -> Result<(), String> {
 #[tauri::command]
 pub(crate) fn clipboard_schedule_wipe(text: String, seconds: u64) -> Result<(), String> {
     let text = Zeroizing::new(text);
+    let scheduler = wipe_scheduler();
+    let generation = scheduler.reserve()?;
     if seconds == 0 || !cfg!(target_os = "windows") {
-        return clipboard_cancel_scheduled_wipe();
+        return Ok(());
     }
     let fingerprint = WipeFingerprint::from_bytes(text.as_bytes());
     drop(text);
-    wipe_scheduler()?.schedule(
-        WipeTask {
-            format: ClipboardFormat::Text,
-            fingerprint,
-        },
-        Duration::from_secs(seconds),
-    )
+    ensure_wipe_worker()?;
+    scheduler
+        .schedule_reserved(
+            generation,
+            WipeTask {
+                format: ClipboardFormat::Text,
+                fingerprint,
+            },
+            Duration::from_secs(seconds),
+        )
+        .map(|_installed| ())
 }
 
 /// Binary entry exchange uses the same latest-task slot as text. Its
 /// short-lived read is zeroized before retaining only a fingerprint.
 #[tauri::command]
 pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), String> {
-    clipboard_cancel_scheduled_wipe()?;
+    let scheduler = wipe_scheduler();
+    let generation = scheduler.reserve()?;
     if seconds == 0 || !cfg!(target_os = "windows") {
         return Ok(());
     }
@@ -151,13 +165,17 @@ pub(crate) fn clipboard_schedule_exchange_wipe(seconds: u64) -> Result<(), Strin
     let ours = Zeroizing::new(ours);
     let fingerprint = WipeFingerprint::from_bytes(ours.as_slice());
     drop(ours);
-    wipe_scheduler()?.schedule(
-        WipeTask {
-            format: ClipboardFormat::Entries,
-            fingerprint,
-        },
-        Duration::from_secs(seconds),
-    )
+    ensure_wipe_worker()?;
+    scheduler
+        .schedule_reserved(
+            generation,
+            WipeTask {
+                format: ClipboardFormat::Entries,
+                fingerprint,
+            },
+            Duration::from_secs(seconds),
+        )
+        .map(|_installed| ())
 }
 
 #[cfg(test)]
