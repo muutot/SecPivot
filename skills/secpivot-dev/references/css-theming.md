@@ -30,6 +30,11 @@ Preserve these characteristics unless the task explicitly requests a redesign:
 - **Narrow settings layout (`@media (max-width: 720px)`):** `SettingsDialog` removes the fixed 168px grid column and lets the content pane fill the viewport. A menu button in the section header opens the primary-category sidebar as a left drawer; the backdrop and category selection close it. The secondary category row remains single-line and horizontally scrollable when needed.
 - Motion is short and functional. Respect the global reduced-motion rule.
 
+The detail history hint describes the database's count and size limits. Do not
+hard-code a version count or promise that the pre-restore version is always
+retained: the configured limits also apply to restore snapshots. Keep this
+copy in the existing muted `.history-hint` paragraph in both locales.
+
 ## Theme color contract
 
 The `ThemeColors` interface has 21 semantic values (identical names to Clipboard plus `linkColor` for URL/contact links):
