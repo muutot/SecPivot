@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S11；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S12；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 14     | 14        | 0         |
+| Medium    | 15     | 15        | 0         |
 | Low       | 3      | 3         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **22** | **22**    | **0**     |
+| **Total** | **23** | **23**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -110,7 +110,7 @@ Svelte 5 主页面/独立窗口 → services/vault 与 invoke → commands → V
 
 ## 4. Detailed Findings
 
-原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S11 与最新验证记录放在补充证据部分。
+原 15 张卡片的问题描述与源码位置保留修复前证据；SP-15 的 Status 已明确标出本轮复核变化。新增 SP-S05–SP-S12 与最新验证记录放在补充证据部分。
 
 ### Finding: SP-01 远程提交成功后本地镜像失败，活动会话保留旧密钥和同步基线
 
@@ -991,3 +991,41 @@ clippy 全通过。此前一次 npm run check 在 Svelte 启动阶段报 Node Zo
 引用，TODO 保留 native 多窗口 pending。报告/metadata 当前卡片 **22**，原始
 15 项/6.1 分基线保持不变；手机另存为新 APK 与设备、SAF provider、跨 renderer
 剪贴板、竞品导入与完整 UI/语义覆盖继续推进。
+
+### Finding: SP-S12 文本导入未接 Android 文档读取，过期选择仍读取明文（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Frontend State / Privacy
+- Status: Confirmed（主机源码/服务回归通过；Android provider 运行待验证）
+- Affected area: native text-import picker and URI read boundary
+- Evidence:
+  - File: `src/lib/services/io.ts:174`、`src/lib/services/saf.ts:16`、`src-tauri/src/commands/entries.rs:465`（`825d15b` 修复前源码）
+  - Function / Module: `pickImportFile` / `openDocument` / `read_text_file`
+  - Relevant behavior: 所有 Tauri 平台都调用 dialog open；`read_text_file` 从路径扩展名过滤后直接调用 std::fs，无法处理 Android 的 content URI。已有 vault SAF 服务只暴露 KDBX MIME 默认集，文本导入未调用它。选择返回后立即读文件，outer awaitCurrentView 直到读取结束才拒绝过期结果。
+  - Reproduction: `tests/io-picker.test.mjs` 运行生产 io/settings/saf 模块，仅替换 navigator 与 Tauri invoke。修复前六项中三项失败：Android 首次调用为 `plugin:dialog|open`；Android、Windows 的 A→B→A 旧选择均启动 `read_text_file`。取消、桌面正常选择、当前错误提示对照通过，见 `io-picker-red.log`。URI/文件名适配缺口由前后端控制流直接确认，未将主机替身当成 Android 真机故障复现。
+- Problem: Android 文本导入缺少可用文档读取链路；已结束的可见会话仍能因迟到选择而把外部明文读入 renderer，尽管后续数据库写入已被守卫阻止。
+- Why it matters: 手机用户无法按现有菜单完成 CSV/XML/Bitwarden JSON/1PIF 导入；锁库或切库后不必要的明文读取延长敏感数据生命周期。未观察用户凭据泄漏、原生选择器异常或数据库误写，不提高为 High。
+- Realistic failure scenario: 手机选择云端 provider 的导出文件；返回的是无扩展名的 content URI，旧后端按本地路径处理失败。另一场景是桌面/手机打开导入选择器后切换或关闭数据库，返回旧选择仍读取明文；回到同一 tab id 也无法恢复原视图授权。
+- Minimal fix: Android 调用 SAF 并传文本格式 MIME，携带 provider DISPLAY_NAME 到读命令；local path 仍按真实扩展名过滤，URI 用显示名过滤。后端走统一有界 reader，严格 UTF-8；原生 picker 返回后先检查原视图，读完成后继续使用既有 completion guard。
+- Better long-term fix: 在真实 APK 上验证云端/本地 provider 的显示名、读取、取消和授权撤销；随后补齐附件及明文导出的 SAF 写入。格式过滤不能替代文件访问授权，不为本项新增广泛路径权限。
+- Regression test suggestion: 六项实际服务测试覆盖四种格式的 MIME/URI/显示名、取消、两平台 A→B→A 无读取、桌面对话框过滤和当前错误提示。后端验证 URI 名称缺失/不支持、local path 不能由 fileName 覆盖、8 MiB 上限、非法 UTF-8 不回显内容；共享 reader 的真实临时文件在 metadata 成功后增长仍被拒绝。旧 read_text_file 的并发增长未单独复现，不另计 Confirmed 漏洞。
+- Estimated effort: 1–2 小时（源码与主机验证）；真机复测另行安排
+
+`288b224` 已提交 SP-S12 的文本导入修正。`saf.openDocument(mimeTypes?)` 默认
+仍用于 KDBX，文本导入按格式传 MIME 并兼容 text/plain/octet-stream，XML 同时
+允许 application/xml 与 text/xml。`read_text_file({path,fileName?})` 对 URI
+使用 provider 显示名，对本地路径只认可真实扩展名；缺名/不支持格式在读前失败。
+8 MiB ceiling 由共享 file_io reader 在流式读取中执行，UTF-8 错误只含通用提示。
+原生选择结果先检查发起 view epoch，避免 A→B→A 后读取旧选文件；读取完成
+仍由既有 guard 拒绝过期结果。导入文件不写入最近数据库记录。未改 Kotlin、
+markup 或 CSS，未以本次结果扩大界面/原生平台覆盖声明。
+
+完整 `npm run verify` 通过，日志 `verify-text-import-saf.log`：格式、Svelte
+check、150 键契约、构建、前端 **263**、Rust **525 + ACL 2**、clippy 均通过。
+提交前格式检查也通过；documentation currency gate 同步 data-contracts、
+security-model 与 docs/android.md。当前详细卡片 **23**（High 5 / Medium 15 /
+Low 3，全部 Confirmed），原始 15 项/6.1 分不变。用户手机 v1.6.5 的另存为
+仍需包含 ACL 修复的新 APK 和真机选择器/provider 验证；本次不标记已解决。
+CSV/XML/HTML 导出与附件保存的 std::fs/桌面对话框链路仍待补齐；native XML、
+1PUX、跨 renderer 剪贴板、完整语义/界面覆盖继续推进，整体目标保持 active。

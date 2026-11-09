@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S11; historical supplemental tracking notes excluded",
-    "total": 22,
-    "confirmed": 22,
+    "scope": "15 baseline cards plus SP-S05 through SP-S12; historical supplemental tracking notes excluded",
+    "total": 23,
+    "confirmed": 23,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 14,
+      "Medium": 15,
       "Low": 3
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "a02c759",
+  "remediation_checkpoint": "288b224",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -151,15 +151,24 @@
       "source_checkpoint": "79f48c8",
       "status": "current-renderer follow-up fixed: completed current copy hook, active-id + path continuous ownership, topology queue predicate and failure cleanup; four baseline regressions failed, all eight actual-service regressions passed; browser path intermediate failure fixed; native multi-window authorization remains unverified",
       "commit": "a02c759"
+    },
+    {
+      "id": "SP-S12",
+      "area": "Android text import lacks SAF URI reading and obsolete native picker results still read plaintext",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "825d15b",
+      "commit": "288b224",
+      "status": "three actual-service baseline assertions failed; six picker tests and bounded reader/name/UTF-8 checks passed; full host verify passed; Android APK/provider runtime and text/attachment exports remain pending"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "a02c759",
-    "log": "verify-sensitive-copy-owner-final.log",
-    "frontend_tests": 257,
-    "rust_unit_tests": 522,
+    "checkpoint": "288b224",
+    "log": "verify-text-import-saf.log",
+    "frontend_tests": 263,
+    "rust_unit_tests": 525,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -211,6 +220,7 @@
     "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending",
     "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests",
     "79f48c8 orders same-renderer text writes and conditional/explicit clears; first two real-module regressions failed before source remediation. A third intermediate-fix regression caught delayed vault close while awaiting pending writes; closeAll now starts independently. Six new frontend regressions passed; full verify 249 frontend, 522 Rust, ACL 2. SP-11 remains partial for cross-window/native binary/external sequence ownership.",
-    "a02c759 admits lock-after-copy only for completed current copy and continuous active-id/path view; ownership rechecked inside topology queue before backend close. Four old service regressions failed, eight final tests passed including cancellation/queued open/A-B-A/current/failure/browser path/no Web Crypto. One transient Node Zone Allocation failure on npm check was followed by unchanged-code check and full verify success; no application OOM attribution. Native multi-window behavior remains pending."
+    "a02c759 admits lock-after-copy only for completed current copy and continuous active-id/path view; ownership rechecked inside topology queue before backend close. Four old service regressions failed, eight final tests passed including cancellation/queued open/A-B-A/current/failure/browser path/no Web Crypto. One transient Node Zone Allocation failure on npm check was followed by unchanged-code check and full verify success; no application OOM attribution. Native multi-window behavior remains pending.",
+    "288b224 routes Android text imports through the existing SAF picker and bounded file adapter, preserving default KDBX filters and using provider display names only for URI format checks. Native picker completion checks view before plaintext read; A-B-A regressions failed on both Android/Windows seams before remediation. Six real-service picker tests and three new Rust checks passed, full verify 263 frontend/525 Rust/ACL2. Shared capped-reader growth test uses a real temporary file; old read_text_file race not separately reproduced. No Kotlin changes, native APK/device validation, user vaults or OS clipboard access; mobile export/attachment writer paths remain pending."
   ]
 }
