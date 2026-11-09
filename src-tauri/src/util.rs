@@ -24,17 +24,17 @@ pub fn url_host(url: &str) -> Option<String> {
     (!host.is_empty()).then_some(host)
 }
 
-/// Write `bytes` to `path` atomically: write to a sibling `.tmp` file, flush
+/// Write `bytes` to `path` atomically: write to a unique sibling `.tmp` file, flush
 /// it, then rename it over the target so readers never observe a half-written
 /// file. On any failure the temp file is removed. `what` names the file type
 /// in the user-facing error messages (e.g. `"配置"`, `"数据库"`).
 pub fn atomic_write(path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
-    let tmp = temp_sibling(path);
+    let tmp = temp_sibling(path).map_err(|e| format!("写入{what}失败: {e}"))?;
     // The temp file holds the new content in clear (it is an encrypted vault,
     // but the same helper writes other files too), so it is created with
     // owner-only permissions instead of the process umask. `create_new` also
-    // refuses to follow a pre-planted symlink; a leftover temp file from a
-    // crashed run is removed and recreated once.
+    // refuses to follow a pre-planted symlink. Each write owns a fresh random
+    // sibling, so concurrent writes cannot remove or truncate one another's temp.
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -42,38 +42,27 @@ pub fn atomic_write(path: &Path, bytes: &[u8], what: &str) -> Result<(), String>
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
+    // Only a successfully created file belongs to this operation. A collision
+    // fails without deleting an existing file, including legacy fixed siblings.
+    let mut file = options
+        .open(&tmp)
+        .map_err(|e| format!("写入{what}失败: {e}"))?;
     let write = (|| -> std::io::Result<()> {
         use std::io::Write;
-        let mut file = match options.open(&tmp) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                let _ = std::fs::remove_file(&tmp);
-                options.open(&tmp)?
-            }
-            Err(e) => return Err(e),
-        };
         file.write_all(bytes)?;
         // The mode is only applied at creation; set it explicitly as well so
         // a recreated temp file can never keep a wider mode.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
         }
-        Ok(())
+        // Flush the exact handle that received the bytes; reopening a path can
+        // accidentally sync another writer's file. Windows requires write access.
+        file.sync_all()
     })();
+    drop(file);
     if let Err(e) = write {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!("写入{what}失败: {e}"));
-    }
-    // Durability: flush the temp file before renaming so a crash/power loss
-    // cannot leave the target empty or stale. The handle must be writable for
-    // `sync_all` (FlushFileBuffers) on Windows.
-    let sync = std::fs::OpenOptions::new()
-        .write(true)
-        .open(&tmp)
-        .and_then(|f| f.sync_all());
-    if let Err(e) = sync {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("写入{what}失败: {e}"));
     }
@@ -90,12 +79,14 @@ pub fn atomic_write(path: &Path, bytes: &[u8], what: &str) -> Result<(), String>
     Ok(())
 }
 
-/// `<name>.<ext>.tmp` sibling for an atomic write (`config.json` →
-/// `config.json.tmp`, `vault.kdbx` → `vault.kdbx.tmp`).
-fn temp_sibling(path: &Path) -> PathBuf {
+/// A random sibling per write; `create_new` remains the final ownership check.
+fn temp_sibling(path: &Path) -> Result<PathBuf, String> {
+    let mut nonce = [0u8; 16];
+    getrandom::getrandom(&mut nonce).map_err(|e| format!("无法生成临时文件名称: {e}"))?;
+    let nonce: String = nonce.iter().map(|byte| format!("{byte:02x}")).collect();
     let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
+    name.push(format!(".{nonce}.tmp"));
+    Ok(path.with_file_name(name))
 }
 
 #[cfg(test)]
@@ -127,11 +118,55 @@ mod tests {
         let path = dir.path().join("test.kdbx");
         atomic_write(&path, b"first", "数据库").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"first");
-        assert!(!dir.path().join("test.kdbx.tmp").exists());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
 
         atomic_write(&path, b"second", "数据库").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"second");
-        assert!(!dir.path().join("test.kdbx.tmp").exists());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn parallel_atomic_writes_use_independent_temporary_files() {
+        use std::sync::Barrier;
+        let dir = tempfile::tempdir().unwrap();
+        for attempt in 0..20 {
+            let path = dir.path().join(format!("fixture-{attempt}.csv"));
+            std::fs::write(&path, b"original").unwrap();
+            let barrier = Barrier::new(3);
+            let results = std::thread::scope(|scope| {
+                let tasks: Vec<_> = (b'A'..=b'C')
+                    .map(|tag| {
+                        let path = &path;
+                        let barrier = &barrier;
+                        scope.spawn(move || {
+                            let payload = vec![tag; 128 * 1024];
+                            barrier.wait();
+                            atomic_write(path, &payload, "fixture")
+                        })
+                    })
+                    .collect();
+                tasks
+                    .into_iter()
+                    .map(|task| task.join().unwrap())
+                    .collect::<Vec<_>>()
+            });
+            assert!(results.iter().all(Result::is_ok), "{results:?}");
+            let stored = std::fs::read(&path).unwrap();
+            assert_eq!(stored.len(), 128 * 1024);
+            assert!((b'A'..=b'C').any(|tag| stored.iter().all(|&byte| byte == tag)));
+        }
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 20);
+    }
+
+    #[test]
+    fn atomic_write_never_removes_a_legacy_sibling() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fixture.csv");
+        let legacy = dir.path().join("fixture.csv.tmp");
+        std::fs::write(&legacy, b"another writer's file").unwrap();
+        atomic_write(&path, b"new", "fixture").unwrap();
+        assert_eq!(std::fs::read(&legacy).unwrap(), b"another writer's file");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
     }
 
     #[test]
