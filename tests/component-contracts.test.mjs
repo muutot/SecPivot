@@ -17,7 +17,7 @@ test("nested group nodes forward every metadata action", async () => {
     "utf8",
   );
   const recursiveBlock = source.match(
-    /\{#each group\.children as child \(child\.uuid\)\}([\s\S]*?)\{\/each\}/,
+    /\{#each [^\n]+ as child \(child\.uuid\)\}([\s\S]*?)\{\/each\}/,
   );
 
   assert.ok(recursiveBlock, "recursive GroupNode block must exist");
