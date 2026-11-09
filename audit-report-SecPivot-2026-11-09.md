@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S39；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S40；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 28     | 28        | 0         |
+| Medium    | 29     | 29        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **50** | **50**    | **0**     |
+| **Total** | **51** | **51**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2125,3 +2125,37 @@ red 证据区分。未执行原生 KeePass 客户端：现存参考 ZIP 无法�
 完整历史恢复、外部附件修改快照及其余系统/UI 审计继续进行；手机 v1.6.5
 云端库另存为仍缺新版 APK/选择器/provider 真机证据。原始基线和评分不变，
 目标继续 active。本报告更新不改变产品契约，无额外 reference 修改需要。
+
+### Finding: SP-S40 恢复历史版本仍保留当前附件集合（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Testing authenticity / Domain compatibility
+- Status: Confirmed
+- Affected area: Native restore_entry_version and its regression expectations
+- Evidence:
+  - File: `src-tauri/src/vault/entries.rs:761–839`、`src-tauri/src/vault/tests.rs:1463–1472`（`141ba99` 修复前）；`src/lib/services/vault.ts:1697`、`src/lib/i18n/zh-CN.ts:154`
+  - Function / Module: VaultSession::restore_entry_version / entry_history_tracks_versions_and_restores
+  - Relevant behavior: 恢复命令替换 fields/attributes 却不触及 attachments；命令返回成功，UI 提示已恢复历史版本，原测试明确要求附件保留当前值。
+  - Reproduction: 实际原生保存重开的合成库包含同名新/旧附件与增删附件；恢复后字段变旧，但同名附件仍为新内容。`restore-attachment-set-red.log` exit 101，1 fail；加强原测试的空附件恢复期望后，`restore-empty-attachment-set-red.log` exit 101，1 fail，新附件仍存在。旧历史仍可读取，因此没有归类为不可恢复的数据丢失。
+  - Independent reference: 官方 KeePass PwEntry.cs 固定 commit `d1eec63f1bd73dc2d5273eaf94528f616b553ce5`（SHA256 `a68f2d7df7a0d49940b63387ed20634f849e60de6f4bb01c4f0ab8a4becba230`），RestoreFromBackup:607–619 调 AssignProperties，后者第 510 行 CloneDeep Binaries。未执行原生 KeePass 客户端。
+- Problem: 恢复后的当前记录混合旧字段和新附件，成功提示与实际恢复范围不一致。
+- Why it matters: 用户依靠历史回滚附件变更时会得到错误版本；绿测试固定了不完整行为，不能证明恢复保真。影响是已确认的恢复功能缺口，不是远程攻击或旧数据必然丢失。
+- Realistic failure scenario: 把附件从旧合同改为新合同，选择旧历史恢复后保存重开，字段显示旧版本，但附件仍是新合同；或恢复无附件版本后附件仍残留。
+- Minimal fix: 变更前在原生会话复制历史 binary Values，保留 protection flags，再替换完整附件集合；追踪 scope 保留恢复前附件供撤销，现有历史限制继续生效。
+- Better long-term fix: 独立检查所有历史 mutation 和保留边界；格式/源码对照不替代原生客户端互操作和 UI 运行验证。
+- Regression test suggestion: 同名替换、旧附件被移除、新附件新增、Unicode/空二进制、双 protection flags、空集合恢复、限制为 1 时清理所选历史、保存重开与撤销恢复均保持准确值；普通 DTO 只带附件名字/大小。
+- Estimated effort: 1–2 小时（原生恢复、KDBX 回归及契约同步）
+
+`b5bec5c` 已替换历史恢复的完整附件集合，保留原 protection flags；
+恢复前附件进入 undo 快照，原数量/大小限制继续应用。27 项历史相关
+回归与完整 `verify-restore-attachment-set.log` exit 0 通过：316 frontend、
+583 Rust、ACL 2，串行且无外部过滤，四个 live clipboard body 默认跳过。
+新增恢复回归覆盖数量上限 10/1、同名变更/新增/移除、Unicode 空附件、
+保护/非保护标记、保存重开与撤销；没有真实用户库、剪贴板、原生客户端
+或手机运行证据。data/security 引用与 partial TODO 同步。
+
+中途两个更严格的历史清理期望失败：当前源码将数量 0 当无限且大小
+不足时仍保留最新一版；官方源码语义不同。这是下一项独立兼容性复核，
+不能由附件恢复通过推断这些边界已修复。本报告提交不改变契约，无新
+reference 修改需要；基线与评分保持不变，目标仍 active。

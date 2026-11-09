@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S39; historical supplemental tracking notes excluded",
-    "total": 50,
-    "confirmed": 50,
+    "scope": "15 baseline cards plus SP-S05 through SP-S40; historical supplemental tracking notes excluded",
+    "total": 51,
+    "confirmed": 51,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 28,
+      "Medium": 29,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "4fbc748",
+  "remediation_checkpoint": "b5bec5c",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S40",
+      "area": "History restore mixes old fields with current attachment set",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "141ba99",
+      "commit": "b5bec5c",
+      "status": "Confirmed and remediated. One actual restored/reopened old binary regression and one strengthened empty-set regression failed before fix. Historical binary Values now resolve in-session before mutation, preserving protection flags and replacing the entire set, with undo subject to existing retention. Twenty-seven history tests and full verify 316/583/ACL2 passed. Old historical values were retained before this fix; no irreversible-loss classification. Two interim assumptions about strict zero/size retention exposed a separate compatibility candidate; final restore regression covers caps 10/1. Native KeePass/Android/UI runtime not exercised."
+    },
     {
       "id": "SP-S39",
       "area": "Sparse KDBX4 binary references corrupt other current attachments after recycle cleanup",
@@ -404,10 +413,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "4fbc748",
-    "log": "verify-attachment-integrity-final.log",
+    "checkpoint": "b5bec5c",
+    "log": "verify-restore-attachment-set.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 582,
+    "rust_unit_tests": 583,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -437,7 +446,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 582,
+    "rust_unit_tests_discovered": 583,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -518,6 +527,14 @@
       "provenance_gate": "npm run verify:keepass-patch: 60 verified files, 3 reviewed patches",
       "reconstruction": "Fresh original archive plus git -c core.autocrlf=false apply --unidiff-zero: all 60 SHA256 hashes match",
       "scope": "Synthetic vaults and source references; no user vault, shared clipboard, native KeePass client, Android APK/device or provider I/O"
+    },
+    "history_attachment_restore": {
+      "result": "passed",
+      "red_logs": ["restore-attachment-set-red.log", "restore-empty-attachment-set-red.log"],
+      "green_log": "restore-attachment-history-green-final.log",
+      "history_tests": 27,
+      "scope": "Actual native synthetic KDBX save/reopen, replacement/removal/addition, empty values, both protection flags, undo and caps 10/1; no native client/device/UI or user vault/clipboard",
+      "limits": "Two interim tests expected stricter retention than current source implements; separate count/size compatibility audit is pending"
     }
   },
   "reverification_notes": [
@@ -573,6 +590,7 @@
     "34b6768 fixes SP-S32 transient tip text contrast using existing primary text token. Independent Edge measured 12/18 baseline failures and 18/18 green passes, including actual import errors/success. Eighteen screenshots inspected; check/build/format passed; full gate remains at 414e049 until a later integration run. Original baseline unchanged, goal active; long-message geometry and Android Save As device/APK remain pending.",
     "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending.",
     "ed5a86d fixes SP-S34 favorite loss across structured and CSV import, frontend metadata and native/browser bulk creation. Three native and three frontend red-to-green plus invalid localized CSV regression passed; six favorite Rust tests and real chooser/icon checks passed. Full verify 316/564/ACL2 exit 0 with four live clipboard bodies skipped. Source docs/TODO synchronized; original baseline preserved. Official JSON excludes trash and includes passwordHistory; attachments belong to ZIP, so initial deleted-item hypothesis is not promoted. Full migration/mobile Save As/remaining system/UI audit still active.",
-    "4fbc748 fixes SP-S38/SP-S39 together as one complete attachment invariant. Valid native history red had three failures; sparse-ID loss reproduced independently with original registry crate. First full gate had one S3 100-page fixture connection failure at page 82; unchanged isolated fixture and serial final full gate passed, without attributing the single failure to product or environment. Final verify 316/582/ACL2 and two dedicated dependency tests passed; four live clipboard bodies skipped. Early fixture compile failures and blanket rustfmt drift were corrected; 57 upstream files restored and provenance gate passed. Initial optional patch reconstruction had only CRLF differences on three files; explicit core.autocrlf=false fresh reconstruction verified all 60 hashes. Data/security/structure/maintenance references and partial history TODO synchronized. Full attachment restore, imports, remaining system/UI coverage and v1.6.5 mobile Save As APK/device remain pending; baseline b7c5d9f and 6.1 score unchanged."
+    "4fbc748 fixes SP-S38/SP-S39 together as one complete attachment invariant. Valid native history red had three failures; sparse-ID loss reproduced independently with original registry crate. First full gate had one S3 100-page fixture connection failure at page 82; unchanged isolated fixture and serial final full gate passed, without attributing the single failure to product or environment. Final verify 316/582/ACL2 and two dedicated dependency tests passed; four live clipboard bodies skipped. Early fixture compile failures and blanket rustfmt drift were corrected; 57 upstream files restored and provenance gate passed. Initial optional patch reconstruction had only CRLF differences on three files; explicit core.autocrlf=false fresh reconstruction verified all 60 hashes. Data/security/structure/maintenance references and partial history TODO synchronized. Full attachment restore, imports, remaining system/UI coverage and v1.6.5 mobile Save As APK/device remain pending; baseline b7c5d9f and 6.1 score unchanged.",
+    "b5bec5c fixes SP-S40 native attachment-set restoration and corrects the existing green-test expectation that had required keeping newer attachments. Twenty-seven history tests passed; full verify 316/583/ACL2 exit 0, four native clipboard live bodies opted out. Original binary flags and empty/Unicode filenames survive save/reopen and undo with count limits 10/1. Contract/security references and partial history TODO updated. Intermediate strict-retention expectations exposed separate zero-count/minimum-one size behavior; no claim those cases are fixed here. New binary buffers stay within the session, no IPC schema/UI/vendor/dependency change. Baseline and score unchanged; full audit goal active, external attachment snapshots and mobile v1.6.5 Save As APK/device still pending."
   ]
 }
