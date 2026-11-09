@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { get } from "svelte/store";
 import { isTauriRuntime, appSettings } from "$lib/services/settings";
 import { t } from "$lib/i18n";
+import type { TipKind } from "$lib/services/tips";
 import { vault } from "$lib/services/vault";
 import {
   LatestOperationGuard,
@@ -36,7 +37,7 @@ export type FaviconFlowHost = {
   operations: LatestOperationGuard;
   isBusy: () => boolean;
   setBusy: (busy: boolean) => void;
-  notify: (message: string) => void;
+  notify: (message: string, kind?: TipKind) => void;
   setDialog: (state: FaviconDialogState | null) => void;
 };
 
@@ -50,7 +51,10 @@ export async function runFaviconDownload(
 ): Promise<void> {
   if (host.isBusy()) return;
   if (!isTauriRuntime()) {
-    host.notify(t(lang(), "browser.unsupported", { feature: t(lang(), "browser.featFavicon") }));
+    host.notify(
+      t(lang(), "browser.unsupported", { feature: t(lang(), "browser.featFavicon") }),
+      "error",
+    );
     return;
   }
   const view: SessionViewToken | null = host.sessionView.capture();

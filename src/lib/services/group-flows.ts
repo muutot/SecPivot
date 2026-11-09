@@ -8,6 +8,7 @@
 import { get } from "svelte/store";
 import { appSettings } from "$lib/services/settings";
 import { t } from "$lib/i18n";
+import type { TipKind } from "$lib/services/tips";
 import { vault } from "$lib/services/vault";
 import {
   LatestOperationGuard,
@@ -21,7 +22,7 @@ export type GroupFlowHost = {
   createOperations: LatestOperationGuard;
   /** Busy token for the group-icon dialog. */
   iconOperations: LatestOperationGuard;
-  notify: (message: string) => void;
+  notify: (message: string, kind?: TipKind) => void;
   /** Register a confirmation dialog; `onconfirm` runs only on approval. */
   ask: (message: string, onconfirm: () => Promise<void>) => void;
 };
@@ -69,7 +70,7 @@ export async function createGroupFlow(
     host.notify(t(lang(), "groupflow.created"));
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.createFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.createFailed", { e: String(e) }), "error");
   } finally {
     if (host.sessionView.isCurrent(view) && host.createOperations.isCurrent(operation)) {
       params.resetBusy();
@@ -89,7 +90,7 @@ export async function renameGroupFlow(
     host.notify(t(lang(), "groupflow.renamed"));
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.renameFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.renameFailed", { e: String(e) }), "error");
   }
 }
 
@@ -116,7 +117,7 @@ export async function saveGroupMetaFlow(
     return true;
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.metaFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.metaFailed", { e: String(e) }), "error");
     return false;
   }
 }
@@ -145,7 +146,7 @@ export async function changeGroupIconFlow(
     host.notify(t(lang(), "groupflow.iconUpdated"));
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.iconFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.iconFailed", { e: String(e) }), "error");
   } finally {
     if (host.sessionView.isCurrent(view) && host.iconOperations.isCurrent(operation)) {
       params.resetBusy();
@@ -179,7 +180,7 @@ export function confirmDeleteGroupFlow(
       host.notify(t(lang(), permanent ? "groupflow.deletedPerm" : "groupflow.deletedBin"));
     } catch (e) {
       if (host.sessionView.isCurrent(view))
-        host.notify(t(lang(), "groupflow.deleteFailed", { e: String(e) }));
+        host.notify(t(lang(), "groupflow.deleteFailed", { e: String(e) }), "error");
     }
   });
 }
@@ -198,7 +199,7 @@ export function confirmEmptyRecycleBinFlow(
       host.notify(t(lang(), "groupflow.emptied"));
     } catch (e) {
       if (host.sessionView.isCurrent(view))
-        host.notify(t(lang(), "groupflow.emptyFailed", { e: String(e) }));
+        host.notify(t(lang(), "groupflow.emptyFailed", { e: String(e) }), "error");
     }
   });
 }
@@ -215,7 +216,7 @@ export async function restoreGroupFlow(
     host.notify(t(lang(), "groupflow.restored"));
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.restoreFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.restoreFailed", { e: String(e) }), "error");
   }
 }
 
@@ -234,7 +235,7 @@ export async function moveEntriesFlow(
     host.notify(t(lang(), "groupflow.moved", { n: uuids.length }));
   } catch (e) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.moveFailed", { e: String(e) }));
+      host.notify(t(lang(), "groupflow.moveFailed", { e: String(e) }), "error");
   }
 }
 
@@ -248,7 +249,7 @@ export async function setGroupExpandedFlow(
     await vault.callInSession(sessionId, () => vault.setGroupExpanded(uuid, expanded));
   } catch (error) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }));
+      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }), "error");
   }
 }
 
@@ -262,6 +263,6 @@ export async function setGroupsExpandedFlow(
     await vault.callInSession(sessionId, () => vault.setGroupsExpanded(uuids, expanded));
   } catch (error) {
     if (host.sessionView.isCurrent(view))
-      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }));
+      host.notify(t(lang(), "groupflow.expandFailed", { e: String(error) }), "error");
   }
 }

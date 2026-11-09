@@ -23,6 +23,7 @@ import { get } from "svelte/store";
 import { isAndroid, isTauriRuntime, appSettings } from "$lib/services/settings";
 import { createDocument, openDocument } from "$lib/services/saf";
 import { t } from "$lib/i18n";
+import type { TipKind } from "$lib/services/tips";
 import { vault } from "$lib/services/vault";
 
 /** Current UI locale for toasts (read lazily: the language can change at
@@ -40,7 +41,7 @@ export type IoHost = {
   /** Toolbar busy flag (reset by the page when the tab changes). */
   setBusy: (busy: boolean) => void;
   /** Toast feedback. */
-  notify: (message: string) => void;
+  notify: (message: string, kind?: TipKind) => void;
   /** Current vault snapshot (or `null` when closed). */
   currentState: () => VaultState | null;
 };
@@ -255,7 +256,8 @@ export async function pickImportFile(
     });
     return result.current ? result.value : null;
   } catch (e) {
-    if (host.sessionView.isCurrent(view)) host.notify(t(lang(), "io.readFailed", { e: String(e) }));
+    if (host.sessionView.isCurrent(view))
+      host.notify(t(lang(), "io.readFailed", { e: String(e) }), "error");
     return null;
   }
 }
@@ -318,7 +320,7 @@ export async function importEntries(
     host.notify(t(lang(), "io.imported", { n: entries.length }));
   } catch (e) {
     if (!host.sessionView.isCurrent(view)) return;
-    host.notify(t(lang(), "io.importFailed", { e: String(e) }));
+    host.notify(t(lang(), "io.importFailed", { e: String(e) }), "error");
   } finally {
     if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
       host.setBusy(false);

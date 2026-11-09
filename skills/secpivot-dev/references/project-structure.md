@@ -1,5 +1,9 @@
 # Project Structure and Runtime Surfaces
 
+Main-page feedback preserves `TipKind` across `flash` and the IO/group/favicon/
+entry-editor notify seams. Known failures pass error explicitly; the global
+`TipsHost` keeps its existing semantic danger styles and success default.
+
 This reference is a source map, not a substitute for reading the current files. Update this map when ownership or entry points change.
 
 Frontend `utils/csv.ts::buildCsv` and native `vault/serialize.rs::escape_csv`
