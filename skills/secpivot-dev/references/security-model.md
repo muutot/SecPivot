@@ -56,6 +56,10 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+HOTP counter advancement preserves the existing `HmacOtp` protected flag.
+A code request must not turn a protected seed into a plaintext custom-field
+snapshot. The regression verifies masking and the next counter after save/reopen.
+
 Vault and keyfile reads are bounded while streaming (512 MiB and 10 MiB),
 including document URIs. SAF saves must read the previous bytes successfully
 before any truncation, and both save and rollback verify the bytes read back.
