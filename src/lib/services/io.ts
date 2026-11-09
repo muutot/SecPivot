@@ -20,7 +20,8 @@ import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
 import type { CustomField, EntryInput, ImportRow, VaultState } from "$lib/types/vault";
 import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
-import { isTauriRuntime, appSettings } from "$lib/services/settings";
+import { isAndroid, isTauriRuntime, appSettings } from "$lib/services/settings";
+import { openDocument } from "$lib/services/saf";
 import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
 
@@ -165,7 +166,7 @@ function readPickedFile(accept: string): Promise<string | null> {
   });
 }
 
-/** Pick an import file via the Tauri dialog (desktop) or a hidden file input,
+/** Pick an import file via SAF (Android), the Tauri dialog (desktop), or a hidden file input,
  *  returning its text, or `null` when cancelled / unreadable / stale view. */
 export async function pickImportFile(
   host: IoHost,
@@ -175,7 +176,37 @@ export async function pickImportFile(
   try {
     const result = await awaitCurrentView(host.sessionView, view, async () => {
       if (isTauriRuntime()) {
+        if (isAndroid()) {
+          // Android providers often report CSV/1PIF as plain text or generic
+          // binary. The backend checks DISPLAY_NAME rather than the opaque URI.
+          const types: Record<string, string> = {
+            csv: "text/csv",
+            xml: "application/xml",
+            json: "application/json",
+            "1pif": "application/octet-stream",
+          };
+          const mimeTypes = [
+            ...new Set([
+              ...filters
+                .flatMap((filter) => filter.extensions)
+                .map((ext) => types[ext.replace(/^\./, "").toLowerCase()])
+                .filter(Boolean),
+              ...(filters.some((filter) => filter.extensions.some((ext) => /^\.?xml$/i.test(ext)))
+                ? ["text/xml"]
+                : []),
+              "text/plain",
+              "application/octet-stream",
+            ]),
+          ];
+          const picked = await openDocument(mimeTypes);
+          if (!picked?.uri || !host.sessionView.isCurrent(view)) return null;
+          return await invoke<string>("read_text_file", {
+            path: picked.uri,
+            fileName: picked.name ?? null,
+          });
+        }
         const selected = await open({ multiple: false, filters });
+        if (!host.sessionView.isCurrent(view)) return null;
         return selected ? await invoke<string>("read_text_file", { path: String(selected) }) : null;
       }
       // Mirror the native dialog's filters in the hidden input's accept list.

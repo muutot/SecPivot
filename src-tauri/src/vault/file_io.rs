@@ -35,12 +35,13 @@ pub(crate) fn is_document_uri(path: &Path) -> bool {
 /// unconditionally turns it into an out-of-memory abort.
 const MAX_LOCAL_FILE_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Read a vault or keyfile, resolving mobile document URIs via the fs plugin.
+/// Read a vault, resolving mobile document URIs via the fs plugin.
 /// `what` names the file type in user-facing error messages.
 pub(crate) fn read(path: &Path, what: &str) -> Result<Vec<u8>, String> {
     read_with_limit(path, what, MAX_LOCAL_FILE_BYTES)
 }
 
+/// Bounded vault/keyfile/text-import read, including mobile document URIs.
 pub(crate) fn read_with_limit(path: &Path, what: &str, limit: u64) -> Result<Vec<u8>, String> {
     #[cfg(mobile)]
     if is_document_uri(path) {
@@ -190,6 +191,24 @@ mod tests {
             read_capped(&b"12345678"[..], "fixture", 8).unwrap(),
             b"12345678"
         );
+    }
+
+    #[test]
+    fn capped_read_rejects_growth_after_a_successful_metadata_check() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("growing.csv");
+        std::fs::write(&path, b"small").unwrap();
+        assert!(std::fs::metadata(&path).unwrap().len() <= 8);
+        let reader = std::fs::File::open(&path).unwrap();
+        let mut writer = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        writer.write_all(b"now-too-large").unwrap();
+        assert!(read_capped(reader, "导入文件", 8)
+            .unwrap_err()
+            .contains("上限"));
     }
 
     #[test]

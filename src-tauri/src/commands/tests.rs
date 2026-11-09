@@ -15,30 +15,52 @@ fn write_file(dir: &TempDir, name: &str, content: &str) -> String {
 fn read_text_file_accepts_csv_and_xml_and_rejects_others() {
     let dir = TempDir::new().unwrap();
     let csv = write_file(&dir, "import.csv", "title,username,password\n");
-    assert_eq!(read_text_file(csv).unwrap(), "title,username,password\n");
+    assert_eq!(
+        read_text_file(csv, None).unwrap(),
+        "title,username,password\n"
+    );
 
     let xml = write_file(&dir, "vault.kdbx.xml", "<KeePassFile/>");
-    assert_eq!(read_text_file(xml).unwrap(), "<KeePassFile/>");
+    assert_eq!(read_text_file(xml, None).unwrap(), "<KeePassFile/>");
 
     let json = write_file(&dir, "bitwarden.json", "{\"items\":[]}");
-    assert_eq!(read_text_file(json).unwrap(), "{\"items\":[]}");
+    assert_eq!(read_text_file(json, None).unwrap(), "{\"items\":[]}");
 
     let pif = write_file(&dir, "export.1pif", "***Top of File***\n");
-    assert_eq!(read_text_file(pif).unwrap(), "***Top of File***\n");
+    assert_eq!(read_text_file(pif, None).unwrap(), "***Top of File***\n");
 
     let txt = write_file(&dir, "notes.txt", "secret local text");
-    let err = read_text_file(txt).unwrap_err();
+    let err = read_text_file(txt, None).unwrap_err();
     assert!(err.contains(".csv"), "unexpected error: {err}");
 
     let no_ext = write_file(&dir, "config", "{}");
-    assert!(read_text_file(no_ext).unwrap_err().contains(".csv"));
+    assert!(read_text_file(no_ext, None).unwrap_err().contains(".csv"));
 }
 
 #[test]
 fn read_text_file_rejects_missing_path() {
     let dir = TempDir::new().unwrap();
     let missing = dir.path().join("nope.csv").to_string_lossy().into_owned();
-    assert!(read_text_file(missing).unwrap_err().contains("失败"));
+    assert!(read_text_file(missing, None)
+        .unwrap_err()
+        .contains("无法读取"));
+}
+
+#[test]
+fn read_text_file_rejects_oversize_and_invalid_utf8_without_echoing_content() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("oversize.csv");
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_len(8 * 1024 * 1024 + 1).unwrap();
+    assert!(read_text_file(path.to_string_lossy().into_owned(), None)
+        .unwrap_err()
+        .contains("8 MiB"));
+
+    let invalid = dir.path().join("invalid.csv");
+    std::fs::write(&invalid, b"synthetic-private-text\xff").unwrap();
+    let error = read_text_file(invalid.to_string_lossy().into_owned(), None).unwrap_err();
+    assert!(error.contains("UTF-8"));
+    assert!(!error.contains("synthetic-private-text"));
 }
 
 #[test]

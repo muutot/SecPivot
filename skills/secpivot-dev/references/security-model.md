@@ -171,6 +171,14 @@ before any truncation, and both save and rollback verify the bytes read back.
 Windows tests exercise the shared transaction helper; native provider behavior
 still requires Android device verification.
 
+Text-import reads share the bounded URI/filesystem reader with an 8 MiB ceiling.
+Android validates the selected provider display name; desktop validates the actual
+path extension. These are format checks, not filesystem authorization. Invalid
+UTF-8 errors never include file content. Native picker completion is checked before
+reading plaintext, and the read result is checked again before parsing/importing;
+an obsolete A view cannot read a file selected after A→B→A. SAF import selections
+are not added to recent vaults. Native provider access remains unverified.
+
 An authoritative remote upload is committed before its optional local mirror.
 Mirror failures retain the new session key and remote hash and surface a warning;
 they never count as repeated upload failures or leave the session using an old key.
