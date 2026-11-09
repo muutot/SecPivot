@@ -1478,7 +1478,7 @@ fn entry_history_tracks_versions_and_restores() {
 
 #[test]
 fn restore_history_attachment_set_survives_reopen_undo_and_retention() {
-    for cap in [10, 1] {
+    for cap in [10, 1, 0] {
         let dir = TempDir::new().unwrap();
         let (mut session, path) = create_session(&dir);
         let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic old", "", "", "");
@@ -1538,6 +1538,10 @@ fn restore_history_attachment_set_survives_reopen_undo_and_retention() {
         assert!(empty.get().is_empty());
         assert!(!empty.is_protected());
         let history = session.get_entry_history(&uuid).unwrap();
+        if cap == 0 {
+            assert!(history.is_empty(), "restore must obey disabled history");
+            continue;
+        }
         assert_eq!(history.len(), if cap == 1 { 1 } else { 2 });
         assert_eq!(history[0].title, "Synthetic new");
         session.restore_entry_version(&uuid, 0).unwrap();
@@ -2458,10 +2462,10 @@ fn entry_history_cap_reads_database_meta() {
     assert_eq!(history.len(), 3, "meta cap of 3 must bound the history");
     assert_eq!(history[0].title, "v7");
     assert_eq!(history[2].title, "v5");
-    // Zero in meta means unlimited: no trimming at all.
+    // A negative limit means unlimited; zero disables history instead.
     {
         let db = session.require_db_mut().unwrap();
-        db.meta.history_max_items = Some(0);
+        db.meta.history_max_items = Some(-1);
     }
     for i in 9..=12 {
         session
@@ -2486,7 +2490,7 @@ fn entry_history_cap_reads_database_meta() {
             .unwrap();
     }
     let history = session.get_entry_history(&uuid).unwrap();
-    assert_eq!(history.len(), 7, "zero cap must keep every snapshot");
+    assert_eq!(history.len(), 7, "negative cap must keep every snapshot");
     // The cap is read from the database meta after a save + reopen too.
     session.save().unwrap();
     drop(session);
@@ -2496,8 +2500,108 @@ fn entry_history_cap_reads_database_meta() {
         .unwrap();
     {
         let db = reopened.require_db_mut().unwrap();
-        assert_eq!(db.meta.history_max_items, Some(0));
+        assert_eq!(db.meta.history_max_items, Some(-1));
     }
+}
+
+#[test]
+fn history_limit_zero_count_releases_superseded_data() {
+    assert_history_limit_releases_superseded_data(DatabaseSettingsPatch {
+        history_max_items: Some(Some(0)),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn history_limit_zero_size_releases_superseded_data() {
+    assert_history_limit_releases_superseded_data(DatabaseSettingsPatch {
+        history_max_size: Some(Some(0)),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn history_limit_small_positive_size_releases_oversized_snapshot() {
+    assert_history_limit_releases_superseded_data(DatabaseSettingsPatch {
+        history_max_size: Some(Some(1)),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn history_limits_negative_values_preserve_multiple_versions_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session
+        .update_database_settings(&DatabaseSettingsPatch {
+            history_max_items: Some(Some(-1)),
+            history_max_size: Some(Some(-1)),
+            ..Default::default()
+        })
+        .unwrap();
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic unlimited", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"version-1")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for bytes in [b"version-2", b"version-3", b"version-4"] {
+        input.attachments[0].data = Some(BASE64.encode(bytes));
+        session.update_entry(&uuid, &input).unwrap();
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.get_entry_history(&uuid).unwrap().len(), 3);
+    let db = session.require_db().unwrap();
+    assert_eq!(db.num_attachments(), 4);
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    let oldest = entry.historical(2).unwrap();
+    assert!(
+        oldest
+            .attachment_by_name("synthetic.txt")
+            .unwrap()
+            .get()
+            .as_slice()
+            == b"version-1"
+    );
+}
+
+fn assert_history_limit_releases_superseded_data(patch: DatabaseSettingsPatch) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(
+        ROOT_GROUP_UUID,
+        "Synthetic retained",
+        "",
+        "synthetic-old",
+        "",
+    );
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.txt".into(),
+        data: Some(BASE64.encode(b"synthetic old attachment")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    session.update_database_settings(&patch).unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    input.password = "synthetic-new".into();
+    input.attachments[0].data = Some(BASE64.encode(b"synthetic new attachment"));
+    session.update_entry(&uuid, &input).unwrap();
+    assert!(session.get_entry_history(&uuid).unwrap().is_empty());
+    assert_eq!(session.require_db().unwrap().num_attachments(), 1);
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert!(session.get_entry_history(&uuid).unwrap().is_empty());
+    assert_eq!(session.require_db().unwrap().num_attachments(), 1);
+    assert!(session.get_entry_password(&uuid).unwrap() == "synthetic-new");
+    assert!(
+        session.attachment_data(&uuid, "synthetic.txt").unwrap() == b"synthetic new attachment"
+    );
 }
 
 #[test]
@@ -3029,8 +3133,8 @@ fn history_size_budget_drops_oldest_snapshots() {
             )
             .unwrap();
     }
-    // A tiny byte budget keeps only the newest snapshots; the exact count
-    // follows the per-snapshot sizes, but must stay well below 7.
+    // A tiny byte budget can remove every snapshot when even the newest
+    // cannot fit. Verify the actual stored total, not a minimum-one policy.
     {
         let db = session.require_db_mut().unwrap();
         db.meta.history_max_size = Some(600);
@@ -3045,7 +3149,13 @@ fn history_size_budget_drops_oldest_snapshots() {
         "byte budget must trim history below the unbounded count (got {})",
         history.len()
     );
-    assert_eq!(history[0].title, "v6");
+    let db = session.require_db().unwrap();
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    let total: u64 = super::entries::snapshot_sizes(&entry).iter().sum();
+    assert!(total <= 600, "stored history must fit its byte ceiling");
+    if let Some(newest) = history.first() {
+        assert_eq!(newest.title, "v6");
+    }
 }
 
 #[test]

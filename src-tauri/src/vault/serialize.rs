@@ -384,11 +384,11 @@ const DEFAULT_HISTORY_VERSIONS: usize = 10;
 
 /// Resolve the per-entry history cap from the database meta. KeePass stores
 /// the limit in `Meta.history_max_items`: a positive value caps the number of
-/// snapshots, `0` or a negative value means unlimited, and an absent value
+/// snapshots, `0` disables history, a negative value means unlimited, and absence
 /// falls back to the KeePass default of 10.
 pub(crate) fn history_cap(meta: &Meta) -> usize {
     match meta.history_max_items {
-        Some(n) if n > 0 => n as usize,
+        Some(n) if n >= 0 => n as usize,
         Some(_) => usize::MAX,
         None => DEFAULT_HISTORY_VERSIONS,
     }
@@ -414,7 +414,7 @@ pub(crate) fn trim_entry_history(entry: &mut EntryMut<'_>, cap: usize) {
 }
 
 /// Drop the oldest snapshots until their cumulative recursive size fits
-/// `max_size` bytes (KeePass `Meta.historyMaxSize`; `<= 0` = unlimited).
+/// `max_size` bytes (KeePass `Meta.historyMaxSize`; negative = unlimited).
 /// `snapshot_sizes` carries each stored snapshot's own total (newest first),
 /// captured before the mutable entry borrow was taken. Snapshots are dropped
 /// from the tail (oldest first), matching KeePass's retention order.
@@ -423,7 +423,7 @@ pub(crate) fn trim_entry_history_by_size(
     max_size: i64,
     snapshot_sizes: &[u64],
 ) {
-    if max_size <= 0 || snapshot_sizes.is_empty() {
+    if max_size < 0 || snapshot_sizes.is_empty() {
         return;
     }
     let budget = max_size as u64;
@@ -434,13 +434,13 @@ pub(crate) fn trim_entry_history_by_size(
     // Newest-first index list; pop the oldest until within budget.
     let mut kept: Vec<usize> = (0..snapshot_sizes.len()).collect();
     let mut running = total;
-    while running > budget && kept.len() > 1 {
+    while running > budget && !kept.is_empty() {
         if let Some(oldest) = kept.pop() {
             running -= snapshot_sizes[oldest];
         }
     }
-    // Always keep at least the newest snapshot even if it alone exceeds the
-    // budget (KeePass keeps the most recent version too).
+    // An individual snapshot may exceed the whole budget. KeePass removes it
+    // too; a zero budget must never retain old secret values.
     if let Some(history) = entry.history.as_mut() {
         let all: Vec<Entry> = history.get_entries().to_vec();
         let mut rebuilt = History::default();

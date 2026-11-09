@@ -26,12 +26,11 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
 }
 
 /// Both retention limits from the database meta: the snapshot-count cap and
-/// the cumulative byte budget (`<= 0` = unlimited).
+/// the cumulative byte budget (negative or absent = unlimited, zero = none).
 pub(crate) fn history_limits(meta: &Meta) -> (usize, i64) {
-    let max_size = meta.history_max_size.unwrap_or(0);
     (
         history_cap(meta),
-        if max_size > 0 { max_size as i64 } else { 0 },
+        meta.history_max_size.unwrap_or(-1) as i64,
     )
 }
 

@@ -331,9 +331,9 @@ pub struct DatabaseSettings {
     pub cipher: String,
     /// `"None"` / `"Gzip"`.
     pub compression: String,
-    /// KeePass `Meta.history_max_items`; `None` = unlimited/default.
+    /// KeePass `Meta.history_max_items`; None = default, zero = none, negative = unlimited.
     pub history_max_items: Option<i64>,
-    /// KeePass `Meta.history_max_size`; `None` = unlimited/default.
+    /// KeePass `Meta.history_max_size`; None/negative = unlimited, zero = none.
     pub history_max_size: Option<i64>,
     /// KeePass recycle-bin flag; `None` in KDBX reads as enabled.
     pub recycle_bin_enabled: bool,
