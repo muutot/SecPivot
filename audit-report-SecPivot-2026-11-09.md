@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S14；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S15；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
 | Medium    | 17     | 17        | 0         |
-| Low       | 3      | 3         | 0         |
+| Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **25** | **25**    | **0**     |
+| **Total** | **26** | **26**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1090,3 +1090,37 @@ security-model、project-structure 和 docs/android.md，纠正陈旧 1PIF 格�
 构建/安装/发布替代 APK，没有手机选择器或云端 provider 运行证据，手机另存为
 不标记已解决。provider pipe/sync、native XML、现代 1PUX、跨 renderer 剪贴板、
 完整语义覆盖与渲染 UI 审查仍在推进，整体目标保持 active。
+
+### Finding: SP-S15 短窗口菜单裁切且不随视口缩放重新定位（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Accessibility / Frontend State / Stability
+- Status: Confirmed（实际 Edge 渲染先红后绿；Android WebView 待验证）
+- Affected area: shared viewport menu and context-menu cascade positioning
+- Evidence:
+  - File: `src/lib/components/ViewportMenuShell.svelte:24`、`src/lib/components/ContextMenu.svelte:54`（`2e36ade` 修复前源码）
+  - Function / Module: menu positioning effect / `submenuFlip`
+  - Relevant behavior: 主菜单只有右/下侧坐标限制，无通用高度或滚动限制；视口变化不是 reactive dependency，打开后缩小窗口不会重新定位。级联菜单过高时把 top 调为负数，仍不能显示全部内容。
+  - Reproduction: `menu-viewport-render.cjs` 在 headless Edge 挂载真实 ContextMenu 和生产 buildToolbarMenuItems。420×320 下 12 项菜单高 358px、top 0、bottom 358，overflowY 为 visible，设置 scrollTop 仍为 0；“设置”在截图底部之外。打开时从 1100×720 缩至 320×240，菜单仍留在 x 932/y 354。24 项合成子菜单 top -394、高 706px，开头不可见。见 `menu-viewport-red.log`、`menu-viewport-assert-red.log` 与 before 截图。
+- Problem: 手机横屏或短桌面窗口的末端操作无法直接点到，缩放后整个菜单可能停在视口之外；长子菜单也缺少有界滚动。
+- Why it matters: 影响“设置”等辅助入口的可达性和界面完整度。范围集中于短/窄视口，未证明秘密泄漏、数据破坏或主流程全面不可用，按 Low 记录。
+- Realistic failure scenario: 把次要工具收进更多菜单，在 420×320 手机横屏打开；底部设置项被裁切且滑动不滚动。桌面菜单保持打开时缩小窗口，旧坐标使操作离开可见区域。
+- Minimal fix: 主菜单限制视口宽高、保持 8px 边距、内部滚动；ResizeObserver 与窗口 resize 更新位置且卸载清理。级联改用 fixed 逃离父菜单滚动裁切，自身有界滚动并随父滚动/视口变化定位；保持现有主题 token、间距和图标。
+- Better long-term fix: 继续验证 Android WebView、软键盘/visual viewport、不同字体缩放与键盘菜单导航；真实手机触摸可达性不能由 Edge 鼠标回归替代。
+- Regression test suggestion: 实际挂载生产组件检查 1100/720/420 宽度的 dark/light/custom 九组视口；短菜单滚到末端并点击“设置”，长子菜单滚到 child 23 并派发；同一实例缩放、负 anchor、Escape、卸载后事件。通过真实页面 welcome 解锁合成库，从工具栏更多菜单滚到“设置”并打开 settings shell。后续补 column-config 和真机软键盘路径。
+- Estimated effort: 1–2 小时（局部修复及渲染回归）；真机检查另计
+
+`c42ea09` 已修复 SP-S15。`menu-viewport-green.log` 与 after 截图记录实际组件
+及主页面点击路径成功，pageerrors 为空；短窗口菜单为 y 8/高 304/bottom 312，
+scrollTop 可到 54。九组主题/宽度截图已检查，紧凑表面与按钮样式保持。
+夹具初期使用不同 Svelte runtime、错误的本地化按钮名和 settings API，以及
+固定 close 次数断言，均在记录最终回归前修正；不计为产品发现。resize 后先等
+浏览器帧布局再断言，避免把观察回调尚未交付当作产品失败。
+
+完整 `npm run verify` 日志 `verify-viewport-menus.log`：格式、Svelte check、
+150 键契约、构建、前端 **286**、Rust **530 + ACL 2**、clippy 全通过。
+documentation currency gate 更新 css-theming 和 project-structure，没有增加
+未验证 TODO 勾选。当前详细卡片 **26**（High 5 / Medium 17 / Low 4，全部
+Confirmed）；基线统计与 6.1 分保持不变。SAF 真机、新 APK、原生 XML、现代
+1PUX、跨窗口剪贴板与其他首方区域语义审查继续推进，整体目标保持 active。
