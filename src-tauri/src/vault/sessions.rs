@@ -131,9 +131,22 @@ fn run_guarded<T, E>(operation: impl FnOnce() -> Result<T, E>, on_panic: E) -> R
 pub struct VaultSessions {
     inner: Mutex<SessionsInner>,
     persistence: Arc<PersistenceGate>,
+    #[cfg(desktop)]
+    active_end: super::session_end::SessionEndSignals,
 }
 
 impl VaultSessions {
+    /// Observe this active lifetime, with no key/password in observer state.
+    /// Caller must hold the active mutex. Callbacks never acquire vault/lifetime
+    /// locks and run after the registry and observer mutexes are released.
+    #[cfg(desktop)]
+    pub(crate) fn watch_active_end(
+        &self,
+        callback: impl FnOnce() + Send + 'static,
+    ) -> Arc<super::SessionEndSignal> {
+        self.active_end.watch(callback)
+    }
+
     /// Serialize prepare/persist/complete transactions across every runtime
     /// writer. The permit does not hold either session lock, so UI reads and
     /// in-memory edits remain responsive while storage work runs.
@@ -325,6 +338,9 @@ impl VaultSessions {
         let id = inner.alloc_id();
         *active = fresh;
         inner.active_id = Some(id.clone());
+        drop(inner);
+        #[cfg(desktop)]
+        self.active_end.finish();
         Ok(VaultOpenResult {
             session_id: id,
             state,
@@ -358,6 +374,9 @@ impl VaultSessions {
                     inner.active_id = Some(promoted);
                 }
             }
+            drop(inner);
+            #[cfg(desktop)]
+            self.active_end.finish();
             Ok(target)
         } else {
             let mut removed = inner
@@ -386,6 +405,9 @@ impl VaultSessions {
         }
         inner.order.clear();
         inner.active_id = None;
+        drop(inner);
+        #[cfg(desktop)]
+        self.active_end.finish();
         Ok(())
     }
 
@@ -458,6 +480,9 @@ impl VaultSessions {
         *active = target;
         inner.active_id = Some(session_id.to_owned());
         inner.order.retain(|id| id != session_id);
+        drop(inner);
+        #[cfg(desktop)]
+        self.active_end.finish();
         Ok(state)
     }
 
@@ -513,6 +538,69 @@ mod tests {
         EntryInput, RemoteMode, WritableDatabaseCipher, DEFAULT_BACKUP_TEMPLATE,
     };
     use tempfile::TempDir;
+
+    #[test]
+    fn inactive_close_idempotent_switch_and_failed_changes_keep_active_observers() {
+        let dir = TempDir::new().unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let parked = registry
+            .open(&mut active, create_vault(&dir, "first.kdbx"))
+            .unwrap()
+            .session_id;
+        let current = registry
+            .open(&mut active, create_vault(&dir, "second.kdbx"))
+            .unwrap()
+            .session_id;
+        let ended = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = Arc::clone(&ended);
+        let signal = registry.watch_active_end(move || {
+            count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        });
+        assert!(registry
+            .open(&mut active, |_| Err("synthetic open failure".into()))
+            .is_err());
+        assert!(registry.switch_active(&mut active, "missing").is_err());
+        registry.switch_active(&mut active, &current).unwrap();
+        registry.close(&mut active, Some(&parked)).unwrap();
+        assert!(signal.is_pending());
+        assert_eq!(ended.load(std::sync::atomic::Ordering::Relaxed), 0);
+        registry.close_all(&mut active, true).unwrap();
+        registry.close_all(&mut active, true).unwrap();
+        assert!(!signal.is_pending());
+        drop(signal);
+        assert_eq!(ended.load(std::sync::atomic::Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn observer_runs_outside_registry_lock_and_panic_does_not_poison_active_vault() {
+        let dir = TempDir::new().unwrap();
+        let registry = Arc::new(VaultSessions::default());
+        let active = Mutex::new(VaultSession::default());
+        registry
+            .open(
+                &mut active.lock().unwrap(),
+                create_vault(&dir, "first.kdbx"),
+            )
+            .unwrap();
+        let weak = Arc::downgrade(&registry);
+        let notified = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed = Arc::clone(&notified);
+        let signal = registry.watch_active_end(move || {
+            let registry = weak.upgrade().unwrap();
+            assert!(registry.inner.try_lock().is_ok());
+            observed.store(true, std::sync::atomic::Ordering::Relaxed);
+            panic!("synthetic observer failure");
+        });
+        registry
+            .close_all(&mut active.lock().unwrap(), false)
+            .unwrap();
+        assert!(notified.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!signal.is_pending());
+        registry
+            .open(&mut active.lock().unwrap(), create_vault(&dir, "next.kdbx"))
+            .unwrap();
+    }
 
     #[test]
     fn persistence_gate_serializes_runtime_writers() {

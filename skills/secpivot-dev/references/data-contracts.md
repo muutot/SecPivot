@@ -36,7 +36,12 @@ string, distinct from the connection id. `rpc-side-channel-ended` carries only
 The renderer closes only the matching prompt and remembers the latest nonsecret
 identity, rejecting old/duplicate shows and end-before-show delivery. A connection
 owns a secret-free RAII prompt lease; its end callback never locks vault/lifetime
-state. Standalone lock/session-switch cancellation is not yet signalled.
+state. `vault/session_end.rs` provides weakly registered, nonsecret one-shot
+signals ended centrally by successful active-vault transitions in `VaultSessions`.
+The prompt registers under the active mutex; open/create adoption, active close,
+lock and tab switch therefore end even idle prompts. Parked close, failed changes
+and idempotent switch preserve them. Proof with an already-ended signal is refused,
+including a return to the original stable tab id. No new IPC command is required.
 
 KeePass XML export uses the official PlainXml value contract: escaped literal
 text and `ProtectInMemory="True"`. Import decodes old unencrypted `Protected`
