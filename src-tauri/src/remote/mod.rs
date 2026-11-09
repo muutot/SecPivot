@@ -97,9 +97,14 @@ pub(crate) fn shared_blocking_client() -> Result<&'static reqwest::blocking::Cli
             let handle = std::thread::Builder::new()
                 .name("remote-client-init".into())
                 .spawn(|| {
-                    crate::net::blocking_client_builder(reqwest::blocking::Client::builder())
-                        .connect_timeout(REMOTE_CONNECT_TIMEOUT)
-                        .build()
+                    let builder =
+                        crate::net::blocking_client_builder(reqwest::blocking::Client::builder());
+                    // Offline HTTP fixtures must talk directly to their local
+                    // peer. A system proxy can relay even 127.0.0.1 requests
+                    // and inject 502s unrelated to the transport under test.
+                    #[cfg(test)]
+                    let builder = builder.no_proxy();
+                    builder.connect_timeout(REMOTE_CONNECT_TIMEOUT).build()
                 })
                 .map_err(|e| format!("无法初始化远程存储客户端: 创建初始化线程失败: {e}"))?;
             match handle.join() {
