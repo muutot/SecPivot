@@ -22,7 +22,7 @@
   "suspected": 1,
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "95accb2",
+  "remediation_checkpoint": "3e3066f",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -69,10 +69,10 @@
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "95accb2",
-    "log": "verify-release-signing-isolation.log",
+    "checkpoint": "3e3066f",
+    "log": "verify-clipboard-fingerprint-sockets.log",
     "frontend_tests": 216,
-    "rust_unit_tests": 475,
+    "rust_unit_tests": 477,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -97,6 +97,9 @@
     "Retract mock-expiry attribution: later HTTP 502 peer differed from loopback fixture endpoint and system proxy was enabled; 2cb9449 disables proxies only in the test client and full verify passed",
     "39697a0 atomically compares and clears Windows clipboard content; SP-11 lifecycle retention remains partially unresolved",
     "95accb2 isolates signing secrets from build runners and removes publishing checkout; YAML/Bash and synthetic cleanup/ABI regressions passed",
-    "Supplemental findings do not change baseline finding counts or scores"
+    "Supplemental findings do not change baseline finding counts or scores",
+    "3e3066f zeroizes text/binary inputs before starting scheduled tasks; threads retain only 32-byte zeroizing fingerprints; renderer lifecycle and worker coalescing remain pending",
+    "Independent socket failure reproduced with delayed bytes: Windows accepted fixture sockets inherited nonblocking mode, causing 10035 WouldBlock and client 10053 ConnectionAborted; b9ce539 restores blocking mode and full verify passed",
+    "User confirmed installed Android version v1.6.5; no replacement APK built, installed, or released in this task"
   ]
 }
