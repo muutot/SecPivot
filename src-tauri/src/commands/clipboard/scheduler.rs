@@ -23,26 +23,48 @@ pub(super) struct LatestDeadline<T> {
 }
 
 impl<T: Send + 'static> LatestDeadline<T> {
-    pub(super) fn start(
-        callback: impl Fn(&Self, u64, T) + Send + 'static,
-    ) -> Result<(Arc<Self>, JoinHandle<()>), String> {
-        let scheduler = Arc::new(Self {
+    pub(super) fn new() -> Arc<Self> {
+        Arc::new(Self {
             state: Mutex::new(State {
                 pending: None,
                 generation: 0,
                 stopped: false,
             }),
             wake: Condvar::new(),
-        });
-        let worker = Arc::clone(&scheduler);
-        let thread = std::thread::Builder::new()
-            .name("clipboard-wipe".into())
-            .spawn(move || worker.run(callback))
-            .map_err(|error| format!("无法创建剪贴板清除任务: {error}"))?;
-        Ok((scheduler, thread))
+        })
     }
 
-    pub(super) fn schedule(&self, payload: T, delay: Duration) -> Result<(), String> {
+    pub(super) fn start_worker(
+        self: &Arc<Self>,
+        callback: impl Fn(&Self, u64, T) + Send + 'static,
+    ) -> Result<JoinHandle<()>, String> {
+        let worker = Arc::clone(self);
+        std::thread::Builder::new()
+            .name("clipboard-wipe".into())
+            .spawn(move || worker.run(callback))
+            .map_err(|error| format!("无法创建剪贴板清除任务: {error}"))
+    }
+
+    /// Reserve before fingerprinting, clipboard reads or worker initialization.
+    /// A newer reservation/cancel invalidates both pending and preparing work.
+    pub(super) fn reserve(&self) -> Result<u64, String> {
+        let mut state = self.state.lock().map_err(|_| "剪贴板任务锁已损坏")?;
+        if state.stopped {
+            return Err("剪贴板清除任务已停止".to_owned());
+        }
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = None;
+        self.wake.notify_one();
+        Ok(state.generation)
+    }
+
+    /// Install only while the originating request still owns its reservation.
+    pub(super) fn schedule_reserved(
+        &self,
+        generation: u64,
+        payload: T,
+        delay: Duration,
+    ) -> Result<bool, String> {
         let deadline = Instant::now()
             .checked_add(delay)
             .ok_or_else(|| "剪贴板清除时间超出支持范围".to_owned())?;
@@ -50,22 +72,20 @@ impl<T: Send + 'static> LatestDeadline<T> {
         if state.stopped {
             return Err("剪贴板清除任务已停止".to_owned());
         }
-        state.generation = state.generation.wrapping_add(1);
+        if state.generation != generation {
+            return Ok(false);
+        }
         state.pending = Some(Pending {
             deadline,
-            generation: state.generation,
+            generation,
             payload,
         });
         self.wake.notify_one();
-        Ok(())
+        Ok(true)
     }
 
     pub(super) fn cancel(&self) -> Result<(), String> {
-        let mut state = self.state.lock().map_err(|_| "剪贴板任务锁已损坏")?;
-        state.generation = state.generation.wrapping_add(1);
-        state.pending = None;
-        self.wake.notify_one();
-        Ok(())
+        self.reserve().map(|_| ())
     }
 
     pub(super) fn is_current(&self, generation: u64) -> bool {
@@ -106,6 +126,20 @@ impl<T: Send + 'static> LatestDeadline<T> {
                 state = next;
             }
         }
+    }
+
+    #[cfg(test)]
+    fn start(
+        callback: impl Fn(&Self, u64, T) + Send + 'static,
+    ) -> Result<(Arc<Self>, JoinHandle<()>), String> {
+        let scheduler = Self::new();
+        let thread = scheduler.start_worker(callback)?;
+        Ok((scheduler, thread))
+    }
+
+    #[cfg(test)]
+    fn schedule(&self, payload: T, delay: Duration) -> Result<bool, String> {
+        self.schedule_reserved(self.reserve()?, payload, delay)
     }
 
     #[cfg(test)]
@@ -213,5 +247,70 @@ mod tests {
         thread.join().unwrap();
         assert_eq!(first, (1, false));
         assert_eq!(second, (2, true));
+    }
+
+    #[test]
+    fn cancellation_during_request_preparation_rejects_the_old_schedule() {
+        let (fired_tx, fired_rx) = mpsc::channel();
+        let (scheduler, thread) = LatestDeadline::start(move |_, _, id| {
+            fired_tx.send(id).unwrap();
+        })
+        .unwrap();
+        // The old command is preparing its fingerprint/worker when lock
+        // cancellation runs. Its eventual installation must stay invalid.
+        let reservation = scheduler.reserve().unwrap();
+        scheduler.cancel().unwrap();
+        let installed = scheduler
+            .schedule_reserved(reservation, 1, Duration::ZERO)
+            .unwrap();
+        let fired = fired_rx.recv_timeout(Duration::from_millis(100));
+        scheduler.stop();
+        thread.join().unwrap();
+        assert!(!installed);
+        assert!(fired.is_err(), "a cancelled request installed a new wipe");
+    }
+
+    #[test]
+    fn cancellation_before_first_worker_start_still_rejects_old_work() {
+        let scheduler = LatestDeadline::new();
+        let reservation = scheduler.reserve().unwrap();
+        // No worker exists at the cancellation boundary.
+        scheduler.cancel().unwrap();
+        let (fired_tx, fired_rx) = mpsc::channel();
+        let thread = scheduler
+            .start_worker(move |_, _, id| fired_tx.send(id).unwrap())
+            .unwrap();
+        let installed = scheduler
+            .schedule_reserved(reservation, 1, Duration::ZERO)
+            .unwrap();
+        let fired = fired_rx.recv_timeout(Duration::from_millis(100));
+        scheduler.stop();
+        thread.join().unwrap();
+        assert!(!installed);
+        assert!(fired.is_err());
+    }
+
+    #[test]
+    fn preparation_finishing_out_of_order_preserves_the_newest_request() {
+        let released = Arc::new(AtomicUsize::new(0));
+        let scheduler = LatestDeadline::new();
+        let old = scheduler.reserve().unwrap();
+        let current = scheduler.reserve().unwrap();
+        assert!(scheduler
+            .schedule_reserved(
+                current,
+                DropProbe(Arc::clone(&released)),
+                Duration::from_secs(3_600)
+            )
+            .unwrap());
+        assert!(!scheduler
+            .schedule_reserved(old, DropProbe(Arc::clone(&released)), Duration::ZERO)
+            .unwrap());
+        assert_eq!(released.load(Ordering::SeqCst), 1);
+        let pending = scheduler.state.lock().unwrap();
+        assert_eq!(pending.pending.as_ref().unwrap().generation, current);
+        drop(pending);
+        scheduler.cancel().unwrap();
+        assert_eq!(released.load(Ordering::SeqCst), 2);
     }
 }
