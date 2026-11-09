@@ -5,7 +5,51 @@ import assert from "node:assert/strict";
 // entry-templates group (KeePass convention). Nested groups are not expanded,
 // and an unset or dangling group uuid yields no templates so the editor hides
 // its selector.
-const { collectTemplateEntries } = await import("../src/lib/utils/templates.ts");
+const { collectTemplateEntries, resolveTemplateSecrets } =
+  await import("../src/lib/utils/templates.ts");
+
+it("resolves all template secrets atomically without modifying its snapshot", async () => {
+  const template = {
+    ...entry("t"),
+    hasTotp: true,
+    customFields: [
+      { name: "public", value: "visible" },
+      { name: "hidden", value: "", protected: true },
+    ],
+  };
+  const result = await resolveTemplateSecrets(template, {
+    password: async () => "synthetic password",
+    totp: async () => "synthetic otp",
+    field: async () => "synthetic field",
+  });
+  assert.equal(result.password, "synthetic password");
+  assert.equal(result.totp, "synthetic otp");
+  assert.equal(result.customFields[1].value, "synthetic field");
+  assert.equal(template.customFields[1].value, "");
+});
+
+it("rejects partial template reads, including absent protected values", async () => {
+  const template = {
+    ...entry("t"),
+    hasTotp: true,
+    customFields: [{ name: "hidden", value: "", protected: true }],
+  };
+  const readers = {
+    password: async () => "synthetic",
+    totp: async () => "otp",
+    field: async () => "field",
+  };
+  await assert.rejects(
+    resolveTemplateSecrets(template, {
+      ...readers,
+      password: async () => {
+        throw new Error("synthetic failure");
+      },
+    }),
+  );
+  await assert.rejects(resolveTemplateSecrets(template, { ...readers, field: async () => null }));
+  await assert.rejects(resolveTemplateSecrets(template, { ...readers, totp: async () => null }));
+});
 
 function group(uuid, entries = [], children = []) {
   return { uuid, name: uuid, isRecycleBin: false, isExpanded: true, entries, children };
