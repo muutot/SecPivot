@@ -14,12 +14,13 @@ use crate::bridge::{
     BridgeRequest, BridgeResponse, BRIDGE_PORT,
 };
 use crate::config::PasswordGeneratorSettings;
+use crate::loopback::ConnectionBudget;
 use crate::vault::{VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -72,6 +73,7 @@ pub(crate) struct BridgeState {
     last_error: Mutex<Option<String>>,
     generator: Mutex<PasswordGeneratorSettings>,
     associate_limiter: AssociateRateLimiter,
+    connections: Arc<ConnectionBudget>,
 }
 
 /// Sliding-window limiter for unauthenticated `associate` attempts.
@@ -155,7 +157,12 @@ impl BridgeState {
             .map_err(|e| format!("设置监听模式失败: {e}"))?;
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let app = app.clone();
-        let join = std::thread::spawn(move || accept_loop(&listener, &app, &stop_rx));
+        let connections = Arc::clone(&self.connections);
+        let join = std::thread::spawn(move || {
+            crate::loopback::accept_loop(&listener, &stop_rx, connections, move |stream, _| {
+                handle_connection(stream, &app);
+            });
+        });
         *guard = Some(ServerHandle {
             stop: stop_tx,
             join: Some(join),
@@ -171,26 +178,6 @@ impl BridgeState {
             if let Some(handle) = guard.take() {
                 handle.stop();
             }
-        }
-    }
-}
-
-/// Accept loopback connections until told to stop; each connection is served
-/// on its own thread so a slow client never blocks the listener.
-fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()>) {
-    while stop.try_recv().is_err() {
-        match listener.accept() {
-            Ok((stream, _addr)) => {
-                // Accepted streams inherit the listener's non-blocking flag on
-                // Windows; readers here expect a blocking stream.
-                let _ = stream.set_nonblocking(false);
-                let app = app.clone();
-                std::thread::spawn(move || handle_connection(stream, &app));
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(_) => std::thread::sleep(Duration::from_millis(50)),
         }
     }
 }
@@ -631,6 +618,64 @@ mod tests {
         let (method, body) = read_http_request(&mut stream).unwrap();
         assert_eq!(method, "POST");
         assert_eq!(body, r#"{"RequestType":"x"}"#);
+    }
+
+    #[test]
+    fn slow_http_connection_pressure_is_bounded() {
+        const CONNECTIONS: usize = 64;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let (count_tx, count_rx) = mpsc::channel();
+        let budget = Arc::new(ConnectionBudget::default());
+        let server_budget = Arc::clone(&budget);
+        let server = std::thread::spawn(move || {
+            let mut workers = Vec::new();
+            for _ in 0..CONNECTIONS {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(IO_TIMEOUT)).unwrap();
+                let started = started_tx.clone();
+                let finished = finished_tx.clone();
+                if let Some(worker) = server_budget
+                    .try_spawn(move || {
+                        started.send(()).unwrap();
+                        let _ = read_http_request(&mut stream);
+                        finished.send(()).unwrap();
+                    })
+                    .unwrap()
+                {
+                    workers.push(worker);
+                }
+            }
+            for _ in 0..workers.len() {
+                started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            }
+            count_tx.send(workers.len()).unwrap();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        let mut clients = Vec::new();
+        for _ in 0..CONNECTIONS {
+            let mut client = TcpStream::connect(addr).unwrap();
+            client
+                .write_all(b"POST / HTTP/1.1\r\nContent-Length: 10\r\n")
+                .unwrap();
+            clients.push(client);
+        }
+        let active = count_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        let finished_early = finished_rx.try_recv().is_ok();
+        drop(clients);
+        server.join().unwrap();
+        eprintln!("slow HTTP connections admitted concurrently: {active}");
+        assert!(
+            !finished_early,
+            "requests must still be incomplete at measurement"
+        );
+        assert_eq!(active, crate::loopback::MAX_CONNECTION_WORKERS);
+        // Once all slow requests close, a new request is admitted again.
+        budget.try_spawn(|| {}).unwrap().unwrap().join().unwrap();
     }
 
     #[test]
