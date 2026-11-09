@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S44；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S45；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 32     | 32        | 0         |
+| Medium    | 33     | 33        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **55** | **55**    | **0**     |
+| **Total** | **56** | **56**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2323,3 +2323,43 @@ mock 的 service（calls=0），重启同一开发服务器后的完整检查通
 Confirmed），基线 `b7c5d9f` 的 15 项/6.1 分保持。手机 v1.6.5 云端
 另存为的发行源 ACL 根因与当前源码修正已验证，替换包与真机/provider
 仍缺证；整体系统/竞品/界面审计继续，目标 active。
+
+### Finding: SP-S45 缺省历史大小与“恢复默认”使用无限预算（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Configuration / Privacy / Data retention / Interoperability
+- Status: Confirmed
+- Affected area: history_limits default byte budget
+- Evidence:
+  - File: `src-tauri/src/vault/entries.rs:28–35`、`src-tauri/src/vault/dto.rs:336`、`src/lib/components/DatabaseSettingsDialog.svelte:110–111/216–222`（`c7ffe08` 修复前）
+  - Function / Module: history_limits / update_database_settings / import_attachment_bytes / update_custom_field
+  - Relevant behavior: history_max_size 缺省映射为 -1 无限；设置空值却标为默认，并发送 JSON null 清除 metadata。数量缺省为 10，不能限制大附件造成的累计历史字节数。
+  - Reproduction: `history-default-size-red-final.log` 两个真实原生回归均失败。先设置无限、产生 4 MiB 快照、实际 JSON null 重置/保存重开，再产生第二份 4 MiB 快照，历史为 2 而预期 1；新库缺省大小保留超过 6 MiB 的单份快照，历史为 1 而预期 0。两个 red 都在首个保留断言停止，未执行各自最终保存重开/显式负数对照；这些在 green 另行完成。
+  - Independent reference: 固定 dlech/KeePass2.x commit `d1eec63f1bd73dc2d5273eaf94528f616b553ce5`。PwDatabase.cs:47–48 的默认为 10 条/6*1024*1024 字节，93–94/569–570 初始化与 Clear 恢复这些值；KdbxFile.Read.Streamed.cs:265–268 仅在相应 XML 元素出现时覆盖。PwEntry.MaintainBackups 使用此预算，与此前 SP-S41 的固定源码一致。`keepass-default-history-provenance.json` 记录三个确切 URL/文件/SHA256，PwDatabase 为 `3470bf8193e95d211d422eafba901a39a68f2a4d796ce11a0e44778d87ad01b0`。未运行官方客户端。
+- Problem: 空设置或重置默认后，旧敏感数据实际采用无限大小保留，偏离界面和 KeePass 默认契约。
+- Why it matters: 旧附件/密码留存超过默认预算，也可能扩大加密库及同步体积。只复现预算超限，没有真实内存耗尽、外泄或安全擦除证据，因此 Medium。
+- Realistic failure scenario: 含大附件的条目在默认设置下反复修改，每个旧版本都被保留，累计超过 6 MiB；从无限改为空值恢复默认后继续编辑，旧无限规则仍生效。
+- Minimal fix: 在共享 history_limits 中以 6 MiB 作为缺省大小；显式负数仍无限，零值和指定正值规则保持。仅后续已有 tracked mutation 执行裁剪，不在 load 或 metadata-only 更新时主动清理整个库。
+- Better long-term fix: 继续核对所有 mutation 入口与跨客户端保留语义；默认值、设置文案和原生实现一同验证，避免只验证 metadata null 能保存。
+- Regression test suggestion: 合成 KDBX 实际 JSON reset/save/reopen 后多个 4 MiB 快照裁剪最旧内容，当前与最新历史附件准确；超过 6 MiB 单份快照在缺省时删除、显式负数时保留；既有数量零值、大小零值和自定义正值继续通过。
+- Estimated effort: 1–2 小时（共享默认、原生持久化/大附件回归、契约同步）
+
+`c45d7b9` 已修复缺省预算，2 项新增原生回归及 27 项历史相关检查
+通过。`verify-history-default-size.log` 完整门 exit 0：format、check 零
+错误警告、150-key 契约、build、316 frontend、593 Rust、ACL 2、clippy
+全部通过。此轮采用默认 Rust 测试调度（RUST_TEST_THREADS 未设置），
+无外部过滤，四个 OS clipboard live body 的显式开关保持关闭，不算真实
+剪贴板执行。重复保存重开验证最新/当前附件的完整合成字节、过时附件
+回收和显式无限对照；当前大附件没有删除。data/security 引用、DTO 注释
+与 partial TODO 同步；其余 mutation 和跨客户端证据未因此标完成。
+初次夹具的 Option 解包与临时 borrow 编译错误修正后才取得有效 red；
+它们不是应用缺陷。早期尝试读取既有参考 ZIP 发现其不是合法 ZIP，
+随后使用固定公开源码；没有从该文件推导默认值。没有 UI/IPC/schema/
+依赖变更、用户库/系统剪贴板/原生客户端/Android provider 运行。
+本次报告提交无需额外 reference 修改。
+
+当前详细卡片 **56**（Critical 1 / High 12 / Medium 33 / Low 10，全部
+Confirmed）；基线 15 项/6.1 分保持。最新完整应用门包括历史文案修复
+和 6 MiB 默认修复；手机替换 APK/provider、其余系统/UI/竞品迁移
+继续审查，整体目标 active。

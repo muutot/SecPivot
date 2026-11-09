@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S44; historical supplemental tracking notes excluded",
-    "total": 55,
-    "confirmed": 55,
+    "scope": "15 baseline cards plus SP-S05 through SP-S45; historical supplemental tracking notes excluded",
+    "total": 56,
+    "confirmed": 56,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 32,
+      "Medium": 33,
       "Low": 10
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "a88ff62",
+  "remediation_checkpoint": "c45d7b9",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S45",
+      "area": "Absent history size and JSON null default reset use unlimited budget",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "c7ffe08",
+      "commit": "c45d7b9",
+      "status": "Confirmed and remediated. Two native actual reset/reopen/mutation probes retained two 4 MiB snapshots and one oversized snapshot before repair; red stopped at initial retention assertions. Default size now uses pinned KeePass 6 MiB budget; explicit negative remains unlimited. Two new regressions and 27 history checks passed, including final KDBX save/reopen and current/latest attachment fidelity. Full verify 316/593/ACL2 exit 0 with default Rust scheduling, no filters and clipboard live flag disabled. Contract/security/DTO/TODO synchronized; no eager database purge, native client/device/provider or user-vault evidence."
+    },
     {
       "id": "SP-S44",
       "area": "History helper copy hard-codes version count and unconditional restore snapshot",
@@ -447,12 +456,12 @@
     }
   ],
   "verification": {
-    "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
+    "command": "npm run verify (default Rust test scheduling; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "8887e2e",
-    "log": "verify-settings-null-wire.log",
+    "checkpoint": "c45d7b9",
+    "log": "verify-history-default-size.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 591,
+    "rust_unit_tests": 593,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -482,7 +491,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 591,
+    "rust_unit_tests_discovered": 593,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -623,6 +632,17 @@
       "frontend_passed": 316,
       "native_integration_checkpoint": "8887e2e",
       "limitations": "Actual EntryDetail with synthetic browser vault and mocked historical rows. Native history policy supported by prior SP-S41 regressions; no device, provider or native history UI execution."
+    },
+    "history_default_size": {
+      "result": "passed",
+      "red_log": "history-default-size-red-final.log",
+      "green_log": "history-default-size-green.log",
+      "history_tests": 27,
+      "new_regressions": 2,
+      "provenance": "keepass-default-history-provenance.json",
+      "source_commit": "d1eec63f1bd73dc2d5273eaf94528f616b553ce5",
+      "scope": "Actual native synthetic JSON settings/reset/save/reopen then tracked edits; cumulative 4 MiB snapshots and oversized snapshot; explicit negative unlimited and current byte fidelity.",
+      "limitations": "Two initial fixture compilation failures excluded. Red stopped at initial retention assertions. Default Rust scheduling, four clipboard live bodies opted out. No native KeePass/client, device/provider, user vault, eager load/metadata purge or secure disk erasure."
     }
   },
   "reverification_notes": [
@@ -683,6 +703,7 @@
     "653ef66 fixes SP-S41 precise zero/positive history count and size limits while preserving negative unlimited and existing absence defaults. Three valid red regressions after real settings/save/reopen demonstrated retained superseded history; initial fixture omitted save and was excluded. Four new native tests and corrected old cap/minimum-one expectations, exact recursive budget and restore cap-zero case passed. Thirty-one targeted history tests and full verify 316/587/ACL2 passed; no external filters and four native clipboard live bodies disabled. References/data/security/DTO comments and partial TODO synchronized. Cleanup occurs only on existing tracked edit/restore paths and current data remains; no native client, Android provider/device, user vault, clipboard or secure filesystem erasure evidence. Baseline b7c5d9f and 6.1 score unchanged; overall goal active. Next separate candidates: external attachment import snapshots, settings wire null reset, absent-size default and remaining system/UI/migration coverage; v1.6.5 Save As source ACL fix still lacks APK/device.",
     "3530ee8 fixes SP-S42 external attachment reimport history/timestamp/retention. Two valid red probes failed; thirty attachment checks and full verify 316/588/ACL2 passed with four clipboard live bodies opted out. Contract/security references and partial history TODO updated; no UI/dependency/IPC changes or native editor/user-vault/device/clipboard runtime. Public v1.6.5 ARM64 APK downloaded read-only with SHA256 754228d99d293363685c1045b09c3b707737825dcba44d740102736c99cc99be matching official release sums. Its library contains complete plugin:saf create/open literals, no plugin:safe create literal. Initial regex overcapture corrected; capabilities empty in asset config and missing grant-name strings alone are not denial proof. Release-tag capability source uses screens instead of windows; separate framework/source verification continues. No replacement APK built/installed/released. Baseline and score unchanged; overall goal active.",
     "8887e2e fixes SP-S43 real JSON nullable settings decoder, preserving absence/null/value for four fields without widening value types. Two valid baseline probes failed; native red stopped at dirty, not final persistence assertions. Three new regressions include actual metadata-only and compression rewrite reset/save/reopen and wrong-type rejection. Eleven targeted settings tests and full verify 316/591/ACL2 passed, four live clipboard bodies skipped. Data/security references and TODO null evidence updated; no DTO schema/UI/dependency change. Independently pinned release tag 006b810 and Tauri 2.11.5/tauri-utils 2.9.3 confirm screens ignored and runtime window/webview OR predicate denies empty scope; standalone resolver tests 2 passed. Public APK hashes match release sums and complete saf literals, but no device/provider/build/install/compiled-authority/signature evidence. Initial gh auth unavailable used public API instead; unquoted PowerShell Git peel syntax corrected with exact quoted ref. Tooling errors not application findings. Baseline/score unchanged; full goal active.",
-    "a88ff62 fixes SP-S44 inaccurate history copy in both languages and updates approved UI reference. Valid baseline rendered twelve mock rows alongside fixed ten-version hint; twelve fresh-server browser cases and screenshots passed, check/build/316 frontend/format exit 0. Initial nonexistent settings API, later hot-reload mock/service mismatch, missing sharp and Python default encoding were fixture/tooling faults and excluded. Existing native history-limit evidence reused; no redundant string mirror tests or full Rust rerun for copy-only change. Own Vite handles stopped, unrelated .trae preserved. Baseline and 6.1 score unchanged; full goal active, native Android replacement/provider and remaining system/migration/UI audits pending."
+    "a88ff62 fixes SP-S44 inaccurate history copy in both languages and updates approved UI reference. Valid baseline rendered twelve mock rows alongside fixed ten-version hint; twelve fresh-server browser cases and screenshots passed, check/build/316 frontend/format exit 0. Initial nonexistent settings API, later hot-reload mock/service mismatch, missing sharp and Python default encoding were fixture/tooling faults and excluded. Existing native history-limit evidence reused; no redundant string mirror tests or full Rust rerun for copy-only change. Own Vite handles stopped, unrelated .trae preserved. Baseline and 6.1 score unchanged; full goal active, native Android replacement/provider and remaining system/migration/UI audits pending.",
+    "c45d7b9 fixes SP-S45 absent history byte budget using pinned KeePass 6 MiB default while preserving explicit negative unlimited. Two valid red native retention tests failed after initial fixture compile errors were corrected; two new native tests and 27 targeted history checks passed. Full verify exit 0: 316 frontend/593 Rust/ACL2, default test scheduling and no filters, clipboard opt-in unset. Exact fixed source URLs/hashes record constructor/Clear/XML conditional defaults; no invalid reference ZIP evidence used. Contract/security/DTO comments and partial TODO synchronized; no eager load/metadata cleanup, user-vault/native-client/device/provider/clipboard execution. Baseline b7c5d9f and 6.1 unchanged; full goal active. Attribute mutation timestamp/history and remaining systems/migration/UI need separate evidence."
   ]
 }
