@@ -7,7 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
-import { buildCsv, parseCsv, parseCsvRows, type CsvRow } from "$lib/utils/csv";
+import { buildCsv, parseCsv, parseCsvRows, CsvParseError, type CsvRow } from "$lib/utils/csv";
 import { buildKeePassXml, parseKdbxXml, type XmlExportRow } from "$lib/utils/kdbx-xml";
 import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
 import {
@@ -121,8 +121,13 @@ export function downloadTextFile(content: string, fileName: string, mime: string
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export function csvToImportEntries(text: string): ImportEntry[] {
-  return parseCsvRows(parseCsv(text)).map((row) => ({ ...row, customFields: [] }));
+export function csvToImportEntries(text: string, language: Language = lang()): ImportEntry[] {
+  try {
+    return parseCsvRows(parseCsv(text)).map((row) => ({ ...row, customFields: [] }));
+  } catch (error) {
+    if (error instanceof CsvParseError) throw new Error(t(language, "error.invalidCsv"));
+    throw error;
+  }
 }
 
 export function xmlToImportEntries(text: string, lang: Language): ImportEntry[] {

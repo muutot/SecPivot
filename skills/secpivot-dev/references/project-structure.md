@@ -6,6 +6,10 @@ Frontend `utils/csv.ts::buildCsv` and native `vault/serialize.rs::escape_csv`
 guard formula-like values before RFC quoting. `tests/csv.test.mjs` and the
 native `export_csv_keeps_guarded_cells_inside_rfc_quotes` exercise their wire
 format with separators, quotes, multiline fields and literal apostrophes.
+`parseCsv` throws content-free `CsvParseError` on malformed quoting;
+`io.csvToImportEntries` localizes it and the main CSV handler stops before writes.
+`io-import.test.mjs` exercises that actual extracted handler, valid multiline
+bulk fields and obsolete picker completions, alongside the parser wire tests.
 
 `GroupTree` initializes known UUIDs from every initial group independently of
 persisted expansion flags; existing collapsed groups must never auto-expand as

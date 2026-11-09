@@ -1121,8 +1121,19 @@
     const text = await pickImportFile(ioHost, view, [
       { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
     ]);
-    if (text === null) return;
-    const entries: ImportEntry[] = csvToImportEntries(text);
+    if (text === null || !sessionView.isCurrent(view)) return;
+    let entries: ImportEntry[];
+    try {
+      entries = csvToImportEntries(text, settings.general.language);
+    } catch (e) {
+      if (sessionView.isCurrent(view))
+        flash(
+          t(settings.general.language, "io.importFailed", {
+            e: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      return;
+    }
     if (entries.length === 0) {
       flash(t(settings.general.language, "page.noCsvEntries"));
       return;

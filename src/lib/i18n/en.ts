@@ -1178,6 +1178,8 @@ export const en: Record<I18nKey, string> = {
   "error.sessionNotOpen": "Database session is not open",
   "error.createGroupFailed": "Failed to create group",
   "error.invalidXml": "File is not valid XML",
+  "error.invalidCsv":
+    "Invalid CSV quoting. Check that the file is complete and quotes are escaped correctly.",
   "error.invalidXmlExport":
     "Cannot export XML: a value contains characters XML cannot represent. The original values have been kept.",
   "error.notKeepassXml": "Not a valid KeePass XML file (missing KeePassFile/Root/Group)",

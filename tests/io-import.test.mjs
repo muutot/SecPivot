@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
 
 register("./helpers/lib-alias-loader.mjs", import.meta.url);
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -20,7 +23,9 @@ globalThis.__TAURI_INTERNALS__ = {
     return state;
   },
 };
-const { importRowsToEntries, importEntries } = await import("../src/lib/services/io.ts");
+const { importRowsToEntries, importEntries, csvToImportEntries } =
+  await import("../src/lib/services/io.ts");
+const { t } = await import("../src/lib/i18n/index.ts");
 const { SessionViewGuard, LatestOperationGuard } =
   await import("../src/lib/utils/session-state.ts");
 const { vault } = await import("../src/lib/services/vault.ts");
@@ -125,4 +130,102 @@ test("browser bulk import retains quality metadata with KeePass defaults", async
   } finally {
     globalThis.__TAURI_INTERNALS__ = native;
   }
+});
+
+test("CSV conversion rejects a whole malformed document with localized content-free errors", () => {
+  const marker = "synthetic-sensitive-marker";
+  for (const language of ["en", "zh-CN"]) {
+    for (const text of [
+      `Group,Title\r\n,valid\r\n,"${marker}`,
+      `Group,Title\r\n,"${marker}"junk\r\n`,
+    ]) {
+      assert.throws(
+        () => csvToImportEntries(text, language),
+        (error) =>
+          error.message === t(language, "error.invalidCsv") && !error.message.includes(marker),
+      );
+    }
+  }
+});
+
+function csvPageFixture(pick) {
+  calls.length = 0;
+  const source = readFileSync(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const script = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
+  const ast = ts.createSourceFile("page.ts", script, ts.ScriptTarget.Latest, true);
+  const handler = ast.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === "handleImportCsv",
+  );
+  assert.ok(handler);
+  const js = ts.transpileModule(handler.getText(ast), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const sessionView = new SessionViewGuard();
+  sessionView.activate("csv-owner");
+  const notices = [];
+  const host = {
+    sessionView,
+    operations: new LatestOperationGuard(),
+    setBusy: () => {},
+    currentState: () => state,
+    notify: (message) => notices.push(message),
+  };
+  const context = {
+    currentVault: state,
+    sessionView,
+    selectedGroup: null,
+    ioHost: host,
+    settings: { general: { language: "zh-CN" } },
+    // The extracted handler and real service share one Error constructor in the app.
+    Error,
+    t,
+    csvToImportEntries,
+    runImportEntries: importEntries,
+    pickImportFile: pick,
+    flash: (message) => notices.push(message),
+  };
+  runInNewContext(js, context);
+  return { context, sessionView, notices, run: () => context.handleImportCsv() };
+}
+
+test("the actual CSV page handler reports malformed quoting and preserves valid multiline fields", async () => {
+  for (const text of ['Group,Title\r\n,valid\r\n,"truncated', 'Group,Title\r\n,"bad"junk']) {
+    const f = csvPageFixture(async () => text);
+    await f.run();
+    assert.equal(calls.length, 0, "malformed input must never create groups or submit entries");
+    assert.equal(f.notices.length, 1);
+    assert.ok(f.notices[0].includes(t("zh-CN", "error.invalidCsv")));
+    assert.ok(
+      !f.notices[0].includes("Error:"),
+      "localized feedback must not add an English Error prefix",
+    );
+  }
+  const f = csvPageFixture(
+    async () =>
+      'Group,Title,Username,Password,URL,Notes\r\n,"First,""quoted""",user,,https://synthetic.example,"one\r\ntwo"\r\n',
+  );
+  await f.run();
+  const batch = calls.find((call) => call.command === "import_entries");
+  assert.ok(batch);
+  assert.equal(batch.args.sessionId, "csv-owner");
+  assert.equal(batch.args.inputs.length, 1);
+  assert.equal(batch.args.inputs[0].title, 'First,"quoted"');
+  assert.equal(batch.args.inputs[0].notes, "one\r\ntwo");
+});
+
+test("the actual CSV page handler ignores an old picker completion after A to B to A", async () => {
+  let release;
+  const f = csvPageFixture(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = f.run();
+  f.sessionView.activate("other-owner");
+  f.sessionView.activate("csv-owner");
+  release('Group,Title\r\n,"truncated');
+  await pending;
+  assert.equal(calls.length, 0);
+  assert.equal(f.notices.length, 0);
 });
