@@ -491,6 +491,398 @@ fn locked_vault_refuses_srp_and_keys() {
 }
 
 #[test]
+fn srp_proof_cannot_create_an_authorization_after_the_vault_locks() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut host = VaultSession::default();
+    host.create(
+        &dir.path().join("locked-proof.kdbx"),
+        "synthetic-master",
+        "Aes",
+        "Aes256",
+        "None",
+        None,
+    )
+    .unwrap();
+    let (a_hex, a) = client_ephemeral();
+    let mut conn = Conn::default();
+    let mut password = None;
+    let reply = dispatch_setup(
+        &mut conn,
+        &identify_to_server("synthetic-client", &a_hex),
+        &mut host,
+        &mut |pw, _| password = Some(pw.to_owned()),
+    )
+    .unwrap();
+    let srp = reply.srp.unwrap();
+    let (m, _) = client_proof(
+        &srp.s.unwrap(),
+        &srp.b.unwrap(),
+        &password.unwrap(),
+        &a_hex,
+        &a,
+    );
+    host.close();
+    let reply = dispatch_setup(&mut conn, &proof_to_server(&m), &mut host, &mut |_, _| {}).unwrap();
+    assert_eq!(
+        reply.error.as_ref().map(|error| error.code.as_str()),
+        Some("AUTH_FAILED")
+    );
+    assert!(host.rpc_key("synthetic-client").is_none());
+    assert!(conn.session_key.is_none());
+}
+
+#[test]
+fn cached_connection_cannot_read_after_the_real_vault_key_expires() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut host = VaultSession::default();
+    host.create(
+        &dir.path().join("expired-key.kdbx"),
+        "synthetic-master",
+        "Aes",
+        "Aes256",
+        "None",
+        None,
+    )
+    .unwrap();
+    let login = serde_json::from_value(json!({
+        "title": "Synthetic credential",
+        "uRLs": ["https://example.test"],
+        "formFieldList": [
+            { "type": "FFTusername", "value": "synthetic-user" },
+            { "type": "FFTpassword", "value": "synthetic-password" }
+        ]
+    }))
+    .unwrap();
+    host.add_login(&login, "").unwrap();
+    host.rpc_session_timeout_secs = 1;
+    host.register_rpc_key("synthetic-client", vec![7; 32]);
+    let mut conn = Conn::default();
+    conn.username = Some("synthetic-client".into());
+    conn.session_key = Some(vec![7; 32]);
+    let request = json!({"jsonrpc":"2.0", "id":1, "method":"FindLogins", "params":[["https://example.test"]]});
+    let frame = Envelope::jsonrpc(encrypt_frame(&[7; 32], &request.to_string()).unwrap());
+    let (reply, _) = dispatch_jsonrpc(
+        &mut conn,
+        &frame,
+        &mut host,
+        &PasswordGeneratorSettings::default(),
+    )
+    .unwrap();
+    let response: Value =
+        serde_json::from_str(&decrypt_frame(&[7; 32], &reply.jsonrpc.unwrap()).unwrap()).unwrap();
+    assert_eq!(
+        response["result"][0]["formFieldList"][1]["value"],
+        "synthetic-password"
+    );
+    host.rpc_keys_expiry = Some(Instant::now() - Duration::from_secs(1));
+    assert!(
+        dispatch_jsonrpc(
+            &mut conn,
+            &frame,
+            &mut host,
+            &PasswordGeneratorSettings::default()
+        )
+        .is_none(),
+        "an expired authorization still served a database response through its connection copy"
+    );
+    assert!(host.rpc_keys.is_empty());
+}
+
+#[test]
+fn stored_key_proof_cannot_reuse_a_revoked_challenge() {
+    let mut host = FakeHost::open();
+    host.register_rpc_key("synthetic-client", vec![7; 32]);
+    let mut conn = Conn::default();
+    let reply = dispatch_setup(
+        &mut conn,
+        &key_request("synthetic-client"),
+        &mut host,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    let sc = reply.key.unwrap().sc.unwrap();
+    host.keys.clear();
+    let cc = "synthetic-challenge";
+    let cr = key_auth_cr(&hex(&[7; 32]), &sc, cc);
+    let reply = dispatch_setup(
+        &mut conn,
+        &key_challenge_response(cc, &cr),
+        &mut host,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(
+        reply.error.as_ref().map(|error| error.code.as_str()),
+        Some("AUTH_RESTART")
+    );
+    assert!(conn.session_key.is_none());
+}
+
+fn begin_session_srp(conn: &mut Conn, host: &mut VaultSession, id: &str) -> Envelope {
+    let (a_hex, a) = client_ephemeral();
+    let mut password = None;
+    let reply = dispatch_setup_for_session(
+        conn,
+        &identify_to_server("synthetic-client", &a_hex),
+        host,
+        Some(id),
+        &mut |pw, _| password = Some(pw.to_owned()),
+    )
+    .unwrap();
+    let srp = reply.srp.unwrap();
+    let (m, _) = client_proof(
+        &srp.s.unwrap(),
+        &srp.b.unwrap(),
+        &password.unwrap(),
+        &a_hex,
+        &a,
+    );
+    proof_to_server(&m)
+}
+
+#[test]
+fn pending_srp_proof_is_bound_to_the_original_registry_session() {
+    for reopen in [false, true] {
+        let dir = tempfile::TempDir::new().unwrap();
+        let vaults = VaultSessions::default();
+        let mut active = VaultSession::default();
+        vaults
+            .open(&mut active, |host| {
+                host.create(
+                    &dir.path().join("first.kdbx"),
+                    "synthetic-master",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    None,
+                )
+            })
+            .unwrap();
+        let first_id = vaults.active_id().unwrap();
+        let mut conn = Conn::default();
+        let proof = begin_session_srp(&mut conn, &mut active, &first_id);
+        if reopen {
+            vaults.close_all(&mut active, true).unwrap();
+        }
+        vaults
+            .open(&mut active, |host| {
+                host.create(
+                    &dir.path().join("second.kdbx"),
+                    "synthetic-master",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    None,
+                )
+            })
+            .unwrap();
+        let second_id = vaults.active_id().unwrap();
+        assert_ne!(first_id, second_id);
+        let reply = dispatch_setup_for_session(
+            &mut conn,
+            &proof,
+            &mut active,
+            Some(&second_id),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(reply.error.unwrap().code, "AUTH_FAILED");
+        assert!(active.rpc_keys.is_empty());
+        assert!(conn.session_key.is_none());
+        assert!(conn.srp.is_none());
+
+        // A fresh authorization on the current session remains functional.
+        let mut conn = Conn::default();
+        let proof = begin_session_srp(&mut conn, &mut active, &second_id);
+        let reply = dispatch_setup_for_session(
+            &mut conn,
+            &proof,
+            &mut active,
+            Some(&second_id),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(reply.srp.unwrap().stage.as_deref(), Some("proofToClient"));
+        assert!(active.rpc_key("synthetic-client").is_some());
+    }
+}
+
+#[test]
+fn retained_rpc_authorization_still_works_after_the_configured_lock_and_unlock() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let vaults = VaultSessions::default();
+    let mut active = VaultSession::default();
+    vaults
+        .open(&mut active, |host| {
+            host.create(
+                &dir.path().join("retained.kdbx"),
+                "synthetic-master",
+                "Aes",
+                "Aes256",
+                "None",
+                None,
+            )
+        })
+        .unwrap();
+    active.register_rpc_key("synthetic-client", vec![7; 32]);
+    let mut conn = Conn::default();
+    conn.username = Some("synthetic-client".into());
+    conn.session_key = Some(vec![7; 32]);
+    let request = json!({"jsonrpc":"2.0", "id":1, "method":"GetAllDatabases", "params":[]});
+    let frame = Envelope::jsonrpc(encrypt_frame(&[7; 32], &request.to_string()).unwrap());
+    vaults.close_all(&mut active, true).unwrap();
+    let challenge = dispatch_setup(
+        &mut conn,
+        &key_request("synthetic-client"),
+        &mut active,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    let sc = challenge.key.unwrap().sc.unwrap();
+    let cc = "synthetic-retained-challenge";
+    let proof = key_auth_cr(&hex(&[7; 32]), &sc, cc);
+    let reply = dispatch_setup(
+        &mut conn,
+        &key_challenge_response(cc, &proof),
+        &mut active,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert!(reply.error.is_none());
+    let (reply, _) = dispatch_jsonrpc(
+        &mut conn,
+        &frame,
+        &mut active,
+        &PasswordGeneratorSettings::default(),
+    )
+    .unwrap();
+    let response: Value =
+        serde_json::from_str(&decrypt_frame(&[7; 32], &reply.jsonrpc.unwrap()).unwrap()).unwrap();
+    assert_eq!(response["error"]["code"], -32000);
+    vaults
+        .open(&mut active, |host| {
+            host.open(&dir.path().join("retained.kdbx"), "synthetic-master", None)
+        })
+        .unwrap();
+    assert!(dispatch_jsonrpc(
+        &mut conn,
+        &frame,
+        &mut active,
+        &PasswordGeneratorSettings::default()
+    )
+    .is_some());
+    active.register_rpc_key("synthetic-client", vec![8; 32]);
+    assert!(dispatch_jsonrpc(
+        &mut conn,
+        &frame,
+        &mut active,
+        &PasswordGeneratorSettings::default()
+    )
+    .is_none());
+    active.close();
+    active
+        .open(&dir.path().join("retained.kdbx"), "synthetic-master", None)
+        .unwrap();
+    assert!(dispatch_jsonrpc(
+        &mut conn,
+        &frame,
+        &mut active,
+        &PasswordGeneratorSettings::default()
+    )
+    .is_none());
+}
+
+#[test]
+fn rpc_write_waiting_for_persistence_rechecks_authorization_before_preparation() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let vaults = Arc::new(VaultSessions::default());
+    let mut active = VaultSession::default();
+    let path = dir.path().join("queued-write.kdbx");
+    vaults
+        .open(&mut active, |host| {
+            host.create(&path, "synthetic-master", "Aes", "Aes256", "None", None)
+        })
+        .unwrap();
+    active.rpc_session_timeout_secs = 1;
+    active.register_rpc_key("synthetic-client", vec![7; 32]);
+    let id = vaults.active_id().unwrap();
+    let active = Arc::new(Mutex::new(active));
+    let before = std::fs::read(&path).unwrap();
+    let held = vaults.acquire_persistence().unwrap();
+    let worker_vaults = Arc::clone(&vaults);
+    let worker_active = Arc::clone(&active);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let mut conn = Conn::default();
+        conn.username = Some("synthetic-client".into());
+        conn.session_key = Some(vec![7; 32]);
+        let request = DecodedJsonRpc {
+            method: "AddLogin".into(),
+            id: json!(1),
+            params: Some(
+                json!([{ "title": "Synthetic write", "uRLs": ["https://example.test"], "formFieldList": [] }, ""]),
+            ),
+        };
+        started_tx.send(()).unwrap();
+        let _permit = worker_vaults.acquire_persistence().unwrap();
+        worker_vaults
+            .with_session_mut_result(
+                &mut worker_active.lock().unwrap(),
+                &id,
+                RpcError::InvalidMessage,
+                |target| prepare_authorized_rpc_write(&conn, &request, target),
+            )
+            .is_err_and(|error| matches!(error, RpcError::AuthFailed))
+    });
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    active.lock().unwrap().rpc_keys_expiry = Some(Instant::now() - Duration::from_secs(1));
+    drop(held);
+    assert!(worker.join().unwrap());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(!active.lock().unwrap().snapshot().unwrap().dirty);
+}
+
+#[test]
+fn authorized_rpc_write_preparation_still_persists_add_and_update() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("authorized-write.kdbx");
+    let mut host = VaultSession::default();
+    host.create(&path, "synthetic-master", "Aes", "Aes256", "None", None)
+        .unwrap();
+    host.register_rpc_key("synthetic-client", vec![7; 32]);
+    let mut conn = Conn::default();
+    conn.username = Some("synthetic-client".into());
+    conn.session_key = Some(vec![7; 32]);
+    let request = DecodedJsonRpc {
+        method: "AddLogin".into(),
+        id: json!(1),
+        params: Some(
+            json!([{ "title": "Synthetic original", "uRLs": ["https://example.test"], "formFieldList": [] }, ""]),
+        ),
+    };
+    let job = prepare_authorized_rpc_write(&conn, &request, &mut host).unwrap();
+    let result = persist_rpc_write(job).unwrap();
+    let (entry, _) = host.complete_rpc_write(result).unwrap();
+    let request = DecodedJsonRpc {
+        method: "UpdateLogin".into(),
+        id: json!(2),
+        params: Some(
+            json!([{ "title": "Synthetic updated", "uRLs": ["https://example.test"], "formFieldList": [] }, entry.uuid, 4, path.to_string_lossy()]),
+        ),
+    };
+    let job = prepare_authorized_rpc_write(&conn, &request, &mut host).unwrap();
+    // An already-admitted transaction still adopts its durable result if
+    // authorization expires after preparation, rather than lying about save.
+    host.rpc_keys.clear();
+    let result = persist_rpc_write(job).unwrap();
+    host.complete_rpc_write(result).unwrap();
+    host.close();
+    let state = host.open(&path, "synthetic-master", None).unwrap();
+    assert_eq!(state.root.entries.len(), 1);
+    assert_eq!(state.root.entries[0].title, "Synthetic updated");
+}
+
+#[test]
 fn tampered_or_keyless_jsonrpc_frames_close() {
     let mut host = FakeHost::open();
     host.register_rpc_key("alice@kprpc", vec![3u8; 32]);
@@ -499,6 +891,7 @@ fn tampered_or_keyless_jsonrpc_frames_close() {
 
     // Key wiped (as on lock) → frame MAC fails → no reply.
     let mut conn = Conn::default();
+    conn.username = Some("alice@kprpc".into());
     conn.session_key = Some(vec![3u8; 32]);
     assert!(dispatch_jsonrpc(
         &mut conn,
