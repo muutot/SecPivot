@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S40; historical supplemental tracking notes excluded",
-    "total": 51,
-    "confirmed": 51,
+    "scope": "15 baseline cards plus SP-S05 through SP-S41; historical supplemental tracking notes excluded",
+    "total": 52,
+    "confirmed": 52,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 29,
+      "Medium": 30,
       "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "b5bec5c",
+  "remediation_checkpoint": "653ef66",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S41",
+      "area": "Zero and strict size history retention settings retain superseded secrets",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "80c297a",
+      "commit": "653ef66",
+      "status": "Confirmed and remediated. Three corrected native settings/save/reopen/edit tests failed for count=0, size=0 and size=1. Official pinned KeePass MaintainBackups treats zero as none and removes oversized newest snapshots; negative remains unlimited. Shared count/size logic now obeys exact limits and releases only unowned old binaries, leaving current data intact. Four new tests, corrected historical assumptions, cap-zero restore and full verify 316/587/ACL2 passed. No external leakage or secure disk-erasure claim; metadata-only changes do not eagerly purge all entries and absent-size/native-client behavior remain separate audits."
+    },
     {
       "id": "SP-S40",
       "area": "History restore mixes old fields with current attachment set",
@@ -413,10 +422,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "b5bec5c",
-    "log": "verify-restore-attachment-set.log",
+    "checkpoint": "653ef66",
+    "log": "verify-history-retention-limits.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 583,
+    "rust_unit_tests": 587,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -446,7 +455,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 583,
+    "rust_unit_tests_discovered": 587,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -535,6 +544,14 @@
       "history_tests": 27,
       "scope": "Actual native synthetic KDBX save/reopen, replacement/removal/addition, empty values, both protection flags, undo and caps 10/1; no native client/device/UI or user vault/clipboard",
       "limits": "Two interim tests expected stricter retention than current source implements; separate count/size compatibility audit is pending"
+    },
+    "history_retention_limits": {
+      "result": "passed",
+      "red_log": "history-retention-limits-red-corrected.log",
+      "green_log": "history-retention-limits-green-final.log",
+      "history_tests": 31,
+      "scope": "Actual native settings/save/reopen followed by tracked mutation; count/size zero and oversized snapshot removal, exact recursive byte budget, negative limits, current bytes/protection preserved, restore with cap 0/1/10",
+      "limitations": "First red fixture omitted a save and failed before reaching retention; excluded. An intermediate legacy test required an oversized newest snapshot; corrected to assert actual total. No eager whole-database purge, disk erasure, native KeePass client/device, user vault or shared clipboard."
     }
   },
   "reverification_notes": [
@@ -591,6 +608,7 @@
     "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending.",
     "ed5a86d fixes SP-S34 favorite loss across structured and CSV import, frontend metadata and native/browser bulk creation. Three native and three frontend red-to-green plus invalid localized CSV regression passed; six favorite Rust tests and real chooser/icon checks passed. Full verify 316/564/ACL2 exit 0 with four live clipboard bodies skipped. Source docs/TODO synchronized; original baseline preserved. Official JSON excludes trash and includes passwordHistory; attachments belong to ZIP, so initial deleted-item hypothesis is not promoted. Full migration/mobile Save As/remaining system/UI audit still active.",
     "4fbc748 fixes SP-S38/SP-S39 together as one complete attachment invariant. Valid native history red had three failures; sparse-ID loss reproduced independently with original registry crate. First full gate had one S3 100-page fixture connection failure at page 82; unchanged isolated fixture and serial final full gate passed, without attributing the single failure to product or environment. Final verify 316/582/ACL2 and two dedicated dependency tests passed; four live clipboard bodies skipped. Early fixture compile failures and blanket rustfmt drift were corrected; 57 upstream files restored and provenance gate passed. Initial optional patch reconstruction had only CRLF differences on three files; explicit core.autocrlf=false fresh reconstruction verified all 60 hashes. Data/security/structure/maintenance references and partial history TODO synchronized. Full attachment restore, imports, remaining system/UI coverage and v1.6.5 mobile Save As APK/device remain pending; baseline b7c5d9f and 6.1 score unchanged.",
-    "b5bec5c fixes SP-S40 native attachment-set restoration and corrects the existing green-test expectation that had required keeping newer attachments. Twenty-seven history tests passed; full verify 316/583/ACL2 exit 0, four native clipboard live bodies opted out. Original binary flags and empty/Unicode filenames survive save/reopen and undo with count limits 10/1. Contract/security references and partial history TODO updated. Intermediate strict-retention expectations exposed separate zero-count/minimum-one size behavior; no claim those cases are fixed here. New binary buffers stay within the session, no IPC schema/UI/vendor/dependency change. Baseline and score unchanged; full audit goal active, external attachment snapshots and mobile v1.6.5 Save As APK/device still pending."
+    "b5bec5c fixes SP-S40 native attachment-set restoration and corrects the existing green-test expectation that had required keeping newer attachments. Twenty-seven history tests passed; full verify 316/583/ACL2 exit 0, four native clipboard live bodies opted out. Original binary flags and empty/Unicode filenames survive save/reopen and undo with count limits 10/1. Contract/security references and partial history TODO updated. Intermediate strict-retention expectations exposed separate zero-count/minimum-one size behavior; no claim those cases are fixed here. New binary buffers stay within the session, no IPC schema/UI/vendor/dependency change. Baseline and score unchanged; full audit goal active, external attachment snapshots and mobile v1.6.5 Save As APK/device still pending.",
+    "653ef66 fixes SP-S41 precise zero/positive history count and size limits while preserving negative unlimited and existing absence defaults. Three valid red regressions after real settings/save/reopen demonstrated retained superseded history; initial fixture omitted save and was excluded. Four new native tests and corrected old cap/minimum-one expectations, exact recursive budget and restore cap-zero case passed. Thirty-one targeted history tests and full verify 316/587/ACL2 passed; no external filters and four native clipboard live bodies disabled. References/data/security/DTO comments and partial TODO synchronized. Cleanup occurs only on existing tracked edit/restore paths and current data remains; no native client, Android provider/device, user vault, clipboard or secure filesystem erasure evidence. Baseline b7c5d9f and 6.1 score unchanged; overall goal active. Next separate candidates: external attachment import snapshots, settings wire null reset, absent-size default and remaining system/UI/migration coverage; v1.6.5 Save As source ACL fix still lacks APK/device."
   ]
 }

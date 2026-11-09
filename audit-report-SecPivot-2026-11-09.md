@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S40；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S41；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 29     | 29        | 0         |
+| Medium    | 30     | 30        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **51** | **51**    | **0**     |
+| **Total** | **52** | **52**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2159,3 +2159,44 @@ red 证据区分。未执行原生 KeePass 客户端：现存参考 ZIP 无法�
 不足时仍保留最新一版；官方源码语义不同。这是下一项独立兼容性复核，
 不能由附件恢复通过推断这些边界已修复。本报告提交不改变契约，无新
 reference 修改需要；基线与评分保持不变，目标仍 active。
+
+### Finding: SP-S41 历史保留的零值与严格大小上限未执行（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Privacy / Configuration / Data retention / Testing authenticity
+- Status: Confirmed
+- Affected area: Shared native history_cap/history_limits/trim_entry_history_by_size
+- Evidence:
+  - File: `src-tauri/src/vault/serialize.rs:384–452`、`src-tauri/src/vault/entries.rs:28–36`、`src-tauri/src/vault/tests.rs:2461–2499`（`80c297a` 修复前）
+  - Function / Module: history_cap / history_limits / trim_entry_history_by_size
+  - Relevant behavior: 数量 0 被映射为 usize::MAX；大小 0 被当作无限；大小裁剪始终至少保留最新一版。旧测试明确要求数量 0 保留全部历史，并对小预算强行访问最新版本。
+  - Reproduction: 合成库通过实际 update_database_settings 配置、保存重开，再用 update_entry 替换旧密码和附件；数量 0、大小 0、大小 1 三个边界仍有历史。`history-retention-limits-red-corrected.log` exit 101，3 fail；首轮缺少设置后 save 导致条目不存在，属于 fixture，未用于产品结论。
+  - Independent reference: 固定 KeePass PwEntry.cs commit `d1eec63f1bd73dc2d5273eaf94528f616b553ce5`，MaintainBackups:659–684 对 count/size >=0 执行删除直到不超限，没有最少一版例外；源 SHA256 `a68f2d7df7a0d49940b63387ed20634f849e60de6f4bb01c4f0ab8a4becba230`。未运行原生 KeePass binary。
+- Problem: 用户或外部 KeePass 库配置禁止/限制历史后，SecPivot 仍将已经替换的旧密码和附件保留在加密库中，大小限制也可能被单个快照突破。
+- Why it matters: 保留行为违反可见设置与格式语义，扩大旧敏感数据留存；没有已发生的对外泄露、磁盘秘密泄漏或进程 OOM 证据，因此按 Medium 定级。
+- Realistic failure scenario: 用户将 HistoryMaxItems 设为 0 禁用历史，然后改掉旧密码；保存重开后仍可访问旧版本。或从设置 HistoryMaxSize=0 的 KeePass 库继续编辑，旧快照仍存在。
+- Minimal fix: 数量/大小非负值按精确上限执行，0 清理所有快照，负数保留无限语义；允许删除超出预算的最新一版，历史重建后回收仅失去所有者的旧附件。
+- Better long-term fix: 单独复核缺省大小、metadata 更新的清理时机、每个 mutation 入口及原生客户端互操作；不将历史清理描述为磁盘安全擦除。
+- Regression test suggestion: 真正设置/保存重开的 count=0、size=0、size 小于单快照，旧历史/旧附件移除且当前密码/附件保持；负数保留多个版本；实际存储总大小 <= 预算；恢复时 count=0 仍保留恢复目标内容但不制造 undo 历史。
+- Estimated effort: 1–2 小时（共享规则、KDBX 回归和契约同步）
+
+`653ef66` 已修复零值与严格大小保留规则。4 项新增原生回归、纠正原
+数量 0/最少一版假设的测试，以及 cap=0 恢复附件回归通过；31 项针对
+历史的检查通过。完整 `verify-history-retention-limits.log` exit 0：
+316 frontend、587 Rust、ACL 2，串行无外部过滤，四个剪贴板 live body
+默认跳过。原生设置/保存重开后执行实际编辑，旧历史/旧附件释放，当前
+密码/附件保持；负数无限也保存重开保持多个版本。
+
+大小不足时，原历史测试仍索引最新版本而失败；改为核对实际累计大小
+<= 预算并只在仍有版本时检查顺序。首轮 red fixture 未保存设置后关闭
+丢掉新条目，未用于产品结论；有效 red 在补齐 save 后三项均复现。
+此次只改共享保留规则，没有全库主动清理、依赖/IPC/UI 结构变更；
+data/security/DTO 注释和 partial TODO 同步，未把修复称作磁盘安全擦除。
+本报告提交没有新的产品契约变化，无额外 reference 修改需要。
+
+下一步独立复核外部附件修改回导的历史快照、settings 的 JSON null 重置
+边界、缺省大小及其余系统/UI/迁移能力；这些候选不加入 Confirmed 统计。
+手机 v1.6.5 云端库另存为已有 ACL 源码修复，仍缺新版 APK 与系统
+选择器/provider 真机验证。原始基线、评分和未验证的平台边界保持不变，
+全面目标继续 active。
