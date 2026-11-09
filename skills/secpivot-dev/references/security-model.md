@@ -44,6 +44,13 @@ URIs never enter recent-vault settings. Device/provider runtime remains pending.
 
 ## Lock lifecycle
 
+The idle activity watcher observes keyboard events in window capture, before
+menus and child controls consume navigation. Discrete keys reset the full idle
+deadline even when their bubble is stopped; cleanup removes the same capture
+listener. This does not change lock duration, disabled mode or focus-loss lock.
+The deterministic menu regression exercises the actual timer functions with a
+fake clock and verifies both the refreshed deadline and listener cleanup.
+
 The RPC side-channel renderer uses a wall-clock deadline, rechecked by interval,
 focus/visibility resume and before copying. Expiry dismisses the modal and drops
 its pending password reference; unmount and manual close do the same. Timer and

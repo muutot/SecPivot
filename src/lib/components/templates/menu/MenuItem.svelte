@@ -11,6 +11,8 @@
     destructive?: boolean;
     disabled?: boolean;
     title?: string;
+    submenuId?: string;
+    expanded?: boolean;
     onclick?: () => void;
     /** Leading slot (icon / check mark). */
     leading?: Snippet;
@@ -27,6 +29,8 @@
     destructive = false,
     disabled = false,
     title = undefined,
+    submenuId,
+    expanded,
     onclick,
     leading,
     trailing,
@@ -41,6 +45,10 @@
   class:destructive
   {role}
   aria-checked={role === "menuitemcheckbox" ? checked : undefined}
+  aria-haspopup={submenuId ? "menu" : undefined}
+  aria-controls={submenuId && expanded ? submenuId : undefined}
+  aria-expanded={submenuId ? expanded : undefined}
+  tabindex="-1"
   {disabled}
   {title}
   {onclick}

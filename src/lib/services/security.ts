@@ -123,7 +123,8 @@ export function installAutoLock(): () => void {
   const onDiscrete = (): void => onActivity(true);
   const onContinuous = (): void => onActivity(false);
   window.addEventListener("pointerdown", onDiscrete);
-  window.addEventListener("keydown", onDiscrete);
+  // Menus and child controls consume navigation before the bubble phase.
+  window.addEventListener("keydown", onDiscrete, true);
   window.addEventListener("mousemove", onContinuous);
   window.addEventListener("wheel", onContinuous, { capture: true, passive: true });
   window.addEventListener("scroll", onContinuous, { capture: true, passive: true });
@@ -141,7 +142,7 @@ export function installAutoLock(): () => void {
   });
   return () => {
     window.removeEventListener("pointerdown", onDiscrete);
-    window.removeEventListener("keydown", onDiscrete);
+    window.removeEventListener("keydown", onDiscrete, true);
     window.removeEventListener("mousemove", onContinuous);
     window.removeEventListener("wheel", onContinuous, true);
     window.removeEventListener("scroll", onContinuous, true);

@@ -188,3 +188,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 浏览器站点边界
 
 - [x] 注册域匹配后缀边界（SP-S21）：固定完整静态 Mozilla PSL，含 PRIVATE/通配/例外；六类独立租户经真实 Bridge/RPC 与合成 KDBX 保存重开不匹配，同站子域与例外继续匹配。默认关闭与既有 IP/尾点/显式精度规则保留；主机测试不代表真实扩展/原生平台授权验证。
+
+## 审计补充 — 菜单键盘操作
+
+- [x] 菜单焦点与逐层导航（SP-S22）：共享 shell 初始焦点、跳过禁用项的上下/Home/End、级联 Right/Enter/Space 与 Left/Esc 返回、根 Esc 归还焦点、Tab/Shift+Tab 正常继续；真实 Edge 组件和三主题 × 三窗口尺寸回归，外部点击/新弹窗/卸载所有权检查通过。主页面捕获快捷键尊重分组菜单所有权；闲置计时器捕获按键，已消费的导航仍刷新期限。原生 Android WebView 与屏幕阅读器仍待验证。

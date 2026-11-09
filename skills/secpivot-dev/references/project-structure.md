@@ -233,6 +233,19 @@ outside the scheduler mutex and rechecks generation under the OS clipboard lock.
 
 `VaultSessions` also owns the runtime `rpc.matchByRegistrableDomain` mode and the `rpc.sessionTimeoutSecs` SRP key lifetime. Startup and settings updates synchronize both to the active slot, every parked session, and sessions opened later; the registry test suite covers propagation across open and switch operations.
 
+`utils/menu-keyboard.ts` owns shared viewport-menu focus, level-scoped arrow/
+Home/End navigation, Escape/Tab dismissal and capture-listener cleanup.
+`ViewportMenuShell` attaches it on mount; `ContextMenu` handles cascade entry/
+return and guarded post-tick child focus. MenuItem exposes submenu ARIA with
+instance-scoped IDs. `tests/menu-keyboard.test.mjs` verifies ownership/lifetime
+with a deterministic DOM seam; native browser button/Tab behavior requires
+rendered verification. Appearance reuses the existing global focus outline.
+The page's earlier window-capture shortcut handler checks the shared
+`activeContextMenu` owner, including menus opened by recursive GroupNode;
+document capture alone cannot block an earlier window listener.
+`security.ts::installAutoLock` observes keys in window capture so consumed
+menu navigation still refreshes idle time; cleanup uses the same capture flag.
+
 ## Mobile (Android) surface
 
 Android support is scoped and wired into the release workflow: platform-specific

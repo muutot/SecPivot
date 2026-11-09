@@ -152,7 +152,14 @@ header/icon blocks, or footer layouts.
 `ViewportMenuShell.svelte` is the canonical viewport-fixed popover menu: it
 clamps to the window with an 8px margin on content/viewport resize, bounds its
 width and height and scrolls internally when the menu exceeds the viewport.
-It closes on Escape or click-outside,
+It focuses the first enabled item on mount. `utils/menu-keyboard.ts` captures
+menu navigation before page bubble shortcuts, scopes Up/Down/Home/End to the
+current menu level and skips disabled items. Escape restores invocation focus;
+leaf Enter/Space preserve native activation and stop page bubble shortcuts.
+The page's earlier window-capture shortcuts also respect `activeContextMenu`.
+Tab restores it before normal browser traversal. Cleanup restores only owned
+focus; outside click/focus and newly focused dialogs keep their focus. It
+closes on Escape, Tab or outside click/focus,
 accepts role/aria label plus a `column-config` modifier for the bounded,
 scrollable column picker, and owns the elevated-surface styles in its scoped
 block. Items are composed from `templates/menu/MenuItem.svelte`; do not
@@ -160,7 +167,15 @@ introduce a second fixed-menu surface or duplicate item base rules.
 `ContextMenu` cascades use viewport-fixed positioning to escape the scrollable
 parent's clipping, flip beside the anchor when space permits, clamp within the
 same margin and follow parent scroll/viewport resize. Long cascades scroll in
-their own surface. Reuse the existing surface, border and scrollbar tokens.
+their own surface. Parents expose `aria-haspopup`/`aria-expanded`/`aria-controls`
+with instance-scoped IDs. Right/Enter/Space enter enabled child rows; Left or
+Escape returns to the parent, with a second Escape closing the root. Deferred
+child focus must check connection, expanded identity and current parent focus.
+Pointer movement that removes a focused child first transfers focus to the
+enabled sibling (or previous parent for a disabled sibling), preserving Escape.
+Items use `tabindex=-1`; the menu owns keyboard navigation, and global
+`:focus-visible` supplies the existing theme/forced-colors outline. Reuse the
+existing surface, border and scrollbar tokens.
 
 ## CSS ownership decision
 

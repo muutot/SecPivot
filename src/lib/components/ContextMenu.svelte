@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ViewportMenuShell from "$lib/components/ViewportMenuShell.svelte";
   import MenuItem from "$lib/components/templates/menu/MenuItem.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
+  import { focusMenuItem, menuItems } from "$lib/utils/menu-keyboard";
 
   export interface ContextMenuItem {
     id: string;
@@ -29,6 +31,7 @@
 
   /** id of the currently expanded cascade submenu. */
   let openSubmenu = $state<string | null>(null);
+  const menuId = $props.id();
 
   let s = $state($appSettings);
   $effect(() => {
@@ -48,6 +51,53 @@
   function dispatch(id: string): void {
     openSubmenu = null;
     onaction(id);
+  }
+
+  function hoverItem(event: PointerEvent, item: ContextMenuItem): void {
+    const anchor = event.currentTarget as HTMLElement;
+    const active = document.activeElement as HTMLElement | null;
+    const oldSubmenu = active?.closest<HTMLElement>(".submenu");
+    // Removing a keyboard-focused child must not strand focus on BODY when
+    // the pointer opens a sibling or closes the cascade.
+    if (
+      oldSubmenu &&
+      oldSubmenu.parentElement !== anchor &&
+      oldSubmenu.closest(".viewport-menu") === anchor.closest(".viewport-menu")
+    ) {
+      const next = item.disabled ? oldSubmenu.parentElement : anchor;
+      const button = next?.querySelector<HTMLButtonElement>('button[role="menuitem"]');
+      if (button) focusMenuItem(button);
+    }
+    openSubmenu = item.children?.length && !item.disabled ? item.id : null;
+  }
+
+  function navigateSubmenu(event: KeyboardEvent): boolean {
+    const target = event.target as HTMLElement;
+    const button = target.closest<HTMLButtonElement>('button[role="menuitem"]');
+    const anchor = target.closest<HTMLElement>(".submenu-anchor");
+    if (!anchor) return false;
+    const parent = anchor.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    if (button !== parent) {
+      if (parent && (event.key === "ArrowLeft" || event.key === "Escape")) {
+        openSubmenu = null;
+        focusMenuItem(parent);
+        return true;
+      }
+      return false;
+    }
+    if (!button || button.disabled || !["ArrowRight", "Enter", " "].includes(event.key))
+      return false;
+    const item = items.find((item) => item.id === anchor.dataset.submenuOwner);
+    if (!item?.children?.length) return false;
+    openSubmenu = item.id;
+    void tick().then(() => {
+      // A close, Tab, outside focus or unmount must defeat delayed child focus.
+      if (!button.isConnected || openSubmenu !== item.id || document.activeElement !== button)
+        return;
+      const submenu = anchor.querySelector<HTMLElement>('[role="menu"]');
+      if (submenu) focusMenuItem(menuItems(submenu)[0] ?? submenu);
+    });
+    return true;
   }
 
   /** Fixed positioning keeps cascades outside the scrollable parent surface.
@@ -79,19 +129,35 @@
   }
 </script>
 
-<ViewportMenuShell {x} {y} onclose={close} ariaLabel={t(lang, "menu.contextMenu")}>
+<ViewportMenuShell
+  {x}
+  {y}
+  onclose={close}
+  ariaLabel={t(lang, "menu.contextMenu")}
+  {navigateSubmenu}
+>
   {#snippet children()}
-    {#each items as item}
+    {#each items as item, index}
       {@const hasChildren = Boolean(item.children?.length)}
       <div
         class="submenu-anchor"
         role="none"
-        onpointerenter={() => (openSubmenu = hasChildren ? item.id : null)}
+        data-submenu-owner={item.id}
+        onpointerenter={(event) => hoverItem(event, item)}
+        onfocusin={(event) => {
+          if (
+            (event.target as HTMLElement).parentElement === event.currentTarget &&
+            openSubmenu !== item.id
+          )
+            openSubmenu = null;
+        }}
       >
         <MenuItem
           label={item.label}
           destructive={item.destructive}
           disabled={item.disabled}
+          submenuId={hasChildren ? `${menuId}-${index}` : undefined}
+          expanded={openSubmenu === item.id}
           onclick={() =>
             hasChildren
               ? (openSubmenu = openSubmenu === item.id ? null : item.id)
@@ -107,7 +173,14 @@
           {/if}
         </MenuItem>
         {#if hasChildren && openSubmenu === item.id}
-          <div class="submenu" use:submenuFlip>
+          <div
+            id={`${menuId}-${index}`}
+            class="submenu"
+            role="menu"
+            aria-label={item.label}
+            tabindex="-1"
+            use:submenuFlip
+          >
             {#each item.children as child (child.id)}
               <MenuItem
                 label={child.label}
