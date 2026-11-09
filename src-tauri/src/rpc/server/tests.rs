@@ -532,6 +532,91 @@ mod ws_transport {
             )
     }
 
+    #[test]
+    fn fragmented_upgrade_waits_for_the_complete_head_without_consuming_it() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (classified_tx, classified_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let first = format!(
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Padding: {}\r\n",
+            "x".repeat(1024)
+        );
+        let rest = b"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+        let expected = [first.as_bytes(), rest].concat();
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let upgrade = is_websocket_upgrade(&mut stream);
+            classified_tx.send(upgrade).unwrap();
+            let _ = resume_rx.recv_timeout(Duration::from_secs(2));
+            let mut received = vec![0; expected.len()];
+            stream.read_exact(&mut received).unwrap();
+            (upgrade, received == expected)
+        });
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(first.as_bytes()).unwrap();
+        let premature = classified_rx.recv_timeout(Duration::from_millis(250)).ok();
+        client.write_all(rest).unwrap();
+        resume_tx.send(()).unwrap();
+        let (upgrade, preserved) = worker.join().unwrap();
+        assert!(
+            premature.is_none(),
+            "incomplete head was classified: {premature:?}"
+        );
+        assert!(upgrade);
+        assert!(
+            preserved,
+            "peek must retain the exact handshake bytes for tungstenite"
+        );
+    }
+
+    fn classify_complete_request(raw: Vec<u8>) -> bool {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            is_websocket_upgrade(&mut stream)
+        });
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(&raw).unwrap();
+        worker.join().unwrap()
+    }
+
+    #[test]
+    fn complete_upgrade_beyond_the_old_peek_buffer_is_recognized() {
+        let request = handshake_request("dGhlIHNhbXBsZSBub25jZQ==").replacen(
+            "Upgrade: websocket",
+            &format!("X-Padding: {}\r\nUpgrade:\tWebSocket", "x".repeat(4096)),
+            1,
+        );
+        assert!(classify_complete_request(request.into_bytes()));
+    }
+
+    #[test]
+    fn upgrade_text_outside_headers_does_not_change_a_plain_probe() {
+        assert!(!classify_complete_request(
+            b"GET /pingAvailabilityTest HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nUpgrade: websocket"
+                .to_vec()
+        ));
+        assert!(!classify_complete_request(vec![b'x'; MAX_HEAD_BYTES + 1]));
+    }
+
+    #[test]
+    fn a_coalesced_frame_does_not_count_toward_the_request_head_limit() {
+        let mut packet = handshake_request("dGhlIHNhbXBsZSBub25jZQ==").into_bytes();
+        // A valid masked binary frame with a 65535-byte payload may arrive
+        // alongside the head. The head alone must determine its size budget.
+        packet.extend_from_slice(&[0x82, 0xfe, 0xff, 0xff, 1, 2, 3, 4]);
+        packet.extend(vec![0; 65_535]);
+        assert!(classify_complete_request(packet));
+    }
+
     fn masked_text(payload: &[u8]) -> Vec<u8> {
         let mask = [1u8, 2, 3, 4];
         let mut frame = vec![0x81, 0x80 | payload.len() as u8];
