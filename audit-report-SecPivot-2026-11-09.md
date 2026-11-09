@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S24；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S25；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
-| High      | 8      | 8         | 0         |
+| High      | 9      | 9         | 0         |
 | Medium    | 22     | 22        | 0         |
 | Low       | 5      | 5         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **35** | **35**    | **0**     |
+| **Total** | **36** | **36**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1522,3 +1522,46 @@ documentation currency gate 同步数据/安全/结构引用；没有据此勾�
 整个自动填充或移动端 TODO。当前卡片 **35**（High 8 / Medium 22 / Low 5），
 原始 15 项/6.1 分基线不变。端口和 Exact 策略、regex/blocked 组合、
 真实扩展、Android APK/真机、完整迁移和语义/UI 覆盖仍待继续。
+
+### Finding: SP-S25 Exact 匹配忽略协议、路径大小写和查询限制（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Privacy / Testing
+- Status: Confirmed
+- Affected area: native KeePassRPC Exact URL policy shared by browser adapters
+- Evidence:
+  - File: `src-tauri/src/vault/helpers.rs:178`、`src/lib/i18n/zh-CN.ts:265`（`b111065` 修复前）
+  - Function / Module: `url_matches_accuracy` / `strip_query` / Exact
+  - Relevant behavior: 完整网址精确匹配实际上删除 scheme、query/fragment，再统一小写；配置 blockHostnameOnlyMatch=true 仍能命中不同协议/路径大小写/查询/fragment。
+  - Reproduction: `exact_matching_preserves_complete_url_identity` 在实际合成 KDBX 保存重开后，用默认和可注册域两个设置通过 BridgeHost/RpcHost 查询。五种变化各返回一条条目，共十组错误命中，见 `exact-url-policy-red.log`；原网址正例通过。日志仅标识变化类型/配置/数量，没有输出密码。
+  - Independent reference: 固定 KeePassRPC commit `dc0a59b60b3ac21da9944bc5b98fe96e706af80a`，EntryConfigv1.cs:44 将 BlockHostnameOnlyMatch 映射到 Exact；KeePassRPCService.cs:345–350 在完整字符串相等时返回 Best，Exact 对其他字符串立即 continue，删除 query 只用于较宽松模式。文件存于 `kprpc-v1-accuracy-reference.cs` / `kprpc-url-match-core-reference.cs`，后者 SHA-256 48aa6042c6f058cfb706af7499720bee0dc1721f5ce5050d675de3259e9412a5。
+- Problem: 用户选择完整网址限制后，后端仍放宽目的地策略，与界面和源客户端的 Exact 语义不一致。
+- Why it matters: 精确 URL 可区分 HTTPS、区分大小写的路径及查询中的租户；不能在缺少用户选择时删去这些限制。证据是合成后端返回，不声称已发生真实扩展外传。
+- Realistic failure scenario: 条目仅允许 HTTPS 的某租户登录网址，另一个 tenant 查询或 HTTP 网址仍可取得该条目。
+- Minimal fix: 在有效主机验证之后，Exact 仅接受完整原字符串相等；删除该分支的自制 query/scheme/path 规范化，保持其他 accuracy 和显式 regex/blocked 优先级。
+- Better long-term fix: 单独复核 Hostname 端口策略、规则交互及扩展输入，后续如要支持规范化应提供明确独立模式，不能偷偷扩大 Exact。
+- Regression test suggestion: 保留实际两个 host、两种配置、五种不同网址与完整网址正例的保存重开回归，继续运行既有 Exact/subdomain、PSL、alternate/blocked/regex 和 authority 测试。
+- Estimated effort: 1 小时（严格分支及回归）
+
+`49a5be3` 已修复 SP-S25。Exact 只接受完整原网址相等；删除自制
+scheme/query/path 规范化，并让 Bridge 保留请求与 submit URL 的原始
+大小写。前端 `shortestMatchable` 在 Exact 下返回原始 trimmed 网址，
+不再删 query/fragment 或补造协议。没有新配置/IPC/依赖或 markup/CSS。
+
+最初只修共享分支时，`exact-url-policy-green.log` 和
+`verify-exact-url-policy.log` 的合法网址正例失败，直接暴露 Bridge
+预先 lower-case 的第二层问题。该失败已修复，不作为通过证据。
+最终 `exact-url-policy-complete.log` 验证实际合成 KDBX 重开的两个 host、
+两种配置、五类变化和合法 request/submit 正例；前端两项建议地址回归
+的红/绿日志为 `exact-url-suggestion-{red,green}.log`。
+正式 `verify-exact-url-policy-complete.log` 通过：前端 **301**、
+Rust **556 + ACL 2**、格式、Svelte check、150 键契约、生产构建与 clippy。
+源码引用固定 KeePassRPC commit 及下载 hash；API 限流和部分 clone
+lazy-fetch 失败仅为取证工具问题，最终使用固定 raw 源码完成核对。
+
+documentation currency gate 同步数据/安全/结构引用。当前卡片 **36**
+（High 9 / Medium 22 / Low 5），原始 15 项/6.1 分基线保持不变。
+Hostname 端口、frontend authority/建议地址、regex/blocked 组合、真实
+扩展与 Android APK/真机、其余迁移及完整语义/UI 覆盖仍待继续。
+整体目标保持进行中，未将手机 v1.6.5 另存为标为真机已解决。
