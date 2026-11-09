@@ -8813,6 +8813,135 @@ fn registrable_domain_match_connects_sibling_hosts_when_enabled() {
 }
 
 #[test]
+fn registrable_domain_matching_respects_private_and_wildcard_suffix_boundaries() {
+    let mut crossings = Vec::new();
+    for (stored_host, unrelated_host, sibling_host) in [
+        (
+            "vault-owner.github.io",
+            "other-owner.github.io",
+            "login.vault-owner.github.io",
+        ),
+        (
+            "vault-owner.blogspot.com",
+            "other-owner.blogspot.com",
+            "login.vault-owner.blogspot.com",
+        ),
+        (
+            "vault-owner.azurewebsites.net",
+            "other-owner.azurewebsites.net",
+            "login.vault-owner.azurewebsites.net",
+        ),
+        (
+            "vault-owner.com.ar",
+            "other-owner.com.ar",
+            "login.vault-owner.com.ar",
+        ),
+        (
+            "vault-owner.tenant.ck",
+            "other-owner.tenant.ck",
+            "login.vault-owner.tenant.ck",
+        ),
+        (
+            "vault-owner.tenant.kawasaki.jp",
+            "other-owner.tenant.kawasaki.jp",
+            "login.vault-owner.tenant.kawasaki.jp",
+        ),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let stored_url = format!("https://{stored_host}/login");
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic PSL vault",
+            &stored_url,
+            serde_json::json!({"version":1}),
+        );
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        session.match_registrable_domain = true;
+        let request = format!("https://{unrelated_host}/login");
+        let bridge = session.logins_for(&request, None);
+        let rpc = session.find_logins(&[request], None, None, None);
+        assert!(bridge.iter().all(|login| login.password == "p"));
+        assert!(rpc.iter().all(|login| login.password == "p"));
+        if !bridge.is_empty() || !rpc.is_empty() {
+            crossings.push((stored_host, bridge.len(), rpc.len()));
+        }
+        let sibling = format!("https://{sibling_host}/login");
+        assert_eq!(
+            session.logins_for(&sibling, None).len(),
+            1,
+            "same registrable site must still match"
+        );
+        assert_eq!(session.find_logins(&[sibling], None, None, None).len(), 1);
+    }
+    assert!(
+        crossings.is_empty(),
+        "bridge/RPC crossed registrable boundaries: {crossings:?}"
+    );
+}
+
+#[test]
+fn registrable_domain_matching_honors_public_suffix_exceptions() {
+    for (stored, sibling) in [
+        ("https://www.ck/login", "https://auth.www.ck/login"),
+        (
+            "https://city.kawasaki.jp/login",
+            "https://auth.city.kawasaki.jp/login",
+        ),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic PSL exception",
+            stored,
+            serde_json::json!({"version":1}),
+        );
+        session.match_registrable_domain = true;
+        assert_eq!(session.logins_for(sibling, None).len(), 1);
+        assert_eq!(
+            session
+                .find_logins(&[sibling.to_owned()], None, None, None)
+                .len(),
+            1
+        );
+    }
+}
+
+#[test]
+fn registrable_domain_matching_keeps_nonregistrable_hosts_distinct() {
+    for (stored, unrelated) in [
+        (
+            "https://github.io/login",
+            "https://vault-owner.github.io/login",
+        ),
+        ("https://co.uk/login", "https://vault-owner.co.uk/login"),
+        ("http://localhost/login", "http://another-host/login"),
+        (
+            "https://vault-owner.invalid/login",
+            "https://other-owner.invalid/login",
+        ),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic nonregistrable host",
+            stored,
+            serde_json::json!({"version":1}),
+        );
+        session.match_registrable_domain = true;
+        assert_eq!(session.logins_for(stored, None).len(), 1);
+        assert!(session.logins_for(unrelated, None).is_empty());
+        assert!(session
+            .find_logins(&[unrelated.to_owned()], None, None, None)
+            .is_empty());
+    }
+}
+
+#[test]
 fn match_accuracy_exact_blocks_subdomains() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

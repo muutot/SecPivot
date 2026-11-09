@@ -204,57 +204,16 @@ fn strip_query(url: &str) -> String {
     rest[..end].to_ascii_lowercase()
 }
 
-/// Multi-label public suffixes that must not be stripped to the last label,
-/// so the registrable domain is the third label from the end (e.g. `co.uk`).
-///
-/// This is a **curated subset** of the Public Suffix List, not the real list:
-/// shipping ~9k rules inline would bloat the binary and the source, and a
-/// dependency for it is a separate decision. The practical consequence is that
-/// a multi-label suffix missing from this table is treated as a single-label
-/// TLD, which makes its registrable domain one label too short and lets two
-/// unrelated hosts under that suffix match each other. Entries below cover the
-/// second-levels most likely to appear in a vault; `matchByRegistrableDomain`
-/// is opt-in (default `false`) precisely because this table is not exhaustive.
-const MULTI_LABEL_SUFFIX: &[&str] = &[
-    "ac.uk", "co.uk", "gov.uk", "org.uk", "net.uk", "me.uk", "ltd.uk", "plc.uk", "com.cn",
-    "net.cn", "org.cn", "gov.cn", "edu.cn", "com.hk", "com.mo", "com.tw", "co.jp", "ne.jp",
-    "or.jp", "ac.jp", "go.jp", "ad.jp", "ed.jp", "gr.jp", "lg.jp", "com.sg", "com.my", "com.vn",
-    "co.za", "org.za", "net.za", "com.au", "net.au", "org.au", "asn.au", "id.au", "co.nz",
-    "com.br", "edu.br", "gov.br", "art.br", "com.mx", "edu.mx", "gob.mx", "net.mx", "org.mx",
-    "com.kw", "edu.kw", "gov.kw", "net.kw", "org.kw", "com.qa", "edu.qa", "gov.qa", "net.qa",
-    "com.tr", "net.tr", "org.tr", "gov.tr", "edu.tr", "co.il", "org.il", "net.il", "ac.il",
-    "gov.il", "co.th", "in.th", "or.th", "go.th", "ac.th", "co.kr", "or.kr", "ne.kr", "ac.in",
-    "gov.in", "co.in", "net.in", "org.in",
-];
-
-/// Registrable domain of a `host`, mirroring KeePassRPC's PSL-based `Domain`
-/// match: the public-suffix label(s) plus one more label. Used when the app
-/// is configured to match by registrable domain, so `account.aliyun.com` and
-/// `passport.aliyun.com` share `aliyun.com`. Unknown suffixes fall back to the
-/// last two labels; already-short hosts are returned unchanged.
-fn registrable_domain(host: &str) -> String {
+/// Registrable site boundary from the pinned Mozilla PSL, including private
+/// hosting tenants, wildcard suffixes and exceptions. IPs and hosts without
+/// a registrable domain retain their full identity; two lookup failures must
+/// never collapse into the same empty site. No runtime network fetch is needed.
+fn registrable_domain(host: &str) -> &str {
     let host = host.trim_end_matches('.');
-    if host.is_empty() {
-        return String::new();
-    }
-    let labels: Vec<&str> = host.split('.').collect();
-    if labels.len() <= 2 {
-        return host.to_owned();
-    }
-    // An IP literal has no registrable domain: every host under the same /24
-    // would otherwise collapse onto one value (`10.0.0.1` and `192.168.0.1`
-    // both reduced to `0.1`) and cross-match credentials between hosts that
-    // share nothing. An address only ever matches itself.
     if host.parse::<std::net::IpAddr>().is_ok() {
-        return host.to_owned();
+        return host;
     }
-    let suffix = labels[labels.len() - 2..].join(".");
-    if MULTI_LABEL_SUFFIX.contains(&suffix.as_str()) {
-        labels[labels.len() - 3..].join(".")
-    } else {
-        // Most hosts: last two labels are the registrable domain.
-        suffix
-    }
+    psl::domain_str(host).unwrap_or(host)
 }
 
 /// Compile a user regex; malformed patterns simply never match (Kee ignores

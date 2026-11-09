@@ -269,3 +269,12 @@ is not authoritative. Invalid/cross-type IDs and non-string target contents reje
 before any rows are published; errors disclose record numbers only. The snapshots
 remain masked in VaultState and survive KDBX save/reopen. This protects migrated
 values, without promising dynamic synchronization when an original field changes.
+
+Opt-in registrable-domain browser matching must respect both public registration
+and private hosting tenant boundaries. The complete pinned static Mozilla PSL
+replaces the hand-maintained subset; wildcard and exception rules are evaluated.
+IP/nonregistrable hosts retain exact full-host identities, never equal failed
+lookups. Bridge/RPC KDBX regressions reject unrelated tenants while same-site
+subdomains and PSL exceptions still match. The default switch remains off;
+list updates require dependency review. Native extension/runtime URL authority
+and all remaining autofill authorization checks are separate evidence gaps.

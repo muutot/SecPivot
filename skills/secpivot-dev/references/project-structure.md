@@ -332,3 +332,9 @@ into protected snapshots for the existing custom-field allocator. It derives
 Identity FullName from source name parts and rejects unknown/malformed targets.
 `bitwarden_tests.rs` checks all target IDs, optional empty values, stale literals,
 invalid mixed documents and KDBX protection; dynamic linkage is not implemented.
+
+`vault/helpers.rs::registrable_domain` uses the pinned `psl`/`psl-types` static
+Mozilla list, including private suffixes, wildcards and exceptions, for opt-in
+Domain accuracy in the shared Bridge/RPC matcher. It borrows the domain slice
+and retains full IP/nonregistrable host identity. No runtime fetch or config/IPC
+schema change is involved. Credential-boundary tests use synthetic reopened KDBX.
