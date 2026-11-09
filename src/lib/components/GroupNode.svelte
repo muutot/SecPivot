@@ -367,6 +367,8 @@
       {onchangeicon}
       {onautotype}
       {onmeta}
+      {templatesGroup}
+      {ontemplates}
       {ondelete}
       {onrestore}
       {onemptybin}

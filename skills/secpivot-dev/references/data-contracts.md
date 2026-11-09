@@ -4,6 +4,8 @@ New-entry templates resolve all hidden password, OTP and protected-field values
 atomically through `resolveTemplateSecrets`. Failed reads retain the draft and
 show an error. Component destruction or a session/path change invalidates pending
 template completion; the selector is create-only and blank resets template fields.
+Recursive `GroupNode` instances forward both `templatesGroup` and `ontemplates`,
+so nested group menus retain the set/unset label and dispatch the page callback.
 
 Persistence returns `PersistOutcome { hash, mirror_warning }`: once the remote
 upload commits, failure of its optional local mirror is a warning, never a failed
