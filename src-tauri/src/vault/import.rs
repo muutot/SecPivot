@@ -167,6 +167,31 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             .transpose()?
             .unwrap_or_default();
 
+        match item.get("passwordHistory") {
+            None | Some(serde_json::Value::Null) => {}
+            Some(value @ serde_json::Value::Array(history)) => {
+                for value in history {
+                    let value = value.as_object().ok_or_else(invalid)?;
+                    if !value
+                        .get("password")
+                        .is_some_and(serde_json::Value::is_string)
+                        || !matches!(
+                            value.get("lastUsedDate"),
+                            None | Some(serde_json::Value::Null | serde_json::Value::String(_))
+                        )
+                    {
+                        return Err(invalid());
+                    }
+                }
+                if !history.is_empty() {
+                    // Source history contains passwords, not complete old entry
+                    // versions. Archive it faithfully behind explicit reveal.
+                    custom_fields.push(names.field("Password History", value.to_string(), true));
+                }
+            }
+            Some(_) => return Err(invalid()),
+        }
+
         if let Some((section, display, string_keys)) = typed_section(kind) {
             custom_fields.push(names.field("Item Type", display.to_owned(), false));
             match item.get(section) {
