@@ -169,8 +169,8 @@ The session-bound temp reader and IPC schema are unchanged.
 
 Native history retention uses nonnegative count/size limits exactly: zero
 retains no snapshots, and negative values are unlimited. An absent count keeps
-the existing default of ten; an absent size remains unlimited. The size budget
-may remove even the newest snapshot when it cannot fit. Cleanup runs on the
+the KeePass default of ten; an absent size uses KeePass's 6 MiB byte budget.
+The size budget may remove even the newest snapshot when it cannot fit. Cleanup runs on the
 existing tracked mutation paths, reindexing attachment owners after trimming;
 setting metadata alone does not eagerly purge all entries. Restore undo is
 therefore conditional on the configured budget.

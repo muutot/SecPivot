@@ -2568,6 +2568,102 @@ fn history_limits_negative_values_preserve_multiple_versions_after_reopen() {
     );
 }
 
+#[test]
+fn history_default_size_trims_oldest_after_json_reset_and_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let unlimited: DatabaseSettingsPatch =
+        serde_json::from_str(r#"{"historyMaxSize":-1}"#).unwrap();
+    session.update_database_settings(&unlimited).unwrap();
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic default budget", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "synthetic.bin".into(),
+        data: Some(BASE64.encode(vec![1; 4 * 1024 * 1024])),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    drop(input);
+    session
+        .import_attachment_bytes(&uuid, "synthetic.bin", vec![2; 4 * 1024 * 1024])
+        .unwrap();
+    let reset: DatabaseSettingsPatch = serde_json::from_str(r#"{"historyMaxSize":null}"#).unwrap();
+    session.update_database_settings(&reset).unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(
+        session
+            .database_settings()
+            .unwrap()
+            .unwrap()
+            .history_max_size,
+        None
+    );
+    assert_eq!(session.get_entry_history(&uuid).unwrap().len(), 1);
+    // The two 4 MiB snapshots together exceed the KeePass default 6 MiB
+    // budget, even though their count is below the default ten versions.
+    session
+        .import_attachment_bytes(&uuid, "synthetic.bin", vec![3; 4 * 1024 * 1024])
+        .unwrap();
+    assert_eq!(session.get_entry_history(&uuid).unwrap().len(), 1);
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.get_entry_history(&uuid).unwrap().len(), 1);
+    let db = session.require_db().unwrap();
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    assert!(super::entries::snapshot_sizes(&entry).iter().sum::<u64>() <= 6 * 1024 * 1024);
+    assert_eq!(db.num_attachments(), 2);
+    let historical = entry.historical(0).unwrap();
+    let attachment = historical.attachment_by_name("synthetic.bin").unwrap();
+    let bytes = attachment.get();
+    assert_eq!(bytes.len(), 4 * 1024 * 1024);
+    assert!(bytes.iter().all(|&byte| byte == 2));
+    let bytes = session.attachment_data(&uuid, "synthetic.bin").unwrap();
+    assert_eq!(bytes.len(), 4 * 1024 * 1024);
+    assert!(bytes.iter().all(|&byte| byte == 3));
+}
+
+#[test]
+fn history_default_size_drops_oversized_snapshot_but_negative_keeps_it() {
+    for unlimited in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        if unlimited {
+            session
+                .update_database_settings(&DatabaseSettingsPatch {
+                    history_max_size: Some(Some(-1)),
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic oversized", "", "", "");
+        input.attachments = vec![AttachmentInput {
+            name: "synthetic.bin".into(),
+            data: Some(BASE64.encode(vec![4; 6 * 1024 * 1024 + 1])),
+        }];
+        let state = session.add_entry(&input).unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        drop(input);
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        session
+            .update_custom_field(&uuid, "Note", "changed", false)
+            .unwrap();
+        let expected = usize::from(unlimited);
+        assert_eq!(session.get_entry_history(&uuid).unwrap().len(), expected);
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        assert_eq!(session.get_entry_history(&uuid).unwrap().len(), expected);
+        assert_eq!(session.require_db().unwrap().num_attachments(), 1);
+        let bytes = session.attachment_data(&uuid, "synthetic.bin").unwrap();
+        assert_eq!(bytes.len(), 6 * 1024 * 1024 + 1);
+        assert!(bytes.iter().all(|&byte| byte == 4));
+    }
+}
+
 fn assert_history_limit_releases_superseded_data(patch: DatabaseSettingsPatch) {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

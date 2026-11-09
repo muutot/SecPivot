@@ -25,12 +25,15 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// KeePass's per-entry history byte budget when the metadata omits it.
+const DEFAULT_HISTORY_SIZE: isize = 6 * 1024 * 1024;
+
 /// Both retention limits from the database meta: the snapshot-count cap and
-/// the cumulative byte budget (negative or absent = unlimited, zero = none).
+/// cumulative byte budget (absent = KeePass default, negative = unlimited).
 pub(crate) fn history_limits(meta: &Meta) -> (usize, i64) {
     (
         history_cap(meta),
-        meta.history_max_size.unwrap_or(-1) as i64,
+        meta.history_max_size.unwrap_or(DEFAULT_HISTORY_SIZE) as i64,
     )
 }
 

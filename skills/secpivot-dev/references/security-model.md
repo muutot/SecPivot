@@ -363,6 +363,11 @@ limits remain unlimited. This is encrypted-vault retention, not secure erasure
 of filesystem blocks, backups, orphan input payloads or JavaScript memory.
 Metadata-only changes do not perform an eager database-wide history purge.
 
+Absent history settings use KeePass defaults: ten snapshots and a 6 MiB
+per-entry cumulative byte budget. An explicit negative size remains unlimited.
+Resetting historyMaxSize to JSON null restores that default budget; subsequent
+tracked edits can trim oversized prior snapshots while keeping current data.
+
 Explicit metadata reset must survive JSON decoding: nullable history limits,
 recycle-bin policy and template-group fields preserve present null as a reset.
 Missing fields keep their values and malformed typed values fail before mutation.
