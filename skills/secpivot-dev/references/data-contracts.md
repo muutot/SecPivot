@@ -386,3 +386,11 @@ Only Domain accuracy with matchByRegistrableDomain enabled uses this lookup;
 default/explicit Hostname/Exact rules and existing blocked/regex lists are unchanged.
 The list is built into the binary: credential matching performs no network reads.
 Review snapshot dependency updates with tenant, wildcard, exception and IP tests.
+
+`util::url_host(&str) -> Option<String>` extracts the actual destination through
+the existing url crate: userinfo is excluded, domains use canonical ASCII IDNA,
+and IP literals use normalized addresses (IPv6 without brackets). Bare host:port
+and protocol-relative URLs remain valid. Invalid authorities, internal whitespace
+and ambiguous bare userinfo return None; there is no new DTO/IPC/dependency.
+Existing host-tier consumers share this identity; port and Exact policy remain
+separate pending audit work.

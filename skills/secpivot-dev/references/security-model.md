@@ -293,3 +293,11 @@ URI/mode shapes and embedded whitespace fail with content-free record numbers.
 Absent/null default mode with one URI and no-URI items remain supported; native
 matching itself is unchanged. This closes an unsafe migration path, not full
 Bitwarden URI compatibility or the broader autofill authorization audit.
+
+Shared `util::url_host` parses destination authority with the existing URL
+crate, excluding userinfo and canonicalizing IDNA/IP identities. Bare hosts,
+host:port and protocol-relative addresses remain supported; malformed authorities,
+internal whitespace/control characters and bare userinfo are rejected. Browser
+credential tests exercise both host adapters after synthetic KDBX reopen in
+default and registrable-domain modes. This repairs host identity, not the
+separate port/Exact/regex policy or native extension authorization boundaries.

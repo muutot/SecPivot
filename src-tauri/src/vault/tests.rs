@@ -8968,6 +8968,100 @@ fn match_accuracy_exact_blocks_subdomains() {
 }
 
 #[test]
+fn browser_matching_does_not_trust_userinfo_as_destination() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "Synthetic authority boundary",
+        "https://bank.example/login",
+        serde_json::json!({"version": 1}),
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let mut unexpected = Vec::new();
+    for registrable in [false, true] {
+        session.match_registrable_domain = registrable;
+        for request in [
+            "https://bank.example:443@unrelated.test/login",
+            "https://bank.example:invalid/login",
+            "https://bank.example\n.unrelated.test/login",
+        ] {
+            let bridge_count = session.logins_for(request, None).len();
+            let rpc_count = session
+                .find_logins(&[request.to_owned()], None, None, None)
+                .len();
+            if bridge_count != 0 || rpc_count != 0 {
+                unexpected.push((registrable, bridge_count, rpc_count));
+            }
+        }
+    }
+    assert!(
+        unexpected.is_empty(),
+        "authority boundary crossings: {unexpected:?}"
+    );
+    for registrable in [false, true] {
+        session.match_registrable_domain = registrable;
+        let request = "https://name:password@bank.example/login";
+        assert_eq!(session.logins_for(request, None).len(), 1);
+        assert_eq!(
+            session
+                .find_logins(&[request.to_owned()], None, None, None)
+                .len(),
+            1
+        );
+    }
+}
+
+#[test]
+fn browser_matching_canonicalizes_idna_and_ip_authorities() {
+    for (stored, same_host, other_host) in [
+        (
+            "https://bücher.example/login",
+            "https://xn--bcher-kva.example/login",
+            "https://other.example/login",
+        ),
+        (
+            "http://[2001:0db8::1]:8080/login",
+            "http://[2001:db8::1]:8080/login",
+            "http://[2001:db8::2]:8080/login",
+        ),
+        (
+            "bank.example:8080/login",
+            "//BANK.example:8080/login",
+            "//other.example:8080/login",
+        ),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic canonical host",
+            stored,
+            serde_json::json!({"version": 1}),
+        );
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        for registrable in [false, true] {
+            session.match_registrable_domain = registrable;
+            assert_eq!(session.logins_for(same_host, None).len(), 1);
+            assert_eq!(
+                session
+                    .find_logins(&[same_host.to_owned()], None, None, None)
+                    .len(),
+                1
+            );
+            assert!(session.logins_for(other_host, None).is_empty());
+            assert!(session
+                .find_logins(&[other_host.to_owned()], None, None, None)
+                .is_empty());
+        }
+    }
+}
+
+#[test]
 fn malformed_kprpc_config_degrades_to_domain_accuracy() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);
