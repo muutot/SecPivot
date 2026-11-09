@@ -12,22 +12,42 @@
 
 type Accuracy = "Exact" | "Hostname" | "Domain";
 
-/** Lower-cased host portion of a URL (`host[:port]`), or `null` when unparsable.
- *  Bracketed IPv6 literals (`[2001:db8::1]`, `[2001:db8::1]:8080`) resolve to
- *  the address inside the brackets — never the first `:` segment. A userinfo
- *  component (`user:pass@host`) is stripped before host extraction. */
-export function urlHost(url: string): string | null {
-  const m = /^[a-z][a-z0-9+.-]*:\/\//i.exec(url);
-  let rest = (m ? url.slice(m[0].length) : url).split(/[/?#]/)[0];
-  const at = rest.lastIndexOf("@");
-  if (at >= 0) rest = rest.slice(at + 1);
-  if (rest.startsWith("[")) {
-    const end = rest.indexOf("]");
-    if (end > 1) return rest.slice(1, end).toLowerCase();
+/** Validate authority with WHATWG URL, retaining an original explicit port
+ * that the parser otherwise removes when it equals the scheme's default. */
+function parseAuthority(value: string): { host: string; port: number | null } | null {
+  const input = value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+  if (!input || /[\p{White_Space}\p{Cc}]/u.test(input)) return null;
+  const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.exec(input);
+  const relative = input.startsWith("//");
+  const bare = !scheme && !relative;
+  try {
+    const parsed = new URL(scheme ? input : relative ? `https:${input}` : `http://${input}`);
+    if (!parsed.hostname) return null;
+    let rest = scheme ? input.slice(scheme[0].length) : relative ? input.slice(2) : input;
+    const special = ["http:", "https:", "ftp:", "ws:", "wss:", "file:"].includes(parsed.protocol);
+    if (special) rest = rest.replace(/^[\\/]+/, "");
+    let authority = rest.split(special ? /[\\/?#]/ : /[/?#]/)[0];
+    if (bare && authority.includes("@")) return null;
+    authority = authority.slice(authority.lastIndexOf("@") + 1);
+    const portText = authority.startsWith("[")
+      ? authority.slice(authority.indexOf("]") + 1).replace(/^:/, "")
+      : authority.includes(":")
+        ? authority.slice(authority.lastIndexOf(":") + 1)
+        : "";
+    if (bare && !portText && authority.endsWith(":")) return null;
+    if (portText && !/^\d+$/.test(portText)) return null;
+    const port = portText ? Number(portText) : null;
+    if (port !== null && (!Number.isInteger(port) || port > 65535)) return null;
+    const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return { host, port };
+  } catch {
     return null;
   }
-  const host = rest.split(":")[0].toLowerCase();
-  return host || null;
+}
+
+/** Canonical destination host, without userinfo, port or IPv6 brackets. */
+export function urlHost(url: string): string | null {
+  return parseAuthority(url)?.host ?? null;
 }
 
 /** Return the shortest address that still matches `url` under `accuracy`, or
@@ -35,8 +55,10 @@ export function urlHost(url: string): string | null {
  *  so user-facing text stays in the i18n dictionaries). */
 export function shortestMatchable(url: string, accuracy: Accuracy): string | null {
   const trimmed = url.trim();
-  const host = urlHost(trimmed);
-  if (!host) return null;
-  if (accuracy === "Domain" || accuracy === "Hostname") return host;
+  const authority = parseAuthority(trimmed);
+  if (!authority) return null;
+  const host = authority.host.includes(":") ? `[${authority.host}]` : authority.host;
+  if (accuracy === "Domain") return host;
+  if (accuracy === "Hostname") return authority.port === null ? host : `${host}:${authority.port}`;
   return trimmed;
 }

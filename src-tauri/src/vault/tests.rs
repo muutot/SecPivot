@@ -9023,6 +9023,148 @@ fn exact_matching_preserves_complete_url_identity() {
 }
 
 #[test]
+fn hostname_matching_preserves_explicit_port_boundaries() {
+    let mut unexpected = Vec::new();
+    for (case, stored, same_authority, other_authority) in [
+        (
+            "nondefault",
+            "https://bank.example:8443/login",
+            "https://bank.example:8443/other",
+            "https://bank.example:8444/login",
+        ),
+        (
+            "explicit default",
+            "https://bank.example:443/login",
+            "https://bank.example:443/other",
+            "https://bank.example/login",
+        ),
+        (
+            "omitted",
+            "https://bank.example/login",
+            "http://bank.example/other",
+            "https://bank.example:443/login",
+        ),
+        (
+            "ipv6",
+            "http://[2001:db8::1]:8443/login",
+            "http://[2001:db8::1]:8443/other",
+            "http://[2001:db8::1]:8444/login",
+        ),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic port boundary",
+            stored,
+            serde_json::json!({"version": 1, "blockDomainOnlyMatch": true}),
+        );
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        for registrable in [false, true] {
+            session.match_registrable_domain = registrable;
+            assert_eq!(session.logins_for(same_authority, None).len(), 1);
+            assert_eq!(
+                session
+                    .find_logins(&[same_authority.to_owned()], None, None, None)
+                    .len(),
+                1
+            );
+            let bridge = session.logins_for(other_authority, None).len();
+            let rpc = session
+                .find_logins(&[other_authority.to_owned()], None, None, None)
+                .len();
+            if bridge != 0 || rpc != 0 {
+                unexpected.push((case, registrable, bridge, rpc));
+            }
+        }
+    }
+    assert!(
+        unexpected.is_empty(),
+        "Hostname port policy was weakened: {unexpected:?}"
+    );
+}
+
+#[test]
+fn hostname_suggested_authorities_match_original_urls_after_reopen() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/url-authorities.json")).unwrap();
+    for case in cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|case| case["host"].is_string())
+    {
+        let host = case["host"].as_str().unwrap();
+        let host = if host.contains(':') {
+            format!("[{host}]")
+        } else {
+            host.to_owned()
+        };
+        let suggestion = match case["port"].as_u64() {
+            Some(port) => format!("{host}:{port}"),
+            None => host,
+        };
+        let original = case["input"].as_str().unwrap().trim();
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        entry_with_kprpc_config(
+            &mut session,
+            "Synthetic suggested rule",
+            "",
+            serde_json::json!({"version": 1, "blockDomainOnlyMatch": true, "altURLs": [suggestion]}),
+        );
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        for registrable in [false, true] {
+            session.match_registrable_domain = registrable;
+            assert_eq!(session.logins_for(original, None).len(), 1);
+            assert_eq!(
+                session
+                    .find_logins(&[original.to_owned()], None, None, None)
+                    .len(),
+                1
+            );
+            assert!(session
+                .logins_for("https://different-authority.test:8443", None)
+                .is_empty());
+        }
+    }
+}
+
+#[test]
+fn domain_matching_keeps_explicitly_loose_port_scope() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    entry_with_kprpc_config(
+        &mut session,
+        "Synthetic Domain scope",
+        "https://bank.example:8443/Login",
+        serde_json::json!({"version": 1}),
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    for registrable in [false, true] {
+        session.match_registrable_domain = registrable;
+        for request in [
+            "https://bank.example:8444/other",
+            "http://bank.example/other",
+        ] {
+            assert_eq!(session.logins_for(request, None).len(), 1);
+            assert_eq!(
+                session
+                    .find_logins(&[request.to_owned()], None, None, None)
+                    .len(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
 fn browser_matching_does_not_trust_userinfo_as_destination() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

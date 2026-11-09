@@ -370,3 +370,11 @@ URLs without lowercasing. `utils/match-url.ts` retains the full trimmed input wh
 suggesting an Exact rule, and `tests/match-url.test.mjs` covers that
 value boundary. The backend tests exercise the shared Bridge/RPC policy after
 synthetic KDBX reopen; no markup or theme changes are involved.
+
+`util.rs::url_authority` owns canonical host plus explicit numeric-port identity
+for Hostname accuracy; `url_host` delegates without exposing ports to existing
+host-only consumers. `match-url.ts` validates WHATWG authority and preserves
+ports/IPv6 brackets in Hostname suggestions. The strict-JSON shared corpus in
+`tests/fixtures/url-authorities.json` runs in Rust and Node tests, with suggested
+alt rules verified through reopened synthetic KDBX Bridge/RPC adapters. Domain
+keeps its broader port scope; no new frontend component or IPC surface exists.

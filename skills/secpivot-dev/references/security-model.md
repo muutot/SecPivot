@@ -299,8 +299,12 @@ crate, excluding userinfo and canonicalizing IDNA/IP identities. Bare hosts,
 host:port and protocol-relative addresses remain supported; malformed authorities,
 internal whitespace/control characters and bare userinfo are rejected. Browser
 credential tests exercise both host adapters after synthetic KDBX reopen in
-default and registrable-domain modes. This repairs host identity, not the
-separate port/regex policy or native extension authorization boundaries.
+default and registrable-domain modes. `url_authority` also retains explicitly
+written ports, including defaults: Hostname compares host plus optional port,
+while Domain remains deliberately broader. Renderer Hostname suggestions retain
+that port and valid IPv6 brackets. A shared synthetic corpus checks both parsers
+and suggested alt rules after KDBX reopen; regex interactions and native extension
+authorization remain separate validation boundaries.
 
 Exact KPRPC URL matching requires identical complete strings after validating
 that both have a usable host. Scheme, path case, query, fragment and explicit

@@ -23,7 +23,8 @@
         ".prettierrc.json",
         "src-tauri/*.json",
         "src-tauri/**/*.json",
-        ".claude/audits/*.json"
+        ".claude/audits/*.json",
+        "tests/fixtures/*.json"
       ],
       "options": {
         "trailingComma": "none"
