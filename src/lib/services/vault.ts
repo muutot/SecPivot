@@ -213,8 +213,8 @@ const BROWSER_KEY = "secpivot-browser-vault";
 
 let browserState: VaultState | null = null;
 let initialized = false;
-/** Registry id of the active backend session (multi-database tabs). `null`
- *  in the browser demo, which has no backend sessions. */
+/** Registry id of the active backend session; the open browser demo uses the
+ * synthetic "browser" id so the same view guards work without backend IPC. */
 let activeSessionId: string | null = null;
 /** Authoritative state cached per open backend session. Every renderer invoke
  * captures one id and updates only that session's cache; a late response can
@@ -572,7 +572,8 @@ async function refreshInternal(sessionId = activeSessionId): Promise<VaultState 
     return value;
   }
   const value = browserState ? deepClone(browserState) : null;
-  if (value) state.set(applyBackendState(value));
+  activeSessionId = value ? "browser" : null;
+  state.set(value ? applyBackendState(value) : null);
   return value;
 }
 
@@ -586,7 +587,8 @@ async function refreshTabs(): Promise<void> {
     return;
   }
   const current = browserState ?? get(state);
-  activeId.set(current ? "browser" : null);
+  activeSessionId = current ? "browser" : null;
+  activeId.set(activeSessionId);
   tabs.set(
     current
       ? [
@@ -643,7 +645,7 @@ export const vault: VaultStore = {
     return get(state);
   },
 
-  /** Backend session id of the active tab (`null` when closed). */
+  /** Active tab id (synthetic "browser" in the demo; null when closed). */
   getActiveSessionId(): string | null {
     return activeSessionId;
   },
@@ -721,6 +723,7 @@ export const vault: VaultStore = {
     browserState.path = path;
     browserState.fileName = path.split(/[\\/]/).pop() ?? "vault.kdbx";
     const result = deepClone(browserState);
+    activeSessionId = "browser";
     state.set(applyBackendState(result));
     remembered.set({ path: result.path, fileName: label?.name ?? result.fileName });
     rememberRecent(result.path, label);
@@ -753,6 +756,7 @@ export const vault: VaultStore = {
     fresh.dirty = false;
     browserState = fresh;
     const result = deepClone(fresh);
+    activeSessionId = "browser";
     state.set(applyBackendState(result));
     remembered.set({ path: result.path, fileName: label?.name ?? result.fileName });
     rememberRecent(result.path, label);
@@ -801,6 +805,7 @@ export const vault: VaultStore = {
     sessionStates.clear();
     iconCaches.clear();
     sessionEpochs.clear();
+    activeSessionId = null;
     state.set(null);
     tabs.set([]);
     activeId.set(null);
@@ -844,6 +849,7 @@ export const vault: VaultStore = {
     sessionStates.clear();
     iconCaches.clear();
     sessionEpochs.clear();
+    activeSessionId = null;
     state.set(null);
     tabs.set([]);
     activeId.set(null);
