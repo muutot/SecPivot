@@ -2,7 +2,7 @@
 //! Extracted from `rpc::server.rs`.
 use serde_json::{json, Value};
 use std::time::Instant;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use super::{Conn, SIDE_CHANNEL_BYTES, SIDE_CHANNEL_TTL};
 use crate::config::PasswordGeneratorSettings;
@@ -18,6 +18,62 @@ pub(crate) struct DecodedJsonRpc {
     pub(crate) id: Value,
     pub(crate) params: Option<Value>,
 }
+
+fn setup_failure(code: &str) -> Envelope {
+    let mut reply = Envelope::setup();
+    reply.error = Some(ErrorMessage {
+        code: code.to_owned(),
+        message_params: vec![],
+    });
+    reply
+}
+
+/// The socket's copy proves frame integrity, not current authorization. Check
+/// the host key under the same vault lock as dispatch, including lazy expiry.
+fn current_key_matches(host: &mut dyn crate::rpc::RpcHost, username: &str, cached: &[u8]) -> bool {
+    if username.is_empty() || cached.len() != 32 {
+        return false;
+    }
+    let Some(current) = host.rpc_key(username).map(Zeroizing::new) else {
+        return false;
+    };
+    current.len() == 32 && mac_eq(&Zeroizing::new(hex(&current)), &Zeroizing::new(hex(cached)))
+}
+
+pub(crate) fn connection_authorized(conn: &Conn, host: &mut dyn crate::rpc::RpcHost) -> bool {
+    let (Some(username), Some(key)) = (&conn.username, &conn.session_key) else {
+        return false;
+    };
+    current_key_matches(host, username, key)
+}
+
+/// Socket setup additionally binds a pending SRP proof to its original stable
+/// vault-session id. A tab switch or a lock/reopen must not authorize a new host.
+pub(crate) fn dispatch_setup_for_session(
+    conn: &mut Conn,
+    env: &Envelope,
+    host: &mut dyn crate::rpc::RpcHost,
+    session_id: Option<&str>,
+    side_channel: &mut dyn FnMut(&str, u64),
+) -> Option<Envelope> {
+    let stage = env.srp.as_ref().and_then(|srp| srp.stage.as_deref());
+    if stage == Some("proofToServer")
+        && (session_id.is_none() || conn.srp_session.as_deref() != session_id)
+    {
+        conn.srp = None;
+        conn.srp_a = None;
+        conn.srp_expiry = None;
+        conn.srp_session = None;
+        return Some(setup_failure("AUTH_FAILED"));
+    }
+    let reply = dispatch_setup(conn, env, host, side_channel);
+    if stage == Some("identifyToServer") && conn.srp.is_some() {
+        conn.srp_session = session_id.map(str::to_owned);
+    } else if stage == Some("proofToServer") {
+        conn.srp_session = None;
+    }
+    reply
+}
 /// Pure setup-protocol state machine; returns the envelope to send (or an
 /// error envelope). Tested directly with a stub host.
 pub(crate) fn dispatch_setup(
@@ -26,14 +82,7 @@ pub(crate) fn dispatch_setup(
     host: &mut dyn crate::rpc::RpcHost,
     side_channel: &mut dyn FnMut(&str, u64),
 ) -> Option<Envelope> {
-    let error = |code: &str| {
-        let mut reply = Envelope::setup();
-        reply.error = Some(ErrorMessage {
-            code: code.to_owned(),
-            message_params: vec![],
-        });
-        reply
-    };
+    let error = setup_failure;
 
     if let Some(srp) = &env.srp {
         match srp.stage.as_deref() {
@@ -77,6 +126,9 @@ pub(crate) fn dispatch_setup(
                 let mut server = conn.srp.take()?;
                 let expiry = conn.srp_expiry.take()?;
                 let a = conn.srp_a.take()?;
+                if !host.is_open() {
+                    return Some(error("AUTH_FAILED"));
+                }
                 eprintln!(
                     "[rpc] proofToServer received (a_len={}, m_len={})",
                     a.len(),
@@ -115,17 +167,20 @@ pub(crate) fn dispatch_setup(
     } else if let Some(key) = &env.key {
         if key.sc.is_none() && key.cc.is_some() && key.cr.is_some() {
             // Stage 2: challenge-response; `cr` must hash to the expected value.
-            let mut secret = conn.key_secret.take()?;
+            let secret = Zeroizing::new(conn.key_secret.take()?);
             let sc = conn.key_sc.take()?;
+            let username = conn.username.as_deref()?;
+            if !current_key_matches(host, username, &secret) {
+                return Some(error("AUTH_RESTART"));
+            }
             let cc = key.cc.clone().unwrap_or_default();
             let cr = key.cr.clone().unwrap_or_default();
-            let secret_hex = hex(&secret);
+            let secret_hex = Zeroizing::new(hex(&secret));
             if !mac_eq(&cr, &key_auth_cr(&secret_hex, &sc, &cc)) {
-                secret.zeroize();
                 return Some(error("AUTH_FAILED"));
             }
             let sr = key_auth_sr(&secret_hex, &sc, &cc);
-            conn.session_key = Some(secret);
+            conn.session_key = Some(secret.to_vec());
             let mut reply = Envelope::setup();
             reply.key = Some(KeyMessage {
                 sr: Some(sr),
@@ -136,7 +191,7 @@ pub(crate) fn dispatch_setup(
         } else {
             // Stage 1: fresh challenge from the session-held key.
             let username = key.username.clone().filter(|s| !s.is_empty())?;
-            let Some(secret) = host.rpc_key(&username) else {
+            let Some(secret) = host.rpc_key(&username).map(Zeroizing::new) else {
                 return Some(error("AUTH_RESTART"));
             };
             if secret.len() != 32 {
@@ -149,8 +204,9 @@ pub(crate) fn dispatch_setup(
                     return Some(error("AUTH_RESTART"));
                 }
             };
-            conn.key_secret = Some(secret);
+            conn.key_secret = Some(secret.to_vec());
             conn.key_sc = Some(sc.clone());
+            conn.username = Some(username);
             let mut reply = Envelope::setup();
             reply.key = Some(KeyMessage {
                 sc: Some(sc),
@@ -198,6 +254,9 @@ pub(crate) fn dispatch_decoded_jsonrpc(
     host: &mut dyn crate::rpc::RpcHost,
     generator: &PasswordGeneratorSettings,
 ) -> Option<(Envelope, String)> {
+    if !connection_authorized(conn, host) {
+        return None;
+    }
     let method = request.method.clone();
     let result =
         handle_jsonrpc_with_generator(host, &request.method, request.params.as_ref(), generator);

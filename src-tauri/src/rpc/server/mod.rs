@@ -21,8 +21,8 @@ use crate::config::PasswordGeneratorSettings;
 use crate::loopback::{CancelableStream, ConnectionBudget, ListenerLifetime};
 use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
 use crate::vault::{
-    classify_save_error, persist_rpc_write, SaveErrorClass, VaultSession, VaultSessions,
-    BROWSER_VAULT_CHANGED_EVENT,
+    classify_save_error, persist_rpc_write, RpcWriteJob, SaveErrorClass, VaultSession,
+    VaultSessions, BROWSER_VAULT_CHANGED_EVENT,
 };
 use serde::Serialize;
 use std::io::{Read, Write};
@@ -42,9 +42,11 @@ mod tests;
 
 #[cfg(test)]
 pub(crate) use self::handshake::dispatch_jsonrpc;
+#[cfg(test)]
 pub(crate) use self::handshake::dispatch_setup;
 use self::handshake::{
-    decode_jsonrpc, dispatch_decoded_jsonrpc, encode_jsonrpc_result, DecodedJsonRpc,
+    connection_authorized, decode_jsonrpc, dispatch_decoded_jsonrpc, dispatch_setup_for_session,
+    encode_jsonrpc_result, DecodedJsonRpc,
 };
 
 /// How long a connection may stall in a handshake step before it is dropped.
@@ -296,6 +298,8 @@ pub(crate) struct Conn {
     srp_a: Option<String>,
     srp: Option<SrpServer>,
     srp_expiry: Option<Instant>,
+    /// Stable vault-session id that owns the pending SRP authorization.
+    srp_session: Option<String>,
     /// Key-auth challenge state (sc served, cc/cr expected next).
     key_secret: Option<Vec<u8>>,
     key_sc: Option<String>,
@@ -529,6 +533,9 @@ fn reply_setup(
         eprintln!("[rpc] VaultSession state missing");
         return false;
     };
+    let Some(vaults) = app.try_state::<VaultSessions>() else {
+        return false;
+    };
     let Some(reply) = ({
         let Ok(mut session) = session_state.lock() else {
             eprintln!("[rpc] VaultSession lock poisoned");
@@ -538,15 +545,21 @@ fn reply_setup(
         // unwind so a handler panic can't poison the session mutex.
         let outcome = lifetime.run_if_active(|| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
-                    let _ = app.emit(
-                        SIDE_CHANNEL_EVENT,
-                        SideChannelRequest {
-                            password: password.to_owned(),
-                            expires_in_secs: expires,
-                        },
-                    );
-                })
+                dispatch_setup_for_session(
+                    conn,
+                    &env,
+                    &mut *session,
+                    vaults.active_id().as_deref(),
+                    &mut |password, expires| {
+                        let _ = app.emit(
+                            SIDE_CHANNEL_EVENT,
+                            SideChannelRequest {
+                                password: password.to_owned(),
+                                expires_in_secs: expires,
+                            },
+                        );
+                    },
+                )
             }))
         });
         match outcome {
@@ -681,14 +694,7 @@ fn reply_jsonrpc_write(
                     &mut active,
                     &session_id,
                     RpcError::InvalidMessage,
-                    |target| {
-                        if !target.is_open() {
-                            return Err(RpcError::Locked);
-                        }
-                        let parsed = parse_write_request(&request.method, request.params.as_ref())?
-                            .ok_or_else(|| RpcError::Unsupported(request.method.clone()))?;
-                        target.prepare_rpc_write(parsed)
-                    },
+                    |target| prepare_authorized_rpc_write(conn, &request, target),
                 )
             }))
         })
@@ -700,6 +706,9 @@ fn reply_jsonrpc_write(
         }
         Some(Ok(Ok(job))) => job,
         Some(Ok(Err(error))) => {
+            if matches!(error, RpcError::AuthFailed) {
+                return false;
+            }
             return encode_jsonrpc_result(conn, &request.id, Err(error))
                 .is_some_and(|reply| send_envelope(ws, &reply));
         }
@@ -771,4 +780,22 @@ fn send_envelope(ws: &mut WebSocket<CancelableStream>, env: &Envelope) -> bool {
         Ok(json) => ws.send(WsMessage::Text(json.into())).is_ok(),
         Err(_) => false,
     }
+}
+
+/// Called after the persistence gate and vault mutex are acquired. Authorization
+/// may have expired or been revoked while this request was waiting for either.
+fn prepare_authorized_rpc_write(
+    conn: &Conn,
+    request: &DecodedJsonRpc,
+    target: &mut VaultSession,
+) -> Result<RpcWriteJob, RpcError> {
+    if !connection_authorized(conn, target) {
+        return Err(RpcError::AuthFailed);
+    }
+    if !target.is_open() {
+        return Err(RpcError::Locked);
+    }
+    let parsed = parse_write_request(&request.method, request.params.as_ref())?
+        .ok_or_else(|| RpcError::Unsupported(request.method.clone()))?;
+    target.prepare_rpc_write(parsed)
 }

@@ -134,6 +134,13 @@ RPC stop clears its live-session list before releasing the server mutex, so
 it cannot erase a restarted listener's records. Visible frontend prompts do
 not yet consume a cancellation event.
 
+`rpc/server/handshake.rs` validates cached connection keys against live host
+authorization before read dispatch and stored-key proof completion. Its
+`dispatch_setup_for_session` binds pending SRP proofs to stable vault-session
+ids. `rpc/server/mod.rs::prepare_authorized_rpc_write` performs the same key
+validation after writer admission and before vault write preparation; blocking
+persistence and durable completion retain their existing lock-free handoff.
+
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
 fingerprint slot; replacement/cancel drops it immediately. Clipboard I/O runs
