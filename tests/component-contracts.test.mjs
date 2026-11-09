@@ -74,7 +74,7 @@ test("entry attachment save rejects stale native-picker results", async () => {
   );
 
   assert.ok(saveBlock, "EntryDetail saveAttachment must exist");
-  assert.match(saveBlock[1], /awaitCurrentView\(detailView, view, \(\) =>\s*saveDialog/);
+  assert.match(saveBlock[1], /awaitCurrentView\(detailView, view, \(\) =>\s*pickSaveFile/);
   assert.match(saveBlock[1], /if \(!picked\.current \|\| !picked\.value\) return/);
   assert.match(saveBlock[1], /const dest = picked\.value/);
   assert.match(saveBlock[1], /vault\.saveAttachment\(uuid, name, dest\)/);
@@ -278,7 +278,7 @@ test("attachment preview binds every async path to its resource view", async () 
   assert.match(dialog, /if \(dialogView\.isCurrent\(view\)\) loading = false/);
   assert.match(dialog, /closeOnEscape=\{!importing\}/);
   assert.ok(saveBlock, "AttachmentPreviewDialog saveToDisk must exist");
-  assert.match(saveBlock[1], /awaitCurrentView\(dialogView, view, \(\) => save/);
+  assert.match(saveBlock[1], /awaitCurrentView\(dialogView, view, \(\) =>\s*pickSaveFile/);
   assert.match(saveBlock[1], /if \(!picked\.current \|\| !picked\.value\) return/);
   assert.match(saveBlock[1], /if \(!dialogView\.isCurrent\(view\)\) return/);
   assert.ok(openBlock, "AttachmentPreviewDialog openExternal must exist");

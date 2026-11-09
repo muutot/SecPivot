@@ -78,7 +78,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 - Android 返回键（返回上层 / 退出）
 - ~~文件选择走 SAF / 文档选择器（打开、新建、另存 `.kdbx`；`tauri-plugin-dialog` 在安卓的等价实现）~~（已落地：`vault/file_io.rs` 用 `tauri-plugin-fs` 经 ContentResolver 读写 `content://`；打开/新建/另存为改用 `tauri-plugin-saf` 的 `ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` 并 `takePersistableUriPermission`，`content://` 可写入最近文件并跨重启重开；桌面仍走 `std::fs` / 原子写与 dialog 插件。**限制**：provider 可能拒绝持久授权或撤销旧授权，失败时需重新选择；`ACTION_CREATE_DOCUMENT` 的初始位置仍由系统 DocumentsUI 决定。真机读写仍待验证。）
 - 文本导入（CSV/XML/Bitwarden JSON/1PIF）已接入 SAF：`io.ts::pickImportFile` 根据格式传 MIME 并兼容 `text/plain` / `application/octet-stream`，`read_text_file` 接收 URI 和 provider 的显示文件名，使用 `vault/file_io.rs` 流式限制到 8 MiB。缺失/不支持的显示扩展名和非法 UTF-8 明确失败；选择期间 A→B→A 不启动旧文件读取，读取完成也再次校验视图。Windows host 合成选择器/IPC 与文件读取测试覆盖此链路，尚需新 APK 与真机云端 provider 验证，不能标记手机可用性完成。
-- 附件保存 / CSV/XML/HTML 导出（`write_attachment_file`、`write_csv_file`）仍直接使用 `std::fs`，移动端尚不可用，后续接入 `vault/file_io.rs`
+- 附件保存 / CSV/XML/HTML 导出已接入 `io.ts::pickSaveFile`：Android 以对应 MIME 创建 SAF 文档，桌面保持保存对话框；详情行和附件预览两个保存入口均保留资源视图守卫。`write_attachment_file`、`write_csv_file` 统一调用 `vault/file_io.rs::write_named`，本地原子替换，URI 先有界读取旧内容、写入/读回验证、失败回滚并校验；错误按文件/附件标记。导出/附件命令临时载荷与旧内容/校验缓冲区使用 Zeroizing，导出 URI 不加入最近数据库。合成原生选择/IPC 和 Windows 文件/故障注入验证覆盖控制流，尚未构建含修复 APK，真机云端 provider、授权撤销、pipe descriptor/sync 与读回一致性仍待验证，手机可用性不标完成。
 - 状态栏 / 沉浸式：主界面 `.app-shell.mobile` 与 `/settings` 的 `.settings-shell` 均用 `env(safe-area-inset-*)` 预留系统栏；主界面隐藏 30px 桌面拖拽条，设置对话框填充安全区内容盒。软键盘弹起 / 捏合缩放仍待适配，真机视觉验证待补
 - SAF 写入的事务性：SAF 无 rename，文档只能原地覆写（先截断），provider 中途报错就会留下空/半截库文件，而移动端该文档常常是用户唯一副本。`vault/file_io.rs` 因此先读出旧内容 → 写入 → 读回比对 → 失败即回滚旧内容（桌面走 `util::atomic_write`，天然原子）。provider 返回陈旧副本会让校验失败，此时保留旧库并把保存报为失败，而不是静默丢数据；真机回滚路径仍待验证
 

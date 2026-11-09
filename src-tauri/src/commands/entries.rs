@@ -412,6 +412,7 @@ pub(crate) fn export_csv(
         session_id.as_deref(),
         |target| target.export_csv_content(),
     )?;
+    let content = zeroize::Zeroizing::new(content);
     vault::write_csv_file(&path, &content)
 }
 
@@ -433,11 +434,12 @@ pub(crate) fn export_emergency_sheet(
         session_id.as_deref(),
         |target| target.emergency_sheet_content(include_passwords),
     )?;
+    let content = zeroize::Zeroizing::new(content);
     vault::write_csv_file(&path, &content)
 }
 
 /// Export all entries as a KeePass 2.x XML file (passwords resolved
-/// server-side, protected values Base64-encoded per the KeePass convention).
+/// server-side, escaped PlainXml with ProtectInMemory for protected fields).
 #[tauri::command]
 pub(crate) fn export_xml(
     vaults: tauri::State<'_, VaultSessions>,
@@ -452,6 +454,7 @@ pub(crate) fn export_xml(
         session_id.as_deref(),
         |target| target.export_xml_content(),
     )?;
+    let content = zeroize::Zeroizing::new(content);
     vault::write_csv_file(&path, &content)
 }
 

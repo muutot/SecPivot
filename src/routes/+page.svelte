@@ -53,6 +53,7 @@
     xmlToImportEntries,
     type IoHost,
     type ImportEntry,
+    pickSaveFile,
   } from "$lib/services/io";
   import { showTip } from "$lib/services/tips";
   import type {
@@ -873,7 +874,7 @@
     try {
       if (isTauriRuntime()) {
         const picked = await awaitCurrentView(sessionView, view, () =>
-          save({
+          pickSaveFile({
             defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".csv",
             filters: [
               { name: t(settings.general.language, "page.filterCsv"), extensions: ["csv"] },
@@ -910,7 +911,7 @@
     try {
       if (isTauriRuntime()) {
         const picked = await awaitCurrentView(sessionView, view, () =>
-          save({
+          pickSaveFile({
             defaultPath: (fileName.replace(/\.kdbx$/i, "") || "secpivot") + ".xml",
             filters: [
               { name: t(settings.general.language, "page.filterXml"), extensions: ["xml"] },
@@ -945,7 +946,7 @@
     const includePasswords = emergencyIncludePasswords;
     try {
       const picked = await awaitCurrentView(sessionView, view, () =>
-        save({
+        pickSaveFile({
           defaultPath: `SecPivot-emergency-${new Date().toISOString().slice(0, 10)}.html`,
           filters: [
             { name: t(settings.general.language, "page.filterHtml"), extensions: ["html"] },

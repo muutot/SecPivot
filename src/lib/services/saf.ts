@@ -22,10 +22,13 @@ export async function openDocument(
 }
 
 /** Pick a destination for a new document with a persistable read/write grant. */
-export async function createDocument(fileName: string): Promise<SafDocument | null> {
+export async function createDocument(
+  fileName: string,
+  mimeTypes: string[] = KDBX_MIME_TYPES,
+): Promise<SafDocument | null> {
   const picked = await invoke<SafDocument | null>("plugin:saf|create_document", {
     fileName,
-    mimeTypes: KDBX_MIME_TYPES,
+    mimeTypes,
   });
   return picked ?? null;
 }

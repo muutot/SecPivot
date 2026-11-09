@@ -6,7 +6,7 @@
 //! state here.
 
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import { buildCsv, parseCsv, parseCsvRows, type CsvRow } from "$lib/utils/csv";
 import { buildKeePassXml, parseKdbxXml, type XmlExportRow } from "$lib/utils/kdbx-xml";
 import { resolveImportGroupPath, type ImportGroupResolver } from "$lib/utils/import-groups";
@@ -21,7 +21,7 @@ import type { CustomField, EntryInput, ImportRow, VaultState } from "$lib/types/
 import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
 import { isAndroid, isTauriRuntime, appSettings } from "$lib/services/settings";
-import { openDocument } from "$lib/services/saf";
+import { createDocument, openDocument } from "$lib/services/saf";
 import { t } from "$lib/i18n";
 import { vault } from "$lib/services/vault";
 
@@ -144,6 +144,35 @@ export function importRowsToEntries(rows: ImportRow[]): ImportEntry[] {
     totp: row.totp || undefined,
     customFields: row.customFields,
   }));
+}
+
+/** Native destination picker shared by plaintext exports and attachment saves.
+ *  Callers keep their captured view guard around this promise before reading
+ *  secrets or starting backend writes. This never remembers an export as a vault. */
+export async function pickSaveFile(
+  options: Pick<SaveDialogOptions, "filters"> & { defaultPath: string },
+): Promise<string | null> {
+  if (isAndroid()) {
+    const types: Record<string, string> = {
+      csv: "text/csv",
+      xml: "application/xml",
+      html: "text/html",
+    };
+    const mimeTypes = [
+      ...new Set(
+        (options.filters ?? [])
+          .flatMap((filter) => filter.extensions)
+          .map((ext) => types[ext.replace(/^\./, "").toLowerCase()])
+          .filter(Boolean),
+      ),
+    ];
+    const document = await createDocument(
+      options.defaultPath,
+      mimeTypes.length ? mimeTypes : ["application/octet-stream"],
+    );
+    return document?.uri || null;
+  }
+  return await save(options);
 }
 
 function readPickedFile(accept: string): Promise<string | null> {
