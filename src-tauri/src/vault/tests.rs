@@ -5449,6 +5449,122 @@ fn empty_database_settings_patch_is_a_noop() {
 }
 
 #[test]
+fn database_settings_patch_distinguishes_absent_null_and_values_on_wire() {
+    let absent: DatabaseSettingsPatch = serde_json::from_str("{}").unwrap();
+    assert!(absent.is_empty());
+    let cleared: DatabaseSettingsPatch = serde_json::from_value(serde_json::json!({
+        "historyMaxItems": null,
+        "historyMaxSize": null,
+        "recycleBinEnabled": null,
+        "entryTemplatesGroup": null,
+    }))
+    .unwrap();
+    assert_eq!(
+        (
+            cleared.history_max_items,
+            cleared.history_max_size,
+            cleared.recycle_bin_enabled,
+            cleared.entry_templates_group
+        ),
+        (Some(None), Some(None), Some(None), Some(None)),
+        "present JSON null must remain an explicit reset, not become an absent field"
+    );
+    let values: DatabaseSettingsPatch = serde_json::from_value(serde_json::json!({
+        "historyMaxItems": 0,
+        "historyMaxSize": -1,
+        "recycleBinEnabled": false,
+        "entryTemplatesGroup": "11111111-1111-1111-1111-111111111111",
+    }))
+    .unwrap();
+    assert_eq!(values.history_max_items, Some(Some(0)));
+    assert_eq!(values.history_max_size, Some(Some(-1)));
+    assert_eq!(values.recycle_bin_enabled, Some(Some(false)));
+    assert_eq!(
+        values
+            .entry_templates_group
+            .as_ref()
+            .and_then(|s| s.as_deref()),
+        Some("11111111-1111-1111-1111-111111111111")
+    );
+}
+
+#[test]
+fn database_settings_null_wire_reset_survives_save_and_reopen() {
+    for reencrypt in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let group = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.to_owned()),
+                icon: None,
+                name: "Synthetic templates".into(),
+            })
+            .unwrap()
+            .root
+            .children[0]
+            .uuid
+            .clone();
+        let configured: DatabaseSettingsPatch = serde_json::from_value(serde_json::json!({
+            "historyMaxItems": 3,
+            "historyMaxSize": 4096,
+            "recycleBinEnabled": false,
+            "entryTemplatesGroup": group,
+        }))
+        .unwrap();
+        session.update_database_settings(&configured).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let mut frame = serde_json::json!({
+            "historyMaxItems": null,
+            "historyMaxSize": null,
+            "recycleBinEnabled": null,
+            "entryTemplatesGroup": null,
+        });
+        if reencrypt {
+            frame["compression"] = serde_json::json!("Gzip");
+        }
+        let reset: DatabaseSettingsPatch = serde_json::from_value(frame).unwrap();
+        let updated = session.update_database_settings(&reset).unwrap();
+        assert_eq!(updated.dirty, !reencrypt);
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let settings = session.database_settings().unwrap().unwrap();
+        assert_eq!(settings.history_max_items, None);
+        assert_eq!(settings.history_max_size, None);
+        assert!(settings.recycle_bin_enabled);
+        assert_eq!(settings.entry_templates_group, None);
+        assert_eq!(settings.kdf, "Aes");
+        assert_eq!(settings.cipher, "Aes256");
+        assert_eq!(
+            settings.compression,
+            if reencrypt { "Gzip" } else { "None" }
+        );
+    }
+}
+
+#[test]
+fn database_settings_patch_rejects_invalid_nullable_wire_types() {
+    for frame in [
+        serde_json::json!({"historyMaxItems": "3"}),
+        serde_json::json!({"historyMaxItems": 1.5}),
+        serde_json::json!({"historyMaxItems": true}),
+        serde_json::json!({"historyMaxItems": []}),
+        serde_json::json!({"historyMaxSize": "4096"}),
+        serde_json::json!({"historyMaxSize": 2.5}),
+        serde_json::json!({"historyMaxSize": {}}),
+        serde_json::json!({"recycleBinEnabled": 0}),
+        serde_json::json!({"recycleBinEnabled": "false"}),
+        serde_json::json!({"entryTemplatesGroup": 3}),
+        serde_json::json!({"entryTemplatesGroup": []}),
+        serde_json::json!({"entryTemplatesGroup": false}),
+    ] {
+        assert!(serde_json::from_value::<DatabaseSettingsPatch>(frame).is_err());
+    }
+}
+
+#[test]
 fn emergency_sheet_includes_passwords_only_when_requested() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

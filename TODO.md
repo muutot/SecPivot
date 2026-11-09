@@ -98,7 +98,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] Auto-Type 编辑器 UI（分组）：分组右键「自动填充设置」对话框（继承/启用/禁用 + 默认序列），调用 `update_group_autotype` 持久化
 - [x] Auto-Type 全局热键多命中选择：多条目命中时 `autotype-pick-request` 事件 + 候选列表 + `autotype_pick` 命令 + 前端选择对话框，回收站条目排除
 - [x] 当前数据库设置（读取）：`get_database_settings` 返回 KDF/cipher/compression/historyMaxItems/recycleBinEnabled，覆盖 Aes/Argon2/Argon2id 与 Aes256/Twofish/ChaCha20/None/Gzip 映射及关闭会话 `None`
-- [x] 当前数据库设置（修改·部分）：`update_database_settings` 支持 `historyMaxItems`/`recycleBinEnabled` 部分写入与 `null` 重置，保存/重开 round-trip 测试通过
+- [x] 当前数据库设置（修改·部分）：`update_database_settings` 支持 `historyMaxItems`/`recycleBinEnabled` 部分写入与 `null` 重置（SP-S43 已补齐真实 JSON 解码），保存/重开 round-trip 测试通过
 - [x] 当前数据库设置（修改·KDF/cipher/compression）：`update_database_settings` 在克隆库上原子应用整份 patch 并同密钥重加密，成功后采纳；Aes→Argon2/ChaCha20/Gzip 保存重开 round-trip 测试通过；Twofish 仅保留既有库兼容，写 DTO 拒绝将其作为迁移目标
 - [x] 当前数据库设置（UI）：「数据库设置」对话框（空白区右键 + More 菜单入口）展示并编辑 KDF/cipher/compression/history 上限/回收站开关，按差异调用 `update_database_settings`；既有 Twofish 显示为只读当前值，仅可显式迁移到 AES-256/ChaCha20
 - [x] 当前数据库设置（修改·history size/模板组）：`historyMaxSize`/`entryTemplatesGroup` 读取、写入与 `null` 重置，UUID 校验，保存/重开 round-trip 测试通过；UI 已含对应输入

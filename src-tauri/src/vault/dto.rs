@@ -1,6 +1,6 @@
 //! Serde DTOs that cross the Tauri IPC boundary (camelCase on the wire),
-//! extracted from `vault.rs`. Pure type definitions plus the tri-state icon
-//! deserializer; no vault-session logic.
+//! extracted from `vault.rs`. Pure type definitions plus nullable-patch and
+//! tri-state icon deserializers; no vault-session logic.
 
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
@@ -357,15 +357,25 @@ pub struct DatabaseSettingsPatch {
     /// `"None"` / `"Gzip"`; present value re-encrypts.
     #[serde(default)]
     pub compression: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_nullable_patch")]
     pub history_max_items: Option<Option<i64>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_nullable_patch")]
     pub history_max_size: Option<Option<i64>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_nullable_patch")]
     pub recycle_bin_enabled: Option<Option<bool>>,
     /// Present string sets the templates-group UUID; `null` clears it.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_nullable_patch")]
     pub entry_templates_group: Option<Option<String>>,
+}
+
+/// A missing patch field uses serde's default None. A present field must
+/// retain its outer Some even when JSON null clears the stored value.
+pub(crate) fn de_nullable_patch<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 impl DatabaseSettingsPatch {
