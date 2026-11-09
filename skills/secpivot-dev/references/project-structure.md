@@ -122,7 +122,17 @@ policy and RAII connection permits. `BridgeState` and `RpcState` each retain
 one budget across listener stop/start cycles: at most 32 connection workers per
 service, including incomplete HTTP/WS requests. Excess connections are dropped
 before thread creation; completed, failed or unwound handlers release permits.
-The listener's stop signal does not imply that existing handlers have exited.
+Each start uses a fresh `ListenerLifetime`, registering sockets and approval
+cancellation senders with RAII cleanup. Stop rejects old-generation dispatch
+and approvals before joining the listener. `loopback/stream.rs` supplies the
+`CancelableStream` used by HTTP and tungstenite: 100 ms native polling checks
+cancellation without shortening logical protocol read deadlines. This avoids
+Windows clone shutdown leaving an existing recv blocked. Already admitted
+storage jobs may finish; their permits are retained until worker return.
+The listener join alone still does not mean every admitted job has exited.
+RPC stop clears its live-session list before releasing the server mutex, so
+it cannot erase a restarted listener's records. Visible frontend prompts do
+not yet consume a cancellation event.
 
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
