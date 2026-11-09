@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S41；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S42；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 30     | 30        | 0         |
+| Medium    | 31     | 31        | 0         |
 | Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **52** | **52**    | **0**     |
+| **Total** | **53** | **53**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2200,3 +2200,44 @@ data/security/DTO 注释和 partial TODO 同步，未把修复称作磁盘安全
 手机 v1.6.5 云端库另存为已有 ACL 源码修复，仍缺新版 APK 与系统
 选择器/provider 真机验证。原始基线、评分和未验证的平台边界保持不变，
 全面目标继续 active。
+
+### Finding: SP-S42 外部附件修改回导不生成历史快照（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / History / Testing authenticity
+- Status: Confirmed
+- Affected area: Native external-viewer attachment reimport
+- Evidence:
+  - File: `src-tauri/src/vault/entries.rs:1125–1140`、`src-tauri/src/commands/vault.rs:853–875`、`src/lib/services/vault.ts:1400–1419`、`src-tauri/src/vault/tests.rs:5252–5320`（`77de788` 修复前）
+  - Function / Module: import_attachment_bytes / import_attachment_from_temp / importAttachmentFromTemp
+  - Relevant behavior: 外部查看器回导直接移除/新增附件，没有 EntryTrack、last_modification 更新或 history count/size 裁剪；已有普通编辑/详情 add 路径则使用这些共同规则。
+  - Reproduction: 先保存重开合成 KDBX，再从实际 session-bound temp store 读回修改内容；加强原测试后发现历史数量 0 而预期 1，`external-attachment-snapshot-red.log` exit 101；已有历史情况下回导后仍只有旧快照而没有修改前当前版本，`external-attachment-retention-red.log` exit 101。未启动真实外部编辑器/Tauri handler，未接触用户文件。
+  - Independent reference: 路由与 token reader/原生 mutation 逐层对照；普通 add_attachments 的相同附件替换已由 EntryTrack 回归验证。固定官方 PwEntry.cs 的 CreateBackup/CloneDeep（commit `d1eec63f1bd73dc2d5273eaf94528f616b553ce5`）保留 Binaries，支持一般 backup 数据语义，但不冒充原生外部编辑器运行证据。
+- Problem: 外部编辑附件这一正常入口成功替换内容，却无法通过条目历史恢复修改前版本；修改时间和保留规则也与普通编辑不一致。
+- Why it matters: 用户依赖每次修改快照的承诺回滚附件时，这个入口留下缺口；已有绿测试只验证新内容保存。没有未删除其他当前条目损坏或外部泄露证据，因此为 Medium。
+- Realistic failure scenario: 在外部编辑器误改附件，确认回导后保存，再尝试恢复修改前版本；历史里没有这次编辑前的内容。
+- Minimal fix: 在同一原生会话用 EntryTrack 包住附件替换，更新 last_modification，scope 结束后应用共享数量/大小限制。保留 token/session reader 与 IPC schema。
+- Better long-term fix: 逐个审查会修改 Entry 的命令入口及编辑提交过程，复核所有历史规则和跨客户端互操作，不把这两个入口通过视为每次修改完整覆盖。
+- Regression test suggestion: 实际 temp store 读取、保存重开保留修改前附件且可恢复；已有历史与 cap 10/1/0、size 小于单快照、旧时间快照及新修改时间、禁用历史时旧无拥有者 binary 回收。
+- Estimated effort: 1–2 小时（原生追踪接线、保存重开及契约同步）
+
+`3530ee8` 已接入外部附件回导的 pre-edit snapshot、修改时间与共享保留
+规则。30 项附件回归通过；完整 `verify-external-attachment-snapshot.log`
+exit 0：316 frontend、588 Rust、ACL 2，串行无外部过滤；四个原生
+剪贴板 live body 默认跳过。实际 temp store 文件读取与 KDBX 重开验证
+旧附件可恢复，cap 10/1/0、size 不足时清理正确，时间快照保持旧值。
+未启动原生外部编辑器/Tauri handler；data/security 引用和 partial TODO
+同步，没有新 IPC/依赖/UI 变更。本报告更新没有新的 reference 修改需要。
+
+公开 v1.6.5 ARM64 APK 已只读下载，SHA256
+`754228d99d293363685c1045b09c3b707737825dcba44d740102736c99cc99be`
+与官方 SHA256SUMS-android.txt 一致；native library SHA256
+`eb64275194f42b78b86e825778a7124bc684a09bc4fb4a92a97f5872fa92ac11`。
+完整 literal 检查找到 plugin:saf 的 create/open_document，没有
+plugin:safe|create_document；初次通用 regex 拼接到下一字串已纠正。
+assets/tauri.conf.json 的 capabilities=[] 与 grant 名称字符串缺失，
+单独都不能证明 ACL 未授予。v1.6.5 tag 的 android capability 使用
+screens 而非 windows，接着核对框架解析/范围。没有构建、安装或发布
+新版 APK，手机系统选择器/provider 真机证据仍缺失；该研究不加入新
+Confirmed 卡片。原始基线与评分不变，目标 active。
