@@ -3,7 +3,7 @@
  *
  * Given the real URL Kee reported (e.g. `FindLogins urls=[...]`), return the
  * shortest string that still matches under the currently selected accuracy:
- * - `Exact`: the full URL with any query/fragment stripped (path preserved).
+ * - `Exact`: the complete original URL, including scheme/query/fragment and case.
  * - `Hostname`: `host[:port]` only (path dropped).
  * - `Domain`: the host, kept scoped so only the host and its subdomains match
  *   (e.g. `passport.aliyun.com` covers `passport.aliyun.com` and deeper hosts,
@@ -30,13 +30,6 @@ export function urlHost(url: string): string | null {
   return host || null;
 }
 
-/** Strip `query` and `fragment` from a URL, keeping scheme + host + path.
- */
-function withoutQueryFragment(url: string): string {
-  const q = url.search(/[?#]/);
-  return q < 0 ? url : url.slice(0, q);
-}
-
 /** Return the shortest address that still matches `url` under `accuracy`, or
  *  `null` when the input is not a usable URL (the caller renders the message
  *  so user-facing text stays in the i18n dictionaries). */
@@ -45,6 +38,5 @@ export function shortestMatchable(url: string, accuracy: Accuracy): string | nul
   const host = urlHost(trimmed);
   if (!host) return null;
   if (accuracy === "Domain" || accuracy === "Hostname") return host;
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return withoutQueryFragment(withScheme);
+  return trimmed;
 }

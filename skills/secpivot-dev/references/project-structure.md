@@ -363,3 +363,10 @@ existing url crate (userinfo exclusion, IDNA, IPv4/IPv6 and authority validation
 shared by URL matching/title helpers. Its unit boundary and reopened synthetic
 KDBX Bridge/RPC tests cover spoofed userinfo, invalid authority and canonical
 host equivalence; no frontend or IPC surface is added.
+
+`vault/helpers.rs::url_matches_accuracy` implements Exact as identical complete
+URL strings after host validation. `vault/hosts.rs` passes original request/submit
+URLs without lowercasing. `utils/match-url.ts` retains the full trimmed input when
+suggesting an Exact rule, and `tests/match-url.test.mjs` covers that
+value boundary. The backend tests exercise the shared Bridge/RPC policy after
+synthetic KDBX reopen; no markup or theme changes are involved.

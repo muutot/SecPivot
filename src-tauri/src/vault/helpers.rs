@@ -79,7 +79,7 @@ pub(crate) fn recycle_bin_id(db: &Database) -> Option<GroupId> {
 /// pair of booleans; the constructor maps them back to the enum).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum MatchAccuracy {
-    /// `blockHostnameOnlyMatch`: only URL-exact / close matches count.
+    /// `blockHostnameOnlyMatch`: only identical complete URLs count.
     Exact,
     /// `blockDomainOnlyMatch`: hostname-and-port matches count.
     Hostname,
@@ -155,7 +155,7 @@ pub(crate) fn kprpc_config(entry: &keepass::db::EntryRef<'_>) -> KprpcConfig {
 /// 3-tier URL match mirroring KeePassRPC's `BestMatchAccuracyForAnyURL`
 /// (abridged: no path/port wildcards). Returns `true` when the request URL is
 /// at least as similar as `min` requires.
-/// - `Exact`: the two URLs are equal discounting scheme/query/port-noise.
+/// - `Exact`: the complete URL strings are identical.
 /// - `Hostname`: same host:port (subdomains never spill).
 /// - `Domain`: same host, or one is a subdomain of the other — or, when
 ///   `registrable` is set (config `rpc.matchByRegistrableDomain`), the same
@@ -175,10 +175,7 @@ fn url_matches_accuracy(
     let subdomain_cover = request_host.ends_with(&format!(".{entry_host}"))
         || entry_host.ends_with(&format!(".{request_host}"));
     match min {
-        MatchAccuracy::Exact => {
-            // Best/close match: identical normalized hosts, plus the same path.
-            host_equal && strip_query(entry_url) == strip_query(request_url)
-        }
+        MatchAccuracy::Exact => entry_url == request_url,
         MatchAccuracy::Hostname => host_equal,
         MatchAccuracy::Domain => {
             if registrable {
@@ -188,20 +185,6 @@ fn url_matches_accuracy(
             }
         }
     }
-}
-
-/// Path part of a URL (host + port + path + query, no scheme), lower-cased, so
-/// two URLs sharing a host and path compare at `Exact` accuracy.
-fn strip_query(url: &str) -> String {
-    let rest = url.split("://").nth(1).unwrap_or(url);
-    let mut end = rest.len();
-    if let Some(i) = rest.find('?') {
-        end = end.min(i);
-    }
-    if let Some(i) = rest.find('#') {
-        end = end.min(i);
-    }
-    rest[..end].to_ascii_lowercase()
 }
 
 /// Registrable site boundary from the pinned Mozilla PSL, including private

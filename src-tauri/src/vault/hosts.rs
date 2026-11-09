@@ -682,13 +682,11 @@ fn collect_bridge_logins(
     if bin_id == Some(group.id()) {
         return;
     }
-    let url = url.to_lowercase();
-    let submit_url = submit_url.map(str::to_lowercase);
     for entry in group.entries() {
-        let matches = kprpc_matches_url(&entry, &url, registrable)
-            || submit_url
-                .as_deref()
-                .is_some_and(|s| kprpc_matches_url(&entry, s, registrable));
+        // Only host identity is case-insensitive. Preserve path/query case
+        // for Exact and user regex policies, including form-submit URLs.
+        let matches = kprpc_matches_url(&entry, url, registrable)
+            || submit_url.is_some_and(|s| kprpc_matches_url(&entry, s, registrable));
         if matches {
             out.push(BridgeLogin {
                 uuid: entry.id().uuid().to_string(),
@@ -699,14 +697,7 @@ fn collect_bridge_logins(
         }
     }
     for child in group.groups() {
-        collect_bridge_logins(
-            child,
-            bin_id,
-            url.as_str(),
-            submit_url.as_deref(),
-            registrable,
-            out,
-        );
+        collect_bridge_logins(child, bin_id, url, submit_url, registrable, out);
     }
 }
 

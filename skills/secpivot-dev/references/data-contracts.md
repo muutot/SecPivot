@@ -392,5 +392,15 @@ the existing url crate: userinfo is excluded, domains use canonical ASCII IDNA,
 and IP literals use normalized addresses (IPv6 without brackets). Bare host:port
 and protocol-relative URLs remain valid. Invalid authorities, internal whitespace
 and ambiguous bare userinfo return None; there is no new DTO/IPC/dependency.
-Existing host-tier consumers share this identity; port and Exact policy remain
-separate pending audit work.
+Existing host-tier consumers share this identity; port policy remains separate
+pending audit work.
+
+KPRPC `blockHostnameOnlyMatch` selects Exact: after host validation, the complete
+URL strings must be identical, including scheme/path case/query/fragment/port.
+Bridge preserves request and submit-URL case before calling the shared matcher;
+only destination-host extraction performs case normalization.
+Explicit regex allow and blocked lists retain their existing priority. The
+renderer `match-url.ts::shortestMatchable` returns the original trimmed URL for
+Exact suggestions; it never removes query/fragment or invents a scheme. There is
+no new setting or IPC. Tests cover both host adapters after KDBX reopen and the
+frontend suggestion value; native extension interoperability remains unverified.
