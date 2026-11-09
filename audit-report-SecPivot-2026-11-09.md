@@ -674,7 +674,7 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 
 此前 `1d3eef7` 的完整 `npm run verify` 通过（前端 208、Rust 463）。本轮完整门禁首次因凭据测试模块位置触发 clippy 失败，`fcee069` 调整后已重新运行完整 `npm run verify` 并通过：格式、Svelte check 零错误警告、150 键设置契约、生产构建、前端 208、Rust 单元测试 464 + ACL 集成测试 2、clippy `-D warnings` 均通过。验证日志位于本任务 visualization 目录的 `verify-after-android-acl.log`。审计 metadata 及两份历史 metadata 仅移除 JSON 尾逗号，全部通过严格 JSON 解析，Prettier override 防止后续重新生成无效 JSON。
 
-新增真机反馈：Android 云端数据库点击“另存为”未弹出选择器，提示 `plugin:saf|create_document not allowed by ACL`。`src-tauri/capabilities/android.json` 误用 `screens`，Tauri 2 忽略该字段，主窗口未获得 SAF 权限。`e5e3c4e` 改为 `windows: ["main"]`；实际 Tauri ACL 解析器在修复前复现拒绝，修复后两项回归证明本地主窗口可打开/新建文档，并且不授权其他窗口、远程页或桌面/iOS。此新增问题不混入修复前 15 项统计。需要新 APK 安装后的系统选择器与提供商写入实测；当前本机缺 Android SDK/NDK，未构建或发布 APK。
+新增真机反馈：Android 云端数据库点击“另存为”未弹出选择器，用户提供的提示文字为 `Command plugin:safe|create_document not allowed by ACL`。当前仓库注册与前端调用的插件名均为 `saf`；反馈文字中 `safe` 的拼写差异尚未通过安装包或原始设备日志核实。源码中存在已确认的 ACL 问题：`src-tauri/capabilities/android.json` 误用 `screens`，Tauri 2 忽略该字段，主窗口未获得 SAF 权限。`e5e3c4e` 改为 `windows: ["main"]`；实际 Tauri ACL 解析器在修复前复现 `plugin:saf|create_document` 拒绝，修复后两项回归证明本地主窗口可打开/新建文档，并且不授权其他窗口、远程页或桌面/iOS。此新增问题不混入修复前 15 项统计。需要新 APK 安装后的系统选择器与提供商写入实测；当前本机缺 Android SDK/NDK，未构建或发布 APK。
 
 新增复核问题：受保护 `HmacOtp` 字段在获取验证码后被无条件写成未保护字段，使后续快照暴露种子。严重性 Medium，状态 Confirmed；测试先在原实现复现失败，`a2b0ddf` 保留原保护标记后通过，并确认保存重开仍隐藏种子、计数器从 42 推进到 43。此补充问题不计入修复前 15 项统计。
 
