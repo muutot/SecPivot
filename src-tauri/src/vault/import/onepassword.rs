@@ -2,16 +2,10 @@
 //! Map known fields and retain unmapped secure data as protected JSON fields.
 //! Binary attachments and folder hierarchy require a separate import contract.
 
-use super::{ImportCustomField, ImportRow};
+use super::{fields::FieldNames, ImportRow};
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
-
-#[derive(Default)]
-struct FieldNames {
-    next: HashMap<String, usize>,
-    used: HashSet<String>,
-}
+use std::collections::HashSet;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +76,7 @@ pub fn parse_1pif(text: &str) -> Result<Vec<ImportRow>, String> {
 }
 
 fn parse_record(record: Record) -> Result<ImportRow, ()> {
-    let mut names = FieldNames::default();
+    let mut names = FieldNames::new("1Password");
     let (title, mut contents, mut urls) = if let Some(overview) = record.overview {
         let mut urls: Vec<String> = overview
             .urls
@@ -257,25 +251,5 @@ fn add_custom(
     value: String,
     protected: bool,
 ) {
-    // Prefix all imported names so KeePass reserved fields/OTP aliases cannot
-    // be dropped or accidentally become active behavior. Keep duplicate values.
-    let base = format!(
-        "1Password {}",
-        if name.trim().is_empty() {
-            "Field"
-        } else {
-            name.trim()
-        }
-    );
-    let mut name = base.clone();
-    let suffix = names.next.entry(base.clone()).or_insert(2);
-    while !names.used.insert(name.clone()) {
-        name = format!("{base} ({suffix})");
-        *suffix += 1;
-    }
-    row.custom_fields.push(ImportCustomField {
-        name,
-        value,
-        protected,
-    });
+    row.custom_fields.push(names.field(name, value, protected));
 }

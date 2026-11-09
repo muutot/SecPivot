@@ -220,6 +220,11 @@ mapping items. Encryption markers must be boolean when present; absent markers
 remain compatible with legacy plaintext. The command's temporary input string
 is zeroized on return, as with 1PIF. This protects the format boundary, not a new
 decryptor, and does not prove imported data's full fidelity or JS heap erasure.
+External Bitwarden custom labels are data: a `Bitwarden` prefix and unique
+suffixes prevent reserved-name drops, duplicate-value overwrites and accidental
+native OTP/KPRPC configuration. Hidden flags remain protected in KDBX and masked
+in snapshots. `import/fields.rs` shares the allocator with 1PIF; native XML OTP
+keys still retain their native semantics through their separate import path.
 
 The renderer clipboard utility serializes its text writes, conditional native
 wipes and explicit clears through one promise queue. Idle writes still start
