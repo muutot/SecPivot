@@ -203,6 +203,11 @@ shared rule into the owning template.
 - Buttons and inputs need visible focus. Never remove outline without a replacement.
 - Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.
 
+Main-window transient tips reuse `TipKind` and the existing success/danger
+palettes in `TipsHost.svelte`. Pass `"error"` from explicit failure branches
+through page/flow callbacks; never select a color by parsing localized messages.
+The severity repair adds no CSS variables, declarations or layout changes.
+
 ## Fixed layer order
 
 | Layer                                                               | Current z-index |

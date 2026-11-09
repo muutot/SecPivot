@@ -132,6 +132,13 @@ and embedded whitespace reject as invalid rather than becoming native URL
 destinations. Missing/null/empty URI collections remain valid. No partial rows
 are returned or schema fields added; complete per-URI matching remains pending.
 
+Main-window `flash(message, kind = "success")` forwards the existing TipKind.
+IO/group/favicon/editor notification seams accept `(message, kind?: TipKind)`;
+explicit failure branches pass `"error"`, while normal completion retains the
+success default. Kinds are assigned at the branch, never inferred from translated
+text. The existing TipsHost danger palette renders errors; view/busy guards and
+backend result contracts remain unchanged.
+
 ## Config contract
 
 `config.rs` persists `conf/config.json` under the data root resolved by `config::resolve_data_dir`: portable mode (a `portable.flag` marker or a legacy `conf/config.json` beside the executable) keeps everything next to the executable so the folder travels as one unit; otherwise the per-user app-data dir is used (installed builds must not write into `Program Files`). The `app_info` command exposes `{ portable, configPath, dataDir }` to the About panel. The Rust `AppConfig` serde shape mirrors the frontend `AppSettings` (`src/lib/types/settings.ts`):

@@ -6,6 +6,7 @@
 import { get } from "svelte/store";
 import { appSettings } from "$lib/services/settings";
 import { t } from "$lib/i18n";
+import type { TipKind } from "$lib/services/tips";
 import { vault } from "$lib/services/vault";
 import type {
   EntryAutoTypeConfig,
@@ -26,7 +27,7 @@ import { SessionViewGuard } from "$lib/utils/session-state";
 export type EntryEditorOptions = {
   /** Shared session-staleness guard owned by the page. */
   sessionView: SessionViewGuard;
-  notify: (message: string) => void;
+  notify: (message: string, kind?: TipKind) => void;
   /** Resolve an entry by uuid inside a fresh snapshot (page helper). */
   findEntry: (state: VaultState | null, uuid: string | null) => VaultEntry | null;
   /** Locate the just-created entry (backend generates the uuid). */
@@ -136,7 +137,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
             }
           } catch (e) {
             if (options.sessionView.isCurrent(view))
-              options.notify(t(lang(), "editor.followUpFailed", { e: String(e) }));
+              options.notify(t(lang(), "editor.followUpFailed", { e: String(e) }), "error");
           }
         }
       } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
@@ -168,7 +169,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
       }
     } catch (e) {
       if (options.sessionView.isCurrent(view))
-        options.notify(t(lang(), "editor.opFailed", { e: String(e) }));
+        options.notify(t(lang(), "editor.opFailed", { e: String(e) }), "error");
     }
   }
 

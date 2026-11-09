@@ -55,7 +55,7 @@
     type ImportEntry,
     pickSaveFile,
   } from "$lib/services/io";
-  import { showTip } from "$lib/services/tips";
+  import { showTip, type TipKind } from "$lib/services/tips";
   import type {
     EntryInput,
     EntryPatch,
@@ -423,8 +423,8 @@
     };
   });
 
-  function flash(message: string): void {
-    showTip(message);
+  function flash(message: string, kind: TipKind = "success"): void {
+    showTip(message, kind);
   }
 
   /** Reactive mirror of the settings store. `$derived(get(appSettings))` would
@@ -740,7 +740,7 @@
       }
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.favFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.favFailed", { e: String(e) }), "error");
     }
   }
 
@@ -750,7 +750,7 @@
       return;
     }
     if (currentVault.readOnly) {
-      flash(t(settings.general.language, "page.readonlyMode"));
+      flash(t(settings.general.language, "page.readonlyMode"), "error");
       return;
     }
     const view = sessionView.capture();
@@ -769,7 +769,7 @@
       if (message.startsWith("REMOTE_CHANGED")) {
         remoteConflict = message.replace("REMOTE_CHANGED\n", "");
       } else {
-        flash(t(settings.general.language, "page.saveFailed", { e: message }));
+        flash(t(settings.general.language, "page.saveFailed", { e: message }), "error");
       }
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
@@ -811,7 +811,7 @@
       }
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
-      flash(t(settings.general.language, "editor.opFailed", { e: String(e) }));
+      flash(t(settings.general.language, "editor.opFailed", { e: String(e) }), "error");
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
@@ -825,6 +825,7 @@
         t(settings.general.language, "browser.unsupported", {
           feature: t(settings.general.language, "browser.featSaveAs"),
         }),
+        "error",
       );
       return;
     }
@@ -860,7 +861,7 @@
       flash(t(settings.general.language, "page.savedAsFile"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.saveAsFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.saveAsFailed", { e: String(e) }), "error");
     }
   }
 
@@ -897,7 +898,7 @@
       if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.exportedCsv"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }), "error");
     }
   }
 
@@ -934,7 +935,7 @@
       if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.exportedXml"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.exportFailed", { e: String(e) }), "error");
     }
   }
 
@@ -964,7 +965,10 @@
       flash(t(settings.general.language, "page.emergencyExported"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.emergencyExportFailed", { e: String(e) }));
+        flash(
+          t(settings.general.language, "page.emergencyExportFailed", { e: String(e) }),
+          "error",
+        );
     }
   }
 
@@ -980,7 +984,7 @@
       flash(t(settings.general.language, "page.historyPurged", { n: cleared }));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.historyPurgeFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.historyPurgeFailed", { e: String(e) }), "error");
     }
   }
 
@@ -998,7 +1002,7 @@
       reportOpen = true;
     } catch (e) {
       if (!sessionView.isCurrent(view)) return;
-      flash(t(settings.general.language, "page.securityFailed", { e: String(e) }));
+      flash(t(settings.general.language, "page.securityFailed", { e: String(e) }), "error");
     } finally {
       if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
     }
@@ -1037,7 +1041,8 @@
       if (copied && sessionView.isCurrent(view))
         flash(t(settings.general.language, "page.copiedPassword"));
     } catch {
-      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.copyFailed"), "error");
     }
   }
 
@@ -1068,7 +1073,8 @@
       scheduleExchangeWipe();
       flash(t(settings.general.language, "page.copiedEntries", { count: copied }));
     } catch (e) {
-      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.copyFailed"), "error");
     }
   }
 
@@ -1089,7 +1095,7 @@
       flash(t(settings.general.language, "page.pastedEntries", { count: result.uuids.length }));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.pasteEntryFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.pasteEntryFailed", { e: String(e) }), "error");
     }
   }
 
@@ -1131,6 +1137,7 @@
           t(settings.general.language, "io.importFailed", {
             e: e instanceof Error ? e.message : String(e),
           }),
+          "error",
         );
       return;
     }
@@ -1159,6 +1166,7 @@
           t(settings.general.language, "io.importFailed", {
             e: e instanceof Error ? e.message : String(e),
           }),
+          "error",
         );
       return;
     }
@@ -1193,7 +1201,7 @@
       rows = parsed.value;
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.bitwardenFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.bitwardenFailed", { e: String(e) }), "error");
       return;
     }
     const entries: ImportEntry[] = importRowsToEntries(rows);
@@ -1228,7 +1236,7 @@
       rows = parsed.value;
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.onePasswordFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.onePasswordFailed", { e: String(e) }), "error");
       return;
     }
     const entries: ImportEntry[] = importRowsToEntries(rows);
@@ -1467,7 +1475,7 @@
         );
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.templatesFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.templatesFailed", { e: String(e) }), "error");
     }
   }
 
@@ -1529,7 +1537,7 @@
       flash(t(settings.general.language, "page.entryRestored"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.entryRestoreFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.entryRestoreFailed", { e: String(e) }), "error");
     }
   }
 
@@ -1563,7 +1571,10 @@
           );
         } catch (e) {
           if (sessionView.isCurrent(view))
-            flash(t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }));
+            flash(
+              t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }),
+              "error",
+            );
         }
       },
     };
@@ -1597,7 +1608,10 @@
           );
         } catch (e) {
           if (sessionView.isCurrent(view))
-            flash(t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }));
+            flash(
+              t(settings.general.language, "groupflow.deleteFailed", { e: String(e) }),
+              "error",
+            );
         }
       },
     };
@@ -1665,7 +1679,8 @@
       if (sessionView.isCurrent(view))
         flash(t(settings.general.language, "page.copiedField", { label }));
     } catch {
-      if (sessionView.isCurrent(view)) flash(t(settings.general.language, "page.copyFailed"));
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "page.copyFailed"), "error");
     }
   }
 
@@ -1793,7 +1808,7 @@
       flash(t(settings.general.language, "page.minimizedHint"));
     } catch (e) {
       if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.autotypeFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.autotypeFailed", { e: String(e) }), "error");
     }
   }
 
@@ -1811,9 +1826,9 @@
       focusLockLease.confirm();
     } catch (e) {
       if (view && sessionView.isCurrent(view) && tcatoOperations.isCurrent(operation)) {
-        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }), "error");
       } else if (!view && tcatoOperations.isCurrent(operation)) {
-        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }));
+        flash(t(settings.general.language, "page.tcatoFailed", { e: String(e) }), "error");
       }
     } finally {
       focusLockLease.release();
@@ -2500,7 +2515,7 @@
   <AutotypePickDialog
     candidates={autotypePick}
     onclose={() => (autotypePick = null)}
-    onerror={(message) => flash(message)}
+    onerror={(message) => flash(message, "error")}
   />
 {/if}
 
