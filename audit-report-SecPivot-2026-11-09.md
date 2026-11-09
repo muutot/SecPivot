@@ -655,7 +655,7 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 | [KeePass 官方 XML writer](https://raw.githubusercontent.com/dlech/KeePass2.x/master/KeePassLib/Serialization/KdbxFile.Write.cs) | PlainXml 原文加 ProtectInMemory；Default 内部格式 XOR 后 Base64    | 直接用于 SP-03 格式修复；不能沿用未加密 Base64 假设                      |
 | [KeePassXC 用户指南](https://keepassxc.org/docs/KeePassXC_UserGuide)                                                            | KDF 解密耗时校准、数据库报告、模板克隆、窗口自动输入、现代迁移格式 | 已有安全报告/模板/自动输入，优先补模板可靠性；KDF 校准是有价值未完成能力 |
 | [Bitwarden 导出](https://bitwarden.com/help/export-your-data/)                                                                  | JSON 明文/加密、CSV 有损、附件 ZIP                                 | 明确 XML/CSV 保真边界；附件迁移需独立完整性与安全设计                    |
-| [1Password 当前导出](https://support.1password.com/export/)                                                                     | 1Password 8 使用 1PUX 或 CSV                                       | 当前 1PIF parser 与真实 JSON-line 格式不符（SP-S10）；1PUX 仍为独立缺口  |
+| [1Password 当前导出](https://support.1password.com/export/)                                                                     | 1Password 8 使用 1PUX 或 CSV                                       | 1PIF JSON-line 基础迁移已修复（SP-S10），完整保真仍部分；1PUX 独立待实现 |
 | [KeeWeb](https://keeweb.info/)                                                                                                  | 紧凑离线界面、附件拖入、受保护字段                                 | 保留现有密集视觉，改善错误/焦点/排序，避免无关信息挤占主界面             |
 
 不引入用户已排除的任意插件体系、事件自动化或硬件密钥；不为“竞品有”而直接扩大秘密外传面。
@@ -864,14 +864,14 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Testing Authenticity
-- Status: Confirmed（尚未修复）
+- Status: Confirmed（基础 JSON-line 导入已修复；完整迁移仍部分）
 - Affected area: 1Password legacy import, format compatibility and completion evidence
 - Evidence:
-  - File: `src-tauri/src/vault/import.rs:148`、`src-tauri/src/commands/entries.rs:496`、`src/routes/+page.svelte:1184`（当前 `8e050d8` 源码）
+  - File: `src-tauri/src/vault/import.rs:148`、`src-tauri/src/commands/entries.rs:496`、`src/routes/+page.svelte:1184`（修复前 `8e050d8` 源码）
   - Function / Module: `parse_1pif` / `finish_1pif_item` / `handleImportOnePassword`
   - Relevant behavior: parser 忽略不以 `***` 开头的行，只处理 `***Key:value`；其唯一相关测试同样编造此格式。真实 1PIF 使用 JSON-line，每条记录包含 `typeName`、`secureContents` 等。生产 command 把空 Vec 当作解析成功，页面随后显示“没有可导入的条目”。
   - Independent reference: [Bitwarden 1PIF importer](https://github.com/bitwarden/clients/blob/1a8bdbfe625bff90a9c0cabef2002e37f6038fa1/libs/importer/src/importers/onepassword/onepassword-1pif-importer.ts) 按行 `JSON.parse`，支持 standard `secureContents` 与 Windows `hmac/overview/details` 变体；对应公开 spec-data 也为 JSON-line。先前猜测文件 URL 的 404 和 GitHub API 限流不属于兼容性证据，最终以只读 shallow/no-checkout 参考 clone 的确定路径与 commit 核对。
-  - Reproduction: 精确抽取当前生产 parser 和 helper，仅移除 DTO serde 装饰，用独立 Rust probe 输入按上述真实 schema 构造的两个合成登录/笔记。函数返回 **0，预期 2**，断言实际失败，见 `onepassword-1pif-baseline-red.log`。未运行 1Password 原生导出或真实用户文件，没有把公开样本密码输出到报告。
+  - Reproduction: 精确抽取修复前生产 parser 和 helper，仅移除 DTO serde 装饰，用独立 Rust probe 输入按上述真实 schema 构造的两个合成登录/笔记。函数返回 **0，预期 2**，断言实际失败，见 `onepassword-1pif-baseline-red.log`。未运行 1Password 原生导出或真实用户文件，没有把公开样本密码输出到报告。
 - Problem: 菜单及 TODO 声称的 legacy 1PIF 能力没有真实格式兼容性；用户正常导出后无法迁移，而现有测试可以保持全绿。
 - Why it matters: 迁移入口无法完成核心工作流，用户可能误以为空库或导出文件无条目。测试只验证自造格式，不能作为竞品互操作及功能完成证据。
 - Realistic failure scenario: 用户从旧版 1Password 导出 JSON-line 1PIF，选择导入；全部记录被忽略，页面报没有条目，登录凭据和笔记未迁入。
@@ -881,3 +881,35 @@ SP-15 当前复核结论提升为 **Confirmed**，`c97a894` 已修复处理线�
 - Estimated effort: 2–4 小时（1PIF）；1PUX 另行估算
 
 TODO 的原“1Password/LastPass 已完成”已降为 partial，明确 LastPass 别名仍接线、1PIF 真实导出失败；1PUX 单列 pending 并纠正其未加密 ZIP 定义。data-contracts 和 project-structure 同步了真实缺口，没有在源码修复前宣称完成。当前详细卡片 **21**（全部 Confirmed，High 5 / Medium 13 / Low 3）；原始 15 项/6.1 分基线保持不变。最新应用完整门禁仍对应 `8e050d8`（前端242、Rust518、ACL2），它未覆盖真实 1PIF 格式，所以不抵消本项失败证据。报告 lint/严格 JSON/格式门另行验证本次文档，后续继续实现兼容修复及剩余审计。
+
+`8c09399` 修复 SP-S10 的基础 JSON-line 导入。生产实现已替换为
+`vault/import/onepassword.rs`，支持 standard `secureContents` 与 Windows
+`overview/details` 变体、BOM/CRLF/UUID 分隔符、回收状态排除、登录/笔记、OTP
+及去重后保留的所有网址。坏记录或不支持的分组/附件使整份解析失败，错误只含
+行号；8 MiB 上限也应用于直接 IPC。隐藏/密码类型/guarded 字段的保护标记通过
+统一 DTO 与实际前端 bulk import 保留，隐藏用户名不会降为普通 UserName。
+所有自定义字段加来源前缀与唯一后缀，避免 reserved/OTP alias 与同名值覆盖；
+复杂字段保留 JSON，未映射 secure contents 与 passwordHistory 保存为受保护的
+Additional Data 字段。它们仍不是原生历史、专门身份类型、分组或附件迁移。
+命令输入使用 Zeroizing，秘密 DTO 移除 Debug；没有证明 JS 堆可零化。
+
+回归证据：`onepassword_tests.rs` 五项真实 schema 合成测试覆盖标准/Windows/
+笔记、损坏后续记录不得部分成功、敏感错误文本不泄漏、隐藏/guarded/复杂字段、
+同名与 reserved 字段、隐藏用户名，以及 serde → EntryInput → batch insert →
+KDBX 保存重开的凭据、OTP、多 URL 和隐藏快照。`tests/io-import.test.mjs`
+运行实际服务模块图与 importEntries，仅替换 Tauri invoke 边界，验证保护标记和
+OTP 穿过真实 `import_entries` 调用；其初次失败来自测试误把命令写成 add_entries，
+经源码核对修正为真实 import_entries，不作为产品缺陷或 red-to-green 证据。
+另直接输入确定 commit 的 Bitwarden TestData、WindowsOpVaultTestData 和
+IdentityTestData 三条公开合成样本，验证用户名/密码/隐藏字段/身份数据保留，
+见 `onepassword-public-reference-green.log` 与 SHA-256 provenance；临时 probe
+测试已 byte-for-byte 恢复，未将竞品测试文本复制进仓库，也未输出样本秘密。
+这仍不是原生 1Password 实际导出或运行时互操作验证。
+
+最新完整 `npm run verify` 日志 `verify-onepassword-json-line-final.log`：格式、
+Svelte check 零错误警告、150 键契约、生产构建、前端 **243**、Rust **522 + ACL 2**、
+clippy `-D warnings` 全通过。维护文档 currency gate 更新 data-contracts、
+security-model 与 project-structure；TODO 继续 partial，完整导入未被勾选。
+当前详细卡片保持 **21**，原始 15 项与 6.1 分基线不变。手机 v1.6.5 另存为
+仍只有 ACL 源码修复证据，无新 APK 或真机选择器验证；SAF provider、剪贴板并发、
+原生 XML、现代 1PUX 与其余完整语义/UI 覆盖仍须继续处理，整体目标保持进行中。

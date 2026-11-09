@@ -33,7 +33,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "8e050d8",
+  "remediation_checkpoint": "8c09399",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -134,16 +134,17 @@
       "severity": "Medium",
       "confidence": "Confirmed",
       "source_checkpoint": "8e050d8",
-      "status": "exact production parser/helper extraction returned zero rows for two synthetic authentic-schema records; independent Bitwarden importer and public spec data confirmed JSON-line schema; source remediation pending, TODO downgraded"
+      "status": "basic standard/Windows JSON-line import fixed; five authentic-schema synthetic regressions plus real frontend bulk IPC mapping and KDBX save/reopen passed; exact three Bitwarden public fixture records passed independent probe; folder/attachment migration refused, native history and native client exports pending, TODO remains partial",
+      "commit": "8c09399"
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "8e050d8",
-    "log": "verify-rpc-active-lifetime-final.log",
-    "frontend_tests": 242,
-    "rust_unit_tests": 518,
+    "checkpoint": "8c09399",
+    "log": "verify-onepassword-json-line-final.log",
+    "frontend_tests": 243,
+    "rust_unit_tests": 522,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -160,7 +161,8 @@
       "Live S3 signature validation not run; local MinIO unavailable",
       "CSP websocket probe is a browser test, not native Tauri dev",
       "Live OS clipboard tests opted out; deterministic tests do not prove native clipboard runtime",
-      "Isolated signing workflow tested with synthetic Bash tool doubles; actual CI and APK signatures not exercised"
+      "Isolated signing workflow tested with synthetic Bash tool doubles; actual CI and APK signatures not exercised",
+      "Native 1Password export/client runtime not run; 1PIF folder/attachment/native history migration and modern unencrypted 1PUX remain incomplete"
     ]
   },
   "reverification_notes": [
@@ -191,6 +193,7 @@
     "8e050d8 centrally ends weak one-shot active-session observers outside registry/observer guards; fd8a08e baseline clean regressions confirm missing end for lock/active-close/switch/open and successful old proof after revisiting original tab; initial observation-mutex destructor panic and missed baseline adaptation compile failure are excluded from product evidence",
     "Cancelled attempt followed by stored-key setup initially discarded the cancellation lease while retaining pending SRP; production regression failed, fixed by clearing all pending SRP state on any setup after cancellation; final full gate passed at 242 frontend, 518 Rust, ACL 2",
     "AOSP permits pipe/socket document descriptors and tauri-plugin-fs uses openAssetFileDescriptor; unconditional sync_all remains a provider candidate. WSL Ubuntu launch failed at missing ext4.vhdx before any syscall probe; 1Password official 1PUX page confirms unencrypted ZIP, legacy import fidelity remains under review",
-    "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending"
+    "SP-S10 demonstrates a green-test authenticity gap: production 1PIF parser accepts fabricated star-prefixed blocks but returns zero for standard JSON-line records; readonly Bitwarden clone at 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 verifies format; no real user export used; legacy TODO downgraded and modern unencrypted 1PUX remains pending",
+    "8c09399 replaces fabricated block parser with strict JSON-line standard/Windows records; preserves hidden/guarded fields, concealed username, OTP, all distinct URLs and protected unmapped secure/history JSON; duplicate labels and reserved/OTP names cannot overwrite values; exact public synthetic fixtures checked with provenance and temporary test restored; initial frontend test used the wrong command name and is excluded from product red evidence; final full verify passed at 243 frontend, 522 Rust and 2 ACL tests"
   ]
 }
