@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S45；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S46；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 33     | 33        | 0         |
+| Medium    | 34     | 34        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **56** | **56**    | **0**     |
+| **Total** | **57** | **57**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2363,3 +2363,43 @@ Confirmed），基线 `b7c5d9f` 的 15 项/6.1 分保持。手机 v1.6.5 云端
 Confirmed）；基线 15 项/6.1 分保持。最新完整应用门包括历史文案修复
 和 6 MiB 默认修复；手机替换 APK/provider、其余系统/UI/竞品迁移
 继续审查，整体目标 active。
+
+### Finding: SP-S46 独立条目属性修改沿用旧时间戳，产生单边合并伪冲突（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Backend API / Merge integrity
+- Status: Confirmed
+- Affected area: update_entry_flags and update_entry_autotype
+- Evidence:
+  - File: `src-tauri/src/vault/entries.rs:405–447/1272–1305`、`src-tauri/src/commands/vault.rs:613–626/926–937`、`src-tauri/src/vault/merge.rs:351–357`（`c52fb8a` 修复前）
+  - Function / Module: update_entry_flags / update_entry_autotype / merge_databases
+  - Relevant behavior: 两个独立原生命令直接写属性并 mark_dirty，但不修改条目 Times.last_modification。合并按条目时间识别更新，两侧时间相同且内容不同会报同一时间戳冲突。
+  - Reproduction: `entry-attribute-tracking-red-corrected.log` 两个原生合成回归均在首个单边合并断言失败。固定旧时间的共同 KDBX 基线，一边分别改 OverrideURL/QualityCheck/前景色或 Auto-Type，保存重开，与未修改副本仍无法合并。最初夹具 borrow 编译错误修正后才得到有效 red。
+  - Independent verification: commands 层直接转发这两个方法；`useEntryEditor.svelte.ts:154–163` 的常规编辑路径先执行 updateEntry，已经负责 primary 字段快照与时间，本项确认的是独立属性接口。固定官方 KeePass PwEntryForm.cs commit `d1eec63f1bd73dc2d5273eaf94528f616b553ce5`，1095–1117 属性赋值后 Touch(true,false)，1124–1127 无实际改变则恢复旧修改时间。`entry-attribute-time-reference-provenance.json` 记录确切 URL/SHA256 `407388e73f47281e09ec32c4d660335822179b33e05874cb77ca3db25b04358e`；未运行原生 KeePass。
+- Problem: 原生属性修改已经持久化，条目仍呈旧修改时间；合并将正常单边变化视为冲突，要求覆盖或下载。
+- Why it matters: 破坏独立 API 的同步与修改时间契约，阻断自动合并。复现的是伪冲突，不是已经覆盖远端或丢失密码，按 Medium。
+- Realistic failure scenario: 独立调用已暴露的条目属性命令改存量记录后保存；另一份同库副本未改变，合并仍显示同一时间戳冲突。
+- Minimal fix: flags 在校验全部通过后比较实际属性；Auto-Type 比较规范化后的完整配置。值实际改变才将条目修改时间设为当前秒精度，重复相等值保留原时间；现有 dirty/revision 与历史安排保持。
+- Better long-term fix: 独立复核分组与收藏 mutation、秒精度重复修改和完整编辑器事务；单命令属性历史与一次编辑器保存的 primary 快照需一起设计，避免额外中间快照改变恢复范围。
+- Regression test suggestion: 两条真实 API 分别修改/保存重开，在两种 local/remote 方向合并都保留新属性；修改时间从固定旧值更新。先保存规范化属性后固定旧时间，再提交相同带空格输入，时间保持，避免秒精度掩盖无条件刷新。既有无效颜色原子拒绝回归继续通过。
+- Estimated effort: 1–2 小时（两条时间更新、KDBX/merge 回归与契约同步）
+
+`5687202` 已修复独立属性时间戳。2 项原生回归通过；
+`entry-attribute-time-green-final.log` 覆盖双向合并、保存重开及
+规范化相等输入的时间保持。完整 `verify-entry-attribute-time.log`
+exit 0：316 frontend、595 Rust、ACL 2、format、check 零错误警告、
+150-key 契约、build、clippy 全部通过；RUST_TEST_THREADS=1，无过滤，
+四个 OS clipboard live body 开关关闭。最后仅补充秒精度说明，格式门
+再次通过。data-contracts 与源码注释同步，没有可因此勾选的完整 TODO。
+初版 red 夹具还包含历史/恢复断言，但在首个 merge 断言停止，没有
+执行它们；最终回归按时间修复收敛，未声称属性独立快照已补齐。
+常规编辑器的 primary 快照安排继续保留。没有 UI/IPC/schema/依赖
+改动、用户库/系统剪贴板/真实 Tauri handler/Android provider 运行。
+
+同一秒内实际变更仍可能无法由时间区分，属于现有 KDBX 精度与 merge
+规则的下一项独立复核；不将本次旧时间修复宣称为所有合并边界完成。
+分组/收藏时间与其他 mutation、竞品迁移和手机替换包/provider 证据
+继续审查。本报告无需额外 reference 修改。当前详细卡片 **57**
+（Critical 1 / High 12 / Medium 34 / Low 10，全部 Confirmed），基线
+`b7c5d9f` 的 15 项/6.1 分保持，整体目标 active。
