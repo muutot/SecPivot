@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S19；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S20；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 21     | 21        | 0         |
+| Medium    | 22     | 22        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **30** | **30**    | **0**     |
+| **Total** | **31** | **31**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1293,3 +1293,46 @@ documentation currency gate 同步 data-contracts/security-model/project-structu
 官方固定 Export 模型和 KeePassXC 映射用于独立来源复核，真实客户端的
 专属类型导出、Android APK/选择器/provider 及剩余字段迁移仍未验证；
 整体审计继续进行。
+
+### Finding: SP-S20 Bitwarden 链接字段被导为空值且无法识别失效目标（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Backend API / Privacy
+- Status: Confirmed
+- Affected area: Bitwarden linked custom-field migration
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:141`（`1d3ddb4` 修复前）
+  - Function / Module: `parse_bitwarden_json` custom fields mapping
+  - Relevant behavior: 只读取 field.value，只有 type 1 才保护；type 3 的 linkedId 不解析。官方 FieldExport 保留 linkedId，CipherView.linkedFieldValue 用类型的 linkedFieldOptions 读取目标属性，而不是静态 field.value。
+  - Reproduction: 两项真实 parser command → import wire → KDBX 回归在旧代码失败：登录密码链接成为未保护的空字段；混合有效记录和未知/跨类型/非数字/空链接目标仍返回成功。见 `bitwarden-linked-red.log`，未操作真实用户数据。
+  - Independent reference: Bitwarden 固定提交 `1a8bdbfe625bff90a9c0cabef2002e37f6038fa1` 的 FieldType.Linked=3、LinkedIdType、FieldExport 和 Cipher/Login/Card/Identity View。七个来源 blob 身份见 `bitwarden-linked-reference-provenance.json`。
+- Problem: 来源客户端可以通过自定义标签读取登录密码、卡片号或身份属性，迁移后同一标签只剩空值且没有错误提示。
+- Why it matters: 用户依赖自定义字段填充表单时会复制空值，迁移成功提示掩盖字段语义丢失；来源主密码等标准值仍在原字段中，未观察已有库损坏。
+- Realistic failure scenario: 登录项有名为表单密码的 linked field（type 3、linkedId 101、value null），导入后自定义字段不能再取得登录密码。
+- Minimal fix: 按官方类型/编号读取目标值，保存为唯一且受保护的导入时快照；未知、跨类型或格式错误的链接在发布任何行前拒绝，并只报告记录序号。
+- Better long-term fix: 导入快照不具备来源的动态属性链接；动态字段引用需要独立的 KeePass 引用/编辑合同与运行验证，不能以快照保留宣称动态同步已实现。
+- Regression test suggestion: 登录 username/password、卡片所有六个目标、身份各字段及 FullName 的值/空白/空值/保护经 wire 和 KDBX 重开保留；跨类型/未知/缺失目标拒绝整批，不回显秘密；stale literal value 不覆盖实际链接目标。
+- Estimated effort: 1–2 小时（静态迁移修复与类型复核）；动态引用另计
+
+`78bb016` 已修复 SP-S20。`import/bitwarden_links.rs` 按官方 IDs 解析登录
+username/password、卡片六项、身份十八项及组合 FullName，转为受保护
+导入时快照。源码 label 仍经共享唯一名称分配器；已知空/缺失/null
+目标合法保留空值，未知/跨类型/格式错误或非字符串目标整次拒绝。
+FullName 保留姓名部分内部空白，仅按 JavaScript trim 规则处理组合结果，
+合成夹具覆盖 BOM、空白 middleName 和外围空格。field.value 的陈旧字面值
+不能覆盖链接目标；迁移后快照不具有动态同步语义。
+
+两个旧代码失败回归转绿，补充卡片/身份全部编号、空目标和陈旧值验证；
+实际 command → ImportRow wire → 批量导入 → KDBX 重开确认值与保护保留，
+普通快照中受保护值仍为空。针对性导入 **20** 项通过；最后扩充错误目标
+用例后完整 `npm run verify`（`verify-bitwarden-linked-fields.log`）通过：
+前端 **290**、Rust **545 + ACL 2**、格式、Svelte check、150 键设置契约、
+构建及 clippy。未改变 IPC shape、markup 或 CSS，documentation currency gate
+更新 data-contracts/security-model/project-structure 与 partial TODO。
+
+当前详细卡片 **31**（High 5 / Medium 22 / Low 4，全部 Confirmed），原始
+基线保持不变。独立复核使用固定 Bitwarden 公开模型及合成库；没有真实
+客户端导出、共享剪贴板、手机 APK 或 provider 运行证据。多 URI 匹配
+模式、组织集合/历史/附件、1PUX、KDF 基准、其余生命周期和完整 UI/文件
+语义覆盖仍待继续，整体目标未完成。

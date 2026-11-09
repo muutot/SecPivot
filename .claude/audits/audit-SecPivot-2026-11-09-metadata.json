@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S19; historical supplemental tracking notes excluded",
-    "total": 30,
-    "confirmed": 30,
+    "scope": "15 baseline cards plus SP-S05 through SP-S20; historical supplemental tracking notes excluded",
+    "total": 31,
+    "confirmed": 31,
     "suspected": 0,
     "by_severity": {
       "High": 5,
-      "Medium": 21,
+      "Medium": 22,
       "Low": 4
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "00f8bbd",
+  "remediation_checkpoint": "78bb016",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -223,15 +223,24 @@
       "source_checkpoint": "abd9008",
       "commit": "00f8bbd",
       "status": "Three genuine baseline regressions failed on skipped typed records, mixed invalid records and nested collisions. Types 1–8 retained with protected unique typed fields; quality flag preserved atomically through import-only DTO and KDBX reopen. Intermediate backend empty-password report and frontend metadata loss independently reproduced and repaired; false/true/absent, invalid-batch preservation and browser fallback verified. Seventeen targeted import tests and full host verification passed; no authentic typed client export/device evidence."
+    },
+    {
+      "id": "SP-S20",
+      "area": "Bitwarden linked fields imported as unprotected blanks and invalid targets silently accepted",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "source_checkpoint": "1d3ddb4",
+      "commit": "78bb016",
+      "status": "Two real command/wire/KDBX baseline regressions failed. Official login/card/identity IDs now resolve protected import-time snapshots; full name follows source composition including JS trim semantics. All card/identity targets, optional empty values, stale literals, malformed/cross-type/unknown links and masked KDBX reopen verified. Twenty targeted import tests and final full verify passed; dynamic linkage/native export/device behavior remains pending."
     }
   ],
   "verification": {
     "command": "npm run verify",
     "result": "passed",
-    "checkpoint": "00f8bbd",
-    "log": "verify-bitwarden-typed-records.log",
+    "checkpoint": "78bb016",
+    "log": "verify-bitwarden-linked-fields.log",
     "frontend_tests": 290,
-    "rust_unit_tests": 542,
+    "rust_unit_tests": 545,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
