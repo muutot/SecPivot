@@ -29,27 +29,43 @@
 
   let unlisten: UnlistenFn | null = null;
   let tick: ReturnType<typeof setInterval> | null = null;
+  let deadline = 0;
 
   function stopTick(): void {
-    if (tick) {
+    if (tick !== null) {
       clearInterval(tick);
       tick = null;
     }
   }
 
+  function refreshCountdown(): void {
+    if (!pending) return;
+    remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    if (remaining === 0) close();
+  }
+
   function startCountdown(secs: number): void {
     stopTick();
-    remaining = Math.max(1, Math.round(secs));
+    if (!Number.isFinite(secs) || secs <= 0) {
+      close();
+      return;
+    }
+    deadline = Date.now() + secs * 1000;
+    refreshCountdown();
+    if (!pending) return;
+    const request = pending;
     tick = setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) stopTick();
+      if (pending === request) refreshCountdown();
     }, 1000);
   }
 
   onMount(() => {
     if (!isTauriRuntime()) return;
     let cancelled = false;
+    document.addEventListener("visibilitychange", refreshCountdown);
+    window.addEventListener("focus", refreshCountdown);
     void listen<SideChannelRequest>("rpc-side-channel-request", (event) => {
+      if (cancelled) return;
       pending = event.payload;
       copied = false;
       startCountdown(event.payload.expiresInSecs);
@@ -63,11 +79,11 @@
     return () => {
       cancelled = true;
       unlisten?.();
-      stopTick();
+      document.removeEventListener("visibilitychange", refreshCountdown);
+      window.removeEventListener("focus", refreshCountdown);
+      close();
     };
   });
-
-  const expired = $derived(pending !== null && remaining <= 0);
 
   const timeText = $derived.by(() => {
     const m = Math.floor(remaining / 60);
@@ -78,14 +94,21 @@
   function close(): void {
     pending = null;
     copied = false;
+    remaining = 0;
+    deadline = 0;
     stopTick();
   }
 
   async function copyPassword(): Promise<void> {
-    if (!pending || copied || expired) return;
+    // Timers may be suspended while the window is hidden or the device sleeps.
+    refreshCountdown();
+    const request = pending;
+    if (!request || copied) return;
     try {
-      await copyText(pending.password);
-      copied = true;
+      await copyText(request.password);
+      if (pending !== request) return;
+      refreshCountdown();
+      if (pending === request) copied = true;
     } catch {
       // clipboard unavailable; the password stays readable in the modal
     }
@@ -109,7 +132,7 @@
           class="copy-button"
           type="button"
           onclick={() => void copyPassword()}
-          disabled={copied || expired}
+          disabled={copied}
         >
           {copied ? t(lang, "rpcprompt.copied") : t(lang, "rpcprompt.copy")}
         </button>
@@ -117,15 +140,9 @@
 
       <p class="approval-note">
         {t(lang, "rpcprompt.remaining")}
-        <strong class="countdown" class:countdown-urgent={!expired && remaining <= 10}
-          >{timeText}</strong
-        >
+        <strong class="countdown" class:countdown-urgent={remaining <= 10}>{timeText}</strong>
         {t(lang, "rpcprompt.note")}
       </p>
-
-      {#if expired}
-        <p class="outcome outcome-expired" aria-live="polite">{t(lang, "rpcprompt.expired")}</p>
-      {/if}
     {/snippet}
     {#snippet actions()}
       <Button onclick={close}>{t(lang, "common.close")}</Button>
@@ -187,11 +204,5 @@
 
   .countdown-urgent {
     color: var(--warning-color);
-  }
-
-  .outcome {
-    margin: 10px 0 0;
-    color: var(--danger-color);
-    font-size: var(--font-size-secondary, 11px);
   }
 </style>

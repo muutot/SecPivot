@@ -26,6 +26,12 @@ only while that exact request is current. Replacing a prompt or unmounting
 invalidates old IPC completions; an old approval cannot mark or dismiss a new one.
 This renderer guard does not replace backend token/session/lifetime validation.
 
+`RpcSideChannelPrompt` dismisses and releases its pending password on expiry,
+manual close and unmount. Its wall-clock countdown catches delayed timer callbacks
+and refreshes on focus/visibility resume and before copy. Old timer/copy completions
+must still own the same request object to update the UI. The event payload remains
+`{ password, expiresInSecs }`; backend completion/cancellation is not yet signalled.
+
 KeePass XML export uses the official PlainXml value contract: escaped literal
 text and `ProtectInMemory="True"`. Import decodes old unencrypted `Protected`
 Base64 only when `Meta/Generator` identifies SecPivot, with strict UTF-8 validation;
