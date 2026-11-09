@@ -533,6 +533,33 @@ mod ws_transport {
     }
 
     #[test]
+    fn listener_stop_cancels_a_partial_handshake_without_waiting_for_the_peer() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let worker_lifetime = Arc::clone(&lifetime);
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let (socket, _) = listener.accept().unwrap();
+            let mut stream = CancelableStream::new(socket, Arc::clone(&worker_lifetime)).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let upgraded = serve_connection_during(stream, &worker_lifetime).is_some();
+            done_tx.send(upgraded).unwrap();
+        });
+        let mut peer = TcpStream::connect(addr).unwrap();
+        peer.write_all(b"GET / HTTP/1.1\r\n").unwrap();
+        assert!(done_rx.recv_timeout(Duration::from_millis(150)).is_err());
+        lifetime.stop();
+        assert!(!done_rx.recv_timeout(Duration::from_secs(1)).unwrap());
+        worker.join().unwrap();
+        // The peer remains alive until after completion; dropping it must not
+        // be what wakes the incomplete-handshake handler.
+        drop(peer);
+    }
+
+    #[test]
     fn fragmented_upgrade_waits_for_the_complete_head_without_consuming_it() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();

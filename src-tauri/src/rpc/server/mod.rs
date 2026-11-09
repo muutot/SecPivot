@@ -18,7 +18,7 @@
 //! state, which is zeroized on drop; long-lived keys live in the session.
 
 use crate::config::PasswordGeneratorSettings;
-use crate::loopback::ConnectionBudget;
+use crate::loopback::{CancelableStream, ConnectionBudget, ListenerLifetime};
 use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
 use crate::vault::{
     classify_save_error, persist_rpc_write, SaveErrorClass, VaultSession, VaultSessions,
@@ -80,10 +80,12 @@ pub(crate) struct SideChannelRequest {
 pub(crate) struct ServerHandle {
     stop: mpsc::Sender<()>,
     join: Option<std::thread::JoinHandle<()>>,
+    lifetime: Arc<ListenerLifetime>,
 }
 
 impl ServerHandle {
     fn stop(mut self) {
+        self.lifetime.stop();
         let _ = self.stop.send(());
         if let Some(join) = self.join.take() {
             let _ = join.join();
@@ -240,14 +242,23 @@ impl RpcState {
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let app = app.clone();
         let connections = Arc::clone(&self.connections);
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let worker_lifetime = Arc::clone(&lifetime);
         let join = std::thread::spawn(move || {
-            crate::loopback::accept_loop(&listener, &stop_rx, connections, move |stream, addr| {
-                handle_connection(stream, &addr.to_string(), &app);
-            });
+            crate::loopback::accept_loop(
+                &listener,
+                &stop_rx,
+                connections,
+                worker_lifetime,
+                move |stream, addr, lifetime| {
+                    handle_connection(stream, &addr.to_string(), &app, &lifetime);
+                },
+            );
         });
         *guard = Some(ServerHandle {
             stop: stop_tx,
             join: Some(join),
+            lifetime,
         });
         if let Ok(mut slot) = self.last_error.lock() {
             *slot = None;
@@ -260,11 +271,11 @@ impl RpcState {
             if let Some(handle) = guard.take() {
                 handle.stop();
             }
-        }
-        // Only the listener has joined. Existing workers keep their permits
-        // until their handlers finish; restarting cannot reset their budget.
-        if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.clear();
+            // Clear before releasing the server mutex: a newly started listener
+            // must not have its live-session records cleared by an older stop.
+            if let Ok(mut sessions) = self.sessions.lock() {
+                sessions.clear();
+            }
         }
     }
 }
@@ -323,12 +334,27 @@ const PROBE_404_RESPONSE: &[u8] = b"HTTP/1.1 404 Not Found\r\nAccess-Control-All
 /// Read the request head (up to `\r\n\r\n`) via `peek` and judge whether the
 /// client is asking for a WebSocket upgrade; nothing is consumed from the
 /// stream, so the head is still visible to tungstenite afterwards.
+#[cfg(test)]
 fn is_websocket_upgrade(stream: &mut TcpStream) -> bool {
+    let lifetime = Arc::new(ListenerLifetime::default());
+    let Ok(socket) = stream.try_clone() else {
+        return false;
+    };
+    let Ok(mut stream) = CancelableStream::new(socket, Arc::clone(&lifetime)) else {
+        return false;
+    };
+    is_websocket_upgrade_during(&mut stream, &lifetime)
+}
+
+fn is_websocket_upgrade_during(stream: &mut CancelableStream, lifetime: &ListenerLifetime) -> bool {
     // Every peek starts at the same unread byte. Replace the snapshot instead
     // of appending duplicates; keep the head/frame bytes for tungstenite.
     let mut head = vec![0u8; MAX_HEAD_BYTES + 1];
     let deadline = Instant::now() + HANDSHAKE_TIMEOUT;
     loop {
+        if !lifetime.is_active() {
+            return false;
+        }
         let n = match stream.peek(&mut head) {
             Ok(0) => return false,
             Ok(n) => n,
@@ -358,15 +384,28 @@ fn is_websocket_upgrade(stream: &mut TcpStream) -> bool {
 
 /// Serve one inbound connection: plain-HTTP port probes get Kee's expected
 /// 404, WebSocket upgrades go through tungstenite.
-fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
-    if !is_websocket_upgrade(&mut stream) {
+#[cfg(test)]
+fn serve_connection(stream: TcpStream) -> Option<WebSocket<CancelableStream>> {
+    let lifetime = Arc::new(ListenerLifetime::default());
+    let stream = CancelableStream::new(stream, Arc::clone(&lifetime)).ok()?;
+    serve_connection_during(stream, &lifetime)
+}
+
+fn serve_connection_during(
+    mut stream: CancelableStream,
+    lifetime: &ListenerLifetime,
+) -> Option<WebSocket<CancelableStream>> {
+    if !is_websocket_upgrade_during(&mut stream, lifetime) {
+        if !lifetime.is_active() {
+            return None;
+        }
         eprintln!("[rpc] plain HTTP probe answered 404");
         let _ = stream.write_all(PROBE_404_RESPONSE);
-        let _ = stream.shutdown(std::net::Shutdown::Write);
+        let _ = stream.socket().shutdown(std::net::Shutdown::Write);
         // Drain the request so the close is a graceful FIN — Windows sends
         // an RST when a socket with unread data is dropped.
         let mut buf = [0u8; 1024];
-        loop {
+        while lifetime.is_active() {
             match stream.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(_) => {}
@@ -381,6 +420,9 @@ fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
     let mut config = WebSocketConfig::default();
     config.max_message_size = Some(MAX_FRAME_BYTES);
     config.max_frame_size = Some(MAX_FRAME_BYTES);
+    if !lifetime.is_active() {
+        return None;
+    }
     match accept_hdr_with_config(stream, accept_callback, Some(config)) {
         Ok(ws) => Some(ws),
         Err(e) => {
@@ -390,15 +432,23 @@ fn serve_connection(mut stream: TcpStream) -> Option<WebSocket<TcpStream>> {
     }
 }
 
-fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
+fn handle_connection(
+    mut stream: CancelableStream,
+    peer: &str,
+    app: &AppHandle,
+    lifetime: &Arc<ListenerLifetime>,
+) {
     let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
     eprintln!("[rpc] connection accepted from {peer}");
-    let Some(mut ws) = serve_connection(stream) else {
+    let Some(mut ws) = serve_connection_during(stream, lifetime) else {
         return;
     };
     eprintln!("[rpc] websocket upgraded ({peer})");
     let rpc_state = app.state::<RpcState>();
-    let Some(conn_id) = rpc_state.register_session(peer.to_owned(), ws.get_mut()) else {
+    let Some(conn_id) = lifetime
+        .run_if_active(|| rpc_state.register_session(peer.to_owned(), ws.get_mut().socket()))
+        .flatten()
+    else {
         return;
     };
     // Handshake is done; allow longer idle on the data path.
@@ -406,6 +456,9 @@ fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
     let mut conn = Conn::default();
     conn.id = conn_id;
     loop {
+        if !lifetime.is_active() {
+            break;
+        }
         let msg = match ws.read() {
             Ok(msg) => msg,
             Err(e) => {
@@ -418,7 +471,7 @@ fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
                 if text.len() > MAX_FRAME_BYTES {
                     break;
                 }
-                if !step(&mut ws, &mut conn, &text, app) {
+                if !step(&mut ws, &mut conn, &text, app, lifetime) {
                     break;
                 }
             }
@@ -436,7 +489,16 @@ fn handle_connection(stream: TcpStream, peer: &str, app: &AppHandle) {
 
 /// Dispatch one text envelope; returns `false` when the connection should
 /// close (error sent, protocol violation, or a completed handshake).
-fn step(ws: &mut WebSocket<TcpStream>, conn: &mut Conn, text: &str, app: &AppHandle) -> bool {
+fn step(
+    ws: &mut WebSocket<CancelableStream>,
+    conn: &mut Conn,
+    text: &str,
+    app: &AppHandle,
+    lifetime: &ListenerLifetime,
+) -> bool {
+    if !lifetime.is_active() {
+        return false;
+    }
     let env: Envelope = match serde_json::from_str(text) {
         Ok(env) => env,
         Err(e) => {
@@ -446,17 +508,18 @@ fn step(ws: &mut WebSocket<TcpStream>, conn: &mut Conn, text: &str, app: &AppHan
     };
     eprintln!("[rpc] envelope protocol={}", env.protocol);
     match env.protocol.as_str() {
-        "setup" => reply_setup(ws, conn, env, app),
-        "jsonrpc" => reply_jsonrpc(ws, conn, env, app),
+        "setup" => reply_setup(ws, conn, env, app, lifetime),
+        "jsonrpc" => reply_jsonrpc(ws, conn, env, app, lifetime),
         // ping / pong / teardown / reconnect — KeePassRPC client keepalives.
         _ => true,
     }
 }
 fn reply_setup(
-    ws: &mut WebSocket<TcpStream>,
+    ws: &mut WebSocket<CancelableStream>,
     conn: &mut Conn,
     env: Envelope,
     app: &AppHandle,
+    lifetime: &ListenerLifetime,
 ) -> bool {
     if env.error.is_some() {
         // Client-side teardown error — close without answering.
@@ -473,23 +536,26 @@ fn reply_setup(
         };
         // Same poison-guard as the bridge server: the guard lives outside the
         // unwind so a handler panic can't poison the session mutex.
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
-                let _ = app.emit(
-                    SIDE_CHANNEL_EVENT,
-                    SideChannelRequest {
-                        password: password.to_owned(),
-                        expires_in_secs: expires,
-                    },
-                );
-            })
-        }));
+        let outcome = lifetime.run_if_active(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                dispatch_setup(conn, &env, &mut *session, &mut |password, expires| {
+                    let _ = app.emit(
+                        SIDE_CHANNEL_EVENT,
+                        SideChannelRequest {
+                            password: password.to_owned(),
+                            expires_in_secs: expires,
+                        },
+                    );
+                })
+            }))
+        });
         match outcome {
-            Ok(reply) => reply,
-            Err(_) => {
+            Some(Ok(reply)) => reply,
+            Some(Err(_)) => {
                 eprintln!("[rpc] dispatch_setup panicked");
                 None
             }
+            None => None,
         }
     }) else {
         eprintln!(
@@ -526,16 +592,17 @@ fn reply_setup(
     }
 }
 fn reply_jsonrpc(
-    ws: &mut WebSocket<TcpStream>,
+    ws: &mut WebSocket<CancelableStream>,
     conn: &mut Conn,
     env: Envelope,
     app: &AppHandle,
+    lifetime: &ListenerLifetime,
 ) -> bool {
     let Some(request) = decode_jsonrpc(conn, &env) else {
         return false;
     };
     if matches!(request.method.as_str(), "AddLogin" | "UpdateLogin") {
-        return reply_jsonrpc_write(ws, conn, request, app);
+        return reply_jsonrpc_write(ws, conn, request, app, lifetime);
     }
     let Some(session_state) = app.try_state::<Mutex<VaultSession>>() else {
         return false;
@@ -550,11 +617,14 @@ fn reply_jsonrpc(
         .ok()
         .map(|guard| guard.clone())
         .unwrap_or_default();
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        dispatch_decoded_jsonrpc(conn, request, &mut *session, &generator)
-    }));
+    let outcome = lifetime.run_if_active(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dispatch_decoded_jsonrpc(conn, request, &mut *session, &generator)
+        }))
+    });
+    drop(session);
     match outcome {
-        Ok(Some((reply, method))) => {
+        Some(Ok(Some((reply, method)))) => {
             if matches!(method.as_str(), "AddLogin" | "UpdateLogin") {
                 // Writes mutate the vault in place; tell the desktop UI to
                 // refresh so the new/edited entry shows up without a reopen.
@@ -562,8 +632,8 @@ fn reply_jsonrpc(
             }
             send_envelope(ws, &reply)
         }
-        Ok(None) => false,
-        Err(_) => {
+        Some(Ok(None)) | None => false,
+        Some(Err(_)) => {
             eprintln!("[rpc] dispatch_jsonrpc panicked");
             false
         }
@@ -571,10 +641,11 @@ fn reply_jsonrpc(
 }
 
 fn reply_jsonrpc_write(
-    ws: &mut WebSocket<TcpStream>,
+    ws: &mut WebSocket<CancelableStream>,
     conn: &Conn,
     request: DecodedJsonRpc,
     app: &AppHandle,
+    lifetime: &ListenerLifetime,
 ) -> bool {
     let Some(session_state) = app.try_state::<Mutex<VaultSession>>() else {
         return false;
@@ -600,36 +671,39 @@ fn reply_jsonrpc_write(
             .is_some_and(|reply| send_envelope(ws, &reply));
         }
     };
-    let job = {
+    let outcome = {
         let Ok(mut active) = session_state.lock() else {
             return false;
         };
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            vaults.with_session_mut_result(
-                &mut active,
-                &session_id,
-                RpcError::InvalidMessage,
-                |target| {
-                    if !target.is_open() {
-                        return Err(RpcError::Locked);
-                    }
-                    let parsed = parse_write_request(&request.method, request.params.as_ref())?
-                        .ok_or_else(|| RpcError::Unsupported(request.method.clone()))?;
-                    target.prepare_rpc_write(parsed)
-                },
-            )
-        }));
-        match outcome {
-            Err(_) => {
-                eprintln!("[rpc] prepare write panicked");
-                return false;
-            }
-            Ok(Ok(job)) => job,
-            Ok(Err(error)) => {
-                return encode_jsonrpc_result(conn, &request.id, Err(error))
-                    .is_some_and(|reply| send_envelope(ws, &reply));
-            }
+        lifetime.run_if_active(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                vaults.with_session_mut_result(
+                    &mut active,
+                    &session_id,
+                    RpcError::InvalidMessage,
+                    |target| {
+                        if !target.is_open() {
+                            return Err(RpcError::Locked);
+                        }
+                        let parsed = parse_write_request(&request.method, request.params.as_ref())?
+                            .ok_or_else(|| RpcError::Unsupported(request.method.clone()))?;
+                        target.prepare_rpc_write(parsed)
+                    },
+                )
+            }))
+        })
+    };
+    let job = match outcome {
+        Some(Err(_)) => {
+            eprintln!("[rpc] prepare write panicked");
+            return false;
         }
+        Some(Ok(Ok(job))) => job,
+        Some(Ok(Err(error))) => {
+            return encode_jsonrpc_result(conn, &request.id, Err(error))
+                .is_some_and(|reply| send_envelope(ws, &reply));
+        }
+        None => return false,
     };
     let persisted =
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| persist_rpc_write(job))) {
@@ -641,6 +715,8 @@ fn reply_jsonrpc_write(
         };
     let result = match persisted {
         Ok(persisted) => {
+            // Stop cancels further admission and socket I/O, not adoption of
+            // a write that has already crossed the durable commit boundary.
             let (login, database) = persisted.persisted_response();
             let response = entry_dto(login, database);
             let Ok(mut active) = session_state.lock() else {
@@ -690,7 +766,7 @@ fn reply_jsonrpc_write(
     }
     sent
 }
-fn send_envelope(ws: &mut WebSocket<TcpStream>, env: &Envelope) -> bool {
+fn send_envelope(ws: &mut WebSocket<CancelableStream>, env: &Envelope) -> bool {
     match serde_json::to_string(env) {
         Ok(json) => ws.send(WsMessage::Text(json.into())).is_ok(),
         Err(_) => false,

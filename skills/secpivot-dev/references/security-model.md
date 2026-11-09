@@ -31,8 +31,20 @@ workers. Each opt-in service has a 32-worker cap (64 total if both are enabled),
 including unauthenticated HTTP/WebSocket requests and approval waits. Excess
 connections are closed without a queued socket or new thread. Managed service
 state retains permits across listener restarts; worker return, spawn failure
-and unwind release them. Listener stop alone does not cancel existing handlers
-or their approvals. This bounds worker amplification, not all resource use or
+and unwind release them. Each listener start owns a fresh `ListenerLifetime`:
+stop invalidates that generation, shuts down its registered sockets and rejects
+pending association waits. Requests queued on the vault mutex revalidate the
+generation before dispatch; a restarted listener cannot revive old requests or
+register their keys/sessions. Short dispatch is linearized with stop under the
+lifetime mutex, acquired after the vault mutex; socket I/O, storage work and
+approval waits never run under that lifetime guard. RPC response writes also
+run outside the vault mutex. An admitted durable RPC write still finishes and
+adopts its committed result, retaining its permit until the worker returns.
+Windows clone shutdown can leave an existing recv blocked despite succeeding;
+`loopback/stream.rs` polls native reads/writes at 100 ms, checks cancellation
+and preserves the protocol's longer logical read timeout. Already rendered
+approval/SRP prompts have no cancellation event yet, although backend approval
+tokens expire. This bounds worker amplification, not all resource use or
 availability against a local process deliberately occupying every slot.
 
 RPC upgrade detection peeks a fresh bounded snapshot of the unread TCP bytes;

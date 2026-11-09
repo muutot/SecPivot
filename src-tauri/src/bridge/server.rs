@@ -14,12 +14,12 @@ use crate::bridge::{
     BridgeRequest, BridgeResponse, BRIDGE_PORT,
 };
 use crate::config::PasswordGeneratorSettings;
-use crate::loopback::ConnectionBudget;
+use crate::loopback::{CancelableStream, ConnectionBudget, ListenerLifetime};
 use crate::vault::{VaultSession, VaultSessions, BROWSER_VAULT_CHANGED_EVENT};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -55,10 +55,12 @@ pub(crate) struct AssociateRequest {
 pub(crate) struct ServerHandle {
     stop: mpsc::Sender<()>,
     join: Option<std::thread::JoinHandle<()>>,
+    lifetime: Arc<ListenerLifetime>,
 }
 
 impl ServerHandle {
     fn stop(mut self) {
+        self.lifetime.stop();
         let _ = self.stop.send(());
         if let Some(join) = self.join.take() {
             let _ = join.join();
@@ -158,14 +160,23 @@ impl BridgeState {
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let app = app.clone();
         let connections = Arc::clone(&self.connections);
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let worker_lifetime = Arc::clone(&lifetime);
         let join = std::thread::spawn(move || {
-            crate::loopback::accept_loop(&listener, &stop_rx, connections, move |stream, _| {
-                handle_connection(stream, &app);
-            });
+            crate::loopback::accept_loop(
+                &listener,
+                &stop_rx,
+                connections,
+                worker_lifetime,
+                move |stream, _, lifetime| {
+                    handle_connection(stream, &app, &lifetime);
+                },
+            );
         });
         *guard = Some(ServerHandle {
             stop: stop_tx,
             join: Some(join),
+            lifetime,
         });
         if let Ok(mut slot) = self.last_error.lock() {
             *slot = None;
@@ -186,7 +197,11 @@ impl BridgeState {
 // One request
 // ---------------------------------------------------------------------------
 
-fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
+fn handle_connection(
+    mut stream: CancelableStream,
+    app: &AppHandle,
+    lifetime: &Arc<ListenerLifetime>,
+) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let (method, body) = match read_http_request(&mut stream) {
         Ok(request) => request,
@@ -247,10 +262,14 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
         .ok()
         .map(|guard| guard.clone())
         .unwrap_or_default();
-    let response =
-        dispatch_request_with_approval(request, &session_state, &sessions, &generator, |id| {
-            request_approval(app, &board, id)
-        });
+    let response = dispatch_request_with_approval(
+        request,
+        &session_state,
+        &sessions,
+        &generator,
+        lifetime,
+        |id| request_approval(app, &board, lifetime, id),
+    );
     if request_type == "set-login" && response.success {
         let _ = app.emit(BROWSER_VAULT_CHANGED_EVENT, ());
     }
@@ -275,6 +294,7 @@ fn dispatch_request_with_approval(
     session_state: &Mutex<VaultSession>,
     sessions: &VaultSessions,
     generator: &PasswordGeneratorSettings,
+    lifetime: &ListenerLifetime,
     approve: impl FnOnce(&str) -> bool,
 ) -> BridgeResponse {
     let request_type = request.request_type.clone();
@@ -284,14 +304,17 @@ fn dispatch_request_with_approval(
         let Ok(mut session) = session_state.lock() else {
             return BridgeResponse::failure(&request_type, "内部错误");
         };
-        return match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handle_request_with_generator(request, &mut *session, |_| false, generator)
-        })) {
-            Ok(response) => response,
-            Err(_) => {
+        return match lifetime.run_if_active(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                handle_request_with_generator(request, &mut *session, |_| false, generator)
+            }))
+        }) {
+            Some(Ok(response)) => response,
+            Some(Err(_)) => {
                 eprintln!("[bridge] request handler panicked");
                 BridgeResponse::failure(&request_type, "内部错误")
             }
+            None => BridgeResponse::failure(&request_type, "浏览器集成已关闭"),
         };
     }
 
@@ -302,15 +325,18 @@ fn dispatch_request_with_approval(
         let Some(originating_id) = sessions.active_id() else {
             return BridgeResponse::failure(&request_type, "数据库未打开或已锁定");
         };
-        let prepared = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            prepare_associate(request, &*session)
-        })) {
-            Ok(Ok(prepared)) => prepared,
-            Ok(Err(response)) => return *response,
-            Err(_) => {
+        let prepared = match lifetime.run_if_active(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                prepare_associate(request, &*session)
+            }))
+        }) {
+            Some(Ok(Ok(prepared))) => prepared,
+            Some(Ok(Err(response))) => return *response,
+            Some(Err(_)) => {
                 eprintln!("[bridge] request handler panicked");
                 return BridgeResponse::failure(&request_type, "内部错误");
             }
+            None => return BridgeResponse::failure(&request_type, "浏览器集成已关闭"),
         };
         (originating_id, prepared)
     };
@@ -333,22 +359,31 @@ fn dispatch_request_with_approval(
     if sessions.active_id().as_deref() != Some(originating_id.as_str()) {
         return prepared.reject("数据库会话已切换,请重新关联");
     }
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        complete_associate(prepared, &mut *session)
-    })) {
-        Ok(response) => response,
-        Err(_) => {
+    match lifetime.run_if_active(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            complete_associate(prepared, &mut *session)
+        }))
+    }) {
+        Some(Ok(response)) => response,
+        Some(Err(_)) => {
             eprintln!("[bridge] request handler panicked");
             BridgeResponse::failure(&request_type, "内部错误")
         }
+        None => BridgeResponse::failure(&request_type, "浏览器集成已关闭"),
     }
 }
 
 /// Ask the user for consent to bind a new browser client: register a pending
 /// approval, emit the frontend event, and block up to `APPROVAL_TIMEOUT` for
 /// `bridge_approve`. Returns the user's decision (rejected on timeout).
-fn request_approval(app: &AppHandle, board: &ApprovalBoard, id: &str) -> bool {
+fn request_approval(
+    app: &AppHandle,
+    board: &ApprovalBoard,
+    lifetime: &Arc<ListenerLifetime>,
+    id: &str,
+) -> bool {
     request_approval_with(
+        lifetime,
         board,
         |token, id| {
             let payload = AssociateRequest {
@@ -365,6 +400,7 @@ fn request_approval(app: &AppHandle, board: &ApprovalBoard, id: &str) -> bool {
 /// Pure half of `request_approval` (unit-testable): `emit` must fire the
 /// event so the UI can answer through `board`.
 pub(crate) fn request_approval_with(
+    lifetime: &Arc<ListenerLifetime>,
     board: &ApprovalBoard,
     emit: impl FnOnce(&str, &str),
     id: &str,
@@ -378,10 +414,24 @@ pub(crate) fn request_approval_with(
         }
     };
     let (tx, rx) = mpsc::channel();
+    let Some(_cancellation) = lifetime.watch_approval(tx.clone()) else {
+        return false;
+    };
     if !board.insert(&token, tx) {
         return false;
     }
-    emit(&token, id);
+    // Catch while the lifetime guard is still alive, just like protocol
+    // dispatch: an event failure must not poison cancellation state or leak
+    // the one-shot approval token.
+    if !matches!(
+        lifetime.run_if_active(
+            || std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { emit(&token, id) }))
+        ),
+        Some(Ok(()))
+    ) {
+        board.remove(&token);
+        return false;
+    }
     let decision = rx.recv_timeout(timeout);
     board.remove(&token);
     matches!(decision, Ok(true))
@@ -447,7 +497,7 @@ fn parse_content_length(head: &[u8]) -> Result<usize, String> {
     Ok(0)
 }
 
-fn read_http_request(stream: &mut TcpStream) -> Result<(String, String), String> {
+fn read_http_request(stream: &mut impl Read) -> Result<(String, String), String> {
     let mut head = Vec::with_capacity(1024);
     let mut buf = [0u8; 4096];
     loop {
@@ -509,7 +559,7 @@ fn cors_headers() -> &'static str {
 }
 
 /// Empty 200 answer for a CORS preflight (OPTIONS).
-fn write_http_options(stream: &mut TcpStream) -> std::io::Result<()> {
+fn write_http_options(stream: &mut impl Write) -> std::io::Result<()> {
     write!(
         stream,
         "HTTP/1.1 200 OK\r\n{}\
@@ -519,7 +569,7 @@ fn write_http_options(stream: &mut TcpStream) -> std::io::Result<()> {
     stream.flush()
 }
 
-fn write_http_response(stream: &mut TcpStream, body: &str) -> std::io::Result<()> {
+fn write_http_response(stream: &mut impl Write, body: &str) -> std::io::Result<()> {
     write!(
         stream,
         "HTTP/1.1 200 OK\r\n{}\
@@ -537,6 +587,7 @@ mod tests {
     use crate::bridge::{make_verifier, BridgeHost};
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use std::io::Write;
+    use std::net::TcpStream;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -784,6 +835,7 @@ mod tests {
         let board = ApprovalBoard::default();
 
         let approved = request_approval_with(
+            &Arc::new(ListenerLifetime::default()),
             &board,
             |token, id| {
                 assert_eq!(id, "client-x");
@@ -795,6 +847,7 @@ mod tests {
         assert!(approved);
 
         let rejected = request_approval_with(
+            &Arc::new(ListenerLifetime::default()),
             &board,
             |token, _| {
                 assert!(board.decide(token, false));
@@ -813,6 +866,7 @@ mod tests {
         let board = ApprovalBoard::default();
         let token = Mutex::new(String::new());
         let decided = request_approval_with(
+            &Arc::new(ListenerLifetime::default()),
             &board,
             |pending_token, _| {
                 *token.lock().unwrap() = pending_token.to_owned();
@@ -846,6 +900,7 @@ mod tests {
                 &worker_active,
                 &worker_sessions,
                 &PasswordGeneratorSettings::default(),
+                &ListenerLifetime::default(),
                 |_| {
                     approval_started_tx.send(()).unwrap();
                     decision_rx.recv().unwrap()
@@ -881,6 +936,7 @@ mod tests {
             &active,
             &sessions,
             &PasswordGeneratorSettings::default(),
+            &ListenerLifetime::default(),
             |_| {
                 sessions
                     .switch_active(&mut active.lock().unwrap(), &first_id)
@@ -902,5 +958,138 @@ mod tests {
             })
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn listener_stop_wakes_pending_approval_and_expires_its_token() {
+        let board = Arc::new(ApprovalBoard::default());
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let worker_board = Arc::clone(&board);
+        let worker_lifetime = Arc::clone(&lifetime);
+        let (prompt_tx, prompt_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            request_approval_with(
+                &worker_lifetime,
+                &worker_board,
+                |token, _| {
+                    prompt_tx.send(token.to_owned()).unwrap();
+                },
+                "synthetic-client",
+                Duration::from_secs(2),
+            )
+        });
+        let token = prompt_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let stopped = Instant::now();
+        lifetime.stop();
+        assert!(!worker.join().unwrap());
+        assert!(stopped.elapsed() < Duration::from_secs(1));
+        assert!(!board.decide(&token, true));
+    }
+
+    #[test]
+    fn stopped_generation_never_emits_a_new_approval_prompt() {
+        let lifetime = Arc::new(ListenerLifetime::default());
+        lifetime.stop();
+        assert!(!request_approval_with(
+            &lifetime,
+            &ApprovalBoard::default(),
+            |_, _| panic!("stopped generation emitted a prompt"),
+            "synthetic-client",
+            Duration::from_secs(1),
+        ));
+    }
+
+    #[test]
+    fn approval_event_panic_expires_the_token_without_poisoning_the_lifetime() {
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let board = ApprovalBoard::default();
+        let token = Mutex::new(String::new());
+        assert!(!request_approval_with(
+            &lifetime,
+            &board,
+            |value, _| {
+                *token.lock().unwrap() = value.to_owned();
+                panic!("synthetic approval event failure");
+            },
+            "synthetic-client",
+            Duration::from_secs(1),
+        ));
+        assert!(lifetime.is_active());
+        assert!(!board.decide(&token.lock().unwrap(), true));
+    }
+
+    #[test]
+    fn approval_answer_cannot_register_a_key_after_stop_or_restart() {
+        let dir = TempDir::new().unwrap();
+        let sessions = VaultSessions::default();
+        let active = Mutex::new(VaultSession::default());
+        open_test_vault(
+            &sessions,
+            &mut active.lock().unwrap(),
+            &dir,
+            "stop-approval.kdbx",
+        );
+        let old = ListenerLifetime::default();
+        let response = dispatch_request_with_approval(
+            associate_request("old-client"),
+            &active,
+            &sessions,
+            &PasswordGeneratorSettings::default(),
+            &old,
+            |_| {
+                old.stop();
+                true
+            },
+        );
+        assert!(!response.success);
+        assert!(active.lock().unwrap().list_clients().is_empty());
+        let restarted = ListenerLifetime::default();
+        let response = dispatch_request_with_approval(
+            associate_request("new-client"),
+            &active,
+            &sessions,
+            &PasswordGeneratorSettings::default(),
+            &restarted,
+            |_| true,
+        );
+        assert!(response.success);
+        assert_eq!(active.lock().unwrap().list_clients().len(), 1);
+    }
+
+    #[test]
+    fn request_waiting_for_the_vault_lock_revalidates_listener_generation() {
+        let dir = TempDir::new().unwrap();
+        let sessions = Arc::new(VaultSessions::default());
+        let active = Arc::new(Mutex::new(VaultSession::default()));
+        open_test_vault(
+            &sessions,
+            &mut active.lock().unwrap(),
+            &dir,
+            "queued-stop.kdbx",
+        );
+        let lifetime = Arc::new(ListenerLifetime::default());
+        let worker_active = Arc::clone(&active);
+        let worker_sessions = Arc::clone(&sessions);
+        let worker_lifetime = Arc::clone(&lifetime);
+        let guard = active.lock().unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            dispatch_request_with_approval(
+                associate_request("queued-client"),
+                &worker_active,
+                &worker_sessions,
+                &PasswordGeneratorSettings::default(),
+                &worker_lifetime,
+                |_| panic!("stopped request reached approval after the vault lock"),
+            )
+        });
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        lifetime.stop();
+        drop(guard);
+        let response = worker.join().unwrap();
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("已关闭"));
+        assert!(active.lock().unwrap().list_clients().is_empty());
     }
 }
