@@ -2,8 +2,9 @@
 //! trait plus the real S3 and WebDAV implementations and an in-memory fake used
 //! by offline tests. The payloads are ordinary KDBX files; only the transport
 //! differs. The frontend sends only a canonical profile path; S3 keys / WebDAV
-//! credentials are resolved from backend config for each command (never cached
-//! in the session) and live in `conf/config.json` per the approved security
+//! credentials are resolved from backend config when building a transport.
+//! Open sessions retain that transport for subsequent saves until close/reopen.
+//! Credentials live in `conf/config.json` per the approved security
 //! model — they are secondary credentials, distinct from vault master passwords.
 
 pub(crate) mod backup;
