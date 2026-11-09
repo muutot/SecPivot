@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S32; historical supplemental tracking notes excluded",
-    "total": 43,
-    "confirmed": 43,
+    "scope": "15 baseline cards plus SP-S05 through SP-S33; historical supplemental tracking notes excluded",
+    "total": 44,
+    "confirmed": 44,
     "suspected": 0,
     "by_severity": {
       "High": 10,
       "Medium": 25,
-      "Low": 8
+      "Low": 9
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "34b6768",
+  "remediation_checkpoint": "42b43cb",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -337,13 +337,21 @@
       "confidence": "Confirmed",
       "commit": "34b6768",
       "status": "Actual Edge colors: 12 of 18 baseline combinations below 4.5:1; primary theme text fixes all 18. Screenshots inspected; check/build/format passed. No full Rust gate claimed for CSS-only checkpoint."
+    },
+    {
+      "id": "SP-S33",
+      "area": "Long URL/filename tips overflow both viewport edges",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "commit": "42b43cb",
+      "status": "Nine actual global TipsHost baseline combinations overflow; nine bounded/wrapped combinations passed. Actual CSV/XML errors/success and 18 contrast/screenshot integration checks plus full verify passed. Stack height/duration unverified."
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "414e049",
-    "log": "verify-tip-kind.log",
+    "checkpoint": "42b43cb",
+    "log": "verify-tip-wrap-integration.log",
     "frontend_tests": 312,
     "rust_unit_tests": 561,
     "android_acl_tests": 2,
@@ -424,6 +432,18 @@
       "check_log": "check-tip-contrast.log",
       "build_log": "build-tip-contrast.log",
       "scope": "Fresh Edge synthetic CSV/XML errors and success, dark/light/custom x three dimensions; custom low-contrast user palettes/native runtime unverified"
+    },
+    "tip_wrap": {
+      "checkpoint": "42b43cb",
+      "result": "passed",
+      "red_log": "tip-wrap-red.log",
+      "green_log": "tip-wrap-green.log",
+      "contact_sheet": "tip-wrap-contact-sheet.png",
+      "screenshots": 9,
+      "integration_browser_log": "tip-wrap-integration-browser.log",
+      "integration_contact_sheet": "tip-wrap-integration-contact-sheet.png",
+      "integration_screenshots": 18,
+      "scope": "Fresh Edge global tip synthetic public strings and real CSV/XML demo import UI; native runtime, stack height/duration unverified"
     }
   },
   "reverification_notes": [
@@ -476,6 +496,7 @@
     "e1f4bdd fixes SP-S29 malformed CSV and adds localized page feedback. Current source independently corroborated against stdlib writer/reader and actual headless Edge UI; temporary server stopped. Standard Error constructor supplied to VM fixture to match real application realm, and responsive locator constrained to visible row; preserved failed logs do not count as product defects. Full final verify 309/561/ACL2 passed with four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline/score unchanged. Goal remains active; XML errors, toast semantics, remaining native per-URI/migration/UI coverage and Android mobile Save As remain pending.",
     "3119cf0 fixes SP-S30 localized XML rejection before writes and discards old picker completions before parsing. Three handler red-to-green tests and actual Edge FileReader/DOMParser passed; full verify 312/561/ACL2 exit 0. Parser unchanged; four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline preserved; goal active and mobile v1.6.5 cloud Save As still lacks APK/device evidence.",
     "414e049 fixes SP-S31 explicit failure severity across page and IO/group/favicon/editor seams. Actual source probes, 38 adjacent IO tests and nine rendered Edge combinations passed; full verify 312/561/ACL2 exit 0. Default live clipboard bodies skipped; no new token or CSS geometry. External patch-script TypeScript resolution/trailing-comma faults corrected before final gate and not counted as product findings. Baseline unchanged, goal active; light contrast and mobile Save As APK/device remain pending.",
-    "34b6768 fixes SP-S32 transient tip text contrast using existing primary text token. Independent Edge measured 12/18 baseline failures and 18/18 green passes, including actual import errors/success. Eighteen screenshots inspected; check/build/format passed; full gate remains at 414e049 until a later integration run. Original baseline unchanged, goal active; long-message geometry and Android Save As device/APK remain pending."
+    "34b6768 fixes SP-S32 transient tip text contrast using existing primary text token. Independent Edge measured 12/18 baseline failures and 18/18 green passes, including actual import errors/success. Eighteen screenshots inspected; check/build/format passed; full gate remains at 414e049 until a later integration run. Original baseline unchanged, goal active; long-message geometry and Android Save As device/APK remain pending.",
+    "42b43cb fixes SP-S33 long-tip horizontal overflow through bounded host geometry and anywhere wrapping. Nine baseline failures/nine green geometry checks, 18 actual import/contrast screenshots and final full verify 312/561/ACL2 passed; earlier contrast CSS is included. Four live clipboard bodies skipped by default; no user vault/clipboard/device. Original baseline unchanged, full goal remains active; mobile v1.6.5 cloud Save As APK/device and remaining system/UI coverage pending."
   ]
 }

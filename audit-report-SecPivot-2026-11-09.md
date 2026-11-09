@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S32；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S33；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
 | Medium    | 25     | 25        | 0         |
-| Low       | 8      | 8         | 0         |
+| Low       | 9      | 9         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **43** | **43**    | **0**     |
+| **Total** | **44** | **44**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1875,3 +1875,48 @@ checkpoint 是 `414e049`，未伪称本 CSS 提交已有全套 Rust 运行证据
 仅合成 demo 库，原生/设备和用户自选低对比度主题不在本次保证范围。
 当前卡片 **43**（High 10 / Medium 25 / Low 8），原始基线保持不变。
 长错误提示窄屏边界、其他系统/UI 和手机 Save As 真机验证继续。
+
+### Finding: SP-S33 长文件名和 URL 提示横向越出窗口（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Accessibility / Design
+- Status: Confirmed
+- Affected area: global transient tip viewport geometry
+- Evidence:
+  - File: `src/lib/components/TipsHost.svelte:20`、`src/lib/components/TipsHost.svelte:33`（`b8dde71` 修复前）
+  - Function / Module: `.tips-host` / `.tip` fixed positioning and intrinsic text width
+  - Relevant behavior: centered fixed host 没有宽度上限，长未断开的 URL/文件名抬高 intrinsic minimum width；消息自身没有可断长词规则，拖大整个 stack。
+  - Reproduction: `tip-wrap-red.log` 实际 TipsHost 显示三个纯合成公开错误文本，dark/light/custom × 1100/760/390 均失败：390px 窗口里消息宽约 1422–1528px，左侧起点为 -516/-569px，失败前缀和信息两端看不见。`tip-wrap-red-light-390.png` 独立截图确认；pageerror=0，无用户库/设备/剪贴板。
+- Problem: 文件路径或远端错误包含长串时，用户只能看到中间一段，无法读取操作结果及完整原因。
+- Why it matters: 错误反馈需要留在当前窗口内；纯布局问题，没有数据库写入或敏感信息泄漏证据。
+- Realistic failure scenario: 云端/文件错误把长 URL 或单词型文件名放入 tip，手机窄屏上裁掉“另存为失败”和结尾说明。
+- Minimal fix: host 用内容宽度并限制到窗口留边与紧凑上限，单条消息遵守 host 宽度并允许长词换行；短消息保持紧凑居中。
+- Better long-term fix: 独立复核超长/多条消息的高度与显示时间，并检查其他 popover 的内在尺寸边界。
+- Regression test suggestion: 三主题三尺寸中所有消息边缘在窗口内、无横向文字 overflow；短消息保持原 padding/font，实际导入失败仍可读。
+- Estimated effort: 0.5–1 小时（局部 CSS 和运行截图复核）
+
+### SP-S33 修复与独立复核（2026-11-10）
+
+`42b43cb` 将 host 设为内容宽度，上限 min(560px, 100vw−24px)；tip
+尊重 host 的 100% 宽度并对长单词/URL 使用 overflow-wrap:anywhere。
+现有 padding、字号、border/background、定时和 z-index 均保留。
+`tip-wrap-red.log` 三主题 × 三尺寸全部横向越界；green 全部在视口
+留边内且 scrollWidth 不超过 clientWidth。390px 上消息宽 366px、
+左右各 12px，前缀/结尾均能读取。真实 `tip-wrap-contact-sheet.png`
+九张截图已检查；测试使用公开合成错误串，未模拟真实网络上传失败。
+
+`tip-wrap-integration-browser.log` 与 18 张截图复核实际 CSV/XML 失败
+及成功导入、三主题/三尺寸，18 组对比度仍通过，pageerror=0。
+`tip-wrap-integration-contact-sheet.png` 已检查，短 tip 仍紧凑居中。
+两个自有 Vite 实例各自运行结束后停止。
+
+完整 `verify-tip-wrap-integration.log` 终态 exit 0：前端 **312**、Rust
+harness **561**、ACL **2**、格式/check/build/clippy 全通过；两线程，
+无外部过滤，四个 live clipboard body 缺省 skip。此次集成门禁也覆盖
+前一 CSS 正文颜色修复。文档 currency gate 同步 css-theming，仅四条
+几何/wrap 声明，没有新 token 或永久低影响样式测试。
+当前卡片 **44**（High 10 / Medium 25 / Low 9），基线 15 项/6.1 分不变。
+整个目标仍 active；逐 URI/regex 交互、迁移保真、KDF 校准、其他 UI
+及原生验证继续，手机 v1.6.5 云端另存为仍未有新 APK/真机证据。
+超长 stack 的高度/阅读时长尚未验证，不用本次横向边界替代。
