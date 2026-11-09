@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S46; historical supplemental tracking notes excluded",
-    "total": 57,
-    "confirmed": 57,
+    "scope": "15 baseline cards plus SP-S05 through SP-S47; historical supplemental tracking notes excluded",
+    "total": 58,
+    "confirmed": 58,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 34,
+      "Medium": 35,
       "Low": 10
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "5687202",
+  "remediation_checkpoint": "5f85f45",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S47",
+      "area": "Group content changes retain old timestamps and obstruct one-sided merge",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "a7d19e9",
+      "commit": "5f85f45",
+      "status": "Confirmed and remediated for omitted timestamps. Eight valid red and eight green actual native synthetic API/save/reopen regressions; six final bidirectional merge cases and two tag-only time/storage cases. One JSON regression covers root/nested missing/null inheritance four ways. Full verify 316/604/ACL2 exit 0. Enabled inheritance intentionally unchanged; stale DTO/reference corrected. No-op normalization retains fixed old time. Tag merge fidelity and same-second divergence remain separate. No UI/device/provider/client/clipboard/user-vault proof."
+    },
     {
       "id": "SP-S46",
       "area": "Standalone entry flags and Auto-Type changes retain old modification time and cause one-sided merge conflicts",
@@ -467,10 +476,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "5687202",
-    "log": "verify-entry-attribute-time.log",
+    "checkpoint": "5f85f45",
+    "log": "verify-group-content-time-final.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 595,
+    "rust_unit_tests": 604,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -500,7 +509,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 595,
+    "rust_unit_tests_discovered": 604,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -661,6 +670,15 @@
       "provenance": "entry-attribute-time-reference-provenance.json",
       "scope": "Actual standalone native API, synthetic KDBX save/reopen, both merge directions and normalized same-value time preservation. Full-field editor still supplies its primary snapshot.",
       "limitations": "Initial borrow compile error excluded. Red stopped at first merge assertion; did not execute historical assertions. No extra standalone attribute history or guarantee for same-second edits; real Tauri/device/clipboard/client runtime unverified."
+    },
+    "group_content_time": {
+      "result": "passed",
+      "red_log": "group-content-time-red-final.log",
+      "green_log": "group-content-time-green-corrected.log",
+      "tests": 8,
+      "inheritance_wire_log": "group-inheritance-wire-green.log",
+      "inheritance_tests": 1,
+      "limits": "Six red tests stopped at first merge assertion; two tag-only red tests stopped at time. Tag merge fidelity is separately reproduced and pending. Same-second ordering/native device/client/provider unverified."
     }
   },
   "reverification_notes": [
@@ -723,6 +741,7 @@
     "8887e2e fixes SP-S43 real JSON nullable settings decoder, preserving absence/null/value for four fields without widening value types. Two valid baseline probes failed; native red stopped at dirty, not final persistence assertions. Three new regressions include actual metadata-only and compression rewrite reset/save/reopen and wrong-type rejection. Eleven targeted settings tests and full verify 316/591/ACL2 passed, four live clipboard bodies skipped. Data/security references and TODO null evidence updated; no DTO schema/UI/dependency change. Independently pinned release tag 006b810 and Tauri 2.11.5/tauri-utils 2.9.3 confirm screens ignored and runtime window/webview OR predicate denies empty scope; standalone resolver tests 2 passed. Public APK hashes match release sums and complete saf literals, but no device/provider/build/install/compiled-authority/signature evidence. Initial gh auth unavailable used public API instead; unquoted PowerShell Git peel syntax corrected with exact quoted ref. Tooling errors not application findings. Baseline/score unchanged; full goal active.",
     "a88ff62 fixes SP-S44 inaccurate history copy in both languages and updates approved UI reference. Valid baseline rendered twelve mock rows alongside fixed ten-version hint; twelve fresh-server browser cases and screenshots passed, check/build/316 frontend/format exit 0. Initial nonexistent settings API, later hot-reload mock/service mismatch, missing sharp and Python default encoding were fixture/tooling faults and excluded. Existing native history-limit evidence reused; no redundant string mirror tests or full Rust rerun for copy-only change. Own Vite handles stopped, unrelated .trae preserved. Baseline and 6.1 score unchanged; full goal active, native Android replacement/provider and remaining system/migration/UI audits pending.",
     "c45d7b9 fixes SP-S45 absent history byte budget using pinned KeePass 6 MiB default while preserving explicit negative unlimited. Two valid red native retention tests failed after initial fixture compile errors were corrected; two new native tests and 27 targeted history checks passed. Full verify exit 0: 316 frontend/593 Rust/ACL2, default test scheduling and no filters, clipboard opt-in unset. Exact fixed source URLs/hashes record constructor/Clear/XML conditional defaults; no invalid reference ZIP evidence used. Contract/security/DTO comments and partial TODO synchronized; no eager load/metadata cleanup, user-vault/native-client/device/provider/clipboard execution. Baseline b7c5d9f and 6.1 unchanged; full goal active. Attribute mutation timestamp/history and remaining systems/migration/UI need separate evidence.",
-    "5687202 fixes SP-S46 omitted entry-attribute timestamps without changing editor primary history behavior. Two valid red native save/reopen/merge regressions failed after fixture borrow repair; red never reached historical assertions, which were removed when timestamp scope was selected after reading actual editor composition. Two final native API regressions include double merge direction and pinned old-time normalized no-op, full verify 316/595/ACL2 passed serially with no filters and live clipboard flag unset. Data contract/source comments synchronized; post-gate changes were documentation only, format passed again. No UI/IPC/schema/dependency or user-vault/clipboard/Tauri-handler/device/client proof. Same-second KDBX precision, group/favorite timestamps and remaining systems/migration/UI/mobile replacement/provider continue; baseline/score unchanged and goal active."
+    "5687202 fixes SP-S46 omitted entry-attribute timestamps without changing editor primary history behavior. Two valid red native save/reopen/merge regressions failed after fixture borrow repair; red never reached historical assertions, which were removed when timestamp scope was selected after reading actual editor composition. Two final native API regressions include double merge direction and pinned old-time normalized no-op, full verify 316/595/ACL2 passed serially with no filters and live clipboard flag unset. Data contract/source comments synchronized; post-gate changes were documentation only, format passed again. No UI/IPC/schema/dependency or user-vault/clipboard/Tauri-handler/device/client proof. Same-second KDBX precision, group/favorite timestamps and remaining systems/migration/UI/mobile replacement/provider continue; baseline/score unchanged and goal active.",
+    "5f85f45 fixes SP-S47 changed group content timestamps and preserves existing JSON missing/null enabled inheritance requested by the dialog. Valid 8-test baseline and 9 final new tests including four wire inheritance combinations; full verify 316/604/ACL2 passed serially after a documentation formatting failure was corrected. Group-tag merge probe still failed independently and is not claimed fixed. Data contract/DTO/backend comments synchronized, no new TODO checked; source add_group mispatch restored before final green. Baseline/score unchanged, goal active."
   ]
 }

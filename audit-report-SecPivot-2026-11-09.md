@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S46；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S47；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 34     | 34        | 0         |
+| Medium    | 35     | 35        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **57** | **57**    | **0**     |
+| **Total** | **58** | **58**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2403,3 +2403,40 @@ exit 0：316 frontend、595 Rust、ACL 2、format、check 零错误警告、
 继续审查。本报告无需额外 reference 修改。当前详细卡片 **57**
 （Critical 1 / High 12 / Medium 34 / Low 10，全部 Confirmed），基线
 `b7c5d9f` 的 15 项/6.1 分保持，整体目标 active。
+
+### Finding: SP-S47 分组内容修改保留旧时间戳，阻断单边合并（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Backend API / Merge integrity
+- Status: Confirmed
+- Affected area: rename_group / set_group_icon / update_group_meta / update_group_autotype
+- Evidence:
+  - File: src-tauri/src/vault/entries.rs:1070–1137/1330–1356、src-tauri/src/vault/dto.rs:519–528（a7d19e9 修复前）
+  - Function / Module: Group content mutations / merge_databases
+  - Relevant behavior: 名称、图标、备注、标签、搜索和 Auto-Type 写入未刷新 Group.times.last_modification；merge 对相同时间的不同内容报错。
+  - Reproduction: group-content-time-red-final.log 的 8 项实际合成 KDBX 回归均失败。六项 nested/root 名称、图标、metadata、Auto-Type 保存重开后在首个合并断言失败；两项仅改标签在保存重开的时间断言失败。red 未执行后续反向合并与相等输入断言。
+  - Independent verification: keepass-0.13.22/src/db/merge.rs:315–359 以修改时间决定胜出分组，时间相等且内容不同拒绝；实际 GroupAutoTypeDialog.svelte:65 用省略 enabled 请求继承。原 DTO/引用的“absent keeps”描述错误，原后端缺省/null 恢复继承的行为应保留。
+- Problem: 持久化成功的分组变更仍携带旧修改时间，普通单边更新被当作冲突。
+- Why it matters: 阻断存量分组的自动同步；本项复现伪冲突，没有密码丢失证据，按 Medium。
+- Realistic failure scenario: 一份共同库只改分组名称或自动填充设置，保存后与未改变的副本合并仍失败。
+- Minimal fix: 四个 mutation 比较规范化后的真实内容，改变时设置当前秒精度修改时间，相等值保持旧时间。root metadata/Auto-Type 共享同一处理；保留 enabled 缺省/null 继承和序列缺省保持/空值清除。
+- Better long-term fix: 分别复核标签合并保真、收藏时间、秒精度重复变化及分组移动/展开边界。
+- Regression test suggestion: 固定旧时间的原生库，实际 API 修改/保存重开后双向合并检查内容；只改标签先检查时间和直接存储。保存规范化属性后再固定旧时间，相等输入不得刷新。root/nested × JSON missing/null enabled 四场景检查继承和后代实际序列。
+- Estimated effort: 2–3 小时（时间修复、九个回归与契约同步）
+
+5f85f45 已修复。group-content-time-green-corrected.log 的 8 项通过，
+group-inheritance-wire-green.log 的 1 项包含四个 JSON/原生继承组合。
+完整 verify-group-content-time-final.log exit 0：316 frontend、604 Rust、
+ACL 2，格式、check、契约、build、clippy 均通过；RUST_TEST_THREADS=1，
+无过滤，四个 live clipboard body 关闭。第一次完整门仅因引用 Markdown
+格式失败，Prettier 修正后最终完整门通过。初版夹具编译错误已排除；
+第一补丁误落到 add_group 后已恢复并改到 rename_group，最终回归通过。
+
+文档门更新 data-contracts 与 DTO/backend 注释，没有改变 enabled 的
+既有继承语义，没有可据此勾选的完整 TODO。标签两项只证明时间和直接
+保存重开，不能证明合并标签保真：独立临时 group-tags-merge-red.log
+的 root/nested 两项仍在首方向 tags 断言失败，将作为独立问题修复。
+无 CSS/markup/schema/IPC/vendor 修改、真实设备/provider/用户库运行。
+当前卡片 58（Critical 1 / High 12 / Medium 35 / Low 10），原始
+b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
