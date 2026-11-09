@@ -224,6 +224,7 @@ jobs:
             Copy-Item -LiteralPath $artifact -Destination $stage -Force
           }
           Copy-Item -LiteralPath "${{ github.workspace }}\dist\SHA256SUMS-windows.txt" -Destination $stage -Force
+          Copy-Item -LiteralPath "${{ github.workspace }}\RELEASE.md" -Destination $stage -Force
           Get-ChildItem -LiteralPath $stage | ForEach-Object { Write-Host "Staged $($_.Name)" }
 
       - name: Preserve Windows release assets
@@ -249,7 +250,6 @@ jobs:
       contents: write
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: windows-release
@@ -264,11 +264,7 @@ jobs:
           set -euo pipefail
           ver="${RELEASE_TAG#v}"
           notes="dist/windows/RELEASE.md"
-          if [ -f RELEASE.md ]; then
-            cp RELEASE.md "$notes"
-          else
-            echo "See CHANGELOG.md for details." > "$notes"
-          fi
+          test -s "$notes"
           assets=(dist/windows/*.exe dist/windows/*.zip dist/windows/SHA256SUMS-windows.txt)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "No Windows release asset to publish." >&2
@@ -409,18 +405,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle_file="src-tauri/gen/android/app/build.gradle.kts"
-          if [ -f "$gradle_file" ]; then
-            # The template signs the release build type with the throwaway
-            # debug key. We sign with the release key in the next step, so
-            # drop any existing signing config first.
-            sed -i '/signingConfig\s*=\s*signingConfigs\.getByName("debug")/d' "$gradle_file"
-            if grep -q 'signingConfig' "$gradle_file"; then
-              echo "Remaining signingConfig references:" >&2
-              grep -n 'signingConfig' "$gradle_file" >&2
-            else
-              echo "Release APK will be built unsigned."
-            fi
+          gradle_file="gen/android/app/build.gradle.kts"
+          test -f "$gradle_file"
+          # Drop the template's throwaway debug key; a separate job signs.
+          sed -i '/signingConfig\s*=\s*signingConfigs\.getByName("debug")/d' "$gradle_file"
+          if grep -q 'signingConfig' "$gradle_file"; then
+            echo "Remaining signingConfig references:" >&2
+            grep -n 'signingConfig' "$gradle_file" >&2
+            exit 1
+          else
+            echo "Release APK will be built unsigned."
           fi
           npx tauri android build --apk --ci --split-per-abi --target aarch64 --target x86_64
         working-directory: src-tauri
@@ -504,9 +498,37 @@ jobs:
             rm -f "$apk.listing"
           done
 
-      # Signs the staged `dist/android/*.apk` files in place and re-verifies
-      # each result, so the files that reach the release are provably signed.
-      - name: Sign release APKs with the release key
+      - name: Preserve unsigned Android APKs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-unsigned-apk
+          path: dist/android/*.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # No checkout or build code shares this runner with the release identity.
+  # Downloaded APKs are data only; all signing commands are inline below.
+  sign-android:
+    name: Sign (Android APK)
+    needs: [validate, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: android-unsigned-apk
+          path: dist/android
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "build-tools;35.0.0"
+
+      - name: Sign and verify release APKs
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -516,36 +538,51 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          apksigner="$build_tools/apksigner"
-          keystore_dir=$(mktemp -d)
+          : "${ANDROID_KEYSTORE_BASE64:?Missing Android keystore}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing Android keystore password}"
+          : "${ANDROID_KEY_PASSWORD:?Missing Android key password}"
+          : "${ANDROID_KEY_ALIAS:?Missing Android key alias}"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$apksigner"
+          umask 077
+          keystore_dir=$(mktemp -d "$RUNNER_TEMP/secpivot-signing.XXXXXX")
+          cleanup() {
+            rm -f -- dist/android/*.signed dist/android/*.listing
+            rm -rf -- "$keystore_dir"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
           keystore="$keystore_dir/secpivot-release.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
-          chmod 600 "$keystore"
           apks=(dist/android/*.apk)
-          if [ ${#apks[@]} -eq 0 ]; then
-            echo "No staged Android APK found under dist/android/." >&2
+          if [ ${#apks[@]} -ne 2 ]; then
+            echo "Exactly two staged Android APKs are required." >&2
             exit 1
           fi
-          for apk in "${apks[@]}"; do
-            # Drop any stale v1 signature files before re-signing (apksigner
-            # replaces the v2/v3 block itself). `zip -d` exits 12 when there
-            # is nothing to remove, which is not a failure here.
-            zip -d "$apk" 'META-INF/*.RSA' 'META-INF/*.SF' 'META-INF/*.MF' >/dev/null 2>&1 || true
+          for abi in arm64-v8a x86_64; do
+            apk="dist/android/SecPivot-${RELEASE_TAG#v}-android-${abi}.apk"
+            test -f "$apk"
             # apksigner cannot write its output onto its own input: sign to a
             # sibling temp file, then move it over the staged asset.
             "$apksigner" sign \
               --ks "$keystore" \
               --ks-key-alias "$ANDROID_KEY_ALIAS" \
-              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
-              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:ANDROID_KEY_PASSWORD \
               --out "$apk.signed" "$apk"
+            "$apksigner" verify --verbose "$apk.signed"
+            unzip -Z1 "$apk.signed" > "$apk.listing"
+            grep -Fx "lib/${abi}/libsecpivot_desktop_lib.so" "$apk.listing" > /dev/null
+            # Refuse an unexpected native ABI in a split package.
+            if grep '^lib/' "$apk.listing" | grep -v "^lib/${abi}/" > /dev/null; then
+              echo "APK contains an unexpected native ABI." >&2
+              exit 1
+            fi
             mv "$apk.signed" "$apk"
             "$apksigner" verify --verbose "$apk"
             echo "Signed $(basename "$apk")"
           done
-          rm -f "$keystore"
-          rm -rf "$keystore_dir"
 
       - name: Generate Android SHA256SUMS
         shell: bash
@@ -581,8 +618,8 @@ jobs:
     # skip is skipped (not failed) and a real failure still leaves the run red
     # through the failing job itself.
     # `verify` is listed so a red test suite keeps APKs off the draft release.
-    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.android.result == 'success' && needs.publish.result == 'success' }}
-    needs: [verify, build, android, publish]
+    if: ${{ always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.sign-android.result == 'success' && needs.publish.result == 'success' }}
+    needs: [verify, build, sign-android, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
