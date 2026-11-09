@@ -351,3 +351,9 @@ Mozilla list, including private suffixes, wildcards and exceptions, for opt-in
 Domain accuracy in the shared Bridge/RPC matcher. It borrows the domain slice
 and retains full IP/nonregistrable host identity. No runtime fetch or config/IPC
 schema change is involved. Credential-boundary tests use synthetic reopened KDBX.
+
+`vault/import.rs::default_login_uri` validates Bitwarden URI collections and
+rejects multiple destinations or explicit source match modes until native
+per-URI policy support exists. Errors contain only record numbers and reason;
+the command returns no partial rows. `import/bitwarden_tests.rs` covers the
+negative command boundary plus supported default/no-URI KDBX round trips.

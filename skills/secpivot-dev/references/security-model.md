@@ -285,3 +285,11 @@ lookups. Bridge/RPC KDBX regressions reject unrelated tenants while same-site
 subdomains and PSL exceptions still match. The default switch remains off;
 list updates require dependency review. Native extension/runtime URL authority
 and all remaining autofill authorization checks are separate evidence gaps.
+
+Bitwarden URI import must never silently weaken source match modes or discard
+destinations. Until native per-URI policies are implemented, explicit modes 0–5
+and multiple nonempty URIs fail the entire parse before any bulk import. Invalid
+URI/mode shapes and embedded whitespace fail with content-free record numbers.
+Absent/null default mode with one URI and no-URI items remain supported; native
+matching itself is unchanged. This closes an unsafe migration path, not full
+Bitwarden URI compatibility or the broader autofill authorization audit.
