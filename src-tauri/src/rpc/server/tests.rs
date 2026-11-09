@@ -641,6 +641,73 @@ fn begin_session_srp(conn: &mut Conn, host: &mut VaultSession, id: &str) -> Enve
 }
 
 #[test]
+fn srp_proof_completion_or_failure_ends_its_visible_attempt() {
+    for lock in [false, true] {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut host = VaultSession::default();
+        host.create(
+            &dir.path().join("prompt.kdbx"),
+            "synthetic-master",
+            "Aes",
+            "Aes256",
+            "None",
+            None,
+        )
+        .unwrap();
+        let mut conn = Conn::default();
+        let proof = begin_session_srp(&mut conn, &mut host, "session");
+        let ended = Arc::new(Mutex::new(Vec::new()));
+        let records = Arc::clone(&ended);
+        conn.prompt = Some(prompt::PromptLease::new("attempt".into(), move |id| {
+            records.lock().unwrap().push(id.to_owned());
+        }));
+        if lock {
+            host.close();
+        }
+        let reply = dispatch_setup_for_session(
+            &mut conn,
+            &proof,
+            &mut host,
+            Some("session"),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(reply.error.is_some(), lock);
+        assert_eq!(*ended.lock().unwrap(), ["attempt"]);
+        assert!(conn.prompt.is_none());
+        drop(conn);
+        assert_eq!(*ended.lock().unwrap(), ["attempt"]);
+    }
+}
+
+#[test]
+fn replacement_setup_ends_the_old_prompt_before_showing_the_new_password() {
+    let mut host = FakeHost::open();
+    let mut conn = Conn::default();
+    let ended = Arc::new(Mutex::new(Vec::new()));
+    let records = Arc::clone(&ended);
+    conn.prompt = Some(prompt::PromptLease::new("old-attempt".into(), move |id| {
+        records.lock().unwrap().push(id.to_owned());
+    }));
+    let (a, _) = client_ephemeral();
+    let mut shown = false;
+    let reply = dispatch_setup_for_session(
+        &mut conn,
+        &identify_to_server("client", &a),
+        &mut host,
+        Some("session"),
+        &mut |_, _| {
+            assert_eq!(*ended.lock().unwrap(), ["old-attempt"]);
+            shown = true;
+        },
+    )
+    .unwrap();
+    assert!(shown && reply.error.is_none());
+    assert!(conn.srp.is_some());
+    assert!(conn.srp_expiry.is_some());
+}
+
+#[test]
 fn pending_srp_proof_is_bound_to_the_original_registry_session() {
     for reopen in [false, true] {
         let dir = tempfile::TempDir::new().unwrap();

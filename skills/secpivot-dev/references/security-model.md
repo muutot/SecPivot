@@ -30,8 +30,13 @@ The RPC side-channel renderer uses a wall-clock deadline, rechecked by interval,
 focus/visibility resume and before copying. Expiry dismisses the modal and drops
 its pending password reference; unmount and manual close do the same. Timer and
 copy completions are bound to the current request object, so old work cannot
-alter a replacement prompt. This does not cancel backend setup or prove JavaScript
-heap zeroization; connection/proof/lock/service cancellation events remain pending.
+alter a replacement prompt. `rpc-side-channel-ended` carries the attempt's
+process-monotonic `requestId` on proof/replacement and connection exit, including
+worker exit after service stop. The renderer ignores old/duplicate shows and cannot
+reopen an ended attempt from delayed delivery. Backend event payloads borrow the
+temporary `Zeroizing` password for synchronous serialization; begin failure and
+callback unwind also wipe that buffer. This does not prove JavaScript heap
+zeroization or immediately cancel an idle prompt on vault lock/session switch.
 
 RPC connection keys prove frame integrity, but do not outlive host authorization.
 Read dispatch and write preparation revalidate the connection's username and
@@ -64,8 +69,9 @@ adopts its committed result, retaining its permit until the worker returns.
 Windows clone shutdown can leave an existing recv blocked despite succeeding;
 `loopback/stream.rs` polls native reads/writes at 100 ms, checks cancellation
 and preserves the protocol's longer logical read timeout. Already rendered
-approval/SRP prompts have no cancellation event yet, although backend approval
-tokens expire. This bounds worker amplification, not all resource use or
+association prompts have no cancellation event yet, although backend approval
+tokens expire; SRP attempts end through their connection lease on worker exit.
+This bounds worker amplification, not all resource use or
 availability against a local process deliberately occupying every slot.
 
 RPC upgrade detection peeks a fresh bounded snapshot of the unread TCP bytes;

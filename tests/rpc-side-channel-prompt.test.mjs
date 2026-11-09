@@ -7,7 +7,8 @@ import ts from "typescript";
 // Run the complete production script; timers, events and clipboard are isolated.
 async function prompt({ delayedListen = false } = {}) {
   const source = await readFile(
-    new URL("../src/lib/components/RpcSideChannelPrompt.svelte", import.meta.url),
+    process.env.SECPIVOT_RPC_PROMPT_SOURCE ??
+      new URL("../src/lib/components/RpcSideChannelPrompt.svelte", import.meta.url),
     "utf8",
   );
   const script = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
@@ -26,12 +27,12 @@ async function prompt({ delayedListen = false } = {}) {
   const timers = new Map();
   const copies = [];
   const resume = new Map();
-  let callback;
+  const callbacks = new Map();
   let cleanup;
   let now = 0;
   let timerId = 0;
   let unlistened = false;
-  let finishListen;
+  const finishListeners = [];
   const derived = (value) => value;
   derived.by = (fn) => fn();
   const eventTarget = {
@@ -53,14 +54,14 @@ async function prompt({ delayedListen = false } = {}) {
     onMount: (mount) => {
       cleanup = mount();
     },
-    listen: (_, listener) => {
-      callback = listener;
+    listen: (name, listener) => {
+      callbacks.set(name, listener);
       const stop = () => {
         unlistened = true;
       };
       return delayedListen
         ? new Promise((resolve) => {
-            finishListen = () => resolve(stop);
+            finishListeners.push(() => resolve(stop));
           })
         : Promise.resolve(stop);
     },
@@ -80,7 +81,8 @@ async function prompt({ delayedListen = false } = {}) {
   );
   await Promise.resolve();
   return {
-    emit: (payload) => callback({ payload }),
+    emit: (payload) => callbacks.get("rpc-side-channel-request")({ payload }),
+    end: (requestId) => callbacks.get("rpc-side-channel-ended")?.({ payload: { requestId } }),
     advance: (ms) => {
       now += ms;
     },
@@ -89,7 +91,7 @@ async function prompt({ delayedListen = false } = {}) {
     close: () => context.dismiss(),
     cleanup: () => cleanup(),
     finishListen: async () => {
-      finishListen();
+      for (const finish of finishListeners) finish();
       await Promise.resolve();
     },
     unlistened: () => unlistened,
@@ -99,7 +101,12 @@ async function prompt({ delayedListen = false } = {}) {
   };
 }
 
-const request = (password = "synthetic-a", expiresInSecs = 120) => ({ password, expiresInSecs });
+let nextRequest = 0;
+const request = (password = "synthetic-a", expiresInSecs = 120) => ({
+  requestId: String(++nextRequest),
+  password,
+  expiresInSecs,
+});
 
 test("expiry removes the displayed password and timer", async () => {
   const ui = await prompt();
@@ -218,4 +225,67 @@ test("resume events refresh expiry and cleanup removes their listeners", async (
   assert.equal(ui.inspect().pending, null);
   ui.cleanup();
   assert.equal(ui.resume.size, 0);
+});
+
+test("the backend end event immediately removes the matching prompt", async () => {
+  const ui = await prompt();
+  const current = request();
+  ui.emit(current);
+  ui.end(current.requestId);
+  assert.equal(ui.inspect().pending, null);
+  assert.equal(ui.timers.size, 0);
+  ui.cleanup();
+});
+
+test("an old connection's end event cannot close the newer prompt", async () => {
+  const ui = await prompt();
+  const old = request();
+  const current = request("synthetic-b");
+  ui.emit(old);
+  ui.emit(current);
+  ui.end(old.requestId);
+  assert.equal(ui.inspect().pending.requestId, current.requestId);
+  ui.cleanup();
+});
+
+test("end-before-show cannot redisplay an already-ended password", async () => {
+  const ui = await prompt();
+  const current = request();
+  ui.end(current.requestId);
+  ui.emit(current);
+  assert.equal(ui.inspect().pending, null);
+  ui.cleanup();
+});
+
+test("a delayed older show cannot replace the latest attempt", async () => {
+  const ui = await prompt();
+  const old = request();
+  const current = request("synthetic-b");
+  ui.emit(current);
+  ui.emit(old);
+  assert.equal(ui.inspect().pending.requestId, current.requestId);
+  ui.cleanup();
+});
+
+test("matching end during copy cannot restore copied feedback", async () => {
+  const ui = await prompt();
+  const current = request();
+  ui.emit(current);
+  const copying = ui.copy();
+  ui.end(current.requestId);
+  ui.copies[0].resolve();
+  await copying;
+  assert.equal(ui.inspect().pending, null);
+  assert.equal(ui.inspect().copied, false);
+  ui.cleanup();
+});
+
+test("duplicate show after manual close cannot reopen the same attempt", async () => {
+  const ui = await prompt();
+  const current = request();
+  ui.emit(current);
+  ui.close();
+  ui.emit(current);
+  assert.equal(ui.inspect().pending, null);
+  ui.cleanup();
 });

@@ -37,6 +37,7 @@ use tungstenite::{accept_hdr_with_config, Message as WsMessage, WebSocket};
 use zeroize::Zeroize;
 
 mod handshake;
+mod prompt;
 #[cfg(test)]
 mod tests;
 
@@ -65,13 +66,21 @@ const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const MAX_HEAD_BYTES: usize = 64 * 1024;
 
 /// Event emitted to the frontend so the side-channel password can be shown.
-/// Payload: `{ password, expiresInSecs }` — never persisted, never logged.
+/// Payload: `{ requestId, password, expiresInSecs }` — never persisted/logged.
 pub(crate) const SIDE_CHANNEL_EVENT: &str = "rpc-side-channel-request";
-#[derive(Debug, Clone, Serialize)]
+pub(crate) const SIDE_CHANNEL_END_EVENT: &str = "rpc-side-channel-ended";
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SideChannelRequest {
-    pub(crate) password: String,
+pub(crate) struct SideChannelRequest<'a> {
+    pub(crate) request_id: &'a str,
+    pub(crate) password: &'a str,
     pub(crate) expires_in_secs: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SideChannelEnded<'a> {
+    request_id: &'a str,
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +113,7 @@ pub(crate) struct RpcState {
     /// Live browser connections, for the settings UI (list + manual close).
     sessions: Mutex<Vec<LiveSession>>,
     next_conn_id: AtomicU64,
+    next_prompt_id: AtomicU64,
     connections: Arc<ConnectionBudget>,
 }
 
@@ -300,6 +310,8 @@ pub(crate) struct Conn {
     srp_expiry: Option<Instant>,
     /// Stable vault-session id that owns the pending SRP authorization.
     srp_session: Option<String>,
+    /// Emits a correlated end event on proof, replacement or connection exit.
+    prompt: Option<prompt::PromptLease>,
     /// Key-auth challenge state (sc served, cc/cr expected next).
     key_secret: Option<Vec<u8>>,
     key_sc: Option<String>,
@@ -536,7 +548,8 @@ fn reply_setup(
     let Some(vaults) = app.try_state::<VaultSessions>() else {
         return false;
     };
-    let Some(reply) = ({
+    let mut new_prompt = None;
+    let reply = {
         let Ok(mut session) = session_state.lock() else {
             eprintln!("[rpc] VaultSession lock poisoned");
             return false;
@@ -551,10 +564,25 @@ fn reply_setup(
                     &mut *session,
                     vaults.active_id().as_deref(),
                     &mut |password, expires| {
+                        let request_id = (app
+                            .state::<RpcState>()
+                            .next_prompt_id
+                            .fetch_add(1, Ordering::Relaxed)
+                            + 1)
+                        .to_string();
+                        let end_app = app.clone();
+                        new_prompt =
+                            Some(prompt::PromptLease::new(request_id.clone(), move |id| {
+                                let _ = end_app.emit(
+                                    SIDE_CHANNEL_END_EVENT,
+                                    SideChannelEnded { request_id: id },
+                                );
+                            }));
                         let _ = app.emit(
                             SIDE_CHANNEL_EVENT,
                             SideChannelRequest {
-                                password: password.to_owned(),
+                                request_id: &request_id,
+                                password,
                                 expires_in_secs: expires,
                             },
                         );
@@ -570,7 +598,9 @@ fn reply_setup(
             }
             None => None,
         }
-    }) else {
+    };
+    conn.prompt = new_prompt;
+    let Some(reply) = reply else {
         eprintln!(
             "[rpc] dispatch_setup returned None (srp={:?} key={:?} error={:?})",
             env.srp

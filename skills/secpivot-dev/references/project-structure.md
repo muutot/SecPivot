@@ -131,8 +131,11 @@ Windows clone shutdown leaving an existing recv blocked. Already admitted
 storage jobs may finish; their permits are retained until worker return.
 The listener join alone still does not mean every admitted job has exited.
 RPC stop clears its live-session list before releasing the server mutex, so
-it cannot erase a restarted listener's records. Visible frontend prompts do
-not yet consume a cancellation event.
+it cannot erase a restarted listener's records. Association prompts do not yet
+consume a cancellation event. RPC SRP prompts consume correlated
+`rpc-side-channel-ended` events from `rpc/server/prompt.rs`: each connection owns
+a secret-free attempt lease, ended at the next setup message or connection drop.
+Lock/session-switch cancellation for idle prompts remains pending.
 
 `rpc/server/handshake.rs` validates cached connection keys against live host
 authorization before read dispatch and stored-key proof completion. Its

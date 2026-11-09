@@ -2,7 +2,7 @@
 //! Extracted from `rpc::server.rs`.
 use serde_json::{json, Value};
 use std::time::Instant;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use super::{Conn, SIDE_CHANNEL_BYTES, SIDE_CHANNEL_TTL};
 use crate::config::PasswordGeneratorSettings;
@@ -56,6 +56,7 @@ pub(crate) fn dispatch_setup_for_session(
     session_id: Option<&str>,
     side_channel: &mut dyn FnMut(&str, u64),
 ) -> Option<Envelope> {
+    drop(conn.prompt.take());
     let stage = env.srp.as_ref().and_then(|srp| srp.stage.as_deref());
     if stage == Some("proofToServer")
         && (session_id.is_none() || conn.srp_session.as_deref() != session_id)
@@ -94,15 +95,14 @@ pub(crate) fn dispatch_setup(
                     return Some(error("AUTH_FAILED"));
                 }
                 eprintln!("[rpc] identifyToServer accepted");
-                let mut password = match random_hex(SIDE_CHANNEL_BYTES) {
+                let password = Zeroizing::new(match random_hex(SIDE_CHANNEL_BYTES) {
                     Ok(password) => password,
                     Err(e) => {
                         eprintln!("[rpc] side-channel password unavailable: {e}");
                         return Some(error("AUTH_FAILED"));
                     }
-                };
+                });
                 let expires = SIDE_CHANNEL_TTL.as_secs();
-                side_channel(&password, expires);
                 let (server, payload) = match SrpServer::begin(&password) {
                     Ok(pair) => pair,
                     Err(e) => {
@@ -110,12 +110,15 @@ pub(crate) fn dispatch_setup(
                         return Some(error("AUTH_FAILED"));
                     }
                 };
-                password.zeroize();
                 let srp_msg: SrpMessage = serde_json::from_value(payload).unwrap_or_default();
                 conn.username = Some(i);
                 conn.srp_a = Some(a);
                 conn.srp = Some(server);
                 conn.srp_expiry = Some(Instant::now() + SIDE_CHANNEL_TTL);
+                // Only display an established attempt. The temporary password
+                // is wiped even when setup or the event callback unwinds.
+                side_channel(&password, expires);
+                drop(password);
                 let mut reply = Envelope::setup();
                 reply.srp = Some(srp_msg);
                 reply.features = Some(features());
