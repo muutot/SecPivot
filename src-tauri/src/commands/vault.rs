@@ -785,6 +785,7 @@ pub(crate) fn save_attachment(
         session_id.as_deref(),
         |target| target.attachment_data(&uuid, &name),
     )?;
+    let data = zeroize::Zeroizing::new(data);
     vault::write_attachment_file(&data, &dest)
 }
 

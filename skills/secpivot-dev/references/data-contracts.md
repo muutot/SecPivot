@@ -20,6 +20,19 @@ are migrated to the scoped address on save. Windows DPAPI inline values are unch
 
 This reference defines the frontend ↔ backend contract. Update it together with any change to IPC commands, serde types, config schema, or vault serialization.
 
+`io.pickSaveFile({defaultPath, filters?})` owns native destination selection for
+CSV/XML/emergency HTML and both attachment-save entry points. Android uses
+`saf.createDocument(fileName, mimeTypes?)`; desktop keeps plugin-dialog save.
+Vault create/save-as keep the KDBX MIME default. The helper returns only the
+selected path/URI and never remembers exports as recent vaults. Caller view
+guards still run before backend secret extraction/write, and emergency HTML
+captures `includePasswords` before selecting. Export/attachment IPC schemas and
+session-id routing are unchanged. Their writers share `file_io::write_named`:
+local paths use atomic replacement; mobile URIs reuse bounded old-content read,
+write/readback verification and verified rollback, with file-specific errors.
+Temporary export/attachment command buffers and URI readback/rollback buffers
+use Zeroizing. Host tests do not prove native Android provider compatibility.
+
 Text imports on Android select via `saf.openDocument(mimeTypes?)`, whose default
 remains the KDBX MIME set for vault opening. Import filters include their format
 MIME and plain-text/binary provider fallbacks. `read_text_file({path, fileName?})`

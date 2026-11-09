@@ -494,10 +494,50 @@ pub(crate) fn persist_remote_merge(
 
 /// Write attachment bytes extracted under the lock (file I/O outside it).
 pub(crate) fn write_attachment_file(data: &[u8], dest: &str) -> Result<(), String> {
-    std::fs::write(dest, data).map_err(|e| format!("写入附件失败: {e}"))
+    super::file_io::write_named(Path::new(dest), data, "附件")
 }
 
-/// Write CSV content built under the lock (file I/O outside it).
+/// Write CSV/XML/HTML content built under the lock (file I/O outside it).
 pub(crate) fn write_csv_file(path: &str, content: &str) -> Result<(), String> {
-    std::fs::write(path, content).map_err(|e| format!("写入文件失败: {e}"))
+    super::file_io::write_named(Path::new(path), content.as_bytes(), "文件")
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    #[test]
+    fn export_writers_preserve_exact_text_and_attachment_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("export.csv");
+        let binary = dir.path().join("attachment.bin");
+        let text_path = text.to_str().unwrap();
+        let binary_path = binary.to_str().unwrap();
+        write_csv_file(text_path, "original").unwrap();
+        write_csv_file(text_path, "\u{feff}Title,Password\r\n合成,synthetic\r\n").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(text).unwrap(),
+            "\u{feff}Title,Password\r\n合成,synthetic\r\n"
+        );
+        write_attachment_file(b"original", binary_path).unwrap();
+        write_attachment_file(&[0, 255, 1, 0], binary_path).unwrap();
+        assert_eq!(std::fs::read(binary).unwrap(), [0, 255, 1, 0]);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn export_writers_report_failure_without_removing_destination_or_leaving_temp() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("destination");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("keep.txt"), b"keep").unwrap();
+        assert!(write_csv_file(target.to_str().unwrap(), "new")
+            .unwrap_err()
+            .contains("文件"));
+        assert!(write_attachment_file(b"new", target.to_str().unwrap())
+            .unwrap_err()
+            .contains("附件"));
+        assert_eq!(std::fs::read(target.join("keep.txt")).unwrap(), b"keep");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
 }

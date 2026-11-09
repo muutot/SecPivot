@@ -11,6 +11,15 @@ publication, not higher-level revision order; vault persistence still needs its
 existing admission gate. Windows host tests cover concurrent replacement and
 legacy sibling preservation; other native platforms remain unverified.
 
+Native plaintext export and attachment-save pickers share `io.pickSaveFile`.
+Android selects a writable SAF document with the export MIME; desktop keeps the
+save dialog. Both attachment entry points and CSV/XML/HTML preserve the original
+view epoch before resolving backend secrets or writing. CSV/XML confirmation and
+HTML's captured password opt-in remain required. The shared named writer uses
+atomic local replacement or verified URI rollback; temporary command payloads,
+rollback/readback buffers and failed capped reads are zeroized on return. Export
+URIs never enter recent-vault settings. Device/provider runtime remains pending.
+
 ## Core invariants
 
 - **Desktop development CSP**: HTTP and HMR WebSocket connections permit only

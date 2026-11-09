@@ -20,7 +20,7 @@
     KeyedViewGuard,
   } from "$lib/utils/session-state";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+  import { pickSaveFile } from "$lib/services/io";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import { keepassIconName } from "$lib/utils/keepass-icons";
   import TotpWidget from "$lib/components/TotpWidget.svelte";
@@ -464,7 +464,7 @@
     try {
       if (!isTauriRuntime()) throw new Error("browser");
       const picked = await awaitCurrentView(detailView, view, () =>
-        saveDialog({ defaultPath: name }),
+        pickSaveFile({ defaultPath: name }),
       );
       if (!picked.current || !picked.value) return;
       const dest = picked.value;

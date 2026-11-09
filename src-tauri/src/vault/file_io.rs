@@ -7,6 +7,7 @@
 //! helpers stay app-handle-free (they run in `spawn_blocking`).
 
 use std::path::Path;
+use zeroize::Zeroizing;
 
 #[cfg(mobile)]
 use std::sync::OnceLock;
@@ -60,7 +61,7 @@ pub(crate) fn read_with_limit(path: &Path, what: &str, limit: u64) -> Result<Vec
 
 fn read_capped(reader: impl std::io::Read, what: &str, limit: u64) -> Result<Vec<u8>, String> {
     use std::io::Read;
-    let mut bytes = Vec::new();
+    let mut bytes = Zeroizing::new(Vec::new());
     reader
         .take(limit.saturating_add(1))
         .read_to_end(&mut bytes)
@@ -68,18 +69,24 @@ fn read_capped(reader: impl std::io::Read, what: &str, limit: u64) -> Result<Vec
     if bytes.len() as u64 > limit {
         return Err(format!("{what}超过 {} MiB 上限", limit / 1024 / 1024));
     }
-    Ok(bytes)
+    Ok(std::mem::take(&mut *bytes))
 }
 
 /// Write a vault file. Desktop paths keep the atomic temp-and-rename behavior;
 /// mobile document URIs are written through the ContentResolver (SAF offers no
 /// rename, so the target is truncated in place).
 pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_named(path, bytes, "数据库")
+}
+
+/// Shared export/attachment writer; local paths are atomic, URI writes keep
+/// verified rollback. `what` labels errors without describing file contents.
+pub(crate) fn write_named(path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
     #[cfg(mobile)]
     if is_document_uri(path) {
-        return write_uri(path, bytes);
+        return write_uri(path, bytes, what);
     }
-    crate::util::atomic_write(path, bytes, "数据库")
+    crate::util::atomic_write(path, bytes, what)
 }
 
 #[cfg(mobile)]
@@ -112,7 +119,7 @@ fn read_uri_with(app: &AppHandle, path: &Path, what: &str, limit: u64) -> Result
 
 /// Write the document content in place, truncating the target first.
 #[cfg(mobile)]
-fn write_uri_with(app: &AppHandle, path: &Path, bytes: &[u8]) -> Result<(), String> {
+fn write_uri_with(app: &AppHandle, path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
     use std::io::Write;
     use tauri_plugin_fs::FsExt;
 
@@ -121,23 +128,25 @@ fn write_uri_with(app: &AppHandle, path: &Path, bytes: &[u8]) -> Result<(), Stri
     let mut file = app
         .fs()
         .open(document_path(path)?, options)
-        .map_err(|e| format!("写入数据库失败: {e}"))?;
+        .map_err(|e| format!("写入{what}失败: {e}"))?;
     file.write_all(bytes)
-        .map_err(|e| format!("写入数据库失败: {e}"))?;
-    file.sync_all().map_err(|e| format!("写入数据库失败: {e}"))
+        .map_err(|e| format!("写入{what}失败: {e}"))?;
+    file.sync_all().map_err(|e| format!("写入{what}失败: {e}"))
 }
 
 /// SAF cannot rename: refuse to truncate unless the old content was read.
 /// A rollback is reported successful only after its bytes are read back.
 #[cfg(any(mobile, test))]
 fn write_verified(
+    what: &str,
     bytes: &[u8],
     mut read: impl FnMut() -> Result<Vec<u8>, String>,
     mut write: impl FnMut(&[u8]) -> Result<(), String>,
 ) -> Result<(), String> {
-    let previous = read().map_err(|e| format!("无法读取原数据库，已取消写入: {e}"))?;
+    let previous =
+        Zeroizing::new(read().map_err(|e| format!("无法读取原{what}，已取消写入: {e}"))?);
     let result = write(bytes).and_then(|()| {
-        if read()? == bytes {
+        if Zeroizing::new(read()?).as_slice() == bytes {
             Ok(())
         } else {
             Err("写入内容校验不一致".to_owned())
@@ -146,26 +155,28 @@ fn write_verified(
     if let Err(error) = result {
         let restored = write(&previous)
             .and_then(|()| read())
-            .is_ok_and(|stored| stored == previous);
+            .map(Zeroizing::new)
+            .is_ok_and(|stored| stored.as_slice() == previous.as_slice());
         let note = if restored {
-            "已回滚到上一次内容"
+            "已回滚到上一次内容".to_owned()
         } else {
-            "回滚失败，请重新选择数据库文件"
+            format!("回滚失败，请重新选择{what}文件")
         };
-        return Err(format!("写入数据库失败: {error}，{note}"));
+        return Err(format!("写入{what}失败: {error}，{note}"));
     }
     Ok(())
 }
 
 #[cfg(mobile)]
-fn write_uri(path: &Path, bytes: &[u8]) -> Result<(), String> {
+fn write_uri(path: &Path, bytes: &[u8], what: &str) -> Result<(), String> {
     let app = APP
         .get()
-        .ok_or_else(|| "写入数据库失败: 应用尚未初始化".to_owned())?;
+        .ok_or_else(|| format!("写入{what}失败: 应用尚未初始化"))?;
     write_verified(
+        what,
         bytes,
-        || read_uri_with(app, path, "数据库文件", MAX_LOCAL_FILE_BYTES),
-        |data| write_uri_with(app, path, data),
+        || read_uri_with(app, path, what, MAX_LOCAL_FILE_BYTES),
+        |data| write_uri_with(app, path, data, what),
     )
 }
 
@@ -215,6 +226,7 @@ mod tests {
     fn unreadable_document_is_never_truncated() {
         let writes = Cell::new(0);
         let result = write_verified(
+            "数据库",
             b"new",
             || Err("provider failed".into()),
             |_| {
@@ -231,6 +243,7 @@ mod tests {
         let stored = RefCell::new(b"previous".to_vec());
         let writes = Cell::new(0);
         let error = write_verified(
+            "数据库",
             b"new",
             || Ok(stored.borrow().clone()),
             |data| {
@@ -249,6 +262,7 @@ mod tests {
         assert_eq!(*stored.borrow(), b"previous");
         stored.borrow_mut().clear();
         write_verified(
+            "数据库",
             b"new",
             || Ok(stored.borrow().clone()),
             |data| {
@@ -264,6 +278,7 @@ mod tests {
     fn rollback_success_requires_readback_verification() {
         let reads = Cell::new(0);
         let error = write_verified(
+            "数据库",
             b"new",
             || {
                 reads.set(reads.get() + 1);
@@ -278,5 +293,46 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("回滚失败"));
         assert!(!error.contains("已回滚"));
+    }
+
+    #[test]
+    fn named_exports_refuse_unreadable_targets_and_restore_failed_writes() {
+        for what in ["文件", "附件"] {
+            let writes = Cell::new(0);
+            let error = write_verified(
+                what,
+                b"new",
+                || Err("provider failed".into()),
+                |_| {
+                    writes.set(writes.get() + 1);
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+            assert!(error.contains(what));
+            assert!(error.contains("已取消写入"));
+            assert_eq!(writes.get(), 0);
+
+            let stored = RefCell::new(b"previous".to_vec());
+            let error = write_verified(
+                what,
+                b"new",
+                || Ok(stored.borrow().clone()),
+                |data| {
+                    writes.set(writes.get() + 1);
+                    if writes.get() == 1 {
+                        *stored.borrow_mut() = b"partial".to_vec();
+                        Err("failed write".into())
+                    } else {
+                        *stored.borrow_mut() = data.to_vec();
+                        Ok(())
+                    }
+                },
+            )
+            .unwrap_err();
+            assert!(error.contains(what));
+            assert!(error.contains("已回滚"));
+            assert_eq!(*stored.borrow(), b"previous");
+        }
     }
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { save } from "@tauri-apps/plugin-dialog";
+  import { pickSaveFile } from "$lib/services/io";
   import { openPath } from "@tauri-apps/plugin-opener";
   import type { AttachmentInfo, AttachmentPreview, TempAttachmentRef } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
@@ -105,7 +105,9 @@
     savingToDisk = true;
     externalError = "";
     try {
-      const picked = await awaitCurrentView(dialogView, view, () => save({ defaultPath: name }));
+      const picked = await awaitCurrentView(dialogView, view, () =>
+        pickSaveFile({ defaultPath: name }),
+      );
       if (!picked.current || !picked.value) return;
       await vault.callInSession(sessionId, () =>
         vault.saveAttachment(uuid, name, String(picked.value)),
