@@ -559,6 +559,245 @@ fn group_autotype_round_trip_and_inheritance() {
 }
 
 #[test]
+fn group_autotype_missing_or_null_enabled_restores_inheritance_after_reopen() {
+    for root in [false, true] {
+        for input in [
+            serde_json::json!({"defaultSequence":"{USERNAME}{ENTER}"}),
+            serde_json::json!({"enabled":null,"defaultSequence":"{USERNAME}{ENTER}"}),
+        ] {
+            let dir = TempDir::new().unwrap();
+            let (mut session, path) = create_session(&dir);
+            let state = session
+                .add_group(&GroupInput {
+                    parent_uuid: Some(ROOT_GROUP_UUID.into()),
+                    name: "Synthetic inheritance".into(),
+                    icon: None,
+                })
+                .unwrap();
+            let child = state.root.children[0].uuid.clone();
+            let uuid = if root {
+                ROOT_GROUP_UUID.to_owned()
+            } else {
+                child.clone()
+            };
+            let state = session
+                .add_entry(&entry_input(&child, "Synthetic child", "", "", ""))
+                .unwrap();
+            let entry_uuid = state.root.children[0].entries[0].uuid.clone();
+            session
+                .update_group_autotype(
+                    &uuid,
+                    &GroupAutoTypeInput {
+                        enabled: Some(false),
+                        default_sequence: None,
+                    },
+                )
+                .unwrap();
+            assert!(session
+                .resolve_autotype_sequence(&entry_uuid)
+                .unwrap()
+                .is_none());
+            let patch: GroupAutoTypeInput = serde_json::from_value(input).unwrap();
+            session.update_group_autotype(&uuid, &patch).unwrap();
+            session.save().unwrap();
+            session.close();
+            session.open(&path, "master-password", None).unwrap();
+            let db = session.require_db().unwrap();
+            let group = if root {
+                db.root()
+            } else {
+                db.group(super::helpers::parse_group_id(&uuid).unwrap())
+                    .unwrap()
+            };
+            assert_eq!(group.enable_autotype, None);
+            assert_eq!(
+                session
+                    .resolve_autotype_sequence(&entry_uuid)
+                    .unwrap()
+                    .as_deref(),
+                Some("{USERNAME}{ENTER}")
+            );
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SyntheticGroupEdit {
+    Rename,
+    Icon,
+    Meta,
+    AutoType,
+    Tags,
+}
+
+#[test]
+fn group_rename_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Rename, false, true);
+}
+
+#[test]
+fn group_icon_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Icon, false, true);
+}
+
+#[test]
+fn group_metadata_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Meta, false, true);
+}
+
+#[test]
+fn root_metadata_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Meta, true, true);
+}
+
+#[test]
+fn group_autotype_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::AutoType, false, true);
+}
+
+#[test]
+fn root_autotype_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::AutoType, true, true);
+}
+
+#[test]
+fn group_tags_only_updates_time_and_survives_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Tags, false, false);
+}
+
+#[test]
+fn root_tags_only_updates_time_and_survives_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Tags, true, false);
+}
+
+fn apply_synthetic_group_edit(session: &mut VaultSession, uuid: &str, edit: SyntheticGroupEdit) {
+    match edit {
+        SyntheticGroupEdit::Rename => {
+            session.rename_group(uuid, " Synthetic renamed ").unwrap();
+        }
+        SyntheticGroupEdit::Icon => {
+            session.set_group_icon(uuid, Some(4)).unwrap();
+        }
+        SyntheticGroupEdit::Meta => {
+            session
+                .update_group_meta(uuid, Some(" Synthetic note ".into()), None, Some(false))
+                .unwrap();
+        }
+        SyntheticGroupEdit::AutoType => {
+            session
+                .update_group_autotype(
+                    uuid,
+                    &GroupAutoTypeInput {
+                        enabled: Some(false),
+                        default_sequence: Some(" {USERNAME}{ENTER} ".into()),
+                    },
+                )
+                .unwrap();
+        }
+        SyntheticGroupEdit::Tags => {
+            session
+                .update_group_meta(uuid, None, Some(" alpha, beta ".into()), None)
+                .unwrap();
+        }
+    }
+}
+
+fn assert_group_edit_time(edit: SyntheticGroupEdit, root: bool, check_merge: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.into()),
+            name: "Synthetic parent".into(),
+            icon: None,
+        })
+        .unwrap();
+    let parent = state.root.children[0].uuid.clone();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(parent),
+            name: "Synthetic child".into(),
+            icon: None,
+        })
+        .unwrap();
+    let uuid = if root {
+        ROOT_GROUP_UUID.to_owned()
+    } else {
+        state.root.children[0].children[0].uuid.clone()
+    };
+    let id = if root {
+        session.require_db().unwrap().root().id()
+    } else {
+        super::helpers::parse_group_id(&uuid).unwrap()
+    };
+    {
+        let db = session.require_db_mut().unwrap();
+        let mut group = db.group_mut(id).unwrap();
+        group.times.creation = Some(merge_ts(0));
+        group.times.last_access = Some(merge_ts(0));
+        group.times.last_modification = Some(merge_ts(10));
+        group.times.location_changed = None;
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    apply_synthetic_group_edit(&mut session, &uuid, edit);
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let current = session.require_db().unwrap();
+    if check_merge {
+        for (local, remote) in [(&baseline, current), (current, &baseline)] {
+            let result = merge_databases(local, remote);
+            assert!(result.is_ok(), "one-sided group edit must merge");
+            let merged = result.unwrap();
+            let group = merged.group(id).unwrap();
+            let expected = current.group(id).unwrap();
+            assert!(group.name == expected.name);
+            assert!(group.notes == expected.notes);
+            assert!(group.icon() == expected.icon());
+            assert!(group.tags == expected.tags);
+            assert_eq!(group.enable_searching, expected.enable_searching);
+            assert_eq!(group.enable_autotype, expected.enable_autotype);
+            assert!(group.default_autotype_sequence == expected.default_autotype_sequence);
+        }
+    } else {
+        assert_eq!(
+            current.group(id).unwrap().tags,
+            vec!["alpha".to_owned(), "beta".to_owned()]
+        );
+    }
+    assert!(
+        current.group(id).unwrap().times.last_modification > Some(merge_ts(10)),
+        "group edit must refresh its modification time"
+    );
+    // Normalize the same input against persisted values; a fixed old time
+    // prevents clock precision from masking an unconditional timestamp write.
+    session
+        .require_db_mut()
+        .unwrap()
+        .group_mut(id)
+        .unwrap()
+        .times
+        .last_modification = Some(merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    apply_synthetic_group_edit(&mut session, &uuid, edit);
+    assert_eq!(
+        session
+            .require_db()
+            .unwrap()
+            .group(id)
+            .unwrap()
+            .times
+            .last_modification,
+        Some(merge_ts(20))
+    );
+}
+
+#[test]
 fn group_meta_notes_tags_search_round_trip() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

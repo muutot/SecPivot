@@ -516,8 +516,8 @@ pub struct EntryAutoTypeInput {
     pub associations: Vec<AutoTypeAssociationDto>,
 }
 
-/// Partial update for a group's Auto-Type config. Absent fields keep the
-/// current value; an empty `defaultSequence` clears the group default.
+/// Group Auto-Type config: missing/null `enabled` restores inheritance.
+/// An omitted `defaultSequence` keeps it; an empty string clears the default.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupAutoTypeInput {

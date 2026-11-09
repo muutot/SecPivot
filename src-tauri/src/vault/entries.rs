@@ -1070,7 +1070,10 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_group_id(uuid)?;
             let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
-            group.name = name.to_owned();
+            if group.name != name {
+                group.name = name.to_owned();
+                group.times.last_modification = Some(Times::now());
+            }
         }
         self.mark_dirty();
         self.snapshot_without_icons()
@@ -1083,9 +1086,13 @@ impl VaultSession {
         {
             let db = self.require_db_mut()?;
             let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
+            let previous_icon = group.icon().cloned();
             match icon {
                 Some(index) => group.set_icon_builtin(index as usize),
                 None => group.set_icon_none(),
+            }
+            if group.icon() != previous_icon.as_ref() {
+                group.times.last_modification = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -1112,19 +1119,28 @@ impl VaultSession {
                 let id = parse_group_id(uuid)?;
                 db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?
             };
+            let mut changed = false;
             if let Some(notes) = notes {
                 let notes = notes.trim();
-                group.notes = if notes.is_empty() {
+                let notes = if notes.is_empty() {
                     None
                 } else {
                     Some(notes.to_owned())
                 };
+                changed |= group.notes != notes;
+                group.notes = notes;
             }
             if let Some(tags) = tags {
-                group.tags = super::serialize::parse_tags(&tags);
+                let tags = super::serialize::parse_tags(&tags);
+                changed |= group.tags != tags;
+                group.tags = tags;
             }
             if let Some(flag) = enable_searching {
+                changed |= group.enable_searching != Some(flag);
                 group.enable_searching = Some(flag);
+            }
+            if changed {
+                group.times.last_modification = Some(Times::now());
             }
         }
         self.mark_dirty();
@@ -1310,9 +1326,9 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
-    /// Update a group's Auto-Type settings (enabled flag and default
-    /// sequence). Absent fields keep the current value; an empty sequence
-    /// clears the group default.
+    /// Update a group's Auto-Type settings. A missing/null enabled flag
+    /// restores inheritance; an omitted sequence keeps the current value,
+    /// while an empty sequence clears the group default.
     pub fn update_group_autotype(
         &mut self,
         uuid: &str,
@@ -1320,19 +1336,21 @@ impl VaultSession {
     ) -> Result<VaultState, String> {
         {
             let db = self.require_db_mut()?;
-            if uuid == ROOT_GROUP_UUID {
-                let mut root = db.root_mut();
-                root.enable_autotype = input.enabled;
-                if let Some(sequence) = &input.default_sequence {
-                    root.default_autotype_sequence = normalize_optional_sequence(Some(sequence));
-                }
+            let mut group = if uuid == ROOT_GROUP_UUID {
+                db.root_mut()
             } else {
                 let id = parse_group_id(uuid)?;
-                let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
-                group.enable_autotype = input.enabled;
-                if let Some(sequence) = &input.default_sequence {
-                    group.default_autotype_sequence = normalize_optional_sequence(Some(sequence));
-                }
+                db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?
+            };
+            let mut changed = group.enable_autotype != input.enabled;
+            group.enable_autotype = input.enabled;
+            if let Some(sequence) = &input.default_sequence {
+                let sequence = normalize_optional_sequence(Some(sequence));
+                changed |= group.default_autotype_sequence != sequence;
+                group.default_autotype_sequence = sequence;
+            }
+            if changed {
+                group.times.last_modification = Some(Times::now());
             }
         }
         self.mark_dirty();
