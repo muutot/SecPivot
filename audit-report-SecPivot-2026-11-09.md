@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S16；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S17；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 5      | 5         | 0         |
-| Medium    | 18     | 18        | 0         |
+| Medium    | 19     | 19        | 0         |
 | Low       | 4      | 4         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **27** | **27**    | **0**     |
+| **Total** | **28** | **28**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1158,3 +1158,45 @@ documentation currency gate 同步三份合同/安全/结构引用；TODO 的 Bi
 完整兼容状态降为 partial，保留自定义字段、链接字段、多 URI 与真实客户端
 导出的后续验证。报告当前详细卡片 **27**（High 5 / Medium 18 / Low 4，
 全部 Confirmed），原始 15 项与 6.1 分基线保持不变。
+
+### Finding: SP-S17 Bitwarden 自定义名称造成迁移值丢失和原生语义误激活（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Privacy / Backend API
+- Status: Confirmed
+- Affected area: Bitwarden custom-field names at the shared KDBX write boundary
+- Evidence:
+  - File: `src-tauri/src/vault/import.rs:146`、`src-tauri/src/vault/serialize.rs:652`、`src-tauri/src/vault/helpers.rs:602`（`4aac415` 修复前源码）
+  - Function / Module: `parse_bitwarden_json` / `sync_custom_fields` / OTP and KPRPC URL resolution
+  - Relevant behavior: 外部 custom name 原样传给 EntryInput；写入 trim 后丢弃 reserved/empty names，重名进入 HashMap 后仅保留末值。HmacOtp 等被后端当成原生 OTP，KPRPC JSON 被当成浏览器配置读取，而 Bitwarden 自定义字段的名称本来只是标签。
+  - Reproduction: 四项实际 parser command → ImportRow serde wire → VaultSession bulk mutation → KDBX save/reopen 回归均在旧实现失败，见 `bitwarden-field-retention-red-final.log`。Password/空名称等附加值缺失，PIN/空白变体与重名丢值，普通 HmacOtp 字段让主 login.totp 的 Totp 变 Hotp；KPRPC JSON 的 altURLs 扩增匹配网址。OverrideURL 字符串标签对照本就不改变独立 override_url 属性，未把该对照算成故障。所有数据库和字段均为合成数据。
+- Problem: 导入成功不代表自定义内容完整迁移；外部标签还可能改变认证器或浏览器匹配语义。
+- Why it matters: 用户失去部分附加凭据、得到错误验证码类型或意料之外的网址匹配。标准 Password 由 reserved guard 保留，未观察主密码被覆盖、旧源文件损坏或真实浏览器凭据外传，按 Medium 记录。
+- Realistic failure scenario: Bitwarden 登录项的附加隐藏字段叫 Password，或多个字段标签为 PIN；导入后附加值不在目标库中。另一项普通标签为 HmacOtp 或 KPRPC JSON，目标客户端按原生控制数据解释它。
+- Minimal fix: 给 Bitwarden 自定义字段统一来源前缀，空/缺名称使用 Field；通过共享唯一名称 allocator 保留每个重名值和保护标记。1PIF 使用同一 allocator 并保持已有 1Password 前缀行为；主账号/密码与 login.totp 映射保持原合同。
+- Better long-term fix: 单独验证链接字段、多个 URI、附件、组织集合、typed items 和真实客户端导出；不能以本项命名修复宣称完整 Bitwarden 迁移。
+- Regression test suggestion: 四项 KDBX 回归验证 reserved/blank names、带空白与显式后缀的重名、保护 flag、标准密码对照、主 TOTP 语义、KPRPC URL matching 和 OverrideURL 属性对照；补缺名称/null 名称 parser 检查，并运行原 1PIF 的保护/保真回归。
+- Estimated effort: 1–2 小时（共享命名边界及 KDBX 复核）；剩余迁移能力另计
+
+`7afcd81` 已修复 SP-S17。`import/fields.rs` 将既有 1PIF allocator 抽为共享
+来源命名规则，保持 `1Password` 名称行为；Bitwarden 使用 `Bitwarden` 前缀、
+唯一后缀和空/null/缺名称的 `Field` 兜底，保护标记随值保留。主 Password 与
+login.totp 不改变；XML 原生 OTP 字段的独立导入路径不使用这个外部命名规则。
+四项 KDBX 回归先红后绿，所有 13 项针对性 import 回归通过，含原五项 1PIF
+schema/保护/serde/KDBX 验证。最终门禁另覆盖了补充 null/缺名称和 map 过滤。
+
+完整 `npm run verify` 日志 `verify-bitwarden-field-retention.log`：格式、
+Svelte check、150 键契约、构建、前端 **286**、Rust **536 + ACL 2**、clippy
+全通过。documentation currency gate 同步 data-contracts、security-model、
+project-structure 和 partial TODO。没有 CSS/markup 改动，也没有使用真实库、
+用户导出或 OS 剪贴板。当前详细卡片 **28**（High 5 / Medium 19 / Low 4，
+全部 Confirmed），基线 15 项/6.1 分保持不变。Bitwarden 链接字段、多 URI、
+组织集合/附件/typed items 以及真客户端导出仍需独立补齐，Android provider、
+原生 XML、现代 1PUX 和其他语义/界面覆盖继续推进，整体目标保持 active。
+
+补报期间新出现的本地 `.openidea/changelists.json` 被 Prettier 纳入全仓检查，
+格式门因此失败；这不是应用缺陷，也未读取、改写或删除该元数据内容。
+`f3aab3d` 为本地 OpenIdea 目录增加 Git/Prettier 忽略，命令证明 ignored=true，
+维护流程同步了保留用户元数据的规则。最终全仓格式门恢复通过；该工具边界
+修正不改变上述应用回归结果或发现统计，既有 `.trae/` 仍保留原样。
