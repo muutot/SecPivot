@@ -2,6 +2,15 @@
 
 SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 
+`util::atomic_write` creates a unique random sibling per write with `create_new`
+and owner-only permissions on Unix, flushes the same writable handle, then
+renames it onto the target. Cleanup only removes that operation's own file;
+concurrent writes cannot truncate/remove another pending writer's sibling. Old
+fixed `.tmp` files are not deleted or reused. This protects complete-payload
+publication, not higher-level revision order; vault persistence still needs its
+existing admission gate. Windows host tests cover concurrent replacement and
+legacy sibling preservation; other native platforms remain unverified.
+
 ## Core invariants
 
 - **Desktop development CSP**: HTTP and HMR WebSocket connections permit only
