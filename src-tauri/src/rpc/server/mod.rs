@@ -18,6 +18,7 @@
 //! state, which is zeroized on drop; long-lived keys live in the session.
 
 use crate::config::PasswordGeneratorSettings;
+use crate::loopback::ConnectionBudget;
 use crate::rpc::{entry_dto, parse_write_request, Envelope, RpcError, SrpServer, RPC_PORT};
 use crate::vault::{
     classify_save_error, persist_rpc_write, SaveErrorClass, VaultSession, VaultSessions,
@@ -27,7 +28,7 @@ use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tungstenite::handshake::server::{ErrorResponse, Request, Response};
@@ -98,6 +99,7 @@ pub(crate) struct RpcState {
     /// Live browser connections, for the settings UI (list + manual close).
     sessions: Mutex<Vec<LiveSession>>,
     next_conn_id: AtomicU64,
+    connections: Arc<ConnectionBudget>,
 }
 
 /// One live browser connection. `stream` is a `try_clone` of the socket used
@@ -236,7 +238,12 @@ impl RpcState {
             .map_err(|e| format!("设置监听模式失败: {e}"))?;
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let app = app.clone();
-        let join = std::thread::spawn(move || accept_loop(&listener, &app, &stop_rx));
+        let connections = Arc::clone(&self.connections);
+        let join = std::thread::spawn(move || {
+            crate::loopback::accept_loop(&listener, &stop_rx, connections, move |stream, addr| {
+                handle_connection(stream, &addr.to_string(), &app);
+            });
+        });
         *guard = Some(ServerHandle {
             stop: stop_tx,
             join: Some(join),
@@ -253,28 +260,10 @@ impl RpcState {
                 handle.stop();
             }
         }
-        // The joined accept loop has torn every connection thread down.
+        // Only the listener has joined. Existing workers keep their permits
+        // until their handlers finish; restarting cannot reset their budget.
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.clear();
-        }
-    }
-}
-
-/// Accept loopback connections until told to stop; each connection is served
-/// on its own thread so a slow client never blocks the listener.
-fn accept_loop(listener: &TcpListener, app: &AppHandle, stop: &mpsc::Receiver<()>) {
-    while stop.try_recv().is_err() {
-        match listener.accept() {
-            Ok((stream, addr)) => {
-                // Accepted streams inherit the listener's non-blocking flag on
-                // Windows; tungstenite needs a blocking stream, so restore it
-                // (a non-blocking read yields WSAEWOULDBLOCK → os error 10035).
-                let _ = stream.set_nonblocking(false);
-                let app = app.clone();
-                let peer = addr.to_string();
-                std::thread::spawn(move || handle_connection(stream, &peer, &app));
-            }
-            Err(_) => std::thread::sleep(Duration::from_millis(50)),
         }
     }
 }

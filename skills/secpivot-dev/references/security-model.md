@@ -26,6 +26,15 @@ SecPivot stores credentials in standard KDBX 4.0 files. This reference documents
 
 ## Lock lifecycle
 
+Browser integration admits connections through `loopback.rs` before spawning
+workers. Each opt-in service has a 32-worker cap (64 total if both are enabled),
+including unauthenticated HTTP/WebSocket requests and approval waits. Excess
+connections are closed without a queued socket or new thread. Managed service
+state retains permits across listener restarts; worker return, spawn failure
+and unwind release them. Listener stop alone does not cancel existing handlers
+or their approvals. This bounds worker amplification, not all resource use or
+availability against a local process deliberately occupying every slot.
+
 Lock happens on:
 
 - explicit lock action (`close_all_vaults`; ordinary tab close uses `close_vault` and does not enter the retained-RPC lock lifecycle);

@@ -117,6 +117,13 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 
 ## Backend ownership
 
+`src-tauri/src/loopback.rs` owns the desktop browser servers' shared accept
+policy and RAII connection permits. `BridgeState` and `RpcState` each retain
+one budget across listener stop/start cycles: at most 32 connection workers per
+service, including incomplete HTTP/WS requests. Excess connections are dropped
+before thread creation; completed, failed or unwound handlers release permits.
+The listener's stop signal does not imply that existing handlers have exited.
+
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
 fingerprint slot; replacement/cancel drops it immediately. Clipboard I/O runs

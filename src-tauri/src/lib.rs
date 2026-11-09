@@ -3,6 +3,8 @@ pub mod bridge;
 pub mod commands;
 pub mod config;
 pub mod crypto;
+#[cfg(desktop)]
+mod loopback;
 mod net;
 pub mod platform;
 pub mod remote;
