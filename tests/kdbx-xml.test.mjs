@@ -12,7 +12,7 @@ test("buildKeePassXml nests groups from A / B paths and escapes text", () => {
       group: "Web <prod> / API",
       title: "Git&Hub",
       username: "alice",
-      password: "s3cret",
+      password: ' 密<&钥"\n ',
       url: "https://x",
       notes: "line1\nline2",
       totp: "JBSWY3DPEHPK3PXP",
@@ -34,10 +34,14 @@ test("buildKeePassXml nests groups from A / B paths and escapes text", () => {
   assert.ok(xml.includes("<Name>Web &lt;prod&gt;</Name>"));
   assert.ok(xml.includes("<Group><Name></Name>"));
   assert.ok(xml.includes("<Key>Title</Key><Value>Git&amp;Hub</Value>"));
-  // Passwords use the KeePass Protected + Base64 convention.
+  // KeePass's official KdbxFile.Write.cs PlainXml branch writes the literal
+  // escaped value and ProtectInMemory; Protected denotes encrypted KDBX XML.
   assert.ok(
-    xml.includes('<Key>Password</Key><Value Protected="True">' + btoa("s3cret") + "</Value>"),
+    xml.includes(
+      '<Key>Password</Key><Value ProtectInMemory="True"> 密&lt;&amp;钥&quot;\n </Value>',
+    ),
   );
+  assert.ok(!xml.includes(' Protected="True"'));
   assert.ok(xml.includes("<Key>otp</Key><Value>JBSWY3DPEHPK3PXP</Value>"));
   // Empty TOTP seeds are omitted entirely.
   const rootEntry = xml.indexOf("Root entry");

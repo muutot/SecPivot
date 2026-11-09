@@ -28,21 +28,22 @@ function textOf(el: Element | null | undefined): string {
   return el?.textContent?.trim() ?? "";
 }
 
-/** KeePass stores `Protected="True"` values as Base64 of the UTF-8 bytes. */
-function decodeProtectedValue(value: string): string {
+/** Older SecPivot exports incorrectly used unencrypted UTF-8 Base64 with
+ *  `Protected`. Only decode that explicitly identified legacy format. */
+function decodeLegacySecPivotValue(value: string, lang: Language): string {
   const b64 = value.trim();
   if (!b64) return "";
   try {
     const decoded = atob(b64);
     const bytes = new Uint8Array(decoded.length);
     for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
-    return new TextDecoder("utf-8").decode(bytes);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
-    return value;
+    throw new Error(t(lang, "error.invalidXml"));
   }
 }
 
-function parseEntry(entry: Element, group: string): XmlImportEntry {
+function parseEntry(entry: Element, group: string, lang: Language): XmlImportEntry {
   const out: XmlImportEntry = {
     group,
     title: "",
@@ -65,7 +66,7 @@ function parseEntry(entry: Element, group: string): XmlImportEntry {
     const valueEl = childElements(child).find((e) => e.tagName === "Value");
     const protectedValue = valueEl?.getAttribute("Protected")?.toLowerCase() === "true";
     const raw = valueEl?.textContent ?? "";
-    const value = protectedValue ? decodeProtectedValue(raw) : raw;
+    const value = protectedValue ? decodeLegacySecPivotValue(raw, lang) : raw;
     switch (key) {
       case "Title":
         out.title = value;
@@ -119,11 +120,21 @@ export function parseKdbxXml(xmlText: string, lang: Language): XmlImportEntry[] 
   if (!root) {
     throw new Error(t(lang, "error.notKeepassXml"));
   }
+  const legacySecPivot = textOf(doc.querySelector("KeePassFile > Meta > Generator")) === "SecPivot";
+  for (const value of doc.querySelectorAll("Value[Protected]")) {
+    if (value.getAttribute("Protected")?.toLowerCase() !== "true") continue;
+    // Default KDBX XML contains stream-encrypted Base64 and cannot be read
+    // without the inner key. PlainXml instead uses literal text and
+    // ProtectInMemory. Refuse a mixed marker even in a legacy SecPivot file.
+    if (!legacySecPivot || value.getAttribute("ProtectInMemory")?.toLowerCase() === "true") {
+      throw new Error(t(lang, "error.encryptedKeepassXml"));
+    }
+  }
   const entries: XmlImportEntry[] = [];
   const groupOf = (group: Element, parts: string[]) => {
     for (const child of childElements(group)) {
       if (child.tagName === "Entry") {
-        entries.push(parseEntry(child, parts.join(" / ")));
+        entries.push(parseEntry(child, parts.join(" / "), lang));
       }
     }
     for (const sub of childElements(group)) {
@@ -156,14 +167,6 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Base64 of the UTF-8 bytes, the KeePass convention for Protected values. */
-function encodeProtected(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
 interface XmlGroupNode {
   name: string;
   entries: XmlExportRow[];
@@ -172,7 +175,8 @@ interface XmlGroupNode {
 
 /** Build a KeePass 2.x XML document from flat rows (`A / B` group paths),
  *  mirroring the desktop `export_xml` payload so both runtimes produce the
- *  same format. Passwords are written `Protected="True"` + Base64. */
+ *  same PlainXml format. Passwords are escaped plaintext with
+ *  `ProtectInMemory="True"`, following the official KeePass XML writer. */
 export function buildKeePassXml(rows: XmlExportRow[]): string {
   const root: XmlGroupNode = { name: "", entries: [], children: new Map() };
   for (const row of rows) {
@@ -194,8 +198,8 @@ export function buildKeePassXml(rows: XmlExportRow[]): string {
     '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>';
   const writeField = (key: string, value: string, protect: boolean): void => {
     xml += `<String><Key>${escapeXml(key)}</Key><Value${
-      protect ? ' Protected="True">' + encodeProtected(value) : ">" + escapeXml(value)
-    }</Value></String>`;
+      protect ? ' ProtectInMemory="True"' : ""
+    }>${escapeXml(value)}</Value></String>`;
   };
   const walk = (node: XmlGroupNode): void => {
     xml += `<Group><Name>${escapeXml(node.name)}</Name>`;

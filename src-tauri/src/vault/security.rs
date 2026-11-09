@@ -1102,7 +1102,8 @@ impl VaultSession {
     /// enough for re-import by SecPivot and KeePass: nested `<Group>`s carry
     /// UUID + name, entries carry their standard string fields, the TOTP seed
     /// (`otp`) and custom fields. Passwords and protected custom fields use
-    /// the KeePass convention `Protected="True"` + Base64 value.
+    /// the official PlainXml convention: escaped plaintext with
+    /// `ProtectInMemory="True"` (not stream-encrypted `Protected` Base64).
     pub(crate) fn export_xml_content(&self) -> Result<String, String> {
         let db = self.require_db()?;
         let mut xml = String::from(
@@ -1114,12 +1115,10 @@ impl VaultSession {
             xml.push_str(&escape_html(key));
             xml.push_str("</Key><Value");
             if protected {
-                xml.push_str(" Protected=\"True\">");
-                xml.push_str(&BASE64.encode(value.as_bytes()));
-            } else {
-                xml.push('>');
-                xml.push_str(&escape_html(value));
+                xml.push_str(" ProtectInMemory=\"True\"");
             }
+            xml.push('>');
+            xml.push_str(&escape_html(value));
             xml.push_str("</Value></String>");
         }
         fn write_entry(xml: &mut String, entry: &keepass::db::EntryRef<'_>) {
