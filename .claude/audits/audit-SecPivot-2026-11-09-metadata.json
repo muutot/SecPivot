@@ -21,19 +21,19 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S29; historical supplemental tracking notes excluded",
-    "total": 40,
-    "confirmed": 40,
+    "scope": "15 baseline cards plus SP-S05 through SP-S30; historical supplemental tracking notes excluded",
+    "total": 41,
+    "confirmed": 41,
     "suspected": 0,
     "by_severity": {
       "High": 10,
-      "Medium": 24,
+      "Medium": 25,
       "Low": 6
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "e1f4bdd",
+  "remediation_checkpoint": "3119cf0",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -313,14 +313,22 @@
       "source_checkpoint": "86bfab8",
       "commit": "e1f4bdd",
       "status": "Confirmed and remediated. Two malformed synthetic CSV documents returned 2/1 rows and each submitted a bulk call through real conversion/import services to a mocked native adapter; independent strict stdlib reader rejected them, valid multiline control passed. Parser now validates quote states and rejects whole documents without content-bearing errors. IO localizes error and page catches it under original view before writes; no English Error prefix. Two parser and three actual service/extracted-page regressions, 288 independently generated stdlib writer cases, and fresh headless Edge real menu/filechooser/FileReader/page checks passed. Browser malformed vault stays empty and clean, valid title/notes preserved, pageerrors0; dev server stopped. Long-lived server fixture timeout, duplicate responsive locator and VM Error-constructor mismatch were harness issues preserved separately, final tests and browser pass. Full verify 309 frontend/561 Rust harness/ACL2 with four native clipboard bodies opted out. No new IPC/config/dependency/CSS/markup. Historical malformed CSV now explicitly rejects. Native/device behavior, XML feedback and remaining UI/semantic audit pending."
+    },
+    {
+      "id": "SP-S30",
+      "area": "XML page parser rejection has no user feedback and picker advertises unsupported CSV",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "commit": "3119cf0",
+      "status": "Three actual extracted handler regressions failed before fix; actual fresh Edge chooser/FileReader/DOMParser rejected malformed and foreign encrypted fields with localized tips, zero pageerrors and unchanged synthetic vault; full verify passed"
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=2; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "e1f4bdd",
-    "log": "verify-csv-strict-import-complete.log",
-    "frontend_tests": 309,
+    "checkpoint": "3119cf0",
+    "log": "verify-xml-import-feedback.log",
+    "frontend_tests": 312,
     "rust_unit_tests": 561,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -374,6 +382,13 @@
       "browser_log": "csv-import-browser-final.log",
       "browser_screenshot": "csv-import-feedback-dark.png",
       "scope": "Fresh headless Edge demo on independent Vite dev; no native vault/device proof"
+    },
+    "xml_import_feedback": {
+      "result": "passed",
+      "red_browser_log": "xml-import-browser-red.log",
+      "green_browser_log": "xml-import-browser-green.log",
+      "full_gate_log": "verify-xml-import-feedback.log",
+      "scope": "Fresh headless Edge, independent Vite, synthetic empty vault; no native/Android/device or clipboard I/O"
     }
   },
   "reverification_notes": [
@@ -423,6 +438,7 @@
     "8a7e939 preserves strict Hostname destination ports and usable frontend rules. Actual KDBX/host baseline eight wrong matches plus frontend port-loss failure retained. Four native and two frontend regressions cover 27 canonical authority cases, 19 suggested alt rules, explicit/default/omitted ports and Domain scope. First full gate clippy manual_strip failure corrected; final full verify 303 frontend/560 Rust/ACL2. Fixed KPRPC URLSummary snapshot hash recorded. Source @/:// in bare path/query are no longer misclassified. Only synthetic vaults; native extension and Android APK/device remain unverified. CSV formula quoting is the next independently unconfirmed candidate, not an extra issue count. Original baseline unchanged, goal active on 2026-11-10.",
     "19b6658 fixes SP-S27 CSV cell boundaries without removing formula protection. Standard-library reader independently reproduced both writers and confirms guarded-value fidelity after fix. Initial station creation failed WinError5 without launching tests; initial gate loopback 10055 failure is retained, isolated check and serial final gate passed. Full check explicitly excludes two shared-clipboard tests, not reported as executed. One vault exchange test lacks the usual live opt-in and needs a separate audit unit. Original baseline/score remains unchanged; goal active and mobile v1.6.5 Save As still lacks APK/device evidence.",
     "6736799 fixes developer verification opt-in gap SP-S28 without any shared OS clipboard I/O. Safe temporary stop proved original reach and final flag control flow; stop removed. Full verify has no external test filters; 561 harness passes do not mean four opted-out native live bodies ran. Original baseline remains unchanged, goal active and mobile Save As still lacks APK/device evidence. CSV malformed quoting was independently reproduced through real conversion and mocked bulk IPC against stdlib reader, to be handled separately.",
-    "e1f4bdd fixes SP-S29 malformed CSV and adds localized page feedback. Current source independently corroborated against stdlib writer/reader and actual headless Edge UI; temporary server stopped. Standard Error constructor supplied to VM fixture to match real application realm, and responsive locator constrained to visible row; preserved failed logs do not count as product defects. Full final verify 309/561/ACL2 passed with four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline/score unchanged. Goal remains active; XML errors, toast semantics, remaining native per-URI/migration/UI coverage and Android mobile Save As remain pending."
+    "e1f4bdd fixes SP-S29 malformed CSV and adds localized page feedback. Current source independently corroborated against stdlib writer/reader and actual headless Edge UI; temporary server stopped. Standard Error constructor supplied to VM fixture to match real application realm, and responsive locator constrained to visible row; preserved failed logs do not count as product defects. Full final verify 309/561/ACL2 passed with four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline/score unchanged. Goal remains active; XML errors, toast semantics, remaining native per-URI/migration/UI coverage and Android mobile Save As remain pending.",
+    "3119cf0 fixes SP-S30 localized XML rejection before writes and discards old picker completions before parsing. Three handler red-to-green tests and actual Edge FileReader/DOMParser passed; full verify 312/561/ACL2 exit 0. Parser unchanged; four live clipboard bodies skipped by default. Documentation currency references synchronized. Original baseline preserved; goal active and mobile v1.6.5 cloud Save As still lacks APK/device evidence."
   ]
 }

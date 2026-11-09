@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S29；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S30；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 0      | 0         | 0         |
 | High      | 10     | 10        | 0         |
-| Medium    | 24     | 24        | 0         |
+| Medium    | 25     | 25        | 0         |
 | Low       | 6      | 6         | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **40** | **40**    | **0**     |
+| **Total** | **41** | **41**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -1752,3 +1752,42 @@ clippy 通过，RUST_TEST_THREADS=2，无外部过滤。四个原生剪贴板 bo
 当前卡片 **40**（High 10 / Medium 24 / Low 6），原始 15 项/6.1 分不变。
 整体目标继续：XML 解析错误反馈、提示色彩语义、逐 URI 迁移及其余
 系统/UI 覆盖仍待核查，手机 v1.6.5 另存为仍缺 APK/真机验证。
+
+### Finding: SP-S30 XML 导入解析失败没有界面反馈（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Frontend state / Accessibility
+- Status: Confirmed
+- Affected area: main-window KeePass XML import
+- Evidence:
+  - File: `src/routes/+page.svelte:1144`、`src/lib/utils/kdbx-xml.ts:115`（`576cdd9` 修复前）
+  - Function / Module: `handleImportXml` / `xmlToImportEntries` / `parseKdbxXml`
+  - Relevant behavior: XML parser 会明确拒绝损坏/外部加密字段，页面在 try/catch 外调用，入口又由 void callback 调用；拒绝变成 unhandled promise，没有用户反馈。选择器还列出 parser 不支持的 CSV filter。
+  - Reproduction: 全新 headless Edge、独立 Vite、纯合成空库，真实菜单→XML 选择器→FileReader→页面。损坏 XML、带 foreign Protected=True 字段 XML 各出现 1 个 pageerror、0 个 tip；库保持 0 条且 dirty=false。合法 PlainXml 对照导入 1 条。`xml-import-browser-red.log` 仅记录计数与布尔值。
+- Problem: 用户选择无法导入的文件后只看到界面没有变化，不知道文件损坏或需要非加密 PlainXml，无法采取正确重试动作。
+- Why it matters: parser 的安全拒绝必须被呈现给用户，否则会误以为软件无响应；这是反馈缺失，没有证据表明安全校验绕过或用户数据库损坏。
+- Realistic failure scenario: 从其他 KeePass 客户端取得带 stream-encrypted Protected 字段的 XML，当前 parser 正确拒绝，但界面不显示已有的兼容性错误说明。
+- Minimal fix: 页面捕获本地化、无字段值的 parser 错误，绑定发起视图并停止写入；选择器仅列出实际支持的 XML filter。
+- Better long-term fix: 对所有导入格式的解析、提示和写入边界做同样的真实页面验证，继续核查反馈严重度和跨格式兼容。
+- Regression test suggestion: 两类实际 parser 拒绝均显示反馈且无 unhandled error/写入；合法字段仍正确映射，过时 picker 结果不解析/不提示，XML picker 不声称支持 CSV。
+- Estimated effort: 0.5–1 小时（页面反馈、filter 和回归）
+
+### SP-S30 修复与独立复核（2026-11-10）
+
+`3119cf0` 已修复 XML 页面错误反馈：现有 parser 的损坏 XML 与外部
+加密字段拒绝在发起视图显示本地化提示，错误不包含字段值；过时 picker
+结果不解析、不写入。选择器只列 XML，合法映射字段保持原行为。
+`xml-import-handler-red.log` 的三个回归在修复前失败，green 日志通过。
+真实全新 Edge 的 `xml-import-browser-red.log` 两类各 0 tip / 1 pageerror，
+`xml-import-browser-green.log` 两类各 1 tip / 0 pageerror，合成库保持为空
+且 clean，合法 PlainXml 对照成功。独立 Vite 进程已停止。
+
+完整 `verify-xml-import-feedback.log` 终态 exit 0：前端 **312**、Rust
+harness **561**、ACL **2**，格式、Svelte、构建与 clippy 通过。
+RUST_TEST_THREADS=2，无外部过滤，四个 live clipboard body 默认 skip。
+文档 currency gate 同步 data-contracts/project-structure；TODO 仅标记
+本次反馈/filter/view 边界。无 parser/IPC/依赖或 CSS/markup 变化。
+当前卡片 **41**（High 10 / Medium 25 / Low 6），原始 15 项/6.1 分不变。
+完整 XML 保真、原生互操作、其他系统与 UI 范围继续验证；手机 v1.6.5
+云端另存为仍缺新 APK/真机证据。
