@@ -95,8 +95,13 @@ at creation. Bitwarden login enables quality evaluation, other types disable it;
 absent metadata keeps the KeePass default (CSV/XML/1PIF unchanged). Browser bulk
 fallback preserves the same flag. Ordinary full-field edits still preserve flags.
 These are schema-based synthetic KDBX regressions, not native export validation.
-Linked fields, URI matching modes, collections, history and attachments remain
-separate migration work.
+Linked type-3 fields resolve official login/card/identity IDs into protected
+import-time snapshots through `import/bitwarden_links.rs`; Identity FullName
+follows source name-part composition. Optional absent/null targets become empty
+protected fields. Unknown/cross-type/non-integer IDs or malformed target values
+reject the whole parse. Stale field.value never overrides the linked target.
+Dynamic linkage after edits, URI matching modes, collections, history and
+attachments remain separate migration work.
 
 ## Config contract
 
@@ -342,7 +347,7 @@ validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent
 preserve legacy plaintext compatibility. Account-encrypted exports have the
 same items envelope and must never be treated as decrypted credentials. Native
-client exports, linked-field and multi-URI fidelity still need separate
+client exports, dynamic linked-field and multi-URI fidelity still need separate
 verification; this boundary does not implement decryption. Bitwarden custom
 labels use a source prefix and unique suffixes through `import/fields.rs` so
 reserved/blank/duplicate labels retain their values without becoming native OTP
