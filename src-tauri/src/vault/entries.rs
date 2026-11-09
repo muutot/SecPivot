@@ -1128,12 +1128,24 @@ impl VaultSession {
         name: &str,
         data: Vec<u8>,
     ) -> Result<VaultState, String> {
+        let id = parse_entry_id(uuid)?;
+        let (cap, max_history_size) = {
+            let db = self.require_db()?;
+            history_limits(&db.meta)
+        };
         {
             let db = self.require_db_mut()?;
-            let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            entry.remove_attachment_by_name(name);
-            entry.add_attachment(name.to_owned(), Value::protected(data));
+            {
+                let mut tracked = entry.track_changes();
+                tracked
+                    .as_mut()
+                    .add_attachment(name.to_owned(), Value::protected(data));
+                tracked.times.last_modification = Some(Times::now());
+            }
+            trim_entry_history(&mut entry, cap);
+            let sizes = snapshot_sizes(&entry.as_ref());
+            trim_entry_history_by_size(&mut entry, max_history_size, &sizes);
         }
         self.mark_dirty();
         self.snapshot_without_icons()

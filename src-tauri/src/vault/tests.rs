@@ -5274,6 +5274,9 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
         })
         .unwrap();
     let uuid = state.root.entries[0].uuid.clone();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
 
     // The external viewer "edited" the registered temp file.
     let (token, _) = store.create("s1", "note.txt", b"edited content").unwrap();
@@ -5292,6 +5295,13 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
         session.attachment_data(&uuid, "note.txt").unwrap(),
         b"edited content"
     );
+    let history = session.get_entry_history(&uuid).unwrap();
+    assert_eq!(
+        history.len(),
+        1,
+        "external edits must preserve the pre-edit snapshot"
+    );
+    assert_eq!(history[0].attachments[0].name, "note.txt");
 
     // Save + reopen keeps the imported bytes.
     session.save().unwrap();
@@ -5299,6 +5309,12 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
     let state = reopened.open(&path, "master-password", None).unwrap();
     let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
     assert_eq!(entry.attachments[0].size, b"edited content".len());
+    let db = reopened.require_db().unwrap();
+    let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+    let old = entry.historical(0).unwrap();
+    assert!(old.attachment_by_name("note.txt").unwrap().get().as_slice() == b"original");
+    reopened.restore_entry_version(&uuid, 0).unwrap();
+    assert!(reopened.attachment_data(&uuid, "note.txt").unwrap() == b"original");
 
     // Unknown tokens are rejected; arbitrary paths are never accepted.
     assert!(store.read_for_session("nope", "s1").is_err());
@@ -5314,6 +5330,65 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
         session.attachment_data(&uuid, "note.txt").unwrap(),
         b"edited content"
     );
+}
+
+#[test]
+fn external_attachment_edit_respects_existing_history_and_retention() {
+    for (cap, size, expected) in [(10, -1, 2), (1, -1, 1), (0, -1, 0), (10, 1, 0)] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic external", "", "", "");
+        input.attachments = vec![AttachmentInput {
+            name: "synthetic.txt".into(),
+            data: Some(BASE64.encode(b"version-1")),
+        }];
+        let state = session.add_entry(&input).unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        input.attachments[0].data = Some(BASE64.encode(b"version-2"));
+        session.update_entry(&uuid, &input).unwrap();
+        let db = session.require_db_mut().unwrap();
+        db.meta.history_max_items = Some(cap);
+        db.meta.history_max_size = Some(size);
+        let old_time = keepass::db::Times::now() - chrono::Duration::days(1);
+        db.entry_mut(parse_entry_id(&uuid).unwrap())
+            .unwrap()
+            .times
+            .last_modification = Some(old_time);
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let store = AttachmentTempStore::default();
+        let (token, _) = store
+            .create("external", "synthetic.txt", b"version-3")
+            .unwrap();
+        let bytes = store.read_for_session(&token, "external").unwrap();
+        session
+            .import_attachment_bytes(&uuid, "synthetic.txt", bytes)
+            .unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let history = session.get_entry_history(&uuid).unwrap();
+        assert_eq!(history.len(), expected, "external edit ignored retention");
+        assert!(session.attachment_data(&uuid, "synthetic.txt").unwrap() == b"version-3");
+        let db = session.require_db().unwrap();
+        let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
+        assert!(entry.times.last_modification.unwrap() > old_time);
+        if expected > 0 {
+            let old = entry.historical(0).unwrap();
+            assert!(
+                old.attachment_by_name("synthetic.txt")
+                    .unwrap()
+                    .get()
+                    .as_slice()
+                    == b"version-2"
+            );
+            assert_eq!(old.times.last_modification, Some(old_time));
+        }
+        if expected == 0 {
+            assert_eq!(db.num_attachments(), 1);
+        }
+    }
 }
 
 /// Twofish remains readable for compatibility, but the settings write DTO
