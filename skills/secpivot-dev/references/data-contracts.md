@@ -20,6 +20,12 @@ are migrated to the scoped address on save. Windows DPAPI inline values are unch
 
 This reference defines the frontend ↔ backend contract. Update it together with any change to IPC commands, serde types, config schema, or vault serialization.
 
+`BridgeApprovalPrompt` captures the displayed request object before invoking
+`bridge_approve`. Success, failure, busy cleanup and the dismissal callback apply
+only while that exact request is current. Replacing a prompt or unmounting
+invalidates old IPC completions; an old approval cannot mark or dismiss a new one.
+This renderer guard does not replace backend token/session/lifetime validation.
+
 KeePass XML export uses the official PlainXml value contract: escaped literal
 text and `ProtectInMemory="True"`. Import decodes old unencrypted `Protected`
 Base64 only when `Meta/Generator` identifies SecPivot, with strict UTF-8 validation;
