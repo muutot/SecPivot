@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S50；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S52；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 13     | 13        | 0         |
+| High      | 15     | 15        | 0         |
 | Medium    | 37     | 37        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **61** | **61**    | **0**     |
+| **Total** | **63** | **63**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2564,3 +2564,85 @@ Confirmed。原始 b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
 仅用合成库，无用户库、共享剪贴板、真实 Tauri handler/官方客户端/
 Android provider 或替换 APK 运行。手机 v1.6.5 云端另存为源码 ACL
 修复已确认；真机验证与其余系统、UI、竞品能力审查继续进行。
+
+### Finding: SP-S51 当前内容与时间相同即跳过历史联合，遗漏另一设备的独有旧版本（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data Integrity / Synchronization / Dependency behavior
+- Status: Confirmed
+- Affected area: Equal-current-time native entry history merge
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:525–548（837b827 修复前）
+  - Function / Module: merge_entries / merge_databases
+  - Relevant behavior: 当前 last_modification 相等且内容比较相等时直接 continue，在读取或联合两边 History 之前返回该条目。当前版本一致不代表此前编辑路径一致。
+  - Reproduction: merge-history-branches-red-distinct.log 的 equal-current 回归在首次历史查找失败。真实合成库两分支分别在 t20/t30 保存不同中间附件/内容，再在 t40 收敛到同一 current 内容，保存重开后合并仍缺少远程中间历史。red 未到反方向、最终合并库重开或重复合并断言。
+  - Independent verification: 不带应用补丁的原始 registry keepass =0.13.22 的真实 KDBX save/reopen 同样缺少远程历史，merge-history-registry-red-distinct.log 为 1 failed。原 archive checksum a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e。固定官方 PwDatabase.cs commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5:875–897 在当前属性处理后单独调用 MergeEntryHistory；1635–1692 联合不同历史时间。SHA256 3470bf8193e95d211d422eafba901a39a68f2a4d796ce11a0e44778d87ad01b0，merge-history-reference-provenance.json 保存 URL/独立夹具 hash。官方对同历史时间也使用时间键，因此并非保留同时间不同内容的证据；未运行官方客户端。
+- Problem: 正常返回成功的同步结果包含最新内容，却遗漏另一设备曾保存的中间版本及其附件。
+- Why it matters: 破坏历史恢复承诺；当前记录仍正常，不以合成结果宣称用户密码丢失或真实远程永久覆盖，按 High。
+- Realistic failure scenario: 两设备分别改记录后又恢复成相同当前值，同步时只有一边的中间版本保留，另一边的旧附件/字段无法从合并历史恢复。
+- Minimal fix: 在临时规范化 binary namespace 上收集 current 时间相同且 history 不同的源历史；原始合并成功后联合到仍存在的条目，不因 current 相等跳过历史。按时间加内容去重，重建附件 ownership。
+- Better long-term fix: 上游修复后复用相同真实 KDBX 回归；继续验证完整 current 属性、历史缺省/异常时间及所有跨客户端边界。
+- Regression test suggestion: 两分支分别修改中间内容和附件，再使 current 内容/时间相同；双向合并、保存重开都保留三个历史版本和确切附件，重复合并不增长版本数。同时间但到期设置不同的历史分别可恢复。
+- Estimated effort: 2–4 小时（联合策略、真实回归、原始包复核和维护契约）
+
+### Finding: SP-S52 本地胜出时按时间跳过远程旧版本，丢弃同时间不同内容的历史（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data Integrity / Synchronization / History identity
+- Status: Confirmed
+- Affected area: Local-winner remote-loser history insertion
+- Evidence:
+  - File: src-tauri/src/vault/merge.rs:116–142（837b827 修复前）
+  - Function / Module: collect_remote_losers / push_losers_into_history
+  - Relevant behavior: 已捕获本地较新条目对应的远程旧 current，但只要 merged history 有相同 last_modification 就 continue，没有比较版本内容。时间精度为秒，时间相同不能代表版本相同。
+  - Reproduction: merge-history-branches-red-distinct.log 的 same-time-loser 回归在首次远程历史查找失败。共同库的本地 t20 版本、远程 t20 版本内容/附件不同；本地随后 t40 编辑胜出，远程旧 current 仍应保留，却因本地 t20 历史已存在被跳过。red 未执行后续重开或反向断言。
+  - Independent verification: 对照保存重开后实际 native 两库时间/历史、collect_remote_losers 的内容差异条件与第一方 skip 控制流。原依赖 merge_history:636–656 对同时间不同内容会保留双方，DuplicateHistoryEntries 只在 enum 定义，未被实际发出；原注释的“重复时间必然导致后续合并失败”依据不成立。不是从官方字典去重行为推断保留双方。
+- Problem: 第一方兼容层抹掉已经捕获的旧分支版本，成功同步后的历史无法恢复那次远程编辑。
+- Why it matters: 同秒编辑是 KDBX 合法状态，当前最新版本仍可读，但历史保真失败；没有用户真实覆盖/永久丢失证据，按 High。
+- Realistic failure scenario: 两设备在同一秒分别保存不同的字段或附件，之后本地再更新；合并时旧远程分支因时间碰撞被丢弃。
+- Minimal fix: 将捕获的 loser 与全部已有历史按 timestamp 加完整内容去重。到期设置和规范化附件引用也参与内容身份；不同内容保留双方，相同版本只留一份。稳定降序排列，批量构建历史后重建附件 reverse refs。
+- Better long-term fix: 不用时间戳代替版本身份；分别核对 current 同秒冲突、未跟踪的外部编辑、current 属性赋值和历史 retention 兼容。
+- Regression test suggestion: 本地更近、已有历史与远程旧 current 同时间且不同字段/附件；双向合并和保存重开保留三个版本及正确附件，重复同步版本数保持。相同时间、同标题但不同到期设置的历史均可恢复。
+- Estimated effort: 1–3 小时（共享联合函数、时间碰撞回归和契约同步）
+
+89d4504 以一个完整历史联合修复同时处理 SP-S51/SP-S52。新增 3 项
+原生回归；merge-history-branches-green.log 的 24 项合并测试通过，
+merge-history-expiration-green.log 的 3 项覆盖双向、附件、重开、重复
+联合与到期设置恢复。最终完整 verify-merge-history-branches-final-debug0.log
+exit 0：317 frontend、621 Rust、ACL 2、format、check 零错误警告、
+150-key 契约、build 和 clippy 全部通过。验证临时设置
+CARGO_PROFILE_DEV_DEBUG=0 降低编译内存，不改仓库 profile，不优化或
+过滤测试；Rust 单线程，无过滤，四个
+live clipboard body 开关关闭。
+
+首次原生编译因 rustc 无法分配 2 MiB 失败，未到产品断言；不改源码
+重试后取得两个有效 red。最初 equal-current 夹具两边中间时间也相同，
+随后分别固定为 t20/t30，将历史联合与同时间 loser 碰撞分开，最终两个
+red 仍失败。官方时间键策略不是本次保留不同内容双方的依据。
+
+第一轮完整门的 621 Rust 已通过，但 clippy 遇到 image/nom 缓存版本
+不一致，不能计作总门成功。仅 cargo clean -p image -p nom 清理这两项
+生成缓存（72 files / 131.8 MiB），没有改依赖版本或用户文件。提交前
+去掉反复 add_entry 首部插入的批量重建，增加 patched History::from_entries
+一次构造有序 Vec，并清除 nested histories；最终门覆盖该实际实现。
+没有从构造改动宣称测得大型真实库性能提升。
+最终源码的首次完整门在 Vite 阶段发生 Node Zone Allocation 内存分配
+失败，尚未到后端测试；保留 verify-merge-history-branches-final.log，
+未改源码/依赖版本重试在 rustc 编译阶段再次内存不足，日志
+verify-merge-history-branches-final-retry.log 保留。随后用临时调试符号
+覆盖取得最终门，不将这些构建失败计为应用发现。
+
+merge-history-dependency-green-final.log 的 7 项通过；原公开包重新
+应用补丁，merge-history-patch-reconstruction-final.log 验证全部 60
+hashes，57 upstream 字节保持，仍只改三个 reviewed 文件。
+data-contracts、project-structure、KEEPASS_PATCH 与 partial TODO 同步，
+没有据此勾选完整同步能力。报告提交无需额外 reference 更新。
+
+当前详细卡片 63（Critical 1 / High 15 / Medium 37 / Low 10），全部
+Confirmed；原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active；当前
+属性合并与同秒策略、其余系统/UI/竞品迁移继续审查。仅使用合成库，
+没有用户库、共享剪贴板、真实 Tauri handler/官方客户端/Android provider
+或替换 APK 运行。手机 v1.6.5 另存为 ACL 发行源码根因与当前源码修复
+已确认，真机/provider 验证仍待完成。
