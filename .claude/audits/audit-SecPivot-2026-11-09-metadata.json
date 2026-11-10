@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S53; historical supplemental tracking notes excluded",
-    "total": 64,
-    "confirmed": 64,
+    "scope": "15 baseline cards plus SP-S05 through SP-S54; historical supplemental tracking notes excluded",
+    "total": 65,
+    "confirmed": 65,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 15,
-      "Medium": 38,
+      "Medium": 39,
       "Low": 10
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "47226b1",
+  "remediation_checkpoint": "ac810e0",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -521,14 +521,23 @@
       "confidence": "Confirmed",
       "commit": "47226b1",
       "status": "Five original native red failures and one original registry red; intermediate 4/1 confirmed old expiry history loss. Actual winner settings, surviving equal-time conflicts, and both-direction losing-version identity repaired. Six new regressions, 31 merge tests and full 317/627/ACL2 passed; full synchronization TODO remains partial."
+    },
+    {
+      "id": "SP-S54",
+      "area": "Hidden negative-tabindex attachment file input defeats modal Tab boundaries",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "b6efc80",
+      "commit": "ac810e0",
+      "status": "Confirmed and remediated. Nine actual browser red-to-green cases, four failing pre-fix handler regressions and six final tests; six browser eligibility cases and real empty filechooser passed. Full verify 323/627/ACL2 exit 0, no new TODO completion."
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "47226b1",
-    "log": "verify-merge-current-expiration.log",
-    "frontend_tests": 317,
+    "checkpoint": "ac810e0",
+    "log": "verify-modal-focus.log",
+    "frontend_tests": 323,
     "rust_unit_tests": 627,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
@@ -800,6 +809,24 @@
       "provenance": "merge-current-expiration-provenance.json",
       "scope": "Actual native synthetic update/save/reopen, expiry enable/reschedule/disable, both directions, merged reopen, historical restore/reopen, duplicate-free repetition, equal-time conflict and permanent deletion",
       "limitations": "Original red stopped at current expiry/conflict checks; historical loss established by intermediate red. Wildcard compile omission and invalid group-deletion fixture expectation excluded. CARGO_PROFILE_DEV_DEBUG=0 temporary, live clipboard opted out. No native Tauri handler/client/device/provider/user-vault or real overwrite evidence."
+    },
+    "modal_tabbable_focus": {
+      "result": "passed",
+      "unit_red_log": "modal-focus-unit-red.log",
+      "unit_red_failed": 4,
+      "new_unit_tests": 6,
+      "browser_red_log": "modal-tabbable-browser-red.log",
+      "browser_red_json": "modal-tabbable-red.json",
+      "browser_green_log": "modal-tabbable-browser-green.log",
+      "browser_green_json": "modal-tabbable-green.json",
+      "browser_cases": 9,
+      "browser_failed_before": 9,
+      "browser_failed_after": 0,
+      "eligibility_log": "modal-focus-eligibility-green.log",
+      "eligibility_cases": 6,
+      "filechooser": true,
+      "scope": "Production EntryEditorDialog mounted via Vite/Svelte with fresh synthetic group, native bidirectional Tab, real CSS/layout and dynamic excluded controls; deterministic production-handler seam for lifetime/empty/interior ownership",
+      "limits": "No native Android WebView/external keyboard/screen reader/Tauri handler/user-vault/clipboard. No editor submission. Narrow tab wrapping tracked separately. CARGO_PROFILE_DEV_DEBUG=0 temporary; live clipboard opted out."
     }
   },
   "reverification_notes": [
@@ -868,6 +895,7 @@
     "6ce4570 fixes SP-S49 favorite timestamps and both native/frontend metadata delta. Two native red tests (first merge and simultaneous modified/size wire mismatch) plus one actual module-graph service red establish independent storage/wire/cache evidence; final seven native/four service and full verify 317/610/ACL2 passed serially. New two native and one service regressions cover favorite/unfavorite, double merge direction and merged reopen, original snapshot/untouched-node identity, command/session/dirty/revision. Data contract union/command tables and paragraph synchronized; docs-only table completion after full gate was separately format checked. No extra history, native UI/device/provider/clipboard/user-vault or same-second monotonic proof. Original baseline/score unchanged, goal active.",
     "46eaec4 fixes SP-S50 attachment merge integrity. Four original native red failures and two original registry archive failures independently corroborate missing/wrong payloads. Intermediate shared-owner red required prepared leases and deduplicated Entry removal; final eight native/seven dependency regressions and full verify 317/618/ACL2 passed serially with no filters and clipboard opt-in unset. Fresh original plus patch matches all 60 hashes, 57 untouched upstream files retained. Data/security/structure/patch references updated; synchronization TODO tightened to partial for equal-current-time history and same-second policy. No real user overwrite/permanent loss, Tauri handler/client/device/provider/user vault/clipboard evidence. Original b7c5d9f baseline/6.1 score unchanged and full goal active.",
     "89d4504 fixes SP-S51/SP-S52 as one complete history-union invariant. Original native two failures, original registry equal-current failure and fixed official source corroborate distinct-time history behavior; official same-time dictionary is not evidence of retaining both variants. Three new native regressions, 24 targeted merge tests, seven dependency tests and final full verify 317/621/ACL2 passed serially. Bulk History::from_entries avoids repeated front insertion; no measured large-vault speed claim. First compiler 2 MiB allocation failure and intermediate clippy image/nom cache mismatch excluded; targeted generated dependency clean followed by final full gate. Fresh original+patch matches all 60 hashes, 57 upstream unchanged. Contract/structure/patch references and partial TODO synchronized. Baseline b7c5d9f/6.1 preserved, goal active; native user-vault/clipboard/client/device/provider and mobile replacement unverified.",
-    "47226b1 fixes SP-S53 as one complete expiration merge invariant. Five native original failures and one unpatched registry failure; pinned official AssignProperties copies expiry/enabled. Intermediate 4/1 independently confirms old-expiry history omission. Six final new regressions cover actual API/save/reopen, both directions, historical restore, repetition, same-time rejection and permanent deletion; 31 merge tests and final full 317/627/ACL2 passed serially with temporary dev debug=0 and no filters/live clipboard. Non-exhaustive match compilation omission and invalid group-deletion expectation excluded; conflict rule not weakened. Contract/structure and partial TODO synchronized, no UI/IPC/schema/vendor/dependency change. Baseline b7c5d9f/6.1 unchanged and goal active; no user-vault/clipboard/Tauri-handler/client/device/provider or real overwrite proof."
+    "47226b1 fixes SP-S53 as one complete expiration merge invariant. Five native original failures and one unpatched registry failure; pinned official AssignProperties copies expiry/enabled. Intermediate 4/1 independently confirms old-expiry history omission. Six final new regressions cover actual API/save/reopen, both directions, historical restore, repetition, same-time rejection and permanent deletion; 31 merge tests and final full 317/627/ACL2 passed serially with temporary dev debug=0 and no filters/live clipboard. Non-exhaustive match compilation omission and invalid group-deletion expectation excluded; conflict rule not weakened. Contract/structure and partial TODO synchronized, no UI/IPC/schema/vendor/dependency change. Baseline b7c5d9f/6.1 unchanged and goal active; no user-vault/clipboard/Tauri-handler/client/device/provider or real overwrite proof.",
+    "ac810e0 fixes SP-S54 modal Tab boundaries. Actual attachment editor browser 9/9 red cases escape/stall; six production-handler tests originally 4 failed/2 passed, now all pass. Nine browser green and six native DOM excluded-candidate cases pass; visible Add still invokes filechooser, cleanup restores invoker. Full verify 323/627/ACL2 passed serially with temporary dev debug=0 and clipboard opt-out. Theme/structure focus contracts and obsolete modal CSS TODO reference corrected; no new TODO checked or CSS/markup/IPC/schema/vendor change. Baseline/score unchanged, goal active; narrow tab wrapping and remaining system/UI/competitor audit continue, mobile v1.6.5 replacement/provider unverified."
   ]
 }

@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S53；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S54；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 15     | 15        | 0         |
-| Medium    | 38     | 38        | 0         |
+| Medium    | 39     | 39        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **64** | **64**    | **0**     |
+| **Total** | **65** | **65**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2696,3 +2696,46 @@ Low 10），原始 b7c5d9f 的 15 项/6.1 分保持。报告提交不需额外�
 审查。仅使用合成数据，无用户库/共享剪贴板/原生 Tauri handler/官方
 客户端/Android provider 或替换 APK 运行；手机 v1.6.5 的另存为源码
 ACL 修复与发行根因已确认，真机验证仍未完成。
+
+### Finding: SP-S54 隐藏附件输入被当作 Tab 边界，弹窗焦点循环失效（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Accessibility / Frontend State / Keyboard ownership
+- Status: Confirmed
+- Affected area: Shared ModalShell keyboard focus trap, actual entry-editor attachment tab
+- Evidence:
+  - File: src/lib/components/ModalShell.svelte:66–106、src/lib/components/EntryEditorDialog.svelte:1509–1518/1917–1919（b6efc80 修复前）
+  - Function / Module: focusables / handleKeydown / attachments tab file-input
+  - Relevant behavior: input:not([disabled]) 仍匹配 CSS 隐藏且 tabindex=-1 的附件 file input。列表未检查有效 tabindex、布局、visibility、fieldset disabled 或 inert。末尾隐藏输入因此替代实际最后的“添加附件”按钮。
+  - Reproduction: modal-tabbable-browser-red.log/json 在生产 EntryEditorDialog 的新建/附件页运行原生按键；dark/light/custom × 1100×720/420×600/420×320 共 9 组全部失败。首个保存按钮 Shift+Tab 仍停在保存，最后的添加附件 Tab 移到 synthetic-after（dialog 外）。没有 pageerror，卸载后回到 synthetic-invoker。
+  - Independent verification: 按真实 CSS 布局/activeElement 判断，与原 handleKeydown 的 first/last 分支和隐藏 file input 核对；随后六项生产 handler 回归在修复前 4 failed / 2 passed（modal-focus-unit-red.log）。测试 DOM seam 不作为原生选择器或布局证据，浏览器实际 Tab 才是该证据。
+- Problem: 焦点 trap 使用不可 Tab 的隐藏节点确定边界，导致反向循环失败且正向跳到背景。
+- Why it matters: 键盘用户在正常附件操作中丢失当前弹窗焦点，必须重新定位。没有观察到秘密泄露、背景保存或库破坏，按 Medium。
+- Realistic failure scenario: 打开条目附件页，从保存按 Shift+Tab 试图进入附件操作却不移动；从添加附件按 Tab 后焦点离开仍显示的弹窗。
+- Minimal fix: 每次按键重新过滤 tabIndex>=0、有效 :disabled、inert 祖先、无布局和非 visible 元素；使用剩余真实候选作为双向循环边界。
+- Better long-term fix: 继续检查其他业务弹窗及屏幕阅读器/移动外接键盘行为，新增控件时保留可见 Tab 边界；不从这一例认定全部弹窗可访问性完整。
+- Regression test suggestion: 生产附件编辑页末尾隐藏输入的双向原生 Tab；负 tabindex、fieldset disabled、inert、display:none 和 visibility:hidden/collapse；动态移除最后控件、无候选 surface fallback、已消费按键及下层 modal 不抢归属；关闭恢复 invoker。
+- Estimated effort: 1–2 小时（真实浏览器复现、六项回归、最小过滤、完整门与契约更新）
+
+ac810e0 已修复。modal-tabbable-browser-green.log/json 的 9 组均通过，
+无 pageerror；modal-focus-eligibility-green.log/json 另在实际 DOM 注入六种
+不可 Tab 的尾部候选，双向循环全部通过。“添加附件”仍触发真实浏览器
+filechooser，空选择不读取任何文件。九份截图及 contact sheet 已检查；
+窄屏页签文字折行是单独待优化的视觉问题，不冒充焦点修复效果。
+
+完整 verify-modal-focus.log exit 0：323 frontend、627 Rust、ACL 2，
+format、check 零错误警告、150-key 契约、build、clippy 全部通过。
+Rust 单线程、无过滤，临时 CARGO_PROFILE_DEV_DEBUG=0；四个 live
+clipboard body opt-out，不改仓库 profile。modal-focus-final-format.log
+再次通过。css-theming/project-structure 更新焦点契约；TODO 只纠正
+不存在的 modal-shared.css 引用，未据此勾选新的完成项。无样式/markup、
+IPC/schema、vendor 或凭据返回改变。
+
+证据仅用新建模式合成 group、独立浏览器；未提交编辑器，未访问用户
+库/共享 OS 剪贴板/原生 Tauri handler/Android provider。两处证据工具
+编辑失败（patch 行匹配和 PowerShell 内联文档替换的引号）在实际断言前
+修正，不计产品缺陷。自己启动的 Vite/Edge 已清理。原始 b7c5d9f 的
+15 项/6.1 分保持；当前 65 张 Confirmed（Critical 1 / High 15 /
+Medium 39 / Low 10），整体目标 active。手机 v1.6.5 另存为 ACL 源码
+修复与发行根因已确认；替换 APK/真机/provider 仍待验证。
