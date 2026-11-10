@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S49；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S50；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 12     | 12        | 0         |
+| High      | 13     | 13        | 0         |
 | Medium    | 37     | 37        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **60** | **60**    | **0**     |
+| **Total** | **61** | **61**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2517,3 +2517,50 @@ Android provider/用户库/共享剪贴板未执行；浏览器服务测试不�
 active，继续复核同秒历史/合并与其余系统、UI 和竞品迁移能力。
 手机已安装 v1.6.5 的云端另存为 ACL 发行源码根因已确认，当前
 源码授权已修复；替换 APK、真机和具体 provider 仍未验证。
+
+### Finding: SP-S50 附件合并遗漏载荷、混用编号并丢失待安装版本的所有权（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data Integrity / Synchronization / Dependency behavior
+- Status: Confirmed
+- Affected area: Native entry merge, attachment pool and detached recycle-bin history
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:439–446/550–584、src-tauri/src/vault/merge.rs:168–181/359–366（316116c 修复前）
+  - Function / Module: merge_entries / merge_databases / restore_bin / EntryMut::remove
+  - Relevant behavior: 原始依赖 Created 直接克隆 Entry，但不复制数据库 binary pool；Updated 复制普通属性但遗漏 attachments。两库 binary ID 仅在各自库内有效。第一方回收站恢复只复制 current 附件，历史引用仍指向 detach/remove 后失去的载荷。
+  - Reproduction: merge-attachments-red-extended.log 四项失败，分别在源胜出后仍读到旧附件、源新增条目读取缺失载荷 panic、两侧新增条目编号碰撞读到另一侧字节、回收站历史恢复缺失载荷 panic 的首个断言停止。未执行后续反向合并/最终保存覆盖断言，不声称这些 red 已证明用户云端覆盖或永久丢失。
+  - Independent verification: 不带任何 Cargo patch 的原始 registry keepass =0.13.22，两个真实合成 KDBX save/reopen/merge 测试均失败，见 merge-attachments-registry-red.log。公开 archive checksum a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e；merge-attachments-provenance.json 保存独立项目测试 hash。固定官方 KeePass PwEntry.cs commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5:490–516 的 AssignProperties 显式深复制 Binaries，SHA256 a68f2d7df7a0d49940b63387ed20634f849e60de6f4bb01c4f0ab8a4becba230。未运行官方客户端。
+- Problem: 合并成功不保证附件对应正确字节，或读取/恢复时发生缺失载荷 panic；回收站历史也缺少完整载荷移植。
+- Why it matters: 附件是密码库的持久数据，错误字节和不可读取的历史破坏数据保真，并可能中断会话。已证明合成库损坏与 panic，缺少实际用户覆盖/永久丢失证据，按 High。
+- Realistic failure scenario: 两台设备各增加一个不同附件后合并，原本相同的数字 ID 指向不同内容；较新源条目的附件没有替换旧 current 集合；本地回收站记录在合并后无法恢复早期附件版本。
+- Minimal fix: 仅在临时数据库 clones 中预先校验并统一 current/history binary ID，按精确字节和保护标记定义身份，SHA256 只索引候选。Created/Updated 实际日志决定 current 附件胜出；完整移植本地回收站各版本载荷。预备租约保护尚未登记的合并所有者，完成后重建 reverse refs 再释放；删除同 ID 的多个文件名时只访问一次。
+- Better long-term fix: 上游修正载荷所有权后用相同回归复核，再考虑移除兼容层；分别审查同 current 时间的历史联合、同秒不同内容与历史去重策略。不要从附件编号修复推断全部同步语义完成。
+- Regression test suggestion: 实际原生双向合并与合并库 save/reopen 检查较新源、新条目、编号碰撞、回收站历史、分叉历史、空附件、保护位、删除、header 编号重排及共享所有者的删除边界。依赖层另测缺失引用原子拒绝、精确内容/保护去重、已有租约拒绝、共享新所有者生存和重复文件名删除。
+- Estimated effort: 6–10 小时（原始包复核、载荷移植、所有权生命周期、补丁重建与完整门）
+
+46eaec4 已修复。merge-attachments-green-owner-final.log 的 8 项原生回归
+和 merge-attachments-dependency-green-owner-final.log 的 7 项依赖层回归
+均通过。提交前对中间补丁再次审查，发现 Created 在删除旧 entry 前直接
+克隆、尚未登记 reverse owner；merge-attachments-shared-delete-red.log
+独立一项仍因缺失载荷失败。因此增加 prepared leases 与去重删除，最终
+8/7 回归通过。该 red 来自中间修复，未冒充原始 baseline。
+
+最终 verify-merge-attachments-owner-final.log exit 0：317 frontend、
+618 Rust、ACL 2，format、check 零错误警告、150-key 契约、build 和
+clippy 全部通过；Rust 单线程，无过滤，四个 live clipboard body 开关
+关闭。之前 617-test 门仅覆盖中间补丁，未用作最终验证。最初夹具 Value
+限定名编译错误已修正，不计产品缺陷。
+
+公开原包重新应用 zero-context patch，merge-attachments-patch-reconstruction-owner-final.log
+验证全部 60 hashes；57 upstream 文件保持原字节，三个 reviewed 文件
+和 provenance/patch 同步。仅对 owned patched 文件格式化。补丁未引入
+第四个 upstream 编辑文件。data-contracts、security-model、project-structure
+和 KEEPASS_PATCH 文档同步；提交前 comment/docs 变更再次通过完整格式门。
+同步 TODO 收紧为部分完成，没有从标题字段回归推断完整历史保真。
+
+当前详细卡片 61（Critical 1 / High 13 / Medium 37 / Low 10），全部
+Confirmed。原始 b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
+仅用合成库，无用户库、共享剪贴板、真实 Tauri handler/官方客户端/
+Android provider 或替换 APK 运行。手机 v1.6.5 云端另存为源码 ACL
+修复已确认；真机验证与其余系统、UI、竞品能力审查继续进行。

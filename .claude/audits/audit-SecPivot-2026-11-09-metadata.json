@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S49; historical supplemental tracking notes excluded",
-    "total": 60,
-    "confirmed": 60,
+    "scope": "15 baseline cards plus SP-S05 through SP-S50; historical supplemental tracking notes excluded",
+    "total": 61,
+    "confirmed": 61,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
-      "High": 12,
+      "High": 13,
       "Medium": 37,
       "Low": 10
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "6ce4570",
+  "remediation_checkpoint": "46eaec4",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -489,15 +489,23 @@
       "confidence": "Confirmed",
       "commit": "ed5a86d",
       "status": "Three Rust and three frontend baseline red tests; creation-only flag preserved through command/wire/KDBX, CSV writer/parser and IO/browser. Four frontend regressions, six targeted Rust tests, real Edge chooser/icons and full gate passed; complete migration remains partial."
+    },
+    {
+      "id": "SP-S50",
+      "area": "Native merge attachment payload, ID and pending-owner integrity",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "commit": "46eaec4",
+      "status": "Four original native failures and two original registry failures; canonical exact-byte/protection IDs, actual winner maps, complete local-bin versions and prepared leases repaired. Eight final native/seven dependency tests and full 317/618/ACL2 gate passed. Equal-current-time history union and same-second policy remain pending."
     }
   ],
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "6ce4570",
-    "log": "verify-favorite-metadata.log",
+    "checkpoint": "46eaec4",
+    "log": "verify-merge-attachments-owner-final.log",
     "frontend_tests": 317,
-    "rust_unit_tests": 610,
+    "rust_unit_tests": 618,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -527,7 +535,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 610,
+    "rust_unit_tests_discovered": 618,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -724,6 +732,20 @@
       "final_format_log": "favorite-metadata-final-format.log",
       "scope": "Actual native favorite/unfavorite API/save/reopen, bidirectional merge and merged KDBX reopen; actual DTO JSON modified/size equals snapshot/storage; actual frontend module graph with mocked Tauri invoke, immutable nodes, command/session/dirty/revision.",
       "limits": "Two red native tests stopped on first favorite/direction or metadata check; service red stopped at joint modified/size assertion. Final loops execute later assertions. No extra history or same-second monotonic guarantee; no native Tauri handler/device/provider/UI/user-vault/clipboard runtime."
+    },
+    "merge_attachment_integrity": {
+      "result": "passed",
+      "red_log": "merge-attachments-red-extended.log",
+      "independent_registry_red_log": "merge-attachments-registry-red.log",
+      "intermediate_shared_owner_red_log": "merge-attachments-shared-delete-red.log",
+      "native_green_log": "merge-attachments-green-owner-final.log",
+      "native_tests": 8,
+      "dependency_green_log": "merge-attachments-dependency-green-owner-final.log",
+      "dependency_tests": 7,
+      "reconstruction_log": "merge-attachments-patch-reconstruction-owner-final.log",
+      "provenance": "merge-attachments-provenance.json",
+      "scope": "Synthetic original registry and native KDBX merge/save/reopen, current/history/local-bin bytes, exact protection/empty values, ID collisions, source removals, header renumbering, shared creation/deletion, leases and missing-reference rejection",
+      "limits": "Original red stopped at first wrong-bytes/panic checks, no real user overwrite or permanent loss established. Shared deletion red belongs to intermediate patch; prior 617-test gate superseded. No native Tauri handler/client/device/provider/user-vault/clipboard. Equal-current-time history and timestamp collision policy remain pending."
     }
   },
   "reverification_notes": [
@@ -789,6 +811,7 @@
     "5687202 fixes SP-S46 omitted entry-attribute timestamps without changing editor primary history behavior. Two valid red native save/reopen/merge regressions failed after fixture borrow repair; red never reached historical assertions, which were removed when timestamp scope was selected after reading actual editor composition. Two final native API regressions include double merge direction and pinned old-time normalized no-op, full verify 316/595/ACL2 passed serially with no filters and live clipboard flag unset. Data contract/source comments synchronized; post-gate changes were documentation only, format passed again. No UI/IPC/schema/dependency or user-vault/clipboard/Tauri-handler/device/client proof. Same-second KDBX precision, group/favorite timestamps and remaining systems/migration/UI/mobile replacement/provider continue; baseline/score unchanged and goal active.",
     "5f85f45 fixes SP-S47 changed group content timestamps and preserves existing JSON missing/null enabled inheritance requested by the dialog. Valid 8-test baseline and 9 final new tests including four wire inheritance combinations; full verify 316/604/ACL2 passed serially after a documentation formatting failure was corrected. Group-tag merge probe still failed independently and is not claimed fixed. Data contract/DTO/backend comments synchronized, no new TODO checked; source add_group mispatch restored before final green. Baseline/score unchanged, goal active.",
     "3eb8194 fixes SP-S48 first-party native merge group-tag fidelity. Original registry archive independently fails two real save/reopen/merge cases; official fixed PwGroup AssignProperties copies tags. Four baseline application failures, eight final targeted checks with four new tests/two strengthened and full verify 316/608/ACL2 passed. Initial save-helper argument error excluded. Data contract synchronized and vendor 60/3/57 provenance unchanged. Original baseline/score unchanged, overall goal active; favorite timestamps/cache and same-second history boundaries need independent reproduction. Mobile v1.6.5 replacement APK/provider remains unverified.",
-    "6ce4570 fixes SP-S49 favorite timestamps and both native/frontend metadata delta. Two native red tests (first merge and simultaneous modified/size wire mismatch) plus one actual module-graph service red establish independent storage/wire/cache evidence; final seven native/four service and full verify 317/610/ACL2 passed serially. New two native and one service regressions cover favorite/unfavorite, double merge direction and merged reopen, original snapshot/untouched-node identity, command/session/dirty/revision. Data contract union/command tables and paragraph synchronized; docs-only table completion after full gate was separately format checked. No extra history, native UI/device/provider/clipboard/user-vault or same-second monotonic proof. Original baseline/score unchanged, goal active."
+    "6ce4570 fixes SP-S49 favorite timestamps and both native/frontend metadata delta. Two native red tests (first merge and simultaneous modified/size wire mismatch) plus one actual module-graph service red establish independent storage/wire/cache evidence; final seven native/four service and full verify 317/610/ACL2 passed serially. New two native and one service regressions cover favorite/unfavorite, double merge direction and merged reopen, original snapshot/untouched-node identity, command/session/dirty/revision. Data contract union/command tables and paragraph synchronized; docs-only table completion after full gate was separately format checked. No extra history, native UI/device/provider/clipboard/user-vault or same-second monotonic proof. Original baseline/score unchanged, goal active.",
+    "46eaec4 fixes SP-S50 attachment merge integrity. Four original native red failures and two original registry archive failures independently corroborate missing/wrong payloads. Intermediate shared-owner red required prepared leases and deduplicated Entry removal; final eight native/seven dependency regressions and full verify 317/618/ACL2 passed serially with no filters and clipboard opt-in unset. Fresh original plus patch matches all 60 hashes, 57 untouched upstream files retained. Data/security/structure/patch references updated; synchronization TODO tightened to partial for equal-current-time history and same-second policy. No real user overwrite/permanent loss, Tauri handler/client/device/provider/user vault/clipboard evidence. Original b7c5d9f baseline/6.1 score unchanged and full goal active."
   ]
 }
