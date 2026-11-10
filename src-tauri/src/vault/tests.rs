@@ -661,13 +661,175 @@ fn root_autotype_updates_time_and_merges_after_reopen() {
 }
 
 #[test]
-fn group_tags_only_updates_time_and_survives_reopen() {
-    assert_group_edit_time(SyntheticGroupEdit::Tags, false, false);
+fn group_tags_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Tags, false, true);
 }
 
 #[test]
-fn root_tags_only_updates_time_and_survives_reopen() {
-    assert_group_edit_time(SyntheticGroupEdit::Tags, true, false);
+fn root_tags_updates_time_and_merges_after_reopen() {
+    assert_group_edit_time(SyntheticGroupEdit::Tags, true, true);
+}
+
+#[test]
+fn group_tags_clear_merges_after_reopen() {
+    for root in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let state = session
+            .add_group(&GroupInput {
+                parent_uuid: Some(ROOT_GROUP_UUID.into()),
+                name: "Synthetic tagged".into(),
+                icon: None,
+            })
+            .unwrap();
+        let uuid = if root {
+            ROOT_GROUP_UUID.to_owned()
+        } else {
+            state.root.children[0].uuid.clone()
+        };
+        let id = if root {
+            session.require_db().unwrap().root().id()
+        } else {
+            super::helpers::parse_group_id(&uuid).unwrap()
+        };
+        session
+            .update_group_meta(&uuid, None, Some("old-tag".into()), None)
+            .unwrap();
+        session
+            .require_db_mut()
+            .unwrap()
+            .group_mut(id)
+            .unwrap()
+            .times
+            .last_modification = Some(merge_ts(10));
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let baseline = session.require_db().unwrap().clone();
+        session
+            .update_group_meta(&uuid, None, Some(String::new()), None)
+            .unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let current = session.require_db().unwrap();
+        assert!(current.group(id).unwrap().tags.is_empty());
+        for (local, remote) in [(&baseline, current), (current, &baseline)] {
+            let merged = merge_databases(local, remote).unwrap();
+            assert_merged_group_tags_reopen(&merged, current, &[id]);
+        }
+    }
+}
+
+#[test]
+fn group_tags_new_subtree_merges_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.into()),
+            name: "Synthetic parent".into(),
+            icon: None,
+        })
+        .unwrap();
+    let parent = state.root.children[0].uuid.clone();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(parent.clone()),
+            name: "Synthetic child".into(),
+            icon: None,
+        })
+        .unwrap();
+    let child = state.root.children[0].children[0].uuid.clone();
+    for (uuid, tags) in [(&parent, "parent-tag"), (&child, "child-tag,second-tag")] {
+        session
+            .update_group_meta(uuid, None, Some(tags.into()), None)
+            .unwrap();
+    }
+    let ids = [
+        super::helpers::parse_group_id(&parent).unwrap(),
+        super::helpers::parse_group_id(&child).unwrap(),
+    ];
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let current = session.require_db().unwrap();
+    for (local, remote) in [(&baseline, current), (current, &baseline)] {
+        let merged = merge_databases(local, remote).unwrap();
+        assert_merged_group_tags_reopen(&merged, current, &ids);
+        assert_eq!(merged.group(ids[1]).unwrap().parent().unwrap().id(), ids[0]);
+    }
+}
+
+#[test]
+fn group_tags_equal_time_divergence_remains_a_merge_error() {
+    let (base, _) = merge_base_db();
+    let mut source = base.clone();
+    source.root_mut().tags = vec!["synthetic-divergence".into()];
+    assert!(merge_databases(&base, &source).is_err());
+    assert!(merge_databases(&source, &base).is_err());
+}
+
+#[test]
+fn group_tags_deleted_group_is_not_recreated() {
+    let (mut base, _) = merge_base_db();
+    let id = {
+        let mut root = base.root_mut();
+        let mut group = root.add_group();
+        group.tags = vec!["synthetic-deleted".into()];
+        group.times.last_modification = Some(merge_ts(20));
+        group.id()
+    };
+    let mut deleted = base.clone();
+    deleted.group_mut(id).unwrap().remove();
+    deleted
+        .deleted_objects
+        .insert(id.uuid(), Some(merge_ts(40)));
+    for (local, remote) in [(&deleted, &base), (&base, &deleted)] {
+        let merged = merge_databases(local, remote).unwrap();
+        assert!(merged.group(id).is_none());
+        assert_eq!(
+            merged.deleted_objects.get(&id.uuid()),
+            Some(&Some(merge_ts(40)))
+        );
+    }
+}
+
+fn assert_merged_group_tags_reopen(
+    merged: &Database,
+    expected: &Database,
+    ids: &[keepass::db::GroupId],
+) {
+    for id in ids {
+        assert_eq!(
+            merged.group(*id).unwrap().tags,
+            expected.group(*id).unwrap().tags
+        );
+    }
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("merged.kdbx");
+    save_database(
+        merged,
+        &path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-only", None).unwrap();
+    let reopened = session.require_db().unwrap();
+    for id in ids {
+        assert_eq!(
+            reopened.group(*id).unwrap().tags,
+            expected.group(*id).unwrap().tags
+        );
+        assert_eq!(
+            reopened.group(*id).unwrap().times.last_modification,
+            expected.group(*id).unwrap().times.last_modification
+        );
+    }
 }
 
 fn apply_synthetic_group_edit(session: &mut VaultSession, uuid: &str, edit: SyntheticGroupEdit) {
@@ -758,6 +920,9 @@ fn assert_group_edit_time(edit: SyntheticGroupEdit, root: bool, check_merge: boo
             assert!(group.notes == expected.notes);
             assert!(group.icon() == expected.icon());
             assert!(group.tags == expected.tags);
+            if matches!(edit, SyntheticGroupEdit::Tags) {
+                assert_merged_group_tags_reopen(&merged, current, &[id]);
+            }
             assert_eq!(group.enable_searching, expected.enable_searching);
             assert_eq!(group.enable_autotype, expected.enable_autotype);
             assert!(group.default_autotype_sequence == expected.default_autotype_sequence);
