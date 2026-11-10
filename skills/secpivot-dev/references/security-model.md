@@ -541,3 +541,16 @@ borrowed archive bytes. The caller must separately own and wipe archive input.
 No native import transaction or frontend read path is wired at this reader
 stage. Tests use sub-2-KiB synthetic ZIPs and tiny injected ceilings, without
 high-resource decompression, real user vaults or native provider access.
+
+The native 1PUX plan retains credentials/OTP, typed section values, item and
+export metadata/history, and binaries in protected KeePass Values. Guarded
+usernames cannot enter the ordinary username snapshot. Plan construction caps
+every attachment copy, not only unique ZIP members, so shared references cannot
+multiply a single member into an unbounded binary allocation. Unknown parent
+metadata and unassociated binaries stay in a protected import-metadata entry.
+These byte/object ceilings do not establish a total heap or allocator-erasure
+guarantee. Source plain notes/ordinary usernames remain standard visible fields.
+The candidate-database transaction validates target/writability, publishes once
+and restores previous data/session metadata on snapshot error. Tiny synthetic
+KDBX tests cover masking, binary/empty-file protection and exact rollback; there
+is not yet a Tauri command or lifecycle/picker race implementation at this stage.

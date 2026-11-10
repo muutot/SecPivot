@@ -682,9 +682,40 @@ compressed, 8192 members, 8 MiB per metadata JSON, 64 MiB per binary and 256 MiB
 total expanded bytes, with declared and bounded actual-read checks. These are
 byte ceilings, not a guarantee about aggregate parser heap use. Empty binary
 files and safe nested files/directories remain native memory only. Source item
-mapping, document identity binding, atomic import and picker IPC are pending;
+mapping, document identity binding and atomic import are provided by the native
+plan/transaction below; picker IPC is pending;
 `parse_1pif` still accepts only legacy 1PIF. No TODO completion follows from this
 reader stage or synthetic fixtures.
+
+`prepare_1pux_import(&[u8]) -> Result<OnePuxImport, String>` owns the native
+account/vault/item plan without Debug/Serialize. `counts()` returns only
+`OnePuxCounts` (accounts/vaults/items/archived/attachments/unreferencedFiles).
+Distinct source identities remain separate even for equal names or item UUIDs
+in different vaults; names bypass the slash/trim group resolver. Duplicate IDs
+within their source scope reject. Active items belong to the source vault;
+archived items go to its new `归档` child. Password/OTP, every section value,
+unknown metadata and source item/password-history JSON remain protected. A
+guarded username remains a protected custom field; conflicting type aliases or
+duplicate designations reject. Non-login quality checking defaults off.
+Native tags follow the existing KeePass reader's trimming; exact tags/URLs and
+all typed/history data also remain in protected source JSON. Source history
+archiving does not create native History snapshots or dynamic URL matching.
+
+Attachment association accepts exactly one full `files/<documentId>__<fileName>`
+or triple-underscore path; missing/ambiguous identities, conflicting same-name
+attachments and size mismatch reject before mutation. Empty files and repeated
+same-item references retain one protected attachment. Each binary copy counts
+toward a 256 MiB plan ceiling (including shared references); plans also cap 64 MiB
+text, 65536 fields, 8192 groups/items, 512 section fields and 128 files per item.
+An import metadata entry holds protected export.attributes/export.data JSON and
+exact-path protected unreferenced binaries, retaining unknown parent/avatar data.
+
+`VaultSession::import_1pux(plan, target: &str)` validates an open/writable session
+and existing target, applies all groups/items/binaries to a database clone, then
+publishes once with one dirty/revision advance. Final snapshot errors restore
+the previous database, dirty/revision/time and cache. It returns masked VaultState,
+not import rows or binary bytes. Native synthetic tests cover save/reopen and
+failure rollback. The API is not yet an exposed Tauri command or picker route.
 
 Bitwarden imports accept plaintext only. Before reading items, the parser
 validates `encrypted` and `passwordProtected`: true rejects with a plaintext

@@ -4302,3 +4302,38 @@ clippy通过。最终日志 SHA256 c83b4e81742031f71ce6e44f10aaa3f041a2b9db8744f
 账号／库／条目迁移、附件身份绑定、原子导入和 picker／IPC仍待接线；
 真实客户端导出与 Android provider／新APK也未验证。TODO155继续
 未完成，89历史Confirmed含已修复项与原始15项／6.1分保持；整体目标active。
+
+#### 1PUX 原生计划／事务阶段验证（2026-11-11，d6d3861 后）
+
+新增 `prepare_1pux_import` 与 `VaultSession::import_1pux`，目前仅原生 API。
+账号／库按来源范围 UUID 校验，库内条目 UUID 重复拒绝；不同库的相同
+UUID、同名账号／库保留独立身份，新条目生成原生 UUID。分组名称直接
+保留，不经 slash split 或 trim；归档条目进入对应库的新「归档」分组。
+密码／OTP／所有 typed字段／受保护用户名／源 item JSON 保持保护；
+源历史、额外网址及未知类型完整保留为 protected JSON，不能称作原生
+History 或动态匹配。普通来源用户名／plain notes 仍是既有可见标准字段。
+
+附件只接受唯一完整 `files/<documentId>__<fileName>` 或三下划线路径，
+缺失／多候选／同名不同身份／大小不一致整份拒绝，空文件保持保护。
+同条目重复引用同文件仅保留一个附件，跨条目每次复制都计入计划的
+256 MiB 二进制上限；另有64 MiB文字、65536字段、8192组／条目及
+每条目512 section字段／128附件限额，不以唯一 ZIP 成员大小代替
+复制后的开销。父级／未知元数据和未引用二进制置于受保护导入元数据
+条目，保留 exact path，不静默丢弃或猜测归属。KeePassXC固定源码
+OPUXReader blob d383dcac19a838cb538d92b1fe528299be9c3755 的双下划线
+读法与官方示例对照；未执行竞品或复制其跳过空附件的策略。
+
+导入先校验数据库／只读／目标，在候选 DB 上应用全部组／条目／附件，
+一次发布并推进一次 revision；最终快照失败还原旧 DB、dirty／revision／
+时间／缓存。7项新增原生测试（连读取器共21项）验证遮蔽、空／二进制
+保护、原生 KDBX 保存重开及无效目标／只读／关闭／快照错误回滚。
+复核发现既有 KeePass tag reader 会 trim 标签两端空白；native预期
+据此明确，protected源 JSON仍逐字保留原标签，不夸大原生保真。
+
+完整 verify exit0：frontend362／Rust708／ACL2／KeePass25／
+QuickXML1363（4 ignored不算执行），format／check／contract／build／
+clippy通过。日志 SHA256 d357bed5d570618a4a9a61fab05d45dac0d21a9090e0a49b2e59e787a51776d5；
+`onepux-native-plan-final-proof.json` 关联源码hash、固定竞品blob及验证。
+未接 Tauri worker／stable session completion 或前端 picker；这两个
+原生阶段都不表示用户已能导入。TODO155、真实导出／Android provider／
+新APK验证继续未完成；89历史Confirmed及原始15项／6.1分保持，目标active。
