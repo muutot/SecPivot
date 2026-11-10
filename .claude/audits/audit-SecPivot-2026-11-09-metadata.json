@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "7d86e04e2ca8f964054b4949818f29d544175c86",
+  "remediation_checkpoint": "d122f20720a1cdcdb5cca59d489501831fa67a34",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "362524f921d03379af031fdab49a1f02105c1bcd",
       "area": "Rejected/no-op remote rename clears saved-credential presence and emits reset warning",
-      "status": "Confirmed, unremediated. Actual stores/queue with masked synthetic IPC: ten same/normalized-same/empty/blank/collision cases across both protocols keep settings identical, lose presence, emit one error and write once. UI directly derives placeholders from presence. No backend credential loss or provider proof."
+      "status": "Confirmed and remediated. Validate existence, nonempty normalized name, unchanged identity and collision before side effects. Immutable ten cases preserve hints/settings with zero errors/writes; diagnostic/red hashes retained. Targeted3 passes including nonexistent and valid rename controls; existing credential reset behavior retained. Full362/687/ACL2/KeePass25/QuickXML1363 ignored4 exit0 also covers preceding label fix. Settings-panels currency synchronized. No backend credential loss/provider/mobile/clipboard proof; remove candidate separate.",
+      "fix_commit": "d122f20720a1cdcdb5cca59d489501831fa67a34"
     },
     {
       "id": "SP-S76",
@@ -1718,17 +1719,40 @@
       "unnamed_webdav_after": 0,
       "check_exit": 0,
       "build_exit": 0,
-      "format_exit": 0
+      "format_exit": 0,
+      "subsequent_full_gate": {
+        "checkpoint": "d122f20720a1cdcdb5cca59d489501831fa67a34",
+        "log": "verify-remote-rename-final.log",
+        "exit_code": 0,
+        "frontend": 362,
+        "rust": 687,
+        "acl": 2
+      }
     },
     "remote_profile_rename_noop": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "362524f921d03379af031fdab49a1f02105c1bcd",
       "provenance": "remote-profile-rename-red-provenance.json",
       "cases": 10,
       "presence_lost": 10,
       "error_tips": 10,
       "extra_writes": 10,
-      "limits": "Actual settings/presence/tips/queue, synthetic masked IPC; no backend/user config/vault/provider/clipboard. Only UI state and unwanted writes are claimed."
+      "limits": "Actual settings/presence/tips/queue, synthetic masked IPC; no backend/user config/vault/provider/clipboard. Only UI state and unwanted writes are claimed. Full verification serial/debug0; live clipboard/S3/config fixture unset. Skipped native clipboard/S3 and ignored QuickXML bodies are not runtime proof.",
+      "fix_commit": "d122f20720a1cdcdb5cca59d489501831fa67a34",
+      "final_proof": "remote-profile-rename-final-proof.json",
+      "presence_lost_after": 0,
+      "error_tips_after": 0,
+      "extra_writes_after": 0,
+      "targeted_tests_passed": 3,
+      "full_log": "verify-remote-rename-final.log",
+      "full_log_sha256": "8cda598d9b78d05f831f441cc74d1900cc5b28e9cdb0611efce4b00b25d2c0e5",
+      "full_exit_code": 0,
+      "full_frontend": 362,
+      "full_rust": 687,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4
     }
   },
   "reverification_notes": [
@@ -1822,6 +1846,7 @@
     "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active.",
     "94985ce status candidate review: RFC4918 section9.1 forbids duplicate property names; six conforming controls with empty unavailable values and disjoint successful properties all preserve expected metadata/collection behavior. Actual parser1 test/684 filtered and ElementTree6 pass. Initial DTO omitted-date vs null fixture error retained and corrected; source restored exactly. No new finding, source edit or full-status/provider coverage claim; historical85/original15/6.1 unchanged.",
     "ff9efb9 remediates SP-S75 exact remote credentials. Immutable14/queued7 zero mismatch; native2/targeted3/frontend2, independent stdlib wire12 and full361/687/ACL2 pass. First Clippy failure retained and rerun after byte-slice correction. Original15/6.1 and86 historical Confirmed cards retained; no historical inventory overwritten or whole-project semantic coverage claim. Provider/mobile/competitor/UI goal remains active.",
-    "7d86e04 closes SP-S76 accessible field names with production DOM/AX, locale/theme/narrow and Tab verification. Check/build/format pass; docs currency synchronized; original15/6.1 and87 historical cards retained. No native screen-reader/provider/mobile or whole-project completion assertion."
+    "7d86e04 closes SP-S76 accessible field names with production DOM/AX, locale/theme/narrow and Tab verification. Check/build/format pass; docs currency synchronized; original15/6.1 and87 historical cards retained. No native screen-reader/provider/mobile or whole-project completion assertion.",
+    "d122f20 closes SP-S77 no-op/invalid rename effects. Immutable10 preserve hints/settings, zero errors/writes; targeted3 and full362/687/ACL2 pass, including preceding label source. Baseline15/6.1 and88 historical cards preserved; no whole-project completion assertion. Provider/mobile/remove-profile/competitor coverage remains separate."
   ]
 }

@@ -4120,7 +4120,7 @@ currency gate同步settings-panels.md，无IPC／schema／秘密处理变化。
 - Severity: Low
 - Confidence: High
 - Category: Frontend state / Stability
-- Status: Confirmed
+- Status: Confirmed（已修复，d122f20）
 - Affected area: Remote profile rename service and saved-credential placeholders
 - Evidence:
   - File: src/lib/services/settings.ts:1372–1417; src/lib/components/settings/RemoteSettingsPanel.svelte:57–64, 128–129 (362524f)
@@ -4139,3 +4139,20 @@ currency gate同步settings-panels.md，无IPC／schema／秘密处理变化。
 累计88历史Confirmed（Critical1／High19／Medium55／Low13），原始15项／
 6.1分保持。本项仅合成IPC与直接UI派生证据，无实际后台凭据丢失证明。
 手机真机／竞品／全项目审计目标仍active。
+
+修复与验证（2026-11-11）：d122f20 先校验profile存在、非空归一化名称、
+同名与同协议冲突，再清presence／提示／排队写入。原样诊断的10项
+均保持设置和凭据存在提示，error／extraWrites均从10降为0，诊断与
+red原件哈希未变。正式3项远程service测试通过，新增回归同时覆盖
+不存在profile和有效重命名：有效操作只写一次、改变身份、按原规则
+清提示并仅在存在已保存凭据时警告；原有精确密码／masked IPC回归保持。
+
+verify-remote-rename-final.log exit0：362前端／687 Rust／ACL2／KeePass25
+／QuickXML1363（4 ignored），format／check／build／补丁来源／clippy
+全通过。本门也覆盖前一表单标签修复的最终源码；单线程debug0，live
+clipboard／S3／config fixture未启用，跳过body及ignored不计运行覆盖。
+remote-profile-rename-final-proof.json保存源码／测试／原样探针与完整日志
+hash；currency gate同步settings-panels.md，无CSS／IPC／schema／
+后端凭据语义变化，不声称真实后台丢失或provider／手机运行证明。
+removeRemoteProfile候选仍未确认，不并入本项。88历史Confirmed与
+原始15项／6.1分保持，整体防御审计／竞品／UI目标仍active。
