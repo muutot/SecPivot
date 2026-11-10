@@ -261,7 +261,7 @@ pub(crate) fn parse_multistatus(
     }
     let mut reader = Reader::from_str(body);
     reader.config_mut().trim_text(true);
-    let request_key = href_to_key(base_url, request_url);
+    let request_key = href_to_key(base_url, request_url)?;
     let request_key = request_key.trim_matches('/').to_owned();
     let mut objects = Vec::new();
     let mut in_response = false;
@@ -310,7 +310,7 @@ pub(crate) fn parse_multistatus(
                 if name == "response" {
                     if in_response {
                         if let Some(h) = href.as_deref() {
-                            let key = href_to_key(base_url, h);
+                            let key = href_to_key(base_url, h)?;
                             // Skip the collection itself, sub-collections, and
                             // any href that is not a plain file key.
                             if !collection
@@ -350,18 +350,79 @@ fn end_local_name(e: &quick_xml::events::BytesEnd) -> String {
         .to_ascii_lowercase()
 }
 
-/// Convert a PROPFIND `href` (absolute URL or absolute path) to a vault key
-/// relative to the configured base URL path.
-pub(crate) fn href_to_key(base_url: &str, href: &str) -> String {
-    let base_path = Url::parse(base_url)
-        .map(|u| u.path().to_string())
-        .unwrap_or_default();
-    let path = Url::parse(href)
-        .map(|u| u.path().to_string())
-        .unwrap_or_else(|_| href.to_string());
-    let relative = match path.strip_prefix(base_path.as_str()) {
-        Some(rest) => rest.to_string(),
-        None => path.as_str().to_string(),
+/// Convert a URI path to a logical key, decoding each segment exactly once.
+/// Do not use a form decoder (`+` is a literal filename character), nor allow
+/// an encoded slash/dot segment to become new path structure.
+fn decode_webdav_path(path: &str) -> Result<String, String> {
+    if path.contains("//") {
+        return Err("WebDAV 文件路径包含不支持的空路径段".to_owned());
+    }
+    path.split('/')
+        .map(|segment| {
+            let mut decoded = Vec::with_capacity(segment.len());
+            let bytes = segment.as_bytes();
+            let mut i = 0;
+            while i < bytes.len() {
+                if bytes[i] == b'%' {
+                    let byte = bytes
+                        .get(i + 1..i + 3)
+                        .and_then(|pair| {
+                            let high = (pair[0] as char).to_digit(16)?;
+                            let low = (pair[1] as char).to_digit(16)?;
+                            Some((high * 16 + low) as u8)
+                        })
+                        .ok_or_else(|| "WebDAV 文件路径的百分号编码无效".to_owned())?;
+                    decoded.push(byte);
+                    i += 3;
+                } else {
+                    decoded.push(bytes[i]);
+                    i += 1;
+                }
+            }
+            let decoded = String::from_utf8(decoded)
+                .map_err(|_| "WebDAV 文件路径不是有效的 UTF-8".to_owned())?;
+            if decoded == "."
+                || decoded == ".."
+                || decoded.contains('/')
+                || decoded.chars().any(char::is_control)
+            {
+                return Err("WebDAV 文件路径包含不支持的路径段".to_owned());
+            }
+            Ok(decoded)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|segments| segments.join("/"))
+}
+
+/// Convert a PROPFIND `href` to a decoded key relative to the configured base.
+/// Read the original URI path before URL parsing can normalize dot segments.
+/// Absolute href authorities are intentionally not used as request destinations.
+pub(crate) fn href_to_key(base_url: &str, href: &str) -> Result<String, String> {
+    let base = Url::parse(base_url).map_err(|_| "WebDAV 服务地址无效".to_owned())?;
+    let base_path = decode_webdav_path(base.path())?;
+    let path = href.split(['?', '#']).next().unwrap_or_default();
+    let path = if let Some((_, authority_path)) = path.split_once("://") {
+        Url::parse(href).map_err(|_| "WebDAV 文件地址无效".to_owned())?;
+        authority_path
+            .find('/')
+            .map_or("/", |i| &authority_path[i..])
+    } else if let Some(authority_path) = path.strip_prefix("//") {
+        base.join(href)
+            .map_err(|_| "WebDAV 文件地址无效".to_owned())?;
+        authority_path
+            .find('/')
+            .map_or("/", |i| &authority_path[i..])
+    } else {
+        path
     };
-    relative.trim_start_matches('/').to_string()
+    let path = decode_webdav_path(path)?;
+    let base_path = base_path.trim_end_matches('/');
+    let relative = if path.starts_with('/') && !base_path.is_empty() {
+        path.strip_prefix(base_path)
+            .filter(|rest| rest.is_empty() || rest.starts_with('/'))
+            .ok_or_else(|| "WebDAV 文件路径不在配置的根路径内".to_owned())?
+    } else {
+        &path
+    };
+    Ok(relative.trim_start_matches('/').to_owned())
 }

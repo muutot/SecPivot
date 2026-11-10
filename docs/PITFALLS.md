@@ -31,6 +31,14 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **A WebDAV href is not a logical key.** Leaving `%20`/UTF-8/`%25` in list keys
+  makes the request encoder encode their percent signs again, selecting another
+  resource. Decode segments once, preserve literal `+` and percent-looking names,
+  and reject malformed/structurally ambiguous paths before returning any keys.
+  Check raw dot segments before URL normalization and enforce a complete endpoint
+  path boundary. Verify actual GET/PUT/readback targets and an untouched sibling,
+  rather than only asserting an intermediate string. S3 keys are already logical.
+
 - **Parser errors can carry input values.** Secret-bearing config recovery logs
   only serde_json category, line and column; never interpolate its full Display
   or Debug error. Wrong-typed numeric credential fields used to appear in stderr.

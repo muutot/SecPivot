@@ -827,19 +827,68 @@ fn webdav_parser_rejects_non_multistatus_body() {
 #[test]
 fn webdav_href_to_key_handles_absolute_and_relative_hrefs() {
     assert_eq!(
-        href_to_key("http://h/dav", "http://h/dav/vaults/a.kdbx"),
+        href_to_key("http://h/dav", "http://h/dav/vaults/a.kdbx").unwrap(),
         "vaults/a.kdbx"
     );
     assert_eq!(
-        href_to_key("http://h/dav", "/dav/vaults/a.kdbx"),
+        href_to_key("http://h/dav", "/dav/vaults/a.kdbx").unwrap(),
         "vaults/a.kdbx"
     );
     assert_eq!(
-        href_to_key("http://h/dav", "vaults/a.kdbx"),
+        href_to_key("http://h/dav", "vaults/a.kdbx").unwrap(),
         "vaults/a.kdbx"
     );
-    assert_eq!(href_to_key("http://h", "/vaults/a.kdbx"), "vaults/a.kdbx");
-    assert_eq!(href_to_key("http://h/dav", "http://h/dav/"), "");
+    assert_eq!(
+        href_to_key("http://h", "/vaults/a.kdbx").unwrap(),
+        "vaults/a.kdbx"
+    );
+    assert_eq!(href_to_key("http://h/dav", "http://h/dav/").unwrap(), "");
+    for (href, key) in [
+        ("/dav/vaults/a%20b.kdbx", "vaults/a b.kdbx"),
+        ("http://h/dav/%E9%9B%AA.kdbx", "雪.kdbx"),
+        ("//h/dav/rate%25.kdbx", "rate%.kdbx"),
+        ("a%2520b.kdbx", "a%20b.kdbx"),
+        ("a+b.kdbx", "a+b.kdbx"),
+        ("/dav/a%23%3F.kdbx?ignored#fragment", "a#?.kdbx"),
+    ] {
+        assert_eq!(href_to_key("http://h/dav", href).unwrap(), key);
+    }
+    assert_eq!(
+        href_to_key("http://h/dav%20root", "/dav%20root/a%20b.kdbx").unwrap(),
+        "a b.kdbx"
+    );
+}
+
+#[test]
+fn webdav_list_rejects_ambiguous_encoding_before_returning_keys() {
+    for href in [
+        "/dav/a%.kdbx",
+        "/dav/a%2.kdbx",
+        "/dav/a%GG.kdbx",
+        "/dav/%FF.kdbx",
+        "/dav/a%2Fb.kdbx",
+        "/dav/%2e/a.kdbx",
+        "/dav/%2E%2e/a.kdbx",
+        "http://h/dav/../a.kdbx",
+        "/dav/a%00.kdbx",
+        "/dav/a%0A.kdbx",
+        "/dav//a.kdbx",
+        "/dav2/a.kdbx",
+        "/other/a.kdbx",
+    ] {
+        let body = format!("<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/valid.kdbx</d:href></d:response><d:response><d:href>{href}</d:href></d:response></d:multistatus>");
+        let error = parse_multistatus(&body, "http://h/dav", "http://h/dav/").unwrap_err();
+        assert!(error.starts_with("WebDAV "));
+        assert!(
+            !error.contains(href),
+            "invalid paths must not enter diagnostics"
+        );
+    }
+    // A percent-looking logical filename remains data after the one decode.
+    assert_eq!(
+        href_to_key("http://h/dav", "/dav/a%252Fb.kdbx").unwrap(),
+        "a%2Fb.kdbx"
+    );
 }
 
 #[test]
@@ -861,4 +910,133 @@ fn webdav_url_for_encodes_segments_and_rejects_dotdot() {
     assert!(storage.url_for("../x.kdbx").is_err());
     assert!(storage.url_for("a/../a.kdbx").is_err());
     assert!(storage.url_for("./a.kdbx").is_err());
+}
+
+#[test]
+fn webdav_listed_filenames_get_put_and_read_back_the_same_resource() {
+    use std::collections::BTreeMap;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let cases = [
+        ("plain.kdbx", "plain.kdbx"),
+        ("a%20b.kdbx", "a b.kdbx"),
+        ("%E9%9B%AA.kdbx", "雪.kdbx"),
+        ("rate%25.kdbx", "rate%.kdbx"),
+        ("a%2520b.kdbx", "a%20b.kdbx"),
+        ("a+b.kdbx", "a+b.kdbx"),
+        ("a%23%3F.kdbx", "a#?.kdbx"),
+    ];
+    let root = "/dav%20root/vaults/";
+    let listing = format!(
+        "<d:multistatus xmlns:d=\"DAV:\">{}</d:multistatus>",
+        cases.iter().map(|(uri, _)| format!(
+            "<d:response><d:href>{root}{uri}</d:href><d:propstat><d:prop><d:getcontentlength>8</d:getcontentlength></d:prop></d:propstat></d:response>"
+        )).collect::<String>()
+    );
+    let mut initial = cases
+        .iter()
+        .map(|(uri, _)| (format!("{root}{uri}"), b"original".to_vec()))
+        .collect::<BTreeMap<_, _>>();
+    // A sibling whose literal percent-looking name would receive a doubly
+    // encoded request must remain untouched.
+    initial.insert(format!("{root}a%252520b.kdbx"), b"sentinel".to_vec());
+    let mut expected = initial.clone();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let peer = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let mut requests = Vec::new();
+        let mut files = initial;
+        for _ in 0..1 + cases.len() * 3 {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= deadline {
+                            return (requests, files);
+                        }
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(e) => panic!("synthetic WebDAV peer accept failed: {e}"),
+                }
+            };
+            configure_s3_page_stream(&stream);
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut header = Vec::new();
+            let mut byte = [0];
+            while !header.ends_with(b"\r\n\r\n") {
+                assert!(header.len() < 16 * 1024, "bounded fixture header");
+                stream.read_exact(&mut byte).unwrap();
+                header.push(byte[0]);
+            }
+            let header = String::from_utf8(header).unwrap();
+            let mut request = header.lines().next().unwrap().split_whitespace();
+            let method = request.next().unwrap();
+            let target = request.next().unwrap();
+            let length = header
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            assert!(length <= 1024, "bounded synthetic payload");
+            let mut data = vec![0; length];
+            stream.read_exact(&mut data).unwrap();
+            requests.push((method.to_owned(), target.to_owned()));
+            let (status, body) = match method {
+                "PROPFIND" if target == root => ("207 Multi-Status", listing.as_bytes().to_vec()),
+                "GET" if files.contains_key(target) => ("200 OK", files[target].clone()),
+                "PUT" if files.contains_key(target) => {
+                    files.insert(target.to_owned(), data);
+                    ("204 No Content", Vec::new())
+                }
+                _ => ("404 Not Found", Vec::new()),
+            };
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+            stream.write_all(&body).unwrap();
+        }
+        (requests, files)
+    });
+    let storage = WebDavStorage {
+        client: reqwest::blocking::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap(),
+        auth: None,
+        base_url: format!("http://{addr}/dav%20root"),
+        list_timeout: Duration::from_secs(3),
+        io_timeout: Duration::from_secs(3),
+    };
+    let objects = storage.list("vaults").unwrap();
+    assert_eq!(objects.len(), cases.len());
+    for (i, (object, (uri, logical))) in objects.iter().zip(cases).enumerate() {
+        assert_eq!(object.key, format!("vaults/{logical}"));
+        assert_eq!(storage.get(&object.key).unwrap(), b"original");
+        let data = format!("updated-{i}").into_bytes();
+        storage.put(&object.key, &data).unwrap();
+        assert_eq!(storage.get(&object.key).unwrap(), data);
+        expected.insert(format!("{root}{uri}"), data);
+    }
+    let (requests, files) = peer.join().unwrap();
+    assert_eq!(requests.len(), 1 + cases.len() * 3);
+    assert_eq!(
+        files, expected,
+        "only the listed resources may be overwritten"
+    );
+    for (requests, (uri, _)) in requests[1..].chunks_exact(3).zip(cases) {
+        for ((method, target), expected_method) in requests.iter().zip(["GET", "PUT", "GET"]) {
+            assert_eq!(method, expected_method);
+            assert_eq!(target, &format!("{root}{uri}"));
+        }
+    }
 }

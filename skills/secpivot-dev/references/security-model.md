@@ -1,5 +1,13 @@
 # Security Model
 
+WebDAV URI decoding must not redirect a listed resource's read or write. Decode
+each segment once into the logical key, preserving literal plus/percent-looking
+names; reject malformed UTF-8/escapes and structural slash/dot/control ambiguity
+before a list returns. Absolute paths must stay under the configured endpoint
+path. Errors contain no href or file contents. The shared request encoder and
+existing mirror basename boundary remain separate. Loopback resource-identity
+tests do not prove native provider or complete remote authorization behavior.
+
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
 remain after refusal; no text is silently dropped. Protected Base64 still
