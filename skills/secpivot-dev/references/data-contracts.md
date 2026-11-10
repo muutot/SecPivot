@@ -705,6 +705,14 @@ Native tags follow the existing KeePass reader's trimming; exact tags/URLs and
 all typed/history data also remain in protected source JSON. Source history
 archiving does not create native History snapshots or dynamic URL matching.
 
+Only the primary 1PUX URL is currently native; extra URL records remain in
+protected Source Item. Official 1Password autofill behavior is per website:
+site scope (PSL plus vendor-related-site rules), exact host including port,
+or Never (ignore that field). SecPivot's existing KPRPC accuracy is entry-wide
+and blockedURLs vetoes the entry, so those fields are not interchangeable with
+per-website policies. The public 1PUX specification only documents label/url,
+not export encoding of these behavior settings; no mapping is claimed yet.
+
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name
 attachments and size mismatch reject before mutation. Empty files and repeated

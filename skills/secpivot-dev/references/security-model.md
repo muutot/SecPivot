@@ -569,3 +569,10 @@ The renderer's native 1PUX route carries only path/display name/target and recei
 masked state/counts. Page view, latest-operation and publication-epoch guards
 reject stale picks/completion UI. Synthetic tests cover these boundaries; actual
 provider/dialog/client exports are not established by mocked API seams.
+
+1PUX additional websites are retained in protected source JSON, not active
+matching rules. Source per-website Never means ignoring that website, whereas
+KPRPC blockedURLs vetoes the whole entry. Source per-website host/site modes
+cannot be represented by one entry-wide accuracy flag. Import fidelity must
+not be inferred from these similarly named policies or from source archives;
+their export encoding and per-destination native behavior remain unverified.

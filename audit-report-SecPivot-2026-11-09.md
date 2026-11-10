@@ -4467,3 +4467,34 @@ a16909b0b18b61d32497a0390ca1982c38553a03fd303038bc48e9e02747805a；
 remote-remove-final-proof.json关联原失败／通过／全门日志与源码hash。
 documentation currency gate同步settings-panels和data-contracts中的删除
 契约；没有CSS／markup／IPC／schema修改，也不改变既有合法删除语义。
+
+#### 1Password 逐网址自动填充规则的官方复核（2026-11-11，ae29ee1）
+
+实际取得[1Password自动填充行为说明](https://support.1password.com/autofill-behavior/)，
+HTTP200／51391字节，HTML SHA256
+aaf36f35ee859ab99207ff4d3006f963a68b00e7095396677f64a5895c00e705。
+HTML和可读article文本保存在onepassword-autofill-behavior-official.html／.txt；
+这是公开资料读取，不是浏览器／竞品客户端运行证据。首次打印因Windows
+GBK无法输出emoji失败，UTF8文本文件已成功写入，随后实际读取核对。
+
+| 官方行为                      | 官方含义                                                                      | 当前SecPivot与迁移差距                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Fill anywhere on this website | 默认，按PSL eTLD+1及厂商关联网站规则，含子域；示例apple.com也可建议icloud.com | Native Domain受全局matchByRegistrableDomain影响；默认false是host／上下子域，true使用静态PSL。没有该厂商关联域规则，不能声称等价 |
+| Only fill on this exact host  | 每网址精确主机含端口；www与无www不同                                          | Native Hostname比较authority，但一个accuracy作用于全条目，不能分别配置每个网址                                                  |
+| Never fill on this website    | 忽略该网址字段，由其余网址决定是否建议                                        | Native blockedURLs是整个条目的否决列表。不能将Never直接映射到此列表，否则会阻止另一个允许字段的匹配                             |
+| Multiple website fields       | 每网址有各自规则，组合产生最终建议范围                                        | 1PUX目前仅主URL生效，其余在protected Source Item保留。不能把追加altURLs当作完整语义迁移                                         |
+
+源码复核helpers.rs的kprpc_config／url_matches_accuracy／kprpc_matches_url与
+onepux.rs的prepare_item证明这些当前差异；官方1PUX说明只写label／url
+两类成员，没有公开这些行为的导出编码，不能假定未记录的规则就是默认。
+此项为已证实能力／语义差距及下一步实施要求，不新增攻击或数据丢失卡片。
+
+采纳目标是逐网址原生规则与可检查的迁移结果：单条目混合Host／Site／
+Never、相同host的Never字段与允许字段并存、不同端口／www／PSL私有
+域边界，以及未知导出规则与完整URL字节需有明确结果。关联网站范围
+不能由任意类似域名推断；未确认的来源编码继续待证，而不是悄悄扩大
+匹配或宣称全部网址兼容。TODO155补齐这些缺口并保持partial；两份维护
+引用和onepux-uri-policy-source-proof.json记录当前边界与原始来源hash。
+本提交不改匹配／导入实现；应用完整门禁仍对应ae29ee1的371／716／ACL2
+及依赖验证。91历史Confirmed含已修复项与原始15项／6.1分保持，整体
+全项目防御审计／竞品／UI目标继续active。

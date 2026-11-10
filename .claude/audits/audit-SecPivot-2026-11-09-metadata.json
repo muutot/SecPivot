@@ -1887,6 +1887,16 @@
       "strongbox": "Unverified: challenge response excluded",
       "limits": "Official rendered documentation and first-party source inspection only. No competitor or SecPivot native provider/device run; historical vendor test dates are not current SecPivot evidence. Strongbox challenge response excluded."
     },
+    "onepassword_uri_policy": {
+      "checkpoint": "ae29ee107477a26bb536fd9c38fe60f37b0b4e50",
+      "result": "Official per-website Site/Host-with-port/Never semantics and current entry-wide KPRPC differences revalidated; capability gaps, no new bug card",
+      "source": "https://support.1password.com/autofill-behavior/",
+      "http_status": 200,
+      "source_bytes": 51391,
+      "source_sha256": "aaf36f35ee859ab99207ff4d3006f963a68b00e7095396677f64a5895c00e705",
+      "proof": "onepux-uri-policy-source-proof.json",
+      "limits": "Public static HTML/article and current source inspection only. No competitor/browser/device execution, real export, or verified export policy encoding. Additional 1PUX URLs remain protected source archives; native per-website policy migration pending."
+    },
     "onepux_specification": {
       "result": "Official specification and current missing implementation revalidated; implementation contract only",
       "checkpoint": "ae326903ee2ae431e8ba859460d22dfadb071a94",
