@@ -391,3 +391,12 @@ parent differences never mask genuine equal-time field/name conflicts and never
 create duplicate content history. Newer permanent deletion remains authoritative;
 missing-time different-parent moves do not acquire fabricated source provenance.
 These synthetic native tests do not prove real client/device synchronization.
+
+Permanent removal records KDBX DeletedObjects UUID/time metadata through the
+crate's tracked deletion API; recursive group removal and empty-bin removal mark
+every descendant. Without those markers, stale synchronization can silently
+restore credentials the user permanently deleted. Ordinary recycling creates no
+permanent marker, invalid batch requests mutate neither objects nor markers, and
+newer explicit remote edits retain the existing conflict policy. These markers
+contain no password or field payload; this is synchronization intent, not secure
+erasure of backups, old copies or filesystem blocks.
