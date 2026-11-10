@@ -658,6 +658,35 @@ SP-06、SP-07、SP-08、SP-13、SP-14 都有低成本局部修复；其中树排
 | [1Password 当前导出](https://support.1password.com/export/)                                                                     | 1Password 8 使用 1PUX 或 CSV                                       | 1PIF JSON-line 基础迁移已修复（SP-S10），完整保真仍部分；1PUX 独立待实现 |
 | [KeeWeb](https://keeweb.info/)                                                                                                  | 紧凑离线界面、附件拖入、受保护字段                                 | 保留现有密集视觉，改善错误/焦点/排序，避免无关信息挤占主界面             |
 
+### 移动端竞品补充证据（2026-11-11，5f3b1fb）
+
+本轮实际读取四个官方渲染页面，原始 DOM snapshot 保存为
+mobile-competitor-rendered-sources.json，SHA256 73291394fb91ea5f354acae5aafe9f6f5984a58cc0f558904d305351740283f2；
+mobile-competitor-final-proof.json关联首方源码hash。下表是能力与设计
+取舍，不增加缺少直接故障证据的bug卡片，也不改变原始评分／统计。
+
+| 产品与有效官方来源                                                                                                                       | 实际文档证据                                                                                                                                                         | SecPivot 对比与取舍                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [KeePassDX 官网](https://www.keepassdx.com/)与[File Manager and Sync](https://github.com/Kunzisoft/KeePassDX/wiki/File-Manager-and-Sync) | Android本地库、Autofill／Magikeyboard／OTP／附件；文件同步与解密后数据合并分开；Save／Merge／Reload及Save a copy to...有不同语义；OPEN_DOCUMENT与GET_CONTENT授权不同 | 已有直接S3/WebDAV与SAF两种链路，继续采用明确动作与授权反馈，不能把可打开当可写或可跨重启。SecPivot另存后切换当前目标的既有契约应在提示中讲清楚，避免照搬copy文案    |
+| [KeePassium 官网](https://keepassium.com/)与[Supported storage](https://support.keepassium.com/kb/sync/#sources)                         | iOS/macOS Files sync／AutoFill／OTP／附件与VoiceOver／大文字；provider页面分direct connection与Files integration，列测试日期、只读、缓存和离线限制                   | 借鉴按连接方式标注验证状态与失败反馈；保留紧凑主题，通过具体焦点、窄屏和大文字检查改善可用性。其provider测试日期多为2021–2023，另有2025更新，不作为当前SecPivot实测 |
+| Strongbox                                                                                                                                | 本轮取到的170-byte响应只是CAPTCHA重定向，没有有效能力正文                                                                                                            | 标记缺证，不将挑战页作为成功资料，不据此承诺功能或兼容性                                                                                                            |
+
+首方对照：src/routes/+page.svelte:821–868的handleSaveAs在Android调用
+createDocument，并携带persisted返回值；src/lib/services/saf.ts:25–33
+invoke的是plugin:saf|create_document；SafPlugin.kt:57–117使用
+ACTION_CREATE_DOCUMENT并返回持久授权结果。vault/session.rs:780–802
+仅在写入成功后complete_save_as采纳新路径并清除remote目标；后续保存
+写入新目标。这与“只保存副本并继续原连接”需分别说明，当前工具栏
+tooltip的copy措辞可作为后续小范围文案优化，尚未改动或宣称已验证。
+
+实际provider验证建议按“本地文档／受支持的云端provider”分开记录：
+选择器是否出现、取消不切会话、写入读回相等、成功后保存目标、仅临时
+授权不进入最近文件、撤权重选和失败保留旧目标；仅用明确的合成库。
+当前v1.6.5反馈中的plugin:safe与源码saf差异仍未取得安装包证明，
+Android capability已修为windows:[main]且ACL解析回归通过；含修复
+APK替换及真机选择器／provider仍待验证。以上全部是文档／源码证据，
+未运行竞品或手机，未访问用户库、配置或云端账号。
+
 不引入用户已排除的任意插件体系、事件自动化或硬件密钥；不为“竞品有”而直接扩大秘密外传面。
 
 ## 36. Reverification / 真实性复核与边界

@@ -1851,6 +1851,21 @@
       "keepass_passed": 25,
       "quickxml_passed": 1363,
       "quickxml_ignored": 4
+    },
+    "mobile_competitor_documents": {
+      "result": "Four rendered official pages and current source compared; adoption recommendations only",
+      "checkpoint": "5f3b1fb16ee18c6a69a4864ede838964ecca32fd",
+      "proof": "mobile-competitor-final-proof.json",
+      "sources": [
+        "https://www.keepassdx.com/",
+        "https://github.com/Kunzisoft/KeePassDX/wiki/File-Manager-and-Sync",
+        "https://keepassium.com/",
+        "https://support.keepassium.com/kb/sync/#sources"
+      ],
+      "source_sha256": "73291394fb91ea5f354acae5aafe9f6f5984a58cc0f558904d305351740283f2",
+      "native_provider_tested": false,
+      "strongbox": "Unverified: challenge response excluded",
+      "limits": "Official rendered documentation and first-party source inspection only. No competitor or SecPivot native provider/device run; historical vendor test dates are not current SecPivot evidence. Strongbox challenge response excluded."
     }
   },
   "reverification_notes": [
