@@ -263,7 +263,14 @@ test("page capture shortcuts respect menus owned by recursive group components",
 test("consumed menu keys refresh the actual idle deadline and cleanup removes the activity listener", () => {
   const source = readFileSync(new URL("../src/lib/services/security.ts", import.meta.url), "utf8");
   const ast = ts.createSourceFile("security.ts", source, ts.ScriptTarget.Latest, true);
-  const names = ["clearIdleTimer", "armIdleLock", "onActivity", "installAutoLock"];
+  const names = [
+    "clearIdleTimer",
+    "lockIdleVault",
+    "checkIdleDeadline",
+    "armIdleLock",
+    "onActivity",
+    "installAutoLock",
+  ];
   const functions = names.map((name) => {
     const node = ast.statements.find(
       (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
@@ -272,7 +279,8 @@ test("consumed menu keys refresh the actual idle deadline and cleanup removes th
     return node.getText(ast).replace(/^export /, "");
   });
   const js = ts.transpileModule(
-    "let idleTimer = null; let idleDeadline = 0;\n" + functions.join("\n"),
+    "let idleTimer = null; let idleDeadline = 0; let idleLockAttempt = null;\n" +
+      functions.join("\n"),
     { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
   ).outputText;
   const listeners = [];
@@ -304,8 +312,9 @@ test("consumed menu keys refresh the actual idle deadline and cleanup removes th
     get: (value) => value,
     vault: { get: () => ({}) },
     locks: 0,
-    lockVault: () => context.locks++,
+    lockVault: async () => context.locks++,
   };
+  context.document = context.window;
   const f = fixture();
   const disposeMenu = f.attach();
   let disposeActivity;

@@ -86,35 +86,68 @@ export async function copyValue(value: string, sensitive: boolean): Promise<void
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let idleDeadline = 0;
+let idleLockAttempt: object | null = null;
 
 function clearIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = null;
 }
 
+function lockIdleVault(): void {
+  clearIdleTimer();
+  if (idleLockAttempt) return;
+  const attempt = {};
+  idleLockAttempt = attempt;
+  void lockVault().finally(() => {
+    // A completed close can publish null and start a new idle lifetime before
+    // this promise settles (clipboard clearing runs independently).
+    if (idleLockAttempt === attempt) idleLockAttempt = null;
+  });
+}
+
+/** Check the old period before activity or resume can replace its deadline. */
+function checkIdleDeadline(): boolean {
+  if (idleLockAttempt) return true;
+  if (
+    idleDeadline > 0 &&
+    Date.now() >= idleDeadline &&
+    get(appSettings).security.autoLockMinutes > 0 &&
+    vault.get()
+  ) {
+    lockIdleVault();
+    return true;
+  }
+  return false;
+}
+
 /** (Re)arm the idle auto-lock timer from `autoLockMinutes` (0 disables). */
 export function armIdleLock(): void {
   clearIdleTimer();
   const minutes = get(appSettings).security.autoLockMinutes;
-  if (minutes <= 0 || !vault.get()) {
+  const open = !!vault.get();
+  if (minutes <= 0 || !open) {
     idleDeadline = 0;
+    // Published closure ends this period; a later open needs its own timer.
+    if (!open) idleLockAttempt = null;
     return;
   }
+  if (checkIdleDeadline()) return;
   idleDeadline = Date.now() + minutes * 60_000;
   idleTimer = setTimeout(() => {
     idleTimer = null;
-    void lockVault();
+    lockIdleVault();
   }, minutes * 60_000);
 }
 
 /**
  * Activity handler shared by all idle-watch events. Discrete user actions
- * (`pointerdown`/`keydown`) always re-arm the timer: a key press 20 s before
+ * (`pointerdown`/`keydown`) re-arm before expiry: a key press 20 s before
  * the deadline is still real activity. High-frequency events
  * (`mousemove`/`wheel`/`scroll`) only re-arm when less than 15 s of the
  * timeout remain, so the timer is not churned on every fire.
  */
 function onActivity(discrete: boolean): void {
+  if (checkIdleDeadline()) return;
   if (discrete || Date.now() >= idleDeadline - 15_000) armIdleLock();
 }
 
@@ -122,14 +155,22 @@ function onActivity(discrete: boolean): void {
 export function installAutoLock(): () => void {
   const onDiscrete = (): void => onActivity(true);
   const onContinuous = (): void => onActivity(false);
+  const onResume = (): void => {
+    checkIdleDeadline();
+  };
+  const onVisibility = (): void => {
+    if (document.visibilityState === "visible") onResume();
+  };
   window.addEventListener("pointerdown", onDiscrete);
   // Menus and child controls consume navigation before the bubble phase.
   window.addEventListener("keydown", onDiscrete, true);
   window.addEventListener("mousemove", onContinuous);
   window.addEventListener("wheel", onContinuous, { capture: true, passive: true });
   window.addEventListener("scroll", onContinuous, { capture: true, passive: true });
+  window.addEventListener("focus", onResume);
+  document.addEventListener("visibilitychange", onVisibility);
   armIdleLock();
-  // Re-arm immediately when `autoLockMinutes` changes instead of waiting for
+  // Re-arm an unexpired period when `autoLockMinutes` changes instead of waiting for
   // the next user activity or vault transition. Guard on the actual value so
   // unrelated settings emissions (theme, clipboard, …) do not reset the idle
   // deadline or churn the timer on every write.
@@ -146,8 +187,11 @@ export function installAutoLock(): () => void {
     window.removeEventListener("mousemove", onContinuous);
     window.removeEventListener("wheel", onContinuous, true);
     window.removeEventListener("scroll", onContinuous, true);
+    window.removeEventListener("focus", onResume);
+    document.removeEventListener("visibilitychange", onVisibility);
     unsubSettings();
     clearIdleTimer();
+    idleDeadline = 0;
   };
 }
 

@@ -85,12 +85,24 @@ URIs never enter recent-vault settings. Device/provider runtime remains pending.
 
 ## Lock lifecycle
 
-The idle activity watcher observes keyboard events in window capture, before
-menus and child controls consume navigation. Discrete keys reset the full idle
-deadline even when their bubble is stopped; cleanup removes the same capture
-listener. This does not change lock duration, disabled mode or focus-loss lock.
-The deterministic menu regression exercises the actual timer functions with a
-fake clock and verifies both the refreshed deadline and listener cleanup.
+The idle watcher checks the existing wall-clock deadline before activity or
+rearming can replace it. Expired periods start the shared lock immediately;
+focus and visible resume only check expiry, never extend an unexpired period.
+Hidden visibility does not implement native Android background-lock policy.
+Keyboard capture observes consumed menu navigation. Discrete input refreshes
+an unexpired period; high-frequency input refreshes within its last 15 seconds.
+Zero disables the timer. Settings rearm only when the duration changes, and
+cannot revive an already expired enabled period.
+
+An opaque idle-close attempt prevents repeated events from enqueueing duplicate
+closes while the published vault still awaits backend closure. Published null
+ends that period; close/reopen starts a new attempt whose state cannot be cleared
+by the earlier promise's completion. Cleanup removes capture/resume listeners,
+the settings subscription, timer and deadline. Actual-service synthetic tests
+exercise delayed timer delivery, post-release duplicate counts, settings,
+cleanup and queued reopen; the menu test also verifies consumed keys. These are
+renderer/service controls, not native suspension, Android onPause/onStop or
+backend enforcement while a renderer cannot execute.
 
 The RPC side-channel renderer uses a wall-clock deadline, rechecked by interval,
 focus/visibility resume and before copying. Expiry dismisses the modal and drops
@@ -158,7 +170,7 @@ isolated loopback sockets, not a live browser extension or Tauri runtime.
 Lock happens on:
 
 - explicit lock action (`close_all_vaults`; ordinary tab close uses `close_vault` and does not enter the retained-RPC lock lifecycle);
-- idle timeout when `autoLockMinutes > 0` (timer refreshed on `pointerdown`/`keydown`/`mousemove`/`wheel`/`scroll`, re-armed at most once per 15 s to avoid churn, reset on vault open, skipped when 0 or no vault open; the settings subscription re-arms only when `autoLockMinutes` itself changes, never on unrelated settings writes);
+- idle timeout when `autoLockMinutes > 0` (the existing deadline is checked before activity/rearm and on focus/visible resume; unexpired periods refresh on `pointerdown`/`keydown`, and on `mousemove`/`wheel`/`scroll` within the last 15 s; reset on vault open, skipped when 0 or no vault open; unrelated settings never reset the deadline and pending idle closes are deduplicated);
 - `lockAfterAction` immediately after a password copy;
 - focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open). TCATO suppresses this path while an open attempt is pending and while the backend-confirmed overlay exists; pending attempts hold independent leases, so one late failure cannot clear another attempt's confirmed overlay state and accidentally re-enable focus-loss locking.
 
