@@ -426,6 +426,11 @@ Bitwarden JSON import rejects true or invalid encryption markers before item
 mapping; account-encrypted files share the plaintext envelope and require this
 gate. Its command zeroizes incoming text. Dynamic linked-field/multi-URI
 fidelity and actual client exports remain separate pending work.
+The same parser's optional_string/optional_array helpers reject malformed common
+values instead of dropping them. Login/folder/field members and numeric 0–3
+custom types are validated before rows return; missing legacy type stays Text.
+Four shape regressions cover whole-document rejection and valid optional/string
+values through the actual command/wire/bulk/KDBX path, including hidden masking.
 
 `vault/import/fields.rs` owns source-prefixed unique custom-label allocation for
 Bitwarden and 1PIF. `import/bitwarden_tests.rs` exercises the real command, shared

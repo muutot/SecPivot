@@ -64,23 +64,20 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         .get("items")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "缺少 items 数组".to_owned())?;
-    let folders: HashMap<String, String> = root
-        .get("folders")
-        .and_then(serde_json::Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|folder| {
-                    let id = folder.get("id")?.as_str()?.to_owned();
-                    let name = folder
-                        .get("name")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("")
-                        .to_owned();
-                    Some((id, name))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut folders = HashMap::new();
+    for (index, folder) in optional_array(root.get("folders"))
+        .map_err(|()| "Bitwarden 分组数组格式无效".to_owned())?
+        .iter()
+        .enumerate()
+    {
+        let invalid = || format!("第 {} 个 Bitwarden 分组格式无效", index + 1);
+        let id = folder
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(invalid)?;
+        let name = optional_string(folder.get("name")).map_err(|()| invalid())?;
+        folders.insert(id.to_owned(), name.to_owned());
+    }
 
     let mut rows = Vec::new();
     for (index, item) in items.iter().enumerate() {
@@ -97,75 +94,63 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             Some(serde_json::Value::Bool(value)) => Some(*value),
             Some(_) => return Err(invalid()),
         };
-        let title = item
-            .get("name")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("")
+        let title = optional_string(item.get("name"))
+            .map_err(|()| invalid())?
             .to_owned();
-        let notes = item
-            .get("notes")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("")
+        let notes = optional_string(item.get("notes"))
+            .map_err(|()| invalid())?
             .to_owned();
-        let group = item
-            .get("folderId")
-            .and_then(serde_json::Value::as_str)
-            .and_then(|id| folders.get(id).cloned())
-            .unwrap_or_default();
+        let folder_id = optional_string(item.get("folderId")).map_err(|()| invalid())?;
+        let group = folders.get(folder_id).cloned().unwrap_or_default();
 
         let mut username = String::new();
         let mut password = String::new();
         let mut url = String::new();
         let mut totp = String::new();
-        if let Some(login) = item.get("login") {
+        if let Some(login) = item.get("login").filter(|value| !value.is_null()) {
+            if !login.is_object() {
+                return Err(invalid());
+            }
             url = default_login_uri(login, index)?;
-            username = login
-                .get("username")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("")
+            username = optional_string(login.get("username"))
+                .map_err(|()| invalid())?
                 .to_owned();
-            password = login
-                .get("password")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("")
+            password = optional_string(login.get("password"))
+                .map_err(|()| invalid())?
                 .to_owned();
-            totp = login
-                .get("totp")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("")
+            totp = optional_string(login.get("totp"))
+                .map_err(|()| invalid())?
                 .to_owned();
         }
 
         let mut names = fields::FieldNames::new("Bitwarden");
-        let mut custom_fields: Vec<ImportCustomField> = item
-            .get("fields")
-            .and_then(serde_json::Value::as_array)
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter(|field| field.is_object())
-                    .map(|field| -> Result<_, String> {
-                        let name = field
-                            .get("name")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("");
-                        let field_type = field.get("type").and_then(serde_json::Value::as_i64);
-                        let value = if field_type == Some(3) {
-                            bitwarden_links::resolve(item, kind, field.get("linkedId"))
-                                .map_err(|()| invalid())?
-                        } else {
-                            field
-                                .get("value")
-                                .and_then(serde_json::Value::as_str)
-                                .unwrap_or("")
-                                .to_owned()
-                        };
-                        Ok(names.field(name, value, matches!(field_type, Some(1 | 3))))
-                    })
-                    .collect::<Result<_, _>>()
+        let mut custom_fields: Vec<ImportCustomField> = optional_array(item.get("fields"))
+            .map_err(|()| invalid())?
+            .iter()
+            .map(|field| -> Result<_, String> {
+                if !field.is_object() {
+                    return Err(invalid());
+                }
+                let name = optional_string(field.get("name")).map_err(|()| invalid())?;
+                let source_value = optional_string(field.get("value")).map_err(|()| invalid())?;
+                // Legacy missing type means Text; present metadata must be a
+                // recognized numeric enum, never a guessed protection flag.
+                let field_type = match field.get("type") {
+                    None => 0,
+                    Some(value) => value
+                        .as_u64()
+                        .filter(|value| *value <= 3)
+                        .ok_or_else(invalid)?,
+                };
+                let value = if field_type == 3 {
+                    bitwarden_links::resolve(item, kind, field.get("linkedId"))
+                        .map_err(|()| invalid())?
+                } else {
+                    source_value.to_owned()
+                };
+                Ok(names.field(name, value, matches!(field_type, 1 | 3)))
             })
-            .transpose()?
-            .unwrap_or_default();
+            .collect::<Result<_, _>>()?;
 
         match item.get("passwordHistory") {
             None | Some(serde_json::Value::Null) => {}
@@ -228,6 +213,24 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         });
     }
     Ok(rows)
+}
+
+/// Missing/null optional values remain empty; malformed values are never
+/// stringified or silently discarded at the structured-import boundary.
+fn optional_string(value: Option<&serde_json::Value>) -> Result<&str, ()> {
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(""),
+        Some(serde_json::Value::String(value)) => Ok(value),
+        Some(_) => Err(()),
+    }
+}
+
+fn optional_array(value: Option<&serde_json::Value>) -> Result<&[serde_json::Value], ()> {
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(&[]),
+        Some(serde_json::Value::Array(value)) => Ok(value),
+        Some(_) => Err(()),
+    }
 }
 
 /// Native entry-wide matching cannot represent mixed Bitwarden URI strategies.

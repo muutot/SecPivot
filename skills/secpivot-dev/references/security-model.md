@@ -258,6 +258,12 @@ mapping items. Encryption markers must be boolean when present; absent markers
 remain compatible with legacy plaintext. The command's temporary input string
 is zeroized on return, as with 1PIF. This protects the format boundary, not a new
 decryptor, and does not prove imported data's full fidelity or JS heap erasure.
+Common Bitwarden strings and optional login/folder/custom-field containers are
+validated before returning any rows. Missing/null optional values remain valid;
+malformed values are never discarded or stringified. Present custom-field types
+must be numeric 0–3, while missing legacy type remains Text. Unknown/string/null
+protection metadata rejects the document instead of exposing a guessed text
+field. Errors contain only record/folder context, never imported contents.
 External Bitwarden custom labels are data: a `Bitwarden` prefix and unique
 suffixes prevent reserved-name drops, duplicate-value overwrites and accidental
 native OTP/KPRPC configuration. Hidden flags remain protected in KDBX and masked

@@ -173,6 +173,14 @@ at creation. Bitwarden login enables quality evaluation, other types disable it;
 absent metadata keeps the KeePass default (CSV/XML/1PIF unchanged). Browser bulk
 fallback preserves the same flag. Ordinary full-field edits still preserve flags.
 These are schema-based synthetic KDBX regressions, not native export validation.
+Common name/notes/folderId and login username/password/totp values must be
+strings when present and non-null. Missing/null optional values stay empty.
+Login must be an object; folders/fields must be arrays with valid members.
+Custom field names/values use the same string check, and present types must be
+numeric 0–3. Missing legacy type remains Text; invalid metadata never becomes
+an unprotected guess. Content-free errors reject the whole document before
+rows return. Synthetic command/wire/KDBX tests preserve valid hidden/linked
+masking and optional values; full source-format compatibility remains partial.
 Linked type-3 fields resolve official login/card/identity IDs into protected
 import-time snapshots through `import/bitwarden_links.rs`; Identity FullName
 follows source name-part composition. Optional absent/null targets become empty
