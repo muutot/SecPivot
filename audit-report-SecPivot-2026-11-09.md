@@ -3642,7 +3642,7 @@ renderer 停止运行时的后端期限约束或完整系统／竞品／UI 工�
 - Severity: Medium
 - Confidence: High
 - Category: Security / Privacy
-- Status: Confirmed
+- Status: Confirmed（已修复，2912963）
 - Affected area: Native startup config recovery diagnostics
 - Evidence:
   - File: src-tauri/src/config/store.rs:48–70; src-tauri/src/config/settings.rs:669–720; src-tauri/src/lib.rs:350 (c9d3f1b)
@@ -3673,3 +3673,21 @@ keyring 的桌面 macOS/Linux 仍写为未保护，需与现有 platform 源码�
 累计 80 Confirmed（Critical 1 / High 19 / Medium 49 / Low 11），包含
 已修复历史；原始 b7c5d9f／15 项／6.1 分不变。手机另存为新 APK／
 真机 provider、移动端安全语义、其余系统／竞品／UI 仍待闭环，目标 active。
+
+修复与验证（2026-11-11）：2912963 只修改配置解析诊断，保留错误类别／
+行列及原来的备份／默认启动反馈，不再插入完整 serde 错误。实际原生
+子进程回归 1 passed / 0 failed / 673 filtered，三个子测试均实际执行；
+坏文件逐字节备份、默认恢复和合法／masked 控制保持。原样锁定依赖
+模块探针 3 passed / 0 failed，源码／manifest／lock 哈希与红测一致。
+
+verify-config-diagnostic.log 最终 exit 0：359 前端、674 Rust、ACL 2、
+KeePass 专项 25、QuickXML 1363（4 ignored）；format、Svelte check／
+build、IPC contract 和 clippy 均通过。Rust 单线程、debug0、无过滤，
+live clipboard 未启用；四项原生剪贴板测试体及 ignored 项不算实际覆盖。
+config-diagnostic-final-proof.json 保存源码、修复 patch 和完整日志哈希。
+
+文档 currency gate 已同步 data-contracts／security-model／PITFALLS 和
+精确 TODO，且纠正桌面 macOS/Linux 已接 OS keyring 的旧说明。未改变
+schema、IPC、CSS、依赖或 vendor。无关 .trae/ 保留。此项只关闭本地
+配置错误日志回显；手机另存为新 APK／真机 provider、移动端 Keystore
+及原生后台锁、其余系统／竞品／UI 仍需继续验证，整体目标 active。

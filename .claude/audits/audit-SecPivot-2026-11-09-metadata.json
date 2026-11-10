@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "c9d3f1b",
       "area": "Raw config deserialization diagnostics echo wrong-typed credential input",
-      "status": "Confirmed, unremediated. Root native regression1 fails with2 disclosures after3 child recovery controls succeed;673 filtered. Independent actual modules use matched serde229/json151 and yield2 disclosure failures/1 valid pass; all3 recovery controls pass. Source restored exactly, synthetic marker redacted. No real credential/user config/Android/logcat/network/clipboard proof; malformed local input condition limits severity. Mobile Keystore/background lock remain separate."
+      "status": "Confirmed and remediated. 2912963 emits parser category/line/column only; exact corrupt backup/default recovery and valid masked control preserved. Root native parent1 green with3 actually executed child fixtures;673 filtered. Immutable pinned actual-module probe3 passed/0 failed with unchanged source/manifest/lock. Full verify exit0:359 frontend/674 Rust/ACL2/KeePass25/QuickXML1363,4 ignored; serial/debug0/unfiltered/live clipboard unset. Four opt-in clipboard bodies and ignored items are not native coverage. No config schema/IPC/CSS/vendor/dependency change. Mobile storage/background lock/device/provider/APK remain unresolved.",
+      "fix_commit": "29129634e8df48e660a39ea8f92650a3b67257a5"
     },
     {
       "id": "SP-S68",
@@ -1370,7 +1371,7 @@
       "proof_green": "idle-deadline-green-evidence.json"
     },
     "config_diagnostic": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "c9d3f1b",
       "native_red": "config-diagnostic-native-red.log",
       "native_failed": 1,
@@ -1380,7 +1381,24 @@
       "independent_failed": 2,
       "independent_passed": 1,
       "controls_passed": 3,
-      "limits": "Synthetic temp config/native child stderr and actual-module helper only. No user data/device/clipboard/network."
+      "limits": "Synthetic temp config/native child stderr and actual-module helper only. No user data/device/clipboard/network.",
+      "fix_commit": "29129634e8df48e660a39ea8f92650a3b67257a5",
+      "native_green": "config-diagnostic-native-green.log",
+      "native_green_passed": 1,
+      "child_controls_executed": 3,
+      "independent_green": "config-diagnostic-green-pinned.json",
+      "independent_green_passed": 3,
+      "independent_green_failed": 0,
+      "full_log": "verify-config-diagnostic.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 674,
+      "full_acl": 2,
+      "keepass_patch_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "final_proof": "config-diagnostic-final-proof.json",
+      "probe_unchanged": true
     }
   },
   "reverification_notes": [
@@ -1465,6 +1483,7 @@
     "7c1cbe1 repairs SP-S65 dedicated entry-text fidelity. Red2 to green2, native current/history and original fixture open/rewrite; vendor23, QuickXML1363/ignored4, independent3 and root full323/670/ACL2 passed. Synthetic provenance and live-clipboard opt-out retained. Complete MIT QuickXML0.41 vendor adds only map patch; registry0.42 unchanged. KeePass six patched/54 untouched, original five patch source bytes identical. Raw archive+patch reconstruction and staged60+43 hashes/patch/fixture byte identity pass; earlier EOL reconstruction/unsupported formatter errors are harness-only. Scoped $text preserves ASCII/Unicode and protected/empty/missing/metadata, no raw substitution/global metadata change. SKILL/maintenance/data/security/structure/patch/TODO gates synchronized. System.Xml helper and pinned KeePass source are auxiliary evidence without native competitor/full migration claims. Count76 Confirmed1/19/45/11 and original b7c5d9f/15/6.1 unchanged; active goal continues.",
     "9798b77 SP-S66 confirmed: real Bitwarden command/wire/import/save publishes9 XML1.0-invalid ordinary cases; native exact reopens9, standard ElementTree/System.Xml reject9. Current-library isolated probe own15/invalid9/valid6, helper.NET10.0.14 total6 accepts18 rejects. Pinned KeePass SafeXmlString source sanitizes; no native-client execution. Red test/source/patch/XML saved; root exact source restored. Borrow-type compilation failure excluded as harness error. Planned publication refusal preserves old bytes/live edits/protected Base64; no silent sanitization or all-Unicode-noncharacter rejection. Report/TODO/data/security documentation gates updated; route/ownership unchanged. Count77 Confirmed1/19/46/11; original b7c5d9f15/6.1 and active goal preserved.",
     "9333209 repairs SP-S66 XML1.0-invalid publication with11-line serializer gate after protected Base64 conversion. Native3 pass for illegal9 imports preserving old-file/live dirty values, historical refusal, legal6/protected-only9 actual save/reopen. Vendor25 with36 illegal key/value/group/meta controls, immutable independent9 refusal/6 legal exact and actual XML standard acceptance, full323/673/ACL2/QuickXML1363 ignored4 pass. Root serial/debug0/unfiltered/live unset; no extra runtime coverage claim. Fresh60hash reconstruction/staged60+43 and patches passed; six existing owned patches/54 upstream unchanged except reviewed XML entry-point; other five patch bytes identical. Recursively formatted child5 restored before full gate; maintain --config skip_children=true. Data/security/structure/maintenance/patch/TODO currency gate synchronized; routes/IPC/schema/defaults unchanged. Report/metadata count77 Confirmed1/19/46/11 and original b7c5d9f15/6.1 preserved. No silent sanitizer/automatic history recovery/full export/client/device/provider/large-vault benchmark/security guarantee; goal active.",
-    "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active."
+    "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active.",
+    "SP-S69 remediated in2912963 with native child-process stderr and immutable pinned actual-module probe; full verify359/674/ACL2 exit0. Original baseline and cumulative80 counts preserved; mobile device/provider/storage/background lock remain unverified."
   ]
 }
