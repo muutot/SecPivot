@@ -202,6 +202,12 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 ## Verification for security changes
 
+Config-load diagnostics must never print the full serde_json error, whose
+type-mismatch text can contain credential-field input. Log only category and
+line/column with recovery status. Native child-process stderr controls verify
+absent input values while retaining exact corrupt backups and valid masked
+snapshots. This does not fix mobile plaintext credential storage.
+
 XML exports preserve CR/CRLF through numeric CR references and reject characters
 that XML 1.0 cannot represent, including invalid JS surrogate halves. Rejection
 never includes a field value and occurs before destination writes; stored KDBX

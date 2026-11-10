@@ -60,12 +60,17 @@ fn read_config(project_dir: &Path) -> Result<AppConfig, String> {
                 let backup = path.with_extension("json.bak");
                 let renamed = fs::rename(&path, &backup).is_ok();
                 eprintln!(
-                    "配置文件解析失败（{}），使用默认配置启动: {e}",
+                    "配置文件解析失败（{}），使用默认配置启动: 类别 {:?}，行 {}，列 {}",
                     if renamed {
                         format!("已备份为 {}", backup.display())
                     } else {
                         "备份失败，原文件保留".to_owned()
-                    }
+                    },
+                    // Display/Debug of the full error may echo a credential
+                    // value on a type mismatch. Category and offsets do not.
+                    e.classify(),
+                    e.line(),
+                    e.column()
                 );
                 return Ok(normalize_config(AppConfig::default()));
             }
