@@ -13,7 +13,7 @@
 
 use super::helpers::recycle_bin_id;
 use chrono::NaiveDateTime;
-use keepass::db::merge::MergeError;
+use keepass::db::merge::{MergeError, MergeEventTarget, MergeEventType};
 use keepass::db::{Entry, EntryId, Group, GroupId, Icon, Times, Value};
 use keepass::Database;
 use std::collections::HashSet;
@@ -144,6 +144,26 @@ fn push_losers_into_history(dest: &mut Database, losers: Vec<(EntryId, Entry)>) 
             let mut history = entry.history.take().unwrap_or_default();
             history.add_entry(loser);
             entry.history = Some(history);
+        }
+    }
+}
+
+/// keepass 0.13.22 omits tags when it creates a source-only group. Its
+/// subsequent equality check then rejects the group it just created. Clear
+/// only those tags in the temporary source clone; the merge log determines
+/// which created/updated groups receive the original tags after success.
+/// Existing groups keep their tags here, including equal-time divergence.
+fn prepare_new_group_tags(dest: &Database, source: &mut Database) {
+    let mut pending = vec![source.root().id()];
+    while let Some(id) = pending.pop() {
+        let Some(group) = source.group(id) else {
+            continue;
+        };
+        pending.extend(group.groups().map(|child| child.id()));
+        if dest.group(id).is_none() {
+            if let Some(mut group) = source.group_mut(id) {
+                group.tags.clear();
+            }
         }
     }
 }
@@ -389,7 +409,23 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     // the remote wins; capture local winners' remote losers up front so they
     // can be pushed into the merged history afterwards.
     let losers = collect_remote_losers(&dest, &source);
-    dest.merge(&source).map_err(describe_merge_error)?;
+    prepare_new_group_tags(&dest, &mut source);
+    let log = dest.merge(&source).map_err(describe_merge_error)?;
+    // Both source-winner branches omit group tags in the pinned dependency.
+    // Use its actual outcome rather than reimplementing timestamp/deletion
+    // decisions; groups removed by later merge events stay removed.
+    for event in log.events {
+        if matches!(
+            event.event_type,
+            MergeEventType::Created | MergeEventType::Updated
+        ) {
+            if let MergeEventTarget::Group(id) = event.target {
+                if let (Some(mut group), Some(original)) = (dest.group_mut(id), remote.group(id)) {
+                    group.tags.clone_from(&original.tags);
+                }
+            }
+        }
+    }
 
     push_losers_into_history(&mut dest, losers);
     restore_bin(&mut dest, bin);

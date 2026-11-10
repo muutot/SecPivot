@@ -159,6 +159,14 @@ Equal values keep the group time. Auto-Type enabled omission intentionally
 restores inheritance as the dialog requests; the sequence keeps its separate
 omitted/empty behavior. This does not change group expansion or move timestamps.
 
+Group tags in native merge use the pinned crate's actual Group Created/Updated
+log events. keepass 0.13.22 omits tags in both branches; source-only group tags
+are cleared only in the temporary source clone to avoid its immediate equal-time
+check on incompletely copied new groups. After successful merge, surviving source
+winners receive their original remote tags, including an empty set. Existing
+same-time divergence remains an error; local winners, deletion and recycle-bin
+exclusion keep their existing decisions. No vendored bytes are changed.
+
 Bitwarden nonempty `passwordHistory` arrays are archived as a uniquely named,
 protected `Bitwarden Password History` custom field. The source JSON preserves
 order, duplicates, empty passwords, optional/null string dates and extra keys;
