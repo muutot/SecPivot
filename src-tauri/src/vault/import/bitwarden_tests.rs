@@ -837,3 +837,190 @@ fn import_favorite_metadata_validates_the_batch_and_keeps_ordinary_edit_contract
     );
     assert!(serde_json::from_value::<ImportEntryInput>(serde_json::json!({"groupUuid":"root","title":"","username":"","password":"","url":"","notes":"","favorite":"false"})).is_err());
 }
+
+fn malformed_bitwarden_items_reject_without_partial_rows(items: Vec<serde_json::Value>) {
+    let mut accepted = 0;
+    for item in items {
+        let text = serde_json::json!({"items":[
+            {"type":2,"name":"Earlier valid note"},item
+        ]})
+        .to_string();
+        match crate::commands::parse_bitwarden_json(text) {
+            Ok(_) => accepted += 1,
+            Err(error) => {
+                assert!(error.contains("第 2 条"));
+                assert!(!error.contains("synthetic-shape-marker"));
+            }
+        }
+    }
+    assert_eq!(
+        accepted, 0,
+        "malformed sources silently returned import rows"
+    );
+}
+
+#[test]
+fn bitwarden_shapes_reject_malformed_common_strings_and_containers() {
+    let mut bad = Vec::new();
+    for value in [
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!({"synthetic-shape-marker":7}),
+    ] {
+        for key in ["name", "notes", "folderId"] {
+            let mut item = serde_json::json!({"type":1,"name":"synthetic-shape-marker"});
+            item[key] = value.clone();
+            bad.push(item);
+        }
+        for key in ["username", "password", "totp"] {
+            let mut item = serde_json::json!({"type":1,"name":"synthetic-shape-marker","login":{}});
+            item["login"][key] = value.clone();
+            bad.push(item);
+        }
+    }
+    for login in [
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!("synthetic-shape-marker"),
+    ] {
+        bad.push(serde_json::json!({"type":1,"name":"synthetic-shape-marker","login":login}));
+    }
+    for fields in [
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!({}),
+        serde_json::json!("synthetic-shape-marker"),
+    ] {
+        bad.push(serde_json::json!({"type":1,"name":"synthetic-shape-marker","fields":fields}));
+    }
+    malformed_bitwarden_items_reject_without_partial_rows(bad);
+}
+
+#[test]
+fn bitwarden_shapes_reject_custom_field_loss_and_ambiguous_protection() {
+    let mut bad = Vec::new();
+    for field in [
+        serde_json::Value::Null,
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!("synthetic-shape-marker"),
+    ] {
+        bad.push(serde_json::json!({"type":1,"name":"synthetic-shape-marker","fields":[field]}));
+    }
+    for value in [
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!({"synthetic-shape-marker":7}),
+    ] {
+        for key in ["name", "value"] {
+            let mut field =
+                serde_json::json!({"name":"PIN","value":"synthetic-shape-marker","type":1});
+            field[key] = value.clone();
+            bad.push(
+                serde_json::json!({"type":1,"name":"synthetic-shape-marker","fields":[field]}),
+            );
+        }
+    }
+    for kind in [
+        serde_json::Value::Null,
+        serde_json::json!("1"),
+        serde_json::json!(true),
+        serde_json::json!(1.5),
+        serde_json::json!(-1),
+        serde_json::json!(4),
+        serde_json::json!({}),
+    ] {
+        bad.push(serde_json::json!({"type":1,"name":"synthetic-shape-marker","fields":[{"name":"PIN","value":"synthetic-shape-marker","type":kind}]}));
+    }
+    malformed_bitwarden_items_reject_without_partial_rows(bad);
+}
+
+#[test]
+fn bitwarden_shapes_reject_malformed_folder_map_before_returning_rows() {
+    let mut bad = vec![
+        serde_json::json!(7),
+        serde_json::json!(true),
+        serde_json::json!({}),
+        serde_json::json!("synthetic-shape-marker"),
+    ];
+    for folder in [
+        serde_json::Value::Null,
+        serde_json::json!(7),
+        serde_json::json!([]),
+        serde_json::json!({}),
+        serde_json::json!({"id":null,"name":"synthetic-shape-marker"}),
+        serde_json::json!({"id":7,"name":"synthetic-shape-marker"}),
+        serde_json::json!({"id":"f1","name":{"text":"synthetic-shape-marker"}}),
+    ] {
+        bad.push(serde_json::json!([{"id":"valid","name":"Earlier"},folder]));
+    }
+    let mut accepted = 0;
+    for folders in bad {
+        let text = serde_json::json!({"folders":folders,"items":[{"type":1,"name":"synthetic-shape-marker","folderId":"f1"}]}).to_string();
+        match crate::commands::parse_bitwarden_json(text) {
+            Ok(_) => accepted += 1,
+            Err(error) => {
+                assert!(error.contains("分组"));
+                assert!(!error.contains("synthetic-shape-marker"));
+            }
+        }
+    }
+    assert_eq!(accepted, 0, "malformed folder map was silently discarded");
+}
+
+#[test]
+fn bitwarden_shapes_keep_valid_null_missing_and_string_fields_after_reopen() {
+    for item in [
+        serde_json::json!({"type":1,"name":"Synthetic empty"}),
+        serde_json::json!({"type":1,"name":"Synthetic empty","notes":null,"folderId":null,"login":null,"fields":null}),
+        serde_json::json!({"type":1,"name":"Synthetic empty","login":{"username":null,"password":null,"totp":null},"fields":[{"name":null,"value":null}]}),
+    ] {
+        let (_dir, session, id) =
+            imported(&serde_json::json!({"folders":null,"items":[item]}).to_string());
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+            .unwrap();
+        assert_eq!(entry.get_password().unwrap_or_default(), "");
+        assert_eq!(entry.get_username().unwrap_or_default(), "");
+        assert_eq!(entry.get(crate::vault::FIELD_NOTES).unwrap_or_default(), "");
+    }
+    let text = r#"{"folders":[{"id":"f1","name":"Work"}],"items":[{"type":1,"name":"Synthetic strings","folderId":"f1",
+      "notes":"synthetic note\n尾部", "login":{"username":" synthetic user ","password":" synthetic password\r\n","totp":"JBSWY3DPEHPK3PXP"},
+      "fields":[{"name":"Text","value":"synthetic text","type":0},{"name":"Hidden","value":"synthetic hidden","type":1},
+                {"name":"Boolean","value":"true","type":2},{"name":"Linked","value":null,"type":3,"linkedId":101},
+                {"name":"Legacy","value":"synthetic legacy"}]}]}"#;
+    let rows = crate::commands::parse_bitwarden_json(text.to_owned()).unwrap();
+    assert_eq!(rows[0].group, "Work");
+    let (_dir, mut session, id) = imported(text);
+    let entry = session
+        .require_db()
+        .unwrap()
+        .entry(crate::vault::helpers::parse_entry_id(&id).unwrap())
+        .unwrap();
+    assert_eq!(entry.get_password(), Some(" synthetic password\r\n"));
+    assert_eq!(entry.get_username(), Some(" synthetic user "));
+    assert_eq!(
+        entry.get(crate::vault::FIELD_NOTES),
+        Some("synthetic note\n尾部")
+    );
+    for (name, value, protected) in [
+        ("Text", "synthetic text", false),
+        ("Hidden", "synthetic hidden", true),
+        ("Boolean", "true", false),
+        ("Linked", " synthetic password\r\n", true),
+        ("Legacy", "synthetic legacy", false),
+    ] {
+        let field = &entry.fields[&format!("Bitwarden {name}")];
+        assert_eq!(field.get(), value);
+        assert_eq!(field.is_protected(), protected);
+    }
+    let wire = serde_json::to_string(&session.state().unwrap().unwrap()).unwrap();
+    assert!(!wire.contains("synthetic hidden"));
+    assert!(!wire.contains("synthetic password"));
+}
