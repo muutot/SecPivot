@@ -55,7 +55,7 @@ impl S3Storage {
         let region = cfg.region.trim();
         let bucket_name = cfg.bucket.trim();
         let access_key = cfg.access_key.trim();
-        let secret_key = cfg.secret_key.trim();
+        let secret_key = cfg.secret_key.as_str();
         if endpoint.is_empty() {
             return Err("请先在设置中配置 S3 服务地址".to_owned());
         }

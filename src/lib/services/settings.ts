@@ -384,6 +384,8 @@ export function normalizeRemoteSettings(
     const value = r[key];
     return typeof value === "string" ? value.trim() : fb;
   };
+  // A password/signing key is opaque; surrounding whitespace is content.
+  const secretKey = typeof r.secretKey === "string" ? r.secretKey : fallback.secretKey;
   const common = {
     prefix: str("prefix", fallback.prefix),
     backupCount: clampInt(
@@ -402,7 +404,7 @@ export function normalizeRemoteSettings(
       kind,
       endpoint: str("endpoint", DEFAULT_WEBDAV_REMOTE_SETTINGS.endpoint),
       accessKey: str("accessKey", DEFAULT_WEBDAV_REMOTE_SETTINGS.accessKey),
-      secretKey: str("secretKey", DEFAULT_WEBDAV_REMOTE_SETTINGS.secretKey),
+      secretKey,
       ...common,
     };
   }
@@ -412,7 +414,7 @@ export function normalizeRemoteSettings(
     region: str("region", DEFAULT_S3_REMOTE_SETTINGS.region),
     bucket: str("bucket", DEFAULT_S3_REMOTE_SETTINGS.bucket),
     accessKey: str("accessKey", DEFAULT_S3_REMOTE_SETTINGS.accessKey),
-    secretKey: str("secretKey", DEFAULT_S3_REMOTE_SETTINGS.secretKey),
+    secretKey,
     ...common,
   };
 }

@@ -31,6 +31,139 @@ fn memory_storage_lists_gets_puts() {
 }
 
 #[test]
+fn remote_password_content_reaches_basic_and_sigv4_requests() {
+    use base64::Engine;
+    use std::io::{Read, Write};
+    let samples = [
+        "fixture",
+        " fixture",
+        "fixture ",
+        " fixture ",
+        "   ",
+        "\u{a0}fixture\u{a0}",
+    ];
+    for kind in ["webdav", "s3"] {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let peer = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(20);
+            for sample in samples {
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(std::time::Instant::now() < deadline);
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(_) => panic!("credential fixture accept failed"),
+                    }
+                };
+                configure_s3_page_stream(&stream);
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut header = Vec::new();
+                let mut byte = [0];
+                while !header.ends_with(b"\r\n\r\n") {
+                    assert!(header.len() < 16 * 1024);
+                    stream.read_exact(&mut byte).unwrap();
+                    header.push(byte[0]);
+                }
+                let header = String::from_utf8(header).unwrap();
+                let field = |wanted: &str| {
+                    header
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case(wanted).then(|| value.trim())
+                        })
+                        .unwrap()
+                };
+                let expected = if kind == "webdav" {
+                    assert!(header.starts_with("GET /dav/a.kdbx HTTP/1.1\r\n"));
+                    format!(
+                        "Basic {}",
+                        base64::engine::general_purpose::STANDARD
+                            .encode(format!("synthetic-user:{sample}"))
+                    )
+                } else {
+                    assert!(header.starts_with("GET /fixture/a.kdbx HTTP/1.1\r\n"));
+                    let date = field("x-amz-date");
+                    let payload = crate::crypto::hex(&crate::crypto::sha256_bytes(b""));
+                    assert!(field("x-amz-content-sha256") == payload);
+                    let signed = "host;x-amz-content-sha256;x-amz-date";
+                    let canonical = format!("GET\n/fixture/a.kdbx\n\nhost:{addr}\nx-amz-content-sha256:{payload}\nx-amz-date:{date}\n\n{signed}\n{payload}");
+                    let scope = format!("{}/us-east-1/s3/aws4_request", &date[..8]);
+                    let to_sign = format!(
+                        "AWS4-HMAC-SHA256\n{date}\n{scope}\n{}",
+                        crate::crypto::hex(&crate::crypto::sha256_bytes(canonical.as_bytes()))
+                    );
+                    let mut key = crate::crypto::hmac_sha256(
+                        format!("AWS4{sample}").as_bytes(),
+                        &date.as_bytes()[..8],
+                    );
+                    for part in [b"us-east-1".as_slice(), b"s3", b"aws4_request"] {
+                        key = crate::crypto::hmac_sha256(&key, part);
+                    }
+                    let signature =
+                        crate::crypto::hex(&crate::crypto::hmac_sha256(&key, to_sign.as_bytes()));
+                    format!("AWS4-HMAC-SHA256 Credential=synthetic-user/{scope}, SignedHeaders={signed}, Signature={signature}")
+                };
+                // Neither a failed assertion nor the response logs credentials.
+                let authorized = field("authorization") == expected;
+                let status = if authorized {
+                    "200 OK"
+                } else {
+                    "401 Unauthorized"
+                };
+                stream
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 {status}\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                        )
+                        .as_bytes(),
+                    )
+                    .unwrap();
+                assert!(
+                    authorized,
+                    "request did not use the exact synthetic credential"
+                );
+            }
+        });
+        for sample in samples {
+            let config = RemoteSettings {
+                kind: kind.into(),
+                endpoint: format!(
+                    "http://{addr}{}",
+                    if kind == "webdav" { "/dav" } else { "" }
+                ),
+                region: "us-east-1".into(),
+                bucket: "fixture".into(),
+                access_key: "synthetic-user".into(),
+                secret_key: sample.into(),
+                ..RemoteSettings::default()
+            };
+            let storage: Box<dyn RemoteStorage> = if kind == "webdav" {
+                Box::new(WebDavStorage::new(&config).unwrap())
+            } else {
+                Box::new(S3Storage::new(&config).unwrap())
+            };
+            assert!(storage.get("a.kdbx").unwrap() == b"ok");
+        }
+        peer.join().unwrap();
+    }
+    let config = RemoteSettings {
+        endpoint: "http://127.0.0.1:1".into(),
+        bucket: "fixture".into(),
+        access_key: "synthetic-user".into(),
+        secret_key: String::new(),
+        ..RemoteSettings::default()
+    };
+    assert!(S3Storage::new(&config).is_err());
+}
+
+#[test]
 fn memory_conditional_put_is_compare_and_swap() {
     let storage = MemoryStorage::default();
     storage.seed("vaults/a.kdbx", b"original".to_vec());

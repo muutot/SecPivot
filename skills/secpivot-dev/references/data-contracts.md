@@ -1,5 +1,15 @@
 # Data Contracts
 
+Remote `secretKey`/`secret_key` is an opaque password or signing key: frontend
+normalization, queued `set_config`, native normalization, protected persistence
+and transport construction preserve every character, including edge whitespace.
+Only the exact empty string keeps an existing stored credential; a whitespace-only
+replacement is a new nonempty value. Endpoint/region/bucket/access-key/prefix/name
+normalization remains unchanged, and stored credentials still cross IPC masked.
+Frontend real-service and native encrypted-reload/Basic-wire tests cover synthetic
+values; no real provider, mobile secret store or recovery of already-trimmed keys
+is implied.
+
 WebDAV `RemoteObject.key` is a logical Unicode path, not a percent-encoded URI.
 `href_to_key(base_url, href) -> Result<String, String>` decodes each path segment
 exactly once before the shared request builder encodes it. Literal plus and

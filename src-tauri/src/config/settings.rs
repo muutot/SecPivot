@@ -1355,7 +1355,8 @@ fn normalize_remote_settings(settings: &mut RemoteSettings) {
     settings.region = settings.region.trim().to_owned();
     settings.bucket = settings.bucket.trim().to_owned();
     settings.access_key = settings.access_key.trim().to_owned();
-    settings.secret_key = settings.secret_key.trim().to_owned();
+    // Password/signing-key whitespace is part of the credential. Only the
+    // exact empty string is a renderer placeholder that keeps a stored value.
     settings.prefix = settings.prefix.trim().to_owned();
     settings.backup_count = clamp_i32(settings.backup_count, 0, 10, 3);
     settings.backup_template = settings.backup_template.trim().to_owned();

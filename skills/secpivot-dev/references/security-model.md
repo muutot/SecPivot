@@ -1,5 +1,13 @@
 # Security Model
 
+Remote passwords and signing keys must be preserved exactly, not trimmed as form
+text. The blank-keep configuration contract applies only to an exact empty string;
+whitespace-only replacement must not silently reuse an older stored credential.
+Normalization, encrypted reload and S3/WebDAV construction retain the secret bytes.
+Masked IPC, platform credential protection and authentication validation keep their
+existing boundaries. Synthetic Windows DPAPI and loopback checks do not establish
+native mobile storage/provider security or recover values previously trimmed.
+
 WebDAV URI decoding must not redirect a listed resource's read or write. Decode
 each segment once into the logical key, preserving literal plus/percent-looking
 names; reject malformed UTF-8/escapes and structural slash/dot/control ambiguity
