@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S57；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S58；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 16     | 16        | 0         |
+| High      | 17     | 17        | 0         |
 | Medium    | 40     | 40        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **68** | **68**    | **0**     |
+| **Total** | **69** | **69**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2884,3 +2884,58 @@ check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单�
 当前详细卡片 68 Confirmed（Critical 1 / High 16 / Medium 40 / Low 11），
 原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续其余系统/竞品/UI
 覆盖；手机 v1.6.5 另存为 ACL 源码修复已确认，新 APK/真机/provider 待验证。
+
+### Finding: SP-S58 祖先分组删除连带丢失较新的深层编辑（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data integrity / Synchronization / Stability
+- Status: Confirmed
+- Affected area: native group merge and permanent-deletion conflict resolution
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:96–113/130–155/226–272（8695b74 修复前）；src-tauri/src/vault/merge.rs::merge_databases
+  - Function / Module: get_last_update / merge_groups / GroupMut::remove
+  - Relevant behavior: 删除祖先前的时间扫描只查看直属条目和子分组。祖先可以先排入删除队列，而孙层条目或分组按自身时间幸存；随后 GroupMut::remove 递归清空祖先整个子树，覆盖了子对象的胜出决定。队列依赖 HashSet 遍历，Deleted 事件在实际移除之前生成，分组移动又在删除之后执行。
+  - Reproduction: nested-deletion-native-red.log 两项真实应用回归失败。用 add_group/add_entry 建三层合成库，保存重开后保留旧副本；真实 delete_group 永久删除并保存重开，另一个实际 VaultSession 对旧副本执行 flags 编辑或叶分组改名，修改时间固定晚于具体删除时间一分钟。以编辑侧为 destination 合并、保存重开，较新条目或叶分组消失。原始红测均停止在该方向的首次缺失断言，反向、旧兄弟节点与重复合并由最终绿测证明。
+  - Independent verification: 无本地 Cargo patch 的原始 registry keepass =0.13.22 两项直接 API/save/reopen 探针同样丢失深层条目/分组（nested-deletion-registry-red-corrected.log；metadata 确认 registry 来源）。固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5 的 PwDatabase.cs:1066–1130 使用子先父后的 ApplyDeletions，并由 SafeCanDeleteGroup 拒绝删除非空分组；保留对象时移除旧标记。来源复用 merge-location-reference-provenance.json，文件 SHA-256 3470bf8193e95d211d422eafba901a39a68f2a4d796ce11a0e44778d87ad01b0 已重新核对。未执行官方客户端。
+- Problem: 较新的编辑虽然满足自己的胜出条件，却被另一层祖先删除隐式覆盖；合并完成后保存重开确认缺失。
+- Why it matters: 嵌套分组的跨设备删除/编辑冲突会持久丢失记录或较新分组元数据，按受限并发冲突场景的 High；不是每次保存必然损坏，原始输入仍保留在本次纯函数调用之外，未读取或证明真实用户库受损。
+- Realistic failure scenario: 一台设备删除整个父分组，另一台随后编辑孙层凭据或改名深层分组；选择合并后，较新工作被祖先删除连带清掉。
+- Minimal fix: 每个对象按自己的标记决定去留，幸存条目/分组恢复所需祖先；完成全部条目/分组移动后，按子先父后只删除空候选分组。保留祖先清除旧标记，Deleted 事件只对应真实删除；临时新增又移除的空祖先不产生虚假事件。
+- Better long-term fix: 单独复核全部删除标记传播和生命周期、相同时间冲突、未知时间的方向差异、回收站及真实客户端/provider；不能把递归 max 时间当成完整删除策略。
+- Regression test suggestion: 深层较新条目和分组编辑双向合并/保存重开/重复合并保留，旧兄弟条目和空分组仍删除；移出对象不连带删除；父标记晚于子编辑也不能覆盖子自己的较新胜出；无子标记不发明删除，实际事件与幸存标记一致，空分组相等/缺失/未知时间保持既有边界。
+- Estimated effort: 3–6 小时（原生/registry/官方复核、删除顺序修复和完整验证）
+
+d1fe8c4 已修复。nested-deletion-native-green-final.log 四项原生回归通过：
+两项真实深层编辑与永久删除，检查重开、两个方向、重复合并、旧兄弟节点及
+祖先标记；两项移出后删除祖先，条目使用实际 move_entry，分组无第一方
+移动命令，因此用依赖 tracked move_to 模拟外部客户端并执行真实 delete_group。
+新增三项依赖回归覆盖独立父/子标记、无子删除标记、实际事件，以及空分组
+时间边界。35 项 merge 模块测试通过（nested-deletion-dependency-merge-final.log），
+11 项补丁专项测试通过（nested-deletion-dependency-all.log）。
+
+明确排除无效证据：registry 首次因未声明 chrono 而编译失败，改用 std
+Duration 后才取得两个有效红测；移动边界首次误调用不存在的 move_group，
+也未执行测试。条目移出夹具随后因 pin_times 清空旧 LocationChanged 而
+触发现有“缺时间保留 destination”策略，检查证明祖先仍非空，并非产品
+修复后空组残留；补齐明确旧位置时间后通过。没有修改已有缺时间移动策略。
+
+本项保留内容时间优先、无内容时间才回退位置时间的既有永久删除策略，
+没有擅自改成 max。空组具体时间相等仍按旧策略删除，未知删除时间且
+具体更新时间的 source-only/destination-only 差异也显式保留和记录；因此
+不宣称与官方等时/未知时间策略完全一致。所有源标记的全局传播和条目
+旧标记清理仍是独立后续边界，本次仅移除幸存祖先的相关旧标记。
+
+verify-nested-deletion.log exit 0：323 frontend、649 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单线程、
+无过滤、临时 CARGO_PROFILE_DEV_DEBUG=0，原生 live clipboard 保持 opt-out。
+最终四文件补丁从原始 archive 在全新目录重建，60 hashes/56 untouched
+文件均符合 provenance；版本、Cargo 接线和未拥有的 vendor 文件未变。
+维护 gate 更新 data-contracts/security-model/project-structure、KEEPASS_PATCH
+和同步 TODO 子边界（保持 [~]）。报告提交仅更新证据，无额外维护引用变更。
+
+本项无 UI/CSS、IPC/schema、秘密返回改变，没有实际 Tauri handler、用户库、
+共享剪贴板、云服务/provider、真实 Android/第三方客户端运行或安全擦除证据。
+当前详细卡片 69 Confirmed（Critical 1 / High 17 / Medium 40 / Low 11），
+原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active；手机 v1.6.5 的
+另存为 ACL 源码修复已确认，替换 APK/真机/provider 验证仍缺。

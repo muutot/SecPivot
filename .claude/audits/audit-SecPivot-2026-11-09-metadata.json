@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S57; historical supplemental tracking notes excluded",
-    "total": 68,
-    "confirmed": 68,
+    "scope": "15 baseline cards plus SP-S05 through SP-S58; historical supplemental tracking notes excluded",
+    "total": 69,
+    "confirmed": 69,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
-      "High": 16,
+      "High": 17,
       "Medium": 40,
       "Low": 11
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "a44d2fd",
+  "remediation_checkpoint": "d1fe8c4",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S58",
+      "area": "Ancestor group deletion cascade removes newer deep entry/group edits despite their independent winner decisions",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "8695b74",
+      "commit": "d1fe8c4",
+      "status": "Confirmed and remediated. Two valid actual API/save/reopen native red failures and two independent unpatched registry red failures; pinned official post-order/empty-group deletion corroborates. Four native, three new dependency, 35 merge-module and 11 patch-specialized cases pass; full verify 323/649/ACL2 serial/no filters/live clipboard/debug=0. Preserve ancestry, independent object markers, moved-out objects, delete old siblings/empty groups child-first after moves, clear retained ancestor markers and emit actual removal events. Invalid chrono/move_group compilation and missing old location fixture excluded. Equal/missing/unknown time policy retained explicitly; global marker propagation/entry marker lifecycle/client/device/provider proof remains separate."
+    },
     {
       "id": "SP-S57",
       "area": "Actual permanent deletion calls untracked removal, omits KDBX tombstones and reintroduces records during stale synchronization",
@@ -562,10 +571,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "a44d2fd",
-    "log": "verify-permanent-deletion.log",
+    "checkpoint": "d1fe8c4",
+    "log": "verify-nested-deletion.log",
     "frontend_tests": 323,
-    "rust_unit_tests": 645,
+    "rust_unit_tests": 649,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -595,7 +604,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 627,
+    "rust_unit_tests_discovered": 649,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -925,6 +934,35 @@
       "provenance": "permanent-deletion-reference-provenance.json",
       "scope": "Actual single/batch/no-bin/recycled entry and recursive group removal, bin emptying, KDBX reopen/stale merge both directions/merged reopen/repetition/tombstones, prior markers and unaffected objects, invalid batch atomicity and newer explicit edit policy",
       "limitations": "Initial three deep-group lookup fixture failures and intermediate missing-mut compilation excluded. Older deletion vs newer move policy not changed; official LastModificationTime-based deletion is separate from location merge. No user vault/clipboard/Tauri handler/real client/device/provider or secure erasure evidence."
+    },
+    "prior_permanent_deletion_gate": {
+      "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
+      "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
+      "checkpoint": "a44d2fd",
+      "log": "verify-permanent-deletion.log",
+      "frontend_tests": 323,
+      "rust_unit_tests": 645,
+      "android_acl_tests": 2
+    },
+    "nested_deletion_conflicts": {
+      "result": "passed",
+      "checkpoint": "d1fe8c4",
+      "native_red_log": "nested-deletion-native-red.log",
+      "native_red_failed": 2,
+      "native_green_log": "nested-deletion-native-green-final.log",
+      "new_native_tests": 4,
+      "registry_red_log": "nested-deletion-registry-red-corrected.log",
+      "registry_red_failed": 2,
+      "registry_metadata": "nested-deletion-registry-metadata.json",
+      "dependency_merge_log": "nested-deletion-dependency-merge-final.log",
+      "dependency_merge_tests": 35,
+      "dependency_specialized_log": "nested-deletion-dependency-all.log",
+      "dependency_specialized_tests": 11,
+      "new_dependency_tests": 3,
+      "reference_provenance": "merge-location-reference-provenance.json",
+      "reconstruction_log": "nested-deletion-patch-reconstruction-final.log",
+      "scope": "Actual deep edits/permanent deletion/reopen/bidirectional/repeated merge, old siblings, entry API and dependency group relocation out of subtree, independent ancestor/child markers, no invented child deletions, actual events, retained ancestor marker cleanup, equal/missing/unknown empty-group times",
+      "limitations": "Invalid chrono/move_group compilation and missing-old-location move fixture excluded. Existing content-first fallback, equal deletion and unknown-time directional asymmetry retained. Global marker propagation/entry marker cleanup remains separate. No user vault/clipboard/Tauri handler/real cloud/client/device/provider evidence."
     }
   },
   "reverification_notes": [
@@ -997,6 +1035,7 @@
     "ac810e0 fixes SP-S54 modal Tab boundaries. Actual attachment editor browser 9/9 red cases escape/stall; six production-handler tests originally 4 failed/2 passed, now all pass. Nine browser green and six native DOM excluded-candidate cases pass; visible Add still invokes filechooser, cleanup restores invoker. Full verify 323/627/ACL2 passed serially with temporary dev debug=0 and clipboard opt-out. Theme/structure focus contracts and obsolete modal CSS TODO reference corrected; no new TODO checked or CSS/markup/IPC/schema/vendor change. Baseline/score unchanged, goal active; narrow tab wrapping and remaining system/UI/competitor audit continue, mobile v1.6.5 replacement/provider unverified.",
     "d6501ab optimizes SP-S55 editor tabs. Actual browser baseline 33/36 wrapped labels; default zh-CN desktop three themes passed. Final 36 cases across zh-CN/en, dark/light/custom, 11/15px secondary font and three sizes pass; 36 screenshots and contact sheets inspected. Intermediate CSS-only Tab focus partially clipped after two rendering frames, explicitly fixed with nearest focusin scroll/inset existing outline. Scoped check/build/323 frontend/format exit 0; native full 627/ACL2 reused at ac810e0. Approved CSS contract synchronized, no new tokens/IPC/schema/vendor/TODO or tests mirroring CSS. Baseline/score unchanged, goal active; no editor submit/user-vault/clipboard/Tauri/device/provider/screen-reader evidence, mobile replacement still pending.",
     "bab958a fixes SP-S56 native location/content merge identity. Four original native failures and four independent unpatched registry failures confirm; ten new native/eight dependency/32 upstream tests and full verify 323/637/ACL2 passed. Source previous-parent UUID is retained even when its referenced bin shell is excluded. Four reviewed upstream patches, 56 unchanged package files and fresh reconstruction all 60 hashes verified. True equal-time conflicts, newer deletion, missing times and content-aware history dedup retain deliberate boundaries. Docs gate and partial TODO synchronized; original b7c5d9f/15 findings/6.1 score unchanged. Overall goal active and mobile replacement APK/device/provider unverified.",
-    "a44d2fd fixes SP-S57 actual permanent deletion markers. Six valid native red failures; independent unpatched registry tracked/untracked controls and fixed official DeleteSelectedEntries/DeleteAllObjects corroborate. Eight new native cases and full verify 323/645/ACL2 passed serially, temporary debug=0, no filters/live clipboard. Five first-party removal call sites now track recursively; partial TODO and data/security/structure gate synchronized, stale group-delete doc corrected. Initial deep fixture lookup and missing-mut compilation excluded. True newer edit and rejected batch boundaries retained; max(move,content) permanent deletion policy not asserted from names. No vendor/UI/IPC/schema/user-vault/clipboard/Tauri/client/device/provider/secure erasure evidence. Original b7c5d9f/15 findings/6.1 baseline preserved, goal active and mobile replacement pending."
+    "a44d2fd fixes SP-S57 actual permanent deletion markers. Six valid native red failures; independent unpatched registry tracked/untracked controls and fixed official DeleteSelectedEntries/DeleteAllObjects corroborate. Eight new native cases and full verify 323/645/ACL2 passed serially, temporary debug=0, no filters/live clipboard. Five first-party removal call sites now track recursively; partial TODO and data/security/structure gate synchronized, stale group-delete doc corrected. Initial deep fixture lookup and missing-mut compilation excluded. True newer edit and rejected batch boundaries retained; max(move,content) permanent deletion policy not asserted from names. No vendor/UI/IPC/schema/user-vault/clipboard/Tauri/client/device/provider/secure erasure evidence. Original b7c5d9f/15 findings/6.1 baseline preserved, goal active and mobile replacement pending.",
+    "d1fe8c4 fixes SP-S58 confirmed nested deletion cascade loss. Actual native 2 valid red, unpatched registry 2 valid red, fixed official post-order/empty-only deletion corroboration; native 4, new dependency 3, merge-module 35 and patch-specialized 11 green. Final full verify 323/649/ACL2 passed serially/debug=0/no filters/live clipboard. Four patched/56 untouched/60 verified hashes reconstructed from original archive in fresh directory. Documentation currency gate and partial sync TODO updated. Invalid compiler/missing-time fixture evidence excluded. Content-first/equal/missing/unknown directional policy preserved; whole marker lifecycle and real client/provider remain pending. No UI/IPC/schema/user-vault/clipboard/device changes. Original b7c5d9f/15/6.1 baseline preserved; goal active and phone APK verification pending."
   ]
 }
