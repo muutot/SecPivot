@@ -21,6 +21,11 @@ extra roots, truncated envelopes and outside-root text fail with content-free
 errors. This adds no external entity resolution or namespace/propstat authority
 claim; native HTTP regressions use only no-auth loopback synthetic documents.
 
+WebDAV collection filtering relies on a type property requested explicitly in
+PROPFIND, not a filename/size heuristic or unsolicited mock data. The request-driven
+loopback fixture checks exact DAV property names and ordinary/extensionless file
+retention. This improves enumeration and adds no new path or provider authority.
+
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
 remain after refusal; no text is silently dropped. Protected Base64 still

@@ -14,13 +14,14 @@ use url::Url;
 // WebDAV transport (reqwest blocking + PROPFIND multistatus parsing)
 // ---------------------------------------------------------------------------
 
-/// `propfind` request body: ask only for size + last-modified so collections
-/// (which carry no `getcontentlength`) are distinguishable from files.
+/// Request the type needed to distinguish collections from files. Size and
+/// last-modified remain optional metadata, not resource-type indicators.
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>
     <d:getcontentlength/>
     <d:getlastmodified/>
+    <d:resourcetype/>
   </d:prop>
 </d:propfind>"#;
 

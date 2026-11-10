@@ -35,6 +35,13 @@ comments and PI remain supported. No namespace/propstat/full XML validation or
 external entity resolution is implied. The shared strict-JSON
 tests/fixtures/webdav-document-envelope.json supplies independent document controls.
 
+WebDAV PROPFIND explicitly requests DAV:resourcetype alongside size/date, matching
+the parser's collection filter. The request-driven native HTTP fixture excludes
+non-slashed collections and keeps normal/extensionless files and metadata.
+Unavailable type/size/date remain optional; filename extension or zero size is
+never used to infer collection membership. Existing namespace/propstat/provider
+limits remain, with no IPC/schema/dependency change.
+
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is
 rejected only when no keyfile is selected; local creation still validates password confirmation. Keyfile
