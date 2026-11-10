@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S55；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S56；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 15     | 15        | 0         |
-| Medium    | 39     | 39        | 0         |
+| Medium    | 40     | 40        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **66** | **66**    | **0**     |
+| **Total** | **67** | **67**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2786,3 +2786,53 @@ ACL 2，临时 debug=0、单线程、无过滤、live clipboard opt-out。
 整体目标 active，继续其余系统/竞品/UI 覆盖。自己启动的 Vite/Edge
 已清理；没有原生 Tauri/Android WebView、屏幕阅读器或设备触摸验证。
 手机 v1.6.5 的另存为 ACL 源码修复已确认，新 APK/真机/provider 仍待验证。
+
+### Finding: SP-S56 移动记录混入内容比较，同父分组合并遗漏较新位置时间（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Synchronization / Stability
+- Status: Confirmed
+- Affected area: native entry/group location merge and first-party history content identity
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:196–202/294–309/492–509/546–552/790–822、src-tauri/src/vault/merge.rs:61–72（3575b38 修复前）
+  - Function / Module: merge_groups / merge_entries / have_groups_diverged / have_entries_diverged / content_diverged
+  - Relevant behavior: 合并仅在父分组不同时比较 LocationChanged，返回同一父分组的较新移动时间被遗漏；PreviousParentGroup 被内容 equality 比较，entry 当前 parent 也污染历史内容身份。分组为避免环而临时移到根时覆盖真实 previous parent。
+  - Reproduction: merge-location-convergence-red-compiled.log 的四个实际原生回归全部失败。合成库由 create_session/add_group/add_entry 创建并保存重开，entry 经真实 move_entry 移出再移回，group 经真实 delete_group/restore_group 返回根。内容时间不变的两项报同时间内容冲突；另有真实 flags/rename 编辑的两项保留 t10 而非较新 t30 位置时间。初始 fixture 未限定 Times 的编译失败不计产品证据。原始红测停止在首次失败，后续重开/反向/第三设备断言只由最终绿测覆盖。
+  - Independent verification: 未应用 Cargo patch 的独立 registry keepass =0.13.22，save/reopen/merge 四项也全部失败（merge-location-registry-independent-red.log）。host cargo metadata 确认实际 registry 来源，archive checksum a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e。固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5 的 PwDatabase.cs:910–917/1405–1430/1457–1490，先 Relocate 再独立合并最大 LocationChanged 与对应 PreviousParentGroup；文件 SHA-256 3470bf8193e95d211d422eafba901a39a68f2a4d796ce11a0e44778d87ad01b0。来源记录 merge-location-reference-provenance.json，未运行官方客户端。
+- Problem: 合并把移动簿记误当内容修改，同时忘记已返回原位置的较新时间；后续第三设备的旧移动可把对象重新移走，或纯位置差异阻止自动合并。
+- Why it matters: 常规多设备移动与返回操作造成错误分组或不必要冲突。复现范围是位置/簿记/历史重复与合并拒绝，没有证实字段、密码或整个对象永久丢失，按 Medium。
+- Realistic failure scenario: A 在 t30 将条目移走再移回根并在 t40 改属性，B 与基线合并后只留下旧位置时间；C 的 t20 旧移动随后被误认为更新，把条目放回旧分组。无内容修改的相同路径则可能先报“同一时间戳内容不同”。
+- Minimal fix: 同父分组合并较新位置时间和其 previous parent；实际重定位/新建分组保留源 provenance，分组临时根移动完成后恢复它。Entry::content_eq 忽略时间/history/当前及前父分组，first-party 另比到期属性；未知时间的不同父分组不借用未执行移动的 source timestamp。
+- Better long-term fix: 继续独立验证相同位置时间的并行移动、删除与较新移动的排序、跨客户端分组顺序及真实远端同步；不可仅按 LastModificationTime 标完整兼容。
+- Regression test suggestion: 四种 entry/group 返回路径含内容有无编辑，保存重开、双向合并、第三设备旧移动；不同父分组相同内容、父子互换、真实同时间字段/名称冲突、较新永久删除、缺失时间和历史同内容去重。底层验证不存在 previous-parent 分组的原始 UUID 经 KDBX 保存重开仍保留。
+- Estimated effort: 2–4 小时（原生复现、官方/registry 交叉核验、依赖补丁及完整门禁）
+
+bab958a 已修复。10 个新增原生回归通过（merge-location-boundaries-final.log），
+8 个依赖专属测试通过（merge-location-dependency-final.log），其中新测试直接
+读取不再存在分组的原始 previous-parent UUID 并保存重开。上游合并测试
+merge-location-upstream-compatibility.log 的 32 项全部通过（31 个原有 + 1 个新增）。
+纯位置差异不再产生内容冲突，真实同时间字段/分组名称冲突仍拒绝，较新永久
+删除不复活对象；缺失时间保持既有未知移动策略，未发明时间顺序。
+
+中间边界探针曾 8 通过 / 2 失败：source 的 previous parent 指向被回收站
+规则移除的 bin shell，公开 previous_parent() 只返回仍存在的分组，None
+不能证明原始 UUID 丢失。纠正可解析 getter 的 fixture 期待后，再增加底层
+原始 UUID 保存重开测试；不将这两项 fixture 失败当新产品缺陷。第一次
+patch formatter 未显式 UTF-8 返回失败，已修正；全平台 offline metadata
+因未缓存 js-sys 失败，实际 Windows target metadata 随后通过，均非产品缺陷。
+
+verify-merge-location.log exit 0：323 frontend、637 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过；Rust 单线程，
+无过滤，临时 CARGO_PROFILE_DEV_DEBUG=0，四个原生 live clipboard body
+保持 opt-out。merge-location-final-format.log 再次通过。新拥有的 db/merge.rs
+单文件通过 stdin rustfmt 格式化，未遍历其他上游文件。KEEPASS_PATCH、
+provenance 和四份维护引用已同步；当前四文件补丁，56 个上游文件逐字节
+不变，从新复制原始包应用 zero-context patch 后全部 60 hashes 匹配。
+
+TODO 只补已验证位置/历史子边界，整体同步保持 [~]。本项无 UI/CSS、
+IPC/schema、密码返回改变，未访问用户库/共享 OS 剪贴板/真实 Tauri handler、
+第三方客户端/设备/provider；未证明真实用户旧位置覆盖或永久丢失。
+当前详细卡片 67 Confirmed（Critical 1 / High 15 / Medium 40 / Low 11），
+原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续其余系统/竞品/UI
+覆盖。手机 v1.6.5 另存为 ACL 源码修复已确认，新 APK/真机/provider 待验证。
