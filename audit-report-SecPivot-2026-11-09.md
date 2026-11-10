@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S60；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S61；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 18     | 18        | 0         |
-| Medium    | 41     | 41        | 0         |
+| Medium    | 42     | 42        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **71** | **71**    | **0**     |
+| **Total** | **72** | **72**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3060,3 +3060,64 @@ tracked-delete-reconstruction.log 从新拷贝原始 archive + 零上下文补�
 Android/APK/device/provider 或第三方客户端运行证据。手机 v1.6.5 另存为
 ACL 修复仍待替换 APK/真机验证。71 Confirmed（Critical 1 / High 18 /
 Medium 41 / Low 11），原 b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
+
+### Finding: SP-S61 合并重新保存已拒绝记录的无引用附件（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Privacy / Data integrity / Synchronization
+- Status: Confirmed
+- Affected area: prepared canonical binary merge and final history/bin ownership
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/types/mod.rs:323–374/379–397；src-tauri/src/vault/merge.rs:452–453/468/500–506（7a22885 修复前）
+  - Function / Module: prepare_attachment_merge, complete_attachment_merge, first-party merge_databases
+  - Relevant behavior: 准备阶段把来源 current/history 载荷导入 destination 并临时保留全部 prepared 二进制。对象随后因较新删除标记被拒绝或移除，完成阶段仅重建反向引用和解除保留；第一方历史联合/回收站恢复后没有最终回收，已无拥有者的载荷仍在 binary pool 并被保存。
+  - Reproduction: SP-S60 删除修复后，merge-orphan-native-red-valid.log 三项实际应用/save/reopen 失败。实际单条/三层子树永久删除保存重开时附件数已为 0，随后与原两附件 current/history 旧副本合并，entry/group 保持删除但附件数为 2 而非 0。另一实际 KDBX 夹具解除历史引用并重建索引，创建一个本地原有孤立头；合并后应只保留这一个旧头，却保留两个。红测在首个方向最终数量断言失败，第二方向和重复/字节断言由绿测覆盖。
+  - Independent verification: 同一原始外部夹具在无 patch registry keepass =0.13.22 两方向控制通过（merge-orphan-registry-control.log）；加本地 prepare/complete 后，两方向均最终 num_attachments 1≠0（merge-orphan-patched-independent-red.log），删除前置为 0 已通过。增加最终 finalize 调用后，两项通过（merge-orphan-patched-independent-green.log）。独立项目不经第一方 merge；registry/local metadata 确认来源，原夹具和 SHA256/feature 差异保存在 merge-orphan-independent-before-finalization.rs 与 merge-orphan-independent-provenance.json。原 registry metadata 的 Cargo 下载提示已分离到 raw.log，JSON 由原捕获内容解析生成，未事后替换来源。
+- Problem: 记录的删除标记正确，仍会在准备阶段把其当前/历史附件重新导入，或保留已删除的 destination 载荷；可见树正确掩盖了文件内容残留。
+- Why it matters: 删除后的新合并库持续携带不需要的载荷，反复合并不同旧版本可增加保存和同步成本，删除保留政策也不一致。按受限的附件保留/增长风险定 Medium；整个 KDBX 仍加密，未证明明文泄漏、未授权读取或磁盘安全擦除失效。
+- Realistic failure scenario: 用户在一台设备永久删除带附件的记录并保存，随后与另一台旧副本同步；记录未复活，但旧附件内容再次写入合并文件并跟随后续保存和同步。
+- Minimal fix: 准备阶段返回 opaque AttachmentMergeState 记录 prepared ID 与原始 destination 孤立头 ID；第一方完成实际 winner、equal/losing histories 和本地 bin 恢复之后，核对最终递归拥有者/保留/载荷，仅回收 prepared 范围内无主且非原孤立头的 ID。
+- Better long-term fix: 继续真实跨客户端和大型附件库验证；原孤立头、来源孤立头排除、merge 后新建载荷与旧文件/备份的保留政策分开。早于历史/回收站恢复的全库 GC 会破坏迟到的合法拥有者，不适合作为本项替代。
+- Regression test suggestion: 实际单条/子树删除、current/history 两载荷、双向合并/保存重开/重复、marker/原输入不变；本地原孤立头字节保留且来源孤立头不导入；canonical alias 原头先/后编号、晚加入二进制/嵌套历史、仍有保留/缺失载荷前置拒绝；既有全部 current/losing/equal-history/bin/shared/protection 回归与独立 registry/prepared/finalized 对照。
+- Estimated effort: 3–5 小时（区分原头保留、最终时序设计、两层独立回归及包来源验证）
+
+879d37f 已修复。prepare_attachment_merge 返回只含 ID 集合的 in-memory
+AttachmentMergeState；原始孤立头 ID 在 canonical 引用变更前记录，
+prepared ID 在导入后记录。complete 继续安装 current winners 并解除
+准备保留，不提前回收；merge_databases 在 history union/loser insertion
+和 restore_bin 之后调用 finalize，成功后再完成删除注册表联合。
+finalize 拒绝尚存保留或任何最终递归拥有者的缺失载荷，失败检查前不
+改变 pool；仅删除 prepared 且非原头且无最终 current/history 所有者
+的二进制。原头与相同字节的 canonical 共享编号先/后情况均保留原
+头的实际 ID/字节；后续加入的 ID 不在清理范围内，不执行全库 GC。
+这两个 ID 集合不含附件值、密码或主密钥，没有 IPC/schema/磁盘元数据。
+
+merge-orphan-native-green.log 三项通过。单条和三层子树从实际创建/
+update/delete/save/reopen 出发，两方向删除对象和 t40 marker、最终
+附件为 0、重复保存重开、原输入两附件不变均通过。原头场景从实际
+历史载荷解除引用并保存重开验证 one orphan；local 保留原历史字节，
+remote 不导入孤立头，两方向重复合并符合既有政策。
+
+merge-orphan-vendor-green.log 17 项通过，其中三项新增验证原头与
+当前内容相同的 canonical alias 两种编号顺序、准备后引入的无引用
+header、complete 后才写入的原始嵌套历史 owner、active lease 和
+missing payload 前置拒绝保持 entries/pool/leases。直接生命周期夹具
+使用空 MergeLog 模拟最终恢复时序，实际 native merge 与完整门验证
+是应用行为证据；不把这个模拟称为真实 provider 或客户端互操作。
+既有 prepared shared-owner、protection/dedup 与 unwind 回归仍通过。
+
+verify-merge-orphan.log exit 0：323 frontend、659 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。包括原有
+current-source/created/shared/branched/equal/losing-history 和回收站
+历史附件的实际合并/保存重开回归。Rust 单线程、无过滤、临时
+CARGO_PROFILE_DEV_DEBUG=0，live clipboard 保持 opt-out。无 _merge
+save_kdbx4 检查通过；原包 + zero-context patch 新目录重建全部 60
+hash 通过，4 patched / 56 untouched 不变。维护 gate 更新三引用、
+patch 说明/专项测试数和专门 TODO；完整同步 TODO 保持 [~]。
+
+本项无 UI/CSS/版本/公开秘密返回改变，无真实 Tauri handler、用户库、
+云服务、第三方客户端、Android APK/device/provider 或物理擦除证据。
+手机 v1.6.5 另存为 ACL 修复仍待替换 APK/真机验证。72 Confirmed
+（Critical 1 / High 18 / Medium 42 / Low 11），原 b7c5d9f 的 15 项/
+6.1 分保持，整体目标 active，继续其余系统/竞品/UI 边界复核。

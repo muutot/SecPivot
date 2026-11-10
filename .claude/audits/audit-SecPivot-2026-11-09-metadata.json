@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S60; historical supplemental tracking notes excluded",
-    "total": 71,
-    "confirmed": 71,
+    "scope": "15 baseline cards plus SP-S05 through SP-S61; historical supplemental tracking notes excluded",
+    "total": 72,
+    "confirmed": 72,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 18,
-      "Medium": 41,
+      "Medium": 42,
       "Low": 11
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "fb3b9c3",
+  "remediation_checkpoint": "879d37f",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S61",
+      "area": "Prepared canonical merge persists rejected/deleted records unowned current/history binaries",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "7a22885",
+      "commit": "879d37f",
+      "status": "Confirmed and remediated. Three actual native red and two independent prepared red; original registry controls pass, finalized external two green. Three native/seventeen specialized/full verify 323/659/ACL2 pass serially/debug=0/no filters/live clipboard. Opaque preparation state is consumed after final history/bin owners; collect unowned prepared IDs only, preserve original local orphan IDs and later-added binaries, reject active leases/missing payloads first. Original/source orphan semantics, alias order, late nested histories and failed inputs covered. Fresh reconstruction 60 hashes/56 unchanged and no-_merge check pass. No plaintext/device/user-vault/physical erasure proof."
+    },
     {
       "id": "SP-S60",
       "area": "Tracked permanent deletion releases its lease but persists unowned current attachment bytes",
@@ -589,10 +598,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "fb3b9c3",
-    "log": "verify-tracked-delete.log",
+    "checkpoint": "879d37f",
+    "log": "verify-merge-orphan.log",
     "frontend_tests": 323,
-    "rust_unit_tests": 656,
+    "rust_unit_tests": 659,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -622,7 +631,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 656,
+    "rust_unit_tests_discovered": 659,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -1005,10 +1014,10 @@
       "scope": "Actual entry/subtree permanent deletion and intermediately/later edited third copies, actual pre-creation same-lineage unseen recipient, two-stage bidirectional reopen/repeated merge, latest/disjoint/unknown markers, final active/bin/custom-icon exclusion and failed-merge input preservation",
       "limitations": "First-party supplement; vendor remains unchanged. Existing winner/survivor/bin-collision marker policy retained. Initial green record-preservation passed before an independent num_attachments=0 assertion failed; orphan source binary retention observed in saved merged output and queued for separate semantics/probe. No user-vault/clipboard/Tauri handler/real cloud/client/device/provider or secure-erasure evidence.",
       "pending_attachment_retention_observation": {
-        "status": "Observed; risk and cleanup semantics not yet independently adjudicated",
+        "status": "Independently confirmed and separately remediated as SP-S61 after SP-S60 isolated tracked deletion leak",
         "log": "deletion-registry-native-green-initial.log",
         "behavior": "Merged/reopened DB has no surviving target record but one unreferenced source binary remains",
-        "next_action": "Actual tracked deletion lease leak now separately fixed as SP-S60. Two independent prepared source/destination merge probes still persist unowned bytes after deletion succeeds; recheck first-party final history/bin ownership before minimal finalization."
+        "next_action": "Prepared finalization now runs after final history/bin owners. Real multi-client/provider and old-copy/physical erasure remain separate verification limits."
       }
     },
     "prior_absent_deletion_registry_gate": {
@@ -1036,6 +1045,34 @@
       "no_merge_check": "tracked-delete-no-merge-check.log",
       "reconstruction": "tracked-delete-reconstruction.log",
       "limitations": "Synthetic data only. Nested guard real; prepared extra count simulated; existing real prepared shared-owner regression passes. Intermediate compiler/normalized-history fixture failures excluded. Original orphan headers retained and prepared merge orphan imports remain a separate observed boundary. No plaintext/user-vault/device/provider/native clipboard/physical erasure evidence."
+    },
+    "prior_tracked_deletion_gate": {
+      "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
+      "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
+      "checkpoint": "fb3b9c3",
+      "log": "verify-tracked-delete.log",
+      "frontend_tests": 323,
+      "rust_unit_tests": 656,
+      "android_acl_tests": 2
+    },
+    "merge_orphan_finalization": {
+      "result": "passed",
+      "checkpoint": "879d37f",
+      "native_red_log": "merge-orphan-native-red-valid.log",
+      "native_red_failed": 3,
+      "native_green_log": "merge-orphan-native-green.log",
+      "new_native_tests": 3,
+      "dependency_log": "merge-orphan-vendor-green.log",
+      "new_dependency_tests": 3,
+      "dependency_tests": 17,
+      "independent_red": "merge-orphan-patched-independent-red.log",
+      "independent_green": "merge-orphan-patched-independent-green.log",
+      "registry_control": "merge-orphan-registry-control.log",
+      "provenance": "merge-orphan-independent-provenance.json",
+      "no_merge_check": "merge-orphan-no-merge-check.log",
+      "reconstruction": "merge-orphan-reconstruction.log",
+      "scope": "Actual delete and current/history creation before two-direction repeated merges/reopens, original local vs source orphan bytes, canonical alias ID order, late nested owners/later header exclusion, active lease/missing payload rejection and all prior merge history/bin/shared/protection cases",
+      "limitations": "Synthetic data only. Direct specialized finalization uses empty MergeLog for late-owner lifetime; native merge/full verification provide actual application evidence. Preserves original destination orphan headers and later-added binaries; no blanket GC or old-copy/filesystem erasure proof. No user vault/Tauri handler/native client/device/provider/clipboard evidence."
     }
   },
   "reverification_notes": [
@@ -1111,6 +1148,7 @@
     "a44d2fd fixes SP-S57 actual permanent deletion markers. Six valid native red failures; independent unpatched registry tracked/untracked controls and fixed official DeleteSelectedEntries/DeleteAllObjects corroborate. Eight new native cases and full verify 323/645/ACL2 passed serially, temporary debug=0, no filters/live clipboard. Five first-party removal call sites now track recursively; partial TODO and data/security/structure gate synchronized, stale group-delete doc corrected. Initial deep fixture lookup and missing-mut compilation excluded. True newer edit and rejected batch boundaries retained; max(move,content) permanent deletion policy not asserted from names. No vendor/UI/IPC/schema/user-vault/clipboard/Tauri/client/device/provider/secure erasure evidence. Original b7c5d9f/15 findings/6.1 baseline preserved, goal active and mobile replacement pending.",
     "d1fe8c4 fixes SP-S58 confirmed nested deletion cascade loss. Actual native 2 valid red, unpatched registry 2 valid red, fixed official post-order/empty-only deletion corroboration; native 4, new dependency 3, merge-module 35 and patch-specialized 11 green. Final full verify 323/649/ACL2 passed serially/debug=0/no filters/live clipboard. Four patched/56 untouched/60 verified hashes reconstructed from original archive in fresh directory. Documentation currency gate and partial sync TODO updated. Invalid compiler/missing-time fixture evidence excluded. Content-first/equal/missing/unknown directional policy preserved; whole marker lifecycle and real client/provider remain pending. No UI/IPC/schema/user-vault/clipboard/device changes. Original b7c5d9f/15/6.1 baseline preserved; goal active and phone APK verification pending.",
     "1b04387 fixes SP-S59 final-absent deletion registry propagation. Final actual native 4 red, unpatched registry 4 red and fixed official MergeInDeletionInfo source corroborate. Seven native and full verify 323/656/ACL2 pass serially/debug=0/no filters/live clipboard; vendor/60-hash provenance unchanged. Final-tree/private first-party helper unions both original ledgers and existing merged markers, max concrete timestamp, final survivors excluded. Documentation currency gate and partial sync TODO updated. Initial no-marker recipient fixture refined to actual pre-creation saved lineage; both final red variants repeat. Initial green orphan source attachment retention observation retained for separate audit, not erased or claimed as binary secure removal. Existing object/survivor/bin marker semantics retained. No UI/IPC/schema/user-vault/clipboard/device changes. Original b7c5d9f/15/6.1 baseline preserved; goal active and phone APK pending.",
-    "fb3b9c3 fixes SP-S60 tracked-removal attachment lease collection. Six actual delete paths fail saved binary counts before merge; unpatched registry controls pass. Eight native/fourteen specialized and full verify 323/656/ACL2 pass serially/debug=0/no filters/live clipboard. Only released candidates without leases or recursive owners collected, unrelated orphan headers preserved. Helper no longer _merge-gated; no-feature compile and fresh patch reconstruction 60 hashes/56 unchanged pass. Compiler/private-field and normalized nested fixture failures excluded. Data/security/structure/patch docs and dedicated narrow TODO updated; sync remains partial. Prepared independent merges still retain unused source/destination binaries after deletion succeeds, separate pending boundary. No UI/schema/IPC/version/user-vault/clipboard/device/physical erasure changes. Original b7c5d9f/15/6.1 unchanged; goal active and phone APK/provider pending."
+    "fb3b9c3 fixes SP-S60 tracked-removal attachment lease collection. Six actual delete paths fail saved binary counts before merge; unpatched registry controls pass. Eight native/fourteen specialized and full verify 323/656/ACL2 pass serially/debug=0/no filters/live clipboard. Only released candidates without leases or recursive owners collected, unrelated orphan headers preserved. Helper no longer _merge-gated; no-feature compile and fresh patch reconstruction 60 hashes/56 unchanged pass. Compiler/private-field and normalized nested fixture failures excluded. Data/security/structure/patch docs and dedicated narrow TODO updated; sync remains partial. Prepared independent merges still retain unused source/destination binaries after deletion succeeds, separate pending boundary. No UI/schema/IPC/version/user-vault/clipboard/device/physical erasure changes. Original b7c5d9f/15/6.1 unchanged; goal active and phone APK/provider pending.",
+    "879d37f fixes SP-S61 final prepared binary collection. Actual native three red after SP-S60 deletion already succeeds; independent prepared two red vs original registry controls, finalized two green. Three native/seventeen specialized/full verify 323/659/ACL2 pass serially/debug=0/no filters/live clipboard. State records only IDs, finalizer after history/bin restores collects unowned prepared IDs, preserves original orphan IDs/later binaries, refuses leases/missing final payloads before mutation. Canonical aliases in both ID orders, late nested histories and failed-state boundaries covered. Fresh 60-hash reconstruction/56 unchanged and no-_merge check pass; docs/patch/TODO gate updated, full sync partial. No UI/IPC/schema/version/user-vault/clipboard/device/provider/physical erasure changes. Original b7c5d9f/15/6.1 preserved; overall goal active and phone APK/provider unverified."
   ]
 }
