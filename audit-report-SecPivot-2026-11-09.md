@@ -3466,3 +3466,40 @@ Rust 字符串不含孤立 surrogate；未将所有 Unicode 非字符一律拒�
 累计 77 Confirmed（Critical 1 / High 19 / Medium 46 / Low 11），
 原 b7c5d9f 的 15 项和 6.1 分保持。手机 v1.6.5 替换 APK／真机
 provider、有效昂贵 KDF 预算与其余系统／竞品／UI 仍未完成，目标 active。
+
+9333209 已完成发布拒绝修复：在完整实际 XML 序列化之后、KDBX
+目标发布之前按 XML 1.0 Char 范围检查文本，非法字符返回固定无内容
+错误。不静默删除、不写非法字符引用、不更改输入读取或默认保护策略。
+受保护值已经转为 Base64，因此其底层任意合法 Rust 字符串保持可存；
+字段名、普通值、元数据、分组和历史中的实际 XML 文本均受校验。
+
+三项原生回归通过：实际 Bitwarden command/wire/import 的 9 种非法
+普通输入保存被拒绝，原文件字节保持且可重开、live dirty 编辑与保护
+值保持；普通 current 修正后仍存在的非法历史阻止发布并保留两个版本；
+6 种合法边界与 9 种 protected-only 非法底层值经过实际保存重开保真。
+依赖新增 2 个测试覆盖 36 个非法 value/key/group/meta 位置以及合法／
+受保护控制，全部 25 专项测试通过。独立探针保持相同源代码、当前
+两个 vendor 路径和记录的 lock，9 个非法保存拒绝、6 个合法保存重开，
+实际生成的 6 份 XML 均由 ElementTree 接受。路径、源／lock／XML
+哈希记录于 kdbx-scalar-independent-green-provenance.json。
+
+verify-kdbx-scalar.log exit 0：323 frontend、673 Rust、ACL 2，来源门、
+format、零错误警告 check、150-key 契约、build、KeePass 25、QuickXML
+1363（4 ignored）及 clippy 均通过。完整根门 serial/debug0/unfiltered，
+live clipboard unset；4 个原生剪贴板测试体和 4 ignored 不计执行覆盖。
+独立探针使用 debug0 dev/default scheduling，不混称根门。短暂 target
+锁等待不计产品失败或性能证据；新增线性字符扫描尚无大库性能基准。
+
+KeePass 仍 6 个 reviewed patch、54 upstream 不变，只有既有
+xml_db/mod.rs 更新；其余五个 patch 文件保持。原始 archive 加新 patch
+重建 60 个哈希、60／43 完整暂存字节及两个 patch identity 均通过，
+QuickXML 来源／补丁未改。一次 rustfmt 跟随入口 module 格式化了五个
+upstream 子文件，已恢复 exact HEAD 字节并在完整门前验证；维护文档
+现在明确 --config skip_children=true，不把工具行为记为产品问题。
+
+文档 gate 同步 data/security/structure、maintenance、patch 说明和
+TODO；SKILL 路由与接口／schema／默认值未变。报告和 strict JSON
+单独复核后提交，累计保持 77、原始 b7c5d9f/15/6.1 不变。
+已有非法普通历史仍会阻止保存，需修正或移除；没有自动修复、完整
+文本导入／导出、跨客户端、手机新 APK／provider 或完整安全保证。
+整个审计／竞品／UI 目标 active。
