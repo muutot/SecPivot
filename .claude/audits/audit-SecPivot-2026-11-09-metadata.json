@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S65; historical supplemental tracking notes excluded",
-    "total": 76,
-    "confirmed": 76,
+    "scope": "15 baseline cards plus SP-S05 through SP-S66; historical supplemental tracking notes excluded",
+    "total": 77,
+    "confirmed": 77,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 45,
+      "Medium": 46,
       "Low": 11
     }
   },
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S66",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "9798b77",
+      "commit": null,
+      "area": "KDBX publishes XML 1.0-invalid ordinary scalars after structured import",
+      "status": "Confirmed, pending repair. Native command/wire/import/save red1 publishes nine illegal cases; nine native self-reopens preserve values and flags. Standard ElementTree/System.Xml reject all nine actual internal XMLs. Separate current-library probe15 own reopens,9 invalid standard rejects/6 valid accepts. System.Xml helper total6 valid/18 illegal; no native competitor or independent encrypted decryption. Pinned SafeXmlString source sanitizes ordinary values, but planned repair refuses publication without dropping data. Red source/patch saved and root source restored. No native self-data-loss or disclosure evidence; unusual input/interoperability scope rated Medium."
+    },
     {
       "id": "SP-S65",
       "severity": "Medium",
@@ -1256,7 +1265,30 @@
     },
     "keepass_patch_tests": 23,
     "quickxml_library_tests": 1363,
-    "quickxml_library_ignored": 4
+    "quickxml_library_ignored": 4,
+    "kdbx_xml_scalars": {
+      "checkpoint": "9798b77",
+      "result": "Confirmed, pending remediation",
+      "proof": "kdbx-scalar-evidence-proof.json",
+      "native_red": "kdbx-scalar-native-red.log",
+      "native_failed": 1,
+      "native_filtered": 670,
+      "native_invalid_published": 9,
+      "native_exact_reopens": 9,
+      "native_ElementTree_rejected": 9,
+      "independent_probe": "kdbx-scalar-probe-final.log",
+      "independent_exact_reopens": 15,
+      "standard_ElementTree": "kdbx-scalar-standard-parser.json",
+      "standard_dotnet": "kdbx-scalar-dotnet-results.json",
+      "standard_dotnet_log": "kdbx-scalar-standard-control.log",
+      "standard_dotnet_runtime": ".NET 10.0.14",
+      "standard_dotnet_valid_accepted": 6,
+      "standard_dotnet_invalid_rejected": 18,
+      "source_reference": "kdbx-scalar-safe-string-reference-provenance.json",
+      "red_patch": "kdbx-scalar-native-red.patch",
+      "root_source_restored": true,
+      "limitations": "Synthetic only; source-equivalent standard XML parsing is not competitor execution or independent KDBX decryption. Root red serial/debug0/live unset; separate probe debug0/default scheduling. Native1 filtered run not full670 pass. No protected downgrade/native self-data-loss/full field/client/device/provider proof."
+    }
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
@@ -1337,6 +1369,7 @@
     "2c71c58 fixes SP-S63 Bitwarden malformed common/field/folder shapes. Diagnostic actual command/wire/batch/KDBX persistence loses4 values and exposes string hidden-type field. Final red3/control1 (63 accepted malformed cases), green30 with4 new, standalone original0/patched3 rejected controls and pinned official contract hashes corroborate. Full verify323/666/ACL2 passes serially/debug0/unfiltered/live clipboard unset; vendor60-hash/5patch unchanged. No coercion, optional null/missing and legacy Text preserve behavior. Docs/data/security/structure/TODO gate updated; SKILL/maintenance routing unchanged. Harness compile/import/uuid failures and initial CRLF control excluded; ordinary-string CRLF retained candidate. i64-to-isize representability safe on current64bit release, not counted. No DTO/UI/IPC/user-vault/native-client/device/provider or full security claim; b7c5d9f/15/6.1 unchanged; goal active.",
     "41a596c fixes SP-S64 ordinary KDBX XML CR serialization. Actual native2 red (14+4 positions after full persistence); original registry9/9 and Full-level control; native2/vendor21/no-merge/actual-to_xml ElementTree/fresh60hash pass. Independent patchedCR2 pass and whitespace1 remains red (first space-only), not masked by root green. Full verify323/668/ACL2 serial/debug0/unfiltered/live clipboard unset. XML refs affect trusted text-only output; normal reader normalization, protected base64 and literal entities remain; noCR output moves bytes with no benchmark claim. Four existing patch files identical/55 upstream unchanged. Data/security/structure/patch/TODO gate updated; stable routes unchanged. Synthetic Plain XML fixture separate from actual encrypted probes. Pinned official writer/factory lacks explicit Entitize; no competitor runtime exact-CR assertion. Harness lifetime/import/clone and doc context failures excluded. Pure-whitespace/scalar/native-client/device/provider/full security remain pending; original b7c5d9f/15/6.1 and active goal preserved.",
     "92c1d14 SP-S65 confirmed, unremediated: actual native2 red yields48 current/history and50 original-file-open/rewrite changes. Original registry AES1 fixture actual get_xml/ElementTree35 ordinary values intact; seven protection attributes, source/lock/XML/fixture hashes recorded. ASCII blank events skipped at quickxml map boundary; Unicode whitespace also trimmed by cs_opt_string. Final vendor1 pass/1 fail; initial absent-Value expectation was harness error and corrected. Direct Option/String attempts fail and withdrawn. Hashed red source/patch/fixture outside repo; all first-party and five existing vendor source bytes restored. Prior323/668/ACL2 green remains source gate but is not whitespace coverage. Report/TODO and three domain refs clarify pending boundary; original b7c5d9f/15/6.1 unchanged.76 Confirmed1/19/45/11; phone replacement APK/provider, valid costly KDF and remaining full/competitor/UI work continue; goal active.",
-    "7c1cbe1 repairs SP-S65 dedicated entry-text fidelity. Red2 to green2, native current/history and original fixture open/rewrite; vendor23, QuickXML1363/ignored4, independent3 and root full323/670/ACL2 passed. Synthetic provenance and live-clipboard opt-out retained. Complete MIT QuickXML0.41 vendor adds only map patch; registry0.42 unchanged. KeePass six patched/54 untouched, original five patch source bytes identical. Raw archive+patch reconstruction and staged60+43 hashes/patch/fixture byte identity pass; earlier EOL reconstruction/unsupported formatter errors are harness-only. Scoped $text preserves ASCII/Unicode and protected/empty/missing/metadata, no raw substitution/global metadata change. SKILL/maintenance/data/security/structure/patch/TODO gates synchronized. System.Xml helper and pinned KeePass source are auxiliary evidence without native competitor/full migration claims. Count76 Confirmed1/19/45/11 and original b7c5d9f/15/6.1 unchanged; active goal continues."
+    "7c1cbe1 repairs SP-S65 dedicated entry-text fidelity. Red2 to green2, native current/history and original fixture open/rewrite; vendor23, QuickXML1363/ignored4, independent3 and root full323/670/ACL2 passed. Synthetic provenance and live-clipboard opt-out retained. Complete MIT QuickXML0.41 vendor adds only map patch; registry0.42 unchanged. KeePass six patched/54 untouched, original five patch source bytes identical. Raw archive+patch reconstruction and staged60+43 hashes/patch/fixture byte identity pass; earlier EOL reconstruction/unsupported formatter errors are harness-only. Scoped $text preserves ASCII/Unicode and protected/empty/missing/metadata, no raw substitution/global metadata change. SKILL/maintenance/data/security/structure/patch/TODO gates synchronized. System.Xml helper and pinned KeePass source are auxiliary evidence without native competitor/full migration claims. Count76 Confirmed1/19/45/11 and original b7c5d9f/15/6.1 unchanged; active goal continues.",
+    "9798b77 SP-S66 confirmed: real Bitwarden command/wire/import/save publishes9 XML1.0-invalid ordinary cases; native exact reopens9, standard ElementTree/System.Xml reject9. Current-library isolated probe own15/invalid9/valid6, helper.NET10.0.14 total6 accepts18 rejects. Pinned KeePass SafeXmlString source sanitizes; no native-client execution. Red test/source/patch/XML saved; root exact source restored. Borrow-type compilation failure excluded as harness error. Planned publication refusal preserves old bytes/live edits/protected Base64; no silent sanitization or all-Unicode-noncharacter rejection. Report/TODO/data/security documentation gates updated; route/ownership unchanged. Count77 Confirmed1/19/46/11; original b7c5d9f15/6.1 and active goal preserved."
   ]
 }

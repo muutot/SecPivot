@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S65；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S66；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 45     | 45        | 0         |
+| Medium    | 46     | 46        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **76** | **76**    | **0**     |
+| **Total** | **77** | **77**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3428,3 +3428,41 @@ ReadElementString 的 .NET 10.0.14 helper 控制跳过 3 个 ASCII 空白，
 重复卡片、不改原始基线。修复不能恢复已丢失内容；分组／元数据纯
 空白、非法 XML scalar、完整跨客户端／真机 provider 和有效昂贵 KDF
 预算仍待验证，整体目标 active。
+
+### Finding: SP-S66 KDBX 保存发布了 XML 1.0 禁止字符
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Interoperability
+- Status: Confirmed
+- Affected area: Native encrypted KDBX serialization after structured import
+- Evidence:
+  - File: src-tauri/src/vault/import.rs::parse_bitwarden_json; entries.rs::import_entries; serialize.rs::write_fields; vendor/keepass-0.13.22/src/format/xml_db/mod.rs::to_xml (9798b77)
+  - Function / Module: parse_bitwarden_json command -> ImportEntryInput wire -> bulk import -> native save -> XML serializer
+  - Relevant behavior: JSON strings retain illegal ordinary XML characters, and the writer emits them without XML 1.0 Char validation. The same native parser accepts the saved file, so self-reopen alone misses the standards incompatibility.
+  - Reproduction: kdbx-scalar-native-red.log: one complete failing native regression publishes nine synthetic imports containing U+0000, U+0001, U+0008, U+000B, U+000C, U+000E, U+001F, U+FFFE or U+FFFF; all nine reopen exactly with protected controls intact.
+  - Independent verification: actual decrypted internal XML from all nine native files is rejected by Python ElementTree and System.Xml. A separate current-library encrypted-save probe also publishes nine illegal cases and preserves all 15 self-reopens; standard readers reject nine and accept six legal controls (TAB/LF/CR/NEL/U+1FFFE/U+10FFFF). System.Xml .NET 10.0.14 totals six legal accepts and 18 illegal rejects across both producers. These are XML parsing controls, not independent KDBX decryption or native competitor execution.
+- Problem: a successful save can publish a KDBX whose internal XML is outside the XML 1.0 character contract.
+- Why it matters: a structured import containing an embedded control character can produce a database unsuitable for standard XML readers used by other clients. Existing native values remain readable here; no native self-data-loss or secret exposure is proved. Medium reflects the unusual input and interoperability scope.
+- Realistic failure scenario: an exported JSON note contains an escaped U+0000; import and save succeed, but the saved internal XML fails a standard XML reader when the user transfers the database to another implementation.
+- Minimal fix: validate actual serialized XML text before encrypted destination publication and return a content-free error on forbidden scalars. Preserve existing destination bytes and live edits; protected Base64 payloads may contain arbitrary underlying string scalars. Do not silently sanitize or turn forbidden characters into equally forbidden character references.
+- Better long-term fix: provide field-local editing feedback and independent native-client fixtures for import/export boundaries; keep allowed supplementary noncharacters and legitimate whitespace distinct from XML 1.0-invalid scalars.
+- Regression test suggestion: enforce atomic native save refusal through real import, history/group/meta/key boundaries; allow TAB/LF/CR/NEL and supplementary controls, and retain protected-only invalid content through Base64. Require source-provenance, standard parser and complete integration checks.
+- Estimated effort: 2–4 hours for a bounded serializer gate, atomic persistence regressions and documentation.
+
+本项确认时尚未修复。原生诊断红测 0 passed / 1 failed / 670 filtered；
+不能把筛选运行说成完整门。红测源码和哈希补丁保留在证据目录，工作区
+测试文件恢复到 9798b77 原字节。此前完整门 323/670/ACL 2 仍是已提交
+源码证据，不代表本项已覆盖。探针首次 String 借用比较编译失败是搭建
+错误，修正后的实际生成／解析结果作为依据。
+
+固定 KeePass 镜像 d1eec63f1bd73dc2d5273eaf94528f616b553ce5 的
+StrUtil.cs:830–866 实现 SafeXmlString，按 XML 1.0 字符范围移除非法
+UTF-16 单元；KdbxFile.Write.cs:912 用于普通 Value。源码及 SHA-256
+保存于 kdbx-scalar-safe-string-reference-provenance.json。此为源码观察，
+未运行竞品；静默删除会改变数据，因此选择保存拒绝并保留原内容。
+Rust 字符串不含孤立 surrogate；未将所有 Unicode 非字符一律拒绝。
+
+累计 77 Confirmed（Critical 1 / High 19 / Medium 46 / Low 11），
+原 b7c5d9f 的 15 项和 6.1 分保持。手机 v1.6.5 替换 APK／真机
+provider、有效昂贵 KDF 预算与其余系统／竞品／UI 仍未完成，目标 active。

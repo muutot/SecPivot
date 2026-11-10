@@ -23,6 +23,11 @@ Original-registry fixture/XML provenance and native open/rewrite/current/history
 regressions cover this boundary. Invalid XML scalars and group/meta whitespace
 remain separate; this change does not recover already-lost content.
 
+Invalid XML 1.0 text is confirmed but not yet remediated (SP-S66). Actual
+Bitwarden command/wire/batch import saves nine illegal ordinary scalars; native
+reopen succeeds while independent standard XML readers reject the internal XML.
+Keep this separate from CR/whitespace fidelity and protected Base64 values.
+
 CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
 existing formula guard apostrophe to the field value before RFC 4180 quoting.
 Commas, quotes and CR/LF therefore remain within one cell. This preserves the
