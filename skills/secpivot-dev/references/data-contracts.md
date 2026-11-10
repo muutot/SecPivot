@@ -90,6 +90,16 @@ actual removals only. Equal/missing timestamps and content-before-location
 fallback keep the existing policy; unknown deletion times remain asymmetric.
 This is not a complete cross-client deletion-lifecycle guarantee.
 
+After restoring the final local recycle bin, first-party merge unions both
+original DeletedObjects maps for UUIDs absent from the final entry/group/custom
+icon sets. It retains the latest concrete time (concrete supersedes unknown),
+including objects both copies deleted and records the recipient never received.
+Existing merge-generated markers also participate. Final active/bin/icon
+survivors do not receive new markers through this union. Object winner rules,
+existing survivor markers and local-bin collision semantics remain unchanged.
+This prevents three-copy resurrection from dropped/older deletion metadata;
+unreferenced attachment retention and physical erasure remain separate concerns.
+
 `RpcSideChannelPrompt` dismisses and releases its pending password on expiry,
 manual close and unmount. Its wall-clock countdown catches delayed timer callbacks
 and refreshes on focus/visibility resume and before copy. Old timer/copy completions

@@ -88,6 +88,15 @@ Native tests cover deep entry/group edits and moved-out descendants; dependency
 tests cover independent ancestor/child markers, unmarked descendants and existing
 equal/missing timestamp policy. The four-file provenance gate applies.
 
+First-party vault/merge.rs::merge_absent_deletion_info runs after restore_bin.
+It unions both original DeletedObjects maps plus existing merged markers for
+UUIDs absent from final entries/groups/custom icons, retaining newer concrete
+times and carrying unseen-object intent. Final survivors are excluded from new
+marker imports; existing survivor/bin collision policy remains. Native tests
+cover three-copy deletion/edits, unseen subtrees, unknown/disjoint timestamps,
+final bin/icon objects and failed-merge input preservation. Vendor bytes are
+unchanged by this first-party deletion-registry supplement.
+
 ## Runtime surfaces
 
 Release signing runs in `sign-android`, a clean Linux job with no checkout or
