@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S69; historical supplemental tracking notes excluded",
-    "total": 80,
-    "confirmed": 80,
+    "scope": "15 baseline cards plus SP-S05 through SP-S70; historical supplemental tracking notes excluded",
+    "total": 81,
+    "confirmed": 81,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 49,
+      "Medium": 50,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S70",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "b6565fb",
+      "area": "WebDAV encoded list hrefs re-encoded as logical keys",
+      "status": "Confirmed, unremediated. Actual production parser/url_for3 mismatches with ASCII control and one outgoing native loopback GET target mismatch; root2 failed/674 filtered. Independent stdlib XML/URL reference4 passed. Test source restored exactly; synthetic no-auth one GET only. No cloud provider, vault load, remote write, data loss or device proof. Fix must preserve percent/UTF-8 segment identity and explicitly reject structural ambiguity; existing config diagnostic fix remains independently verified."
+    },
     {
       "id": "SP-S69",
       "severity": "Medium",
@@ -1399,6 +1407,21 @@
       "quickxml_ignored": 4,
       "final_proof": "config-diagnostic-final-proof.json",
       "probe_unchanged": true
+    },
+    "webdav_path_identity": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "b6565fb",
+      "native_red": "webdav-path-native-red.log",
+      "native_failed": 2,
+      "native_filtered": 674,
+      "parser_cases": 4,
+      "parser_mismatches": 3,
+      "native_loopback_gets": 1,
+      "independent_reference": "webdav-path-independent-reference.json",
+      "independent_passed": 4,
+      "provenance": "webdav-path-confirmation-provenance.json",
+      "source_restored": true,
+      "limits": "Synthetic tiny XML and path strings plus one no-auth loopback GET. No cloud/device/vault/remote write/shared clipboard/high-resource tests."
     }
   },
   "reverification_notes": [

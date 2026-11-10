@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S69；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S70；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 49     | 49        | 0         |
+| Medium    | 50     | 50        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **80** | **80**    | **0**     |
+| **Total** | **81** | **81**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3691,3 +3691,35 @@ config-diagnostic-final-proof.json 保存源码、修复 patch 和完整日志�
 schema、IPC、CSS、依赖或 vendor。无关 .trae/ 保留。此项只关闭本地
 配置错误日志回显；手机另存为新 APK／真机 provider、移动端 Keystore
 及原生后台锁、其余系统／竞品／UI 仍需继续验证，整体目标 active。
+
+### Finding: SP-S70 WebDAV 列表键名再次编码后指向不同文件
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data integrity
+- Status: Confirmed
+- Affected area: WebDAV list-to-open and shared object URL construction
+- Evidence:
+  - File: src-tauri/src/remote/webdav.rs:73–88, 161–169, 254–340, 355–366; src/lib/services/vault.ts:873–898; src-tauri/src/commands/remote.rs:28–80 (b6565fb)
+  - Function / Module: parse_multistatus -> href_to_key -> RemoteObject.key -> open_remote_vault -> WebDavStorage::url_for
+  - Relevant behavior: href_to_key retains percent-encoded href path text as the logical key; url_for then encodes each percent sign again. The selected key travels unchanged through the service and native open path. GET and PUT share this URL builder.
+  - Reproduction: webdav-path-native-red.log executes actual production parsing and URL construction for four tiny synthetic paths. Plain ASCII retains its target; encoded space, UTF-8 Chinese and literal percent cases differ. A separate native GET captures `GET /dav/vaults/a%2520b.kdbx HTTP/1.1` for a listed `/dav/vaults/a%20b.kdbx`. Both regressions fail, with 674 unrelated tests filtered; no live provider or KDBX load was exercised.
+  - Independent verification: Python stdlib ElementTree and urllib decode/re-encode all four XML href references to their expected original resource paths. webdav-path-independent-reference.json records four controls. Diagnostic source/patch and source hashes are saved; the production tests.rs is restored byte-for-byte before this report.
+- Problem: WebDAV list results use URI-encoded strings where the transport expects a logical decoded key, so a selected filename can resolve to a different resource.
+- Why it matters: normal spaces, Chinese filenames and percent signs can produce a download error despite the file being visible. If a differently named encoded-literal file exists, the request can select that sibling instead. Medium reflects normal filename usability and target identity; no real vault loss, overwrite or cloud-provider execution is proved.
+- Realistic failure scenario: a provider lists `a b.kdbx` as `a%20b.kdbx`; selecting it sends `a%2520b.kdbx`, which refers to a file literally named `a%20b.kdbx`. A typical provider returns 404 because that sibling does not exist.
+- Minimal fix: establish a single URI-to-logical-key boundary with exactly one segment-wise UTF-8 percent decode, then use the existing one-time request encoding. Validate malformed escapes, separator and dot-segment ambiguity explicitly rather than globally unquoting into structural separators. Preserve ordinary direct create/open keys and S3 semantics.
+- Better long-term fix: cover absolute/path-relative hrefs, endpoint path boundaries, query/fragment handling and native provider behavior with an explicit WebDAV resource identity contract.
+- Regression test suggestion: assert actual list-to-GET targets for ASCII, spaces, Unicode, literal percent and already-percent-looking logical filenames; add controlled write/readback and rejection controls for malformed encoding, encoded separators and traversal before publishing any fix.
+- Estimated effort: 2–4 hours for the scoped path contract, bounded parser/wire regressions and full verification; real mobile/cloud provider verification remains separate.
+
+本项确认阶段未修改应用行为；临时原生回归 0 passed / 2 failed /
+674 filtered，普通路径控制通过，独立标准库参考 4 passed。只用合成
+XML／路径和一次无凭据的 loopback GET；未读取用户库／配置、未访问
+云端／共享剪贴板、未写远程文件或复现高资源输入。之前配置诊断修复
+2912963 的完整门仍有效，但不作为本项修复验证。本项尚未修复。
+
+累计 81 Confirmed（Critical 1 / High 19 / Medium 50 / Low 11），含
+历史已修复项；原始 b7c5d9f／15 项／6.1 分不变。整体目标 active，
+手机另存为新 APK／真机 provider、移动端安全、其余系统／竞品／UI
+仍未全部闭环。
