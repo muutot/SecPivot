@@ -178,7 +178,7 @@
       error = t(lang, "welcome.pickRemoteFile");
       return;
     }
-    if (!password) {
+    if (!password && !keyfilePath) {
       error = t(lang, "welcome.needPassword");
       return;
     }
@@ -200,7 +200,7 @@
       error = t(lang, "welcome.remoteKeyRequired");
       return;
     }
-    if (!password) {
+    if (!password && !keyfilePath) {
       error = t(lang, "welcome.needPassword");
       return;
     }
@@ -272,7 +272,7 @@
       error = t(lang, "welcome.pickDbFile");
       return;
     }
-    if (!password) {
+    if (!password && !keyfilePath) {
       error = t(lang, "welcome.needPassword");
       return;
     }
@@ -351,7 +351,7 @@
   }
 
   async function confirmCreate(): Promise<void> {
-    if (!password) {
+    if (!password && !keyfilePath) {
       error = t(lang, "welcome.needPassword");
       return;
     }

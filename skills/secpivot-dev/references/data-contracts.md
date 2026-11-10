@@ -1,5 +1,13 @@
 # Data Contracts
 
+Welcome local/remote open and create forms accept a password, a selected keyfile,
+or both, matching native build_database_key and LockScreen. An empty password is
+rejected only when no keyfile is selected; local creation still validates password confirmation. Keyfile
+requests never remember a password-only credential. Existing backend keyfile
+validation and IPC shapes are unchanged. tests/welcome-credentials.test.mjs
+executes the four production handlers with synthetic service seams; native
+keyfile-only create/change/reopen controls are separate from picker/provider proof.
+
 The patched shared Argon2 transform rejects KDBX u64 iteration or byte-to-KiB
 memory values that do not fit u32 instead of truncating them. Existing open/save
 error contracts carry the failure; no IPC, config schema or default changes.
