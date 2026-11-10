@@ -33,6 +33,12 @@ unchanged identity and same-protocol collisions before any side effect. Rejected
 or unchanged names retain credential-presence hints and do not warn or persist.
 A successful identity change keeps the existing credential-reset warning.
 
+`removeRemoteProfile` validates existence and the remaining same-protocol profile
+count before clearing credential-presence hints or scheduling persistence. Last,
+missing and repeated removals are complete no-ops at the service boundary; the
+panel also disables deleting the final profile. A successful active-profile
+removal selects a remaining profile of that protocol and retains other hints.
+
 At narrow widths (`max-width: 720px`), the primary sidebar becomes an off-canvas
 drawer. The section header exposes the menu toggle, the content pane uses the
 full viewport width, and selecting a primary category or pressing the backdrop

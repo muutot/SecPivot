@@ -105,3 +105,76 @@ test("queued native settings keep the exact secret and accept masked acknowledge
     appSettings.destroy();
   }
 });
+
+test("rejected remote removals retain the final profile and credential hints without persistence", async () => {
+  try {
+    for (const kind of ["s3", "webdav"]) {
+      const path = `${kind}/config_1`;
+      const extras = get(appSettings).remoteProfiles.filter(
+        (profile) => profile.settings.kind === kind && profile.name !== "config_1",
+      );
+      for (const profile of extras) {
+        appSettings.removeRemoteProfile(`${kind}/${profile.name}`);
+        await appSettings.flush();
+      }
+      appSettings.updateRemote(path, "secretKey", "synthetic-removal-fixture");
+      await appSettings.flush();
+      assert.equal(get(remoteSecretPresence)[path].secretKey, true);
+      for (const rejected of [path, `${kind}/missing`]) {
+        const before = get(appSettings);
+        const presenceBefore = get(remoteSecretPresence);
+        const writesBefore = writeCount;
+        appSettings.removeRemoteProfile(rejected);
+        await appSettings.flush();
+        assert.ok(
+          get(remoteSecretPresence) === presenceBefore,
+          "rejected removal changed credential hints",
+        );
+        assert.ok(get(appSettings) === before, "rejected removal changed settings identity");
+        assert.equal(writeCount, writesBefore, "rejected removal persisted settings");
+      }
+    }
+  } finally {
+    appSettings.destroy();
+  }
+});
+
+test("accepted remote removal selects a same-protocol replacement and preserves other hints", async () => {
+  try {
+    for (const kind of ["s3", "webdav"]) {
+      const path = `${kind}/removable`;
+      appSettings.addRemoteProfile(kind, "removable");
+      await appSettings.flush();
+      appSettings.updateRemote(path, "secretKey", "synthetic-deleted-fixture");
+      await appSettings.flush();
+      const before = get(appSettings);
+      const presenceBefore = get(remoteSecretPresence);
+      const writesBefore = writeCount;
+      assert.equal(before.activeRemote, path);
+      appSettings.removeRemoteProfile(path);
+      await appSettings.flush();
+      const after = get(appSettings);
+      assert.deepEqual(
+        after.remoteProfiles,
+        before.remoteProfiles.filter(
+          (profile) => !(profile.settings.kind === kind && profile.name === "removable"),
+        ),
+      );
+      assert.equal(after.activeRemote, `${kind}/config_1`);
+      assert.equal(get(remoteSecretPresence)[path], undefined);
+      for (const [otherPath, presence] of Object.entries(presenceBefore)) {
+        if (otherPath !== path) assert.deepEqual(get(remoteSecretPresence)[otherPath], presence);
+      }
+      assert.equal(writeCount, writesBefore + 1);
+      const afterBeforeRetry = get(appSettings);
+      const presenceBeforeRetry = get(remoteSecretPresence);
+      appSettings.removeRemoteProfile(path);
+      await appSettings.flush();
+      assert.equal(get(appSettings), afterBeforeRetry);
+      assert.equal(get(remoteSecretPresence), presenceBeforeRetry);
+      assert.equal(writeCount, writesBefore + 1, "duplicate removal persisted settings");
+    }
+  } finally {
+    appSettings.destroy();
+  }
+});
