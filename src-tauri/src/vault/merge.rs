@@ -1,8 +1,8 @@
 //! Entry-level merge of the local vault with its remote counterpart
 //! (官方同步·条目级合并).
 //!
-//! The heavy lifting — UUID matching, last-modification comparison, history
-//! union, deleted-object tracking, group/icon merge — comes from the keepass
+//! The heavy lifting — UUID matching, last-modification comparison, ordinary
+//! history merge, deleted-object tracking, group/icon merge — comes from the keepass
 //! crate's `Database::merge`. On top of it this module enforces SecPivot's
 //! recycle-bin rule (回收站排除): bin contents never take part in the merge.
 //! They are detached from both clones first, and the local bin is reattached
@@ -14,18 +14,17 @@
 use super::helpers::recycle_bin_id;
 use chrono::NaiveDateTime;
 use keepass::db::merge::{MergeError, MergeEventTarget, MergeEventType};
-use keepass::db::{Entry, EntryId, Group, GroupId, Icon, Times, Value};
+use keepass::db::{Entry, EntryId, Group, GroupId, Icon, Times};
 use keepass::Database;
 use std::collections::HashSet;
 
 /// A bin entry detached for the merge, remembered with the group it hung
-/// under inside the bin and its attachment payloads (`EntryMut::remove`
-/// drops last-referenced attachments from the database).
+/// under inside the bin. All current/historical binaries are restored from
+/// the immutable original local database after metadata is reattached.
 struct DetachedEntry {
     id: EntryId,
     parent: GroupId,
     entry: Entry,
-    attachments: Vec<(String, Value<Vec<u8>>)>,
 }
 
 /// A bin subtree group detached for the merge. Only content fields are
@@ -117,9 +116,9 @@ fn push_losers_into_history(dest: &mut Database, losers: Vec<(EntryId, Entry)>) 
         if dominated {
             continue;
         }
-        // Skip a loser whose timestamp already exists in the target history:
-        // duplicate `last_modification` values make every later merge of the
-        // merged database fail with `DuplicateHistoryEntries`.
+        // Retain the existing timestamp collision policy: do not append a
+        // loser whose modification time is already represented. Divergent
+        // same-time versions need a separate history-policy audit.
         let loser_time = loser.times.last_modification;
         let duplicate_timestamp = loser_time.is_some()
             && dest
@@ -168,18 +167,13 @@ fn prepare_new_group_tags(dest: &Database, source: &mut Database) {
     }
 }
 
-/// Snapshot a bin entry (content + attachments) before detaching it.
+/// Snapshot a bin entry's complete content/version tree before detaching it.
 fn snapshot_entry(db: &Database, id: EntryId, parent: GroupId) -> Option<DetachedEntry> {
     let entry = db.entry(id)?;
-    let attachments = entry
-        .attachments_named()
-        .map(|(name, attachment)| (name.to_owned(), attachment.data.clone()))
-        .collect();
     Some(DetachedEntry {
         id,
         parent,
         entry: (*entry).clone(),
-        attachments,
     })
 }
 
@@ -266,7 +260,7 @@ fn snapshot_ancestor_dropped(
 /// propagates); a newer remote edit drops the bin copy (and, for groups, its
 /// whole snapshot subtree). Exact ties keep the active edit: resurrecting an
 /// entry the user can see and re-delete beats silently dropping an edit.
-fn restore_bin(dest: &mut Database, bin: DetachedBin) {
+fn restore_bin(dest: &mut Database, bin: DetachedBin, original: &Database) -> Result<(), String> {
     let mut dropped_groups: HashSet<GroupId> = HashSet::new();
     for snap in &bin.groups {
         let Some(active_time) = dest.group(snap.id).map(|g| active_change(&g.times)) else {
@@ -284,6 +278,7 @@ fn restore_bin(dest: &mut Database, bin: DetachedBin) {
     }
 
     let mut dropped_entries: HashSet<EntryId> = HashSet::new();
+    let mut restored_entries = Vec::new();
     for snap in &bin.entries {
         let Some(active) = dest.entry(snap.id) else {
             continue;
@@ -359,10 +354,10 @@ fn restore_bin(dest: &mut Database, bin: DetachedBin) {
             }
             None => {}
         }
-        for (name, data) in &snap.attachments {
-            entry.add_attachment(name.clone(), data.clone());
-        }
+        restored_entries.push(snap.id);
     }
+    dest.copy_entry_attachment_versions_from(original, &restored_entries)
+        .map_err(|error| format!("无法恢复合并后的回收站附件：{error}"))
 }
 
 /// User-facing description of a merge failure (same-timestamp divergence is
@@ -384,8 +379,9 @@ fn describe_merge_error(error: MergeError) -> String {
 
 /// Merge `remote` into a clone of `local` by entry/group UUID +
 /// last-modified timestamp and return the merged database. Histories are
-/// preserved (the keepass merge unions both sides' histories and pushes the
-/// losing side's current state); the recycle bin is excluded — the merged
+/// combined when the crate compares distinct current modification times;
+/// same-current-time histories and timestamp collisions require separate
+/// policy handling. The recycle bin is excluded — the merged
 /// database keeps the local bin as-is and never pulls remote bin contents in.
 pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Database, String> {
     let mut dest = local.clone();
@@ -408,9 +404,12 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     // The keepass merge only preserves the losing side's current state when
     // the remote wins; capture local winners' remote losers up front so they
     // can be pushed into the merged history afterwards.
+    dest.prepare_attachment_merge(&mut source)
+        .map_err(|error| format!("无法合并附件：{error}"))?;
     let losers = collect_remote_losers(&dest, &source);
     prepare_new_group_tags(&dest, &mut source);
     let log = dest.merge(&source).map_err(describe_merge_error)?;
+    dest.complete_attachment_merge(&source, &log);
     // Both source-winner branches omit group tags in the pinned dependency.
     // Use its actual outcome rather than reimplementing timestamp/deletion
     // decisions; groups removed by later merge events stay removed.
@@ -428,6 +427,7 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     }
 
     push_losers_into_history(&mut dest, losers);
-    restore_bin(&mut dest, bin);
+    dest.rebuild_attachment_references();
+    restore_bin(&mut dest, bin, local)?;
     Ok(dest)
 }

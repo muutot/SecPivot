@@ -452,7 +452,13 @@ impl EntryMut<'_> {
     where
         F: FnMut(AttachmentMut<'_>),
     {
-        let attachments: Vec<AttachmentId> = self.attachments.values().copied().collect();
+        let attachments: Vec<AttachmentId> = self
+            .attachments
+            .values()
+            .copied()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         for attachment_id in attachments {
             f(AttachmentMut::new(self.database, attachment_id));
         }
@@ -675,7 +681,13 @@ impl EntryMut<'_> {
             attachment.entries.retain(|&(entry_id, _)| entry_id != id);
 
             // if this was the last entry referencing the attachment, remove it from the database
-            if attachment.entries.is_empty() {
+            let attachment_id = attachment.id();
+            let leased = attachment
+                .as_ref()
+                .database()
+                .pending_history_attachments
+                .contains_key(&attachment_id);
+            if attachment.entries.is_empty() && !leased {
                 attachment.remove();
             }
         });

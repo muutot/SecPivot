@@ -184,6 +184,22 @@ no field. Generic import custom-field IPC and native KDBX protection carry it.
 
 The pinned keepass 0.13.22 package is locally patched for attachment ownership
 and dense KDBX4 header references (see `src-tauri/vendor/KEEPASS_PATCH.md`).
+Native merge prepares a shared attachment namespace in temporary database
+clones before comparing entries or merging histories. Identity includes exact
+bytes and the protection flag; SHA-256 only indexes equality candidates.
+Created/Updated entry events select current binary references, then reverse
+ownership is rebuilt after losing versions join history. Detached local recycle
+bin entries restore every current/historical payload from the immutable local
+input, with complete version-layout validation before copying maps. Missing
+payloads reject the merge without publishing a partial database. The patched
+Database methods are prepare_attachment_merge, complete_attachment_merge,
+copy_entry_attachment_versions_from and rebuild_attachment_references.
+Preparation rejects existing history/merge leases and leases all destination
+binaries until actual winner ownership is installed. Entry removal respects
+those leases and visits each binary ID once when multiple filenames share it.
+This fixes binary mapping/ownership; equal-current-time history union and
+same-second divergence remain separate merge-policy boundaries.
+
 Tracked edits lease old binaries until the pre-edit snapshot is appended;
 deletion affects only the addressed entry version. History count/size trimming,
 single-version deletion and clear-all reindex references and reclaim only

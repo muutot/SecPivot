@@ -11,11 +11,17 @@ Only these upstream files are changed:
 
 - `src/db/types/entry.rs`: lease attachments until tracked snapshots are appended,
   remove only the addressed current/history reverse reference, and reindex after
-  snapshot insertion. Dedicated tests cover shared attachments and guard unwind.
+  snapshot insertion. Entry removal honors prepared merge leases and visits each
+  binary ID once even when filenames alias identical payloads. Dedicated tests
+  cover shared attachments and guard unwind.
 - `src/db/types/mod.rs`: track ephemeral leases separately from persisted data,
   clear leases on database clone, rebuild current/history ownership, and collect
   only payloads affected by an explicit entry/history removal. Loading preserves
-  otherwise unreferenced header data.
+  otherwise unreferenced header data. It also prepares canonical binary IDs for
+  merge, applies actual entry winners, copies complete recycle-bin version maps
+  and rejects missing payloads before mutation. Exact bytes and protection flags
+  determine identity. Prepared leases protect pending merge owners until winner
+  maps are installed; existing leases reject preparation.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication.
@@ -36,10 +42,10 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The two dependency-specific tests can be run separately:
+The seven dependency-specific tests can be run separately:
 
 ```powershell
-cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --lib secpivot_
+cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge --lib secpivot_
 ```
 
 An upgrade alone is not a verified fix: the inspected 0.13.25 and 0.17.0 packages
