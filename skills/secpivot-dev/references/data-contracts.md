@@ -197,8 +197,16 @@ copy_entry_attachment_versions_from and rebuild_attachment_references.
 Preparation rejects existing history/merge leases and leases all destination
 binaries until actual winner ownership is installed. Entry removal respects
 those leases and visits each binary ID once when multiple filenames share it.
-This fixes binary mapping/ownership; equal-current-time history union and
-same-second divergence remain separate merge-policy boundaries.
+The first-party merge wrapper separately unions source histories when current
+modification times match. Local-winner source snapshots and history-only unions
+deduplicate by timestamp plus content, including expiration and canonical
+binary references; distinct same-time versions remain restorable. Timestamp
+buckets limit comparisons to candidate duplicates. Repeated unions preserve
+version count, and descending time order keeps newest-first history indices.
+Patched History::from_entries builds the sorted list once and strips nested
+history trees instead of repeatedly moving the growing list with add_entry.
+Current-content divergence at an identical timestamp still rejects the merge;
+this is not a complete cross-client merge compatibility guarantee.
 
 Tracked edits lease old binaries until the pre-edit snapshot is appended;
 deletion affects only the addressed entry version. History count/size trimming,

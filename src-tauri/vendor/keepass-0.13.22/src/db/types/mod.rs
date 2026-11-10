@@ -22,6 +22,18 @@ pub use group::{
     MoveGroupError,
 };
 pub use history::History;
+
+impl History {
+    /// Build an already ordered history without repeated front insertion.
+    /// Like add_entry, snapshots never retain nested history trees.
+    pub fn from_entries(mut entries: Vec<Entry>) -> Self {
+        for entry in &mut entries {
+            entry.history = None;
+        }
+        Self { entries }
+    }
+}
+
 pub use icon::{
     CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon,
 };

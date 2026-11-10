@@ -310,20 +310,32 @@
 +}
 --- a/src/db/types/mod.rs
 +++ b/src/db/types/mod.rs
-@@ -25 +25,3 @@
+@@ -25 +25,15 @@
 -pub use icon::{CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon};
++
++impl History {
++    /// Build an already ordered history without repeated front insertion.
++    /// Like add_entry, snapshots never retain nested history trees.
++    pub fn from_entries(mut entries: Vec<Entry>) -> Self {
++        for entry in &mut entries {
++            entry.history = None;
++        }
++        Self { entries }
++    }
++}
++
 +pub use icon::{
 +    CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon,
 +};
-@@ -36 +38 @@
+@@ -36 +50 @@
 -#[derive(Debug, Clone, PartialEq, Eq)]
 +#[derive(Debug, PartialEq, Eq)]
-@@ -50,0 +53,4 @@
+@@ -50,0 +65,4 @@
 +    /// Attachment leases held by not-yet-appended EntryTrack snapshots.
 +    #[cfg_attr(feature = "serialization", serde(skip))]
 +    pub(crate) pending_history_attachments: HashMap<AttachmentId, usize>,
 +
-@@ -61,0 +68,83 @@
+@@ -61,0 +80,83 @@
 +}
 +
 +/// Fail closed when a merge cannot map every current/historical binary.
@@ -407,11 +419,11 @@
 +            deleted_objects: self.deleted_objects.clone(),
 +        }
 +    }
-@@ -91,0 +181 @@
+@@ -91,0 +193 @@
 +            pending_history_attachments: HashMap::new(),
-@@ -109,0 +200 @@
+@@ -109,0 +212 @@
 +            pending_history_attachments: HashMap::new(),
-@@ -141,0 +233,281 @@
+@@ -141,0 +245,281 @@
 +    }
 +
 +    /// Rebuild one entry's current/historical reverse references and collect
@@ -693,7 +705,7 @@
 +            map.insert(id, dest_id);
 +        }
 +        map
-@@ -287,0 +660,149 @@
+@@ -287,0 +672,149 @@
 +
 +#[cfg(all(test, feature = "_merge"))]
 +mod secpivot_merge_attachment_tests {

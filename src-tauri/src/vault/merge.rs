@@ -14,9 +14,9 @@
 use super::helpers::recycle_bin_id;
 use chrono::NaiveDateTime;
 use keepass::db::merge::{MergeError, MergeEventTarget, MergeEventType};
-use keepass::db::{Entry, EntryId, Group, GroupId, Icon, Times};
+use keepass::db::{Entry, EntryId, Group, GroupId, History, Icon, Times};
 use keepass::Database;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// A bin entry detached for the merge, remembered with the group it hung
 /// under inside the bin. All current/historical binaries are restored from
@@ -100,49 +100,55 @@ fn collect_remote_losers(dest: &Database, source: &Database) -> Vec<(EntryId, En
     losers
 }
 
-/// Push captured losers into the merged entries' histories, skipping ones
-/// already identical to the newest history entry.
+/// The crate skips history union when current modification times match.
+/// Capture only the source histories that differ; a real current-content
+/// conflict still rejects the whole merge before these snapshots are applied.
+fn collect_equal_current_histories(dest: &Database, source: &Database) -> Vec<(EntryId, History)> {
+    source
+        .iter_all_entries()
+        .filter_map(|entry| {
+            let local = dest.entry(entry.id())?;
+            let time = entry.times.last_modification?;
+            if local.times.last_modification != Some(time) || local.history == entry.history {
+                return None;
+            }
+            entry
+                .history
+                .as_ref()
+                .map(|history| (entry.id(), history.clone()))
+        })
+        .collect()
+}
+
+/// Union versions by timestamp AND complete content, including expiration and
+/// canonical attachment IDs. A shared timestamp does not identify a version.
+/// Timestamp buckets avoid comparing every unrelated pair in large histories.
+fn union_history(entry: &mut Entry, extra: impl Iterator<Item = Entry>) {
+    let mut versions: Vec<Entry> = Vec::new();
+    let mut buckets: HashMap<Option<NaiveDateTime>, Vec<usize>> = HashMap::new();
+    let original = entry.history.take().unwrap_or_default();
+    for mut snapshot in original.get_entries().iter().cloned().chain(extra) {
+        snapshot.history = None;
+        let bucket = buckets.entry(snapshot.times.last_modification).or_default();
+        let duplicate = bucket.iter().any(|&index| {
+            let existing = &versions[index];
+            existing.times.expiry == snapshot.times.expiry
+                && existing.times.expires == snapshot.times.expires
+                && !content_diverged(existing, &snapshot)
+        });
+        if !duplicate {
+            bucket.push(versions.len());
+            versions.push(snapshot);
+        }
+    }
+    versions.sort_by_key(|snapshot| std::cmp::Reverse(snapshot.times.last_modification));
+    entry.history = Some(History::from_entries(versions));
+}
+
 fn push_losers_into_history(dest: &mut Database, losers: Vec<(EntryId, Entry)>) {
     for (id, loser) in losers {
-        let dominated = dest
-            .entry(id)
-            .map(|entry| {
-                entry
-                    .historical(0)
-                    .map(|newest| !content_diverged(&newest, &loser))
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false);
-        if dominated {
-            continue;
-        }
-        // Retain the existing timestamp collision policy: do not append a
-        // loser whose modification time is already represented. Divergent
-        // same-time versions need a separate history-policy audit.
-        let loser_time = loser.times.last_modification;
-        let duplicate_timestamp = loser_time.is_some()
-            && dest
-                .entry(id)
-                .map(|entry| {
-                    entry
-                        .history
-                        .as_ref()
-                        .map(|history| {
-                            history
-                                .get_entries()
-                                .iter()
-                                .any(|snapshot| snapshot.times.last_modification == loser_time)
-                        })
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false);
-        if duplicate_timestamp {
-            continue;
-        }
         if let Some(mut entry) = dest.entry_mut(id) {
-            let mut history = entry.history.take().unwrap_or_default();
-            history.add_entry(loser);
-            entry.history = Some(history);
+            union_history(&mut entry, std::iter::once(loser));
         }
     }
 }
@@ -379,9 +385,8 @@ fn describe_merge_error(error: MergeError) -> String {
 
 /// Merge `remote` into a clone of `local` by entry/group UUID +
 /// last-modified timestamp and return the merged database. Histories are
-/// combined when the crate compares distinct current modification times;
-/// same-current-time histories and timestamp collisions require separate
-/// policy handling. The recycle bin is excluded — the merged
+/// combined even when current modification times match; distinct historical
+/// content sharing a timestamp is preserved. The recycle bin is excluded — the merged
 /// database keeps the local bin as-is and never pulls remote bin contents in.
 pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Database, String> {
     let mut dest = local.clone();
@@ -407,6 +412,7 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     dest.prepare_attachment_merge(&mut source)
         .map_err(|error| format!("无法合并附件：{error}"))?;
     let losers = collect_remote_losers(&dest, &source);
+    let equal_histories = collect_equal_current_histories(&dest, &source);
     prepare_new_group_tags(&dest, &mut source);
     let log = dest.merge(&source).map_err(describe_merge_error)?;
     dest.complete_attachment_merge(&source, &log);
@@ -426,6 +432,11 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
         }
     }
 
+    for (id, history) in equal_histories {
+        if let Some(mut entry) = dest.entry_mut(id) {
+            union_history(&mut entry, history.get_entries().iter().cloned());
+        }
+    }
     push_losers_into_history(&mut dest, losers);
     dest.rebuild_attachment_references();
     restore_bin(&mut dest, bin, local)?;
