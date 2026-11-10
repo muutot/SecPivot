@@ -2085,7 +2085,7 @@
 -        .as_bytes()
 -        .to_vec();
 -
-@@ -73,0 +70,51 @@
+@@ -73,0 +70,62 @@
 +
 +    // In-memory IDs may have gaps after deletion. KDBX4 binary Ref values
 +    // address positions in this exact header array, not the original IDs.
@@ -2128,6 +2128,17 @@
 +    }
 +    remap_group(&mut kdbx.root.group, &dense_ids)?;
 +    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?;
++    // Validate after protected values became base64; never silently drop text.
++    if xml.chars().any(|c| {
++        !matches!(c, '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}'
++            | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
++    }) {
++        return Err(std::io::Error::new(
++            std::io::ErrorKind::InvalidData,
++            "Database contains a character not allowed in XML 1.0",
++        )
++        .into());
++    }
 +    // Model strings are XML text, never CDATA. Character references preserve
 +    // CR across XML's mandatory line-ending normalization without changing
 +    // literal entity text or protected fields' base64 payloads.
@@ -2137,11 +2148,11 @@
 +        xml
 +    }
 +    .into_bytes();
-@@ -94 +141,2 @@
+@@ -94 +152,2 @@
 -        let mut db = crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
 +        let mut db =
 +            crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
-@@ -154,3 +202,6 @@
+@@ -154,3 +213,6 @@
 -        self.root
 -            .group
 -            .xml_to_db_handle(db.root_mut(), &attachments, &custom_icons, inner_decryptor)?;
@@ -2151,9 +2162,9 @@
 +            &custom_icons,
 +            inner_decryptor,
 +        )?;
-@@ -159,0 +211 @@
+@@ -159,0 +222 @@
 +        db.rebuild_attachment_references();
-@@ -183,3 +235,6 @@
+@@ -183,3 +246,6 @@
 -                    #[allow(clippy::indexing_slicing)] // We just checked that the index is in bounds
 -                    if let Some(crate::db::Icon::Custom(icon_id)) =
 -                        entry.history.as_ref().and_then(|h| h.entries[i].icon.as_ref())
@@ -2163,13 +2174,75 @@
 +                        .history
 +                        .as_ref()
 +                        .and_then(|h| h.entries[i].icon.as_ref())
-@@ -211 +266,4 @@
+@@ -211 +277,4 @@
 -    fn db_to_xml(db: &crate::db::Database, inner_cipher: &mut dyn Cipher) -> Result<Self, CryptographyError> {
 +    fn db_to_xml(
 +        db: &crate::db::Database,
 +        inner_cipher: &mut dyn Cipher,
 +    ) -> Result<Self, CryptographyError> {
-@@ -313,0 +372,55 @@
+@@ -313,0 +383,117 @@
++    #[cfg(feature = "save_kdbx4")]
++    #[test]
++    fn secpivot_kdbx_scalar_writer_rejects_illegal_text_and_keys() {
++        for scalar in [0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff] {
++            let text = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
++            for location in ["value", "key", "group", "meta"] {
++                let mut db = crate::Database::new();
++                match location {
++                    "group" => db.root_mut().name = text.clone(),
++                    "meta" => db.meta.database_description = Some(text.clone()),
++                    _ => {
++                        let mut root = db.root_mut();
++                        let mut entry = root.add_entry();
++                        if location == "key" {
++                            entry.set_protected(&text, "synthetic");
++                        } else {
++                            entry.set_unprotected("Notes", &text);
++                        }
++                    }
++                }
++                let mut cipher = crate::config::InnerCipherConfig::Plain
++                    .get_cipher(&[])
++                    .unwrap();
++                let error = to_xml(&db, &mut *cipher).unwrap_err().to_string();
++                assert!(error.contains("not allowed in XML 1.0"));
++                assert!(!error.contains(&text));
++            }
++        }
++    }
++
++    #[cfg(feature = "save_kdbx4")]
++    #[test]
++    fn secpivot_kdbx_scalar_writer_keeps_legal_and_protected_text() {
++        for scalar in [
++            0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff, 9, 10, 13, 0x85, 0x1fffe, 0x10ffff,
++        ] {
++            let secret = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
++            let plain = if [9, 10, 13, 0x85, 0x1fffe, 0x10ffff].contains(&scalar) {
++                secret.as_str()
++            } else {
++                "synthetic ordinary"
++            };
++            let mut db = crate::Database::new();
++            let id = {
++                let mut root = db.root_mut();
++                let mut entry = root.add_entry();
++                entry.set_unprotected("Notes", plain);
++                entry.set_protected("Password", &secret);
++                entry.id()
++            };
++            let mut cipher = crate::config::InnerCipherConfig::Plain
++                .get_cipher(&[])
++                .unwrap();
++            let (xml, attachments) = to_xml(&db, &mut *cipher).unwrap();
++            let loaded = parse_xml(&xml, &attachments, &mut *cipher).unwrap();
++            let entry = loaded.entry(id).unwrap();
++            assert_eq!(entry.get("Notes"), Some(plain));
++            assert_eq!(entry.fields["Password"].get(), &secret);
++            assert!(entry.fields["Password"].is_protected());
++        }
++    }
++
 +    #[cfg(feature = "save_kdbx4")]
 +    #[test]
 +    fn secpivot_kdbx_carriage_serializer_preserves_text_and_literal_entities() {
@@ -2225,30 +2298,30 @@
 +        assert_eq!(entry.get("Reference"), Some("synthetic\nline\ntail"));
 +    }
 +
-@@ -320 +433,4 @@
+@@ -320 +506,4 @@
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -327 +443,2 @@
+@@ -327 +516,2 @@
 -            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 +            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +            0x0e, 0x0f,
-@@ -338 +455,2 @@
+@@ -338 +528,2 @@
 -                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
 +                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S")
 +                    .unwrap(),
-@@ -342 +460,2 @@
+@@ -342 +533,2 @@
 -        let serialized = quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
 +        let serialized =
 +            quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
-@@ -373 +492,3 @@
+@@ -373 +565,3 @@
 -        let mut cipher = crate::config::InnerCipherConfig::Plain.get_cipher(&[]).unwrap();
 +        let mut cipher = crate::config::InnerCipherConfig::Plain
 +            .get_cipher(&[])
 +            .unwrap();
-@@ -376 +497,2 @@
+@@ -376 +570,2 @@
 -        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects).unwrap();
 +        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects)
 +            .unwrap();

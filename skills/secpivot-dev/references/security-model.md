@@ -1,5 +1,13 @@
 # Security Model
 
+KDBX serialization rejects actual XML 1.0-invalid text before publication with
+a content-free error. Old file bytes, live dirty edits and historical content
+remain after refusal; no text is silently dropped. Protected Base64 still
+permits arbitrary underlying string scalars. Native import/save and dependency
+key/group/meta/character-boundary controls verify this scope. The reader is
+unchanged; invalid existing ordinary history may prevent saving until corrected
+or removed. No automatic recovery or native competitor execution is implied.
+
 Argon2d/Argon2id derivation checks that the KDBX u64 iteration count and memory
 in KiB fit the library's u32 parameters before computing. Oversized values return
 TimeTooLarge/MemoryTooMuch through existing cryptographic errors; they must never

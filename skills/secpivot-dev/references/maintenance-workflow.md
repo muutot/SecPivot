@@ -44,11 +44,13 @@ hashes, six/one explicitly patched Rust files and Cargo wiring. Read
 `src-tauri/vendor/KEEPASS_PATCH.md` and `QUICK_XML_PATCH.md` before patch edits.
 Preserve untouched upstream bytes/licenses and update only reviewed patched
 hashes after verification; do not blanket-format either published package.
+When formatting an owned module entry point, pass rustfmt `--config skip_children=true`
+to avoid rewriting untouched upstream child modules; compare all package hashes.
 QuickXML's package and byte-preserving patch are exempt from Git text/EOL
 normalization because its upstream files use CRLF. Check staged byte hashes,
 not only working files, before committing a package/provenance change.
 
-`npm run test:keepass-patch` and `npm run test:quickxml-patch` run the 23 KeePass
+`npm run test:keepass-patch` and `npm run test:quickxml-patch` run the 25 KeePass
 specialized tests and QuickXML's serialization-enabled library unit tests in
 disposable source copies, preserving the published standalone Cargo locks.
 Both run in `npm run verify`. The helper validates its created temporary root
