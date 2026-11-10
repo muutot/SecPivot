@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S68; historical supplemental tracking notes excluded",
-    "total": 79,
-    "confirmed": 79,
+    "scope": "15 baseline cards plus SP-S05 through SP-S69; historical supplemental tracking notes excluded",
+    "total": 80,
+    "confirmed": 80,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 48,
+      "Medium": 49,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S69",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "c9d3f1b",
+      "area": "Raw config deserialization diagnostics echo wrong-typed credential input",
+      "status": "Confirmed, unremediated. Root native regression1 fails with2 disclosures after3 child recovery controls succeed;673 filtered. Independent actual modules use matched serde229/json151 and yield2 disclosure failures/1 valid pass; all3 recovery controls pass. Source restored exactly, synthetic marker redacted. No real credential/user config/Android/logcat/network/clipboard proof; malformed local input condition limits severity. Mobile Keystore/background lock remain separate."
+    },
     {
       "id": "SP-S68",
       "severity": "Medium",
@@ -1360,6 +1368,19 @@
       "full_rust": 673,
       "full_acl": 2,
       "proof_green": "idle-deadline-green-evidence.json"
+    },
+    "config_diagnostic": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "c9d3f1b",
+      "native_red": "config-diagnostic-native-red.log",
+      "native_failed": 1,
+      "native_filtered": 673,
+      "native_proof": "config-diagnostic-native-red-provenance.json",
+      "independent_red": "config-diagnostic-red-pinned.json",
+      "independent_failed": 2,
+      "independent_passed": 1,
+      "controls_passed": 3,
+      "limits": "Synthetic temp config/native child stderr and actual-module helper only. No user data/device/clipboard/network."
     }
   },
   "reverification_notes": [

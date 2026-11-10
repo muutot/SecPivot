@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S68；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S69；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 48     | 48        | 0         |
+| Medium    | 49     | 49        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **79** | **79**    | **0**     |
+| **Total** | **80** | **80**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3636,3 +3636,40 @@ TODO 只检查精确 renderer 范围。已有 SKILL 路由、模块归属、IPC�
 计数与原始 15 项／6.1 基线另行复核。整体目标继续 active；本项不
 代表原生 Android 后台锁定、Keystore、手机另存为新 APK／真机 provider、
 renderer 停止运行时的后端期限约束或完整系统／竞品／UI 工作完成。
+
+### Finding: SP-S69 损坏配置的解析诊断回显凭据字段输入
+
+- Severity: Medium
+- Confidence: High
+- Category: Security / Privacy
+- Status: Confirmed
+- Affected area: Native startup config recovery diagnostics
+- Evidence:
+  - File: src-tauri/src/config/store.rs:48–70; src-tauri/src/config/settings.rs:669–720; src-tauri/src/lib.rs:350 (c9d3f1b)
+  - Function / Module: ConfigStore::load -> read_config -> serde_json::from_str<AppConfig> error logging
+  - Relevant behavior: startup recovery prints the complete serde_json error with Display. Wrong-typed accessKey/secretKey values can appear in that error even though their decoding fails. The corrupt file is backed up and defaults load, so successful recovery does not prove diagnostic privacy.
+  - Reproduction: config-diagnostic-red-pinned.json executes the real production config modules with root-matching serde 1.0.229 / serde_json 1.0.151. Two numeric credential-field cases appear in stderr; correctly typed string control does not. All three file/recovery controls pass. Captured evidence redacts the synthetic credential token.
+  - Independent verification: config-diagnostic-native-red.log runs the actual root ConfigStore in isolated child processes. One parent regression fails with disclosure count 2 rather than 0 after all three child controls succeed, including exact backup, defaults and valid masked snapshot. 673 root tests are filtered; this is not a full gate. Diagnostic test source/patch hashes are saved and the original tests.rs bytes restored exactly.
+- Problem: a malformed config can place a credential-field input value into process diagnostics through a raw deserialization error.
+- Why it matters: a manually edited legacy/plaintext WebDAV credential with missing JSON quotes may be copied into a diagnostic capture or support log. Medium reflects the wrong-typed local-config condition and stderr scope; no real credential, normal DPAPI/keyring value, remote disclosure or Android logcat execution is proved.
+- Realistic failure scenario: a numeric WebDAV password is manually entered without quotes in a legacy config; the app starts on defaults and preserves the corrupt file, but stderr includes the entire input number.
+- Minimal fix: emit only the parser's non-content category, line and column plus existing recovery/backup status. Never format the error's Display/Debug text or source JSON into the diagnostic. Keep config recovery and schema behavior unchanged.
+- Better long-term fix: review other secret-bearing parse boundaries and verify native mobile logging/storage separately. Keystore and background lock gaps are independent and remain unresolved.
+- Regression test suggestion: capture actual root recovery stderr in child processes for wrong-typed accessKey/secretKey and a valid control; require absent input values, exact corrupt-file backup, defaults and unchanged valid/masked values. Corroborate with the immutable module probe.
+- Estimated effort: 1–2 hours for a safe diagnostic formatter, native regression and complete verification.
+
+确认阶段尚未修改应用行为，工作区测试文件已恢复。原生红测 0 passed /
+1 failed / 673 filtered，三项子进程控制全部成功才到达回显计数断言。
+独立探针首版 serde_json 1.0.154 是初步证据；最终依据已对齐 root lock
+的 1.0.151 版本，源码／manifest／lock 哈希见 config-diagnostic-red-pinned.json。
+不把新版本辅助结果混称生产版本，也未访问用户配置、密码库、剪贴板
+或网络。原生和独立探针使用的凭据均为公开合成标记。
+
+移动端复核另确认 remote_secret::store 仍经非 Windows DPAPI passthrough，
+Android Keystore 和原生 onPause／onStop 锁定未接；这里只记录已有源码
+缺口，不声称设备泄漏复现或在本项完成其实现。PITFALLS 中把已接系统
+keyring 的桌面 macOS/Linux 仍写为未保护，需与现有 platform 源码同步。
+
+累计 80 Confirmed（Critical 1 / High 19 / Medium 49 / Low 11），包含
+已修复历史；原始 b7c5d9f／15 项／6.1 分不变。手机另存为新 APK／
+真机 provider、移动端安全语义、其余系统／竞品／UI 仍待闭环，目标 active。
