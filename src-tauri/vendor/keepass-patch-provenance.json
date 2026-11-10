@@ -130,7 +130,7 @@
     {
       "path": "src/db/types/entry.rs",
       "upstream_sha256": "1e68c36e6906ede54577e7e8e4bf1e80b344bcde6f46ff8ddd6b00e38f11b11b",
-      "patched_sha256": "1602065725109ff84400950fc5f312f651b40ebd4eda169591e0fd0b888e9fe1"
+      "patched_sha256": "9bf79103b9ed998741718655e400b7725b588f3d2aec8a52390bab3acdb9a00a"
     },
     {
       "path": "src/db/types/group.rs",
@@ -151,7 +151,7 @@
     {
       "path": "src/db/types/mod.rs",
       "upstream_sha256": "53f5fd72029a3de985b1fff7b9f5872f38f5d0385e07e5100d451514740424f9",
-      "patched_sha256": "46133ffd8599323c6bd17ec9a53f8a3251ad78947d8d54fe203c0ead4cf38cab"
+      "patched_sha256": "02584d912d7dd8484cb58f651801d88c910687709d33f0db78336ed1b697e9ac"
     },
     {
       "path": "src/db/types/times.rs",

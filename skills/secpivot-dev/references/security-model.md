@@ -373,3 +373,13 @@ recycle-bin policy and template-group fields preserve present null as a reset.
 Missing fields keep their values and malformed typed values fail before mutation.
 This enforces the requested configuration; it does not eagerly purge vault
 history or change KDF/cipher defaults.
+
+Native merge attachment payloads stay inside temporary in-memory database clones.
+The canonical index uses fingerprints only for lookup and verifies exact bytes
+and protection flags before deduplication. No fingerprints or binary values
+enter logs, IPC or configuration. Current and historical references receive
+the same namespace; local recycle-bin version payloads come from the original
+local input. Missing references fail before merged database publication.
+Temporary merge leases protect prepared payloads during entry creation/deletion;
+completion rebuilds reverse ownership before releasing them. Existing leases
+reject preparation instead of overwriting another mutation's ownership.

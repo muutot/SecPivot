@@ -55,8 +55,11 @@ the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the three patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and two
-dependency-specific tests cover shared references and guard unwind.
+in the audit scope. Native vault tests cover the application boundary and seven
+dependency-specific tests cover shared references, guard unwind, missing-payload
+rejection, exact-byte/protection deduplication and prepared-owner lifetime.
+Canonical binary merge and
+complete local recycle-bin version transplantation live in patched types/mod.rs.
 
 ## Runtime surfaces
 

@@ -11256,6 +11256,586 @@ fn history_titles(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
 /// 同改 (remote newer): the newer remote edit wins and the losing local
 /// edit is preserved in the entry history.
 #[test]
+fn merge_attachment_new_entry_sharing_deleted_local_payload_keeps_bytes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic old owner", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "shared.txt".into(),
+        data: Some(BASE64.encode(b"shared-owner-bytes")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let old_id = super::helpers::parse_entry_id(&state.root.entries[0].uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), old_id, merge_ts(10));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let base = session.require_db().unwrap().clone();
+    session
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(old_id)
+        .unwrap()
+        .remove();
+    session
+        .require_db_mut()
+        .unwrap()
+        .deleted_objects
+        .insert(old_id.uuid(), Some(merge_ts(20)));
+    input.title = "Synthetic new owner".into();
+    let state = session.add_entry(&input).unwrap();
+    let id = super::helpers::parse_entry_id(&state.root.entries[0].uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(30));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    for (local, remote) in [
+        (&base, session.require_db().unwrap()),
+        (session.require_db().unwrap(), &base),
+    ] {
+        let merged = merge_databases(local, remote).unwrap();
+        assert!(merged.entry(old_id).is_none());
+        assert!(
+            merged
+                .entry(id)
+                .unwrap()
+                .attachment_by_name("shared.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"shared-owner-bytes"
+        );
+        let path = dir.path().join("shared-owner-merged.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        assert!(
+            reopened
+                .attachment_data(&id.uuid().to_string(), "shared.txt")
+                .unwrap()
+                == b"shared-owner-bytes"
+        );
+    }
+}
+
+#[test]
+fn merge_attachment_branched_histories_keep_payloads_and_protection() {
+    let dir = TempDir::new().unwrap();
+    let (mut left, left_path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic base", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "same.txt".into(),
+        data: Some(BASE64.encode(b"base-bytes")),
+    }];
+    let state = left.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = super::helpers::parse_entry_id(&uuid).unwrap();
+    pin_times(left.require_db_mut().unwrap(), id, merge_ts(10));
+    left.save().unwrap();
+    left.close();
+    left.open(&left_path, "master-password", None).unwrap();
+    let right_path = dir.path().join("branch-right.kdbx");
+    std::fs::copy(&left_path, &right_path).unwrap();
+    let mut right = VaultSession::default();
+    right.open(&right_path, "master-password", None).unwrap();
+    for (session, path, title, bytes, time, protected) in [
+        (
+            &mut left,
+            &left_path,
+            "Synthetic local",
+            b"local-version".as_slice(),
+            20,
+            false,
+        ),
+        (
+            &mut right,
+            &right_path,
+            "Synthetic remote",
+            b"remote-version".as_slice(),
+            30,
+            true,
+        ),
+    ] {
+        input.title = title.into();
+        input.attachments[0].data = Some(BASE64.encode(bytes));
+        input.attachments.truncate(1);
+        if protected {
+            input.attachments.push(AttachmentInput {
+                name: "empty.txt".into(),
+                data: Some(String::new()),
+            });
+        }
+        session.update_entry(&uuid, &input).unwrap();
+        if !protected {
+            session
+                .require_db_mut()
+                .unwrap()
+                .entry_mut(id)
+                .unwrap()
+                .attachment_by_name_mut("same.txt")
+                .unwrap()
+                .data = keepass::db::Value::unprotected(bytes.to_vec());
+        }
+        if protected {
+            session
+                .require_db_mut()
+                .unwrap()
+                .entry_mut(id)
+                .unwrap()
+                .attachment_by_name_mut("empty.txt")
+                .unwrap()
+                .data = keepass::db::Value::unprotected(Vec::new());
+        }
+        pin_times(session.require_db_mut().unwrap(), id, merge_ts(time));
+        session.save().unwrap();
+        session.close();
+        session.open(path, "master-password", None).unwrap();
+    }
+    for (local, remote) in [
+        (left.require_db().unwrap(), right.require_db().unwrap()),
+        (right.require_db().unwrap(), left.require_db().unwrap()),
+    ] {
+        let merged = merge_databases(local, remote).unwrap();
+        let entry = merged.entry(id).unwrap();
+        assert!(
+            entry
+                .attachment_by_name("same.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"remote-version"
+        );
+        assert!(entry.attachment_by_name("same.txt").unwrap().is_protected());
+        assert!(entry
+            .attachment_by_name("empty.txt")
+            .unwrap()
+            .get()
+            .is_empty());
+        assert!(!entry
+            .attachment_by_name("empty.txt")
+            .unwrap()
+            .is_protected());
+        let history = entry.history.as_ref().unwrap();
+        assert_eq!(history.get_entries().len(), 2);
+        let local_index = history
+            .get_entries()
+            .iter()
+            .position(|e| e.get_title() == Some("Synthetic local"))
+            .unwrap();
+        let historical = entry.historical(local_index).unwrap();
+        assert!(
+            historical
+                .attachment_by_name("same.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"local-version"
+        );
+        assert!(!historical
+            .attachment_by_name("same.txt")
+            .unwrap()
+            .is_protected());
+        let path = dir.path().join("branched-merged.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        reopened.restore_entry_version(&uuid, local_index).unwrap();
+        assert!(reopened.attachment_data(&uuid, "same.txt").unwrap() == b"local-version");
+        reopened.save().unwrap();
+        reopened.close();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        assert!(!reopened
+            .require_db()
+            .unwrap()
+            .entry(id)
+            .unwrap()
+            .attachment_by_name("same.txt")
+            .unwrap()
+            .is_protected());
+    }
+}
+
+#[test]
+fn merge_attachment_source_removal_keeps_only_historical_bytes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic remove", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "removed.txt".into(),
+        data: Some(BASE64.encode(b"retained-history")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = super::helpers::parse_entry_id(&uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(10));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let base = session.require_db().unwrap().clone();
+    input.attachments.clear();
+    session.update_entry(&uuid, &input).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    for (local, remote) in [
+        (&base, session.require_db().unwrap()),
+        (session.require_db().unwrap(), &base),
+    ] {
+        let merged = merge_databases(local, remote).unwrap();
+        let entry = merged.entry(id).unwrap();
+        assert!(entry.attachment_by_name("removed.txt").is_none());
+        assert!(
+            entry
+                .historical(0)
+                .unwrap()
+                .attachment_by_name("removed.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"retained-history"
+        );
+        let path = dir.path().join("removed-merged.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        assert!(reopened.attachment_data(&uuid, "removed.txt").is_err());
+        reopened.restore_entry_version(&uuid, 0).unwrap();
+        assert!(reopened.attachment_data(&uuid, "removed.txt").unwrap() == b"retained-history");
+    }
+}
+
+#[test]
+fn merge_attachment_unchanged_payload_survives_header_renumbering() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic spare", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "same.txt".into(),
+        data: Some(BASE64.encode(b"spare")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let spare = super::helpers::parse_entry_id(&state.root.entries[0].uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), spare, merge_ts(10));
+    input.title = "Synthetic unchanged".into();
+    input.attachments[0].data = Some(BASE64.encode(b"unchanged"));
+    let state = session.add_entry(&input).unwrap();
+    let id = super::helpers::parse_entry_id(&state.root.entries[1].uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(10));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let base = session.require_db().unwrap().clone();
+    session
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(spare)
+        .unwrap()
+        .remove();
+    session
+        .require_db_mut()
+        .unwrap()
+        .deleted_objects
+        .insert(spare.uuid(), Some(merge_ts(30)));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    for (local, remote) in [
+        (&base, session.require_db().unwrap()),
+        (session.require_db().unwrap(), &base),
+    ] {
+        let merged = merge_databases(local, remote).unwrap();
+        assert!(merged.entry(spare).is_none());
+        assert!(
+            merged
+                .entry(id)
+                .unwrap()
+                .attachment_by_name("same.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"unchanged"
+        );
+        assert_eq!(
+            merged.entry(id).unwrap().times.last_modification,
+            Some(merge_ts(10))
+        );
+    }
+}
+
+#[test]
+fn merge_attachment_colliding_new_entry_ids_keep_both_payloads() {
+    let dir = TempDir::new().unwrap();
+    let (mut left, left_path) = create_session(&dir);
+    left.close();
+    left.open(&left_path, "master-password", None).unwrap();
+    let right_path = dir.path().join("right.kdbx");
+    std::fs::copy(&left_path, &right_path).unwrap();
+    let mut right = VaultSession::default();
+    right.open(&right_path, "master-password", None).unwrap();
+    let mut expected = Vec::new();
+    for (session, path, title, bytes) in [
+        (
+            &mut left,
+            &left_path,
+            "Synthetic local",
+            b"local-unique".as_slice(),
+        ),
+        (
+            &mut right,
+            &right_path,
+            "Synthetic remote",
+            b"remote-unique".as_slice(),
+        ),
+    ] {
+        let mut input = entry_input(ROOT_GROUP_UUID, title, "", "", "");
+        input.attachments = vec![AttachmentInput {
+            name: "same.txt".into(),
+            data: Some(BASE64.encode(bytes)),
+        }];
+        let state = session.add_entry(&input).unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        expected.push((super::helpers::parse_entry_id(&uuid).unwrap(), bytes));
+        session.save().unwrap();
+        session.close();
+        session.open(path, "master-password", None).unwrap();
+    }
+    for (local, remote) in [
+        (left.require_db().unwrap(), right.require_db().unwrap()),
+        (right.require_db().unwrap(), left.require_db().unwrap()),
+    ] {
+        let merged = merge_databases(local, remote).unwrap();
+        for (id, bytes) in &expected {
+            assert!(
+                merged
+                    .entry(*id)
+                    .unwrap()
+                    .attachment_by_name("same.txt")
+                    .unwrap()
+                    .get()
+                    .as_slice()
+                    == *bytes,
+                "independent payloads with colliding binary ids must survive"
+            );
+        }
+        let path = dir.path().join("collision-merged.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        for (id, bytes) in &expected {
+            assert!(
+                reopened
+                    .attachment_data(&id.uuid().to_string(), "same.txt")
+                    .unwrap()
+                    .as_slice()
+                    == *bytes
+            );
+        }
+    }
+}
+
+#[test]
+fn merge_attachment_bin_preserves_historical_payloads_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic bin history", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "version.txt".into(),
+        data: Some(BASE64.encode(b"bin-old")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = super::helpers::parse_entry_id(&uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(10));
+    input.attachments[0].data = Some(BASE64.encode(b"bin-current"));
+    session.update_entry(&uuid, &input).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let remote = session.require_db().unwrap().clone();
+    session.delete_entry(&uuid).unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let merged = merge_databases(session.require_db().unwrap(), &remote).unwrap();
+    let entry = merged.entry(id).unwrap();
+    assert!(
+        entry
+            .attachment_by_name("version.txt")
+            .unwrap()
+            .get()
+            .as_slice()
+            == b"bin-current"
+    );
+    assert!(
+        entry
+            .historical(0)
+            .unwrap()
+            .attachment_by_name("version.txt")
+            .unwrap()
+            .get()
+            .as_slice()
+            == b"bin-old",
+        "local bin history must retain original payload"
+    );
+    let path = dir.path().join("bin-merged.kdbx");
+    save_database(
+        &merged,
+        &path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&path, "synthetic-only", None).unwrap();
+    reopened.restore_entry(&uuid).unwrap();
+    reopened.restore_entry_version(&uuid, 0).unwrap();
+    assert!(reopened.attachment_data(&uuid, "version.txt").unwrap() == b"bin-old");
+}
+
+#[test]
+fn merge_attachment_updated_source_retains_current_and_history_bytes() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic merge attachment", "", "", "");
+    input.attachments = vec![
+        AttachmentInput {
+            name: "shared.txt".into(),
+            data: Some(BASE64.encode(b"synthetic-old")),
+        },
+        AttachmentInput {
+            name: "old-only.txt".into(),
+            data: Some(BASE64.encode(b"old-only")),
+        },
+    ];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = super::helpers::parse_entry_id(&uuid).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(10));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    input.attachments = vec![
+        AttachmentInput {
+            name: "shared.txt".into(),
+            data: Some(BASE64.encode(b"synthetic-new")),
+        },
+        AttachmentInput {
+            name: "new-only.txt".into(),
+            data: Some(BASE64.encode(b"new-only")),
+        },
+    ];
+    session.update_entry(&uuid, &input).unwrap();
+    pin_times(session.require_db_mut().unwrap(), id, merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let source = session.require_db().unwrap();
+    for (local, remote) in [(&baseline, source), (source, &baseline)] {
+        let merged = merge_databases(local, remote).unwrap();
+        let entry = merged.entry(id).unwrap();
+        assert!(
+            entry
+                .attachment_by_name("shared.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"synthetic-new",
+            "merged current must use winning attachment bytes"
+        );
+        assert!(entry.attachment_by_name("new-only.txt").is_some());
+        assert!(entry.attachment_by_name("old-only.txt").is_none());
+        let history = entry.historical(0).unwrap();
+        assert!(
+            history
+                .attachment_by_name("shared.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"synthetic-old"
+        );
+        let merged_path = dir.path().join("attachment-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        assert!(reopened.attachment_data(&uuid, "shared.txt").unwrap() == b"synthetic-new");
+        reopened.restore_entry_version(&uuid, 0).unwrap();
+        assert!(reopened.attachment_data(&uuid, "shared.txt").unwrap() == b"synthetic-old");
+    }
+}
+
+#[test]
+fn merge_attachment_created_source_retains_new_payload_after_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic new attachment", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "new.txt".into(),
+        data: Some(BASE64.encode(b"synthetic-created")),
+    }];
+    let state = session.add_entry(&input).unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    let id = super::helpers::parse_entry_id(&uuid).unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let source = session.require_db().unwrap();
+    let merged = merge_databases(&baseline, source).unwrap();
+    let entry = merged.entry(id).unwrap();
+    assert!(
+        entry.attachment_by_name("new.txt").is_some(),
+        "new entry must resolve its source attachment"
+    );
+    assert!(
+        entry
+            .attachment_by_name("new.txt")
+            .unwrap()
+            .get()
+            .as_slice()
+            == b"synthetic-created"
+    );
+    let merged_path = dir.path().join("created-merged.kdbx");
+    save_database(
+        &merged,
+        &merged_path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut reopened = VaultSession::default();
+    reopened.open(&merged_path, "synthetic-only", None).unwrap();
+    assert!(reopened.attachment_data(&uuid, "new.txt").unwrap() == b"synthetic-created");
+}
+
+#[test]
 fn merge_databases_remote_newer_edit_wins_and_preserves_local_history() {
     let (base, entry_id) = merge_base_db();
     let mut local = base.clone();
