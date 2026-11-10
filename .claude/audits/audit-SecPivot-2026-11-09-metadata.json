@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "41a596c",
+  "remediation_checkpoint": "7c1cbe1",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -72,9 +72,9 @@
       "severity": "Medium",
       "confidence": "High",
       "source_checkpoint": "92c1d14",
-      "commit": null,
+      "commit": "7c1cbe1",
       "area": "KDBX reader drops whitespace-only ordinary current/history values before save",
-      "status": "Confirmed, not remediated. Native2 red:48 current/history +50 external-open/rewrite positions changed. Original registry AES1 fixture actual XML/ElementTree35 values intact, registry/source/lock/fixture/XML hashes corroborate. Final vendor1 pass/1 fail; missing-Value harness assumption corrected. Direct Option/String attempts both red and withdrawn. All application/five patched source bytes restored exactly; red regression patch/fixture outside repo. ASCII map skipping and Unicode generic trim are distinct layers of one fidelity issue. Prior323/668/ACL2 full green excludes these uncommitted red tests and does not prove repair. No raw substitution/global metadata change, recovery/default-protection/user-vault/device/provider/competitor runtime claim."
+      "status": "Confirmed and remediated. Native2 red (48 current/history and50 external open/rewrite changes) now2 green; original registry fixture/XML provenance retains35 source values. StringValue direct $text bypasses generic Unicode trim; local QuickXML0.41 blank events retained only for dedicated-text structs. Empty/missing/protected/metadata and CDATA/comments/PI controls pass. Vendor23, QuickXML1363/4 ignored, independent3, full323/670/ACL2 pass; full root serial/debug0/live unset. Fresh archive reconstruction/staged60+43 hashes pass; prior five KeePass source patch bytes unchanged. Sixth KeePass entry source and one QuickXML map patched;54/42 upstream files unchanged. Pinned official source plus System.Xml helper-like control do not prove native competitor behavior. No recovery/group/meta whitespace/invalid-scalar/device/provider/full-security claim."
     },
     {
       "id": "SP-S64",
@@ -634,10 +634,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "41a596c",
-    "log": "verify-kdbx-carriage.log",
+    "checkpoint": "7c1cbe1",
+    "log": "verify-kdbx-whitespace.log",
     "frontend_tests": 323,
-    "rust_unit_tests": 668,
+    "rust_unit_tests": 670,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -667,7 +667,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 668,
+    "rust_unit_tests_discovered": 670,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -1197,8 +1197,8 @@
       "limitations": "Synthetic data only. Root full gate serial/debug0/unfiltered/live clipboard unset; independent default profile/threads differ. Actual to_xml fixture uses Plain inner cipher; native/external tests separately cover encrypted save/parse. Pure-whitespace suite stops at first space-only failure and remains unremediated candidate; invalid scalars/unseen model surfaces/client/device/provider/full string fidelity not proved. Official writer factory has no explicit Entitize; no native competitor runtime proof."
     },
     "kdbx_whitespace": {
-      "checkpoint": "92c1d14",
-      "result": "Confirmed, pending remediation",
+      "checkpoint": "7c1cbe1",
+      "result": "Confirmed and remediated for ordinary entry-value whitespace",
       "proof": "kdbx-whitespace-evidence-proof.json",
       "native_red": "kdbx-whitespace-native-red-final.log",
       "native_failed": 2,
@@ -1212,8 +1212,51 @@
       "reader_reference": "kdbx-whitespace-reader-reference-provenance.json",
       "regression_patch": "kdbx-whitespace-regressions-red.patch",
       "source_restored": true,
-      "limitations": "Synthetic bounded data only; root red serial/debug0/live unset; original producer default profile. XML source independent ElementTree read, no independent encrypted decryption/client runtime. Failed attempts removed and root latest full gate still323/668/ACL2; red tests not in committed suite. No group/meta whitespace/scalar/recovery/client/device/provider/full-security claim."
-    }
+      "limitations": "Synthetic bounded data only; root serial/debug0/unfiltered/live unset; independent default profile/scheduling differs. Four root native live-clipboard bodies and four QuickXML ignored not executed. Independent source uses current vendor paths; source XML ElementTree is not independent encrypted decryption. System.Xml helper is not a KeePass app/full encrypted migration test. New complete MIT vendor preserves original CRLF/locks; unused self-patch warning in disposable QuickXML root is harmless and application dependency wiring is separately verified. Final raw byte reconstruction supersedes EOL harness failures. No group/meta whitespace, illegal scalars, recovery, native-client/device/provider/full-security claim.",
+      "source_restored_stage": "Confirmation only at 949c641; final fix adopts dedicated-text patch in 7c1cbe1",
+      "native_green": "kdbx-whitespace-native-green.log",
+      "native_passed": 2,
+      "vendor_green": "kdbx-whitespace-vendor-green.log",
+      "vendor_green_passed": 23,
+      "quickxml_green": "kdbx-whitespace-quickxml-green.log",
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "independent_green": "kdbx-whitespace-independent-green.log",
+      "independent_passed": 3,
+      "independent_metadata": "kdbx-whitespace-independent-metadata.json",
+      "independent_provenance": "kdbx-whitespace-independent-provenance.json",
+      "reconstruction": "kdbx-whitespace-reconstruction-raw.log",
+      "keepass_files_verified": 60,
+      "keepass_patched_files": 6,
+      "keepass_untouched_files": 54,
+      "quickxml_files_verified": 43,
+      "quickxml_patched_files": 1,
+      "quickxml_untouched_files": 42,
+      "staged_hashes_verified": true,
+      "full_verify": "verify-kdbx-whitespace.log",
+      "full_verify_exit_code": 0,
+      "full_frontend_passed": 323,
+      "full_native_passed": 670,
+      "full_acl_passed": 2,
+      "competitor_reader": "keepass-whitespace-read-reference-provenance.json",
+      "competitor_streamed": "keepass-whitespace-streamed-reference-provenance.json",
+      "competitor_helper": "keepass-whitespace-helper-control.log",
+      "competitor_helper_runtime": ".NET 10.0.14",
+      "competitor_helper_ascii_skipped": 3,
+      "competitor_helper_controls_retained": 2
+    },
+    "prior_kdbx_carriage_gate": {
+      "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
+      "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
+      "checkpoint": "41a596c",
+      "log": "verify-kdbx-carriage.log",
+      "frontend_tests": 323,
+      "rust_unit_tests": 668,
+      "android_acl_tests": 2
+    },
+    "keepass_patch_tests": 23,
+    "quickxml_library_tests": 1363,
+    "quickxml_library_ignored": 4
   },
   "reverification_notes": [
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
@@ -1293,6 +1336,7 @@
     "1ce2452 fixes SP-S62 shared Argon2 checked-parameter conversion. Actual local/remote/save 3 red, original registry 2 save/parse red and pinned official checked conversion corroborate. Native3/specialized19/normal vector/external2/full verify 323/662/ACL2 pass serially/debug=0/no filters/live clipboard. All probes compute only1/64KiB; unsupported high declarations rejected, no default/AES change or resource caps claimed. Two empty synthetic fixture hashes preserve original producer, local/remote refusal keeps session and avoids mirror, failed save keeps old file/reopen. Five reviewed patches/55 unchanged/60-hash fresh reconstruction; maintenance/data/security/structure/patch/TODO gate synchronized. TryFrom import for upstream Rust2018 and shell escaping failures excluded. User adds avoid security problems; ordinary Bitwarden unexpected-value candidate and valid expensive KDF resource budget remain pending. No UI/IPC/schema/user-vault/clipboard/device/runtime client/credential leakage or OOM proof. Original b7c5d9f/15/6.1 preserved; goal active and phone replacement APK/provider unverified.",
     "2c71c58 fixes SP-S63 Bitwarden malformed common/field/folder shapes. Diagnostic actual command/wire/batch/KDBX persistence loses4 values and exposes string hidden-type field. Final red3/control1 (63 accepted malformed cases), green30 with4 new, standalone original0/patched3 rejected controls and pinned official contract hashes corroborate. Full verify323/666/ACL2 passes serially/debug0/unfiltered/live clipboard unset; vendor60-hash/5patch unchanged. No coercion, optional null/missing and legacy Text preserve behavior. Docs/data/security/structure/TODO gate updated; SKILL/maintenance routing unchanged. Harness compile/import/uuid failures and initial CRLF control excluded; ordinary-string CRLF retained candidate. i64-to-isize representability safe on current64bit release, not counted. No DTO/UI/IPC/user-vault/native-client/device/provider or full security claim; b7c5d9f/15/6.1 unchanged; goal active.",
     "41a596c fixes SP-S64 ordinary KDBX XML CR serialization. Actual native2 red (14+4 positions after full persistence); original registry9/9 and Full-level control; native2/vendor21/no-merge/actual-to_xml ElementTree/fresh60hash pass. Independent patchedCR2 pass and whitespace1 remains red (first space-only), not masked by root green. Full verify323/668/ACL2 serial/debug0/unfiltered/live clipboard unset. XML refs affect trusted text-only output; normal reader normalization, protected base64 and literal entities remain; noCR output moves bytes with no benchmark claim. Four existing patch files identical/55 upstream unchanged. Data/security/structure/patch/TODO gate updated; stable routes unchanged. Synthetic Plain XML fixture separate from actual encrypted probes. Pinned official writer/factory lacks explicit Entitize; no competitor runtime exact-CR assertion. Harness lifetime/import/clone and doc context failures excluded. Pure-whitespace/scalar/native-client/device/provider/full security remain pending; original b7c5d9f/15/6.1 and active goal preserved.",
-    "92c1d14 SP-S65 confirmed, unremediated: actual native2 red yields48 current/history and50 original-file-open/rewrite changes. Original registry AES1 fixture actual get_xml/ElementTree35 ordinary values intact; seven protection attributes, source/lock/XML/fixture hashes recorded. ASCII blank events skipped at quickxml map boundary; Unicode whitespace also trimmed by cs_opt_string. Final vendor1 pass/1 fail; initial absent-Value expectation was harness error and corrected. Direct Option/String attempts fail and withdrawn. Hashed red source/patch/fixture outside repo; all first-party and five existing vendor source bytes restored. Prior323/668/ACL2 green remains source gate but is not whitespace coverage. Report/TODO and three domain refs clarify pending boundary; original b7c5d9f/15/6.1 unchanged.76 Confirmed1/19/45/11; phone replacement APK/provider, valid costly KDF and remaining full/competitor/UI work continue; goal active."
+    "92c1d14 SP-S65 confirmed, unremediated: actual native2 red yields48 current/history and50 original-file-open/rewrite changes. Original registry AES1 fixture actual get_xml/ElementTree35 ordinary values intact; seven protection attributes, source/lock/XML/fixture hashes recorded. ASCII blank events skipped at quickxml map boundary; Unicode whitespace also trimmed by cs_opt_string. Final vendor1 pass/1 fail; initial absent-Value expectation was harness error and corrected. Direct Option/String attempts fail and withdrawn. Hashed red source/patch/fixture outside repo; all first-party and five existing vendor source bytes restored. Prior323/668/ACL2 green remains source gate but is not whitespace coverage. Report/TODO and three domain refs clarify pending boundary; original b7c5d9f/15/6.1 unchanged.76 Confirmed1/19/45/11; phone replacement APK/provider, valid costly KDF and remaining full/competitor/UI work continue; goal active.",
+    "7c1cbe1 repairs SP-S65 dedicated entry-text fidelity. Red2 to green2, native current/history and original fixture open/rewrite; vendor23, QuickXML1363/ignored4, independent3 and root full323/670/ACL2 passed. Synthetic provenance and live-clipboard opt-out retained. Complete MIT QuickXML0.41 vendor adds only map patch; registry0.42 unchanged. KeePass six patched/54 untouched, original five patch source bytes identical. Raw archive+patch reconstruction and staged60+43 hashes/patch/fixture byte identity pass; earlier EOL reconstruction/unsupported formatter errors are harness-only. Scoped $text preserves ASCII/Unicode and protected/empty/missing/metadata, no raw substitution/global metadata change. SKILL/maintenance/data/security/structure/patch/TODO gates synchronized. System.Xml helper and pinned KeePass source are auxiliary evidence without native competitor/full migration claims. Count76 Confirmed1/19/45/11 and original b7c5d9f/15/6.1 unchanged; active goal continues."
   ]
 }

@@ -3361,7 +3361,7 @@ debug=0/无过滤，live clipboard opt-in unset，4 个原生 live 测试体
 - Regression test suggestion: reapply the hashed red regression patch with its synthetic fixture; require actual current/history save/reopen, original-file open/rewrite, ASCII/Unicode whitespace, protected/unprotected password controls, empty/missing values and optional metadata. Include interleaved/nested/escaped XML cases appropriate to the final parser design, patch provenance and the complete integration gate.
 - Estimated effort: 4–8 hours for a scoped parser/library fix, independent evidence and integration checks.
 
-此项尚未修复。已撤回两个未通过的限定转换尝试；应用源码与五个现有
+确认阶段（949c641）尚未修复。已撤回两个未通过的限定转换尝试；应用源码与五个现有
 vendor patch 文件全部恢复为 92c1d14 的确切字节。红测 patch、源码快照、
 合成 fixture/provenance、实际内部 XML 和失败日志保存在本任务证据目录。
 fixture 不含用户内容，测试解锁值为公开 synthetic-only，KDF 仅 AES-1。
@@ -3381,3 +3381,50 @@ RUST_TEST_THREADS=1/debug=0/live clipboard unset；外部生产者默认 profile
 当前累计 76 Confirmed（Critical 1 / High 19 / Medium 45 / Low 11）；原
 b7c5d9f 的 15 项/6.1 分保持。手机 v1.6.5 替换 APK/provider、有效昂贵
 KDF 预算、其余系统、竞品与 UI 仍需继续，整个目标 active。
+
+7c1cbe1 已完成限定修复：StringValue 从 `$value` 改为 `$text`，通过
+直接 String 转换保留 Unicode 空白；本地固定 QuickXML 0.41.0 的
+ElementMapAccess 仅在目标结构明确声明 `$text` 时保留空白事件。
+结构缩进、一般 `$value` 与可选元数据维持原规则，未引入原始 XML
+替换、临时标记或另一套解析器。保护属性／内部加密 Base64、空 Value、
+缺失整个 Value 的拒绝、历史和普通回车处理的控制均通过。
+
+本轮验证从原生两个失败转为两个通过：当前／历史六种 ASCII、CR/CRLF
+和 Unicode 输入及原版 registry 合成库的打开／重写均保真。KeePass
+23 个专项测试通过；QuickXML 开启 serialize 的 library 测试 1363
+通过、4 ignored，包含新增明确文本／属性／CDATA／注释／PI 和结构
+控制。独立探针固定原测试源码并指向当前两个 vendor，3 个测试通过，
+包括普通 CR、五种 ASCII 空白、保护和字面实体控制；原生测试另覆盖
+Unicode。独立默认 profile／调度不混称根门配置。
+
+verify-kdbx-whitespace.log exit 0：323 frontend、670 Rust、ACL 2，
+两套来源门、format、零错误警告 check、150-key 契约、build 和 clippy
+通过。根门单线程／debug=0／无过滤，live clipboard opt-in unset；
+4 个原生剪贴板测试体及 QuickXML 4 个 ignored 不计执行覆盖。QuickXML
+测试源副本作为根包时出现 unused patch 提示，不影响执行该副本的
+library tests；应用和独立探针的依赖路径另有来源验证。
+
+KeePass 60 文件中新增第六个 owned patch entry.rs，其余原有五个 patch
+字节全部保持，54 个 upstream 文件不变。QuickXML 完整 43 文件／MIT
+包中只改 map.rs，42 文件保持原字节，registry 0.42 包未改。
+原始 archive 加补丁重建 60／43 哈希及全部暂存字节检查通过。
+搭建时的 diff 换行规范化导致重建失败，已用保留 CRLF 载荷的 diff_bytes
+修正；最终依据 kdbx-whitespace-reconstruction-raw.log，不将搭建错误
+计为产品问题。Git attributes 局部禁用新包／补丁 EOL 规范化，格式门
+仅覆盖 owned source；测试在经路径验证的临时源码副本中运行，保留
+published Cargo.lock 原字节。
+
+竞品复核采用 KeePass 镜像固定 d1eec63f1bd73dc2d5273eaf94528f616b553ce5：
+KdbxFile.Read.cs:759–781 的 ReadString/Raw 调用 ReadElementString，
+Streamed.cs:101、512–513、958 后连接 reader factory 和普通 Value 路径；
+XmlUtilEx:98–105 设置 IgnoreWhitespace=true。相同 System.Xml 设置和
+ReadElementString 的 .NET 10.0.14 helper 控制跳过 3 个 ASCII 空白，
+保留 2 个 ordinary/empty 控制。这只校准辅助方法，未运行 KeePass
+应用／完整加密 KDBX，不能推出竞品真实迁移丢失。QuickXML 0.42 缓存
+源码仍无明确文本分支，仅源码观察，未声称其运行验证。
+
+文档 gate 已同步 SKILL/maintenance、data/security/structure、两套补丁
+说明和 TODO。此项维持 Confirmed 并记录已修复，累计仍 76，不新增
+重复卡片、不改原始基线。修复不能恢复已丢失内容；分组／元数据纯
+空白、非法 XML scalar、完整跨客户端／真机 provider 和有效昂贵 KDF
+预算仍待验证，整体目标 active。
