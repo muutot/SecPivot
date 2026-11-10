@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S77; historical supplemental tracking notes excluded",
-    "total": 88,
-    "confirmed": 88,
+    "scope": "15 baseline cards plus SP-S05 through SP-S78; historical supplemental tracking notes excluded",
+    "total": 89,
+    "confirmed": 89,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 55,
+      "Medium": 56,
       "Low": 13
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S78",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "c4e164de95dd95b8738011c3f9feae8d108ac86b",
+      "area": "Development tooling versions overlap public advisories",
+      "status": "Confirmed, unremediated. Installed/locked Vite8.2.2,devalue5.9.1,source-map-js1.2.1 match saved npm ranges; GitHub independently confirms Vite8.2.4 fix and actual dev editor middleware registration. All audit eight nodes/three High, production zero. No exploit/editor invocation/live data/shipped client impact demonstrated. Remaining Low applicability separate; cargo-audit unavailable."
+    },
     {
       "id": "SP-S77",
       "severity": "Low",
@@ -1753,6 +1761,37 @@
       "keepass_passed": 25,
       "quickxml_passed": 1363,
       "quickxml_ignored": 4
+    },
+    "frontend_toolchain_advisories": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "c4e164de95dd95b8738011c3f9feae8d108ac86b",
+      "before_proof": "dependency-audit-current-proof.json",
+      "all_counts": {
+        "info": 0,
+        "low": 5,
+        "moderate": 0,
+        "high": 3,
+        "critical": 0,
+        "total": 8
+      },
+      "production_counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "installed_before": {
+        "vite": "8.2.2",
+        "devalue": "5.9.1",
+        "source-map-js": "1.2.1",
+        "@sveltejs/kit": "2.70.3",
+        "cookie": "0.6.0",
+        "deepmerge": "4.3.1"
+      },
+      "rust_audit": "Unavailable: cargo-audit not installed; no installation attempted",
+      "limits": "Lock/installed/public advisory inspection only; no exploit payload, dev endpoint triggering, live vault/config/clipboard or user data accessed."
     }
   },
   "reverification_notes": [

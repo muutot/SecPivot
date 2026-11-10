@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S77；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S78；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 55     | 55        | 0         |
+| Medium    | 56     | 56        | 0         |
 | Low       | 13     | 13        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **88** | **88**    | **0**     |
+| **Total** | **89** | **89**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4156,3 +4156,31 @@ hash；currency gate同步settings-panels.md，无CSS／IPC／schema／
 后端凭据语义变化，不声称真实后台丢失或provider／手机运行证明。
 removeRemoteProfile候选仍未确认，不并入本项。88历史Confirmed与
 原始15项／6.1分保持，整体防御审计／竞品／UI目标仍active。
+
+### Finding: SP-S78 当前开发工具链含公开公告对应的未修复版本
+
+- Severity: Medium
+- Confidence: High
+- Category: Supply chain / Development security
+- Status: Confirmed
+- Affected area: Frontend development/build toolchain dependencies
+- Evidence:
+  - File: package.json:38–41; package-lock.json; vite.config.js:16–31; node_modules/vite/dist/node/chunks/node.js:11408–11429, 26639 (c4e164d)
+  - Function / Module: Vite development server launchEditorMiddleware; Svelte/PostCSS dependency graph
+  - Relevant behavior: installed and locked Vite8.2.2 registers the editor middleware during development. The project permits TAURI_DEV_HOST for mobile development. Public GHSA-587h-7wmj-h5pm explicitly includes Vite8.2.0–8.2.3 and fixes8.2.4. Production packages remain the four Tauri API/plugin packages; shipped app is a static SPA.
+  - Reproduction: npm audit --json returns eight affected package nodes, including high-severity Vite/devalue/source-map-js. Actual installed versions are Vite8.2.2, devalue5.9.1 and source-map-js1.2.1; dependency graph ties the latter two to SvelteKit/Svelte and Vite/PostCSS. npm audit --omit=dev returns zero. No exploit payload or editor endpoint was triggered.
+  - Independent verification: the GitHub advisory API independently confirms the Vite affected/fixed ranges, with JSON SHA256 92a6001ac829d76504e4c5fcd8ad9d2d00fa65b313d25ae201d573fa0b1e4183. devalue/source-map-js ranges come from saved npm advisory output; their separate API fetches were unavailable and are not represented as independent verification. dependency-audit-current-proof.json retains installed versions and both audit hashes.
+- Problem: the verified build remains on dependency versions with announced security fixes; a passing application verify does not check current advisories.
+- Why it matters: development exposes network/editor/build parsing surfaces on the developer machine, potentially widened for mobile development. Medium reflects confirmed affected versions and the development boundary, without demonstrating exploitation, remote exposure, vault disclosure or shipped-client impact. The scanner's High labels are not copied into application severity.
+- Realistic failure scenario: a maintainer runs the unpatched Vite development server with a reachable mobile-development host. The known vulnerable editor middleware is part of that server; a normal build/test pass leaves its announced fix absent.
+- Minimal fix: update Vite to the patched8.2.4 line and compatible devalue5.9.4/source-map-js1.2.2 patches, preserve major versions and inspect exact lock changes. Re-run audit, check/build, ordinary localhost preview and full verify.
+- Better long-term fix: retain dated all-dependency and production-only advisory evidence at release/integration checkpoints, review applicability rather than force-upgrading all packages. Rust advisory coverage is currently incomplete because cargo-audit is unavailable.
+- Regression test suggestion: assert locked/installed versions match reviewed patched releases and npm audit no longer identifies these three nodes; perform ordinary dev page/HMR and production builds plus existing behavior tests, without constructing exploit or resource-exhaustion probes.
+- Estimated effort: 1–2 hours including dependency diff review, frontend smoke and full verification.
+
+本项确认的是当前依赖版本与公告范围，不是攻击复现。其余五个Low节点
+涉及SvelteKit enhanced form／prerender headers／cookie／deepmerge：首方搜索
+未见对应直接调用，尚不能判定这些路径在本应用可触达，不用扫描结果
+替代实际适用性。没有强制major升级、后台工具安装或真实数据访问。
+累计89历史Confirmed（Critical1／High19／Medium56／Low13）及原始15项／
+6.1分保持，整体目标仍active。
