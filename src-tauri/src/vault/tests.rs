@@ -12029,6 +12029,182 @@ fn merge_databases_unions_history_from_both_sides() {
     }
 }
 
+#[test]
+fn merge_history_equal_current_preserves_both_branches_after_reopen() {
+    assert_merge_history_branch_fidelity(true);
+}
+
+#[test]
+fn merge_history_same_time_loser_preserves_both_versions_after_reopen() {
+    assert_merge_history_branch_fidelity(false);
+}
+
+#[test]
+fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
+    let dir = TempDir::new().unwrap();
+    let (base, id) = merge_base_db();
+    let mut local = base.clone();
+    let mut remote = base.clone();
+    for (db, expires_at) in [(&mut local, merge_ts(60)), (&mut remote, merge_ts(70))] {
+        edit_title(db, id, "Synthetic expiration", merge_ts(20));
+        {
+            let mut entry = db.entry_mut(id).unwrap();
+            entry.times.expires = Some(true);
+            entry.times.expiry = Some(expires_at);
+        }
+        edit_title(db, id, "Synthetic converged", merge_ts(40));
+        let mut entry = db.entry_mut(id).unwrap();
+        entry.times.expires = Some(false);
+        entry.times.expiry = None;
+    }
+    for (a, b) in [(&local, &remote), (&remote, &local)] {
+        let merged = merge_databases(a, b).unwrap();
+        let path = dir.path().join("expiration-history.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        let entry = reopened.require_db().unwrap().entry(id).unwrap();
+        let versions = entry.history.as_ref().unwrap().get_entries();
+        assert_eq!(versions.len(), 3);
+        for expected in [merge_ts(60), merge_ts(70)] {
+            let index = versions
+                .iter()
+                .position(|e| e.times.expiry == Some(expected))
+                .unwrap();
+            let mut restored = VaultSession::default();
+            restored.open(&path, "synthetic-only", None).unwrap();
+            restored
+                .restore_entry_version(&id.to_string(), index)
+                .unwrap();
+            let entry = restored.require_db().unwrap().entry(id).unwrap();
+            assert_eq!(entry.times.expiry, Some(expected));
+            assert_eq!(entry.times.expires, Some(true));
+        }
+        let repeated = merge_databases(reopened.require_db().unwrap(), b).unwrap();
+        assert_eq!(
+            repeated
+                .entry(id)
+                .unwrap()
+                .history
+                .as_ref()
+                .unwrap()
+                .get_entries()
+                .len(),
+            3
+        );
+    }
+}
+
+fn assert_merge_history_branch_fidelity(equal_current: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut local, local_path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic common", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "version.txt".into(),
+        data: Some(BASE64.encode(b"synthetic-common")),
+    }];
+    let uuid = local.add_entry(&input).unwrap().root.entries[0]
+        .uuid
+        .clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    pin_times(local.require_db_mut().unwrap(), id, merge_ts(10));
+    local.save().unwrap();
+    local.close();
+    local.open(&local_path, "master-password", None).unwrap();
+    let remote_path = dir.path().join("history-remote.kdbx");
+    std::fs::copy(&local_path, &remote_path).unwrap();
+    let mut remote = VaultSession::default();
+    remote.open(&remote_path, "master-password", None).unwrap();
+    for (session, title, bytes) in [
+        (
+            &mut local,
+            "Synthetic local branch",
+            b"synthetic-local".as_slice(),
+        ),
+        (
+            &mut remote,
+            "Synthetic remote branch",
+            b"synthetic-remote".as_slice(),
+        ),
+    ] {
+        input.title = title.into();
+        input.attachments[0].data = Some(BASE64.encode(bytes));
+        session.update_entry(&uuid, &input).unwrap();
+        pin_times(session.require_db_mut().unwrap(), id, merge_ts(20));
+    }
+    input.title = "Synthetic converged".into();
+    input.attachments[0].data = Some(BASE64.encode(b"synthetic-current"));
+    local.update_entry(&uuid, &input).unwrap();
+    pin_times(local.require_db_mut().unwrap(), id, merge_ts(40));
+    if equal_current {
+        // Distinct historical timestamps separate history-only union from the
+        // second regression's same-time, different-content loser collision.
+        pin_times(remote.require_db_mut().unwrap(), id, merge_ts(30));
+        remote.update_entry(&uuid, &input).unwrap();
+        pin_times(remote.require_db_mut().unwrap(), id, merge_ts(40));
+    }
+    for (session, path) in [(&mut local, &local_path), (&mut remote, &remote_path)] {
+        session.save().unwrap();
+        session.close();
+        session.open(path, "master-password", None).unwrap();
+    }
+    for (a, b) in [
+        (local.require_db().unwrap(), remote.require_db().unwrap()),
+        (remote.require_db().unwrap(), local.require_db().unwrap()),
+    ] {
+        let merged = merge_databases(a, b).unwrap();
+        let expected = [
+            ("Synthetic common", b"synthetic-common".as_slice()),
+            ("Synthetic local branch", b"synthetic-local".as_slice()),
+            ("Synthetic remote branch", b"synthetic-remote".as_slice()),
+        ];
+        let inspect = |db: &Database| {
+            let entry = db.entry(id).unwrap();
+            assert_eq!(entry.get_title(), Some("Synthetic converged"));
+            let titles = history_titles(&entry);
+            for (title, bytes) in expected {
+                let index = titles.iter().position(|actual| actual == title);
+                assert!(
+                    index.is_some(),
+                    "merge must preserve historical branch {title}"
+                );
+                assert!(
+                    entry
+                        .historical(index.unwrap())
+                        .unwrap()
+                        .attachment_by_name("version.txt")
+                        .unwrap()
+                        .get()
+                        .as_slice()
+                        == bytes
+                );
+            }
+            assert_eq!(
+                titles.len(),
+                expected.len(),
+                "shared history must deduplicate"
+            );
+        };
+        inspect(&merged);
+        let merged_path = dir.path().join("history-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        inspect(reopened.require_db().unwrap());
+        inspect(&merge_databases(reopened.require_db().unwrap(), b).unwrap());
+    }
+}
+
 /// A genuine conflict: same UUID edited on both sides at the same timestamp
 /// with different content cannot be auto-merged.
 #[test]

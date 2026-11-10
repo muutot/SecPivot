@@ -21,7 +21,9 @@ Only these upstream files are changed:
   merge, applies actual entry winners, copies complete recycle-bin version maps
   and rejects missing payloads before mutation. Exact bytes and protection flags
   determine identity. Prepared leases protect pending merge owners until winner
-  maps are installed; existing leases reject preparation.
+  maps are installed; existing leases reject preparation. History::from_entries
+  constructs an ordered snapshot list once and strips nested histories, avoiding
+  repeated front insertion in the first-party history union.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication.
