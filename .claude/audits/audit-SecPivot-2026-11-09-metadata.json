@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S75; historical supplemental tracking notes excluded",
-    "total": 86,
-    "confirmed": 86,
+    "scope": "15 baseline cards plus SP-S05 through SP-S76; historical supplemental tracking notes excluded",
+    "total": 87,
+    "confirmed": 87,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 54,
+      "Medium": 55,
       "Low": 12
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S76",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "d9c2af4cfaa6ea2460b88bed54f4f2b0b8060bd5",
+      "area": "Remote settings text/password controls have no accessible names",
+      "status": "Confirmed, unremediated. Isolated DOM and native browser AX prove S3 eight/WebDAV six unnamed fields; label/aria-label/aria-labelledby/title absent. Existing TextField supports localized ariaLabel. No user config/vault/credential values/clipboard accessed."
+    },
     {
       "id": "SP-S75",
       "severity": "Medium",
@@ -1686,6 +1694,15 @@
       "keepass_passed": 25,
       "quickxml_passed": 1363,
       "quickxml_ignored": 4
+    },
+    "remote_form_accessible_names": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "d9c2af4cfaa6ea2460b88bed54f4f2b0b8060bd5",
+      "before": "remote-form-name-confirmed-before.json",
+      "before_sha256": "13219e10913032bc7544a54f5cf4306d80cba772daab143ff74465e8a7745d97",
+      "unnamed_s3": 8,
+      "unnamed_webdav": 6,
+      "limits": "Isolated localhost DOM/AX names only; no field values or user data accessed"
     }
   },
   "reverification_notes": [

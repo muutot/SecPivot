@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S75；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S76；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 54     | 54        | 0         |
+| Medium    | 55     | 55        | 0         |
 | Low       | 12     | 12        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **86** | **86**    | **0**     |
+| **Total** | **87** | **87**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4073,3 +4073,28 @@ remote-password-whitespace-final-proof.json保存fix patch、源码、原样
 累计86 Confirmed含历史已修复项（Critical1／High19／Medium54／Low12），
 原始b7c5d9f／15项／6.1分及历史库存artifact保持；完整审计／竞品／UI
 目标仍active，手机另存为仍待替换APK／真机provider验证。
+
+### Finding: SP-S76 远程设置输入框缺少可访问名称
+
+- Severity: Medium
+- Confidence: High
+- Category: Accessibility
+- Status: Confirmed
+- Affected area: S3 and WebDAV settings form fields
+- Evidence:
+  - File: src/lib/components/settings/RemoteSettingsPanel.svelte:124–385; src/lib/components/templates/form/TextField.svelte:26, 114 (d9c2af4)
+  - Function / Module: RemoteSettingsPanel -> TextField input
+  - Relevant behavior: visible headings are strong elements adjacent to the fields, with no label association. TextField supports ariaLabel but the panel does not pass it for any of its eight text/password fields. The profile Select and backup range already have names.
+  - Reproduction: isolated localhost UI renders eight unnamed S3 and six unnamed WebDAV text/password controls. DOM checks independently exclude label, aria-label, aria-labelledby and title; native browser accessibility tree lacks their field descriptions. Only names/types/headings were inspected, without credential values or user settings. remote-form-name-confirmed-before.json SHA256 13219e10913032bc7544a54f5cf4306d80cba772daab143ff74465e8a7745d97.
+- Problem: assistive technology receives generic inputs or placeholder examples instead of stable localized field names.
+- Why it matters: users navigating the form through a screen reader cannot reliably distinguish endpoint, username/key, password, prefix and backup template, especially when placeholders are empty or become the same saved-credential hint. The whole connection form is affected; no credential disclosure or provider incident is claimed.
+- Realistic failure scenario: a screen-reader user tabs through WebDAV settings to configure a connection; the password and username controls have no programmatic names even though headings are visible to sighted users.
+- Minimal fix: supply TextField.ariaLabel from the same existing localized keys as visible headings, including protocol-specific endpoint and credential titles. Preserve shared primitives and theme tokens.
+- Better long-term fix: check stable localized accessible names when reviewing every settings form; shared controls cannot infer nearby headings safely.
+- Regression test suggestion: inspect rendered S3/WebDAV in both locales, verify all text/password fields have names matching visible headings, and confirm name-based locators plus Tab focus. Check dark/light and narrow layout without entering credentials.
+- Estimated effort: 30–60 minutes including localized props and rendered verification.
+
+本项先确认并记录再实施；仅独立localhost UI／源码证据，未访问用户配置／
+密码库／真实凭据／系统剪贴板。累计87 Confirmed含历史已修复项
+（Critical1／High19／Medium55／Low12），原始15项／6.1分保持。
+手机另存为的新版APK／真机provider验证和整体审计／竞品目标仍未完成。
