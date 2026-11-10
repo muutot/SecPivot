@@ -31,6 +31,13 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **A word in the body does not identify an XML document.** WebDAV's substring
+  guard accepted HTML mentioning `multistatus`, while EOF published incomplete
+  or multiple-root lists. Validate one completed root before returning objects;
+  keep the property reader's specific errors and legal surrounding whitespace,
+  comments and PI. Document-envelope checks do not establish namespace/propstat
+  or all XML syntax semantics.
+
 - **One XML property can contain many events.** WebDAV Text/CDATA chunks used to
   replace earlier chunks, while GeneralRef was ignored: `a&amp;b.kdbx` became
   `b.kdbx`, and split size `12` became `2`. Read the entire simple property before

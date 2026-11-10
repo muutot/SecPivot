@@ -913,6 +913,128 @@ fn webdav_url_for_encodes_segments_and_rejects_dotdot() {
 }
 
 #[test]
+fn webdav_document_envelope_requires_one_complete_multistatus_root() {
+    let cases: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/webdav-document-envelope.json"
+    ))
+    .unwrap();
+    for case in cases.as_array().unwrap() {
+        let result = parse_multistatus(
+            case["xml"].as_str().unwrap(),
+            "http://h/dav",
+            "http://h/dav/",
+        );
+        assert_eq!(result.is_err(), case["reject"].as_bool().unwrap());
+        if let Err(error) = result {
+            assert_eq!(
+                error,
+                "WebDAV 响应不是完整的 multistatus 文档，请检查服务地址与对象前缀"
+            );
+        }
+    }
+    let surrounded = "<?xml version=\"1.0\"?>\n<!--before--><?fixture before?>\n<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response></d:multistatus>\n<!--after--><?fixture after?>\t";
+    assert_eq!(
+        parse_multistatus(surrounded, "http://h/dav", "http://h/dav/").unwrap()[0].key,
+        "a.kdbx"
+    );
+    for body in [
+        "",
+        "<multistatus>",
+        "<multistatus/><multistatus/>",
+        "<![CDATA[before]]><multistatus/>",
+        "<multistatus/>&#32;",
+        "<multistatus/><?xml version=\"1.0\"?>",
+        "<multistatus/><!--after--><!DOCTYPE other>",
+    ] {
+        assert!(parse_multistatus(body, "http://h/dav", "http://h/dav/").is_err());
+    }
+}
+
+#[test]
+fn webdav_http_list_rejects_invalid_document_envelopes() {
+    use std::io::{Read, Write};
+    let cases: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/webdav-document-envelope.json"
+    ))
+    .unwrap();
+    let bodies = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|case| case["xml"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let peer = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut served = 0;
+        for body in bodies {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "fixture accept deadline"
+                        );
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("fixture accept: {error}"),
+                }
+            };
+            configure_s3_page_stream(&stream);
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut header = Vec::new();
+            let mut byte = [0];
+            while !header.ends_with(b"\r\n\r\n") {
+                assert!(header.len() < 16 * 1024);
+                stream.read_exact(&mut byte).unwrap();
+                header.push(byte[0]);
+            }
+            let header = String::from_utf8(header).unwrap();
+            assert!(header.starts_with("PROPFIND /dav/ HTTP/1.1\r\n"));
+            assert!(!header.to_ascii_lowercase().contains("authorization:"));
+            let length = header
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            assert!(length <= 1024);
+            stream.read_exact(&mut vec![0; length]).unwrap();
+            // Success HTTP status alone must not turn a broken body into a list.
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/xml; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            stream.write_all(response.as_bytes()).unwrap();
+            served += 1;
+        }
+        served
+    });
+    let storage = WebDavStorage {
+        client: super::shared_blocking_client().unwrap().clone(),
+        auth: None,
+        base_url: format!("http://{addr}/dav"),
+        list_timeout: Duration::from_secs(3),
+        io_timeout: Duration::from_secs(3),
+    };
+    for case in cases.as_array().unwrap() {
+        let result = storage.list("");
+        assert_eq!(result.is_err(), case["reject"].as_bool().unwrap());
+        if let Ok(objects) = result {
+            assert_eq!(
+                objects.len(),
+                if case["name"] == "valid-file" { 1 } else { 0 }
+            );
+        }
+    }
+    assert_eq!(peer.join().unwrap(), 8);
+}
+
+#[test]
 fn webdav_xml_property_text_preserves_full_values() {
     let cases: serde_json::Value =
         serde_json::from_str(include_str!("../../../tests/fixtures/webdav-xml-text.json")).unwrap();

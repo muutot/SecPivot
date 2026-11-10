@@ -25,6 +25,16 @@ independent standard-XML controls; the native wire regression covers thirteen
 filename classes. Full XML structure/namespace/propstat/provider compatibility
 remains separate; no IPC/schema/dependency changes are involved.
 
+WebDAV list publication additionally requires exactly one completed multistatus
+document root. A second root, unclosed envelope, wrong-root error page or
+non-whitespace outside the root fails with a content-free document error.
+The envelope pass runs after property parsing, retaining existing field-specific
+failures; it uses a streaming depth counter and does not publish partial objects.
+Valid empty lists, case-compatible local tag names and surrounding XML whitespace,
+comments and PI remain supported. No namespace/propstat/full XML validation or
+external entity resolution is implied. The shared strict-JSON
+tests/fixtures/webdav-document-envelope.json supplies independent document controls.
+
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is
 rejected only when no keyfile is selected; local creation still validates password confirmation. Keyfile

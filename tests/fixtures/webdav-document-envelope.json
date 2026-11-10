@@ -1,0 +1,50 @@
+[
+  {
+    "name": "valid-empty",
+    "group": "control",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": false
+  },
+  {
+    "name": "valid-file",
+    "group": "control",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response></d:multistatus>",
+    "reject": false
+  },
+  {
+    "name": "html-text",
+    "group": "root",
+    "xml": "<html><body>multistatus is unavailable</body></html>",
+    "reject": true
+  },
+  {
+    "name": "html-comment",
+    "group": "root",
+    "xml": "<html><!--multistatus--><body>Unavailable</body></html>",
+    "reject": true
+  },
+  {
+    "name": "html-attribute",
+    "group": "root",
+    "xml": "<html data-page=\"multistatus\"><body>Unavailable</body></html>",
+    "reject": true
+  },
+  {
+    "name": "unclosed-root",
+    "group": "boundary",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response>",
+    "reject": true
+  },
+  {
+    "name": "two-roots",
+    "group": "boundary",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response></d:multistatus><d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "trailing-text",
+    "group": "boundary",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href></d:response></d:multistatus>unexpected trailing body",
+    "reject": true
+  }
+]

@@ -15,6 +15,12 @@ truncated properties fail before any list returns; these reader errors expose no
 field content. Native loopback read/write/readback tests verify resource identity
 and an untouched sibling. This is not complete XML or provider authorization proof.
 
+WebDAV parses values without publishing objects until a separate streaming
+envelope pass confirms one completed multistatus root. Wrong-root error pages,
+extra roots, truncated envelopes and outside-root text fail with content-free
+errors. This adds no external entity resolution or namespace/propstat authority
+claim; native HTTP regressions use only no-auth loopback synthetic documents.
+
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
 remain after refusal; no text is silently dropped. Protected Base64 still
