@@ -284,7 +284,11 @@ serde → batch EntryInput → KDBX save/reopen. The frontend `io-import.test.mj
 exercises the real bulk IPC mapping with a fake backend boundary. 1PIF folders
 and binary attachments are refused rather than silently dropped; unmapped secure
 contents/history are preserved as protected JSON fields. Native client export
-verification remains missing and modern unencrypted 1PUX ZIP is unimplemented.
+verification remains missing. `vault/import/onepux_archive.rs` provides a
+native-only bounded version-3 ZIP reader with an opaque `OnePuxArchive`;
+`onepux_archive_tests.rs` uses tiny independent Python stored/deflate/ZIP64
+fixtures. Account/vault/item/attachment migration and frontend/IPC wiring are
+still pending; the reader alone does not complete modern 1PUX import.
 
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending

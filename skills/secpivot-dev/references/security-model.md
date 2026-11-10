@@ -528,3 +528,16 @@ permanently removed records. Final entry/group/icon/bin survivors receive no new
 markers through this union; existing bin collision and object winner policies
 remain. Marker propagation does not prove removal of unreferenced attachments
 or filesystem/backup erasure. Native three-copy/reopen tests cover the registry.
+
+The native-only 1PUX reader never extracts ZIP members or returns plaintext over
+IPC. It bounds compressed bytes and the raw directory before library allocation,
+then bounds metadata/binary and total expanded reads; unsupported/malformed
+archives produce fixed errors without filenames or field values. Duplicate ZIP
+names and JSON keys reject instead of dropping earlier source contents. Owned
+binary/metadata input buffers use Zeroizing; successful and partial owned JSON
+trees wipe strings/keys on Drop. This does not establish wiping of serde/deflate
+internal temporary buffers, all allocator copies, filenames, or the caller's
+borrowed archive bytes. The caller must separately own and wipe archive input.
+No native import transaction or frontend read path is wired at this reader
+stage. Tests use sub-2-KiB synthetic ZIPs and tiny injected ceilings, without
+high-resource decompression, real user vaults or native provider access.

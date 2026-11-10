@@ -4249,7 +4249,7 @@ files成员名称以前缀documentID关联；不能用全局item UUID、basename
 保存在onepux-official-rendered-spec.json。
 
 当前源代码确实仍缺现代导入：read_text_file只允许CSV/XML/JSON/1PIF，
-handleImport1Password只选1pif并调用parse_1pif；io.ImportEntry没有
+handleImportOnePassword只选1pif并调用parse_1pif；io.ImportEntry没有
 附件载荷，importEntries在映射中固定attachments:[]；分组逐次创建后
 才提交import_entries。native批量插入会预校验条目分组/附件，但它
 不能回滚此前独立创建的分组。本轮未构造真实失败情景，后者保留为
@@ -4276,3 +4276,29 @@ checkpoint：370个tracked文本文件／120566行。
 逐行语义审查。未读真实库/配置/剪贴板、未运行竞品、未构建APK或
 恢复高资源KDF复现。89历史Confirmed与原始15项／6.1分保持；整个
 审计／竞品／UI目标active，1PUX完整实施与验证仍是明确待办。
+
+#### 1PUX 原生归档读取阶段验证（2026-11-11，e0de7f0 后）
+
+新增原生 `parse_1pux_archive` 与不具 Debug／Serialize 的借用式归档对象；
+未增加 IPC 或前端入口，不修改当前库。ZIP9.5.0 仅启用 stored／deflate，
+锁差异新增 zip／typed-path／constant_time_eq0.6.1／nix，未升级原有包。
+先检查原始中心目录的成员数量、单磁盘／ZIP64边界、路径与重复名，
+再由 ZIP 库校验重叠、加密／特殊成员、CRC 和声明／实际长度。
+限额为压缩64 MiB、8192成员、每份JSON8 MiB、单二进制64 MiB、
+累计展开256 MiB；这不是整体解析堆内存的保证。安全嵌套路径、空附件
+与目录 CRC 校验得到保留；重复 JSON 键拒绝，避免静默覆盖源内容。
+拥有的输入缓冲和成功／部分 JSON 树退出时擦除；不声称库内部临时
+缓冲、全部分配副本、文件名或调用方借用字节已擦除。
+
+五个独立 Python 产生的合成 ZIP 均小于2 KiB；14项原生读取测试覆盖
+正常 stored／deflate／local与directory ZIP64、重复名／JSON键、CRC、
+截断、越界／非法路径、加密／特殊文件、重叠及极小注入资源限额。
+完整 verify exit0：frontend362／Rust701／ACL2／KeePass25／
+QuickXML1363（4 ignored不算执行），format／check／contract／build／
+clippy通过。最终日志 SHA256 c83b4e81742031f71ce6e44f10aaa3f041a2b9db8744fd4c97ad2d8ed5ae3c65，
+`onepux-reader-final-proof.json` 关联源码／依赖／夹具hash。首轮 clippy
+要求折叠一处嵌套条件，修正后完整复验通过，失败日志仍保留。
+
+账号／库／条目迁移、附件身份绑定、原子导入和 picker／IPC仍待接线；
+真实客户端导出与 Android provider／新APK也未验证。TODO155继续
+未完成，89历史Confirmed含已修复项与原始15项／6.1分保持；整体目标active。

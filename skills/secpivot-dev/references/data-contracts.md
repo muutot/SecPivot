@@ -670,6 +670,22 @@ retain that flag. `parse_1pif` and `parse_bitwarden_json` zeroize their incoming
 returns errors directly; parser DTOs omit `Debug` so accidental debugging cannot
 print imported secrets. Native 1Password export/client runtime is not verified.
 
+`vault::parse_1pux_archive(&[u8]) -> Result<OnePuxArchive, String>` is a native
+reader, not an IPC command or import mutation. Its borrowed `attributes`, `data`
+and exact-path `files` accessors expose no serialization/Debug implementation.
+Only version 3 with an accounts array is accepted. Metadata is parsed without
+duplicate JSON keys. Raw central-directory count/names are checked before the
+ZIP library builds its map; duplicate/overlapping/encrypted/special members,
+unsafe UTF-8 paths, unsupported codecs and malformed/CRC-damaged data reject.
+Stored/deflate and small single-disk ZIP64 are supported. Limits are 64 MiB
+compressed, 8192 members, 8 MiB per metadata JSON, 64 MiB per binary and 256 MiB
+total expanded bytes, with declared and bounded actual-read checks. These are
+byte ceilings, not a guarantee about aggregate parser heap use. Empty binary
+files and safe nested files/directories remain native memory only. Source item
+mapping, document identity binding, atomic import and picker IPC are pending;
+`parse_1pif` still accepts only legacy 1PIF. No TODO completion follows from this
+reader stage or synthetic fixtures.
+
 Bitwarden imports accept plaintext only. Before reading items, the parser
 validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent

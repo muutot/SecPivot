@@ -1,4 +1,4 @@
-//! Structured import parsers (Bitwarden JSON and 1Password 1PIF exports).
+//! Structured import parsers and native-only 1Password 1PUX archive decoding.
 //! a malformed or unexpected document fails with a readable error instead of
 //! silently importing garbage.
 
@@ -8,7 +8,9 @@ use std::collections::HashMap;
 mod bitwarden_links;
 mod fields;
 mod onepassword;
+mod onepux_archive;
 pub use onepassword::parse_1pif;
+pub use onepux_archive::{parse_1pux_archive, OnePuxArchive};
 
 #[cfg(test)]
 mod bitwarden_tests;

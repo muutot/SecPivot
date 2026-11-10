@@ -169,7 +169,10 @@ pub use self::dto::{
 
 pub use self::breach::BreachFinding;
 pub(crate) use self::breach::HIBP_RANGE_URL;
-pub use self::import::{parse_1pif, parse_bitwarden_json, ImportCustomField, ImportRow};
+pub use self::import::{
+    parse_1pif, parse_1pux_archive, parse_bitwarden_json, ImportCustomField, ImportRow,
+    OnePuxArchive,
+};
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::{sweep_stale_temp_attachments, AttachmentTempStore};
 
