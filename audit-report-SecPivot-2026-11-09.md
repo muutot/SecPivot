@@ -3542,3 +3542,28 @@ Medium 47 / Low 11）；包含历史已修复项，不等于 78 项未修复。
 其 Android DialogPlugin.kt 使用 ACTION_GET_CONTENT 返回 URI，故“调用
 桌面插件必然不出现手机选择器”的推断不成立，不计确认缺陷。与 SAF
 的持久授权差异、迟到回调、新 APK／真机提供商行为继续保留待验。
+
+73ec3c6 已修复 SP-S67：四个欢迎页入口只在密码与密钥文件均为空时
+拒绝，中英文提示均说明两种凭据。密码确认、所选数据库路径检查、
+后端认证失败与密钥文件请求不记忆密码的已有行为保留；未改变后端
+KDF、IPC、密钥校验或界面样式。
+
+原样 welcome-keyfile-probe.mjs 的 SHA-256 已比对确认未改动，同一
+探针修复后 18/18 通过（welcome-keyfile-green.log）。仓库加入的
+welcome-credentials.test.mjs 采用相同生产 handler 与合成服务边界，
+使用仓库相对路径便于跨主机运行；不把该替身描述成真实文件选择或
+远程网络运行。暂存六文件哈希与补丁见 welcome-keyfile-green-evidence.json
+及 welcome-keyfile-fix.patch。
+
+verify-welcome-keyfile.log exit 0：格式、零错误警告类型检查、150-key
+设置契约、生产构建、341 frontend、673 Rust、ACL 2、KeePass 25、
+QuickXML 1363（4 ignored）及 clippy 全部通过。Rust 根测试串行、
+debug0、无筛选、live clipboard unset；四个原生剪贴板测试体与 ignored
+不计执行覆盖。此前仅筛选原生两项的日志继续作为独立控制，不混称
+完整门。提交前补充文档后的 format:check 亦通过。
+
+文档 gate 同步 data-contracts 与 TODO 的精确前端完成项；既有
+SKILL 路由、模块归属、认证／会话／主题合同保持，无额外引用更新。
+报告和 strict JSON 另行复核，累计保持 78，原 15 项／6.1 基线保持。
+用户随后已把全局目标恢复为 active；本轮有界工作完成后仍继续审计，
+未宣称全部系统／竞品／UI 或手机新 APK／真机 provider 已完成。

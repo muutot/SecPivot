@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "9333209",
+  "remediation_checkpoint": "73ec3c6",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "32c23d9",
       "area": "Welcome forms reject backend-supported keyfile-only credentials",
-      "status": "Confirmed, not yet remediated. Four actual extracted production form submissions stop before service calls with a selected synthetic keyfile and empty password. Bounded VM probe18:8 fail/10 pass; four backend-error cases fail through the same early gate. Independent existing native keyfile-only2 pass with actual create/change/reopen and incorrect-credential controls;671 Rust/ACL2 filtered, not a full gate. No real device/provider/remote/client proof. High-resource KDF reproduction was never executed and is abandoned; product notice provides no exact rule or request log. Actual goal record blocked; current defensive work explicitly authorized by user."
+      "status": "Confirmed and remediated. Four welcome local/remote open/create guards accept password or selected keyfile, preserving confirmation, missing-path and backend failure handling; keyfile requests never remember password-only credentials. Unchanged independent probe18 passes; repository production-handler tests add18 and full verify passes341 frontend/673 Rust/ACL2/KeePass25/QuickXML1363 with4 ignored. Root Rust serial/debug0/unfiltered/live clipboard unset; skipped live bodies are not runtime coverage. Data contract and exact frontend TODO updated. No backend/KDF/IPC/CSS change and no real Android picker/provider/APK/remote-client proof. Resource-exhaustion reproduction never executed and abandoned; exact notice trigger unknown. User subsequently restored goal active; broader audit remains incomplete.",
+      "commit": "73ec3c6"
     },
     {
       "id": "SP-S66",
