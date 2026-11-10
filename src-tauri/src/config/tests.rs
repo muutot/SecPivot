@@ -479,6 +479,92 @@ fn remote_defaults_and_normalization_rules() {
 }
 
 #[test]
+fn remote_password_content_survives_normalization() {
+    for kind in ["s3", "webdav"] {
+        for sample in [
+            "",
+            "fixture",
+            " fixture",
+            "fixture ",
+            " fixture ",
+            "   ",
+            "\u{a0}fixture\u{a0}",
+        ] {
+            let mut config = AppConfig::default();
+            let profile = config
+                .remote_profiles
+                .iter_mut()
+                .find(|p| p.settings.kind == kind)
+                .unwrap();
+            profile.settings.secret_key = sample.into();
+            profile.settings.endpoint = "  https://synthetic.invalid  ".into();
+            let normalized = normalize_config(config);
+            let settings = &normalized
+                .remote_profiles
+                .iter()
+                .find(|p| p.settings.kind == kind)
+                .unwrap()
+                .settings;
+            assert!(settings.secret_key == sample, "secret content changed");
+            assert_eq!(settings.endpoint, "https://synthetic.invalid");
+        }
+    }
+}
+
+#[test]
+fn remote_password_content_survives_protected_reload_and_blank_keep() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    for kind in ["s3", "webdav"] {
+        let path = format!("{kind}/config_1");
+        for sample in [
+            " fixture",
+            "fixture ",
+            " fixture ",
+            "   ",
+            "\u{a0}fixture\u{a0}",
+        ] {
+            let mut config = store.get_masked().unwrap();
+            let profile = config
+                .remote_profiles
+                .iter_mut()
+                .find(|p| p.settings.kind == kind)
+                .unwrap();
+            profile.settings.access_key = "synthetic-user".into();
+            profile.settings.secret_key = sample.into();
+            let masked = store.set(config).unwrap();
+            assert!(masked
+                .remote_profiles
+                .iter()
+                .all(|p| p.settings.secret_key.is_empty()));
+            assert!(store.remote_settings(&path).unwrap().secret_key == sample);
+            assert_eq!(store.secret_presence(&path).unwrap(), (true, true));
+            // Blank input means keep the exact stored value, including an
+            // entirely whitespace replacement, rather than the previous key.
+            store.set(masked).unwrap();
+            let reopened = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+            assert!(reopened.remote_settings(&path).unwrap().secret_key == sample);
+            #[cfg(target_os = "windows")]
+            {
+                let persisted: serde_json::Value =
+                    serde_json::from_str(&fs::read_to_string(store.config_path()).unwrap())
+                        .unwrap();
+                let profile = persisted["remoteProfiles"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|p| p["settings"]["kind"] == kind)
+                    .unwrap();
+                assert!(profile["settings"]["secretKey"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("dpapi1:"));
+            }
+        }
+    }
+}
+
+#[test]
 fn remote_profile_names_are_unique_and_suffixed_on_normalize() {
     let mut config = AppConfig::default();
     config.remote_profiles.push(RemoteProfile {

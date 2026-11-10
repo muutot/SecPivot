@@ -243,3 +243,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] WebDAV 集合类型请求（SP-S73）：命名属性请求包含 DAV:resourcetype，实际无凭据 loopback 服务按请求返回属性并剔除无尾斜杠集合、保留普通和无扩展名文件及大小／日期；请求属性的 DAV namespace 与精确三项名称有回归。类型／大小／日期缺失不猜测资源种类；原样探针及独立 XML 请求／响应契约通过。propstat／namespace／真实 provider 仍独立待审。
 
 - [x] WebDAV 扩展元素归属（SP-S74）：按 DAV namespace 与预期容器读取 href／metadata／collection，忽略未知子树包括熟悉短名的后代；DAV prefix／default／重绑定与全无namespace旧格式分离，未知prefix或非DAV根拒绝。原样三项探针、先前XML文本三项原样探针与独立XML十六项控制通过；实际无凭据loopback列表／GET／PUT／回读四次请求保持真实文件、大小／日期及名称相似旁文件。propstat状态／重复属性／完整XML及真机provider仍独立待审。
+
+## 审计补充 — 远程密码保真
+
+- [x] 远程密码空白（SP-S75）：secretKey／secret_key 在前端归一化、排队IPC、原生配置与S3／WebDAV构造中保持原字符；空字符串继续表示保留，纯空白作为新密码替换。真实服务回归、Windows临时目录加密保存／重开／空值保留与十二次loopback Basic／SigV4请求通过；原样前端／原生失败探针转绿，Python标准库独立校验十二次实际请求。真实provider／移动密钥存储及历史已被trim值的恢复仍不在此完成范围。

@@ -31,6 +31,12 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **Passwords are not surrounding form whitespace.** Remote secret normalization
+  once trimmed both edges, breaking valid WebDAV passwords before Basic auth.
+  Preserve opaque secret strings in frontend queues, native configuration and
+  transport construction. Exact empty means keep; whitespace-only means replace.
+  Compare synthetic credential values without logging assertion operands.
+
 - **Expanded names and parent context define WebDAV fields.** Matching only
   local names let extension href/response/collection properties replace the
   real file or hide it. Resolve DAV namespaces, use expected parent containers,
