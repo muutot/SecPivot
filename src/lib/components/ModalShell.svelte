@@ -63,13 +63,22 @@
   const escapeScope = acquireEscapeScope();
   $effect(() => () => escapeScope.release());
 
-  /** Focusable descendants kept inside the dialog while it is open. */
+  /** Candidate controls; layout and effective Tab eligibility are checked below. */
   const FOCUSABLE_SELECTOR =
     "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])";
 
   function focusables(): HTMLElement[] {
     if (!dialogRef) return [];
-    return Array.from(dialogRef.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    // File inputs may match the selector while hidden or tabindex=-1. They
+    // cannot be Tab boundaries: focusing them can fail and release the trap.
+    return Array.from(dialogRef.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+      (element) =>
+        element.tabIndex >= 0 &&
+        !element.matches(":disabled") &&
+        !element.closest("[inert]") &&
+        element.getClientRects().length > 0 &&
+        getComputedStyle(element).visibility === "visible",
+    );
   }
 
   function handleKeydown(event: KeyboardEvent): void {
