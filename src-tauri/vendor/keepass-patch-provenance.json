@@ -94,7 +94,7 @@
     {
       "path": "src/db/merge.rs",
       "upstream_sha256": "1f2931d05fa4f596688da6dd9ded7feff75f958d9413849882f17ea3d89860b0",
-      "patched_sha256": "a1be28a238606237d786d5cbeb44caf1f37ba1c0985a57ccdc2b38b6a3b30232"
+      "patched_sha256": "49f9e8aa8950bae9155790b2ee0067538fb9adb23622ff1b74bd36ac62ec5770"
     },
     {
       "path": "src/db/mod.rs",

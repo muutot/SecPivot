@@ -4,13 +4,16 @@
 //! types in this module describe what a merge changed, via the returned
 //! [`MergeLog`].
 
-use std::{collections::HashSet, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 use chrono::NaiveDateTime;
 use thiserror::Error;
 
 use crate::{
-    db::{CustomIconId, Entry, EntryId, Group, GroupId, GroupRef, History, MoveGroupError, Times},
+    db::{CustomIconId, Entry, EntryId, Group, GroupId, History, MoveGroupError, Times},
     Database,
 };
 
@@ -92,23 +95,13 @@ impl Database {
     }
 }
 
-/// Get the last update time (modification or location change) of a group, considering its entries and subgroups.
-fn get_last_update(group: GroupRef<'_>) -> Option<NaiveDateTime> {
-    let last_update = group
-        .times
+/// Preserve the source-only object's existing timestamp policy. Descendants
+/// decide independently; a parent's deletion must never implicitly delete them.
+fn survives_deletion(deletion: Option<NaiveDateTime>, times: &Times) -> bool {
+    times
         .last_modification
-        .or(group.times.location_changed);
-
-    group
-        .entries()
-        .filter_map(|e| e.times.last_modification.or(e.times.location_changed))
-        .chain(
-            group
-                .groups()
-                .filter_map(|g| g.times.last_modification.or(g.times.location_changed)),
-        )
-        .chain(last_update)
-        .max()
+        .or(times.location_changed)
+        .is_some_and(|update| deletion.is_none_or(|deleted| update > deleted))
 }
 
 /// Merge groups from `source` into `dest`, appending to a log of the merge process.
@@ -124,40 +117,39 @@ fn merge_groups(
 
     // Handle groups that exist only in source and might need to be added.
     let mut groups_to_add = HashSet::new();
+    let mut deletion_candidates = HashMap::new();
     for &id in source_groups.difference(&dest_groups) {
         #[allow(clippy::unwrap_used)] // id is guaranteed to exist
         let source = source_db.group(id).unwrap();
 
         // was the group deleted in dest?
         if let Some(deletion_time) = dest_db.deleted_objects.get(&id.uuid()) {
-            // get the last modification time of the group in source.
-            let source_last_update = get_last_update(source);
-
-            // compare deletion time and last update time to decide whether to re-add the group
-            match (deletion_time, source_last_update) {
-                (Some(deletion_time), Some(source_last_update)) => {
-                    // if the group was deleted after its last modification time in source,
-                    // do not re-add it, otherwise we can re-add the group
-                    if *deletion_time >= source_last_update {
-                        continue;
-                    }
-                }
-                (Some(_), None) => {
-                    // blank last update time in source - do not re-add the group
-                    continue;
-                }
-                (None, Some(_)) => {
-                    // blank deletion time is probably older than concrete update time - re-add the
-                    // group
-                }
-                (None, None) => {
-                    // both times are blank - do not re-add the group
-                    continue;
-                }
+            // Remember even an initially rejected ancestor: a surviving child
+            // may require its shell, which can only be deleted if it ends empty.
+            deletion_candidates.insert(id, *deletion_time);
+            if !survives_deletion(*deletion_time, &source.times) {
+                continue;
             }
         }
 
         groups_to_add.insert(id);
+    }
+
+    // A surviving entry needs its parent even when every group in its ancestry
+    // predates deletion. The add stack below restores those ancestors once.
+    for entry in source_db.iter_all_entries() {
+        let parent_id = entry.parent().id();
+        if dest_groups.contains(&parent_id) {
+            continue;
+        }
+        if dest_db.entry(entry.id()).is_none() {
+            if let Some(deleted) = dest_db.deleted_objects.get(&entry.id().uuid()) {
+                if !survives_deletion(*deleted, &entry.times) {
+                    continue;
+                }
+            }
+        }
+        groups_to_add.insert(parent_id);
     }
 
     // actually add groups from groups_to_add. Use a stack to ensure that parent groups are added as needed
@@ -223,31 +215,9 @@ fn merge_groups(
     }
 
     // Handle groups that exist only in destination. These groups might need to be deleted.
-    let mut to_delete = Vec::new();
     for &id in dest_groups.difference(&source_groups) {
-        #[allow(clippy::unwrap_used)] // id is guaranteed to exist
-        let dest = dest_db.group_mut(id).unwrap();
-
-        // was the group deleted in source?
         if let Some(deletion_time) = source_db.deleted_objects.get(&id.uuid()) {
-            let dest_last_updated = get_last_update(dest.as_ref());
-            if let (Some(deletion_time), Some(dest_last_updated)) =
-                (deletion_time, dest_last_updated)
-            {
-                // if the group was deleted and then later modified in dest, do not delete it
-                if *deletion_time < dest_last_updated {
-                    continue;
-                }
-            }
-
-            // queue the deletion so that all subgroups will also emit a deletion event
-            to_delete.push(id);
-            dest_db.deleted_objects.insert(id.uuid(), *deletion_time);
-
-            log.events.push(MergeEvent {
-                target: MergeEventTarget::Group(id),
-                event_type: MergeEventType::Deleted,
-            });
+            deletion_candidates.insert(id, *deletion_time);
         }
     }
 
@@ -256,20 +226,14 @@ fn merge_groups(
     // generate events
     merge_entries(dest_db, source_db, log)?;
 
-    // perform all group deletions
-    while let Some(id) = to_delete.pop() {
-        if let Some(group) = dest_db.group_mut(id) {
-            group.remove();
-        }
-    }
-
-    // re-compute the group set after additions and deletions
-    let dest_groups = dest_db.groups.keys().cloned().collect::<HashSet<_>>();
+    // Re-compute after additions. Keep candidate parents available for moves;
+    // final empty-group deletion follows both entry and group relocation.
+    let merged_groups = dest_db.groups.keys().cloned().collect::<HashSet<_>>();
 
     // Handle groups that exist in both source and destination.
     let mut moves = Vec::new();
     let root_id = dest_db.root().id();
-    for &id in dest_groups.intersection(&source_groups) {
+    for &id in merged_groups.intersection(&source_groups) {
         #[allow(clippy::unwrap_used)] // id is guaranteed to exist
         let mut dest = dest_db.group_mut(id).unwrap();
 
@@ -294,7 +258,7 @@ fn merge_groups(
                         continue;
                     };
 
-                    if !dest_groups.contains(&parent_id) {
+                    if !merged_groups.contains(&parent_id) {
                         log.warnings.push(format!(
                             "Cannot move group {} to group {} because the group does not exist in the destination database.",
                             id,
@@ -385,6 +349,53 @@ fn merge_groups(
         group.move_to(parent_id)?;
         group.previous_parent_group = previous_parent;
     }
+
+    // Reverse a parent-first traversal of the final tree. Hash iteration order
+    // must not let an ancestor cascade-remove a surviving deep descendant.
+    let mut stack = vec![root_id];
+    let mut post_order = Vec::new();
+    let mut discarded_groups = HashSet::new();
+    while let Some(id) = stack.pop() {
+        if let Some(group) = dest_db.group(id) {
+            stack.extend(group.groups().map(|child| child.id()));
+            post_order.push(id);
+        }
+    }
+    for id in post_order.into_iter().rev() {
+        let Some(&deletion) = deletion_candidates.get(&id) else {
+            continue;
+        };
+        #[allow(clippy::unwrap_used)] // traversal only includes existing groups
+        let group = dest_db.group(id).unwrap();
+        let update = group
+            .times
+            .last_modification
+            .or(group.times.location_changed);
+        let newer = match (deletion, update) {
+            (Some(deleted), Some(updated)) => updated > deleted,
+            (None, Some(_)) => !dest_groups.contains(&id),
+            _ => false,
+        };
+        if newer || group.entries().next().is_some() || group.groups().next().is_some() {
+            // A retained ancestor's old marker must not delete it later merely
+            // because its surviving child is subsequently moved away.
+            dest_db.deleted_objects.remove(&id.uuid());
+            continue;
+        }
+        #[allow(clippy::unwrap_used)] // still exists after the immutable check
+        dest_db.group_mut(id).unwrap().remove();
+        dest_db.deleted_objects.insert(id.uuid(), deletion);
+        if dest_groups.contains(&id) {
+            log.events.push(MergeEvent {
+                target: MergeEventTarget::Group(id),
+                event_type: MergeEventType::Deleted,
+            });
+        } else {
+            // A temporary source-only ancestor never became a merged object.
+            discarded_groups.insert(id);
+        }
+    }
+    log.events.retain(|event| !matches!(event.target, MergeEventTarget::Group(id) if discarded_groups.contains(&id)));
 
     Ok(())
 }
@@ -867,6 +878,168 @@ mod merge_tests {
     const SUBGROUP2_ID: GroupId = GroupId::from_uuid(uuid!("00000000-0000-0000-0000-000000000005"));
     const ENTRY1_ID: EntryId = EntryId::from_uuid(uuid!("00000000-0000-0000-0000-000000000006"));
     const ENTRY2_ID: EntryId = EntryId::from_uuid(uuid!("00000000-0000-0000-0000-000000000007"));
+
+    #[cfg(feature = "save_kdbx4")]
+    fn secpivot_reopen(db: &Database) -> Database {
+        let mut bytes = Vec::new();
+        db.save(
+            &mut bytes,
+            crate::DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        Database::open(
+            &mut std::io::Cursor::new(bytes),
+            crate::DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    #[cfg(feature = "save_kdbx4")]
+    fn secpivot_nested_delete_uses_independent_markers_and_actual_events() {
+        let t = |secs| Times::epoch() + std::time::Duration::from_secs(secs);
+        let mut base = Database::new();
+        let parent = base.root_mut().add_group().id();
+        let middle = base.group_mut(parent).unwrap().add_group().id();
+        let leaf = base.group_mut(middle).unwrap().add_group().id();
+        let entry = base.group_mut(leaf).unwrap().add_entry().id();
+        let sibling = base.group_mut(parent).unwrap().add_entry().id();
+        for id in [parent, middle, leaf] {
+            base.group_mut(id).unwrap().times.last_modification = Some(t(10));
+        }
+        for id in [entry, sibling] {
+            base.entry_mut(id).unwrap().times.last_modification = Some(t(10));
+        }
+        let base = secpivot_reopen(&base);
+        let mut deleted = base.clone();
+        deleted
+            .group_mut(parent)
+            .unwrap()
+            .track_changes()
+            .remove()
+            .unwrap();
+        for id in [parent.uuid(), middle.uuid()] {
+            deleted.deleted_objects.insert(id, Some(t(100)));
+        }
+        for id in [leaf.uuid(), entry.uuid(), sibling.uuid()] {
+            deleted.deleted_objects.insert(id, Some(t(30)));
+        }
+        let deleted = secpivot_reopen(&deleted);
+        let mut edited = base;
+        edited.entry_mut(entry).unwrap().quality_check = false;
+        edited.entry_mut(entry).unwrap().times.last_modification = Some(t(40));
+        let edited = secpivot_reopen(&edited);
+        for (a, b) in [(&edited, &deleted), (&deleted, &edited)] {
+            let mut merged = a.clone();
+            let log = merged.merge(b).unwrap();
+            let merged = secpivot_reopen(&merged);
+            assert!(!merged.entry(entry).unwrap().quality_check);
+            assert!(merged.entry(sibling).is_none());
+            for id in [parent, middle, leaf] {
+                assert!(
+                    merged.group(id).is_some(),
+                    "a later ancestor marker cannot cascade-delete a surviving child"
+                );
+                assert!(!merged.deleted_objects.contains_key(&id.uuid()));
+            }
+            for event in log.events {
+                if matches!(event.event_type, super::MergeEventType::Deleted) {
+                    match event.target {
+                        super::MergeEventTarget::Group(id) => assert!(merged.group(id).is_none()),
+                        super::MergeEventTarget::Entry(id) => assert!(merged.entry(id).is_none()),
+                        _ => {}
+                    }
+                }
+            }
+            let mut repeated = merged.clone();
+            repeated.merge(b).unwrap();
+            assert_eq!(secpivot_reopen(&repeated).iter_all_entries().count(), 1);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "save_kdbx4")]
+    fn secpivot_nested_delete_does_not_invent_descendant_deletions() {
+        let mut base = Database::new();
+        let parent = base.root_mut().add_group().id();
+        let leaf = base.group_mut(parent).unwrap().add_group().id();
+        let entry = base.group_mut(leaf).unwrap().add_entry().id();
+        for id in [parent, leaf] {
+            base.group_mut(id).unwrap().times.last_modification = Some(Times::epoch());
+        }
+        base.entry_mut(entry).unwrap().times.last_modification = Some(Times::epoch());
+        let base = secpivot_reopen(&base);
+        let mut deleted = base.clone();
+        deleted.group_mut(parent).unwrap().remove();
+        deleted
+            .deleted_objects
+            .insert(parent.uuid(), Some(Times::now()));
+        let deleted = secpivot_reopen(&deleted);
+        for (a, b) in [(&base, &deleted), (&deleted, &base)] {
+            let mut merged = a.clone();
+            merged.merge(b).unwrap();
+            let merged = secpivot_reopen(&merged);
+            assert!(merged.group(parent).is_some());
+            assert!(merged.group(leaf).is_some());
+            assert!(merged.entry(entry).is_some());
+            assert!(merged.deleted_objects.is_empty());
+        }
+    }
+
+    #[test]
+    fn secpivot_empty_group_deletion_retains_timestamp_boundaries() {
+        let t = Times::epoch();
+        for (deletion, update, location, source_only_survives, dest_only_survives) in [
+            (Some(t), Some(t), Some(t), false, false),
+            (
+                Some(t),
+                Some(t + std::time::Duration::from_secs(1)),
+                None,
+                true,
+                true,
+            ),
+            (
+                Some(t),
+                Some(t),
+                Some(t + std::time::Duration::from_secs(1)),
+                false,
+                false,
+            ),
+            (
+                Some(t),
+                None,
+                Some(t + std::time::Duration::from_secs(1)),
+                true,
+                true,
+            ),
+            (Some(t), None, None, false, false),
+            (None, None, None, false, false),
+            (None, Some(t), None, true, false),
+        ] {
+            let mut base = Database::new();
+            let id = base.root_mut().add_group().id();
+            base.group_mut(id).unwrap().times.last_modification = update;
+            base.group_mut(id).unwrap().times.location_changed = location;
+            let mut deleted = base.clone();
+            deleted.group_mut(id).unwrap().remove();
+            deleted.deleted_objects.insert(id.uuid(), deletion);
+            for (a, b, survives) in [
+                (&deleted, &base, source_only_survives),
+                (&base, &deleted, dest_only_survives),
+            ] {
+                let mut merged = a.clone();
+                let log = merged.merge(b).unwrap();
+                assert_eq!(merged.group(id).is_some(), survives);
+                let group_events: Vec<_> = log.events.iter().filter(|event| matches!(event.target, super::MergeEventTarget::Group(target) if target == id)).collect();
+                if a.group(id).is_none() && !survives {
+                    assert!(group_events.is_empty());
+                }
+                if survives {
+                    assert!(!merged.deleted_objects.contains_key(&id.uuid()));
+                }
+            }
+        }
+    }
 
     #[test]
     #[cfg(feature = "save_kdbx4")]

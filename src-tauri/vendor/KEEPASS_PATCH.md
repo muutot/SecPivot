@@ -22,6 +22,11 @@ Only these upstream files are changed:
   Content equality ignores both parent locations; true equal-time content
   conflicts still fail. Different-parent moves with missing timestamps retain
   the existing destination and never borrow a time for an unapplied move.
+  Group deletion is evaluated after entry and group relocation, from children
+  to ancestors. Only an empty group may be removed; surviving entries/groups
+  restore their required ancestors. Each object's own deletion timestamp is
+  independent, retained ancestors lose obsolete markers, and Deleted events
+  describe actual removals. Equal/missing-time policy is otherwise preserved.
 - `src/db/types/mod.rs`: track ephemeral leases separately from persisted data,
   clear leases on database clone, rebuild current/history ownership, and collect
   only payloads affected by an explicit entry/history removal. Loading preserves
@@ -52,7 +57,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The eight dependency-specific tests can be run separately:
+The eleven dependency-specific tests can be run separately:
 
 ```powershell
 cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_

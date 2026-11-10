@@ -4039,6 +4039,316 @@ fn permanent_delete_still_allows_a_genuinely_newer_remote_edit() {
     }
 }
 
+fn assert_nested_delete_preserves_newer_descendant(group_edit: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut deleted, path) = create_session(&dir);
+    let mut groups = Vec::new();
+    let mut parent = ROOT_GROUP_UUID.to_owned();
+    for name in ["Synthetic parent", "Synthetic middle", "Synthetic leaf"] {
+        deleted
+            .add_group(&GroupInput {
+                parent_uuid: Some(parent.clone()),
+                name: name.into(),
+                icon: None,
+            })
+            .unwrap();
+        parent = deleted
+            .require_db()
+            .unwrap()
+            .iter_all_groups()
+            .find(|group| group.name == name)
+            .unwrap()
+            .id()
+            .uuid()
+            .to_string();
+        groups.push(parent.clone());
+    }
+    deleted
+        .add_entry(&entry_input(
+            &parent,
+            "Synthetic newer descendant",
+            "",
+            "",
+            "",
+        ))
+        .unwrap();
+    let entry_id = deleted
+        .require_db()
+        .unwrap()
+        .group(super::helpers::parse_group_id(&parent).unwrap())
+        .unwrap()
+        .entries()
+        .next()
+        .unwrap()
+        .id();
+    deleted
+        .add_entry(&entry_input(
+            &groups[0],
+            "Synthetic old sibling",
+            "",
+            "",
+            "",
+        ))
+        .unwrap();
+    let sibling_id = deleted
+        .require_db()
+        .unwrap()
+        .group(super::helpers::parse_group_id(&groups[0]).unwrap())
+        .unwrap()
+        .entries()
+        .next()
+        .unwrap()
+        .id();
+    let sibling_group = deleted
+        .require_db_mut()
+        .unwrap()
+        .group_mut(super::helpers::parse_group_id(&groups[1]).unwrap())
+        .unwrap()
+        .add_group()
+        .id();
+    {
+        let db = deleted.require_db_mut().unwrap();
+        db.meta.recyclebin_enabled = Some(false);
+        let ids: Vec<_> = db.iter_all_groups().map(|group| group.id()).collect();
+        for id in ids {
+            let mut group = db.group_mut(id).unwrap();
+            group.times.last_modification = Some(merge_ts(10));
+            group.times.location_changed = Some(merge_ts(10));
+        }
+        pin_times(db, entry_id, merge_ts(10));
+        pin_times(db, sibling_id, merge_ts(10));
+    }
+    deleted.save().unwrap();
+    deleted.close();
+    deleted.open(&path, "master-password", None).unwrap();
+    let stale = deleted.require_db().unwrap().clone();
+    deleted.delete_group(&groups[0]).unwrap();
+    deleted.save().unwrap();
+    deleted.close();
+    deleted.open(&path, "master-password", None).unwrap();
+    let deleted_at = deleted.require_db().unwrap().deleted_objects[&entry_id.uuid()].unwrap();
+    let newer_at = deleted_at + chrono::Duration::minutes(1);
+    let edited_path = dir.path().join("nested-edited.kdbx");
+    save_database(
+        &stale,
+        &edited_path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut edited = VaultSession::default();
+    edited.open(&edited_path, "synthetic-only", None).unwrap();
+    if group_edit {
+        edited
+            .rename_group(&groups[2], "Synthetic renamed leaf")
+            .unwrap();
+        edited
+            .require_db_mut()
+            .unwrap()
+            .group_mut(super::helpers::parse_group_id(&groups[2]).unwrap())
+            .unwrap()
+            .times
+            .last_modification = Some(newer_at);
+    } else {
+        edited
+            .update_entry_flags(&entry_id.uuid().to_string(), None, Some(false), None)
+            .unwrap();
+        edited
+            .require_db_mut()
+            .unwrap()
+            .entry_mut(entry_id)
+            .unwrap()
+            .times
+            .last_modification = Some(newer_at);
+    }
+    edited.save().unwrap();
+    edited.close();
+    edited.open(&edited_path, "synthetic-only", None).unwrap();
+    for (a, b) in [
+        (edited.require_db().unwrap(), deleted.require_db().unwrap()),
+        (deleted.require_db().unwrap(), edited.require_db().unwrap()),
+    ] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged_path = dir.path().join("nested-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        let merged = reopened.require_db().unwrap();
+        if group_edit {
+            let group = merged
+                .group(super::helpers::parse_group_id(&groups[2]).unwrap())
+                .expect("a newer nested group edit must not be cascaded away");
+            assert_eq!(group.name, "Synthetic renamed leaf");
+            assert_eq!(group.times.last_modification, Some(newer_at));
+        } else {
+            let entry = merged
+                .entry(entry_id)
+                .expect("a newer deep entry edit must survive ancestor deletion");
+            assert!(!entry.quality_check);
+            assert_eq!(entry.times.last_modification, Some(newer_at));
+        }
+        for uuid in &groups {
+            assert!(
+                merged
+                    .group(super::helpers::parse_group_id(uuid).unwrap())
+                    .is_some(),
+                "surviving descendants retain their ancestry"
+            );
+            assert!(
+                !merged
+                    .deleted_objects
+                    .contains_key(&super::helpers::parse_group_id(uuid).unwrap().uuid()),
+                "retained ancestors have no delayed deletion marker"
+            );
+        }
+        assert!(
+            merged.entry(sibling_id).is_none(),
+            "unchanged siblings must still be deleted"
+        );
+        assert!(
+            merged.group(sibling_group).is_none(),
+            "unchanged sibling groups must still be deleted"
+        );
+        assert!(merged.deleted_objects.contains_key(&sibling_id.uuid()));
+        assert!(merged.deleted_objects.contains_key(&sibling_group.uuid()));
+        if group_edit {
+            assert!(
+                merged.entry(entry_id).is_none(),
+                "newer group metadata does not veto the entry's deletion"
+            );
+        }
+        let repeated = super::merge::merge_databases(merged, b).unwrap();
+        assert_eq!(
+            repeated.iter_all_groups().count(),
+            merged.iter_all_groups().count()
+        );
+        assert_eq!(
+            repeated.iter_all_entries().count(),
+            merged.iter_all_entries().count()
+        );
+    }
+}
+
+#[test]
+fn nested_deletion_keeps_a_newer_deep_entry_edit_after_reopen() {
+    assert_nested_delete_preserves_newer_descendant(false);
+}
+#[test]
+fn nested_deletion_keeps_a_newer_deep_group_edit_after_reopen() {
+    assert_nested_delete_preserves_newer_descendant(true);
+}
+
+fn assert_nested_delete_preserves_moved_out_descendant(move_group: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut moved, path) = create_session(&dir);
+    let parent_id = moved.require_db_mut().unwrap().root_mut().add_group().id();
+    let middle_id = moved
+        .require_db_mut()
+        .unwrap()
+        .group_mut(parent_id)
+        .unwrap()
+        .add_group()
+        .id();
+    let leaf_id = moved
+        .require_db_mut()
+        .unwrap()
+        .group_mut(middle_id)
+        .unwrap()
+        .add_group()
+        .id();
+    let entry_id = moved
+        .require_db_mut()
+        .unwrap()
+        .group_mut(leaf_id)
+        .unwrap()
+        .add_entry()
+        .id();
+    {
+        let db = moved.require_db_mut().unwrap();
+        db.meta.recyclebin_enabled = Some(false);
+        for id in [parent_id, middle_id, leaf_id] {
+            let mut group = db.group_mut(id).unwrap();
+            group.times.last_modification = Some(merge_ts(10));
+            group.times.location_changed = Some(merge_ts(10));
+        }
+        pin_times(db, entry_id, merge_ts(10));
+        db.entry_mut(entry_id).unwrap().times.location_changed = Some(merge_ts(10));
+    }
+    moved.save().unwrap();
+    moved.close();
+    moved.open(&path, "master-password", None).unwrap();
+    let stale = moved.require_db().unwrap().clone();
+    if move_group {
+        // There is no first-party group-move command. Model a foreign client
+        // using the dependency's tracked group relocation contract.
+        let db = moved.require_db_mut().unwrap();
+        let root = db.root().id();
+        db.group_mut(leaf_id)
+            .unwrap()
+            .track_changes()
+            .move_to(root)
+            .unwrap();
+    } else {
+        moved
+            .move_entry(&entry_id.uuid().to_string(), ROOT_GROUP_UUID)
+            .unwrap();
+    }
+    moved.delete_group(&parent_id.uuid().to_string()).unwrap();
+    moved.save().unwrap();
+    moved.close();
+    moved.open(&path, "master-password", None).unwrap();
+    for (a, b) in [
+        (&stale, moved.require_db().unwrap()),
+        (moved.require_db().unwrap(), &stale),
+    ] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged_path = dir.path().join("moved-out-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        let db = reopened.require_db().unwrap();
+        assert!(db.group(parent_id).is_none());
+        assert!(db.group(middle_id).is_none());
+        let entry = db
+            .entry(entry_id)
+            .expect("a moved-out descendant is outside the deleted subtree");
+        if move_group {
+            assert_eq!(entry.parent().id(), leaf_id);
+            assert_eq!(
+                db.group(leaf_id).unwrap().parent().unwrap().id(),
+                db.root().id()
+            );
+            assert!(!db.deleted_objects.contains_key(&leaf_id.uuid()));
+        } else {
+            assert_eq!(entry.parent().id(), db.root().id());
+            assert!(db.group(leaf_id).is_none());
+        }
+        assert!(!db.deleted_objects.contains_key(&entry_id.uuid()));
+        let repeated = super::merge::merge_databases(db, b).unwrap();
+        assert!(repeated.entry(entry_id).is_some());
+        assert!(repeated.group(parent_id).is_none());
+    }
+}
+
+#[test]
+fn nested_deletion_keeps_an_entry_moved_out_before_parent_deletion() {
+    assert_nested_delete_preserves_moved_out_descendant(false);
+}
+
+#[test]
+fn nested_deletion_keeps_a_group_moved_out_before_parent_deletion() {
+    assert_nested_delete_preserves_moved_out_descendant(true);
+}
+
 #[test]
 fn delete_entries_moves_all_to_recycle_bin() {
     let dir = TempDir::new().unwrap();

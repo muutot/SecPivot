@@ -60,12 +60,12 @@ fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
 `src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus four
-reviewed attachment/history/location/serialization patches. Cargo's local patch keeps
+reviewed attachment/history/location/deletion/serialization patches. Cargo's local patch keeps
 the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the four patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and eight
+in the audit scope. Native vault tests cover the application boundary and eleven
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 Canonical binary merge and
@@ -81,7 +81,12 @@ after the wrapper sorts versions. Patched db/merge.rs merges same-parent locatio
 times independently of content, carries the winning move's previous parent
 through staged group relocation and retains missing-time destination provenance.
 Entry::content_eq excludes current/previous parent bookkeeping; first-party
-history identity adds expiration. The four-file provenance gate applies.
+history identity adds expiration. Group deletion restores required ancestry and
+removes only empty candidates in child-first order after entry/group moves;
+retained ancestors lose obsolete markers, Deleted events reflect actual removal.
+Native tests cover deep entry/group edits and moved-out descendants; dependency
+tests cover independent ancestor/child markers, unmarked descendants and existing
+equal/missing timestamp policy. The four-file provenance gate applies.
 
 ## Runtime surfaces
 
