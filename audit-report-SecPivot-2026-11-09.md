@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S62；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S63；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 42     | 42        | 0         |
+| Medium    | 43     | 43        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **73** | **73**    | **0**     |
+| **Total** | **74** | **74**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3184,3 +3184,73 @@ schema 与实际写入复核的候选，不计 Confirmed；KDF 有效大参数�
 第三方客户端、Android device/APK 或完整安全保证证据。73 Confirmed
 （Critical 1 / High 19 / Medium 42 / Low 11），b7c5d9f 原 15 项/6.1
 分保持，整体目标 active。
+
+### Finding: SP-S63 Bitwarden 普通字段错误类型被静默丢弃且自定义保护类型被猜测
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Type safety / Security
+- Status: Confirmed
+- Affected area: Bitwarden JSON parser, command rows and KDBX import
+- Evidence:
+  - File: src-tauri/src/vault/import.rs (8fc838d before repair), import/bitwarden_tests.rs
+  - Function / Module: parse_bitwarden_json, command parse_bitwarden_json, actual ImportRow wire -> import_entries -> save/reopen
+  - Relevant behavior: name/notes/folderId and login username/password/totp use as_str().unwrap_or(""); invalid fields containers or members are dropped; invalid custom names/values become empty, nonnumeric/unknown field types default to unprotected text. Malformed folder maps are dropped.
+  - Reproduction: bitwarden-shapes-observed-final.log passes a diagnostic that actually saves/reopens malformed synthetic input. Four values are empty; a string "1" hidden-field type is stored and exposed unprotected. The temporary diagnostic is removed from final regression tests. Missing get_notes and mut compilation errors are harness errors, not product findings.
+  - Independent verification: fixed official Bitwarden commit 1a8bdbfe625bff90a9c0cabef2002e37f6038fa1 export models define ordinary values as strings and fields as arrays of FieldExport; enum 0/1/2/3 specifies Text/Hidden/Boolean/Linked. Four source files and SHA-256 recorded in bitwarden-shapes-reference-provenance.json. This is source contract corroboration, not a claim that official runtime rejects all malformed values; normalizeFieldTypeForSdk itself defaults unknown values to text.
+- Problem: malformed input succeeds while losing data; uncertain protection metadata is guessed into an unprotected value.
+- Why it matters: the import can look successful even when credentials/notes/custom data are discarded. String hidden metadata demonstrates local exposure through the normal unprotected DTO, but malformed source is required; no normal valid export leak, exploit, unknown credentials or full client interoperability proof.
+- Realistic failure scenario: a damaged or transformed JSON file changes a password to an object or a field type to "1"; SecPivot imports empty credentials or a visible custom secret instead of reporting an error.
+- Minimal fix: reject unexpected non-null string/container values and invalid custom-field enums before returning rows; keep missing/null optional values and legacy missing field type as Text; use content-free record/folder errors. Do not guess by stringifying values or coercing types.
+- Better long-term fix: typed exhaustive boundary models and real client migration tests, including unsupported collections/attachments/multiple URI behavior.
+- Regression test suggestion: ordinary string/container errors, malformed members and enums reject whole document even after valid earlier records; invalid folders reject before rows; optional missing/null, numeric 0–3 and legacy missing type preserve semantics through actual command/wire/KDBX reopen and protected DTO masking; all prior import regressions.
+- Estimated effort: 2–3 hours for bounded reproduction, minimal parser validation and integration evidence.
+
+2c71c58 已修复。optional_string/optional_array 保留合法缺省/null，拒绝错误
+标量/容器；login 非空须为 object，folders 须有可映射字符串 id，普通
+名称/备注/登录值和自定义 name/value 须为字符串。字段 type 缺省保留
+历史 Text；显式值必须是数字 0–3，既有 type-3 目标 resolver 不变。
+整份解析失败不返回部分行，不 stringify/coerce 错误数据，不改变
+DTO/IPC/UI。unknown folderId 与重复 id 的既有政策未扩大修复。
+
+bitwarden-shapes-red-final.log 四项中合法对照通过，三项拒绝测试失败：
+32 个普通值/容器、20 个自定义成员/类型、11 个分组错误被接受。
+bitwarden-shapes-observed-final.log 的单独诊断实际执行 command→wire→
+批量导入→保存重开，四值变空及 string "1" 字段未保护并进入 DTO
+得到复核；诊断留在证据目录，未作为期待错误行为的回归留在源码。
+最早合法备注 CRLF 的对照失败是 KDBX 普通字符串换行归一化的另一个
+候选，已明确改为 LF 合法对照后重跑红测；本项不把该现象算作已修复。
+初期不存在 get_notes 方法、缺少 mut、独立模块位置/uuid 依赖错误
+均为探针搭建错误，不作为产品缺陷。
+
+bitwarden-shapes-green.log 30 个 Bitwarden 测试全部通过，其中四项
+新增回归覆盖 63 个错误案例，以及合法 null/缺省/字符串、四种数字
+字段类型与历史缺省 Text 的实际保存重开。密码 CRLF、用户名空格、
+备注 LF/Unicode、显式 hidden 与 linked 的保护/DTO 遮罩保持。
+分组名在 parser 行验证，后续 imported helper 绑定 root；不声称
+该专项证明真实前端多级分组创建。前端原导入回归由完整门覆盖。
+
+独立两个小型可执行程序直接编译固定 8fc838d 与修复后 parser 的
+四个源文件（hash 在 bitwarden-shapes-independent-provenance.json），
+没有 Tauri/测试模块。三个相同异常输入原版全部接受，修复版全部拒绝，
+正常字符串/隐藏值对照均保持；见 independent-*-final.log。独立
+Cargo.lock 保留依赖版本；这是 first-party 源码隔离复核，不是官方
+Bitwarden 运行时或 registry parser。官方四个固定提交导出模型/枚举
+及 hash 佐证字段契约；未知类型 normalizeFieldTypeForSdk 的 fallback
+明确保留为官方偏差说明，未把官方源码说成运行时全拒绝证明。
+
+verify-bitwarden-shapes.log exit 0：323 frontend / 666 Rust / ACL 2；
+format、零错误警告 check、150-key 契约、build 和 clippy 均通过。
+Rust 单线程、debug=0、无测试过滤，live clipboard opt-in 保持 unset；
+四个原生剪贴板测试体未执行，不计原生互操作。受审 keepass 五补丁/
+60 hashes 未改变。维护 gate 同步 data-contracts/security-model/
+project-structure 和独立 TODO；maintenance-workflow 与 SKILL 路由
+没有新事实需改。没有真实用户库/共享剪贴板/云服务或 native-client/
+Android APK/provider 运行。报告 lint、strict JSON/74 卡片及原始
+b7c5d9f/15 项/6.1 分复核后提交。
+
+historyMaxSize 现为 i64 且当前 Windows/Android 发布仅 64 位，对应
+as isize 截断候选不能成立为当前产品发现，未计问题。普通 KDBX 字符串
+CRLF、有效昂贵 KDF 的预算/取消、其余系统/竞品/UI 边界以及手机
+v1.6.5 另存为替换 APK/真机验证继续保留。74 Confirmed（Critical 1 /
+High 19 / Medium 43 / Low 11），整体目标 active。
