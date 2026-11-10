@@ -290,7 +290,8 @@ native-only bounded version-3 ZIP reader with an opaque `OnePuxArchive`;
 fixtures. `vault/import/onepux.rs` prepares a native protected plan and owns
 `VaultSession::import_1pux` candidate-database publication/rollback;
 `onepux_tests.rs` verifies account/vault identity, source archives, exact binary
-binding, masking and synthetic KDBX reopen. `commands/import.rs` exposes the
+binding, masking, typed-string secret getter usability and synthetic KDBX reopen.
+Compound/multi-key source values remain protected JSON. `commands/import.rs` exposes the
 bounded spawn_blocking read/prepare and stable-origin completion, covered by
 `commands/import_tests.rs`. `io.ts::importOnePux`, `vault.ts::importOnePux` and the
 page's `handleImportOnePux` own the new existing-menu/picker route; Node tests in

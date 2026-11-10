@@ -361,3 +361,103 @@ fn existing_target_group_receives_the_whole_import_without_merging_equal_names()
     let target = db.group(parse_group_id(&target).unwrap()).unwrap();
     assert_eq!(target.groups().filter(|g| g.name == "1Password").count(), 1);
 }
+
+#[test]
+fn recognized_scalar_fields_return_usable_values_through_the_reopened_secret_getter() {
+    let (_dir, mut session, path) = session();
+    session
+        .import_1pux(prepare_1pux_import(&fixture(&data())).unwrap(), "root")
+        .unwrap();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-master", None).unwrap();
+    let id = {
+        let db = session.require_db().unwrap();
+        let root = db.root();
+        let imported = root.groups().find(|g| g.name == "1Password").unwrap();
+        let account = imported.groups().next().unwrap();
+        let vault = account.groups().next().unwrap();
+        let entry = vault.entries().next().unwrap();
+        entry.id().uuid().to_string()
+    };
+    assert_eq!(
+        session
+            .get_custom_field_value(&id, "1Password Extra Password")
+            .unwrap()
+            .as_deref(),
+        Some("synthetic-pin")
+    );
+    assert_eq!(
+        session
+            .get_custom_field_value(&id, "1Password Extra Password (2)")
+            .unwrap()
+            .as_deref(),
+        Some("synthetic-other")
+    );
+}
+
+#[test]
+fn typed_string_values_keep_exact_bytes_protection_and_complete_source_typing() {
+    let cases = [
+        ("concealed", ""),
+        ("string", " scalar first\r\nscalar second \t"),
+        ("url", "https://synthetic.example/A?Case=Yes"),
+        ("phone", "+1 (000) 123-4567"),
+        ("futureString", "测试 field"),
+    ];
+    let mut data = data();
+    let fields: Vec<_> = cases
+        .iter()
+        .enumerate()
+        .map(|(index, (kind, value))| {
+            let mut typed = Map::new();
+            typed.insert((*kind).to_owned(), json!(value));
+            json!({"title":format!("Value {index}"),"guarded":false,"value":typed})
+        })
+        .collect();
+    data["accounts"][0]["vaults"][0]["items"][0]["details"]["sections"] =
+        json!([{"title":"Types","fields":fields}]);
+    let (_dir, mut session, path) = session();
+    let state = session
+        .import_1pux(prepare_1pux_import(&fixture(&data)).unwrap(), "root")
+        .unwrap();
+    let wire = serde_json::to_string(&state).unwrap();
+    for (_, value) in cases.iter().filter(|(_, value)| !value.is_empty()) {
+        assert!(!wire.contains(&serde_json::to_string(value).unwrap()));
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-master", None).unwrap();
+    let db = session.require_db().unwrap();
+    let root = db.root();
+    let imported = root.groups().find(|g| g.name == "1Password").unwrap();
+    let account = imported.groups().next().unwrap();
+    let vault = account.groups().next().unwrap();
+    let entry = vault.entries().next().unwrap();
+    let source: Json = serde_json::from_str(entry.get("1Password Source Item").unwrap()).unwrap();
+    for (index, (kind, value)) in cases.iter().enumerate() {
+        let name = format!("1Password Types Value {index}");
+        assert!(entry.fields[&name].is_protected());
+        assert_eq!(entry.get(&name), Some(*value));
+        assert_eq!(
+            source["details"]["sections"][0]["fields"][index]["value"][*kind],
+            *value
+        );
+    }
+}
+
+#[test]
+fn compound_and_multi_key_values_are_not_flattened_or_lost() {
+    let mut budget = Budget::default();
+    for source in [
+        json!({"address":{"street":"Synthetic", "city":"Test"}}),
+        json!({"string":"one", "concealed":"two"}),
+        json!({"futureType":[1,2,3]}),
+        json!({"date":1700000000}),
+    ] {
+        let value = section_value(&source, &mut budget).unwrap();
+        assert!(value.is_protected());
+        let stored: Json = serde_json::from_str(value.get()).unwrap();
+        assert_eq!(stored, source);
+    }
+}

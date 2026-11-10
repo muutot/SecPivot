@@ -147,6 +147,17 @@ fn custom(item: &mut PreparedItem, names: &mut FieldNames, label: &str, value: V
         .insert(names.field(label, String::new(), true).name, value);
 }
 
+fn section_value(value: &Json, budget: &mut Budget) -> Result<Value<String>, String> {
+    let values = object(value)?;
+    // A typed string is still the field's usable string. Preserve its type and
+    // other source attributes in Source Item, not in the copied credential.
+    if let Some(Json::String(value)) = values.values().next().filter(|_| values.len() == 1) {
+        return budget.text(value, true);
+    }
+    // Complex/unknown shapes retain their complete protected representation.
+    budget.json(value)
+}
+
 fn document(
     value: &Json,
     archive: &OnePuxArchive,
@@ -311,7 +322,7 @@ fn prepare_item(
             }
             // Every typed/guarded/unknown value retains protection regardless
             // of a contradictory guarded:false. Source JSON preserves typing.
-            custom(&mut item, &mut names, &label, budget.json(value)?);
+            custom(&mut item, &mut names, &label, section_value(value, budget)?);
         }
     }
     if let Some(file) = details.get("documentAttributes") {
