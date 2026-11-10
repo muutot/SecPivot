@@ -70,6 +70,15 @@ const invoke = mock.fn((cmd, args = {}) => {
     case "add_entry":
       state = makeState(state.revision + 1);
       return Promise.resolve(state);
+    case "toggle_favorite":
+      return Promise.resolve({
+        kind: "favorite",
+        revision: state.revision + 1,
+        uuid: args.uuid,
+        favorite: true,
+        modified: "2030-01-02T03:04:05Z",
+        size: 4321,
+      });
     case "save_vault": {
       const result = makeState(state.revision + 1);
       return new Promise((resolvePromise) => {
@@ -147,4 +156,38 @@ test("out-of-order save responses cannot clobber newer committed state", async (
   await first;
 
   assert.equal(vault.get().revision, newerRequest.result.revision);
+});
+
+test("favorite delta updates backend metadata and preserves untouched snapshot nodes", async () => {
+  state = makeState(20);
+  const beforeEntry = {
+    uuid: "synthetic-favorite",
+    groupUuid: "root",
+    title: "Synthetic",
+    username: "",
+    url: "",
+    notes: "",
+    hasTotp: false,
+    favorite: false,
+    modified: "2020-01-01T00:00:00Z",
+    size: 4301,
+  };
+  const untouched = { ...beforeEntry, uuid: "synthetic-untouched" };
+  state.root.entries = [beforeEntry, untouched];
+  await vault.refresh();
+  const before = vault.get();
+  calls.length = 0;
+  const returned = await vault.toggleFavorite(beforeEntry.uuid);
+  const updated = returned.root.entries[0];
+  assert.deepEqual([updated.modified, updated.size], ["2030-01-02T03:04:05Z", 4321]);
+  assert.equal(updated.favorite, true);
+  assert.equal(returned.revision, 21);
+  assert.equal(returned.dirty, true);
+  assert.strictEqual(returned.root.entries[1], before.root.entries[1]);
+  assert.equal(before.root.entries[0].favorite, false);
+  assert.equal(before.root.entries[0].size, 4301);
+  assert.deepEqual(
+    calls.map(({ cmd, args }) => ({ cmd, args })),
+    [{ cmd: "toggle_favorite", args: { uuid: beforeEntry.uuid, sessionId: "s1" } }],
+  );
 });

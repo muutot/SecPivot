@@ -371,6 +371,7 @@ fn favorite_delta_skips_tree_rebuild() {
             revision,
             uuid: delta_uuid,
             favorite,
+            ..
         } => {
             assert_eq!(delta_uuid, uuid);
             assert!(favorite);
@@ -5330,6 +5331,105 @@ fn totp_seed_never_serializes_into_snapshot() {
         "TOTP seed leaked into snapshot JSON: {serialized}"
     );
     assert!(serialized.contains("hasTotp"));
+}
+
+#[test]
+fn favorite_toggle_updates_time_and_merges_after_reopen() {
+    for initially_favorite in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let state = session
+            .add_entry(&entry_input(
+                ROOT_GROUP_UUID,
+                "Synthetic favorite",
+                "",
+                "",
+                "",
+            ))
+            .unwrap();
+        let uuid = state.root.entries[0].uuid.clone();
+        let id = super::helpers::parse_entry_id(&uuid).unwrap();
+        if initially_favorite {
+            session.toggle_favorite_delta(&uuid).unwrap();
+        }
+        session
+            .require_db_mut()
+            .unwrap()
+            .entry_mut(id)
+            .unwrap()
+            .times
+            .last_modification = Some(merge_ts(10));
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let baseline = session.require_db().unwrap().clone();
+        session.toggle_favorite_delta(&uuid).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let current = session.require_db().unwrap();
+        for (local, remote) in [(&baseline, current), (current, &baseline)] {
+            let result = merge_databases(local, remote);
+            assert!(result.is_ok(), "one-sided favorite change must merge");
+            let merged = result.unwrap();
+            assert_eq!(
+                merged.entry(id).unwrap().get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+                !initially_favorite
+            );
+            let merged_path = dir.path().join("favorite-merged.kdbx");
+            save_database(
+                &merged,
+                &merged_path,
+                DatabaseKey::new().with_password("synthetic-only"),
+            )
+            .unwrap();
+            let mut reopened = VaultSession::default();
+            reopened.open(&merged_path, "synthetic-only", None).unwrap();
+            assert_eq!(
+                reopened
+                    .require_db()
+                    .unwrap()
+                    .entry(id)
+                    .unwrap()
+                    .get(FIELD_FAVORITE)
+                    == Some(FIELD_FAVORITE_TRUE),
+                !initially_favorite
+            );
+        }
+        assert!(current.entry(id).unwrap().times.last_modification > Some(merge_ts(10)));
+    }
+}
+
+#[test]
+fn favorite_delta_matches_snapshot_metadata() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let state = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic metadata",
+            "",
+            "",
+            "",
+        ))
+        .unwrap();
+    let uuid = state.root.entries[0].uuid.clone();
+    for expected_favorite in [true, false] {
+        let delta = serde_json::to_value(session.toggle_favorite_delta(&uuid).unwrap()).unwrap();
+        let snapshot = session.snapshot().unwrap();
+        let entry = &snapshot.root.entries[0];
+        assert_eq!(delta["favorite"], expected_favorite);
+        let expected = serde_json::to_value(entry).unwrap();
+        let mismatches: Vec<_> = ["modified", "size"]
+            .into_iter()
+            .filter(|key| delta.get(*key) != expected.get(*key))
+            .collect();
+        assert!(
+            mismatches.is_empty(),
+            "favorite delta metadata mismatch: {mismatches:?}"
+        );
+        assert_eq!(entry.size, session.get_entry_storage(&uuid).unwrap().total);
+    }
 }
 
 #[test]

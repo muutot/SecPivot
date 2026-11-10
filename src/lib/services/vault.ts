@@ -297,7 +297,9 @@ function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState 
   let entryPatches: Map<string, Partial<VaultEntry>> | null = null;
   let groupPatches: Map<string, Partial<VaultGroup>> | null = null;
   if (delta.kind === "favorite") {
-    entryPatches = new Map([[delta.uuid, { favorite: delta.favorite }]]);
+    entryPatches = new Map([
+      [delta.uuid, { favorite: delta.favorite, modified: delta.modified, size: delta.size }],
+    ]);
   } else if (delta.kind === "groupsExpanded") {
     groupPatches = new Map(
       Object.entries(delta.groups).map(([uuid, expanded]) => [uuid, { isExpanded: expanded }]),
@@ -1354,6 +1356,7 @@ export const vault: VaultStore = {
       const entry = findEntry(draft.root, uuid);
       if (!entry) throw new Error("entry not found");
       entry.favorite = !entry.favorite;
+      entry.modified = new Date().toISOString();
     });
     state.set(applyBackendState(result));
     return result;
