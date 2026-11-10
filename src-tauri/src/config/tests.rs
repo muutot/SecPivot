@@ -1186,3 +1186,85 @@ fn load_with_mode_reports_portable_flag_and_paths() {
         dir.path().join("conf").join("config.json")
     );
 }
+
+#[test]
+fn config_parse_diagnostics_never_echo_input() {
+    const CASE: &str = "SECPIVOT_CONFIG_DIAGNOSTIC_FIXTURE";
+    const MARKER: u64 = 4242424242424242;
+    if let Ok(mode) = std::env::var(CASE) {
+        let mut remote = serde_json::json!({
+            "kind": "webdav", "endpoint": "https://synthetic.invalid",
+            "accessKey": "probe-user", "secretKey": MARKER.to_string()
+        });
+        match mode.as_str() {
+            "invalid-secret" => remote["secretKey"] = serde_json::json!(MARKER),
+            "invalid-access" => remote["accessKey"] = serde_json::json!(MARKER),
+            "valid" => {}
+            _ => panic!("unknown synthetic fixture"),
+        }
+        let text = serde_json::to_vec(&serde_json::json!({
+            "remoteProfiles": [{"name": "probe", "settings": remote}]
+        }))
+        .unwrap();
+        let dir = TempDir::new().unwrap();
+        let conf = dir.path().join("conf");
+        fs::create_dir(&conf).unwrap();
+        let path = conf.join("config.json");
+        fs::write(&path, &text).unwrap();
+        let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        if mode == "valid" {
+            assert_eq!(fs::read(&path).unwrap(), text);
+            assert!(!path.with_extension("json.bak").exists());
+            assert_eq!(
+                store.remote_settings("webdav/probe").unwrap().secret_key,
+                MARKER.to_string()
+            );
+            assert!(store
+                .get_masked()
+                .unwrap()
+                .remote_profiles
+                .iter()
+                .all(|p| p.settings.secret_key.is_empty()));
+        } else {
+            assert!(!path.exists());
+            assert_eq!(fs::read(path.with_extension("json.bak")).unwrap(), text);
+            assert!(store.remote_settings("webdav/probe").is_err());
+        }
+        return;
+    }
+    let mut disclosures = 0;
+    for mode in ["invalid-secret", "invalid-access", "valid"] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "config::tests::config_parse_diagnostics_never_echo_input",
+                "--nocapture",
+            ])
+            .env(CASE, mode)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "synthetic config recovery control failed"
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stdout.contains("1 passed;"),
+            "child fixture must actually execute"
+        );
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        if mode != "valid" {
+            assert!(
+                stderr.contains("类别 Data") && stderr.contains("行 1") && stderr.contains("列 "),
+                "diagnostic must retain non-content category and location"
+            );
+        }
+        if stderr.contains(&MARKER.to_string()) {
+            disclosures += 1;
+        }
+    }
+    assert_eq!(
+        disclosures, 0,
+        "config diagnostics must not contain input values"
+    );
+}
