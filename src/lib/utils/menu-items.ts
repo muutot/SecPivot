@@ -176,6 +176,7 @@ function importItems(locale: Language): ContextMenuItem[] {
     { id: "import-xml", label: t(locale, "menu.importXml"), icon: "upload" },
     { id: "import-bitwarden", label: t(locale, "menu.importBitwarden"), icon: "upload" },
     { id: "import-1password", label: t(locale, "menu.import1password"), icon: "upload" },
+    { id: "import-1pux", label: t(locale, "menu.import1pux"), icon: "upload" },
   ];
 }
 

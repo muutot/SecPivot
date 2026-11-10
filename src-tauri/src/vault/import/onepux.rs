@@ -435,12 +435,23 @@ fn insert(parent: &mut GroupMut<'_>, plan: PreparedGroup) {
 }
 
 impl VaultSession {
-    /// One publication of groups/entries/attachments. No earlier group IPCs and
-    /// no partial mutation when target validation or final snapshot fails.
-    pub fn import_1pux(&mut self, plan: OnePuxImport, target: &str) -> Result<VaultState, String> {
+    /// Admission check shared by the command's pre-read gate and publication.
+    pub(crate) fn validate_1pux_target(&self, target: &str) -> Result<(), String> {
         if self.is_read_only() {
             return Err("数据库只读；未导入任何内容".into());
         }
+        let db = self.require_db()?;
+        if target != ROOT_GROUP_UUID {
+            db.group(parse_group_id(target)?)
+                .ok_or("目标分组不存在；未导入任何内容")?;
+        }
+        Ok(())
+    }
+
+    /// One publication of groups/entries/attachments. No earlier group IPCs and
+    /// no partial mutation when target validation or final snapshot fails.
+    pub fn import_1pux(&mut self, plan: OnePuxImport, target: &str) -> Result<VaultState, String> {
+        self.validate_1pux_target(target)?;
         let db = self.require_db()?;
         let target_id = if target == ROOT_GROUP_UUID {
             db.root().id()

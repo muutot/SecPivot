@@ -272,6 +272,56 @@ export async function pickImportFile(
   }
 }
 
+/** Native ZIP import: the renderer handles a selection and masked result only. */
+export async function importOnePux(
+  host: IoHost,
+  view: SessionViewToken,
+  baseGroupUuid: string | null,
+): Promise<void> {
+  if (!host.sessionView.isCurrent(view)) return;
+  const operation = host.operations.begin();
+  host.setBusy(true);
+  try {
+    if (!isTauriRuntime())
+      throw new Error(
+        t(lang(), "browser.unsupported", { feature: t(lang(), "browser.feat1pImport") }),
+      );
+    const picked = isAndroid()
+      ? await openDocument(["application/zip", "application/octet-stream"])
+      : await open({
+          multiple: false,
+          filters: [{ name: t(lang(), "page.filter1pux"), extensions: ["1pux"] }],
+        });
+    if (!host.sessionView.isCurrent(view) || !host.operations.isCurrent(operation) || !picked)
+      return;
+    const selection =
+      typeof picked === "string"
+        ? { uri: picked, name: null }
+        : Array.isArray(picked)
+          ? null
+          : picked;
+    if (!selection?.uri) return;
+    const counts = await vault.callInSession(view.sessionId, () =>
+      vault.importOnePux(selection.uri, selection.name ?? null, baseGroupUuid),
+    );
+    if (!host.sessionView.isCurrent(view) || !host.operations.isCurrent(operation)) return;
+    host.notify(
+      counts.unreferencedFiles
+        ? t(lang(), "io.onepuxImported", { n: counts.items, files: counts.unreferencedFiles })
+        : t(lang(), "io.imported", { n: counts.items }),
+    );
+  } catch (e) {
+    if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
+      host.notify(
+        t(lang(), "io.importFailed", { e: e instanceof Error ? e.message : String(e) }),
+        "error",
+      );
+  } finally {
+    if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
+      host.setBusy(false);
+  }
+}
+
 /** Resolve each row's group and add it as an entry; reports a one-shot summary.
  *  Every unique group path is resolved once (creating missing groups), then all
  *  entries are bulk-inserted in a single IPC call instead of one `add_entry`

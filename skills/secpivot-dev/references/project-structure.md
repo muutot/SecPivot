@@ -290,8 +290,13 @@ native-only bounded version-3 ZIP reader with an opaque `OnePuxArchive`;
 fixtures. `vault/import/onepux.rs` prepares a native protected plan and owns
 `VaultSession::import_1pux` candidate-database publication/rollback;
 `onepux_tests.rs` verifies account/vault identity, source archives, exact binary
-binding, masking and synthetic KDBX reopen. Frontend/IPC wiring and actual client
-exports remain pending; these native stages alone do not complete 1PUX import.
+binding, masking and synthetic KDBX reopen. `commands/import.rs` exposes the
+bounded spawn_blocking read/prepare and stable-origin completion, covered by
+`commands/import_tests.rs`. `io.ts::importOnePux`, `vault.ts::importOnePux` and the
+page's `handleImportOnePux` own the new existing-menu/picker route; Node tests in
+`tests/io-onepux.test.mjs` use production page/service code with synthetic API
+seams. Real client export/provider/dialog execution remains separate pending
+evidence; the earlier native-only stages alone did not complete this route.
 
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
