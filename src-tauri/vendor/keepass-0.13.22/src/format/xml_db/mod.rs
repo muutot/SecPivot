@@ -108,9 +108,16 @@ pub fn to_xml(
         Ok(())
     }
     remap_group(&mut kdbx.root.group, &dense_ids)?;
-    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
-        .as_bytes()
-        .to_vec();
+    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?;
+    // Model strings are XML text, never CDATA. Character references preserve
+    // CR across XML's mandatory line-ending normalization without changing
+    // literal entity text or protected fields' base64 payloads.
+    let xml = if xml.contains('\r') {
+        xml.replace('\r', "&#xD;")
+    } else {
+        xml
+    }
+    .into_bytes();
 
     let attachments = attachments.into_iter().map(|(_, data)| data).collect();
 
@@ -361,6 +368,61 @@ mod tests {
 
     #[derive(Serialize, Deserialize)]
     struct Test<T>(T);
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_kdbx_carriage_serializer_preserves_text_and_literal_entities() {
+        let expected = "synthetic\r\nline\rtab\t😀";
+        let mut db = crate::Database::new();
+        let id = {
+            let mut root = db.root_mut();
+            let mut entry = root.add_entry();
+            entry.set_unprotected("Plain\r\nkey", expected);
+            entry.set_unprotected("Literal", "literal &#xD; &amp; <tag>");
+            entry.set_protected("Protected", expected);
+            entry.id()
+        };
+        let mut cipher = crate::config::InnerCipherConfig::Plain
+            .get_cipher(&[])
+            .unwrap();
+        let (xml, attachments) = to_xml(&db, &mut *cipher).unwrap();
+        assert!(
+            !xml.contains(&b'\r'),
+            "literal CR would normalize on XML read"
+        );
+        assert!(std::str::from_utf8(&xml).unwrap().contains("&#xD;"));
+        let parsed = parse_xml(&xml, &attachments, &mut *cipher).unwrap();
+        let entry = parsed.entry(id).unwrap();
+        assert_eq!(entry.get("Plain\r\nkey"), Some(expected));
+        assert_eq!(entry.get("Literal"), Some("literal &#xD; &amp; <tag>"));
+        assert_eq!(entry.get("Protected"), Some(expected));
+        assert!(entry.fields["Protected"].is_protected());
+    }
+
+    #[test]
+    fn secpivot_kdbx_carriage_reader_keeps_entity_and_standard_normalization_semantics() {
+        let xml = r#"<KeePassFile><Meta/><Root><Group><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Name>Root</Name>
+            <Entry><UUID>AQEBAQEBAQEBAQEBAQEBAQ==</UUID>
+                <String><Key>Reference</Key><Value>synthetic&#xD;&#xA;line&#xD;tail</Value></String>
+                <String><Key>Literal</Key><Value>literal &amp;#xD;</Value></String>
+            </Entry></Group></Root></KeePassFile>"#;
+        let mut cipher = crate::config::InnerCipherConfig::Plain
+            .get_cipher(&[])
+            .unwrap();
+        let parsed = parse_xml(xml.as_bytes(), &[], &mut *cipher).unwrap();
+        let root = parsed.root();
+        let entry = root.entries().next().unwrap();
+        assert_eq!(entry.get("Reference"), Some("synthetic\r\nline\rtail"));
+        assert_eq!(entry.get("Literal"), Some("literal &#xD;"));
+        let raw = xml.replace(
+            "synthetic&#xD;&#xA;line&#xD;tail",
+            "synthetic\r\nline\rtail",
+        );
+        let normalized = parse_xml(raw.as_bytes(), &[], &mut *cipher).unwrap();
+        let root = normalized.root();
+        let entry = root.entries().next().unwrap();
+        assert_eq!(entry.get("Reference"), Some("synthetic\nline\ntail"));
+    }
 
     #[test]
     fn test_deserialize_uuid() {

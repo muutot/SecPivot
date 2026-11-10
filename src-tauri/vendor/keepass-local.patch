@@ -1943,7 +1943,7 @@
 -        .as_bytes()
 -        .to_vec();
 -
-@@ -73,0 +70,44 @@
+@@ -73,0 +70,51 @@
 +
 +    // In-memory IDs may have gaps after deletion. KDBX4 binary Ref values
 +    // address positions in this exact header array, not the original IDs.
@@ -1985,14 +1985,21 @@
 +        Ok(())
 +    }
 +    remap_group(&mut kdbx.root.group, &dense_ids)?;
-+    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
-+        .as_bytes()
-+        .to_vec();
-@@ -94 +134,2 @@
++    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?;
++    // Model strings are XML text, never CDATA. Character references preserve
++    // CR across XML's mandatory line-ending normalization without changing
++    // literal entity text or protected fields' base64 payloads.
++    let xml = if xml.contains('\r') {
++        xml.replace('\r', "&#xD;")
++    } else {
++        xml
++    }
++    .into_bytes();
+@@ -94 +141,2 @@
 -        let mut db = crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
 +        let mut db =
 +            crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
-@@ -154,3 +195,6 @@
+@@ -154,3 +202,6 @@
 -        self.root
 -            .group
 -            .xml_to_db_handle(db.root_mut(), &attachments, &custom_icons, inner_decryptor)?;
@@ -2002,9 +2009,9 @@
 +            &custom_icons,
 +            inner_decryptor,
 +        )?;
-@@ -159,0 +204 @@
+@@ -159,0 +211 @@
 +        db.rebuild_attachment_references();
-@@ -183,3 +228,6 @@
+@@ -183,3 +235,6 @@
 -                    #[allow(clippy::indexing_slicing)] // We just checked that the index is in bounds
 -                    if let Some(crate::db::Icon::Custom(icon_id)) =
 -                        entry.history.as_ref().and_then(|h| h.entries[i].icon.as_ref())
@@ -2014,36 +2021,92 @@
 +                        .history
 +                        .as_ref()
 +                        .and_then(|h| h.entries[i].icon.as_ref())
-@@ -211 +259,4 @@
+@@ -211 +266,4 @@
 -    fn db_to_xml(db: &crate::db::Database, inner_cipher: &mut dyn Cipher) -> Result<Self, CryptographyError> {
 +    fn db_to_xml(
 +        db: &crate::db::Database,
 +        inner_cipher: &mut dyn Cipher,
 +    ) -> Result<Self, CryptographyError> {
-@@ -320 +371,4 @@
+@@ -313,0 +372,55 @@
++    #[cfg(feature = "save_kdbx4")]
++    #[test]
++    fn secpivot_kdbx_carriage_serializer_preserves_text_and_literal_entities() {
++        let expected = "synthetic\r\nline\rtab\t😀";
++        let mut db = crate::Database::new();
++        let id = {
++            let mut root = db.root_mut();
++            let mut entry = root.add_entry();
++            entry.set_unprotected("Plain\r\nkey", expected);
++            entry.set_unprotected("Literal", "literal &#xD; &amp; <tag>");
++            entry.set_protected("Protected", expected);
++            entry.id()
++        };
++        let mut cipher = crate::config::InnerCipherConfig::Plain
++            .get_cipher(&[])
++            .unwrap();
++        let (xml, attachments) = to_xml(&db, &mut *cipher).unwrap();
++        assert!(
++            !xml.contains(&b'\r'),
++            "literal CR would normalize on XML read"
++        );
++        assert!(std::str::from_utf8(&xml).unwrap().contains("&#xD;"));
++        let parsed = parse_xml(&xml, &attachments, &mut *cipher).unwrap();
++        let entry = parsed.entry(id).unwrap();
++        assert_eq!(entry.get("Plain\r\nkey"), Some(expected));
++        assert_eq!(entry.get("Literal"), Some("literal &#xD; &amp; <tag>"));
++        assert_eq!(entry.get("Protected"), Some(expected));
++        assert!(entry.fields["Protected"].is_protected());
++    }
++
++    #[test]
++    fn secpivot_kdbx_carriage_reader_keeps_entity_and_standard_normalization_semantics() {
++        let xml = r#"<KeePassFile><Meta/><Root><Group><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Name>Root</Name>
++            <Entry><UUID>AQEBAQEBAQEBAQEBAQEBAQ==</UUID>
++                <String><Key>Reference</Key><Value>synthetic&#xD;&#xA;line&#xD;tail</Value></String>
++                <String><Key>Literal</Key><Value>literal &amp;#xD;</Value></String>
++            </Entry></Group></Root></KeePassFile>"#;
++        let mut cipher = crate::config::InnerCipherConfig::Plain
++            .get_cipher(&[])
++            .unwrap();
++        let parsed = parse_xml(xml.as_bytes(), &[], &mut *cipher).unwrap();
++        let root = parsed.root();
++        let entry = root.entries().next().unwrap();
++        assert_eq!(entry.get("Reference"), Some("synthetic\r\nline\rtail"));
++        assert_eq!(entry.get("Literal"), Some("literal &#xD;"));
++        let raw = xml.replace(
++            "synthetic&#xD;&#xA;line&#xD;tail",
++            "synthetic\r\nline\rtail",
++        );
++        let normalized = parse_xml(raw.as_bytes(), &[], &mut *cipher).unwrap();
++        let root = normalized.root();
++        let entry = root.entries().next().unwrap();
++        assert_eq!(entry.get("Reference"), Some("synthetic\nline\ntail"));
++    }
++
+@@ -320 +433,4 @@
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -327 +381,2 @@
+@@ -327 +443,2 @@
 -            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 +            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +            0x0e, 0x0f,
-@@ -338 +393,2 @@
+@@ -338 +455,2 @@
 -                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
 +                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S")
 +                    .unwrap(),
-@@ -342 +398,2 @@
+@@ -342 +460,2 @@
 -        let serialized = quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
 +        let serialized =
 +            quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
-@@ -373 +430,3 @@
+@@ -373 +492,3 @@
 -        let mut cipher = crate::config::InnerCipherConfig::Plain.get_cipher(&[]).unwrap();
 +        let mut cipher = crate::config::InnerCipherConfig::Plain
 +            .get_cipher(&[])
 +            .unwrap();
-@@ -376 +435,2 @@
+@@ -376 +497,2 @@
 -        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects).unwrap();
 +        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects)
 +            .unwrap();

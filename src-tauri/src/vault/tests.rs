@@ -14808,3 +14808,122 @@ fn kprpc_regex_empty_guard_preserves_meaningful_whitespace_and_explicit_wildcard
         "https://unrelated.example"
     ));
 }
+
+#[test]
+fn kdbx_carriage_entry_history_groups_and_metadata_survive_save_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let old = "synthetic old\r\nline\rtab\t😀";
+    let new = "synthetic new\r\nline\rtab\t😀";
+    let input = |text: &str| {
+        let mut value = entry_input(ROOT_GROUP_UUID, text, text, text, text);
+        value.notes = text.into();
+        value.custom_fields = vec![
+            CustomField {
+                name: "Plain\r\nlabel".into(),
+                value: text.into(),
+                protected: false,
+            },
+            CustomField {
+                name: "Hidden".into(),
+                value: text.into(),
+                protected: true,
+            },
+            CustomField {
+                name: "Literal".into(),
+                value: "literal &#xD; &amp; <tag>".into(),
+                protected: false,
+            },
+        ];
+        value
+    };
+    let state = session.add_entry(&input(old)).unwrap();
+    let id = state.root.entries[0].uuid.clone();
+    session.update_entry(&id, &input(new)).unwrap();
+    let state = session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.into()),
+            name: new.into(),
+            icon: None,
+        })
+        .unwrap();
+    let group_id = state.root.children[0].uuid.clone();
+    session
+        .update_group_meta(ROOT_GROUP_UUID, Some(new.into()), None, None)
+        .unwrap();
+    session
+        .update_group_meta(&group_id, Some(new.into()), None, None)
+        .unwrap();
+    session.require_db_mut().unwrap().meta.database_description = Some(new.into());
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.get_entry_password(&id).unwrap(), new);
+    let db = session.require_db().unwrap();
+    let entry = db.entry(parse_entry_id(&id).unwrap()).unwrap();
+    let historical = entry.historical(0).unwrap();
+    let mut mismatches = 0;
+    for (version, expected) in [(&entry, new), (&historical, old)] {
+        assert_eq!(version.fields[FIELD_PASSWORD].get(), expected);
+        assert!(version.fields[FIELD_PASSWORD].is_protected());
+        assert_eq!(version.fields["Hidden"].get(), expected);
+        assert!(version.fields["Hidden"].is_protected());
+        assert_eq!(version.fields["Literal"].get(), "literal &#xD; &amp; <tag>");
+        for name in [
+            FIELD_TITLE,
+            FIELD_USERNAME,
+            FIELD_URL,
+            FIELD_NOTES,
+            "Plain\r\nlabel",
+        ] {
+            mismatches += usize::from(version.get(name) != Some(expected));
+        }
+    }
+    let group = db
+        .group(super::helpers::parse_group_id(&group_id).unwrap())
+        .unwrap();
+    mismatches += usize::from(group.name != new);
+    mismatches += usize::from(group.notes.as_deref() != Some(new));
+    mismatches += usize::from(db.root().notes.as_deref() != Some(new));
+    mismatches += usize::from(db.meta.database_description.as_deref() != Some(new));
+    assert_eq!(
+        mismatches, 0,
+        "ordinary current/history/group/meta CR content was changed"
+    );
+}
+
+#[test]
+fn kdbx_carriage_bitwarden_command_wire_import_survives_save_reopen() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let expected = "synthetic\r\nline\rtab\t😀";
+    let text = serde_json::json!({"items":[{"type":1,"name":expected,"notes":expected,
+        "login":{"username":expected,"password":expected},
+        "fields":[{"name":"Plain","value":expected,"type":0},{"name":"Hidden","value":expected,"type":1}]}]}).to_string();
+    let rows = crate::commands::parse_bitwarden_json(text).unwrap();
+    let mut wire = serde_json::to_value(&rows[0]).unwrap();
+    wire["groupUuid"] = serde_json::json!(ROOT_GROUP_UUID);
+    wire["attachments"] = serde_json::json!([]);
+    let input: ImportEntryInput = serde_json::from_value(wire).unwrap();
+    let state = session.import_entries(&[input]).unwrap();
+    let id = state.root.entries[0].uuid.clone();
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    assert_eq!(session.get_entry_password(&id).unwrap(), expected);
+    let entry = session
+        .require_db()
+        .unwrap()
+        .entry(parse_entry_id(&id).unwrap())
+        .unwrap();
+    assert_eq!(entry.fields["Bitwarden Hidden"].get(), expected);
+    assert!(entry.fields["Bitwarden Hidden"].is_protected());
+    let mut mismatches = 0;
+    for name in [FIELD_TITLE, FIELD_USERNAME, FIELD_NOTES, "Bitwarden Plain"] {
+        mismatches += usize::from(entry.get(name) != Some(expected));
+    }
+    assert_eq!(
+        mismatches, 0,
+        "valid imported CR strings were changed by KDBX persistence"
+    );
+}

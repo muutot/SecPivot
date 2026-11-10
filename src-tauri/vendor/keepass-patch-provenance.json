@@ -222,7 +222,7 @@
     {
       "path": "src/format/xml_db/mod.rs",
       "upstream_sha256": "8915a76daf1ef7d6b74d884af69b3bcbee7198a4a55366152abb0d955e28cc7e",
-      "patched_sha256": "83c03562b85ebf2403c31ca8d5a75d64fe79948f32bc2501075edeac0f3a7c4d"
+      "patched_sha256": "f7ced5bba1c74f7ea8ceb3b8279a167b47e99a63747510e1714d5ebe080be31b"
     },
     {
       "path": "src/format/xml_db/tags.rs",

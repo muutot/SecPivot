@@ -9,6 +9,14 @@ preserving the previous file. Two empty synthetic KDBX4 fixtures under
 tests/fixtures/kdf-overflow-* reproduce the original reader/writer mismatch;
 their provenance hashes identify the unpatched registry producer.
 
+The KDBX internal XML writer represents raw CR as character references after
+trusted text-only serialization, preserving CR/CRLF in ordinary field values/
+keys, current/history versions and group/meta text. Literal entity text retains
+its escaped spelling and protected fields retain their base64 ciphertext. The
+reader keeps standard XML normalization for raw CR from other producers.
+Pure-whitespace optional-string decoding and invalid XML scalars remain separate
+fidelity boundaries; this change does not recover already normalized content.
+
 CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
 existing formula guard apostrophe to the field value before RFC 4180 quoting.
 Commas, quotes and CR/LF therefore remain within one cell. This preserves the
