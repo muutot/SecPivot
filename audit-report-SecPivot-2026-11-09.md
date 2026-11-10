@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S48；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S49；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 36     | 36        | 0         |
+| Medium    | 37     | 37        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **59** | **59**    | **0**     |
+| **Total** | **60** | **60**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2476,3 +2476,44 @@ data-contracts 已同步合并契约，无可据此勾选的完整 TODO。
 当前详细卡片 59（Critical 1 / High 12 / Medium 36 / Low 10），
 原始 b7c5d9f 的 15 项与 6.1 分保持。整体目标 active：继续独立
 复核收藏修改时间/缓存、秒精度历史冲突、其余系统/UI/竞品迁移。
+
+### Finding: SP-S49 收藏切换沿用旧修改时间，轻量返回与缓存缺少变更元数据（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Frontend State / Backend API
+- Status: Confirmed
+- Affected area: toggle_favorite command, favorite delta, entry modified/size cache
+- Evidence:
+  - File: src-tauri/src/vault/security.rs:94–122、src-tauri/src/vault/dto.rs:300–312、src/lib/services/vault.ts:293–319/1349–1362、src/lib/types/vault.ts:195–209（7b5e8d5 修复前）
+  - Function / Module: toggle_favorite_delta / applyBackendDelta / invokeSessionDelta
+  - Relevant behavior: 实际收藏命令修改 SecPivot.Favorite 自定义字段，却不刷新条目 last_modification；Favorite delta 只返回 revision/uuid/favorite。前端也只修改 favorite，未应用条目的 modified/size。
+  - Reproduction: favorite-metadata-red.log 的两个新增原生测试失败（已有五项通过）：固定旧时间的存量合成库，真实 toggle_favorite_delta/save/reopen 后在首次单边合并断言失败；另一条真实 DTO JSON 检查同时识别 modified、size 与完整快照不一致。第一条 red 未执行反向合并/合并库重开及取消收藏分支，第二条 red 停在首次收藏，不声明原 baseline 已运行取消收藏。
+  - Independent verification: commands/vault.rs:910–920 的实际 toggle_favorite handler 返回 toggle_favorite_delta；services/vault.ts 的正常 UI 路径调用该 command。真实服务模块图仅 mock Tauri invoke 的 favorite-service-metadata-red.log 为 1 failed / 3 passed，即便模拟后端返回 modified/size，前端仍保留旧 2020 时间与 4301 大小而不是 2030/4321。该联合断言同时复现两个字段，后续节点/dirty/路由断言未执行。merge.rs 与 pinned keepass 的实际比较拒绝同时间不同内容；serialize.rs:246–248/278–340 定义标准时间格式和真实大小计算。
+- Problem: 正常收藏切换保存成功，却因旧时间无法单边合并；列表/详情缓存的修改时间与条目大小滞后，直到完整快照刷新。
+- Why it matters: 破坏日常收藏操作的同步与轻量更新契约。复现自动合并阻断和元数据缓存滞后，没有已丢失密码/附件或用户库证据，按 Medium。
+- Realistic failure scenario: 一台设备仅收藏/取消收藏存量条目，保存后与未修改副本同步仍提示同时间戳冲突；本机修改时间和大小列未随收藏更新。
+- Minimal fix: 收藏 mutation 设置当前秒精度条目修改时间，返回同一格式时间及实际 entry_size 总量。Rust/TypeScript Favorite delta 增加 modified、size，前端与 favorite 一起做不可变树补丁。浏览器 demo 切换也更新自己的条目时间。
+- Better long-term fix: 独立复核同秒变化、历史时间重复与其他 delta 对缓存元数据的影响；不要用 renderer 时钟推测 native 条目时间或为收藏额外生成编辑历史。
+- Regression test suggestion: 收藏/取消收藏都在真实 API/save/reopen 后双向合并并保存合并库重开；原生 JSON delta 的 modified/size 与完整快照和实际存储统计相等。真实服务 mock invoke 的 delta 同时更新时间/大小/favorite，旧快照与无关条目保持，sessionId/command/revision/dirty 正确。
+- Estimated effort: 1–2 小时（原生时间、两端 delta、服务/原生回归与维护契约）
+
+6ce4570 已修复。favorite-metadata-green.log 的 7 项通过，含两个新增
+原生回归；favorite-service-metadata-green.log 的 4 项通过，含一个新增
+真实服务模块图回归。最终测试覆盖收藏及取消、双向合并、合并库
+保存重开、JSON 元数据与不可变节点、命令/session 路由。
+完整 verify-favorite-metadata.log exit 0：317 frontend、610 Rust、
+ACL 2，check 零错误警告、契约、build、clippy、format 全部通过。
+Rust 单线程无过滤，四个 live clipboard body 关闭。完整门启动后
+仅补全两处 reference 字段表，favorite-metadata-final-format.log 再次
+通过。data-contracts 的类型表/命令表/详细契约同步，无新 TODO 勾选。
+没有额外条目历史、CSS/markup、vendor、密码返回字段或 IPC command
+变化；新增返回字段仅时间与大小。原生 Tauri handler/真实列表渲染/
+Android provider/用户库/共享剪贴板未执行；浏览器服务测试不替代
+真机证据，秒精度仍无同秒单调保证。
+
+当前详细卡片 60（Critical 1 / High 12 / Medium 37 / Low 10），
+全部 Confirmed；原始 b7c5d9f 的 15 项/6.1 分保持。完整审计目标
+active，继续复核同秒历史/合并与其余系统、UI 和竞品迁移能力。
+手机已安装 v1.6.5 的云端另存为 ACL 发行源码根因已确认，当前
+源码授权已修复；替换 APK、真机和具体 provider 仍未验证。
