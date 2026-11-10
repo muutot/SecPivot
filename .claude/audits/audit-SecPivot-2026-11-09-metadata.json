@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S79; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 90,
-    "confirmed": 90,
+    "scope": "15 baseline cards plus SP-S05 through SP-S80; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 91,
+    "confirmed": 91,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
       "Medium": 57,
-      "Low": 13
+      "Low": 14
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
@@ -67,6 +67,16 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S80",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "dd94097",
+      "area": "Rejected remote profile removal clears credential hints and persists unchanged configuration",
+      "status": "Confirmed internal service defect and remediated; validation before effects, targeted5 and full verify371 frontend/716 Rust/ACL2/KeePass25/QuickXML1363 pass; ignored4 excluded",
+      "evidence": "Actual production settings/presence/queue with synthetic masked set_config: one executed final-profile regression fails in remote-remove-reproduced-clean-red.log exit1; fixed two additional regressions cover both protocols, final/missing/repeated/accepted removal and other hint preservation.",
+      "limitations": "Current panel disables final-profile delete. No normal user final-delete click, real config/provider, stored credential loss or security bypass demonstrated; Low reflects internal no-op invariant and duplicate-call persistence."
+    },
     {
       "id": "SP-S79",
       "severity": "Medium",

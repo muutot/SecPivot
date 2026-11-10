@@ -1345,6 +1345,10 @@ export const appSettings: AppSettingsStore = {
   },
 
   removeRemoteProfile(path): void {
+    const state = get(settings);
+    const current = findRemoteProfile(state.remoteProfiles, path);
+    if (!current || remoteProfilesForKind(state.remoteProfiles, current.settings.kind).length <= 1)
+      return;
     secretPresence.update((current) => {
       if (!(path in current)) return current;
       const next = { ...current };
@@ -1352,10 +1356,6 @@ export const appSettings: AppSettingsStore = {
       return next;
     });
     settings.update((s) => {
-      const current = findRemoteProfile(s.remoteProfiles, path);
-      if (!current) return s;
-      const sameKind = remoteProfilesForKind(s.remoteProfiles, current.settings.kind);
-      if (sameKind.length <= 1) return s;
       const remoteProfiles = s.remoteProfiles.filter(
         (profile) => remoteProfilePath(profile) !== path,
       );

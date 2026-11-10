@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S79；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S80；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
 | Medium    | 57     | 57        | 0         |
-| Low       | 13     | 13        | 0         |
+| Low       | 14     | 14        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **90** | **90**    | **0**     |
+| **Total** | **91** | **91**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4431,3 +4431,39 @@ build、369项前端测试、完整format通过。未新增镜像文案测试；
 后续需要明确来源匹配语义和完整URL字节，再建立原生互操作测试，不能
 把源JSON归档当作全部网址可自动填充。手机v1.6.5另存为ACL与provider／
 新APK仍保留待验证；原始基线及90历史Confirmed统计保持，整体目标active。
+
+### Finding: SP-S80 服务拒绝远程配置删除后仍清凭据提示并写配置
+
+- Severity: Low
+- Confidence: High
+- Category: Frontend state / Internal service invariant
+- Status: Confirmed（内部服务缺陷；已修复并通过完整门禁）
+- Affected area: appSettings.removeRemoteProfile and remoteSecretPresence
+- Evidence:
+  - File: src/lib/services/settings.ts:1346–1371; src/lib/components/settings/RemoteSettingsPanel.svelte:148–153 at dd94097.
+  - Function / Module: removeRemoteProfile -> secretPresence update -> settings validation -> schedulePersist.
+  - Relevant behavior: final/missing profile rejection occurs after clearing the named presence entry; every call schedules a write, including repeated removal of an already deleted profile.
+  - Reproduction: execute the actual settings/presence/persist service with a masked synthetic set_config response. The final S3 profile remains, but its stored-credential hint disappears; one executed regression fails with exit1 in remote-remove-reproduced-clean-red.log. Earlier red.log separately fails settings identity after the redundant acknowledgement; it contains synthetic settings only. Both are execution failures, not compilation failures.
+  - Independent verification: the UI derives placeholders from presenceMap[activePath]. The current panel disables its delete button when profiles.length <= 1, so normal final-profile clicks were not demonstrated. No actual provider, persisted credential loss or security bypass is established.
+- Problem: an internally rejected operation still publishes effects associated with successful deletion.
+- Why it matters: stale/repeated service calls cause redundant persistence, and an internal final-profile call misrepresents saved credentials. Low reflects the present UI gate and limited impact rather than claiming a normal user-facing data-loss route.
+- Realistic failure scenario: a duplicate service callback retries a successful deletion after the profile has disappeared and unnecessarily writes configuration again. The final-profile hint failure is confirmed at the service boundary; the panel currently prevents that direct user action.
+- Minimal fix: validate profile existence and remaining same-protocol count before any presence or queue change; retain successful deletion and same-protocol active replacement.
+- Better long-term fix: keep service validation authoritative even where UI controls are disabled; assess queued configuration and backend deletion separately with owned fixtures.
+- Regression test suggestion: last/missing/repeated deletion keeps store identity, hints and write count; accepted S3/WebDAV deletion removes only its profile, preserves other hints, chooses its transport replacement and writes once.
+- Estimated effort: one focused service guard and two production-service regressions.
+
+相关5项remote-settings测试通过，包含新增2项，S3/WebDAV的最后／不存在／
+重复删除与合法删除均验证。只使用synthetic字段和masked IPC，没有读真实
+配置／库／剪贴板，也没有声明当前UI可以点击删除最后一份配置。这里的
+真实性复核缩小了影响判断，不把内部验证扩大成正常用户凭据丢失。
+当前91历史Confirmed（Critical1／High19／Medium57／Low14）含已修复项，
+原始15项／6.1分保持；手机provider／APK及迁移完整语义仍待验证，目标active。
+
+完整verify-remote-remove-final.log exit0：frontend371／Rust716／ACL2／
+KeePass25／QuickXML1363（4 ignored不算执行），format／check／contract／
+build／clippy通过。日志 SHA256
+a16909b0b18b61d32497a0390ca1982c38553a03fd303038bc48e9e02747805a；
+remote-remove-final-proof.json关联原失败／通过／全门日志与源码hash。
+documentation currency gate同步settings-panels和data-contracts中的删除
+契约；没有CSS／markup／IPC／schema修改，也不改变既有合法删除语义。

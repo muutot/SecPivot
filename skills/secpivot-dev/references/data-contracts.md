@@ -745,6 +745,14 @@ registry tests exercise admission and stable completion; actual 1Password client
 exports, desktop IPC/runtime dialog and Android provider execution still need
 separate evidence.
 
+`settings.ts::removeRemoteProfile` preserves the one-profile-per-transport
+invariant before any credential-presence or persistence side effect. A missing
+path, final profile or repeated removal leaves the existing stores and queue
+unchanged. Successful deletion removes only that identity, preserves other
+presence hints and chooses a same-protocol replacement when the active profile
+was removed. Synthetic masked set_config tests exercise both protocols; they
+do not establish actual provider or stored-credential deletion behavior.
+
 Bitwarden imports accept plaintext only. Before reading items, the parser
 validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent
