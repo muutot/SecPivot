@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S72；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S73；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
 | Medium    | 52     | 52        | 0         |
-| Low       | 11     | 11        | 0         |
+| Low       | 12     | 12        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **83** | **83**    | **0**     |
+| **Total** | **84** | **84**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3874,3 +3874,39 @@ currency gate同步data-contracts／security-model／PITFALLS与精确TODO；
 设备／APK、共享剪贴板、远程文件写入或高资源复现。累计83
 Confirmed含历史已修复项，原始b7c5d9f／15项／6.1分保持；手机
 另存为新APK／真机、完整审计／竞品／UI仍待完成，目标active。
+
+### Finding: SP-S73 WebDAV 请求未询问集合类型，按需属性响应把目录列成文件
+
+- Severity: Low
+- Confidence: High
+- Category: Stability / Testing
+- Status: Confirmed
+- Affected area: WebDAV PROPFIND request and collection classification contract
+- Evidence:
+  - File: src-tauri/src/remote/webdav.rs:17–25, 124–164, 299–383; src-tauri/src/remote/tests.rs:624–646, 764–814 (abe8106)
+  - Function / Module: PROPFIND_BODY -> WebDavStorage::list -> parse_multistatus
+  - Relevant behavior: the named-property request includes size and last-modified only, while the parser needs resourcetype/collection to reliably exclude directories. Existing mocks return this unrequested property, hiding the request/response mismatch; file names no longer require a kdbx extension and optional size cannot identify resource type.
+  - Reproduction: a bounded no-auth loopback server parses the actual request and returns resourcetype only when requested. The request contains only getcontentlength/getlastmodified; a collection href without its optional trailing slash is published as vaults/archive alongside a.kdbx and the extensionless backup file. webdav-collection-native-red.log reports1 passed/1 failed/680 filtered; explicit-type parser control already succeeds.
+  - Independent verification: Python stdlib XML parsing of the captured actual request confirms exactly two DAV property names; the response contains four member records and no type property. Request/response/diagnostic/root-source SHA256 and exact source restoration are recorded in webdav-collection-red-provenance.json. RFC4918 §5.2 recommends resourcetype as more reliable than the URI and only SHOULD requires a collection trailing slash; §9.1 defines named-property selection.
+- Problem: the transport never requests the property on which its collection filter depends.
+- Why it matters: a named-property server can show a directory as a selectable database file, followed by an open failure. Low reflects a constrained enumeration/usability defect; no actual provider incident, file overwrite, credential disclosure or data loss is demonstrated.
+- Realistic failure scenario: a cloud gateway returns only the two requested metadata properties and represents a directory without a trailing slash. SecPivot shows that directory in its file list, although the parser would correctly skip it if its type were requested and returned.
+- Minimal fix: request DAV:resourcetype alongside size/date, then retain the existing optional metadata and filename behavior. Add a wire fixture whose response follows the actual named-property request instead of always returning extra properties.
+- Better long-term fix: separately audit namespace and successful propstat/type semantics, unavailable properties and real-provider compatibility; never guess that extensionless or size-zero objects are directories.
+- Regression test suggestion: capture the real PROPFIND property names, verify a request-driven response excludes non-slashed collections and retains kdbx/extensionless files and metadata; missing type/size/date compatibility and previous URI/XML/empty-list controls remain green.
+- Estimated effort: 30–60 minutes for the request property, bounded wire regression and full verification.
+
+竞品复核：KeeWeb固定公开commit ad7891de92cf666400a6b4c859eeb731b0f68761、
+package版本1.18.9的StorageWebDav提供直接URL GET／HEAD与PUT／临时
+文件MOVE，未实现PROPFIND列表，不能据此验证集合识别。其默认临时
+写后MOVE需要额外提供商方法与事务语义，不直接搬入本项修复；其
+fileOptsToStoreOpts的XOR／Base64也不替代SecPivot原生凭据存储。
+上述为源码比较，无竞品运行／安全事件判断；固定源码和package
+哈希保存于keeweb-webdav-pinned-reference.json。首次旧路径404已通过
+官方仓库树定位impl路径，不计产品缺陷。
+
+确认阶段未修改应用行为，临时测试逐字节恢复。仅一次小型无凭据
+loopback请求和合成成员，无用户配置／密码库、真实云端、真机／APK、
+共享剪贴板、远程文件写入或高资源复现。累计84 Confirmed含历史
+已修复项（Critical1／High19／Medium52／Low12），原始b7c5d9f／15项／
+6.1分保持；其余审计／竞品／UI与手机另存为真机验证仍待完成。

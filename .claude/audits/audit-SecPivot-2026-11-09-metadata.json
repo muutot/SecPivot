@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S72; historical supplemental tracking notes excluded",
-    "total": 83,
-    "confirmed": 83,
+    "scope": "15 baseline cards plus SP-S05 through SP-S73; historical supplemental tracking notes excluded",
+    "total": 84,
+    "confirmed": 84,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
       "Medium": 52,
-      "Low": 11
+      "Low": 12
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S73",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "abe8106",
+      "area": "WebDAV named-property request omits collection type needed by filter",
+      "status": "Confirmed, unremediated. Actual no-auth loopback request names only size/date; requested-property server omits type and non-slashed archive collection appears beside actual kdbx/extensionless files. Native1 red/1 explicit-type control green/680 filtered; stdlib XML capture confirms request/response boundary and hashes/exact restoration recorded. RFC4918 section5.2/9.1 normative support; pinned KeeWeb directURL adapter lacks PROPFIND listing, not runtime evidence. No real provider/vault/write/disclosure/data loss/device/APK/high-resource proof; propstat/namespace remain separate."
+    },
     {
       "id": "SP-S72",
       "severity": "Medium",
@@ -1531,6 +1539,23 @@
       "quickxml_passed": 1363,
       "quickxml_ignored": 4,
       "final_proof": "webdav-structure-final-proof.json"
+    },
+    "webdav_collection_request": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "abe8106",
+      "native_red": "webdav-collection-native-red.log",
+      "native_failed": 1,
+      "native_passed": 1,
+      "native_filtered": 680,
+      "loopback_requests": 1,
+      "synthetic_member_records": 4,
+      "request": "webdav-collection-request-red.xml",
+      "response": "webdav-collection-response-red.xml",
+      "provenance": "webdav-collection-red-provenance.json",
+      "source_restored_exactly": true,
+      "competitor_reference": "keeweb-webdav-pinned-reference.json",
+      "normative_reference": "webdav-collection-reference.json",
+      "limits": "One no-auth loopback PROPFIND request with four synthetic member records and one explicit-type parser control; no user config/vault, real provider, device/APK, shared clipboard, remote write, credential disclosure/data loss or high-resource test."
     }
   },
   "reverification_notes": [
