@@ -31,6 +31,14 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **One XML property can contain many events.** WebDAV Text/CDATA chunks used to
+  replace earlier chunks, while GeneralRef was ignored: `a&amp;b.kdbx` became
+  `b.kdbx`, and split size `12` became `2`. Read the entire simple property before
+  trimming/interpreting it, accumulate references once, and preserve literal
+  entity text. Unknown/nested/truncated values must reject the list with a
+  content-free error. Keep XML decoding separate from URI percent decoding and
+  verify actual request targets, not just nonempty parser output.
+
 - **A WebDAV href is not a logical key.** Leaving `%20`/UTF-8/`%25` in list keys
   makes the request encoder encode their percent signs again, selecting another
   resource. Decode segments once, preserve literal `+` and percent-looking names,

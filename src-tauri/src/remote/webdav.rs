@@ -224,24 +224,28 @@ impl RemoteStorage for WebDavStorage {
     }
 }
 
-/// Record a text payload against the element currently open (`current`).
-/// Element names are matched lowercase (see [`local_name`]).
-fn record_prop(
-    current: &str,
-    href: &mut Option<String>,
-    size: &mut Option<usize>,
-    modified: &mut Option<String>,
-    text: &str,
-) {
-    match current {
-        "href" => *href = Some(text.to_string()),
-        "getcontentlength" => *size = text.parse().ok(),
-        "getlastmodified" => *modified = Some(text.to_string()),
-        // Real servers emit many more PROPFIND properties (displayname,
-        // resourcetype, supportedreport-set, …); skipping them here is the
-        // intended parse, not swallowed errors. Server-side failures are
-        // reported by the HTTP status checks around each request.
-        _ => {}
+/// Read a complete simple property before interpreting its value. XML can
+/// divide text around references, CDATA, comments or processing instructions.
+/// Decode one reference event at a time, never recursively unescape the result.
+fn read_prop_text(reader: &mut Reader<&[u8]>) -> Result<String, String> {
+    let invalid = || "WebDAV 列表字段包含无效 XML 内容".to_owned();
+    let mut value = String::new();
+    loop {
+        match reader.read_event().map_err(|_| invalid())? {
+            Event::Text(text) => {
+                value.push_str(&text.xml10_content().map_err(|_| invalid())?);
+            }
+            Event::CData(text) => {
+                value.push_str(&text.xml10_content().map_err(|_| invalid())?);
+            }
+            Event::GeneralRef(reference) => {
+                let entity = format!("&{};", reference.decode().map_err(|_| invalid())?);
+                value.push_str(&quick_xml::escape::unescape(&entity).map_err(|_| invalid())?);
+            }
+            Event::End(_) => return Ok(value),
+            Event::Comment(_) | Event::PI(_) => {}
+            _ => return Err(invalid()),
+        }
     }
 }
 
@@ -260,12 +264,10 @@ pub(crate) fn parse_multistatus(
         return Err("WebDAV 响应不是有效的 multistatus 列表，请检查服务地址与对象前缀".to_owned());
     }
     let mut reader = Reader::from_str(body);
-    reader.config_mut().trim_text(true);
     let request_key = href_to_key(base_url, request_url)?;
     let request_key = request_key.trim_matches('/').to_owned();
     let mut objects = Vec::new();
     let mut in_response = false;
-    let mut current = String::new();
     let mut href: Option<String> = None;
     let mut size: Option<usize> = None;
     let mut modified: Option<String> = None;
@@ -276,60 +278,56 @@ pub(crate) fn parse_multistatus(
             Err(e) => return Err(format!("WebDAV 列表解析失败: {e}")),
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
-                current = local_name(&e);
-                if current == "response" {
+                let name = local_name(&e);
+                if name == "response" {
                     in_response = true;
                     href = None;
                     size = None;
                     modified = None;
                     collection = false;
-                } else if current == "collection" {
+                } else if name == "collection" {
                     collection = true;
+                } else if in_response {
+                    match name.as_str() {
+                        "href" => href = Some(read_prop_text(&mut reader)?.trim().to_owned()),
+                        "getcontentlength" => {
+                            size = read_prop_text(&mut reader)?.trim().parse().ok();
+                        }
+                        "getlastmodified" => {
+                            let text = read_prop_text(&mut reader)?.trim().to_owned();
+                            modified = (!text.is_empty()).then_some(text);
+                        }
+                        // Other DAV properties remain intentionally ignored.
+                        _ => {}
+                    }
                 }
             }
             Ok(Event::Empty(e)) => {
-                current = local_name(&e);
-                if current == "collection" {
+                if local_name(&e) == "collection" {
                     collection = true;
-                }
-            }
-            Ok(Event::Text(t)) => {
-                if in_response {
-                    let text = t.xml10_content().unwrap_or_default().trim().to_owned();
-                    record_prop(&current, &mut href, &mut size, &mut modified, &text);
-                }
-            }
-            Ok(Event::CData(t)) => {
-                if in_response {
-                    let text = String::from_utf8_lossy(t.as_ref()).trim().to_owned();
-                    record_prop(&current, &mut href, &mut size, &mut modified, &text);
                 }
             }
             Ok(Event::End(e)) => {
                 let name = end_local_name(&e);
-                if name == "response" {
-                    if in_response {
-                        if let Some(h) = href.as_deref() {
-                            let key = href_to_key(base_url, h)?;
-                            // Skip the collection itself, sub-collections, and
-                            // any href that is not a plain file key.
-                            if !collection
-                                && !key.is_empty()
-                                && !key.trim_matches('/').is_empty()
-                                && !h.ends_with('/')
-                                && key.trim_matches('/') != request_key
-                            {
-                                objects.push(RemoteObject {
-                                    key,
-                                    size: size.unwrap_or(0),
-                                    modified: modified.clone(),
-                                });
-                            }
+                if name == "response" && in_response {
+                    if let Some(h) = href.as_deref() {
+                        let key = href_to_key(base_url, h)?;
+                        // Skip the collection itself, sub-collections, and
+                        // any href that is not a plain file key.
+                        if !collection
+                            && !key.is_empty()
+                            && !key.trim_matches('/').is_empty()
+                            && !h.ends_with('/')
+                            && key.trim_matches('/') != request_key
+                        {
+                            objects.push(RemoteObject {
+                                key,
+                                size: size.unwrap_or(0),
+                                modified: modified.clone(),
+                            });
                         }
-                        in_response = false;
                     }
-                } else {
-                    current.clear();
+                    in_response = false;
                 }
             }
             Ok(_) => {}
