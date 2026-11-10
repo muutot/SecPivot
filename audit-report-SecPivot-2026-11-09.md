@@ -4237,3 +4237,42 @@ f5f9ddc146f7e7c170725c53aac7684aa09087a172a5f219a8d689c6055e0092。合成测试�
 toolchain-remediation-final-proof.json关联原样scan、包锁hash与dev
 smoke证据。SP-S78依赖补丁修复已复核；89历史Confirmed含已修复项
 及原始15项／6.1分保持，整个有界防御审计目标仍active。
+
+#### 1PUX 官方格式与实现前置复核（2026-11-11，ae32690）
+
+本轮实际读取[官方1PUX格式](https://support.1password.com/1pux-format/)
+完整渲染正文，其发布时间2026-08-17，示例export.attributes版本3。
+1PUX为每个解锁账号的未加密ZIP，包含export.attributes、export.data
+及files/；data为accounts→vaults→items树。条目UUID仅在各库内唯一，
+files成员名称以前缀documentID关联；不能用全局item UUID、basename
+或同名分组去重。原样snapshot和SHA256 6322af674872db6b062c8a65de1b6d3127f7652e14d55970175bb7da15f5a2ce
+保存在onepux-official-rendered-spec.json。
+
+当前源代码确实仍缺现代导入：read_text_file只允许CSV/XML/JSON/1PIF，
+handleImport1Password只选1pif并调用parse_1pif；io.ImportEntry没有
+附件载荷，importEntries在映射中固定attachments:[]；分组逐次创建后
+才提交import_entries。native批量插入会预校验条目分组/附件，但它
+不能回滚此前独立创建的分组。本轮未构造真实失败情景，后者保留为
+实现事务要求，不新增未经复现的bug卡片。Cargo.toml也没有ZIP读取依赖。
+
+实施依据onepux-source-contract-proof.json关联上述源码hash，确定以下
+必须独立覆盖的边界：有界二进制读取／解压（成员数、每成员、总量）、
+无磁盘解压、重复路径及校验失败整份拒绝；账号/库/条目的复合身份与
+名称保真；designation凭据原样、concealed/guarded字段保护、收藏及
+active/archived状态、notes/sections/typed values保留；document ID
+精确附件关联／重名／缺失／声明大小；不能把源密码历史归档称作完整
+原生历史。对未知类型保留受保护源JSON或明确拒绝，不猜测降级。
+
+拟采用原生“读取／准备→稳定会话与目标校验→单次发布组/条目/附件”
+路径，renderer仅接收最终masked状态及计数，避免未加密ZIP和附件
+经普通UI状态流转。此段是实施契约，尚未实现；最终需小型标准ZIP
+合成fixtures、真实command/session/masking及KDBX保存重开证明。
+Android SAF选择／取消／过期视图、provider与真实1Password导出另行
+验证。TODO155保持未完成，不将官方文档、设计或入口视为已交付。
+
+本轮新库存first-party-inventory-onepux-spec.json以ae32690为
+checkpoint：370个tracked文本文件／120566行。
+历史fee4565与原始inventory保持原样；新hash/路径覆盖不是全部文件
+逐行语义审查。未读真实库/配置/剪贴板、未运行竞品、未构建APK或
+恢复高资源KDF复现。89历史Confirmed与原始15项／6.1分保持；整个
+审计／竞品／UI目标active，1PUX完整实施与验证仍是明确待办。

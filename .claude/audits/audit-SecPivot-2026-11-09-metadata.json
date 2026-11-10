@@ -1866,6 +1866,19 @@
       "native_provider_tested": false,
       "strongbox": "Unverified: challenge response excluded",
       "limits": "Official rendered documentation and first-party source inspection only. No competitor or SecPivot native provider/device run; historical vendor test dates are not current SecPivot evidence. Strongbox challenge response excluded."
+    },
+    "onepux_specification": {
+      "result": "Official specification and current missing implementation revalidated; implementation contract only",
+      "checkpoint": "ae326903ee2ae431e8ba859460d22dfadb071a94",
+      "spec": "https://support.1password.com/1pux-format/",
+      "spec_sha256": "6322af674872db6b062c8a65de1b6d3127f7652e14d55970175bb7da15f5a2ce",
+      "proof": "onepux-source-contract-proof.json",
+      "implemented": false,
+      "native_export_tested": false,
+      "inventory": "first-party-inventory-onepux-spec.json",
+      "file_count": 370,
+      "line_count": 120566,
+      "limits": "Specification and source review only; no 1PUX implementation, native client export, device/provider test or hostile archive/resource-exhaustion probe. Proposed architecture is not current runtime behavior."
     }
   },
   "reverification_notes": [
