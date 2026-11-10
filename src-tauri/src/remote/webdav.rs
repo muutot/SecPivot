@@ -249,6 +249,54 @@ fn read_prop_text(reader: &mut Reader<&[u8]>) -> Result<String, String> {
     }
 }
 
+/// Check the document envelope independently of the property reader, which
+/// consumes complete elements. Never publish a partial list or an error page
+/// just because its text happens to contain the word `multistatus`.
+fn validate_multistatus_document(body: &str) -> Result<(), String> {
+    let invalid = || "WebDAV 响应不是完整的 multistatus 文档，请检查服务地址与对象前缀".to_owned();
+    let mut reader = Reader::from_str(body);
+    let mut depth = 0usize;
+    let mut seen_root = false;
+    loop {
+        match reader.read_event().map_err(|_| invalid())? {
+            Event::Start(element) => {
+                if depth == 0 {
+                    if seen_root || local_name(&element) != "multistatus" {
+                        return Err(invalid());
+                    }
+                    seen_root = true;
+                }
+                depth += 1;
+            }
+            Event::Empty(element) if depth == 0 => {
+                if seen_root || local_name(&element) != "multistatus" {
+                    return Err(invalid());
+                }
+                seen_root = true;
+            }
+            Event::End(_) => depth = depth.checked_sub(1).ok_or_else(invalid)?,
+            Event::Text(text) if depth == 0 => {
+                if !text
+                    .iter()
+                    .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+                {
+                    return Err(invalid());
+                }
+            }
+            Event::CData(_) | Event::GeneralRef(_) if depth == 0 => return Err(invalid()),
+            Event::Decl(_) | Event::DocType(_) if seen_root => return Err(invalid()),
+            Event::Eof => {
+                return if seen_root && depth == 0 {
+                    Ok(())
+                } else {
+                    Err(invalid())
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Parse a PROPFIND `multistatus` body into file objects. A `<response>` is a
 /// file when it is not the requested collection and is not a collection
 /// (`<resourcetype><collection/></resourcetype>`). `getcontentlength` is used
@@ -260,9 +308,6 @@ pub(crate) fn parse_multistatus(
     base_url: &str,
     request_url: &str,
 ) -> Result<Vec<RemoteObject>, String> {
-    if !body.to_ascii_lowercase().contains("multistatus") {
-        return Err("WebDAV 响应不是有效的 multistatus 列表，请检查服务地址与对象前缀".to_owned());
-    }
     let mut reader = Reader::from_str(body);
     let request_key = href_to_key(base_url, request_url)?;
     let request_key = request_key.trim_matches('/').to_owned();
@@ -333,6 +378,9 @@ pub(crate) fn parse_multistatus(
             Ok(_) => {}
         }
     }
+    // Preserve the more specific simple-property failures while ensuring no
+    // objects leave this function before the entire envelope is complete.
+    validate_multistatus_document(body)?;
     Ok(objects)
 }
 
