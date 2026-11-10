@@ -22,8 +22,9 @@ Unknown references, invalid decoding and nested/truncated property content rejec
 the whole list with content-free errors. Missing/empty size/date hints and existing
 collection handling remain. `tests/fixtures/webdav-xml-text.json` supplies eight
 independent standard-XML controls; the native wire regression covers thirteen
-filename classes. Full XML structure/namespace/propstat/provider compatibility
-remains separate; no IPC/schema/dependency changes are involved.
+filename classes. Namespace/context handling is described below; full XML,
+propstat and provider compatibility remain separate. No IPC/schema/dependency
+changes are involved.
 
 WebDAV list publication additionally requires exactly one completed multistatus
 document root. A second root, unclosed envelope, wrong-root error page or
@@ -31,16 +32,27 @@ non-whitespace outside the root fails with a content-free document error.
 The envelope pass runs after property parsing, retaining existing field-specific
 failures; it uses a streaming depth counter and does not publish partial objects.
 Valid empty lists, case-compatible local tag names and surrounding XML whitespace,
-comments and PI remain supported. No namespace/propstat/full XML validation or
-external entity resolution is implied. The shared strict-JSON
+comments and PI remain supported. The envelope pass alone does not validate
+namespaces/propstat/full XML or resolve external entities. The shared strict-JSON
 tests/fixtures/webdav-document-envelope.json supplies independent document controls.
 
 WebDAV PROPFIND explicitly requests DAV:resourcetype alongside size/date, matching
 the parser's collection filter. The request-driven native HTTP fixture excludes
 non-slashed collections and keeps normal/extensionless files and metadata.
 Unavailable type/size/date remain optional; filename extension or zero size is
-never used to infer collection membership. Existing namespace/propstat/provider
-limits remain, with no IPC/schema/dependency change.
+never used to infer collection membership. Namespace/context handling is described
+below; propstat/provider limits remain, with no IPC/schema/dependency change.
+
+WebDAV uses NsReader expanded names and expected parent containers for responses,
+href, propstat/prop metadata and resourcetype/collection. Unknown/unexpected
+elements and their entire subtrees are ignored, including familiar DAV-looking
+descendants. DAV prefix aliases/default namespaces and existing uppercase names
+remain compatible. An entirely unqualified root selects a separate legacy mode;
+unqualified children under a DAV root are not DAV fields. Non-DAV roots and
+unbound prefixes reject without XML contents. Scalar errors remain content-free,
+and namespace parsing does not resolve external entities. The strict-JSON
+tests/fixtures/webdav-namespaces.json corpus covers sixteen independent controls.
+Propstat success/duplicate/full XML/provider semantics remain separate.
 
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is

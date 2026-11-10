@@ -7,6 +7,8 @@ use super::RemoteStorage;
 use super::{REMOTE_CONFLICT_MARKER, REMOTE_IO_TIMEOUT, REMOTE_LIST_TIMEOUT};
 use crate::config::RemoteSettings;
 use quick_xml::events::Event;
+use quick_xml::name::ResolveResult;
+use quick_xml::NsReader;
 use quick_xml::Reader;
 use std::time::Duration;
 use url::Url;
@@ -228,7 +230,7 @@ impl RemoteStorage for WebDavStorage {
 /// Read a complete simple property before interpreting its value. XML can
 /// divide text around references, CDATA, comments or processing instructions.
 /// Decode one reference event at a time, never recursively unescape the result.
-fn read_prop_text(reader: &mut Reader<&[u8]>) -> Result<String, String> {
+fn read_prop_text(reader: &mut NsReader<&[u8]>) -> Result<String, String> {
     let invalid = || "WebDAV 列表字段包含无效 XML 内容".to_owned();
     let mut value = String::new();
     loop {
@@ -250,11 +252,86 @@ fn read_prop_text(reader: &mut Reader<&[u8]>) -> Result<String, String> {
     }
 }
 
+fn invalid_multistatus_document() -> String {
+    "WebDAV 响应不是完整的 multistatus 文档，请检查服务地址与对象前缀".to_owned()
+}
+
+fn root_uses_dav_namespace(namespace: &ResolveResult<'_>) -> Result<bool, String> {
+    match namespace {
+        ResolveResult::Bound(namespace) if namespace.as_ref() == b"DAV:" => Ok(true),
+        // Keep the explicitly separate legacy, entirely unqualified format.
+        ResolveResult::Unbound => Ok(false),
+        _ => Err(invalid_multistatus_document()),
+    }
+}
+
+fn namespace_matches(namespace: &ResolveResult<'_>, qualified: bool) -> Result<bool, String> {
+    match namespace {
+        ResolveResult::Bound(namespace) => Ok(qualified && namespace.as_ref() == b"DAV:"),
+        ResolveResult::Unbound => Ok(!qualified),
+        ResolveResult::Unknown(_) => Err("WebDAV XML 命名空间前缀无效".to_owned()),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DavElement {
+    Multistatus,
+    Response,
+    Propstat,
+    Prop,
+    ResourceType,
+    Collection,
+    Href,
+    Size,
+    Modified,
+}
+
+/// A familiar name in another container is still an unknown extension here.
+fn expected_element(name: &str, parent: &[DavElement]) -> Option<DavElement> {
+    use DavElement::*;
+    match (name, parent) {
+        ("response", [Multistatus]) => Some(Response),
+        ("href", [Multistatus, Response]) => Some(Href),
+        ("propstat", [Multistatus, Response]) => Some(Propstat),
+        ("prop", [Multistatus, Response, Propstat]) => Some(Prop),
+        ("resourcetype", [Multistatus, Response, Propstat, Prop]) => Some(ResourceType),
+        ("collection", [Multistatus, Response, Propstat, Prop, ResourceType]) => Some(Collection),
+        ("getcontentlength", [Multistatus, Response, Propstat, Prop]) => Some(Size),
+        ("getlastmodified", [Multistatus, Response, Propstat, Prop]) => Some(Modified),
+        _ => None,
+    }
+}
+
+/// RFC 4918 section 17 ignores the whole unexpected subtree, including any
+/// recognized-looking descendants. Namespace prefixes must still be bound.
+fn skip_unknown_element(reader: &mut NsReader<&[u8]>) -> Result<(), String> {
+    let mut depth = 1usize;
+    loop {
+        let (namespace, event) = reader
+            .read_resolved_event()
+            .map_err(|_| invalid_multistatus_document())?;
+        if matches!(namespace, ResolveResult::Unknown(_)) {
+            return Err("WebDAV XML 命名空间前缀无效".to_owned());
+        }
+        match event {
+            Event::Start(_) => depth += 1,
+            Event::End(_) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(());
+                }
+            }
+            Event::Eof => return Err(invalid_multistatus_document()),
+            _ => {}
+        }
+    }
+}
+
 /// Check the document envelope independently of the property reader, which
 /// consumes complete elements. Never publish a partial list or an error page
 /// just because its text happens to contain the word `multistatus`.
 fn validate_multistatus_document(body: &str) -> Result<(), String> {
-    let invalid = || "WebDAV 响应不是完整的 multistatus 文档，请检查服务地址与对象前缀".to_owned();
+    let invalid = invalid_multistatus_document;
     let mut reader = Reader::from_str(body);
     let mut depth = 0usize;
     let mut seen_root = false;
@@ -309,53 +386,89 @@ pub(crate) fn parse_multistatus(
     base_url: &str,
     request_url: &str,
 ) -> Result<Vec<RemoteObject>, String> {
-    let mut reader = Reader::from_str(body);
+    let mut reader = NsReader::from_str(body);
     let request_key = href_to_key(base_url, request_url)?;
     let request_key = request_key.trim_matches('/').to_owned();
     let mut objects = Vec::new();
-    let mut in_response = false;
+    let mut qualified_root = None;
+    let mut path = Vec::new();
     let mut href: Option<String> = None;
     let mut size: Option<usize> = None;
     let mut modified: Option<String> = None;
     let mut collection = false;
 
     loop {
-        match reader.read_event() {
-            Err(e) => return Err(format!("WebDAV 列表解析失败: {e}")),
-            Ok(Event::Eof) => break,
-            Ok(Event::Start(e)) => {
+        let (namespace, event) = reader
+            .read_resolved_event()
+            .map_err(|_| "WebDAV 列表解析失败".to_owned())?;
+        match event {
+            Event::Eof => break,
+            Event::Start(e) => {
                 let name = local_name(&e);
-                if name == "response" {
-                    in_response = true;
-                    href = None;
-                    size = None;
-                    modified = None;
-                    collection = false;
-                } else if name == "collection" {
-                    collection = true;
-                } else if in_response {
-                    match name.as_str() {
-                        "href" => href = Some(read_prop_text(&mut reader)?.trim().to_owned()),
-                        "getcontentlength" => {
-                            size = read_prop_text(&mut reader)?.trim().parse().ok();
-                        }
-                        "getlastmodified" => {
-                            let text = read_prop_text(&mut reader)?.trim().to_owned();
-                            modified = (!text.is_empty()).then_some(text);
-                        }
-                        // Other DAV properties remain intentionally ignored.
-                        _ => {}
+                if path.is_empty() {
+                    if qualified_root.is_some() || name != "multistatus" {
+                        return Err(invalid_multistatus_document());
                     }
+                    qualified_root = Some(root_uses_dav_namespace(&namespace)?);
+                    path.push(DavElement::Multistatus);
+                    continue;
                 }
+                let matching = namespace_matches(
+                    &namespace,
+                    qualified_root.ok_or_else(invalid_multistatus_document)?,
+                )?;
+                let Some(element) = matching.then(|| expected_element(&name, &path)).flatten()
+                else {
+                    skip_unknown_element(&mut reader)?;
+                    continue;
+                };
+                match element {
+                    DavElement::Response => {
+                        href = None;
+                        size = None;
+                        modified = None;
+                        collection = false;
+                    }
+                    DavElement::Href => {
+                        href = Some(read_prop_text(&mut reader)?.trim().to_owned());
+                        continue;
+                    }
+                    DavElement::Size => {
+                        size = read_prop_text(&mut reader)?.trim().parse().ok();
+                        continue;
+                    }
+                    DavElement::Modified => {
+                        let text = read_prop_text(&mut reader)?.trim().to_owned();
+                        modified = (!text.is_empty()).then_some(text);
+                        continue;
+                    }
+                    DavElement::Collection => collection = true,
+                    _ => {}
+                }
+                path.push(element);
             }
-            Ok(Event::Empty(e)) => {
-                if local_name(&e) == "collection" {
+            Event::Empty(e) => {
+                let name = local_name(&e);
+                if path.is_empty() {
+                    if qualified_root.is_some() || name != "multistatus" {
+                        return Err(invalid_multistatus_document());
+                    }
+                    qualified_root = Some(root_uses_dav_namespace(&namespace)?);
+                } else if namespace_matches(
+                    &namespace,
+                    qualified_root.ok_or_else(invalid_multistatus_document)?,
+                )? && expected_element(&name, &path) == Some(DavElement::Collection)
+                {
                     collection = true;
                 }
             }
-            Ok(Event::End(e)) => {
-                let name = end_local_name(&e);
-                if name == "response" && in_response {
+            Event::End(_) => {
+                namespace_matches(
+                    &namespace,
+                    qualified_root.ok_or_else(invalid_multistatus_document)?,
+                )?;
+                let element = path.pop().ok_or_else(invalid_multistatus_document)?;
+                if element == DavElement::Response {
                     if let Some(h) = href.as_deref() {
                         let key = href_to_key(base_url, h)?;
                         // Skip the collection itself, sub-collections, and
@@ -373,10 +486,9 @@ pub(crate) fn parse_multistatus(
                             });
                         }
                     }
-                    in_response = false;
                 }
             }
-            Ok(_) => {}
+            _ => {}
         }
     }
     // Preserve the more specific simple-property failures while ensuring no
@@ -386,12 +498,6 @@ pub(crate) fn parse_multistatus(
 }
 
 fn local_name(e: &quick_xml::events::BytesStart) -> String {
-    String::from_utf8_lossy(e.local_name().as_ref())
-        .into_owned()
-        .to_ascii_lowercase()
-}
-
-fn end_local_name(e: &quick_xml::events::BytesEnd) -> String {
     String::from_utf8_lossy(e.local_name().as_ref())
         .into_owned()
         .to_ascii_lowercase()

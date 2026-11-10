@@ -241,3 +241,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] WebDAV 文档边界（SP-S72）：发布列表前要求单个完整 multistatus 根，错误页面／未闭合根／多个根／根外文本必须报错；保持合法空列表、既有大小写兼容及字段错误契约。原样三项探针、独立 XML 八项控制与实际无凭据 loopback HTTP 八次列表回归通过；合法前后空白／注释／PI 有对照。namespace／propstat／完整 XML 与真实 provider 仍独立待审。
 
 - [x] WebDAV 集合类型请求（SP-S73）：命名属性请求包含 DAV:resourcetype，实际无凭据 loopback 服务按请求返回属性并剔除无尾斜杠集合、保留普通和无扩展名文件及大小／日期；请求属性的 DAV namespace 与精确三项名称有回归。类型／大小／日期缺失不猜测资源种类；原样探针及独立 XML 请求／响应契约通过。propstat／namespace／真实 provider 仍独立待审。
+
+- [x] WebDAV 扩展元素归属（SP-S74）：按 DAV namespace 与预期容器读取 href／metadata／collection，忽略未知子树包括熟悉短名的后代；DAV prefix／default／重绑定与全无namespace旧格式分离，未知prefix或非DAV根拒绝。原样三项探针、先前XML文本三项原样探针与独立XML十六项控制通过；实际无凭据loopback列表／GET／PUT／回读四次请求保持真实文件、大小／日期及名称相似旁文件。propstat状态／重复属性／完整XML及真机provider仍独立待审。

@@ -1,0 +1,182 @@
+[
+  {
+    "name": "canonical",
+    "group": "control",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "alternate-prefix",
+    "group": "control",
+    "xml": "<z:multistatus xmlns:z=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><z:response><z:href>/dav/actual.kdbx</z:href><z:propstat><z:prop><z:getcontentlength>12</z:getcontentlength><z:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</z:getlastmodified></z:prop><z:status>HTTP/1.1 200 OK</z:status></z:propstat></z:response></z:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "default-DAV-namespace",
+    "group": "control",
+    "xml": "<multistatus xmlns=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><response><href>/dav/actual.kdbx</href><propstat><prop><getcontentlength>12</getcontentlength><getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</getlastmodified></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "uppercase-compatibility",
+    "group": "control",
+    "xml": "<d:MULTISTATUS xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:RESPONSE><d:HREF>/dav/actual.kdbx</d:HREF><d:PROPSTAT><d:PROP><d:GETCONTENTLENGTH>12</d:GETCONTENTLENGTH><d:GETLASTMODIFIED>Mon, 01 Jan 2024 00:00:00 GMT</d:GETLASTMODIFIED></d:PROP><d:STATUS>HTTP/1.1 200 OK</d:STATUS></d:PROPSTAT></d:RESPONSE></d:MULTISTATUS>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "unqualified-legacy",
+    "group": "control",
+    "xml": "<multistatus xmlns:x=\"urn:secpivot:fixture\"><response><href>/dav/actual.kdbx</href><propstat><prop><getcontentlength>12</getcontentlength><getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</getlastmodified></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "foreign-href-size-date",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><x:href>/dav/other.kdbx</x:href><x:getcontentlength>99</x:getcontentlength><x:getlastmodified>other-date</x:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "foreign-collection",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><d:resourcetype><x:collection/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "foreign-nested-response",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><x:response><x:href>/dav/other.kdbx</x:href></x:response></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "default-namespace-rebinding",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><href xmlns=\"urn:secpivot:fixture\">/dav/other.kdbx</href></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "foreign-root",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"urn:secpivot:fixture\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "unbound-root-prefix",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "unqualified-shadow-in-DAV",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><href>/dav/other.kdbx</href></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "DAV-href-under-foreign-container",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><x:dead-property><d:href>/dav/other.kdbx</d:href></x:dead-property></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "DAV-collection-under-foreign-container",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><x:dead-property><d:collection/></x:dead-property></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "foreign-top-response",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response><x:response><x:href>/dav/other.kdbx</x:href></x:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  },
+  {
+    "name": "prefix-rebinding",
+    "group": "extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:secpivot:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified><d:href xmlns:d=\"urn:secpivot:fixture\">/dav/other.kdbx</d:href></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>",
+    "objects": [
+      {
+        "key": "actual.kdbx",
+        "size": 12,
+        "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+      }
+    ]
+  }
+]
