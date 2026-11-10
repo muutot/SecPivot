@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S67；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S68；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 47     | 47        | 0         |
+| Medium    | 48     | 48        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **78** | **78**    | **0**     |
+| **Total** | **79** | **79**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3567,3 +3567,41 @@ SKILL 路由、模块归属、认证／会话／主题合同保持，无额外�
 报告和 strict JSON 另行复核，累计保持 78，原 15 项／6.1 基线保持。
 用户随后已把全局目标恢复为 active；本轮有界工作完成后仍继续审计，
 未宣称全部系统／竞品／UI 或手机新 APK／真机 provider 已完成。
+
+### Finding: SP-S68 迟到的空闲锁到期回调被恢复活动延后
+
+- Severity: Medium
+- Confidence: High
+- Category: Security / Frontend state
+- Status: Confirmed
+- Affected area: Renderer idle auto-lock deadline and pending closure
+- Evidence:
+  - File: src/lib/services/security.ts:86–168; src/lib/services/vault.ts:820–850; src/routes/+page.svelte:299–332 (8f6b31c)
+  - Function / Module: armIdleLock / onActivity / installAutoLock -> lockVault -> topologyQueue closeAll
+  - Relevant behavior: rearm cancels the previous timer and overwrites its deadline without checking expiry. Focus/visibility resume has no expiry listener. Until backend close resolves the published vault remains open, so subsequent activity can schedule another close.
+  - Reproduction: idle-deadline-confirmed-red.log: 8 bounded tests, 5 failed / 3 passed. Advancing mocked wall time without delivering the due timeout, then pointerdown/wheel/focus/visibilitychange leaves close count 0. Releasing a gated first close after later activity reveals close count 2.
+  - Independent verification: the probe imports the actual security/settings/vault service graph, mocks only IPC/localStorage/events/clock and exercises the real topology queue. Rechecking after gate release corrects the earlier weak pending assertion; original probe remains unchanged as historical evidence. Early activity, early resume and disabled mode controls pass. No Android/native suspension or shared clipboard execution.
+- Problem: a configured idle deadline can be replaced by a fresh period after it has already expired; repeated activity while a close is pending can also enqueue a duplicate close.
+- Why it matters: the resumed interface can remain unlocked beyond the user's selected idle duration. Medium reflects the timer-delivery ordering constraint and synthetic runtime scope; no credential disclosure, authentication exploit or device frequency is proved.
+- Realistic failure scenario: a renderer resumes after its idle deadline while its timer callback is delayed; the first normal click cancels the due timer and grants another full idle interval.
+- Minimal fix: check the existing deadline before rearming, check expiry on focus and visible resume without extending an unexpired deadline, and prevent duplicate idle closure while the same attempt is pending. Preserve zero-disabled and normal early activity semantics.
+- Better long-term fix: validate native Android lifecycle/background locking and native backend timing separately; renderer resume checks cannot substitute for onPause/onStop or enforce deadlines while the renderer cannot run.
+- Regression test suggestion: retain actual-service delayed-timer activity/resume controls and assert duplicate count after releasing closure; add hidden/early-resume, settings changes, cleanup and close/reopen lifetime controls.
+- Estimated effort: 2–3 hours for a scoped deadline guard, regression and full verification.
+
+本项确认阶段尚未修改应用源码。哈希、完整 checkpoint 与源码来源见
+idle-deadline-evidence.json；5 个失败归入同一空闲锁生命周期卡片，
+不计成五个独立缺陷。旧探针的 pending 用例未在释放 close 后断言，
+其原先通过不能用作防重复证据；补强版释放后明确观察到两次关闭。
+
+竞品固定 KeePass 镜像 d1eec63f1bd73dc2d5273eaf94528f616b553ce5：
+MainForm.cs:1596–1654 的 timer 比较 UTC deadline，带重入 guard；
+MainForm_Functions.cs:2863–2873 的 NotifyUserActivity 仍无条件刷新期限。
+这里只借鉴显式期限与关闭防重思路，不声称竞品已解决相同恢复事件
+交错；未运行竞品。两个原始源码的 SHA-256 已保存。
+
+累计 79 Confirmed（Critical 1 / High 19 / Medium 48 / Low 11），包含
+历史已修复项；原始 b7c5d9f / 15 项 / 6.1 分不变。此前拦截的准确
+触发原因仍未知，高资源耗尽复现未执行且已放弃。原生 Android 后台锁、
+Keystore、手机另存为替换 APK／真机 provider、完整竞品能力与 UI
+优化仍待完成；整体目标 active。

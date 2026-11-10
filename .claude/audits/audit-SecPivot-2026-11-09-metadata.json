@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S67; historical supplemental tracking notes excluded",
-    "total": 78,
-    "confirmed": 78,
+    "scope": "15 baseline cards plus SP-S05 through SP-S68; historical supplemental tracking notes excluded",
+    "total": 79,
+    "confirmed": 79,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 47,
+      "Medium": 48,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S68",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "8f6b31c",
+      "area": "Delayed idle expiry overwritten by activity/resume and duplicate pending close",
+      "status": "Confirmed, unremediated. Actual-service synthetic probe8 yields5 failed/3 passed. Four delayed activity/resume cases remain open; post-release pending close count2. Earlier pre-release assertion was insufficient and corrected in a separate immutable probe. No native suspend/device/clipboard/user-vault proof; no resource-exhaustion reproduction. Pinned competitor source reviewed without runtime/event-order claims."
+    },
     {
       "id": "SP-S67",
       "severity": "Medium",
@@ -1329,6 +1337,16 @@
       "frontend_tests": 323,
       "rust_unit_tests": 670,
       "android_acl_tests": 2
+    },
+    "idle_deadline": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "8f6b31c",
+      "probe": "idle-deadline-confirmed-probe.mjs",
+      "red_log": "idle-deadline-confirmed-red.log",
+      "proof": "idle-deadline-evidence.json",
+      "failed": 5,
+      "passed": 3,
+      "limitations": "Actual production service graph with synthetic IPC, storage, wall clock and events; no user vault, clipboard, network or device execution"
     }
   },
   "reverification_notes": [
