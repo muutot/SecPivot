@@ -4408,3 +4408,26 @@ build／clippy均通过。日志 SHA256
 dbac850251b6803e200c3503f6b1780a52c096fa06c40d0ac52a9a15379473da，
 onepux-scalar-final-proof.json关联原始失败、相关通过、全门日志和源码hash。
 documentation currency gate同步三份维护引用；TODO155保持partial。
+
+#### 另存为提示文案与后续迁移边界复核（2026-11-11，6794db7 后）
+
+现有save_as_writes_new_file_and_switches_session_target及
+save_as_from_remote_session_switches_to_local测试在本轮完整门禁实际通过，
+证明成功后后续保存改用新文件、云端会话转为本地。原tooltip仅说“数据库
+副本”未说明这个后果。中英文toolbar.saveAs改为说明新文件成为后续保存
+目标；工具栏短标签与紧凑结构保持，外观工具栏说明共享同一键。
+theme-token gate无CSS／markup／token新增，css-theming维护引用已同步。
+
+隔离loopback14208通过UI创建项目合成demo，1280×720暗色工具栏AX读到
+新help，外观→工具栏实际截图save-as-description-rendered.png显示新说明；
+console error为空。verify-save-as-description.log exit0：check零错误／警告、
+build、369项前端测试、完整format通过。未新增镜像文案测试；没有改保存
+逻辑，也不以browser demo证明原生文件写入。浅色／窄屏／英文实际呈现
+未新增验证。临时服务已停止，无真实配置／库／共享剪贴板访问。
+
+额外网址复核：原生匹配器只读取URL与KPRPC altURLs，1PUX当前仍仅迁移
+主URL，其他网址在protected Source Item中保留；KeePassXC固定源码将
+其映射为AdditionalUrlAttribute字段，不能直接假定SecPivot识别该字段。
+后续需要明确来源匹配语义和完整URL字节，再建立原生互操作测试，不能
+把源JSON归档当作全部网址可自动填充。手机v1.6.5另存为ACL与provider／
+新APK仍保留待验证；原始基线及90历史Confirmed统计保持，整体目标active。

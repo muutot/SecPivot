@@ -105,7 +105,7 @@ export const zhCN = {
   "toolbar.newEntryLabel": "条目",
   "toolbar.save": "保存数据库 (Ctrl+S)",
   "toolbar.saveLabel": "保存",
-  "toolbar.saveAs": "另存为数据库副本到新路径",
+  "toolbar.saveAs": "保存到新文件，后续保存使用新文件",
   "toolbar.saveAsLabel": "另存为",
   "toolbar.lock": "锁定数据库",
   "toolbar.lockLabel": "锁定",

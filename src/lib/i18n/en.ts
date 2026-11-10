@@ -109,7 +109,7 @@ export const en: Record<I18nKey, string> = {
   "toolbar.newEntryLabel": "Entry",
   "toolbar.save": "Save database (Ctrl+S)",
   "toolbar.saveLabel": "Save",
-  "toolbar.saveAs": "Save database copy to a new path",
+  "toolbar.saveAs": "Save to a new file and use it for future saves",
   "toolbar.saveAsLabel": "Save as",
   "toolbar.lock": "Lock database",
   "toolbar.lockLabel": "Lock",
