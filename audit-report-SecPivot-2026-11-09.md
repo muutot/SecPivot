@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S52；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S53；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 15     | 15        | 0         |
-| Medium    | 37     | 37        | 0         |
+| Medium    | 38     | 38        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **63** | **63**    | **0**     |
+| **Total** | **64** | **64**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2646,3 +2646,53 @@ Confirmed；原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active；当�
 没有用户库、共享剪贴板、真实 Tauri handler/官方客户端/Android provider
 或替换 APK 运行。手机 v1.6.5 另存为 ACL 发行源码根因与当前源码修复
 已确认，真机/provider 验证仍待完成。
+
+### Finding: SP-S53 合并遗漏当前到期设置，并忽略到期差异的冲突与旧版本（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Configuration Safety / Data Integrity / Synchronization
+- Status: Confirmed
+- Affected area: Current entry expiration merge and historical expiration identity
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:525–534/564–584/808–820、src-tauri/src/vault/merge.rs:60–72/86–90（aba9da2 修复前）
+  - Function / Module: merge_entries / have_entries_diverged / collect_remote_losers / merge_databases
+  - Relevant behavior: 原始依赖较新 source 分支只复制 Times.last_modification，遗漏 expiry/expires；相等时间的内容比较将整个 Times 清空，包括到期设置。第一方 loser 比较沿用该方式，也无法识别到期唯一变化。
+  - Reproduction: merge-current-expiration-native-red.log 的五项实际 API/合成 KDBX 回归均失败。启用仍为 None，延期仍为 2030 而不是 2040，取消仍为 2030，分叉修改仍保留较旧 2035；四项都在首次 current expiry 断言停止。同时间、不同到期设置的第五项没有报冲突。原 red 没有执行反方向、最终合并库重开、历史恢复或重复合并断言。
+  - Independent verification: 不带应用补丁的 registry keepass =0.13.22 对真实 synthetic KDBX save/reopen 同样在首次合并后 expiry/expires 检查失败，merge-current-expiration-registry-red.log 为 1 failed，archive SHA256 a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e。固定官方 PwEntry.cs commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5:490–531 的 AssignProperties 显式复制 m_tExpire/m_bExpires，SHA256 a68f2d7df7a0d49940b63387ed20634f849e60de6f4bb01c4f0ab8a4becba230，完整来源和独立测试 hash 见 merge-current-expiration-provenance.json。未运行官方客户端。
+- Problem: 较新的启用/延期/取消设置不能随 current 内容胜出；同时间不同到期设置被当作相等，旧分支的到期设置也不能恢复。
+- Why it matters: 合并撤销用户已保存的到期配置，使到期状态和提醒不正确。本项证明配置保真与历史到期恢复失败，没有密码/附件字节丢失、真实云端覆盖或凭据泄露证据，按 Medium。
+- Realistic failure scenario: 一台设备延长或取消某记录的到期，另一台合并后修改时间已更新，却仍显示旧到期设置；分叉修改后也无法从历史恢复旧设备的到期选择。
+- Minimal fix: 以实际 Entry Created/Updated 日志复制 source expiry/expires。相等 current 时间的到期冲突候选在胜出时间改变前捕获，并在原生删除决策后仅对仍存在的差异条目报现有同时间戳错误，持久化前拒绝。到期设置纳入内容身份，双向捕获较旧 current 并按时间加内容联合历史。
+- Better long-term fix: 逐项核对 current 属性/时间元数据与外部客户端的真实兼容；继续审查缺少修改时间的对象、同秒策略及完整历史保真，避免以一个设置修复认定整个合并完成。
+- Regression test suggestion: 启用/延期/取消经真实 update_entry/save/reopen 后双向合并，保存合并库重开保持 current date/enabled/time。分叉到期修改保留公共基线与较旧分支，历史恢复后再保存重开保持旧 date/enabled；重复合并不重复，等时间到期差异拒绝。较新到期更新后永久删除不得在任一方向复活。
+- Estimated effort: 2–4 小时（current 补齐、版本比较、六个回归、独立包复核与契约）
+
+47226b1 已修复。先补齐 current 设置与冲突检查后，
+merge-current-expiration-intermediate-corrected.log 为 4 passed / 1 failed：
+分叉回归已越过 current 断言，在“旧到期设置应留在历史”断言失败。
+这份中间修复证据独立确认旧版本缺失，未冒充原始 red 已执行历史断言。
+最终将到期纳入内容身份并捕获两侧较旧 current，31 项 merge 回归在
+merge-current-expiration-green-final.log 通过，包括六项新增到期场景。
+
+完整 verify-merge-current-expiration.log exit 0：317 frontend、627 Rust、
+ACL 2，format、check 零错误警告、150-key 契约、build、clippy 全部
+通过；Rust 单线程，无过滤，临时 CARGO_PROFILE_DEV_DEBUG=0，四个
+live clipboard body 关闭。没有改仓库构建 profile 或依赖版本。
+data-contracts 与 project-structure 同步现有命令/模块契约，TODO 仍
+保持 partial；无 CSS/markup、IPC/DTO/schema、vendor 或密码返回改动。
+依赖 provenance gate 仍验证 60 文件/3 reviewed patches/57 unchanged。
+
+最初 event match 缺少 non-exhaustive/wildcard 分支导致编译失败，修正
+后才取得有效中间回归，不是原应用缺陷。初次额外分组删除夹具错误地
+认为条目会先删除再重建；实际 crate 在移出条目后才删除旧分组，条目
+仍存活，同时间到期差异应报冲突。未为该错误预期削弱冲突规则；最终
+以真实永久删除场景验证双向不复活。失败日志 merge-current-expiration-green.log
+保留，不将这个 fixture 错误计为新增应用问题。
+
+本报告统计 64 张 Confirmed 卡片（Critical 1 / High 15 / Medium 38 /
+Low 10），原始 b7c5d9f 的 15 项/6.1 分保持。报告提交不需额外技能
+引用变更。整体目标 active，继续其余 current 合并、系统/UI/竞品能力
+审查。仅使用合成数据，无用户库/共享剪贴板/原生 Tauri handler/官方
+客户端/Android provider 或替换 APK 运行；手机 v1.6.5 的另存为源码
+ACL 修复与发行根因已确认，真机验证仍未完成。
