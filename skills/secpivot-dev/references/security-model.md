@@ -407,3 +407,12 @@ child-first order. Every descendant uses its own deletion marker; retained
 ancestors lose obsolete markers and do not emit Deleted events. Synthetic
 save/reopen tests cover deep edits, old siblings and moved-out objects. Existing
 equal/missing timestamp policy remains; real client interoperability is unproven.
+
+First-party merge carries deletion intent for objects absent from both inputs
+or never seen by the recipient. After restoring the local bin it unions both
+original marker maps, preserving the latest concrete time for final-absent
+UUIDs. Otherwise a third stale/intermediately edited copy can reintroduce
+permanently removed records. Final entry/group/icon/bin survivors receive no new
+markers through this union; existing bin collision and object winner policies
+remain. Marker propagation does not prove removal of unreferenced attachments
+or filesystem/backup erasure. Native three-copy/reopen tests cover the registry.

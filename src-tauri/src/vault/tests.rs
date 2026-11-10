@@ -4039,6 +4039,424 @@ fn permanent_delete_still_allows_a_genuinely_newer_remote_edit() {
     }
 }
 
+fn deletion_registry_reopen(dir: &TempDir, db: &Database, name: &str) -> Database {
+    let path = dir.path().join(name);
+    save_database(
+        db,
+        &path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-only", None).unwrap();
+    session.require_db().unwrap().clone()
+}
+
+fn deletion_registry_base(
+    dir: &TempDir,
+    group_delete: bool,
+) -> (Database, Vec<String>, EntryId, Database) {
+    let (mut session, path) = create_session(dir);
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.recyclebin_enabled = Some(false);
+        db.root_mut().times.last_modification = Some(merge_ts(10));
+        db.root_mut().times.location_changed = Some(merge_ts(10));
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let unseen = session.require_db().unwrap().clone();
+    let mut groups = Vec::new();
+    let mut parent = ROOT_GROUP_UUID.to_owned();
+    if group_delete {
+        for name in ["Ledger parent", "Ledger middle", "Ledger leaf"] {
+            session
+                .add_group(&GroupInput {
+                    parent_uuid: Some(parent.clone()),
+                    name: name.into(),
+                    icon: None,
+                })
+                .unwrap();
+            parent = session
+                .require_db()
+                .unwrap()
+                .iter_all_groups()
+                .find(|g| g.name == name)
+                .unwrap()
+                .id()
+                .uuid()
+                .to_string();
+            groups.push(parent.clone());
+        }
+    }
+    let mut input = entry_input(&parent, "Synthetic ledger record", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "ledger.txt".into(),
+        data: Some(BASE64.encode(b"synthetic ledger payload")),
+    }];
+    session.add_entry(&input).unwrap();
+    let entry = session
+        .require_db()
+        .unwrap()
+        .iter_all_entries()
+        .next()
+        .unwrap()
+        .id();
+    {
+        let db = session.require_db_mut().unwrap();
+        db.meta.recyclebin_enabled = Some(false);
+        let ids: Vec<_> = db.iter_all_groups().map(|g| g.id()).collect();
+        for id in ids {
+            let mut group = db.group_mut(id).unwrap();
+            group.times.last_modification = Some(merge_ts(10));
+            group.times.location_changed = Some(merge_ts(10));
+        }
+        pin_times(db, entry, merge_ts(10));
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    (session.require_db().unwrap().clone(), groups, entry, unseen)
+}
+
+fn deletion_registry_delete(
+    dir: &TempDir,
+    base: &Database,
+    groups: &[String],
+    entry: EntryId,
+    time: NaiveDateTime,
+    name: &str,
+) -> Database {
+    let path = dir.path().join(name);
+    save_database(
+        base,
+        &path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-only", None).unwrap();
+    if let Some(parent) = groups.first() {
+        session.delete_group(parent).unwrap();
+    } else {
+        session.delete_entry(&entry.uuid().to_string()).unwrap();
+    }
+    let db = session.require_db_mut().unwrap();
+    assert_eq!(
+        db.deleted_objects.len(),
+        groups.len() + 1,
+        "actual deletion records each object before fixture times are pinned"
+    );
+    assert!(db.deleted_objects.values().all(Option::is_some));
+    for value in db.deleted_objects.values_mut() {
+        *value = Some(time);
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-only", None).unwrap();
+    session.require_db().unwrap().clone()
+}
+
+fn assert_deletion_registry_latest_time_propagates(group_delete: bool) {
+    let dir = TempDir::new().unwrap();
+    let (base, groups, entry, _) = deletion_registry_base(&dir, group_delete);
+    let early = deletion_registry_delete(
+        &dir,
+        &base,
+        &groups,
+        entry,
+        merge_ts(20),
+        "early-delete.kdbx",
+    );
+    let late = deletion_registry_delete(
+        &dir,
+        &base,
+        &groups,
+        entry,
+        merge_ts(40),
+        "late-delete.kdbx",
+    );
+    let edited_path = dir.path().join("between-deletions.kdbx");
+    save_database(
+        &base,
+        &edited_path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut edited = VaultSession::default();
+    edited.open(&edited_path, "synthetic-only", None).unwrap();
+    edited
+        .update_entry_flags(&entry.uuid().to_string(), None, Some(false), None)
+        .unwrap();
+    edited
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(entry)
+        .unwrap()
+        .times
+        .last_modification = Some(merge_ts(30));
+    edited.save().unwrap();
+    edited.close();
+    edited.open(&edited_path, "synthetic-only", None).unwrap();
+    for (a, b) in [(&early, &late), (&late, &early)] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "ledger-merged.kdbx");
+        for (x, y) in [
+            (&merged, edited.require_db().unwrap()),
+            (edited.require_db().unwrap(), &merged),
+        ] {
+            let third = super::merge::merge_databases(x, y).unwrap();
+            let third = deletion_registry_reopen(&dir, &third, "ledger-third.kdbx");
+            assert!(
+                third.entry(entry).is_none(),
+                "an edit between two deletions must not beat the later deletion"
+            );
+            assert_eq!(third.deleted_objects[&entry.uuid()], Some(merge_ts(40)));
+            for group in &groups {
+                let id = super::helpers::parse_group_id(group).unwrap();
+                assert!(third.group(id).is_none());
+                assert_eq!(third.deleted_objects[&id.uuid()], Some(merge_ts(40)));
+            }
+            // Source attachment retention is a separate merge-ownership audit;
+            // record absence does not establish erasure of unreferenced bytes.
+            let repeated = super::merge::merge_databases(&third, y).unwrap();
+            assert!(repeated.entry(entry).is_none());
+        }
+        assert_eq!(merged.deleted_objects[&entry.uuid()], Some(merge_ts(40)));
+    }
+    edited
+        .update_entry_flags(&entry.uuid().to_string(), None, Some(true), None)
+        .unwrap();
+    edited
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(entry)
+        .unwrap()
+        .times
+        .last_modification = Some(merge_ts(50));
+    edited.save().unwrap();
+    edited.close();
+    edited.open(&edited_path, "synthetic-only", None).unwrap();
+    let merged = super::merge::merge_databases(&early, &late).unwrap();
+    for (a, b) in [
+        (&merged, edited.require_db().unwrap()),
+        (edited.require_db().unwrap(), &merged),
+    ] {
+        let future = super::merge::merge_databases(a, b).unwrap();
+        let future = deletion_registry_reopen(&dir, &future, "ledger-future-edit.kdbx");
+        let record = future
+            .entry(entry)
+            .expect("an edit after the latest deletion keeps the existing winner policy");
+        assert!(record.quality_check);
+        assert_eq!(record.times.last_modification, Some(merge_ts(50)));
+        assert!(
+            record
+                .attachment_by_name("ledger.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"synthetic ledger payload"
+        );
+        let repeated = super::merge::merge_databases(&future, b).unwrap();
+        assert_eq!(
+            repeated.entry(entry).unwrap().times.last_modification,
+            Some(merge_ts(50))
+        );
+    }
+    assert_eq!(early.deleted_objects[&entry.uuid()], Some(merge_ts(20)));
+    assert_eq!(late.deleted_objects[&entry.uuid()], Some(merge_ts(40)));
+    assert!(
+        base.entry(entry).is_some(),
+        "merge never mutates its original inputs"
+    );
+}
+
+#[test]
+fn deletion_registry_keeps_latest_entry_deletion_for_a_third_replica() {
+    assert_deletion_registry_latest_time_propagates(false);
+}
+
+#[test]
+fn deletion_registry_keeps_latest_subtree_deletion_for_a_third_replica() {
+    assert_deletion_registry_latest_time_propagates(true);
+}
+
+fn assert_deletion_registry_unseen_objects_propagate(group_delete: bool) {
+    let dir = TempDir::new().unwrap();
+    let (base, groups, entry, unseen) = deletion_registry_base(&dir, group_delete);
+    let deleted = deletion_registry_delete(
+        &dir,
+        &base,
+        &groups,
+        entry,
+        merge_ts(40),
+        "unseen-delete.kdbx",
+    );
+    // The recipient shares the lineage but never received the creator's records.
+    assert!(unseen.entry(entry).is_none());
+    assert_eq!(unseen.iter_all_groups().count(), 1);
+    assert!(unseen.deleted_objects.is_empty());
+    let unseen = deletion_registry_reopen(&dir, &unseen, "unseen-recipient.kdbx");
+    for (a, b) in [(&unseen, &deleted), (&deleted, &unseen)] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "unseen-merged.kdbx");
+        for (x, y) in [(&merged, &base), (&base, &merged)] {
+            let third = super::merge::merge_databases(x, y).unwrap();
+            let third = deletion_registry_reopen(&dir, &third, "unseen-third.kdbx");
+            assert!(
+                third.entry(entry).is_none(),
+                "a deletion must propagate even when the recipient never saw the object"
+            );
+            assert_eq!(third.deleted_objects[&entry.uuid()], Some(merge_ts(40)));
+            for group in &groups {
+                assert!(third
+                    .group(super::helpers::parse_group_id(group).unwrap())
+                    .is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn deletion_registry_carries_unseen_entry_tombstones() {
+    assert_deletion_registry_unseen_objects_propagate(false);
+}
+
+#[test]
+fn deletion_registry_carries_unseen_subtree_tombstones() {
+    assert_deletion_registry_unseen_objects_propagate(true);
+}
+
+#[test]
+fn deletion_registry_unions_disjoint_and_known_unknown_times_without_regression() {
+    let dir = TempDir::new().unwrap();
+    let (session, _) = create_session(&dir);
+    let mut local = session.require_db().unwrap().clone();
+    let mut remote = local.clone();
+    let mut expected = std::collections::HashMap::new();
+    for (index, (a, b, result)) in [
+        (None, Some(Some(merge_ts(40))), Some(merge_ts(40))),
+        (Some(Some(merge_ts(50))), None, Some(merge_ts(50))),
+        (
+            Some(Some(merge_ts(60))),
+            Some(Some(merge_ts(30))),
+            Some(merge_ts(60)),
+        ),
+        (
+            Some(Some(merge_ts(20))),
+            Some(Some(merge_ts(70))),
+            Some(merge_ts(70)),
+        ),
+        (Some(None), Some(Some(merge_ts(80))), Some(merge_ts(80))),
+        (Some(Some(merge_ts(90))), Some(None), Some(merge_ts(90))),
+        (Some(None), Some(None), None),
+        (None, Some(None), None),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = uuid::Uuid::from_u128(0x1000 + index as u128);
+        if let Some(time) = a {
+            local.deleted_objects.insert(id, time);
+        }
+        if let Some(time) = b {
+            remote.deleted_objects.insert(id, time);
+        }
+        expected.insert(id, result);
+    }
+    let local = deletion_registry_reopen(&dir, &local, "disjoint-local.kdbx");
+    let remote = deletion_registry_reopen(&dir, &remote, "disjoint-remote.kdbx");
+    for (a, b) in [(&local, &remote), (&remote, &local)] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "disjoint-merged.kdbx");
+        assert_eq!(merged.deleted_objects, expected);
+        let repeated = super::merge::merge_databases(&merged, b).unwrap();
+        assert_eq!(repeated.deleted_objects, expected);
+        assert_eq!(merged.iter_all_groups().count(), 1);
+        assert_eq!(merged.iter_all_entries().count(), 0);
+    }
+}
+
+#[test]
+fn deletion_registry_does_not_import_markers_for_final_active_or_bin_objects() {
+    for recycled in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut local, groups, entry, _) = deletion_registry_base(&dir, true);
+        let icon = local
+            .root_mut()
+            .set_icon_custom_new(b"synthetic icon payload".to_vec())
+            .id();
+        if recycled {
+            local.meta.recyclebin_enabled = Some(true);
+            let bin = add_bin(&mut local);
+            local
+                .group_mut(super::helpers::parse_group_id(&groups[0]).unwrap())
+                .unwrap()
+                .move_to(bin)
+                .unwrap();
+        }
+        let local = deletion_registry_reopen(&dir, &local, "present-local.kdbx");
+        let mut remote = local.clone();
+        remote
+            .deleted_objects
+            .insert(icon.uuid(), Some(merge_ts(5)));
+        remote
+            .deleted_objects
+            .insert(entry.uuid(), Some(merge_ts(5)));
+        for id in local.iter_all_groups().map(|g| g.id().uuid()) {
+            remote.deleted_objects.insert(id, Some(merge_ts(5)));
+        }
+        let remote = deletion_registry_reopen(&dir, &remote, "present-remote.kdbx");
+        let merged = super::merge::merge_databases(&local, &remote).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "present-merged.kdbx");
+        assert!(merged.entry(entry).is_some());
+        assert!(merged.custom_icon(icon).is_some());
+        assert_eq!(
+            merged.entry(entry).unwrap().parent().id(),
+            local.entry(entry).unwrap().parent().id()
+        );
+        for id in local.iter_all_groups().map(|g| g.id()) {
+            assert!(merged.group(id).is_some());
+        }
+        assert!(
+            merged.deleted_objects.is_empty(),
+            "temporary bin detachment must not import a permanent marker for a final survivor"
+        );
+        assert!(
+            merged
+                .entry(entry)
+                .unwrap()
+                .attachment_by_name("ledger.txt")
+                .unwrap()
+                .get()
+                .as_slice()
+                == b"synthetic ledger payload"
+        );
+    }
+}
+
+#[test]
+fn deletion_registry_failed_merge_keeps_original_ledgers_and_objects() {
+    let dir = TempDir::new().unwrap();
+    let (mut local, _, entry, _) = deletion_registry_base(&dir, false);
+    let mut remote = local.clone();
+    let id = uuid::Uuid::from_u128(0x2000);
+    local.deleted_objects.insert(id, Some(merge_ts(20)));
+    remote.deleted_objects.insert(id, Some(merge_ts(40)));
+    remote.entry_mut(entry).unwrap().quality_check = false;
+    let local_before = local.deleted_objects.clone();
+    let remote_before = remote.deleted_objects.clone();
+    assert!(
+        super::merge::merge_databases(&local, &remote).is_err(),
+        "a same-time content conflict still fails before final ledger union"
+    );
+    assert_eq!(local.deleted_objects, local_before);
+    assert_eq!(remote.deleted_objects, remote_before);
+    assert!(local.entry(entry).unwrap().quality_check);
+    assert!(!remote.entry(entry).unwrap().quality_check);
+}
+
 fn assert_nested_delete_preserves_newer_descendant(group_edit: bool) {
     let dir = TempDir::new().unwrap();
     let (mut deleted, path) = create_session(&dir);

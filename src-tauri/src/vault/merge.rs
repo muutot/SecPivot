@@ -9,7 +9,9 @@
 //! afterwards. A detached bin object that collides with an object the merge
 //! kept active is resolved by timestamp: the newer change wins (deletion vs.
 //! edit), and a winning deletion is recorded in `deleted_objects` so it
-//! propagates on later merges.
+//! propagates on later merges. After the final tree and local bin are restored,
+//! absent-object deletion info is unioned from both original inputs, retaining
+//! the latest concrete timestamp even when neither copy contains the object.
 
 use super::helpers::recycle_bin_id;
 use chrono::NaiveDateTime;
@@ -383,6 +385,29 @@ fn restore_bin(dest: &mut Database, bin: DetachedBin, original: &Database) -> Re
         .map_err(|error| format!("无法恢复合并后的回收站附件：{error}"))
 }
 
+/// The crate only copies markers when it removes an existing object. Carry
+/// deletion intent even when a recipient never saw the object or both copies
+/// already deleted it. Run after bin restoration so temporary detachment cannot
+/// import a permanent marker for an object that the final tree still contains.
+fn merge_absent_deletion_info(dest: &mut Database, local: &Database, remote: &Database) {
+    let present: HashSet<_> = dest
+        .iter_all_entries()
+        .map(|entry| entry.id().uuid())
+        .chain(dest.iter_all_groups().map(|group| group.id().uuid()))
+        .chain(dest.iter_all_custom_icons().map(|icon| icon.id().uuid()))
+        .collect();
+    for (&id, &time) in local
+        .deleted_objects
+        .iter()
+        .chain(remote.deleted_objects.iter())
+    {
+        if !present.contains(&id) {
+            let merged = dest.deleted_objects.entry(id).or_insert(time);
+            *merged = (*merged).max(time);
+        }
+    }
+}
+
 /// User-facing description of a merge failure (same-timestamp divergence is
 /// a genuine conflict the user resolves with 覆盖远程 / 下载远程).
 fn describe_merge_error(error: MergeError) -> String {
@@ -477,5 +502,6 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     push_losers_into_history(&mut dest, losers);
     dest.rebuild_attachment_references();
     restore_bin(&mut dest, bin, local)?;
+    merge_absent_deletion_info(&mut dest, local, remote);
     Ok(dest)
 }
