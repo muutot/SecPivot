@@ -9,6 +9,13 @@ registry-produced fixtures exercise these paths without expensive derivation.
 This representability check does not impose a practical resource budget on all
 valid KDF values or prove cross-client/runtime interoperability.
 
+KDBX internal text serialization emits CR character references before encryption
+so ordinary text/history/keys/group/meta content does not silently change its
+line endings. This acts on trusted serializer output, whose model has no CDATA;
+it never guesses or repairs reader input. Protected values keep inner encryption
+and literal entity text stays literal. Pure-whitespace decoding and invalid
+scalars need separate verification; no default secret-protection policy changes.
+
 SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 
 Both CSV writers prepend the existing spreadsheet formula guard before quoting

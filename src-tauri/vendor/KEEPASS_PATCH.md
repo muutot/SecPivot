@@ -52,7 +52,11 @@ Only these upstream files are changed:
   repeated front insertion in the first-party history union.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
-  save. Missing references fail before destination publication.
+  save. Missing references fail before destination publication. Serialize raw CR
+  as XML character references so text values/keys retain their line endings.
+  The model emits text rather than CDATA; literal entity strings and protected
+  base64 remain intact, and the reader still applies standard raw-CR normalization.
+  Pure-whitespace values discarded by optional-string decoding remain separate.
 
 The other 55 upstream files are byte-for-byte unchanged. The provenance JSON
 records each original hash and the five reviewed patched hashes. Run
@@ -70,7 +74,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The nineteen dependency-specific tests can be run separately:
+The twenty-one dependency-specific tests can be run separately:
 
 ```powershell
 cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_

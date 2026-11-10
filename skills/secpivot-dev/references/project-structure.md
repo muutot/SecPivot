@@ -65,7 +65,7 @@ the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the five patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and nineteen
+in the audit scope. Native vault tests cover the application boundary and twenty-one
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after
@@ -103,6 +103,13 @@ memory value with checked u32 conversions before derivation. Unrepresentable
 parameters return the existing Argon2 errors instead of wrapping to low costs.
 Shared library read/write paths all use this transform; native fixtures cover
 local/remote open and failed-save publication. Standard KDF defaults are unchanged.
+
+Patched format/xml_db/mod.rs encodes raw CR from the trusted text-only XML
+serializer as character references before KDBX encryption. It preserves current/
+history field values and keys, group/meta text and literal entity strings while
+leaving normal parser normalization and protected base64 unchanged. Native
+entry/history/group/meta and Bitwarden wire regressions accompany two direct
+serializer/parser tests; pure-whitespace optional-string decoding is separate.
 
 First-party vault/merge.rs::merge_absent_deletion_info runs after restore_bin.
 It unions both original DeletedObjects maps plus existing merged markers for
