@@ -1,5 +1,17 @@
 # Data Contracts
 
+WebDAV `RemoteObject.key` is a logical Unicode path, not a percent-encoded URI.
+`href_to_key(base_url, href) -> Result<String, String>` decodes each path segment
+exactly once before the shared request builder encodes it. Literal plus and
+percent-looking names retain their identity. Absolute/path-relative hrefs and
+encoded endpoint paths are supported; query/fragment suffixes are excluded from
+the path. Raw dot segments are checked before URL normalization. Invalid escapes,
+UTF-8, encoded slash/control/dot segments, interior empty segments and absolute
+paths outside the configured root reject the entire list with content-free errors.
+Absolute href authorities still do not select the request destination. Direct
+create/open keys and S3 keep their existing logical-key contract. Bounded loopback
+list/GET/PUT/readback tests cover resource identity, not real provider compatibility.
+
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is
 rejected only when no keyfile is selected; local creation still validates password confirmation. Keyfile
