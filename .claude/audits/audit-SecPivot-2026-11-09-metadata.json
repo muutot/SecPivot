@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "7532f1f64c40eabedd759bb79a72a176ade9aa65",
+  "remediation_checkpoint": "ff9efb9234e0b6d8d734c8de9ed5c55c590fd5aa",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "858f947",
       "area": "Remote password edge whitespace removed by frontend/native config normalization and S3 construction",
-      "status": "Confirmed, unremediated. Actual frontend normalization14 changes10, queued masked IPC7 changes5; native normalization14 changes10 and DPAPI TempDir store/reopen5 values gives10 mismatches. Native2 failed/684 filtered, exact restoration and hashes retained. RFC7617 concatenation and pinned KeeWeb direct-password Basic construction independently corroborate. Exact-empty placeholder can retain old secret after whitespace-only replacement. No user config/vault/real provider/credential disclosure/device/APK/live clipboard/high-resource proof."
+      "status": "Confirmed and remediated. Exact secrets preserved across frontend/native normalization and S3 construction; exact-empty keeps stored credentials. Immutable frontend14/queued7 zero mismatch, native2 and targeted native3/frontend2 pass with exact restoration. Independent stdlib oracle authorizes actual12 bounded synthetic Basic/SigV4 GETs without storing credentials/headers. Full361/687/ACL2/KeePass25/QuickXML1363 ignored4 exit0; first Clippy failure retained, corrected and rerun. Application docs synchronized. No real provider/mobile/APK/user vault/config/live clipboard/high-resource proof; skipped bodies excluded.",
+      "fix_commit": "ff9efb9234e0b6d8d734c8de9ed5c55c590fd5aa"
     },
     {
       "id": "SP-S74",
@@ -1654,7 +1655,7 @@
       "limits": "Six tiny synthetic XML controls, actual parser and independent ElementTree oracle. No network request, actual provider/vault/config/clipboard/device/APK/high-resource work. This is six cases in one native test, not six native test functions and not comprehensive status validation. Nonempty failed values, forbidden duplicate properties, response-level/missing/malformed status and actual providers remain separate; no complete success-only status interpretation claim."
     },
     "remote_password_whitespace": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "858f9470c00f62702ba9f0b8c2dd56fadbb43cc8",
       "provenance": "remote-password-whitespace-red-proof.json",
       "independent_reference": "remote-password-whitespace-independent-reference.json",
@@ -1665,7 +1666,26 @@
       "native_failed": 2,
       "native_filtered": 684,
       "source_restored_exactly": true,
-      "limits": "Synthetic remote credential values only; exact equality assertions do not log raw credentials. Real ConfigStore operates only in TempDir with Windows DPAPI; no user configuration/vault/shared clipboard or actual cloud/device/APK/high-resource input. Frontend uses actual module plus synthetic masked set_config seam. RFC normative corroboration, not live provider proof."
+      "limits": "Twelve bounded loopback GET requests and synthetic keys only. No user config/vault/live cloud/provider/device/APK/clipboard; this proves credential bytes in these requests, not comprehensive SigV4/provider compatibility. Full verification serial/debug0; live clipboard/S3/config fixture unset. Four clipboard bodies, live S3 and ignored tests do not establish runtime coverage.",
+      "fix_commit": "ff9efb9234e0b6d8d734c8de9ed5c55c590fd5aa",
+      "final_proof": "remote-password-whitespace-final-proof.json",
+      "immutable_green_proof": "remote-password-whitespace-green-immutable-proof.json",
+      "independent_wire_proof": "remote-password-independent-wire-proof.json",
+      "frontend_green_normalized_mismatches": 0,
+      "frontend_green_queued_mismatches": 0,
+      "native_immutable_passed": 2,
+      "targeted_native_passed": 3,
+      "frontend_passed": 2,
+      "wire_requests": 12,
+      "full_log": "verify-remote-password-whitespace-final.log",
+      "full_log_sha256": "17acbf1f582d41d8721c5bf5ee7e9daac2dc3915dc1b7c6dda6a9228b6a1ad93",
+      "full_exit_code": 0,
+      "full_frontend": 361,
+      "full_rust": 687,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4
     }
   },
   "reverification_notes": [
@@ -1757,6 +1777,7 @@
     "520a69c remediates SP-S72 document-envelope false success. Immutable3,XML8,no-authHTTP8,remote32 and full359/680/ACL2 pass. Compile E0282 corrected before checks; live clipboard/S3/ignored coverage excluded. Original15/6.1 baseline and83 historical Confirmed cards preserved; namespace/propstat/provider/device/competitor/UI work remains active.",
     "fee4565 remediates SP-S73 missing requested type: immutable2 green,actual DAV property/response stdlib controls,request-driven HTTP collection exclusion/extensionless retention,final remote34 and full359/682/ACL2 pass. Pinned KeeWeb directURL capability comparison does not prove listing/runtime or adopt XOR/MOVE. Original15/6.1 and84 historical cards preserved; provider/mobile/namespace/propstat/full audit/competitor/UI remain active.",
     "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active.",
-    "94985ce status candidate review: RFC4918 section9.1 forbids duplicate property names; six conforming controls with empty unavailable values and disjoint successful properties all preserve expected metadata/collection behavior. Actual parser1 test/684 filtered and ElementTree6 pass. Initial DTO omitted-date vs null fixture error retained and corrected; source restored exactly. No new finding, source edit or full-status/provider coverage claim; historical85/original15/6.1 unchanged."
+    "94985ce status candidate review: RFC4918 section9.1 forbids duplicate property names; six conforming controls with empty unavailable values and disjoint successful properties all preserve expected metadata/collection behavior. Actual parser1 test/684 filtered and ElementTree6 pass. Initial DTO omitted-date vs null fixture error retained and corrected; source restored exactly. No new finding, source edit or full-status/provider coverage claim; historical85/original15/6.1 unchanged.",
+    "ff9efb9 remediates SP-S75 exact remote credentials. Immutable14/queued7 zero mismatch; native2/targeted3/frontend2, independent stdlib wire12 and full361/687/ACL2 pass. First Clippy failure retained and rerun after byte-slice correction. Original15/6.1 and86 historical Confirmed cards retained; no historical inventory overwritten or whole-project semantic coverage claim. Provider/mobile/competitor/UI goal remains active."
   ]
 }

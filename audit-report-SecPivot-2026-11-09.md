@@ -4024,7 +4024,7 @@ oracle格式并完整重跑六例，保留webdav-status-initial-harness-error.lo
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Data integrity
-- Status: Confirmed
+- Status: Confirmed（已修复，ff9efb9）
 - Affected area: Remote secret normalization and settings persistence
 - Evidence:
   - File: src/lib/services/settings.ts:377–418, 1221–1229; src-tauri/src/config/settings.rs:1352–1359; src-tauri/src/config/store.rs:57–86, 210–243; src-tauri/src/remote/s3.rs:58, 93–102 (858f947)
@@ -4046,3 +4046,30 @@ masked IPC边界，原生配置仅临时目录及Windows DPAPI。没有真实用
 密码原样传递契约，不采用其XOR持久化；不以源码比较证明竞品运行。
 累计86 Confirmed含历史已修复项（Critical1／High19／Medium54／Low12），
 原始b7c5d9f／15项／6.1分保持；完整审计／竞品／UI目标仍active。
+
+修复与验证（2026-11-11）：ff9efb9 在前端／原生配置归一化及S3
+构造中原样保留secretKey／secret_key；仅exact empty保持旧凭据，
+纯空白作为新非空值保存。其他字段的归一化和masked IPC保持。
+原样前端14项归一化／7项排队提交均0 mismatch；原样原生2项通过，
+正式配置／transport原生3项与前端2项通过，所有临时源码逐字节恢复。
+Windows DPAPI临时目录保存／重开及blank-keep覆盖合成凭据。
+
+独立Python stdlib base64／UTF8／hashlib／hmac检查实际12次loopback
+GET（WebDAV6／S3 6）均匹配完整输入，不导入项目crypto，不保存
+认证header或原始凭据。证明这些请求的凭据字节，不泛化为完整SigV4
+或真实provider兼容性。red／green／independent诊断与日志哈希均核对。
+
+完整verify-remote-password-whitespace-final.log exit0：361前端／687
+Rust／ACL2／KeePass25／QuickXML1363（4 ignored），format／check／
+build／补丁来源／clippy通过。首次完整门仅在新增测试date切片写法
+触发Clippy；改用byte slice后窄Clippy、原样与独立wire及完整门重新
+通过，首次失败日志仍保留。单线程、debug0，live clipboard／S3／
+config fixture未启用，跳过body和ignored不计运行覆盖。
+
+remote-password-whitespace-final-proof.json保存fix patch、源码、原样
+诊断与完整日志哈希；data-contracts／security-model／PITFALLS／TODO
+已在修复提交同步，本次仅收尾证据。无真实配置／密码库／云端／设备
+／APK／共享剪贴板／高资源执行；不能恢复此前已trim的凭据。
+累计86 Confirmed含历史已修复项（Critical1／High19／Medium54／Low12），
+原始b7c5d9f／15项／6.1分及历史库存artifact保持；完整审计／竞品／UI
+目标仍active，手机另存为仍待替换APK／真机provider验证。
