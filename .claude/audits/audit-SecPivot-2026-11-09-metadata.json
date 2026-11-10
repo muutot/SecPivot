@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S61; historical supplemental tracking notes excluded",
-    "total": 72,
-    "confirmed": 72,
+    "scope": "15 baseline cards plus SP-S05 through SP-S62; historical supplemental tracking notes excluded",
+    "total": 73,
+    "confirmed": 73,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
-      "High": 18,
+      "High": 19,
       "Medium": 42,
       "Low": 11
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "879d37f",
+  "remediation_checkpoint": "1ce2452",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S62",
+      "area": "Argon2 u64 parameters truncate to low u32 costs while persisted header retains high declaration",
+      "severity": "High",
+      "confidence": "High",
+      "source_checkpoint": "3602a93",
+      "commit": "1ce2452",
+      "status": "Confirmed and remediated. Actual local/remote open and save three red, original registry two save/parse red, pinned official upper-bound/checked conversion corroboration. Three native, nineteen specialized, normal explicit vector, external patched two green and full verify 323/662/ACL2 pass serially/debug=0/no filters/live clipboard. Checked u32 conversions map existing errors; defaults/AES unchanged. Both empty registry-produced fixtures reject before adoption/mirror and save preserves old bytes/reopen. Fifth reviewed crypt/kdf.rs patch; 55 untouched/60-hash fresh reconstruction verified. No default weakening, actual credential leak/OOM/CPU exhaustion/client/device/user-vault proof; valid costly parameters resource budget remains separate."
+    },
     {
       "id": "SP-S61",
       "area": "Prepared canonical merge persists rejected/deleted records unowned current/history binaries",
@@ -598,10 +607,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "879d37f",
-    "log": "verify-merge-orphan.log",
+    "checkpoint": "1ce2452",
+    "log": "verify-kdf-overflow.log",
     "frontend_tests": 323,
-    "rust_unit_tests": 659,
+    "rust_unit_tests": 662,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -631,7 +640,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 659,
+    "rust_unit_tests_discovered": 662,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -1073,6 +1082,36 @@
       "reconstruction": "merge-orphan-reconstruction.log",
       "scope": "Actual delete and current/history creation before two-direction repeated merges/reopens, original local vs source orphan bytes, canonical alias ID order, late nested owners/later header exclusion, active lease/missing payload rejection and all prior merge history/bin/shared/protection cases",
       "limitations": "Synthetic data only. Direct specialized finalization uses empty MergeLog for late-owner lifetime; native merge/full verification provide actual application evidence. Preserves original destination orphan headers and later-added binaries; no blanket GC or old-copy/filesystem erasure proof. No user vault/Tauri handler/native client/device/provider/clipboard evidence."
+    },
+    "prior_merge_orphan_gate": {
+      "command": "npm run verify (RUST_TEST_THREADS=1; CARGO_PROFILE_DEV_DEBUG=0; live clipboard opt-in unset)",
+      "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
+      "checkpoint": "879d37f",
+      "log": "verify-merge-orphan.log",
+      "frontend_tests": 323,
+      "rust_unit_tests": 659,
+      "android_acl_tests": 2
+    },
+    "argon2_parameter_bounds": {
+      "result": "passed",
+      "checkpoint": "1ce2452",
+      "native_red": "kdf-overflow-native-red.log",
+      "native_red_failed": 3,
+      "native_green": "kdf-overflow-native-green-final.log",
+      "new_native_tests": 3,
+      "registry_red": "kdf-overflow-registry-red.log",
+      "registry_failed": 2,
+      "independent_green": "kdf-overflow-independent-green.log",
+      "specialized_log": "kdf-overflow-vendor-green.log",
+      "specialized_tests": 19,
+      "new_specialized_tests": 2,
+      "normal_vector": "kdf-normal-vector-green.log",
+      "reference": "kdf-overflow-reference-provenance.json",
+      "fixtures": "tests/fixtures/kdf-overflow-provenance.json",
+      "reconstruction": "kdf-patch-reconstruction.log",
+      "patched_files": 5,
+      "untouched_files": 55,
+      "limitations": "All overflow probes execute only 1 iteration/64 KiB. No huge resource exhaustion test or default weakening/secret leak proof. Official memory policy stricter; only representability repaired. Native paths preserve sessions and old file, remote uses MemoryStorage not actual provider. Valid expensive KDF budget/cancellation and native cross-client/device remain unverified."
     }
   },
   "reverification_notes": [
@@ -1149,6 +1188,7 @@
     "d1fe8c4 fixes SP-S58 confirmed nested deletion cascade loss. Actual native 2 valid red, unpatched registry 2 valid red, fixed official post-order/empty-only deletion corroboration; native 4, new dependency 3, merge-module 35 and patch-specialized 11 green. Final full verify 323/649/ACL2 passed serially/debug=0/no filters/live clipboard. Four patched/56 untouched/60 verified hashes reconstructed from original archive in fresh directory. Documentation currency gate and partial sync TODO updated. Invalid compiler/missing-time fixture evidence excluded. Content-first/equal/missing/unknown directional policy preserved; whole marker lifecycle and real client/provider remain pending. No UI/IPC/schema/user-vault/clipboard/device changes. Original b7c5d9f/15/6.1 baseline preserved; goal active and phone APK verification pending.",
     "1b04387 fixes SP-S59 final-absent deletion registry propagation. Final actual native 4 red, unpatched registry 4 red and fixed official MergeInDeletionInfo source corroborate. Seven native and full verify 323/656/ACL2 pass serially/debug=0/no filters/live clipboard; vendor/60-hash provenance unchanged. Final-tree/private first-party helper unions both original ledgers and existing merged markers, max concrete timestamp, final survivors excluded. Documentation currency gate and partial sync TODO updated. Initial no-marker recipient fixture refined to actual pre-creation saved lineage; both final red variants repeat. Initial green orphan source attachment retention observation retained for separate audit, not erased or claimed as binary secure removal. Existing object/survivor/bin marker semantics retained. No UI/IPC/schema/user-vault/clipboard/device changes. Original b7c5d9f/15/6.1 baseline preserved; goal active and phone APK pending.",
     "fb3b9c3 fixes SP-S60 tracked-removal attachment lease collection. Six actual delete paths fail saved binary counts before merge; unpatched registry controls pass. Eight native/fourteen specialized and full verify 323/656/ACL2 pass serially/debug=0/no filters/live clipboard. Only released candidates without leases or recursive owners collected, unrelated orphan headers preserved. Helper no longer _merge-gated; no-feature compile and fresh patch reconstruction 60 hashes/56 unchanged pass. Compiler/private-field and normalized nested fixture failures excluded. Data/security/structure/patch docs and dedicated narrow TODO updated; sync remains partial. Prepared independent merges still retain unused source/destination binaries after deletion succeeds, separate pending boundary. No UI/schema/IPC/version/user-vault/clipboard/device/physical erasure changes. Original b7c5d9f/15/6.1 unchanged; goal active and phone APK/provider pending.",
-    "879d37f fixes SP-S61 final prepared binary collection. Actual native three red after SP-S60 deletion already succeeds; independent prepared two red vs original registry controls, finalized two green. Three native/seventeen specialized/full verify 323/659/ACL2 pass serially/debug=0/no filters/live clipboard. State records only IDs, finalizer after history/bin restores collects unowned prepared IDs, preserves original orphan IDs/later binaries, refuses leases/missing final payloads before mutation. Canonical aliases in both ID orders, late nested histories and failed-state boundaries covered. Fresh 60-hash reconstruction/56 unchanged and no-_merge check pass; docs/patch/TODO gate updated, full sync partial. No UI/IPC/schema/version/user-vault/clipboard/device/provider/physical erasure changes. Original b7c5d9f/15/6.1 preserved; overall goal active and phone APK/provider unverified."
+    "879d37f fixes SP-S61 final prepared binary collection. Actual native three red after SP-S60 deletion already succeeds; independent prepared two red vs original registry controls, finalized two green. Three native/seventeen specialized/full verify 323/659/ACL2 pass serially/debug=0/no filters/live clipboard. State records only IDs, finalizer after history/bin restores collects unowned prepared IDs, preserves original orphan IDs/later binaries, refuses leases/missing final payloads before mutation. Canonical aliases in both ID orders, late nested histories and failed-state boundaries covered. Fresh 60-hash reconstruction/56 unchanged and no-_merge check pass; docs/patch/TODO gate updated, full sync partial. No UI/IPC/schema/version/user-vault/clipboard/device/provider/physical erasure changes. Original b7c5d9f/15/6.1 preserved; overall goal active and phone APK/provider unverified.",
+    "1ce2452 fixes SP-S62 shared Argon2 checked-parameter conversion. Actual local/remote/save 3 red, original registry 2 save/parse red and pinned official checked conversion corroborate. Native3/specialized19/normal vector/external2/full verify 323/662/ACL2 pass serially/debug=0/no filters/live clipboard. All probes compute only1/64KiB; unsupported high declarations rejected, no default/AES change or resource caps claimed. Two empty synthetic fixture hashes preserve original producer, local/remote refusal keeps session and avoids mirror, failed save keeps old file/reopen. Five reviewed patches/55 unchanged/60-hash fresh reconstruction; maintenance/data/security/structure/patch/TODO gate synchronized. TryFrom import for upstream Rust2018 and shell escaping failures excluded. User adds avoid security problems; ordinary Bitwarden unexpected-value candidate and valid expensive KDF resource budget remain pending. No UI/IPC/schema/user-vault/clipboard/device/runtime client/credential leakage or OOM proof. Original b7c5d9f/15/6.1 preserved; goal active and phone replacement APK/provider unverified."
   ]
 }

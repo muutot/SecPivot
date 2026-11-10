@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S61；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S62；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 18     | 18        | 0         |
+| High      | 19     | 19        | 0         |
 | Medium    | 42     | 42        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **72** | **72**    | **0**     |
+| **Total** | **73** | **73**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3121,3 +3121,66 @@ patch 说明/专项测试数和专门 TODO；完整同步 TODO 保持 [~]。
 手机 v1.6.5 另存为 ACL 修复仍待替换 APK/真机验证。72 Confirmed
 （Critical 1 / High 18 / Medium 42 / Low 11），原 b7c5d9f 的 15 项/
 6.1 分保持，整体目标 active，继续其余系统/竞品/UI 边界复核。
+
+### Finding: SP-S62 Argon2 参数截断后实际派生成本远小于文件声明（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Security / Configuration / Data integrity
+- Status: Confirmed
+- Affected area: shared Argon2d/Argon2id derivation and local/remote database read/write
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/crypt/kdf.rs:75–87；src-tauri/src/vault/persist.rs:165/210/254/292/412/454（3602a93 修复前）
+  - Function / Module: Argon2Kdf::transform_key and every Database::parse/save caller
+  - Relevant behavior: KDBX iterations 和 memory 字段为 u64，transform_key 将 iterations as u32 与 (memory / 1024) as u32 不检查转换；高位丢失。4294967297 次实际变 1 次，4398046576640 字节实际变 64 KiB，保存和重开仍保留原声明。
+  - Reproduction: kdf-overflow-native-red.log 三条真实应用路径均失败：本地打开、远程 SaveLocal 打开接受原版生成的异常文件；实际 save 接受并发布无法表示的 Argon2id 配置。前两红测停在首个迭代溢出文件的拒绝断言；另一个内存文件和失败后的会话/镜像/旧文件断言在绿测覆盖。原红测的后续断言不是已执行证据。
+  - Independent verification: 无 patch keepass =0.13.22 的两项独立 save/parse 探针均失败（kdf-overflow-registry-red.log），实际计算仅 1 次和 64 KiB，保存/重开配置与巨大声明一致。kdf-overflow-registry-metadata.json 确认 registry 来源。固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5 Argon2Kdf.cs:61–65/150–155/213 的 MaxIterations 与 checked KiB 转换明确拒绝越界；SHA-256 329942510a856078e72e5e19ad88cee4879b49c4e120c335c259c4d881d663d6，来源见 kdf-overflow-reference-provenance.json。官方实际内存政策更严格，本项仅修正表示折返；未运行官方客户端。
+- Problem: 不受支持的声明被作为低成本参数执行，文件公开加密参数不再描述实际密码派生操作；严格实现无法按相同声明解密这种文件。
+- Why it matters: 加密边界缺少必要输入校验，实际派生成本可能远低于其声明，按安全敏感参数缺乏验证定 High。未证明普通 SecPivot 默认库弱化、实际凭据泄漏、鉴权绕过、CPU/内存耗尽或攻击者获得未知密码。
+- Realistic failure scenario: 用户打开同类截断生成器产生的高声明参数库并再次保存，应用继续用低成本处理而不拒绝；以后迁往严格客户端会失败，文件上的迭代/内存值也会误导安全评估。
+- Minimal fix: 在共用 Argon2 transform 执行前检查 u32 转换，超范围返回已有 TimeTooLarge/MemoryTooMuch，沿全部原生读写失败路径处理，不限于单个 IPC。
+- Better long-term fix: 独立设计有效范围内昂贵 KDF 的资源预算、取消与用户反馈；进行受控基准和真实跨客户端验证。本项不实现任意内存上限、不降低合法参数、不自动修复已经错误派生的文件。
+- Regression test suggestion: 原版有界合成异常库验证本地/远程拒绝、原会话及 dirty/revision 保留、不生成镜像；失败保存旧文件仍按原 KDF 重开；Argon2d/id 两种变体越界拒绝和正常独立向量；全部 KDF 默认/设置/重加密/合并回归、fixture/hash/来源与完整门。
+- Estimated effort: 2–4 小时（独立与实际三路径复现、受审依赖范围扩展、最小转换修复及完整验证）
+
+1ce2452 已修复。crypt/kdf.rs 使用 u32::try_from 检查两项参数，映射到已有
+Argon2 错误，再构造并运行 Config。memory 仍按字节 /1024 转为 KiB；
+标准算法、AES、盐/主密钥处理及默认 64 MiB/3 次不变。所有 open/save
+调用自动覆盖，没有新 IPC/schema/UI 或参数猜测回退。该 upstream crate
+为 Rust 2018，首个中间编译未导入 TryFrom，已显式补齐；该编译失败
+和 PowerShell helper 转义失败不作产品缺陷证据。
+
+kdf-overflow-native-green-final.log 三项通过。两份空合成 Argon2d KDBX
+由原版实际 save/parse 生成，有效 header/HMAC，已存 tests/fixtures/
+kdf-overflow-* 及哈希/声明/生产者 provenance。本地/远程打开分别检查
+两个文件都拒绝、旧 db/path/dirty/revision 不变；远程原对象不变且
+镜像目录未生成。Argon2id 实际保存对两个 overflow 配置均拒绝，旧
+文件字节不变且原密码/AES KDF 仍可重开。未修改或读取用户数据库。
+
+kdf-overflow-vendor-green.log 19 项通过，其中两项新增各覆盖 d/id
+的溢出错误种类，原有附件/history/merge 所有权专项仍通过。
+kdf-normal-vector-green.log 独立显式 Argon2 Config 的 64 KiB 向量通过。
+kdf-overflow-independent-green.log 相同外部 save/parse 探针在 local
+patch 下两项通过；kdf-overflow-patched-metadata.json 确认实际本地来源。
+有界红测不会分配 TB 内存或执行数十亿次迭代；未运行表示范围内的
+资源耗尽测试，不能从安全的小成本复现推出进程 OOM/挂死。
+
+verify-kdf-overflow.log exit 0：323 frontend、662 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单线程、
+无过滤、临时 CARGO_PROFILE_DEV_DEBUG=0，live clipboard 保持 opt-out。
+包含默认 Argon2id、AES/Argon2/Argon2id 写重开、正常参数和现有全库
+行为回归。新的第五受审文件 crypt/kdf.rs 纳入 verifier/provenance/
+zero-context patch；55 upstream 文件逐字节不变，原 archive/许可证与
+全部 60 hash 保持，kdf-patch-reconstruction.log 在新目录重建验证。
+维护 gate 同步 maintenance-workflow/data-contracts/security-model/
+project-structure、patch 说明/专项数和独立 KDF TODO；没有修改原来的
+四个补丁文件内容。SKILL.md 的稳定路由无需额外更新。
+
+用户新增“避免出现安全问题”已纳入后续安全边界优先审查。当前发现
+普通 Bitwarden字段会把意外类型静默转为空值，仍为待进一步按官方
+schema 与实际写入复核的候选，不计 Confirmed；KDF 有效大参数的
+预算/取消、其他系统/UI/竞品迁移和手机 v1.6.5 另存为新 APK/provider
+继续验证。无真实 Tauri handler、云服务、用户库、实际剪贴板、原生
+第三方客户端、Android device/APK 或完整安全保证证据。73 Confirmed
+（Critical 1 / High 19 / Medium 42 / Low 11），b7c5d9f 原 15 项/6.1
+分保持，整体目标 active。
