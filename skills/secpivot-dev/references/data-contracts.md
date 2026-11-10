@@ -13,6 +13,18 @@ Absolute href authorities still do not select the request destination. Direct
 create/open keys and S3 keep their existing logical-key contract. Bounded loopback
 list/GET/PUT/readback tests cover resource identity, not real provider compatibility.
 
+WebDAV href/size/modified properties are read as complete simple XML values.
+Text, CDATA and standard named/numeric references concatenate without per-event
+trimming; comments/processing instructions do not erase preceding text. Reference
+decoding is once per event, preserving literal entity-looking text. Trim only the
+complete value, then apply the existing URI decoder or optional metadata parser.
+Unknown references, invalid decoding and nested/truncated property content reject
+the whole list with content-free errors. Missing/empty size/date hints and existing
+collection handling remain. `tests/fixtures/webdav-xml-text.json` supplies eight
+independent standard-XML controls; the native wire regression covers thirteen
+filename classes. Full XML structure/namespace/propstat/provider compatibility
+remains separate; no IPC/schema/dependency changes are involved.
+
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is
 rejected only when no keyfile is selected; local creation still validates password confirmation. Keyfile

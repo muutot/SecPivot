@@ -1,0 +1,65 @@
+[
+  {
+    "name": "plain",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/plain.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/plain.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/plain.kdbx"
+  },
+  {
+    "name": "named-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a&amp;b.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/a&b.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/a&b.kdbx"
+  },
+  {
+    "name": "decimal-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a&#38;b.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/a&b.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/a&b.kdbx"
+  },
+  {
+    "name": "split-cdata",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href><![CDATA[/dav/vaults/a]]><![CDATA[b.kdbx]]></d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/ab.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/ab.kdbx"
+  },
+  {
+    "name": "comment-split",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a<!--split-->b.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/ab.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/ab.kdbx"
+  },
+  {
+    "name": "percent-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a&#37;20b.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/a b.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/a%20b.kdbx"
+  },
+  {
+    "name": "literal-entity-text",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a&amp;amp;b.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/a&amp;b.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    "stdlib_href": "/dav/vaults/a&amp;b.kdbx"
+  },
+  {
+    "name": "split-metadata",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/plain.kdbx</d:href><d:propstat><d:prop><d:getcontentlength>1<![CDATA[2]]></d:getcontentlength><d:getlastmodified>Mon, <![CDATA[01 Jan 2024]]> 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>",
+    "key": "vaults/plain.kdbx",
+    "size": 12,
+    "modified": "Mon, 01 Jan 2024 00:00:00 GMT"
+  }
+]

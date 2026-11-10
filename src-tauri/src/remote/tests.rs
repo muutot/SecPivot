@@ -913,30 +913,91 @@ fn webdav_url_for_encodes_segments_and_rejects_dotdot() {
 }
 
 #[test]
+fn webdav_xml_property_text_preserves_full_values() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/webdav-xml-text.json")).unwrap();
+    for case in cases.as_array().unwrap() {
+        let objects = parse_multistatus(
+            case["xml"].as_str().unwrap(),
+            "http://h/dav",
+            "http://h/dav/vaults/",
+        )
+        .unwrap();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].key, case["key"].as_str().unwrap());
+        assert_eq!(objects[0].size, case["size"].as_u64().unwrap() as usize);
+        assert_eq!(objects[0].modified.as_deref(), case["modified"].as_str());
+    }
+    let pi = "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/a<?secpivot fixture?>b.kdbx</d:href></d:response></d:multistatus>";
+    assert_eq!(
+        parse_multistatus(pi, "http://h/dav", "http://h/dav/").unwrap()[0].key,
+        "vaults/ab.kdbx"
+    );
+}
+
+#[test]
+fn webdav_xml_invalid_property_content_rejects_the_entire_list() {
+    let valid = "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/valid.kdbx</d:href></d:response><d:response>";
+    for property in ["href", "getcontentlength", "getlastmodified"] {
+        for value in ["a&missing;b", "a&#x110000;b", "a<part/>b", "a&amp"] {
+            let body =
+                format!("{valid}<{property}>{value}</{property}></d:response></d:multistatus>");
+            let error = parse_multistatus(&body, "http://h/dav", "http://h/dav/").unwrap_err();
+            assert_eq!(error, "WebDAV 列表字段包含无效 XML 内容");
+            assert!(!error.contains(value));
+        }
+        let truncated = format!("{valid}<{property}>unfinished");
+        assert_eq!(
+            parse_multistatus(&truncated, "http://h/dav", "http://h/dav/").unwrap_err(),
+            "WebDAV 列表字段包含无效 XML 内容"
+        );
+    }
+    // Missing or empty hints remain optional, as before.
+    let empty = "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/a.kdbx</d:href><d:propstat><d:prop><d:getcontentlength></d:getcontentlength><d:getlastmodified></d:getlastmodified></d:prop></d:propstat></d:response></d:multistatus>";
+    let objects = parse_multistatus(empty, "http://h/dav", "http://h/dav/").unwrap();
+    assert_eq!(objects[0].size, 0);
+    assert!(objects[0].modified.is_none());
+}
+
+#[test]
 fn webdav_listed_filenames_get_put_and_read_back_the_same_resource() {
     use std::collections::BTreeMap;
     use std::io::{Read, Write};
     use std::net::TcpListener;
 
     let cases = [
-        ("plain.kdbx", "plain.kdbx"),
-        ("a%20b.kdbx", "a b.kdbx"),
-        ("%E9%9B%AA.kdbx", "雪.kdbx"),
-        ("rate%25.kdbx", "rate%.kdbx"),
-        ("a%2520b.kdbx", "a%20b.kdbx"),
-        ("a+b.kdbx", "a+b.kdbx"),
-        ("a%23%3F.kdbx", "a#?.kdbx"),
+        ("plain.kdbx", "plain.kdbx", "plain.kdbx"),
+        ("a%20b.kdbx", "a%20b.kdbx", "a b.kdbx"),
+        ("%E9%9B%AA.kdbx", "%E9%9B%AA.kdbx", "雪.kdbx"),
+        ("rate%25.kdbx", "rate%25.kdbx", "rate%.kdbx"),
+        ("a%2520b.kdbx", "a%2520b.kdbx", "a%20b.kdbx"),
+        ("a+b.kdbx", "a+b.kdbx", "a+b.kdbx"),
+        ("a%23%3F.kdbx", "a%23%3F.kdbx", "a#?.kdbx"),
+        ("named&amp;x.kdbx", "named&x.kdbx", "named&x.kdbx"),
+        ("decimal&#38;x.kdbx", "decimal&x.kdbx", "decimal&x.kdbx"),
+        ("cdata<![CDATA[x.kdbx]]>", "cdatax.kdbx", "cdatax.kdbx"),
+        (
+            "comment<!--split-->x.kdbx",
+            "commentx.kdbx",
+            "commentx.kdbx",
+        ),
+        ("percent&#37;20x.kdbx", "percent%20x.kdbx", "percent x.kdbx"),
+        (
+            "literal&amp;amp;x.kdbx",
+            "literal&amp;x.kdbx",
+            "literal&amp;x.kdbx",
+        ),
     ];
     let root = "/dav%20root/vaults/";
     let listing = format!(
         "<d:multistatus xmlns:d=\"DAV:\">{}</d:multistatus>",
-        cases.iter().map(|(uri, _)| format!(
-            "<d:response><d:href>{root}{uri}</d:href><d:propstat><d:prop><d:getcontentlength>8</d:getcontentlength></d:prop></d:propstat></d:response>"
+        cases.iter().map(|(xml, _, _)| format!(
+            "<d:response><d:href>{root}{xml}</d:href><d:propstat><d:prop><d:getcontentlength>&#56;</d:getcontentlength><d:getlastmodified>Mon, <![CDATA[01 Jan 2024]]> 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response>"
         )).collect::<String>()
     );
     let mut initial = cases
         .iter()
-        .map(|(uri, _)| (format!("{root}{uri}"), b"original".to_vec()))
+        .map(|(_, uri, _)| (format!("{root}{uri}"), b"original".to_vec()))
         .collect::<BTreeMap<_, _>>();
     // A sibling whose literal percent-looking name would receive a doubly
     // encoded request must remain untouched.
@@ -1019,8 +1080,13 @@ fn webdav_listed_filenames_get_put_and_read_back_the_same_resource() {
     };
     let objects = storage.list("vaults").unwrap();
     assert_eq!(objects.len(), cases.len());
-    for (i, (object, (uri, logical))) in objects.iter().zip(cases).enumerate() {
+    for (i, (object, (_, uri, logical))) in objects.iter().zip(cases).enumerate() {
         assert_eq!(object.key, format!("vaults/{logical}"));
+        assert_eq!(object.size, 8);
+        assert_eq!(
+            object.modified.as_deref(),
+            Some("Mon, 01 Jan 2024 00:00:00 GMT")
+        );
         assert_eq!(storage.get(&object.key).unwrap(), b"original");
         let data = format!("updated-{i}").into_bytes();
         storage.put(&object.key, &data).unwrap();
@@ -1033,7 +1099,7 @@ fn webdav_listed_filenames_get_put_and_read_back_the_same_resource() {
         files, expected,
         "only the listed resources may be overwritten"
     );
-    for (requests, (uri, _)) in requests[1..].chunks_exact(3).zip(cases) {
+    for (requests, (_, uri, _)) in requests[1..].chunks_exact(3).zip(cases) {
         for ((method, target), expected_method) in requests.iter().zip(["GET", "PUT", "GET"]) {
             assert_eq!(method, expected_method);
             assert_eq!(target, &format!("{root}{uri}"));

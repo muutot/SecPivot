@@ -8,6 +8,13 @@ path. Errors contain no href or file contents. The shared request encoder and
 existing mirror basename boundary remain separate. Loopback resource-identity
 tests do not prove native provider or complete remote authorization behavior.
 
+WebDAV known-property XML decoding precedes URI segment decoding. Assemble all
+text/CDATA/reference chunks before interpretation, and decode each reference once
+so literal entity text cannot be reinterpreted. Unknown references or nested/
+truncated properties fail before any list returns; these reader errors expose no
+field content. Native loopback read/write/readback tests verify resource identity
+and an untouched sibling. This is not complete XML or provider authorization proof.
+
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
 remain after refusal; no text is silently dropped. Protected Base64 still
