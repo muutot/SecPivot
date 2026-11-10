@@ -1,5 +1,14 @@
 # Data Contracts
 
+The patched shared Argon2 transform rejects KDBX u64 iteration or byte-to-KiB
+memory values that do not fit u32 instead of truncating them. Existing open/save
+error contracts carry the failure; no IPC, config schema or default changes.
+Native local/remote open keep the active session and avoid mirror creation on
+these failures. Save serialization rejects before destination publication,
+preserving the previous file. Two empty synthetic KDBX4 fixtures under
+tests/fixtures/kdf-overflow-* reproduce the original reader/writer mismatch;
+their provenance hashes identify the unpatched registry producer.
+
 CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
 existing formula guard apostrophe to the field value before RFC 4180 quoting.
 Commas, quotes and CR/LF therefore remain within one cell. This preserves the

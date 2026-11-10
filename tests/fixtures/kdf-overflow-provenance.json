@@ -1,0 +1,30 @@
+{
+  "producer": "Unpatched crates.io keepass 0.13.22",
+  "archive_sha256": "a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e",
+  "kind": "Empty synthetic KDBX4 databases; no user vault contents. Fixed public test password is supplied only by the tests.",
+  "kdf": "Argon2d version 0x13, parallelism 1",
+  "iterations_fixture": {
+    "iterations": 4294967297,
+    "memory_bytes": 65536
+  },
+  "memory_fixture": {
+    "iterations": 1,
+    "memory_bytes": 4398046576640
+  },
+  "actual_unpatched_cost": "Both wrap to 1 iteration and 64 KiB; generation and reopening use bounded computation.",
+  "generator_sha256": "9d6faaed227a22ec103edb4284d2da22a802914075acd3eb9defc6f5af05a531",
+  "files": [
+    {
+      "path": "kdf-overflow-iterations.kdbx",
+      "sha256": "647386eb213c1729eb8af4965e6e7ad43440f8bfaa39d0fa7a19cfc42192698c",
+      "bytes": 753,
+      "overflow": "iterations"
+    },
+    {
+      "path": "kdf-overflow-memory.kdbx",
+      "sha256": "9a82e7e14da71ac99c410b5c26f0e869a1ea18d43bc4c3889c343453a35c7815",
+      "bytes": 753,
+      "overflow": "memory"
+    }
+  ]
+}

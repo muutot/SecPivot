@@ -1,3 +1,61 @@
+--- a/src/crypt/kdf.rs
++++ b/src/crypt/kdf.rs
+@@ -1 +1 @@
+-use std::convert::TryInto;
++use std::convert::{TryFrom, TryInto};
+@@ -67,0 +68,3 @@
++        let mem_cost =
++            u32::try_from(self.memory / 1024).map_err(|_| argon2::Error::MemoryTooMuch)?;
++        let time_cost = u32::try_from(self.iterations).map_err(|_| argon2::Error::TimeTooLarge)?;
+@@ -80 +83 @@
+-            mem_cost: (self.memory / 1024) as u32,
++            mem_cost,
+@@ -82 +85 @@
+-            time_cost: self.iterations as u32,
++            time_cost,
+@@ -100,0 +104,42 @@
++
++    #[test]
++    fn secpivot_argon2_rejects_overflowing_iterations_before_derivation() {
++        for variant in [Variant::Argon2d, Variant::Argon2id] {
++            let kdf = Argon2Kdf {
++                memory: 64 * 1024,
++                salt: vec![9_u8; 32],
++                iterations: (1u64 << 32) + 1,
++                parallelism: 1,
++                version: Version::Version13,
++                variant,
++            };
++            let result = kdf.transform_key(&GenericArray::<u8, U32>::from([7_u8; 32]));
++            assert!(matches!(
++                result,
++                Err(super::CryptographyError::Argon2(
++                    argon2::Error::TimeTooLarge
++                ))
++            ));
++        }
++    }
++
++    #[test]
++    fn secpivot_argon2_rejects_overflowing_memory_before_derivation() {
++        for variant in [Variant::Argon2d, Variant::Argon2id] {
++            let kdf = Argon2Kdf {
++                memory: ((1u64 << 32) + 64) * 1024,
++                salt: vec![9_u8; 32],
++                iterations: 1,
++                parallelism: 1,
++                version: Version::Version13,
++                variant,
++            };
++            let result = kdf.transform_key(&GenericArray::<u8, U32>::from([7_u8; 32]));
++            assert!(matches!(
++                result,
++                Err(super::CryptographyError::Argon2(
++                    argon2::Error::MemoryTooMuch
++                ))
++            ));
++        }
++    }
 --- a/src/db/merge.rs
 +++ b/src/db/merge.rs
 @@ -7 +7,4 @@
