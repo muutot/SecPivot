@@ -384,6 +384,15 @@ Temporary merge leases protect prepared payloads during entry creation/deletion;
 completion rebuilds reverse ownership before releasing them. Existing leases
 reject preparation instead of overwriting another mutation's ownership.
 
+Preparation also returns an opaque, nonsecret AttachmentMergeState recording
+the prepared pool and original destination orphan IDs. Final collection occurs
+only after first-party history unions and local bin restoration, with recursive
+owner and remaining-lease/missing-payload validation. It removes unowned prepared
+imports/deleted-destination payloads, preserving original destination orphan
+headers and later-created binaries. Completion must not collect before late
+owners are installed. These synthetic KDBX tests establish final file contents;
+old copies, backups and filesystem blocks remain outside this collection.
+
 Merge location bookkeeping is independent of entry/group content timestamps.
 Newer same-parent moves retain LocationChanged and PreviousParentGroup through
 KDBX save/reopen, so an older third-device move cannot undo a return. Structural

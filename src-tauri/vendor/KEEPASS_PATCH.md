@@ -37,7 +37,12 @@ Only these upstream files are changed:
   merge, applies actual entry winners, copies complete recycle-bin version maps
   and rejects missing payloads before mutation. Exact bytes and protection flags
   determine identity. Prepared leases protect pending merge owners until winner
-  maps are installed; existing leases reject preparation. History::from_entries
+  maps are installed; existing leases reject preparation. Preparation returns an
+  opaque state capturing the prepared pool and original destination orphan IDs.
+  Finalization after the caller's history/bin restoration collects only unowned
+  prepared IDs, preserving original orphan headers and later-added binaries.
+  Active leases or missing final owner payloads fail before collection.
+  History::from_entries
   constructs an ordered snapshot list once and strips nested histories, avoiding
   repeated front insertion in the first-party history union.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
@@ -60,7 +65,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The fourteen dependency-specific tests can be run separately:
+The seventeen dependency-specific tests can be run separately:
 
 ```powershell
 cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_
