@@ -695,7 +695,11 @@ in different vaults; names bypass the slash/trim group resolver. Duplicate IDs
 within their source scope reject. Active items belong to the source vault;
 archived items go to its new `归档` child. Password/OTP, every section value,
 unknown metadata and source item/password-history JSON remain protected. A
-guarded username remains a protected custom field; conflicting type aliases or
+single-key typed string section value stores the exact inner string (including
+empty values and whitespace), so the secret getter/copy path remains usable.
+Compound, numeric and multi-key values retain protected JSON; original typing
+and attributes remain in Source Item in both cases.
+A guarded username remains a protected custom field; conflicting type aliases or
 duplicate designations reject. Non-login quality checking defaults off.
 Native tags follow the existing KeePass reader's trimming; exact tags/URLs and
 all typed/history data also remain in protected source JSON. Source history

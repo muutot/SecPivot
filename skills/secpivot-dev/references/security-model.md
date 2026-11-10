@@ -543,7 +543,10 @@ stage. Tests use sub-2-KiB synthetic ZIPs and tiny injected ceilings, without
 high-resource decompression, real user vaults or native provider access.
 
 The native 1PUX plan retains credentials/OTP, typed section values, item and
-export metadata/history, and binaries in protected KeePass Values. Guarded
+export metadata/history, and binaries in protected KeePass Values. Unwrapping
+a single typed string does not reduce protection, even for guarded:false or
+unknown string types; complete source typing remains protected. Reopened KDBX
+tests verify exact usable strings and absence from masked snapshots. Guarded
 usernames cannot enter the ordinary username snapshot. Plan construction caps
 every attachment copy, not only unique ZIP members, so shared references cannot
 multiply a single member into an unbounded binary allocation. Unknown parent

@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S78; historical supplemental tracking notes excluded",
-    "total": 89,
-    "confirmed": 89,
+    "scope": "15 baseline cards plus SP-S05 through SP-S79; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 90,
+    "confirmed": 90,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 56,
+      "Medium": 57,
       "Low": 13
     }
   },
@@ -67,6 +67,16 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S79",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "12f3f5c",
+      "area": "1PUX typed scalar secret getter returns JSON wrapper instead of original value",
+      "status": "Confirmed and remediated; protected single-string unwrapping, targeted24 and full verify369 frontend/716 Rust/ACL2/KeePass25/QuickXML1363 pass, ignored4 excluded",
+      "evidence": "onepux-scalar-reproduced-red.log compiled one reopened KDBX getter regression and failed exit101; earlier red.log compilation error excluded. Official concealed string example and fixed KeePassXC blob independently corroborate inner-string semantics.",
+      "limitations": "Synthetic ZIP/KDBX only; no real client export, desktop IPC/dialog, Android provider or APK verification. Compound/numeric/multi-key values remain protected JSON, not complete native typed semantics."
+    },
     {
       "id": "SP-S78",
       "severity": "Medium",

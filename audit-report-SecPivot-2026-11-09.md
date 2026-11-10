@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S78；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S79；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 56     | 56        | 0         |
+| Medium    | 57     | 57        | 0         |
 | Low       | 13     | 13        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **89** | **89**    | **0**     |
+| **Total** | **90** | **90**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4373,3 +4373,38 @@ build／clippy通过。日志 SHA256 a85186037a8e2de2cb021c7114435390e7665f7f46a
 为partial：真实1Password导出、desktop IPC／dialog和Android provider／
 新APK仍待验证，不等同完整互操作。89历史Confirmed及原始15项／
 6.1分保持；整体审计、竞品取舍与UI优化目标active。
+
+### Finding: SP-S79 1PUX 标量字段复制得到 JSON 包装而非原始值
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Import usability
+- Status: Confirmed（已修复，完整门禁通过）
+- Affected area: Native 1PUX typed section values and custom-field secret getter
+- Evidence:
+  - File: src-tauri/src/vault/import/onepux.rs, prepare_item section mapping at 12f3f5c.
+  - Function / Module: budget.json -> protected custom field -> get_custom_field_value.
+  - Relevant behavior: every section value was serialized as JSON, including single-key string values such as concealed PINs.
+  - Reproduction: import a small synthetic ZIP, save/close/reopen the actual KDBX, then call the production secret getter. Actual value was `{"concealed":"synthetic-pin"}` rather than `synthetic-pin`; one compiled regression failed with exit101. Evidence: onepux-scalar-reproduced-red.log and its exit JSON. The earlier onepux-scalar-red.log was a test compilation error and is excluded as reproduction evidence.
+  - Independent verification: official 1PUX format example represents PIN with concealed string; saved official snapshot SHA256 6322af674872db6b062c8a65de1b6d3127f7652e14d55970175bb7da15f5a2ce. KeePassXC OPUXReader blob d383dcac19a838cb538d92b1fe528299be9c3755 reads the inner string before assigning the field. No competitor execution or real customer export was used.
+- Problem: preserved source typing was placed in the usable credential itself; successful import and secret protection did not establish correct copy semantics.
+- Why it matters: pasting an imported PIN or other custom string supplies wrapper text instead of the intended value. Source data remains recoverable, but routine use fails.
+- Realistic failure scenario: a user imports a PIN and copies its protected custom field after reopening the database; the pasted JSON is rejected by the destination form.
+- Minimal fix: unwrap exactly one string-valued member while keeping its native Value protected and retaining complete source typing/attributes in protected Source Item. Preserve compound, numeric and multi-key values as JSON.
+- Better long-term fix: separately validate typed compound-field semantics and additional URL policy against public source/schema; protected archives alone do not establish complete native migration.
+- Regression test suggestion: saved/reopened secret getter, exact empty/CRLF/whitespace/Unicode strings, unknown string types, protected state and masked snapshots; compound/multi-key/numeric preservation without flattening.
+- Estimated effort: one focused native correction and three meaningful regressions plus integration verification.
+
+复核：相关24项原生测试通过（onepux-scalar-green.log），新增3项覆盖上述
+getter、逐字值／保护／类型和复杂值保留。首轮新增遮蔽测试误用了与可见
+notes相同的标记，调整为独立字段标记后通过；不将该断言失败登记为泄漏。
+当前90历史Confirmed（Critical1／High19／Medium57／Low13）含已修复项；
+原始15项／6.1分保持。手机provider／新APK、真实1Password导出仍未验证，
+整个有界防御审计／竞品／界面目标继续active。
+
+完整verify-onepux-scalar-final.log exit0：frontend369／Rust716／ACL2／
+KeePass25／QuickXML1363（4 ignored不算执行）；format／check／contract／
+build／clippy均通过。日志 SHA256
+dbac850251b6803e200c3503f6b1780a52c096fa06c40d0ac52a9a15379473da，
+onepux-scalar-final-proof.json关联原始失败、相关通过、全门日志和源码hash。
+documentation currency gate同步三份维护引用；TODO155保持partial。
