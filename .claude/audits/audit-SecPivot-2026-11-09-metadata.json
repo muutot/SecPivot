@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "82aea43eb1169f3b78b94656d1e2fa8249971c4b",
+  "remediation_checkpoint": "520a69cda4b7c00342fdb3ce159cde75bbe1e294",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "28fa586",
       "area": "WebDAV accepts wrong-root and incomplete/multiple-root document envelopes",
-      "status": "Confirmed, unremediated. Actual parser two red/one valid control,678 filtered; three HTML substring matches become empty success, unclosed/two-root/trailing-text documents publish1/2/1 objects. Independent XML/root8 controls pass; immutable fixture/diagnostic/source hashes and exact restoration recorded. No network/provider/vault/write/disclosure/loss/device/APK/external entity/high-resource evidence. Namespace/propstat/fullXML semantics remain separate."
+      "status": "Confirmed and remediated. 520a69c requires one complete multistatus root before list publication via independent streaming depth pass after property parsing; wrong roots, multiple/unclosed roots and outside text reject with content-free envelope errors, retaining valid empty/case/PI/comment/whitespace and property errors. Immutable3 green/680 filtered, independent XML8/strictJSON fixture values unchanged, eight no-auth HTTP200 loopback lists invalid6/valid2;remote32 harness. Initial compile E0282 corrected before full359/680/ACL2/KeePass25/QuickXML1363 ignored4 exit0. Live clipboard/S3 bodies and ignored not actual runtime coverage. No IPC/schema/dep/vendor/CSS change; namespace/propstat/fullXML/provider/device/APK remain separate.",
+      "fix_commit": "520a69cda4b7c00342fdb3ce159cde75bbe1e294"
     },
     {
       "id": "SP-S71",
@@ -1499,7 +1500,7 @@
       "final_proof": "webdav-xml-final-proof.json"
     },
     "webdav_document_envelope": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "28fa586",
       "native_red": "webdav-structure-native-red.log",
       "native_failed": 2,
@@ -1512,7 +1513,24 @@
       "diagnostic": "webdav-structure-diagnostic.rs",
       "provenance": "webdav-structure-red-provenance.json",
       "source_restored_exactly": true,
-      "limits": "Eight tiny synthetic XML documents; actual production parser tests only. No network, credentials, user config/vault, provider/device/APK, shared clipboard, remote writes, external entities or high-resource tests. No data loss or credential disclosure demonstrated."
+      "limits": "Serial/debug0/unfiltered Windows host, live clipboard/S3/config fixture unset. Four native clipboard bodies, S3 live body and4 ignored QuickXML tests are not execution evidence. Tiny synthetic XML and no-auth loopback only; no user config/vault, real provider/client/device/APK/shared clipboard/remote file write/external entities/high-resource tests. Namespace/propstat/full XML scalar/syntax semantics and mobile behavior remain separate.",
+      "fix_commit": "520a69cda4b7c00342fdb3ce159cde75bbe1e294",
+      "immutable_green": "webdav-structure-native-green-immutable.log",
+      "immutable_passed": 3,
+      "immutable_green_proof": "webdav-structure-green-immutable-proof.json",
+      "targeted_log": "webdav-structure-targeted-final.log",
+      "targeted_harness_passed": 32,
+      "http_list_requests": 8,
+      "first_compile_failure": "E0282 ambiguous BytesText.as_ref; corrected to slice iterator before targeted/clippy/immutable/full checks",
+      "full_log": "verify-webdav-structure-final.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 680,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "final_proof": "webdav-structure-final-proof.json"
     }
   },
   "reverification_notes": [
@@ -1600,6 +1618,7 @@
     "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active.",
     "SP-S69 remediated in2912963 with native child-process stderr and immutable pinned actual-module probe; full verify359/674/ACL2 exit0. Original baseline and cumulative80 counts preserved; mobile device/provider/storage/background lock remain unverified.",
     "a314835 remediates SP-S70 URI/key double encoding with immutable2 green, bounded seven-file22-request native listGETPUTreadback and13 invalid-path whole-list controls; remote28 harness and full359/676/ACL2 exit0. Live S3/native clipboard/ignored bodies not actual runtime coverage. RFC3986/4918 normative reference only; source/doc currency gate updated. Baseline15/6.1 and cumulative81 preserved; complete provider/device/mobile/URI/XML/competitor/UI work remains active.",
-    "82aea43 remediates SP-S71 simple XML text/reference truncation. Immutable3 green, standardXML8, native13 classes40 wire requests and15 invalid controls, remote30 harness/full359/678/ACL2 exit0. First full clippy failure corrected and independently replayed; live native/provider/ignored coverage excluded. Baseline15/6.1 and cumulative82 preserved; full XML/provider/device/competitor/UI audit remains active."
+    "82aea43 remediates SP-S71 simple XML text/reference truncation. Immutable3 green, standardXML8, native13 classes40 wire requests and15 invalid controls, remote30 harness/full359/678/ACL2 exit0. First full clippy failure corrected and independently replayed; live native/provider/ignored coverage excluded. Baseline15/6.1 and cumulative82 preserved; full XML/provider/device/competitor/UI audit remains active.",
+    "520a69c remediates SP-S72 document-envelope false success. Immutable3,XML8,no-authHTTP8,remote32 and full359/680/ACL2 pass. Compile E0282 corrected before checks; live clipboard/S3/ignored coverage excluded. Original15/6.1 baseline and83 historical Confirmed cards preserved; namespace/propstat/provider/device/competitor/UI work remains active."
   ]
 }

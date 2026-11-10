@@ -3824,7 +3824,7 @@ fixture／原样诊断／fix patch／完整日志和参考哈希。
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Testing
-- Status: Confirmed
+- Status: Confirmed（已修复，520a69c）
 - Affected area: WebDAV list document envelope validation
 - Evidence:
   - File: src-tauri/src/remote/webdav.rs:134–166, 254–338; src-tauri/src/remote/mod.rs:180–204 (28fa586)
@@ -3846,3 +3846,31 @@ fixture／原样诊断／fix patch／完整日志和参考哈希。
 propstat／真实provider仍待审，手机另存为仍缺新APK／真机验证。
 累计83 Confirmed（Critical1／High19／Medium52／Low11）含历史修复；
 原始 b7c5d9f／15项／6.1分保持，整体目标 active。
+
+修复与验证（2026-11-11）：520a69c 在发布列表前以独立流式深度
+计数验证单个完整 multistatus 根。错误根、根未闭合、第二个根及
+根外非XML空白拒绝列表；合法空根、前后空白／注释／PI 保持。
+完整属性读取仍先执行，原有字段错误契约不被提前的文档错误替代；
+命名空间、response／propstat语义和完整XML scalar／语法不在此门内。
+
+原样诊断源码与八项确认fixture的SHA256未变：3项全部通过，680
+无关测试filtered；独立标准XML8项及严格JSON值一致性通过，临时
+测试精确恢复。原生loopback实际8次无凭据HTTP200列表响应覆盖同
+一组无效6项与合法2项，六项无效响应全部报错；另有合法前后PI／
+注释／空白及7项非法边界控制。远程32项harness通过，其中S3 live
+体未启用，不计提供商验证；此前属性／URI请求回归继续通过。
+
+初次编译在 BytesText.as_ref 类型推断处E0282终止，修为直接slice
+迭代后，targeted／clippy／原样重播／完整门通过，不计新增产品缺陷。
+verify-webdav-structure-final.log exit0：359前端／680 Rust／ACL2／
+KeePass25／QuickXML1363（4 ignored），format／check／contract／
+build／clippy全通过。单线程、debug0、无过滤，live clipboard／S3／
+配置fixture开关未启用；四个原生剪贴板体、S3 live及ignored不计
+实际运行覆盖。webdav-structure-final-proof.json保存源码、原样诊断、
+fixture、fix patch和完整日志哈希。
+
+currency gate同步data-contracts／security-model／PITFALLS与精确TODO；
+无IPC／schema／依赖／vendor／CSS改动。无用户密码库、真实provider、
+设备／APK、共享剪贴板、远程文件写入或高资源复现。累计83
+Confirmed含历史已修复项，原始b7c5d9f／15项／6.1分保持；手机
+另存为新APK／真机、完整审计／竞品／UI仍待完成，目标active。
