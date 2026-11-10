@@ -81,6 +81,15 @@ retain the existing merge winner policy; deletion is not an unconditional veto.
 Batch UUID validation precedes removals or tombstones. Untracked removal remains
 appropriate for temporary merge detachment, which must not create user deletions.
 
+Patched native group merge decides each object's deletion independently. A newer
+deep entry/group edit restores its required ancestors, while unchanged siblings
+still follow their own markers. Group removals run child-first after all entry
+and group moves and require emptiness; no ancestor removal cascades over a
+survivor. Retained ancestors lose obsolete markers and Deleted log events cover
+actual removals only. Equal/missing timestamps and content-before-location
+fallback keep the existing policy; unknown deletion times remain asymmetric.
+This is not a complete cross-client deletion-lifecycle guarantee.
+
 `RpcSideChannelPrompt` dismisses and releases its pending password on expiry,
 manual close and unmount. Its wall-clock countdown catches delayed timer callbacks
 and refreshes on focus/visibility resume and before copy. Old timer/copy completions

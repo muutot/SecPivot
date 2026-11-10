@@ -400,3 +400,10 @@ permanent marker, invalid batch requests mutate neither objects nor markers, and
 newer explicit remote edits retain the existing conflict policy. These markers
 contain no password or field payload; this is synchronization intent, not secure
 erasure of backups, old copies or filesystem blocks.
+
+Native group merge cannot implicitly delete surviving descendants. It restores
+required ancestry, finishes moves, then removes only empty candidate groups in
+child-first order. Every descendant uses its own deletion marker; retained
+ancestors lose obsolete markers and do not emit Deleted events. Synthetic
+save/reopen tests cover deep edits, old siblings and moved-out objects. Existing
+equal/missing timestamp policy remains; real client interoperability is unproven.
