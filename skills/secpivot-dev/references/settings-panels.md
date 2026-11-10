@@ -161,6 +161,9 @@ Before adding CSS:
 
 ## Form details
 
+- Remote text/password fields pass `TextField.ariaLabel` from the same localized
+  heading keys, including protocol-specific endpoint and credential names. Keep
+  these names stable when placeholders switch to the saved-credential hint.
 - Hide number spin buttons when the control is visually a plain value field.
 - Keep tabular numeric labels stable and non-shrinking.
 - Let long labels/paths/numbers shrink, wrap, or ellipsize without overflowing the card.

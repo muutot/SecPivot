@@ -117,6 +117,7 @@
       <div class="setting-row-input">
         <TextField
           id="remote-profile-name"
+          ariaLabel={t(lang, "remote.nameTitle")}
           size="control"
           invalid={nameConflict}
           type="text"
@@ -174,6 +175,9 @@
       </div>
       <div class="setting-row-input">
         <TextField
+          ariaLabel={kind === "webdav"
+            ? t(lang, "remote.endpointWebdav")
+            : t(lang, "remote.endpointS3")}
           size="control"
           type="text"
           value={remote.endpoint}
@@ -197,6 +201,7 @@
         </div>
         <div class="setting-row-input">
           <TextField
+            ariaLabel={t(lang, "remote.region")}
             size="control"
             type="text"
             value={remote.region}
@@ -215,6 +220,7 @@
         </div>
         <div class="setting-row-input">
           <TextField
+            ariaLabel={t(lang, "remote.bucket")}
             size="control"
             type="text"
             value={remote.bucket}
@@ -243,6 +249,9 @@
       </div>
       <div class="setting-row-input">
         <TextField
+          ariaLabel={kind === "webdav"
+            ? t(lang, "remote.accessKeyWebdav")
+            : t(lang, "remote.accessKeyS3")}
           size="control"
           type="text"
           autocomplete="off"
@@ -275,6 +284,9 @@
       </div>
       <div class="setting-row-input">
         <TextField
+          ariaLabel={kind === "webdav"
+            ? t(lang, "remote.secretWebdav")
+            : t(lang, "remote.secretS3")}
           size="control"
           type="password"
           autocomplete="off"
@@ -305,6 +317,7 @@
       <div class="setting-row-input">
         <TextField
           id="remote-prefix"
+          ariaLabel={t(lang, "remote.prefix")}
           size="control"
           type="text"
           value={remote.prefix}
@@ -349,6 +362,7 @@
       <div class="setting-row-input">
         <TextField
           id="remote-backup-template"
+          ariaLabel={t(lang, "remote.templateTitle")}
           size="control"
           type="text"
           value={remote.backupTemplate}
