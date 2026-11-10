@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S47；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S48；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 12     | 12        | 0         |
-| Medium    | 35     | 35        | 0         |
+| Medium    | 36     | 36        | 0         |
 | Low       | 10     | 10        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **58** | **58**    | **0**     |
+| **Total** | **59** | **59**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2440,3 +2440,39 @@ ACL 2，格式、check、契约、build、clippy 均通过；RUST_TEST_THREADS=1
 无 CSS/markup/schema/IPC/vendor 修改、真实设备/provider/用户库运行。
 当前卡片 58（Critical 1 / High 12 / Medium 35 / Low 10），原始
 b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
+
+### Finding: SP-S48 分组标签在合并胜出时遗漏，新建带标签分组产生伪冲突（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Synchronization / Dependency behavior
+- Status: Confirmed
+- Affected area: Native group merge, root metadata and newly created subtrees
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:188–202/345–359、src-tauri/src/vault/merge.rs:389–393（bc66fc3 修复前）
+  - Function / Module: keepass merge_groups / SecPivot merge_databases
+  - Relevant behavior: 原始依赖在 Created/Updated 两个分组属性复制分支均遗漏 tags。Updated 成功却保留旧标签；Created 随后比较新建的目标分组与源分组，因标签不同且时间相同而拒绝。
+  - Reproduction: group-tags-merge-red-corrected.log 共 4 failed / 2 passed。root/nested 更新在首方向 tags 断言失败；清空标签仍是 old-tag，停在 nested 的首次检查；新增带标签子树在首次 merge 返回同时间戳冲突。red 未执行反向、最终重开或后续 root-clear 断言。初次保存 helper 参数顺序编译错误已修正，不计产品证据。
+  - Independent verification: 单独项目原始 registry keepass =0.13.22（Cargo.lock 为公开 archive checksum a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e，开启 _merge，没有应用补丁）的两个实际 save/reopen/merge 测试均失败：更新后 [] 而源为 synthetic-tag，新建带标签组 merge 拒绝。group-tags-registry-independent-red.log 与 group-tags-reference-provenance.json 保存来源。固定官方 KeePass PwGroup.cs commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5:503–544 的 AssignProperties 显式复制 m_lTags；SHA256 1836977793c3f634bb94e2d3cd2b669f709ae0519bd80a0761b565ed245066d2。未运行官方客户端。
+- Problem: 成功合并遗漏较新分组标签；清空意图被撤销；新建带标签分组无法正常合并。
+- Why it matters: 破坏元数据保真和分组同步。本次没有密码、附件或用户真实库丢失证据，按 Medium。
+- Realistic failure scenario: 一台设备给分组添加/清空标签，另一台合并后仍显示旧标签；新建标签分类分组后同步直接提示同时间戳冲突。
+- Minimal fix: 第一方临时 source clone 仅对 destination 尚不存在的分组清空标签，避免依赖新增分支的立即伪冲突；合并成功后按实际 Group Created/Updated 日志为仍存在的胜出分组复制 original remote tags，包含空集合。现有同时间戳冲突、本地较新版本、删除及回收站决策保持。
+- Better long-term fix: 上游修正两个分组复制分支后用相同回归复核，再考虑去掉第一方兼容层。不要仅因版本升级或编译通过认为数据保真已恢复。
+- Regression test suggestion: root/nested 修改和清空标签，真实 API/save/reopen 后双向合并，再保存合并库重开检查标签与时间。新建父子分组保留各自标签和父子关系；两个方向确认同时间戳差异仍拒绝、删除的带标签分组不复活。
+- Estimated effort: 2–3 小时（兼容层、六个标签场景、原始依赖复核和完整门）
+
+3eb8194 已修复。group-tags-merge-green-final.log 的 8 项通过：
+六项标签合并/边界场景与两个已有标签回归，其中四项为新增测试、
+两个既有时间测试扩展到真实合并/合并库重开。完整
+verify-group-tags-merge.log exit 0：316 frontend、608 Rust、ACL 2，
+format、check 零错误警告、契约、build、clippy 全部通过；Rust 单线程，
+无过滤，四个 live clipboard body 关闭。依赖 provenance gate 仍为
+60 文件/3 reviewed patches/57 upstream byte-identical，没有 vendor 编辑。
+data-contracts 已同步合并契约，无可据此勾选的完整 TODO。
+没有用户库、真实 Tauri handler/官方 KeePass 客户端/Android provider
+或替换 APK 运行。源码修复不是手机已安装 v1.6.5 的现场验证。
+
+当前详细卡片 59（Critical 1 / High 12 / Medium 36 / Low 10），
+原始 b7c5d9f 的 15 项与 6.1 分保持。整体目标 active：继续独立
+复核收藏修改时间/缓存、秒精度历史冲突、其余系统/UI/竞品迁移。

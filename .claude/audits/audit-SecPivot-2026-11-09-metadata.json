@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S47; historical supplemental tracking notes excluded",
-    "total": 58,
-    "confirmed": 58,
+    "scope": "15 baseline cards plus SP-S05 through SP-S48; historical supplemental tracking notes excluded",
+    "total": 59,
+    "confirmed": 59,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 12,
-      "Medium": 35,
+      "Medium": 36,
       "Low": 10
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "5f85f45",
+  "remediation_checkpoint": "3eb8194",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S48",
+      "area": "Group source-winner merge omits tags; new tagged groups cause equal-time conflict",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "bc66fc3",
+      "commit": "3eb8194",
+      "status": "Confirmed and remediated. Four valid native baseline failures and independent original registry two-test failures. First-party temporary source-only tag normalization and actual Created/Updated merge-log restoration preserve empty/nonempty winning tags without modifying vendor bytes. Eight targeted tests and full verify 316/608/ACL2 exit 0 passed. Existing equal-time conflict, local winner and tombstone behavior maintained. No native official KeePass client, device/provider/clipboard/user-vault execution."
+    },
     {
       "id": "SP-S47",
       "area": "Group content changes retain old timestamps and obstruct one-sided merge",
@@ -476,10 +485,10 @@
   "verification": {
     "command": "npm run verify (RUST_TEST_THREADS=1; live clipboard opt-in unset)",
     "result": "passed; four native live clipboard bodies disabled by explicit opt-in",
-    "checkpoint": "5f85f45",
-    "log": "verify-group-content-time-final.log",
+    "checkpoint": "3eb8194",
+    "log": "verify-group-tags-merge.log",
     "frontend_tests": 316,
-    "rust_unit_tests": 604,
+    "rust_unit_tests": 608,
     "android_acl_tests": 2,
     "prior_hotp_backend_gate": {
       "checkpoint": "a2b0ddf",
@@ -509,7 +518,7 @@
       "scope": "Fresh headless Edge, production ColumnConfigMenu/ContextMenu, synthetic public labels, no user vault or clipboard",
       "limitations": "Android WebView, screen readers and full native focus/window behavior unverified"
     },
-    "rust_unit_tests_discovered": 604,
+    "rust_unit_tests_discovered": 608,
     "rust_unit_tests_filtered": 0,
     "excluded_live_tests": [],
     "standard_csv_reader": {
@@ -679,6 +688,19 @@
       "inheritance_wire_log": "group-inheritance-wire-green.log",
       "inheritance_tests": 1,
       "limits": "Six red tests stopped at first merge assertion; two tag-only red tests stopped at time. Tag merge fidelity is separately reproduced and pending. Same-second ordering/native device/client/provider unverified."
+    },
+    "group_tags_merge": {
+      "result": "passed",
+      "red_log": "group-tags-merge-red-corrected.log",
+      "green_log": "group-tags-merge-green-final.log",
+      "targeted_tests": 8,
+      "new_tests": 4,
+      "strengthened_tests": 2,
+      "independent_registry_red": "group-tags-registry-independent-red.log",
+      "registry_failures": 2,
+      "provenance": "group-tags-reference-provenance.json",
+      "scope": "Actual synthetic native API/save/reopen and both merge directions, merged KDBX reopen, root/nested changed/cleared tags, new subtree, same-time conflict and deletion. Pinned dependency bytes unchanged.",
+      "limits": "Red four failures stopped at first direction/assertion, clearing loop did not reach root before failure. Initial helper argument compilation error excluded. Official client/device/provider/user-vault/clipboard runtime unverified."
     }
   },
   "reverification_notes": [
@@ -742,6 +764,7 @@
     "a88ff62 fixes SP-S44 inaccurate history copy in both languages and updates approved UI reference. Valid baseline rendered twelve mock rows alongside fixed ten-version hint; twelve fresh-server browser cases and screenshots passed, check/build/316 frontend/format exit 0. Initial nonexistent settings API, later hot-reload mock/service mismatch, missing sharp and Python default encoding were fixture/tooling faults and excluded. Existing native history-limit evidence reused; no redundant string mirror tests or full Rust rerun for copy-only change. Own Vite handles stopped, unrelated .trae preserved. Baseline and 6.1 score unchanged; full goal active, native Android replacement/provider and remaining system/migration/UI audits pending.",
     "c45d7b9 fixes SP-S45 absent history byte budget using pinned KeePass 6 MiB default while preserving explicit negative unlimited. Two valid red native retention tests failed after initial fixture compile errors were corrected; two new native tests and 27 targeted history checks passed. Full verify exit 0: 316 frontend/593 Rust/ACL2, default test scheduling and no filters, clipboard opt-in unset. Exact fixed source URLs/hashes record constructor/Clear/XML conditional defaults; no invalid reference ZIP evidence used. Contract/security/DTO comments and partial TODO synchronized; no eager load/metadata cleanup, user-vault/native-client/device/provider/clipboard execution. Baseline b7c5d9f and 6.1 unchanged; full goal active. Attribute mutation timestamp/history and remaining systems/migration/UI need separate evidence.",
     "5687202 fixes SP-S46 omitted entry-attribute timestamps without changing editor primary history behavior. Two valid red native save/reopen/merge regressions failed after fixture borrow repair; red never reached historical assertions, which were removed when timestamp scope was selected after reading actual editor composition. Two final native API regressions include double merge direction and pinned old-time normalized no-op, full verify 316/595/ACL2 passed serially with no filters and live clipboard flag unset. Data contract/source comments synchronized; post-gate changes were documentation only, format passed again. No UI/IPC/schema/dependency or user-vault/clipboard/Tauri-handler/device/client proof. Same-second KDBX precision, group/favorite timestamps and remaining systems/migration/UI/mobile replacement/provider continue; baseline/score unchanged and goal active.",
-    "5f85f45 fixes SP-S47 changed group content timestamps and preserves existing JSON missing/null enabled inheritance requested by the dialog. Valid 8-test baseline and 9 final new tests including four wire inheritance combinations; full verify 316/604/ACL2 passed serially after a documentation formatting failure was corrected. Group-tag merge probe still failed independently and is not claimed fixed. Data contract/DTO/backend comments synchronized, no new TODO checked; source add_group mispatch restored before final green. Baseline/score unchanged, goal active."
+    "5f85f45 fixes SP-S47 changed group content timestamps and preserves existing JSON missing/null enabled inheritance requested by the dialog. Valid 8-test baseline and 9 final new tests including four wire inheritance combinations; full verify 316/604/ACL2 passed serially after a documentation formatting failure was corrected. Group-tag merge probe still failed independently and is not claimed fixed. Data contract/DTO/backend comments synchronized, no new TODO checked; source add_group mispatch restored before final green. Baseline/score unchanged, goal active.",
+    "3eb8194 fixes SP-S48 first-party native merge group-tag fidelity. Original registry archive independently fails two real save/reopen/merge cases; official fixed PwGroup AssignProperties copies tags. Four baseline application failures, eight final targeted checks with four new tests/two strengthened and full verify 316/608/ACL2 passed. Initial save-helper argument error excluded. Data contract synchronized and vendor 60/3/57 provenance unchanged. Original baseline/score unchanged, overall goal active; favorite timestamps/cache and same-second history boundaries need independent reproduction. Mobile v1.6.5 replacement APK/provider remains unverified."
   ]
 }
