@@ -4184,3 +4184,27 @@ removeRemoteProfile候选仍未确认，不并入本项。88历史Confirmed与
 替代实际适用性。没有强制major升级、后台工具安装或真实数据访问。
 累计89历史Confirmed（Critical1／High19／Medium56／Low13）及原始15项／
 6.1分保持，整体目标仍active。
+
+#### SP-S78 补丁修复复核（441b052）
+
+已独立提交 Vite8.2.4、devalue5.9.4、source-map-js1.2.2；锁文件仅三个
+包节点及根 Vite minimum 由^8.1.5提高为^8.2.4，没有 major升级或
+无关依赖变更。安装与锁版本逐项相等，原始红扫描与官方公告保留。
+复扫 all 由8节点／3 High降为5 Low／0 High，production仍0；all audit
+退出1是剩余Low公告，不能表述为全部公告清零。剩余Kit enhanced form、
+prerender headers、cookie及deepmerge的首方关键词搜索无匹配；静态SPA
+和无生产Node服务仅限定适用性，不证明整份开发依赖无风险。未作强制
+升级或漏洞端点调用，Rust公告仍因cargo-audit缺失未覆盖。
+
+新loopback origin14206实际欢迎页正常、WebSocket connected及
+CSS hot updated通过，浏览器日志无error。只触碰app.css的mtime以
+触发普通热更新，原始字节hash与mtime均恢复，临时dev server已停止。
+完整verify exit0：frontend362、Rust687、ACL2、KeePass25、
+QuickXML1363（4 ignored不算执行）；来源／format／check／contract／
+build／clippy均通过。日志verify-toolchain-patches-final.log，SHA256
+f5f9ddc146f7e7c170725c53aac7684aa09087a172a5f219a8d689c6055e0092。合成测试默认取消所有SECPIVOT_* live
+开关，单线程debug0；不代表真实clipboard／provider／APK验证。
+
+toolchain-remediation-final-proof.json关联原样scan、包锁hash与dev
+smoke证据。SP-S78依赖补丁修复已复核；89历史Confirmed含已修复项
+及原始15项／6.1分保持，整个有界防御审计目标仍active。

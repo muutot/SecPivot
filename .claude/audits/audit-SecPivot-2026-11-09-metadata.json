@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "c4e164de95dd95b8738011c3f9feae8d108ac86b",
       "area": "Development tooling versions overlap public advisories",
-      "status": "Confirmed, unremediated. Installed/locked Vite8.2.2,devalue5.9.1,source-map-js1.2.1 match saved npm ranges; GitHub independently confirms Vite8.2.4 fix and actual dev editor middleware registration. All audit eight nodes/three High, production zero. No exploit/editor invocation/live data/shipped client impact demonstrated. Remaining Low applicability separate; cargo-audit unavailable."
+      "status": "Confirmed; compatible patches remediated and verified. Locked/installed Vite8.2.4,devalue5.9.4,source-map-js1.2.2; all audit five Low/zero High, production zero; normal loopback page and CSS HMR, full verify pass. Remaining Low applicability and missing Rust advisory tool coverage remain separate.",
+      "fix_commits": ["441b052bbc0783ea899f50ef0999778e79a11020"]
     },
     {
       "id": "SP-S77",
@@ -1763,7 +1764,7 @@
       "quickxml_ignored": 4
     },
     "frontend_toolchain_advisories": {
-      "result": "Confirmed, unremediated",
+      "result": "Patch remediation verified; five Low nodes remain; Rust advisory coverage unavailable",
       "checkpoint": "c4e164de95dd95b8738011c3f9feae8d108ac86b",
       "before_proof": "dependency-audit-current-proof.json",
       "all_counts": {
@@ -1791,7 +1792,65 @@
         "deepmerge": "4.3.1"
       },
       "rust_audit": "Unavailable: cargo-audit not installed; no installation attempted",
-      "limits": "Lock/installed/public advisory inspection only; no exploit payload, dev endpoint triggering, live vault/config/clipboard or user data accessed."
+      "limits": "Lock/installed/public advisory inspection only; no exploit payload, dev endpoint triggering, live vault/config/clipboard or user data accessed.",
+      "fix_commit": "441b052bbc0783ea899f50ef0999778e79a11020",
+      "final_proof": "toolchain-remediation-final-proof.json",
+      "installed_after": {
+        "vite": "8.2.4",
+        "devalue": "5.9.4",
+        "source-map-js": "1.2.2"
+      },
+      "after_audits": {
+        "all": {
+          "file": "npm-audit-patched-all.json",
+          "sha256": "69fdf8659ac4c611e74ae9120e29d1fedd2e1c18fe42739cf7af88d7cacda949",
+          "exit_code": 1,
+          "counts": {
+            "info": 0,
+            "low": 5,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 5
+          },
+          "remaining_nodes": [
+            "@sveltejs/adapter-static",
+            "@sveltejs/kit",
+            "@sveltejs/vite-plugin-svelte",
+            "cookie",
+            "deepmerge"
+          ]
+        },
+        "production": {
+          "file": "npm-audit-patched-production.json",
+          "sha256": "cfee4d87a434d3e0d099069f7d67c9feec244e4f61aaa95c99a1d3d8825f7cb1",
+          "exit_code": 0,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          },
+          "remaining_nodes": []
+        }
+      },
+      "verify": {
+        "exit_code": 0,
+        "log": "verify-toolchain-patches-final.log",
+        "log_sha256": "f5f9ddc146f7e7c170725c53aac7684aa09087a172a5f219a8d689c6055e0092",
+        "rust_test_threads": 1,
+        "profile_dev_debug": 0,
+        "live_clipboard_s3_config_fixture_unset": true
+      },
+      "dev_smoke": "toolchain-dev-smoke-proof.json",
+      "frontend_passed": 362,
+      "rust_passed": 687,
+      "acl_passed": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4
     }
   },
   "reverification_notes": [
