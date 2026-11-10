@@ -287,8 +287,11 @@ contents/history are preserved as protected JSON fields. Native client export
 verification remains missing. `vault/import/onepux_archive.rs` provides a
 native-only bounded version-3 ZIP reader with an opaque `OnePuxArchive`;
 `onepux_archive_tests.rs` uses tiny independent Python stored/deflate/ZIP64
-fixtures. Account/vault/item/attachment migration and frontend/IPC wiring are
-still pending; the reader alone does not complete modern 1PUX import.
+fixtures. `vault/import/onepux.rs` prepares a native protected plan and owns
+`VaultSession::import_1pux` candidate-database publication/rollback;
+`onepux_tests.rs` verifies account/vault identity, source archives, exact binary
+binding, masking and synthetic KDBX reopen. Frontend/IPC wiring and actual client
+exports remain pending; these native stages alone do not complete 1PUX import.
 
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
