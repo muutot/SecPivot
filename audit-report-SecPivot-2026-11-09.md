@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S58；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S59；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 17     | 17        | 0         |
+| High      | 18     | 18        | 0         |
 | Medium    | 40     | 40        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **69** | **69**    | **0**     |
+| **Total** | **70** | **70**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2939,3 +2939,61 @@ check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单�
 当前详细卡片 69 Confirmed（Critical 1 / High 17 / Medium 40 / Low 11），
 原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active；手机 v1.6.5 的
 另存为 ACL 源码修复已确认，替换 APK/真机/provider 验证仍缺。
+
+### Finding: SP-S59 缺失对象的删除标记未合并，第三副本使永久删除失效（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data integrity / Privacy / Synchronization
+- Status: Confirmed
+- Affected area: merge_databases and the absent-object DeletedObjects registry
+- Evidence:
+  - File: src-tauri/src/vault/merge.rs:433/477–481（daa0a05 修复前）；src-tauri/vendor/keepass-0.13.22/src/db/merge.rs:89–94/219–221/480–495/768–781
+  - Function / Module: first-party merge_databases and pinned Database::merge deletion branches
+  - Relevant behavior: 依赖只在实际移除 destination 中已有的条目/分组/图标时写来源标记。双方都缺失的对象不进入这些分支；来源独有的标记被丢弃，双方同 UUID 的较新删除时间也未联合。第一方包装层未补全这张注册表。
+  - Reproduction: deletion-registry-native-red-final.log 四项实际应用/保存重开回归失败。两个副本均用真实 delete_entry 或三层 delete_group 永久删除，生成每个对象的具体标记后固定合成 t20/t40；第三实际会话 flags 编辑固定 t30。先合并两个已删除副本并保存重开，再与第三副本合并保存重开，条目/子树复活。另两项使用实际创建条目/分组前已保存重开的同根库作为从未见对象的接收端；来源真实删除后标记也未传入，下一次旧副本合并复活。原始红测均停在第一个方向的复活断言，后续方向/标记/重复断言由最终绿测覆盖。
+  - Independent verification: 无 Cargo patch 的原始 registry keepass =0.13.22 四项直接 API/save/reopen 探针同样复活（deletion-registry-independent-red.log），当前 metadata 再确认 registry 来源。固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5 的 PwDatabase.cs:925–928/1019–1064 总是合并删除表，MergeInDeletionInfo 保留较新的 DeletionTime，不要求对象当前存在。来源复用 merge-location-reference-provenance.json；文件 SHA-256 3470bf8193e95d211d422eafba901a39a68f2a4d796ce11a0e44778d87ad01b0 已核对。未运行官方客户端。
+- Problem: 即使真实删除已经写入并保存了标记，后续合并仍可能把传播所需的标记或最新时间丢掉；两副本当前均无对象的表象掩盖了第三副本风险。
+- Why it matters: 永久删除意图无法在多副本同步中可靠传递，较旧凭据或整个子树会返回，按受限多副本冲突路径的 High；未证明真实用户数据泄漏或遭第三方读取。
+- Realistic failure scenario: 两台设备分别删除同一记录，较早删除的副本接收较晚删除副本却保留旧时间；第三台设备上传两次删除之间的编辑，合并将其当成较新编辑恢复。创建后删除、另一台尚未见过的记录也能从旧副本返回。
+- Minimal fix: 在实际第一方同步入口完成合并和本地回收站恢复之后，对最终缺失 UUID 联合双方原始 DeletedObjects 与现有 merged 标记，保留较新具体时间，具体时间优先未知时间；最终幸存条目/分组/自定义图标不导入新标记。
+- Better long-term fix: 继续验证活跃对象旧标记生命周期、回收站特殊标记、等时/未知时冲突和真实三客户端/provider；另行复核不再引用的源附件字节，不将删除表正确等同于安全擦除。
+- Regression test suggestion: 实际单条/三层子树删除和中间编辑三副本复现；从未见对象的实际创建前接收端；两个合并阶段的双向保存重开/重复合并；双方独有/较旧/较新/未知标记联合不倒退，晚于最新删除的真实编辑及其附件仍保留；最终活动/回收站/图标不引入新标记；失败合并不改变输入注册表或对象。
+- Estimated effort: 3–6 小时（真实三副本/registry/官方复核、最终树注册表修复及完整验证）
+
+1b04387 已修复。新增私有 merge_absent_deletion_info，在 restore_bin 成功后
+调用；最终所有 entry/group/custom-icon UUID 构成集合，双方原始注册表
+逐项与现有 merged 标记取最新具体时间。先前合并阶段可能覆盖的本地
+时间也从原始输入恢复。复杂度为最终对象数与双方标记数之和；没有新增
+IPC/schema 或全局状态，唯一应用 Database::merge 调用仍经这个包装层。
+没有改 vendor：原始 registry 缺陷仍由第一方补充处理，升级不能替代回归。
+
+deletion-registry-native-green-final.log 七项回归通过。四条主体路径包含
+实际 API、明确创建前副本、每个具体删除标记、两个阶段的双向 KDBX
+保存重开/重复合并；两条最新删除场景还验证 t50 的真实 flags 反向修改
+仍胜出并保留附件。三项边界验证八种独立/未知/新旧时间组合，最终活动
+或回收站分组/条目和根自定义图标不引入标记，等时内容冲突仍失败且
+输入删除表及对象不变。已有幸存对象标记和本地 bin collision 标记政策
+保持；这不是对所有活跃对象旧标记进行全局清理。
+
+原始四项有效红测先用移除后的无标记状态代表未见对象，随后改为实际
+创建前已保存重开的同根库；最终四项再次失败并作为主要复现证据。
+首次修复绿测的两项主体已不复活，但随后“附件总数应为 0”的断言失败：
+没有条目引用时仍有一个源二进制随合并保存。此观测保留于
+deletion-registry-native-green-initial.log，独立于注册表修复；最终主体回归
+验证记录/注册表，较新幸存版本验证实际附件字节。未引用附件保留的
+责任/删除语义仍待单独 probe，本项不认定二进制安全擦除，也不把这个
+观察自动计为另一项已确认缺陷。没有为使测试通过而修改附件所有权代码。
+
+verify-deletion-registry.log exit 0：323 frontend、656 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单线程，
+无过滤、临时 CARGO_PROFILE_DEV_DEBUG=0，原生 live clipboard 保持 opt-out。
+60 文件/4 补丁 provenance gate 通过，vendor/version/Cargo 接线未改变。
+维护 gate 更新 data-contracts/security-model/project-structure 和同步 TODO
+的已验证子边界（保持 [~]）；报告提交仅更新证据，无额外维护引用变更。
+
+本项无 UI/CSS、秘密返回或用户设置改变，没有实际 Tauri handler、用户库、
+共享 OS 剪贴板、云服务/provider/Android/第三方客户端运行或安全擦除证据。
+当前详细卡片 70 Confirmed（Critical 1 / High 18 / Medium 40 / Low 11），
+原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续未引用附件边界
+及其余系统/竞品/UI；手机 v1.6.5 另存为 ACL 源码修复已确认，APK/真机待验。
