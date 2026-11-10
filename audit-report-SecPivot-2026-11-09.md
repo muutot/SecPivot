@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S63；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S64；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 43     | 43        | 0         |
+| Medium    | 44     | 44        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **74** | **74**    | **0**     |
+| **Total** | **75** | **75**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3254,3 +3254,88 @@ as isize 截断候选不能成立为当前产品发现，未计问题。普通 K
 CRLF、有效昂贵 KDF 的预算/取消、其余系统/竞品/UI 边界以及手机
 v1.6.5 另存为替换 APK/真机验证继续保留。74 Confirmed（Critical 1 /
 High 19 / Medium 43 / Low 11），整体目标 active。
+
+### Finding: SP-S64 KDBX 保存后普通字符串的回车及 CRLF 被归一化
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Interoperability
+- Status: Confirmed
+- Affected area: KDBX4 internal XML serialization for current/history entries, groups and metadata
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/format/xml_db/mod.rs:111–113 (5926f46 before repair), entry.rs::StringValue and group/meta serializers
+  - Function / Module: to_xml -> quick_xml::se::to_string_with_root; parse_xml
+  - Relevant behavior: serializer writes literal CR, and standards-based XML parsing normalizes CR/CRLF to LF. Ordinary entry values, keys, group and metadata strings can change after successful save/reopen. Inner-protected values are base64 encrypted and retain CR.
+  - Reproduction: previous real Bitwarden command/wire/KDBX CRLF note control changed to LF (bitwarden-shapes-red.log), retained as a separate candidate during SP-S63. New native direct add/edit/current+history/group/meta and Bitwarden command/wire imports exercise the actual persisted boundary.
+  - Independent verification: unpatched keepass =0.13.22 registry probe actually save/parses a bounded AES-1 synthetic database: nine ordinary CR positions mismatch while protected and literal-entity controls retain values. kdbx-whitespace-registry-red-final.log. The same probe verifies QuoteLevel::Full still normalizes CR; quick-xml 0.41.0 se/simple_type.rs::escape_list escapes XML metacharacters only. Registry source and Cargo.lock remain recorded. No native third-party client execution.
+- Problem: successful encrypted persistence changes valid source strings instead of preserving their exact line endings.
+- Why it matters: credential usernames, imported multiline notes, custom data, field keys and historical content may change; native/foreign files with unprotected passwords also expose this correctness boundary. No default protected-password weakening or credential disclosure is proved.
+- Realistic failure scenario: a valid imported multiline note or custom value with CRLF is saved and reopened; the app reports success while that text and its historical copy now contain LF.
+- Minimal fix: represent raw CR as XML character references after trusted serialization, preserving the existing XML parser's standard normalization and inner-encryption behavior. Literal entity text must remain literal. All model fields are text content, not CDATA; no schema/IPC/UI change.
+- Better long-term fix: complete scalar fidelity and independent cross-client migration tests. Pure-whitespace entry values are independently emptied by cs_opt_string, a separate pending boundary; this CR encoding change must not be represented as repairing every whitespace value.
+- Regression test suggestion: actual current/history/group/meta save/reopen and Bitwarden wire import, protected/literal controls; direct serializer checks character references plus external standards parser, explicit CR entity parse control; full KDF/attachments/merge regressions and patch reconstruction.
+- Estimated effort: 2–3 hours for native/independent bounded evidence and minimal serialization repair with full integration.
+
+This card is recorded before changing the serializer. Initial probe compile
+failures (temporary GroupMut lifetime, missing helper import and EntryRef clone)
+are harness errors, not product evidence. Pure-whitespace registry red stops on
+the first space-only case and is not full current-application proof for that
+separate finding. Existing SP-S18 concerns explicit plaintext XML export, while
+this issue occurs inside the encrypted KDBX's ordinary persistence path.
+
+41a596c 已修复。可信 serializer 输出中 raw CR 编为 &#xD;，不修改读入
+文件的标准归一化，不猜测修复旧内容。模型当前字符串为文本而非 CDATA；
+保护值仍经原 inner cipher/base64，字面 &#xD; / &amp; / <tag> 由原
+serializer 转义，不再二次解析。无 CR 的输出直接 into_bytes，避免
+原 as_bytes().to_vec 拷贝；有 CR 时仅执行必要转换，不声称基准性能提升。
+不改变 KDF/cipher/schema/IPC/UI。纯空白值的 cs_opt_string 清空和非法
+XML scalar 是独立边界，该项未修复、未标完整字符串保真。
+
+kdbx-carriage-native-red-final.log 两个实际应用测试失败，全部完成
+保存重开后分别统计 14 个 current/history/group/meta 位置与 4 个
+真实 Bitwarden command→wire→batch 字段的 CR 内容变化；密码/隐藏
+字段与 literal 控制在红测就通过。kdbx-carriage-native-green.log 两项
+通过，包含普通字段名 CR、当前/历史保护标记与值、group notes/name、
+root notes 和 metadata description。group 名称/notes 走实际 API；
+description 为原生数据库内 seed 后实际 save/reopen。
+
+原 registry keepass =0.13.22 的外部独立实际 save/parse 探针先发现
+9/9 个普通 CR 位置变化，Full QuoteLevel 控制依旧会归一化；源/lock
+在 kdbx-carriage-registry-metadata.json 与 original-Cargo.lock 记录。
+同一探针用明确 local patch 后 CR 9/9 全保留；对应 metadata source
+为 null。独立套件整体仍有 1 个 pure-whitespace 失败（首个 space-only
+案例，6/6 值清空），2 个 CR/Full 控制通过，见 patched-pending.log；
+未把这份套件说成全绿，也未把该独立边界当成当前 native 全覆盖。
+这些 AES-1 固定合成库探针计算有界，没有用户数据或昂贵 KDF。
+
+依赖回归两项新增，先 writer red1/parser control green1，最终 21 个
+secpivot_ 专项全通过；no-default-features + save_kdbx4 编译通过。
+真实 to_xml 的 synthetic fixture 经临时测试生成、probe 随后移除。
+独立 Python ElementTree 读取它时 CR key/value、literal 和 Protected
+base64 控制保持；还验证 raw-CR 对照按标准归一化。该 fixture 为 Plain
+inner cipher 的合成 XML，不是用户文件或完整加密 KDBX；真实加密路径
+由应用和外部 save/parse 单独验证。XML/source hashes 见 standard
+provenance。临时 GroupMut lifetime、helper import、EntryRef clone
+编译错误及 docs patch context 失配不算产品问题。
+
+竞品源固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5：
+KdbxFile.Write.cs:203 使用 XmlUtilEx.CreateXmlWriter，XmlUtilEx.cs:139–156
+工厂未显式设置 NewLineHandling/Entitize。两文件 hash 在 reference
+provenance 中；不能仅据这些代码声称官方完整混合回车保真，未运行
+客户端。选择标准字符引用的依据是实际复现与独立 XML parser 结果，
+不盲目复制竞品默认行为。
+
+verify-kdbx-carriage.log exit 0：323 frontend、668 Rust、ACL 2；format、
+零错误警告 check、150-key 契约、build、clippy 均通过。根完整门单线程/
+debug=0/无过滤，live clipboard opt-in unset，4 个原生 live 测试体
+未执行。独立探针使用其记录的默认构建/调度，不混称根门配置。
+补丁仍 5 文件，仅 xml_db/mod.rs 改变，另外 4 patch bytes 保持；
+55 upstream 文件字节不变，fresh archive+patch 重建全部 60 hashes
+通过。维护 gate 同步 data/security/structure、patch 文档/21 专项数与
+独立 TODO；SKILL/maintenance 路由无需改。报告 lint、strict JSON、
+75 卡片和 b7c5d9f 原 15 项/6.1 分保持后提交。
+
+手机 v1.6.5 另存为仍待新 APK/真机/provider，pure-whitespace native
+边界、有效昂贵 KDF 预算与其余系统/竞品/UI 继续审查；无用户库、
+实际剪贴板、云服务、第三方客户端或完整安全保证证据。75 Confirmed
+（Critical 1 / High 19 / Medium 44 / Low 11），整体目标 active。
