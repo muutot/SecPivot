@@ -683,7 +683,7 @@ total expanded bytes, with declared and bounded actual-read checks. These are
 byte ceilings, not a guarantee about aggregate parser heap use. Empty binary
 files and safe nested files/directories remain native memory only. Source item
 mapping, document identity binding and atomic import are provided by the native
-plan/transaction below; picker IPC is pending;
+plan/transaction below; native picker IPC is described after that API;
 `parse_1pif` still accepts only legacy 1PIF. No TODO completion follows from this
 reader stage or synthetic fixtures.
 
@@ -715,7 +715,31 @@ and existing target, applies all groups/items/binaries to a database clone, then
 publishes once with one dirty/revision advance. Final snapshot errors restore
 the previous database, dirty/revision/time and cache. It returns masked VaultState,
 not import rows or binary bytes. Native synthetic tests cover save/reopen and
-failure rollback. The API is not yet an exposed Tauri command or picker route.
+failure rollback. The API is exposed through the native command below.
+
+`import_1pux_file({ sessionId, path, fileName?, targetGroupUuid? })` requires a
+stable originating session ID and returns `{ state: VaultState, counts:
+OnePuxCounts }` in camelCase. `commands/import.rs` validates session/writability/
+target before I/O, reads at most 64 MiB into Zeroizing input in spawn_blocking,
+prepares outside the session lock, then resolves the same ID and target again
+for publication. Local extensions cannot be overridden by fileName; document
+URIs require the provider display name. Errors/join failures omit input contents.
+Tab switching can complete into the parked origin; closing it rejects completion.
+The source worker can outlive a close until it returns; no immediate worker
+cancellation or I/O latency guarantee is claimed.
+
+`vault.ts::importOnePux` captures the invocation session and publication epoch;
+`io.ts::importOnePux` owns the picker/busy/latest-operation flow and calls it via
+callInSession. The new `import-1pux` menu route captures the page view and selected
+group before the existing desktop dialog or Android SAF. A stale/cancelled/
+superseded picker never invokes import, and old completions cannot publish
+feedback/busy state into a newer view. No archive bytes/rows/base64 attachments
+go through the renderer; it receives masked state and counts only. Existing
+1PIF remains a separate route. Browser demo rejects 1PUX before native picking.
+Synthetic Node tests exercise production page/service paths and native worker/
+registry tests exercise admission and stable completion; actual 1Password client
+exports, desktop IPC/runtime dialog and Android provider execution still need
+separate evidence.
 
 Bitwarden imports accept plaintext only. Before reading items, the parser
 validates `encrypted` and `passwordProtected`: true rejects with a plaintext

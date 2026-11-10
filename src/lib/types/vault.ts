@@ -1,3 +1,17 @@
+export interface OnePuxCounts {
+  accounts: number;
+  vaults: number;
+  items: number;
+  archived: number;
+  attachments: number;
+  unreferencedFiles: number;
+}
+
+export interface OnePuxImportResult {
+  state: VaultState;
+  counts: OnePuxCounts;
+}
+
 export interface VaultEntry {
   uuid: string;
   groupUuid: string;

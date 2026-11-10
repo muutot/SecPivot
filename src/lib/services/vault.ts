@@ -7,6 +7,8 @@ import type {
   VaultEntry,
   EntryInput,
   ImportEntryInput,
+  OnePuxImportResult,
+  OnePuxCounts,
   EntryPatch,
   AttachmentInput,
   EntryFlags,
@@ -124,6 +126,11 @@ interface VaultStore {
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   addEntries: (inputs: ImportEntryInput[]) => Promise<VaultState>;
+  importOnePux: (
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ) => Promise<OnePuxCounts>;
   updateEntry: (uuid: string, input: EntryInput) => Promise<VaultState>;
   updateEntryFlags: (uuid: string, flags: EntryFlags) => Promise<VaultState>;
   updateEntries: (uuids: string[], patch: EntryPatch) => Promise<VaultState>;
@@ -1040,6 +1047,27 @@ export const vault: VaultStore = {
     });
     state.set(applyBackendState(result));
     return result;
+  },
+
+  async importOnePux(
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ): Promise<OnePuxCounts> {
+    if (!isTauriRuntime()) {
+      throw new Error(
+        t(lang(), "browser.unsupported", { feature: t(lang(), "browser.feat1pImport") }),
+      );
+    }
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<OnePuxImportResult>(
+      "import_1pux_file",
+      { path, fileName, targetGroupUuid },
+      sessionId,
+    );
+    commitSessionStateAtEpoch(sessionId, epoch, result.state);
+    return result.counts;
   },
 
   async addEntries(inputs: ImportEntryInput[]): Promise<VaultState> {

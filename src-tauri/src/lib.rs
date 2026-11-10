@@ -424,6 +424,7 @@ pub fn run() {
             commands::change_master_key,
             commands::add_entry,
             commands::import_entries,
+            commands::import_1pux_file,
             commands::update_entry,
             commands::update_entry_flags,
             commands::update_entries,

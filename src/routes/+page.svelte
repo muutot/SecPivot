@@ -46,6 +46,7 @@
     csvToImportEntries,
     downloadTextFile,
     importEntries as runImportEntries,
+    importOnePux as runImportOnePux,
     importRowsToEntries,
     pickImportFile,
     toCsvExportRows,
@@ -1247,6 +1248,13 @@
     await runImportEntries(ioHost, entries, view, baseGroupUuid);
   }
 
+  async function handleImportOnePux(): Promise<void> {
+    if (!currentVault) return;
+    const view = sessionView.capture();
+    if (!view) return;
+    await runImportOnePux(ioHost, view, selectedGroup);
+  }
+
   function openSettings(): void {
     void goto("/settings");
   }
@@ -1842,6 +1850,7 @@
     else if (id === "import-xml") void handleImportXml();
     else if (id === "import-bitwarden") void handleImportBitwarden();
     else if (id === "import-1password") void handleImportOnePassword();
+    else if (id === "import-1pux") void handleImportOnePux();
     else if (id === "select-all") selectAllEntries();
     else if (id === "save") void handleSave();
     else if (id === "save-as") void handleSaveAs();
@@ -1868,6 +1877,7 @@
     else if (id === "import-xml") void handleImportXml();
     else if (id === "import-bitwarden") void handleImportBitwarden();
     else if (id === "import-1password") void handleImportOnePassword();
+    else if (id === "import-1pux") void handleImportOnePux();
     else if (id === "export-csv") void handleExportCsv();
     else if (id === "export-xml") void handleExportXml();
     else if (id === "export-emergency") emergencyExportOpen = true;

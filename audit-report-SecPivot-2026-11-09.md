@@ -4337,3 +4337,39 @@ clippy通过。日志 SHA256 d357bed5d570618a4a9a61fab05d45dac0d21a9090e0a49b2e5
 未接 Tauri worker／stable session completion 或前端 picker；这两个
 原生阶段都不表示用户已能导入。TODO155、真实导出／Android provider／
 新APK验证继续未完成；89历史Confirmed及原始15项／6.1分保持，目标active。
+
+#### 1PUX 命令／前端接线与呈现复核（2026-11-11，9ff1310 后）
+
+现已注册 `import_1pux_file`，必传 sessionId，读取前校验会话／只读／
+目标分组；worker 内以64 MiB有界 Zeroizing 输入读取并准备计划，
+完成时按原 ID再次校验并提交。URI按 provider显示名校验扩展名，
+本地路径不能由显示名覆写类型；只返回masked VaultState和计数。
+5项命令／worker／registry合成测试覆盖真实后台读取函数、开始前
+会话拒绝、A停泊／B活动时完成仍属A，以及关闭A后的晚到提交拒绝。
+并不声称 worker 可在关闭时立即取消：它可保留源数据直到返回，
+字节／对象限额也不保证 provider I/O时延或总堆／全部临时副本擦除。
+
+新增独立1PUX入口，沿用既有菜单／图标／主题原语，没有CSS或markup
+变更。旧1PIF入口保持单独格式。页面先捕获视图和目标，io使用
+desktop dialog或Android SAF，renderer只携带路径／显示名／分组；
+vault服务固定session与publication epoch。取消／旧A→B→A路径／
+同视图被新选择覆盖的旧picker不会读文件或启动导入；旧completion
+也不写新视图提示／busy。7项Node测试使用实际页面和服务，覆盖这些
+边界及成功／失败／browser拒绝；未关联文件保留有明确的本地化提示。
+
+新loopback14207的1280×720暗色browser demo实际显示CSV／XML／
+Bitwarden／1PIF／1PUX五个来源，Right键进入子菜单；图像保存为
+`onepux-menu-rendered.png`。点击1PUX正确提示浏览器不支持原生导入，
+console无error；呈现发现多余英文Error:前缀，去除后真实复查为
+「导入失败：浏览器预览不支持1Password 导入」，回归测试也覆盖。
+仅在新origin经UI生成项目的合成演示数据，未访问真实库／配置／
+剪贴板；临时dev server已停止。未作浅色／窄屏或原生对话框实测。
+
+最终完整verify exit0：frontend369／Rust713／ACL2／KeePass25／
+QuickXML1363（4 ignored不算执行），来源／format／check／contract／
+build／clippy通过。日志 SHA256 a85186037a8e2de2cb021c7114435390e7665f7f46a8c999f89ea6eb87e2d581；
+`onepux-route-final-proof.json` 关联全链源码hash、命令字段与呈现图像。
+首轮菜单来源数量的旧测试4→5后复验，失败日志保留。TODO155只更新
+为partial：真实1Password导出、desktop IPC／dialog和Android provider／
+新APK仍待验证，不等同完整互操作。89历史Confirmed及原始15项／
+6.1分保持；整体审计、竞品取舍与UI优化目标active。

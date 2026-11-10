@@ -162,7 +162,8 @@ describe("buildToolbarMenuItems", () => {
     const byId = Object.fromEntries(items.map((item) => [item.id, item]));
 
     const importIds = byId["import"].children.map((child) => child.id);
-    assert.equal(importIds.length, 4);
+    assert.equal(importIds.length, 5);
+    assert.ok(importIds.includes("import-1password") && importIds.includes("import-1pux"));
     assert.deepEqual([...new Set(importIds)], importIds);
 
     const exportIds = byId["export"].children.map((child) => child.id);

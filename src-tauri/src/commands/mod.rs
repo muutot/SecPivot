@@ -13,6 +13,7 @@ pub(crate) mod credential;
 pub(crate) mod entries;
 pub(crate) mod favicon;
 pub(crate) mod groups;
+pub(crate) mod import;
 #[cfg(desktop)]
 pub(crate) mod qrcode;
 pub(crate) mod remote;
@@ -31,6 +32,7 @@ pub(crate) use self::credential::*;
 pub(crate) use self::entries::*;
 pub(crate) use self::favicon::*;
 pub(crate) use self::groups::*;
+pub(crate) use self::import::*;
 #[cfg(desktop)]
 pub(crate) use self::qrcode::*;
 pub(crate) use self::remote::*;

@@ -553,4 +553,16 @@ guarantee. Source plain notes/ordinary usernames remain standard visible fields.
 The candidate-database transaction validates target/writability, publishes once
 and restores previous data/session metadata on snapshot error. Tiny synthetic
 KDBX tests cover masking, binary/empty-file protection and exact rollback; there
-is not yet a Tauri command or lifecycle/picker race implementation at this stage.
+is now a Tauri command and guarded renderer picker as described below.
+
+`commands/import.rs::import_1pux_file` requires an originating session ID,
+validates its writable target before file reads, runs bounded preparation off
+the session lock and resolves the same ID/target at completion. Closed sessions
+reject; switches cannot redirect import to a new active vault. Input bytes are
+Zeroizing worker memory. A started source worker is not immediately cancelled
+by lock/close and can retain temporary source data until return; byte/object
+ceilings do not bound provider I/O latency. No master key enters that worker.
+The renderer's native 1PUX route carries only path/display name/target and receives
+masked state/counts. Page view, latest-operation and publication-epoch guards
+reject stale picks/completion UI. Synthetic tests cover these boundaries; actual
+provider/dialog/client exports are not established by mocked API seams.
