@@ -207,6 +207,13 @@ Patched History::from_entries builds the sorted list once and strips nested
 history trees instead of repeatedly moving the growing list with add_entry.
 Current-content divergence at an identical timestamp still rejects the merge;
 this is not a complete cross-client merge compatibility guarantee.
+Expiration date/enabled are part of first-party version content. Older current
+versions are captured in either merge direction, including expiration-only
+changes. Actual Entry Created/Updated outcomes copy source expiration settings.
+Equal-current-time expiration conflict candidates are captured before winner
+timestamps change; surviving divergent entries reject after native deletion
+decisions and before database publication or any persistence. Deleted objects
+are never re-created by this metadata completion step.
 
 Tracked edits lease old binaries until the pre-edit snapshot is appended;
 deletion affects only the addressed entry version. History count/size trimming,

@@ -55,9 +55,12 @@ fn active_change(times: &Times) -> Option<NaiveDateTime> {
     times.last_modification.max(times.location_changed)
 }
 
-/// Content comparison ignoring timestamps and history (mirrors the keepass
-/// merge's divergence check).
+/// Content comparison ignores bookkeeping timestamps and history, but expiry
+/// date/enabled are entry content and must remain part of version identity.
 fn content_diverged(a: &Entry, b: &Entry) -> bool {
+    if expiration_diverged(a, b) {
+        return true;
+    }
     let mut a = a.clone();
     a.times = Times::default();
     a.history = None;
@@ -67,11 +70,29 @@ fn content_diverged(a: &Entry, b: &Entry) -> bool {
     a != b
 }
 
-/// Capture the remote side's current state for entries where the LOCAL side
-/// is newer: the keepass merge only pushes the losing side into the history
-/// when the remote wins, so local winners need their remote loser preserved
-/// here (历史保留).
-fn collect_remote_losers(dest: &Database, source: &Database) -> Vec<(EntryId, Entry)> {
+fn expiration_diverged(a: &Entry, b: &Entry) -> bool {
+    a.times.expiry != b.times.expiry || a.times.expires != b.times.expires
+}
+
+/// The crate ignores expiration in its equal-current-time comparison. Capture
+/// candidates before it changes winner timestamps, then reject only those still
+/// divergent and present after group/entry deletion decisions have completed.
+fn collect_equal_time_expiration_conflicts(dest: &Database, source: &Database) -> Vec<EntryId> {
+    source
+        .iter_all_entries()
+        .filter_map(|entry| {
+            let local = dest.entry(entry.id())?;
+            let time = entry.times.last_modification?;
+            (local.times.last_modification == Some(time) && expiration_diverged(&local, &entry))
+                .then_some(entry.id())
+        })
+        .collect()
+}
+
+/// Capture the older current version in either direction. The crate does not
+/// consider expiration when deciding whether to back up a destination version.
+/// Exact timestamp/content deduplication after merge avoids duplicate backups.
+fn collect_losing_versions(dest: &Database, source: &Database) -> Vec<(EntryId, Entry)> {
     fn walk(
         group: keepass::db::GroupRef<'_>,
         source: &Database,
@@ -83,8 +104,12 @@ fn collect_remote_losers(dest: &Database, source: &Database) -> Vec<(EntryId, En
                     entry.times.last_modification,
                     remote.times.last_modification,
                 ) {
-                    if local_time > remote_time && content_diverged(&entry, &remote) {
-                        let mut loser = (*remote).clone();
+                    if local_time != remote_time && content_diverged(&entry, &remote) {
+                        let mut loser = if local_time > remote_time {
+                            (*remote).clone()
+                        } else {
+                            (*entry).clone()
+                        };
                         loser.history = None;
                         losers.push((entry.id(), loser));
                     }
@@ -132,9 +157,7 @@ fn union_history(entry: &mut Entry, extra: impl Iterator<Item = Entry>) {
         let bucket = buckets.entry(snapshot.times.last_modification).or_default();
         let duplicate = bucket.iter().any(|&index| {
             let existing = &versions[index];
-            existing.times.expiry == snapshot.times.expiry
-                && existing.times.expires == snapshot.times.expires
-                && !content_diverged(existing, &snapshot)
+            !content_diverged(existing, &snapshot)
         });
         if !duplicate {
             bucket.push(versions.len());
@@ -406,28 +429,48 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
         }
     }
 
-    // The keepass merge only preserves the losing side's current state when
-    // the remote wins; capture local winners' remote losers up front so they
-    // can be pushed into the merged history afterwards.
+    // Canonicalize binary references before comparing and capturing versions.
     dest.prepare_attachment_merge(&mut source)
         .map_err(|error| format!("无法合并附件：{error}"))?;
-    let losers = collect_remote_losers(&dest, &source);
+    let losers = collect_losing_versions(&dest, &source);
     let equal_histories = collect_equal_current_histories(&dest, &source);
+    let expiration_conflicts = collect_equal_time_expiration_conflicts(&dest, &source);
     prepare_new_group_tags(&dest, &mut source);
     let log = dest.merge(&source).map_err(describe_merge_error)?;
+    for id in expiration_conflicts {
+        if let (Some(entry), Some(remote)) = (dest.entry(id), source.entry(id)) {
+            if expiration_diverged(&entry, &remote) {
+                return Err(describe_merge_error(
+                    MergeError::EntryModificationTimeNotUpdated(id),
+                ));
+            }
+        }
+    }
     dest.complete_attachment_merge(&source, &log);
-    // Both source-winner branches omit group tags in the pinned dependency.
-    // Use its actual outcome rather than reimplementing timestamp/deletion
-    // decisions; groups removed by later merge events stay removed.
+    // The source-winner branches omit group tags and current entry expiration.
+    // Use actual outcomes; objects deleted by later events stay removed.
     for event in log.events {
         if matches!(
             event.event_type,
             MergeEventType::Created | MergeEventType::Updated
         ) {
-            if let MergeEventTarget::Group(id) = event.target {
-                if let (Some(mut group), Some(original)) = (dest.group_mut(id), remote.group(id)) {
-                    group.tags.clone_from(&original.tags);
+            match event.target {
+                MergeEventTarget::Group(id) => {
+                    if let (Some(mut group), Some(original)) =
+                        (dest.group_mut(id), remote.group(id))
+                    {
+                        group.tags.clone_from(&original.tags);
+                    }
                 }
+                MergeEventTarget::Entry(id) => {
+                    if let (Some(mut entry), Some(original)) =
+                        (dest.entry_mut(id), source.entry(id))
+                    {
+                        entry.times.expiry = original.times.expiry;
+                        entry.times.expires = original.times.expires;
+                    }
+                }
+                _ => {}
             }
         }
     }
