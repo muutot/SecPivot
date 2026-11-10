@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S74; historical supplemental tracking notes excluded",
-    "total": 85,
-    "confirmed": 85,
+    "scope": "15 baseline cards plus SP-S05 through SP-S75; historical supplemental tracking notes excluded",
+    "total": 86,
+    "confirmed": 86,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 53,
+      "Medium": 54,
       "Low": 12
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S75",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "858f947",
+      "area": "Remote password edge whitespace removed by frontend/native config normalization and S3 construction",
+      "status": "Confirmed, unremediated. Actual frontend normalization14 changes10, queued masked IPC7 changes5; native normalization14 changes10 and DPAPI TempDir store/reopen5 values gives10 mismatches. Native2 failed/684 filtered, exact restoration and hashes retained. RFC7617 concatenation and pinned KeeWeb direct-password Basic construction independently corroborate. Exact-empty placeholder can retain old secret after whitespace-only replacement. No user config/vault/real provider/credential disclosure/device/APK/live clipboard/high-resource proof."
+    },
     {
       "id": "SP-S74",
       "severity": "Medium",
@@ -1644,6 +1652,20 @@
         "reason": "Expected JSON included modified:null; the production DTO intentionally omits absent modified. Four cases reached, final two not reached. Fixture/oracle corrected to DTO omission; no application code changed and this failure is not a product finding."
       },
       "limits": "Six tiny synthetic XML controls, actual parser and independent ElementTree oracle. No network request, actual provider/vault/config/clipboard/device/APK/high-resource work. This is six cases in one native test, not six native test functions and not comprehensive status validation. Nonempty failed values, forbidden duplicate properties, response-level/missing/malformed status and actual providers remain separate; no complete success-only status interpretation claim."
+    },
+    "remote_password_whitespace": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "858f9470c00f62702ba9f0b8c2dd56fadbb43cc8",
+      "provenance": "remote-password-whitespace-red-proof.json",
+      "independent_reference": "remote-password-whitespace-independent-reference.json",
+      "frontend_normalized_cases": 14,
+      "frontend_normalized_mismatches": 10,
+      "frontend_queued_cases": 7,
+      "frontend_queued_mismatches": 5,
+      "native_failed": 2,
+      "native_filtered": 684,
+      "source_restored_exactly": true,
+      "limits": "Synthetic remote credential values only; exact equality assertions do not log raw credentials. Real ConfigStore operates only in TempDir with Windows DPAPI; no user configuration/vault/shared clipboard or actual cloud/device/APK/high-resource input. Frontend uses actual module plus synthetic masked set_config seam. RFC normative corroboration, not live provider proof."
     }
   },
   "reverification_notes": [

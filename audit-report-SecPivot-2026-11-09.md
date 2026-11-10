@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S74；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S75；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 53     | 53        | 0         |
+| Medium    | 54     | 54        | 0         |
 | Low       | 12     | 12        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **85** | **85**    | **0**     |
+| **Total** | **86** | **86**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4018,3 +4018,31 @@ oracle格式并完整重跑六例，保留webdav-status-initial-harness-error.lo
 高资源复现；非空失败值、重复属性、response级／缺失／畸形status与
 完整provider语义仍待独立判断，六例通过不代表全面状态验证。
 累计85历史Confirmed、原始15项／6.1分不变，整体目标仍active。
+
+### Finding: SP-S75 远程密码被自动去掉两端空白，正确凭据在配置保存时改写
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data integrity
+- Status: Confirmed
+- Affected area: Remote secret normalization and settings persistence
+- Evidence:
+  - File: src/lib/services/settings.ts:377–418, 1221–1229; src-tauri/src/config/settings.rs:1352–1359; src-tauri/src/config/store.rs:57–86, 210–243; src-tauri/src/remote/s3.rs:58, 93–102 (858f947)
+  - Function / Module: normalizeRemoteSettings -> schedulePersist -> ConfigStore::set/read_config -> normalize_remote_settings
+  - Relevant behavior: the frontend string helper trims secretKey before queued set_config; native normalization independently trims secret_key after decoding and after encrypted storage reload. WebDAV forwards the resulting changed password unchanged, while S3 construction additionally trims its signing key.
+  - Reproduction: fourteen actual frontend normalization cases across both kinds change ten exact values; seven actual appSettings.updateRemote/flush cases send five changed values to the synthetic set_config seam. Native production normalization changes ten of fourteen values; ConfigStore::set and actual Windows DPAPI TempDir reopen each change five supplied boundary-whitespace values. Two native tests fail with counts only,684 unrelated tests filtered; no credential values logged. Leading/trailing/both/space-only/Unicode edge whitespace fail; plain/empty and endpoint trim controls retain their intended behavior.
+  - Independent verification: RFC7617 section2 specifies concatenating user-id, colon and password, excluding control characters without whitespace trimming. Pinned KeeWeb commit ad7891de92cf666400a6b4c859eeb731b0f68761 uses config.password directly in Basic construction at storage-webdav.js:367–370; this is source evidence only. Diagnostic/log/source/RFC hashes and exact restoration are in remote-password-whitespace-red-proof.json and remote-password-whitespace-independent-reference.json.
+- Problem: password content is treated as surrounding form whitespace rather than an exact credential. A whitespace-only replacement can also become the empty placeholder that retains an older stored password.
+- Why it matters: a valid WebDAV credential cannot be submitted or stored faithfully; repeated authentication failures look like server or ACL problems. Medium reflects verified configuration fidelity and expected login failure, with no actual provider incident, credential disclosure, vault loss or privilege bypass demonstrated.
+- Realistic failure scenario: a WebDAV account has a password beginning or ending in spaces. The user enters the correct password; the queued settings payload and stored configuration silently contain a different value, so subsequent Basic authentication cannot match the account.
+- Minimal fix: preserve secretKey/secret_key strings exactly through normalization and transport construction. Keep endpoint/region/bucket/prefix/name normalization and exact-empty placeholder semantics. Add actual queued IPC, encrypted reload and bounded synthetic Basic request regressions.
+- Better long-term fix: treat secret fields as opaque values across all configuration boundaries; distinguish exact empty from whitespace without silently sanitizing credentials. Mobile secret-store and real provider/device compatibility remain independent work.
+- Regression test suggestion: replay immutable frontend/native probes; verify masked responses, exact-byte encrypted reload and blank-keep after whitespace-only replacement, and a bounded loopback Basic header matching the original synthetic password. S3 signing-key preservation and empty-key rejection need scoped coverage without live cloud credentials.
+- Estimated effort: 1–2 hours for the three normalization/construction changes, independent replay, native wire and full verification.
+
+确认阶段未修改应用行为，临时测试逐字节恢复；前端为真实模块与合成
+masked IPC边界，原生配置仅临时目录及Windows DPAPI。没有真实用户
+配置／密码库／云端认证／剪贴板／设备／APK或高资源工作。竞品仅取
+密码原样传递契约，不采用其XOR持久化；不以源码比较证明竞品运行。
+累计86 Confirmed含历史已修复项（Critical1／High19／Medium54／Low12），
+原始b7c5d9f／15项／6.1分保持；完整审计／竞品／UI目标仍active。
