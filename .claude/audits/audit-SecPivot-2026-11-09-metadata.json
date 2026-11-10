@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S76; historical supplemental tracking notes excluded",
-    "total": 87,
-    "confirmed": 87,
+    "scope": "15 baseline cards plus SP-S05 through SP-S77; historical supplemental tracking notes excluded",
+    "total": 88,
+    "confirmed": 88,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
       "Medium": 55,
-      "Low": 12
+      "Low": 13
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S77",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "362524f921d03379af031fdab49a1f02105c1bcd",
+      "area": "Rejected/no-op remote rename clears saved-credential presence and emits reset warning",
+      "status": "Confirmed, unremediated. Actual stores/queue with masked synthetic IPC: ten same/normalized-same/empty/blank/collision cases across both protocols keep settings identical, lose presence, emit one error and write once. UI directly derives placeholders from presence. No backend credential loss or provider proof."
+    },
     {
       "id": "SP-S76",
       "severity": "Medium",
@@ -1711,6 +1719,16 @@
       "check_exit": 0,
       "build_exit": 0,
       "format_exit": 0
+    },
+    "remote_profile_rename_noop": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "362524f921d03379af031fdab49a1f02105c1bcd",
+      "provenance": "remote-profile-rename-red-provenance.json",
+      "cases": 10,
+      "presence_lost": 10,
+      "error_tips": 10,
+      "extra_writes": 10,
+      "limits": "Actual settings/presence/tips/queue, synthetic masked IPC; no backend/user config/vault/provider/clipboard. Only UI state and unwanted writes are claimed."
     }
   },
   "reverification_notes": [

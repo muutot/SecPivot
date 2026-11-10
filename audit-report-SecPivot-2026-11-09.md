@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S76；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S77；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
 | Medium    | 55     | 55        | 0         |
-| Low       | 12     | 12        | 0         |
+| Low       | 13     | 13        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **87** | **87**    | **0**     |
+| **Total** | **88** | **88**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4114,3 +4114,28 @@ theme-token gate使用既有TextField能力，无CSS／token／布局变化；
 currency gate同步settings-panels.md，无IPC／schema／秘密处理变化。
 没有真机读屏／provider／APK证明，不将此局部修复认定全站无障碍完成；
 累计87历史Confirmed及原始15项／6.1分保持，整体目标仍active。
+
+### Finding: SP-S77 无效远程配置重命名清空凭据存在提示并触发误报
+
+- Severity: Low
+- Confidence: High
+- Category: Frontend state / Stability
+- Status: Confirmed
+- Affected area: Remote profile rename service and saved-credential placeholders
+- Evidence:
+  - File: src/lib/services/settings.ts:1372–1417; src/lib/components/settings/RemoteSettingsPanel.svelte:57–64, 128–129 (362524f)
+  - Function / Module: appSettings.renameRemoteProfile -> secretPresence / showTip / schedulePersist
+  - Relevant behavior: removes stored-credential presence and shows the rename-reset error before validating the profile, normalized name or collision. Same-name also executes the rename path; every call queues a config write.
+  - Reproduction: actual service/presence/tips/queue with a masked synthetic IPC seam runs same, normalized-same, empty, whitespace-only and collision names for both S3 and WebDAV. All ten keep the settings content identical, yet lose secret presence, emit one error and cause one extra set_config. remote-profile-rename-red.json and immutable diagnostic hashes are saved in remote-profile-rename-red-provenance.json; no raw values logged.
+  - Independent verification: the UI derives saved-credential placeholders directly from presenceMap[activePath]. The service's name validation occurs after clearing that state. Neither backend credential loss nor real-provider failure is claimed.
+- Problem: an operation rejected or having no identity change nevertheless publishes the side effects of a successful rename.
+- Why it matters: the user sees that credentials need re-entry and loses the saved placeholder despite retaining the original profile. Low reflects proven misleading UI state and redundant persistence, without proof of stored-secret destruction.
+- Realistic failure scenario: the user clears the live profile-name input or enters a colliding name. The original profile remains selected but the UI falsely says it was renamed and credentials were reset.
+- Minimal fix: validate profile existence, normalized name, unchanged identity and collisions before changing presence, displaying reset feedback or scheduling persistence. Keep successful rename behavior unchanged.
+- Better long-term fix: perform validation before side effects for other profile operations too; removeRemoteProfile remains a separate unconfirmed scope.
+- Regression test suggestion: execute both protocols' unchanged/invalid/collision cases against actual stores and queue, asserting unchanged presence/settings, no error tips and no IPC writes. Verify a valid rename changes identity and retains the existing reset warning only when stored credentials were present.
+- Estimated effort: 30–60 minutes for validation ordering, service regressions and frontend verification.
+
+累计88历史Confirmed（Critical1／High19／Medium55／Low13），原始15项／
+6.1分保持。本项仅合成IPC与直接UI派生证据，无实际后台凭据丢失证明。
+手机真机／竞品／全项目审计目标仍active。
