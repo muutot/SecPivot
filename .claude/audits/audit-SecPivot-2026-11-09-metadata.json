@@ -21,20 +21,20 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S54; historical supplemental tracking notes excluded",
-    "total": 65,
-    "confirmed": 65,
+    "scope": "15 baseline cards plus SP-S05 through SP-S55; historical supplemental tracking notes excluded",
+    "total": 66,
+    "confirmed": 66,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 15,
       "Medium": 39,
-      "Low": 10
+      "Low": 11
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "ac810e0",
+  "remediation_checkpoint": "d6501ab",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -530,6 +530,15 @@
       "source_checkpoint": "b6efc80",
       "commit": "ac810e0",
       "status": "Confirmed and remediated. Nine actual browser red-to-green cases, four failing pre-fix handler regressions and six final tests; six browser eligibility cases and real empty filechooser passed. Full verify 323/627/ACL2 exit 0, no new TODO completion."
+    },
+    {
+      "id": "SP-S55",
+      "area": "Responsive editor tab labels wrap under narrow viewport/localized/enlarged fonts",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "564751d",
+      "commit": "d6501ab",
+      "status": "Confirmed and remediated. Thirty-three wrapped cases in 36 actual-browser baseline renders; final 36 pass one-line geometry, native Tab visibility and dialog bounds. Scoped check/build/323 frontend/full format passed; native full gate retained at ac810e0. CSS-only intermediate focus visibility failures led to nearest scrolling; existing theme tokens and compact metrics retained."
     }
   ],
   "verification": {
@@ -827,6 +836,21 @@
       "filechooser": true,
       "scope": "Production EntryEditorDialog mounted via Vite/Svelte with fresh synthetic group, native bidirectional Tab, real CSS/layout and dynamic excluded controls; deterministic production-handler seam for lifetime/empty/interior ownership",
       "limits": "No native Android WebView/external keyboard/screen reader/Tauri handler/user-vault/clipboard. No editor submission. Narrow tab wrapping tracked separately. CARGO_PROFILE_DEV_DEBUG=0 temporary; live clipboard opted out."
+    },
+    "editor_tab_layout": {
+      "result": "passed",
+      "checkpoint": "d6501ab",
+      "red_log": "editor-tabs-browser-red.log",
+      "red_json": "editor-tabs-red.json",
+      "red_wrapped_cases": 33,
+      "browser_cases": 36,
+      "green_log": "editor-tabs-browser-green-final-reveal.log",
+      "green_json": "editor-tabs-green-final.json",
+      "scoped_log": "editor-tabs-scoped-verification.log",
+      "frontend_tests": 323,
+      "native_integration_checkpoint": "ac810e0",
+      "scope": "Actual production editor, synthetic create group, native Tab and Range text geometry; zh-CN/en, dark/light/custom, 11/15px secondary font and 1100x720/420x600/360x320; all final items visible and one-line",
+      "limitations": "Initial CSS-only green-named probes failed and retained; explicit focusin scrolling required. No submission, user-vault, clipboard, screen reader, touch device or Android WebView. Existing Rust/ACL full gate reused for UI-only scope."
     }
   },
   "reverification_notes": [
@@ -896,6 +920,7 @@
     "46eaec4 fixes SP-S50 attachment merge integrity. Four original native red failures and two original registry archive failures independently corroborate missing/wrong payloads. Intermediate shared-owner red required prepared leases and deduplicated Entry removal; final eight native/seven dependency regressions and full verify 317/618/ACL2 passed serially with no filters and clipboard opt-in unset. Fresh original plus patch matches all 60 hashes, 57 untouched upstream files retained. Data/security/structure/patch references updated; synchronization TODO tightened to partial for equal-current-time history and same-second policy. No real user overwrite/permanent loss, Tauri handler/client/device/provider/user vault/clipboard evidence. Original b7c5d9f baseline/6.1 score unchanged and full goal active.",
     "89d4504 fixes SP-S51/SP-S52 as one complete history-union invariant. Original native two failures, original registry equal-current failure and fixed official source corroborate distinct-time history behavior; official same-time dictionary is not evidence of retaining both variants. Three new native regressions, 24 targeted merge tests, seven dependency tests and final full verify 317/621/ACL2 passed serially. Bulk History::from_entries avoids repeated front insertion; no measured large-vault speed claim. First compiler 2 MiB allocation failure and intermediate clippy image/nom cache mismatch excluded; targeted generated dependency clean followed by final full gate. Fresh original+patch matches all 60 hashes, 57 upstream unchanged. Contract/structure/patch references and partial TODO synchronized. Baseline b7c5d9f/6.1 preserved, goal active; native user-vault/clipboard/client/device/provider and mobile replacement unverified.",
     "47226b1 fixes SP-S53 as one complete expiration merge invariant. Five native original failures and one unpatched registry failure; pinned official AssignProperties copies expiry/enabled. Intermediate 4/1 independently confirms old-expiry history omission. Six final new regressions cover actual API/save/reopen, both directions, historical restore, repetition, same-time rejection and permanent deletion; 31 merge tests and final full 317/627/ACL2 passed serially with temporary dev debug=0 and no filters/live clipboard. Non-exhaustive match compilation omission and invalid group-deletion expectation excluded; conflict rule not weakened. Contract/structure and partial TODO synchronized, no UI/IPC/schema/vendor/dependency change. Baseline b7c5d9f/6.1 unchanged and goal active; no user-vault/clipboard/Tauri-handler/client/device/provider or real overwrite proof.",
-    "ac810e0 fixes SP-S54 modal Tab boundaries. Actual attachment editor browser 9/9 red cases escape/stall; six production-handler tests originally 4 failed/2 passed, now all pass. Nine browser green and six native DOM excluded-candidate cases pass; visible Add still invokes filechooser, cleanup restores invoker. Full verify 323/627/ACL2 passed serially with temporary dev debug=0 and clipboard opt-out. Theme/structure focus contracts and obsolete modal CSS TODO reference corrected; no new TODO checked or CSS/markup/IPC/schema/vendor change. Baseline/score unchanged, goal active; narrow tab wrapping and remaining system/UI/competitor audit continue, mobile v1.6.5 replacement/provider unverified."
+    "ac810e0 fixes SP-S54 modal Tab boundaries. Actual attachment editor browser 9/9 red cases escape/stall; six production-handler tests originally 4 failed/2 passed, now all pass. Nine browser green and six native DOM excluded-candidate cases pass; visible Add still invokes filechooser, cleanup restores invoker. Full verify 323/627/ACL2 passed serially with temporary dev debug=0 and clipboard opt-out. Theme/structure focus contracts and obsolete modal CSS TODO reference corrected; no new TODO checked or CSS/markup/IPC/schema/vendor change. Baseline/score unchanged, goal active; narrow tab wrapping and remaining system/UI/competitor audit continue, mobile v1.6.5 replacement/provider unverified.",
+    "d6501ab optimizes SP-S55 editor tabs. Actual browser baseline 33/36 wrapped labels; default zh-CN desktop three themes passed. Final 36 cases across zh-CN/en, dark/light/custom, 11/15px secondary font and three sizes pass; 36 screenshots and contact sheets inspected. Intermediate CSS-only Tab focus partially clipped after two rendering frames, explicitly fixed with nearest focusin scroll/inset existing outline. Scoped check/build/323 frontend/format exit 0; native full 627/ACL2 reused at ac810e0. Approved CSS contract synchronized, no new tokens/IPC/schema/vendor/TODO or tests mirroring CSS. Baseline/score unchanged, goal active; no editor submit/user-vault/clipboard/Tauri/device/provider/screen-reader evidence, mobile replacement still pending."
   ]
 }

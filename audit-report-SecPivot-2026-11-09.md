@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S54；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S55；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 15     | 15        | 0         |
 | Medium    | 39     | 39        | 0         |
-| Low       | 10     | 10        | 0         |
+| Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **65** | **65**    | **0**     |
+| **Total** | **66** | **66**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2739,3 +2739,50 @@ IPC/schema、vendor 或凭据返回改变。
 15 项/6.1 分保持；当前 65 张 Confirmed（Critical 1 / High 15 /
 Medium 39 / Low 10），整体目标 active。手机 v1.6.5 另存为 ACL 源码
 修复与发行根因已确认；替换 APK/真机/provider 仍待验证。
+
+### Finding: SP-S55 编辑器页签在窄屏或较大字号下折行，标签难以阅读（补充发现）
+
+- Severity: Low
+- Confidence: High
+- Category: Accessibility / Responsive UI / Visual design
+- Status: Confirmed
+- Affected area: EntryEditorDialog secondary tab labels and overflow
+- Evidence:
+  - File: src/lib/components/EntryEditorDialog.svelte:829–900/1541–1568（564751d 修复前）
+  - Function / Module: editor-tabs / editor-tab layout
+  - Relevant behavior: 页签 flex 项默认允许收缩，标签允许折行，整行未配置横向滚动。手机宽度把“字段”“附件”等拆成单字两行；英文和较大字号使相同问题出现在更多尺寸。
+  - Reproduction: editor-tabs-browser-red.log/json 在生产新建编辑器、合成 group、附件页进行 36 组浏览器检查：三主题 × 中英文 × 11/15px secondary 字号 × 1100×720/420×600/360×320。33 组标签有多行，默认中文桌面三主题的 3 组通过；使用实际文字 Range rects 和截图，非 CSS 字符串判断。
+  - Independent verification: 和原 scoped CSS 的 shrink/wrap 默认行为及实际浅色窄屏截图交叉核对；设置页/只读 clipboard 参考已有不收缩、横向滚动的密集导航模式。未把这项可读性问题升级为隐藏能力或数据丢失。
+- Problem: 页签标签被挤成碎片式多行，导航高度和可读性随语言/字体意外改变。
+- Why it matters: 手机屏幕和大字号偏好下增加辨认操作的成本。记录内容、保存与点击能力仍存在，按 Low。
+- Realistic failure scenario: 手机宽度打开新建/编辑记录，附件和字段页签显示为纵向单字；切换英文或调大字号进一步压缩标签。
+- Minimal fix: 标签保持 nowrap、项目不收缩，页签栏内部横向滚动；复用既有字体/颜色/滚动条 token 和控件 padding。焦点进入时 nearest 对齐完整按钮，现有焦点描边 inset 防裁切。
+- Better long-term fix: 继续验证其他业务导航的窄屏、长标签、字体偏好及真实 Android WebView；保持紧凑主题，不以单组件效果认定移动端完整适配。
+- Regression test suggestion: 中英文、dark/light/custom、默认和增大 secondary 字号的宽/窄/短窗口，测量每个标签单行与 dialog 边界；原生 Tab 遍历六个页签时完整露出当前控件，焦点描边可见，页签栏滚动不扩大弹窗。
+- Estimated effort: 1–2 小时（布局复现、最小样式/焦点补齐、36 组渲染和维护契约）
+
+d6501ab 已优化。最终 editor-tabs-browser-green-final-reveal.log 与
+editor-tabs-green-final.json 的 36 组均通过，全部单行、每个原生 Tab
+焦点完整露出、弹窗不横向溢出；无 pageerror，卸载恢复 synthetic-invoker。
+36 张截图和三主题 contact sheets 已检查，默认中文桌面保持紧凑形态。
+没有编辑器提交、文件读取或真实用户库操作。
+
+首版仅增加 nowrap/overflow 时，33 组仍在 focused item 完整可见检查失败，
+editor-tabs-green-immediate-measurement.log/json 保留。两帧渲染后仍失败
+（editor-tabs-browser-green-final.log），确认不是单纯采样时序：浏览器
+可能仅让控件部分可见。因此增加 focusin 的 nearest 滚动和 inset
+描边，最终独立复测通过，不将中间 green 名称误作通过证据。
+辅助 Python 首次未指定 UTF-8 的 JSON 读取失败已修正，不计应用缺陷。
+
+editor-tabs-scoped-verification.log exit 0：check 零错误警告、build、
+323 frontend、全仓 format（Prettier/cargo fmt）通过。本项只改变
+UI/样式，原生集成门沿用 ac810e0 的 verify-modal-focus.log：627 Rust、
+ACL 2，临时 debug=0、单线程、无过滤、live clipboard opt-out。
+未额外重复后端测试。css-theming 同步 approved 单行/滚动/焦点模式，
+无新主题变量、业务数据/schema/IPC、vendor 或 TODO 状态改变。
+
+当前详细卡片 66 Confirmed（Critical 1 / High 15 / Medium 39 / Low 11），
+原始 b7c5d9f 的 15 项/6.1 分保持。报告提交无需额外维护引用更新。
+整体目标 active，继续其余系统/竞品/UI 覆盖。自己启动的 Vite/Edge
+已清理；没有原生 Tauri/Android WebView、屏幕阅读器或设备触摸验证。
+手机 v1.6.5 的另存为 ACL 源码修复已确认，新 APK/真机/provider 仍待验证。
