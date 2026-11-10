@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S59；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S60；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 18     | 18        | 0         |
-| Medium    | 40     | 40        | 0         |
+| Medium    | 41     | 41        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **70** | **70**    | **0**     |
+| **Total** | **71** | **71**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2997,3 +2997,66 @@ check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单�
 当前详细卡片 70 Confirmed（Critical 1 / High 18 / Medium 40 / Low 11），
 原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续未引用附件边界
 及其余系统/竞品/UI；手机 v1.6.5 另存为 ACL 源码修复已确认，APK/真机待验。
+
+### Finding: SP-S60 跟踪永久删除释放临时保留后留下无引用附件（补充发现）
+
+- Severity: Medium
+- Confidence: High
+- Category: Privacy / Data integrity / Storage
+- Status: Confirmed
+- Affected area: tracked permanent entry/subtree/bin deletion and persisted attachment ownership
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/db/types/entry.rs:403–431/681–714/812–820/937–960（472ecb6 修复前）；src-tauri/vendor/keepass-0.13.22/src/db/types/mod.rs:245–285
+  - Function / Module: EntryMut::track_changes, EntryMut::remove, EntryTrack::remove/drop, reindex_entry_attachments
+  - Relevant behavior: 本地补丁为尚未加入历史的当前附件持有计数保留。永久删除先移除 entry 及全部反向引用；历史附件无此保留可正常回收，当前附件暂留。drop 无条目可写入快照，解除保留后重建索引；已删除条目的 desired 与旧反向引用均为空，原当前 ID 不进入 affected 集合，二进制持续保存。
+  - Reproduction: tracked-delete-native-red-valid.log 六条实际路径失败：禁用回收站的单条/批量/三层子树、回收站内单条/三层子树及 empty_recycle_bin。每个目标与幸存者均经实际 update_entry 生成不同的当前/历史附件、save/close/open；删除再 save/close/open 后附件数分别比预期多 1/2/2/1/2/3。失败均在后续 merge 之前，不把未执行的合并断言当红测证据。
+  - Independent verification: 独立无 patch 的 keepass =0.13.22 项目真实 tracked remove/save/reopen 后附件数为 0，两项原版对照通过（merge-orphan-registry-control.log）；keepass-orphan-registry-metadata.json 确认 registry 来源，原 archive SHA-256 a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e。原版没有本地保留机制；本项归因于本地补丁，而非声称原版普通移除 API 不履行合同。
+- Problem: 用户永久删除了拥有者及历史，当前附件却继续以无引用二进制存于新保存的 KDBX 内；应用列表看不到这些残留。
+- Why it matters: 删除语义与持久化内容不一致，重复增删附件还会增加库体积和保存/同步成本。按有约束的内容保留及增长风险定 Medium；附件仍受整个 KDBX 加密，没有证明明文泄漏、第三方读取或安全擦除承诺。
+- Realistic failure scenario: 用户永久删除带附件的记录或清空回收站，以为该新保存库已经不含这些载荷；以后继续同步这份库，残留仍随文件保存和传输。
+- Minimal fix: EntryTrack drop 重建索引后显式审查其 retained_attachments 中已无保留、无反向引用的 ID，递归核对最终所有 current/history 拥有者，仅回收真正无主的本次释放载荷；不全库 GC。
+- Better long-term fix: 独立验证 prepared merge 保留结束与最终历史/回收站恢复后的清理契约；源旧副本、既有孤立头数据和文件系统/备份擦除分别处理，不将本项回收推广为全面擦除。
+- Regression test suggestion: 六条真实永久删除 API 生成当前/历史附件、保存重开并保留未删条目原字节；别名共享 ID、另一 current/嵌套 history 所有者、嵌套 guard 最后一个保留释放、额外准备阶段保留、原先无引用头数据；原版 registry 对照、无 _merge feature 编译和完整 provenance gate。
+- Estimated effort: 2–4 小时（独立对照、六路径回归、最小 drop 修复与包来源验证）
+
+fb3b9c3 已修复。仅将本次解除保留的候选纳入回收，现有索引重建逻辑不变。
+只有候选非空时递归读取当前数据库的拥有者；仍被 current/history 引用
+或仍有保留的附件不会被回收，未参与此次保留的无引用头数据保持。
+现有递归 collect_entry_attachment_ids 取消 _merge 限定供普通跟踪使用；
+没有新增公开 API、IPC、schema 或持久化字段。批量/子树删除原本逐条
+处理，本项未证明大库性能改善，性能基准仍缺证。
+
+tracked-delete-native-green.log 八项通过，增强已有六条路径而非新增
+同名空测；初始未提交的两项 merge-orphan 回归在实际删除前置断言失败，
+据此改为验证真实删除，保留其 merge-orphan-native-red.log 观察但未将
+尚未运行的合并段当成证据。最终六路径同时检查幸存当前字节与历史
+字节，随后原有双向旧副本合并/保存重开/重复及 tombstone 断言通过。
+本项对合并结果没有“全部附件为 0”的断言，合并导入残留单独追踪。
+
+tracked-delete-vendor-green-final.log 14 项通过，其中三项新增覆盖别名、
+共享 current/原始嵌套历史、双层真实 guard、模拟额外 prepared 计数和
+不相关孤立头数据。现有真实 prepare/merge 共享拥有者案例仍通过；
+模拟计数不是完整 provider/merge finalization 验证。首版嵌套夹具使用
+add_entry 自动去掉嵌套历史，已改为原始嵌套结构再绿测；两次私有字段
+编译失败和该夹具失败均不用于扩大产品缺陷结论。
+
+verify-tracked-delete.log exit 0：323 frontend、656 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单线程、
+无过滤、临时 CARGO_PROFILE_DEV_DEBUG=0，live clipboard 保持 opt-out。
+tracked-delete-no-merge-check.log 无 _merge 的 save_kdbx4 编译通过。
+tracked-delete-reconstruction.log 从新拷贝原始 archive + 零上下文补丁
+重建全部 60 hash；仍为 4 补丁 / 56 原文件。仅 entry.rs 的 drop/tests
+和 types/mod.rs 的 helper gate 改动，未扩散到 untouched group.rs。
+维护 gate 更新 data-contracts/security-model/project-structure、补丁说明
+与专门删除附件 TODO；完整同步 TODO 继续 [~]，未宣称跨客户端完整兼容。
+
+删除修复后，独立 prepared 对照的两个方向均在合并结果最终附件数
+失败（merge-orphan-patched-independent-red.log）；删除前置阶段已通过。
+该观察显示第二条准备阶段无引用载荷清理路径，保持独立待审计记录，
+本项没有在 complete_attachment_merge 提前回收可能尚属 losing-history
+或本地回收站的载荷。独立探针不会读取真实库、云端或共享 OS 剪贴板。
+
+本项无 UI/CSS/版本或秘密返回改变，没有原生 Tauri handler、真实用户库、
+Android/APK/device/provider 或第三方客户端运行证据。手机 v1.6.5 另存为
+ACL 修复仍待替换 APK/真机验证。71 Confirmed（Critical 1 / High 18 /
+Medium 41 / Low 11），原 b7c5d9f 的 15 项/6.1 分保持，整体目标 active。
