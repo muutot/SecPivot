@@ -64,6 +64,8 @@ psl = "=2.1.249"
 # Exact pin: rxing 0.9.2 requires image =0.25.8, so newer patches cannot resolve.
 image = { version = "=0.25.8", default-features = false, features = ["png"] }
 rxing = "0.9.2"
+# Bounded native 1PUX reads: stored/deflate only; no extraction or crypto features.
+zip = { version = "=9.5.0", default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
