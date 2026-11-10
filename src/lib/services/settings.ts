@@ -1370,6 +1370,19 @@ export const appSettings: AppSettingsStore = {
   },
 
   renameRemoteProfile(path, name): void {
+    const state = get(settings);
+    const current = findRemoteProfile(state.remoteProfiles, path);
+    if (!current) return;
+    const nextName = normalizeRemoteProfileName(name, "");
+    if (nextName === "" || nextName === current.name) return;
+    const collides = state.remoteProfiles.some(
+      (profile) =>
+        remoteProfilePath(profile) !== path &&
+        profile.settings.kind === current.settings.kind &&
+        profile.name === nextName,
+    );
+    if (collides) return;
+
     // A rename changes the profile identity the backend merges credentials
     // by, so stored secrets do not follow it: drop presence for both paths
     // and tell the user to re-enter them.
@@ -1386,17 +1399,6 @@ export const appSettings: AppSettingsStore = {
       showTip(t(get(settings).general.language, "remote.renamedSecretsReset"), "error");
     }
     settings.update((s) => {
-      const current = findRemoteProfile(s.remoteProfiles, path);
-      if (!current) return s;
-      const nextName = normalizeRemoteProfileName(name, "");
-      if (nextName === "") return s;
-      const collides = s.remoteProfiles.some(
-        (profile) =>
-          remoteProfilePath(profile) !== path &&
-          profile.settings.kind === current.settings.kind &&
-          profile.name === nextName,
-      );
-      if (collides) return s;
       const remoteProfiles = s.remoteProfiles.map((profile) =>
         remoteProfilePath(profile) === path ? { ...profile, name: nextName } : profile,
       );
