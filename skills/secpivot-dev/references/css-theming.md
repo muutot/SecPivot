@@ -35,6 +35,10 @@ hard-code a version count or promise that the pre-restore version is always
 retained: the configured limits also apply to restore snapshots. Keep this
 copy in the existing muted `.history-hint` paragraph in both locales.
 
+The Save As toolbar tooltip and Appearance toolbar description use the same
+localized key. Explain that successful Save As switches future saves to the new
+file; keep the compact visible label unchanged. A remote session becomes local.
+
 ## Theme color contract
 
 The `ThemeColors` interface has 21 semantic values (identical names to Clipboard plus `linkColor` for URL/contact links):
