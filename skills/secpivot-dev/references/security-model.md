@@ -1,10 +1,12 @@
 # Security Model
 
-SP-S66 confirms that illegal ordinary XML 1.0 characters can be published in
-KDBX through Bitwarden import. The native parser accepts the resulting data;
-standard XML readers reject it. Repair is pending and must preserve the old
-file and live edits rather than silently dropping text. No secret disclosure
-or native competitor application failure has been demonstrated.
+KDBX serialization rejects actual XML 1.0-invalid text before publication with
+a content-free error. Old file bytes, live dirty edits and historical content
+remain after refusal; no text is silently dropped. Protected Base64 still
+permits arbitrary underlying string scalars. Native import/save and dependency
+key/group/meta/character-boundary controls verify this scope. The reader is
+unchanged; invalid existing ordinary history may prevent saving until corrected
+or removed. No automatic recovery or native competitor execution is implied.
 
 Argon2d/Argon2id derivation checks that the KDBX u64 iteration count and memory
 in KiB fit the library's u32 parameters before computing. Oversized values return

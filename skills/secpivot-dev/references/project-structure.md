@@ -65,7 +65,7 @@ the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the six patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and twenty-three
+in the audit scope. Native vault tests cover the application boundary and twenty-five
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after
@@ -107,7 +107,11 @@ local/remote open and failed-save publication. Standard KDF defaults are unchang
 Patched format/xml_db/mod.rs encodes raw CR from the trusted text-only XML
 serializer as character references before KDBX encryption. It preserves current/
 history field values and keys, group/meta text and literal entity strings while
-leaving normal parser normalization and protected base64 unchanged. Native
+leaving normal parser normalization and protected base64 unchanged.
+It validates actual XML 1.0 Char ranges before publication, rejecting forbidden
+ordinary current/history/key/group/meta text with a content-free error while
+retaining live edits and old file bytes. Protected Base64 scalars and allowed
+supplementary noncharacters remain supported; no reader/sanitization change. Native
 entry/history/group/meta and Bitwarden wire regressions accompany two direct
 serializer/parser tests. Patched format/xml_db/entry.rs opts StringValue into
 dedicated `$text` mapping with direct String conversion, preserving ASCII and
@@ -123,7 +127,7 @@ the diff payload are preserved by explicit Git attribute exceptions; the other
 42 files remain unchanged. README/schema/ordinary parsing are unchanged and
 the separate registry QuickXML 0.42 dependency is unaffected.
 `scripts/test-dependency-patch.mjs` tests source copies in a validated temporary
-folder so standalone Cargo locks remain original. KeePass's 23 specialized
+folder so standalone Cargo locks remain original. KeePass's 25 specialized
 and QuickXML's serialize-enabled library tests run through npm and full verify;
 upstream ignored tests remain limits. Patch descriptions/reconstruction are in
 KEEPASS_PATCH.md and QUICK_XML_PATCH.md.

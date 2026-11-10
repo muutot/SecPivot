@@ -15039,3 +15039,115 @@ fn kdbx_whitespace_original_registry_fixture_survives_native_open_and_rewrite() 
         "valid external whitespace values were emptied by native open/rewrite"
     );
 }
+
+fn kdbx_scalar_import_input(plain: &str, protected: &str) -> ImportEntryInput {
+    let text = serde_json::json!({"items":[{"type":1,"name":"Synthetic scalar","notes":plain,
+        "login":{"username":plain,"password":protected},
+        "fields":[{"name":"Plain","value":plain,"type":0},{"name":"Hidden","value":protected,"type":1}]}]}).to_string();
+    let rows = crate::commands::parse_bitwarden_json(text).unwrap();
+    let mut wire = serde_json::to_value(&rows[0]).unwrap();
+    wire["groupUuid"] = serde_json::json!(ROOT_GROUP_UUID);
+    wire["attachments"] = serde_json::json!([]);
+    serde_json::from_value(wire).unwrap()
+}
+
+#[test]
+fn kdbx_scalar_bitwarden_save_rejects_invalid_xml_atomically() {
+    for scalar in [0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let previous = std::fs::read(&path).unwrap();
+        let expected = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
+        let state = session
+            .import_entries(&[kdbx_scalar_import_input(&expected, &expected)])
+            .unwrap();
+        let id = state.root.entries[0].uuid.clone();
+        let error = session.save().unwrap_err();
+        assert!(error.contains("not allowed in XML 1.0"));
+        assert!(!error.contains(&expected));
+        assert!(session.snapshot().unwrap().dirty);
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        let loaded = Database::parse(
+            &previous,
+            DatabaseKey::new().with_password("master-password"),
+        )
+        .unwrap();
+        assert_eq!(loaded.root().entries().count(), 0);
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&id).unwrap())
+            .unwrap();
+        for field in [FIELD_USERNAME, FIELD_NOTES, "Bitwarden Plain"] {
+            assert_eq!(entry.get(field), Some(expected.as_str()));
+        }
+        for field in [FIELD_PASSWORD, "Bitwarden Hidden"] {
+            assert_eq!(entry.fields[field].get(), &expected);
+            assert!(entry.fields[field].is_protected());
+        }
+    }
+}
+
+#[test]
+fn kdbx_scalar_legal_and_protected_values_survive_native_save_reopen() {
+    for scalar in [
+        0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff, 9, 10, 13, 0x85, 0x1fffe, 0x10ffff,
+    ] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let expected = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
+        let plain = if [9, 10, 13, 0x85, 0x1fffe, 0x10ffff].contains(&scalar) {
+            expected.as_str()
+        } else {
+            "synthetic ordinary"
+        };
+        let state = session
+            .import_entries(&[kdbx_scalar_import_input(plain, &expected)])
+            .unwrap();
+        let id = state.root.entries[0].uuid.clone();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&id).unwrap())
+            .unwrap();
+        for field in [FIELD_USERNAME, FIELD_NOTES, "Bitwarden Plain"] {
+            assert_eq!(entry.get(field), Some(plain));
+        }
+        for field in [FIELD_PASSWORD, "Bitwarden Hidden"] {
+            assert_eq!(entry.fields[field].get(), &expected);
+            assert!(entry.fields[field].is_protected());
+        }
+    }
+}
+
+#[test]
+fn kdbx_scalar_historical_invalid_text_prevents_publication_without_losing_edits() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let previous = std::fs::read(&path).unwrap();
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic history", "", "", "");
+    input.notes = "synthetic\0history".into();
+    let state = session.add_entry(&input).unwrap();
+    let id = state.root.entries[0].uuid.clone();
+    input.notes = "synthetic corrected".into();
+    session.update_entry(&id, &input).unwrap();
+    assert!(session
+        .save()
+        .unwrap_err()
+        .contains("not allowed in XML 1.0"));
+    assert_eq!(std::fs::read(&path).unwrap(), previous);
+    assert!(session.snapshot().unwrap().dirty);
+    let entry = session
+        .require_db()
+        .unwrap()
+        .entry(parse_entry_id(&id).unwrap())
+        .unwrap();
+    assert_eq!(entry.get(FIELD_NOTES), Some("synthetic corrected"));
+    assert_eq!(
+        entry.historical(0).unwrap().get(FIELD_NOTES),
+        Some("synthetic\0history")
+    );
+}

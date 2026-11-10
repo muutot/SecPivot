@@ -23,10 +23,14 @@ Original-registry fixture/XML provenance and native open/rewrite/current/history
 regressions cover this boundary. Invalid XML scalars and group/meta whitespace
 remain separate; this change does not recover already-lost content.
 
-Invalid XML 1.0 text is confirmed but not yet remediated (SP-S66). Actual
-Bitwarden command/wire/batch import saves nine illegal ordinary scalars; native
-reopen succeeds while independent standard XML readers reject the internal XML.
-Keep this separate from CR/whitespace fidelity and protected Base64 values.
+KDBX to_xml validates the XML 1.0 Char ranges on actual serialized text before
+encrypted destination publication. Forbidden ordinary values/keys/group/meta
+and history text fail with a content-free error, preserving the previous file
+and live dirty edits. Protected Base64 keeps arbitrary underlying scalars;
+TAB/LF/CR/NEL and allowed supplementary noncharacters retain their values.
+Import remains lossless in memory; invalid historical ordinary text can also
+prevent saving. The reader is unchanged and no automatic sanitization/recovery
+or complete native-client compatibility is implied.
 
 CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
 existing formula guard apostrophe to the field value before RFC 4180 quoting.

@@ -57,6 +57,10 @@ Only these upstream files are changed:
   The model emits text rather than CDATA; literal entity strings and protected
   base64 remain intact, and the reader still applies standard raw-CR normalization.
   Pure-whitespace entry text is handled separately by the entry reader below.
+  Validate actual serialized XML against XML 1.0 Char ranges before publication;
+  forbidden ordinary text/keys/group/meta/history returns a content-free error.
+  Protected values are already Base64 and may retain arbitrary source scalars.
+  No silent filtering, reader change or all-Unicode-noncharacter rejection.
 - `src/format/xml_db/entry.rs`: deserialize entry values through dedicated
   `$text` and a direct String converter, preserving ASCII/Unicode whitespace.
   This works with the scoped QuickXML patch described in `QUICK_XML_PATCH.md`;
@@ -81,7 +85,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The twenty-three dependency-specific tests can be run separately:
+The twenty-five dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch

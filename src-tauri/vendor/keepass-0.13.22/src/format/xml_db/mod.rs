@@ -109,6 +109,17 @@ pub fn to_xml(
     }
     remap_group(&mut kdbx.root.group, &dense_ids)?;
     let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?;
+    // Validate after protected values became base64; never silently drop text.
+    if xml.chars().any(|c| {
+        !matches!(c, '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}'
+            | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
+    }) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Database contains a character not allowed in XML 1.0",
+        )
+        .into());
+    }
     // Model strings are XML text, never CDATA. Character references preserve
     // CR across XML's mandatory line-ending normalization without changing
     // literal entity text or protected fields' base64 payloads.
@@ -368,6 +379,68 @@ mod tests {
 
     #[derive(Serialize, Deserialize)]
     struct Test<T>(T);
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_kdbx_scalar_writer_rejects_illegal_text_and_keys() {
+        for scalar in [0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff] {
+            let text = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
+            for location in ["value", "key", "group", "meta"] {
+                let mut db = crate::Database::new();
+                match location {
+                    "group" => db.root_mut().name = text.clone(),
+                    "meta" => db.meta.database_description = Some(text.clone()),
+                    _ => {
+                        let mut root = db.root_mut();
+                        let mut entry = root.add_entry();
+                        if location == "key" {
+                            entry.set_protected(&text, "synthetic");
+                        } else {
+                            entry.set_unprotected("Notes", &text);
+                        }
+                    }
+                }
+                let mut cipher = crate::config::InnerCipherConfig::Plain
+                    .get_cipher(&[])
+                    .unwrap();
+                let error = to_xml(&db, &mut *cipher).unwrap_err().to_string();
+                assert!(error.contains("not allowed in XML 1.0"));
+                assert!(!error.contains(&text));
+            }
+        }
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_kdbx_scalar_writer_keeps_legal_and_protected_text() {
+        for scalar in [
+            0u32, 1, 8, 11, 12, 14, 31, 0xfffe, 0xffff, 9, 10, 13, 0x85, 0x1fffe, 0x10ffff,
+        ] {
+            let secret = format!("synthetic{}tail", char::from_u32(scalar).unwrap());
+            let plain = if [9, 10, 13, 0x85, 0x1fffe, 0x10ffff].contains(&scalar) {
+                secret.as_str()
+            } else {
+                "synthetic ordinary"
+            };
+            let mut db = crate::Database::new();
+            let id = {
+                let mut root = db.root_mut();
+                let mut entry = root.add_entry();
+                entry.set_unprotected("Notes", plain);
+                entry.set_protected("Password", &secret);
+                entry.id()
+            };
+            let mut cipher = crate::config::InnerCipherConfig::Plain
+                .get_cipher(&[])
+                .unwrap();
+            let (xml, attachments) = to_xml(&db, &mut *cipher).unwrap();
+            let loaded = parse_xml(&xml, &attachments, &mut *cipher).unwrap();
+            let entry = loaded.entry(id).unwrap();
+            assert_eq!(entry.get("Notes"), Some(plain));
+            assert_eq!(entry.fields["Password"].get(), &secret);
+            assert!(entry.fields["Password"].is_protected());
+        }
+    }
 
     #[cfg(feature = "save_kdbx4")]
     #[test]
