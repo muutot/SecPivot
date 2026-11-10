@@ -3605,3 +3605,34 @@ MainForm_Functions.cs:2863–2873 的 NotifyUserActivity 仍无条件刷新期�
 触发原因仍未知，高资源耗尽复现未执行且已放弃。原生 Android 后台锁、
 Keystore、手机另存为替换 APK／真机 provider、完整竞品能力与 UI
 优化仍待完成；整体目标 active。
+
+193fe0a 已修复 SP-S68 的 renderer 空闲期限：活动／rearm 前检查旧期限，
+focus 和 visible resume 只检查是否到期，未到期不延长；隐藏事件不替代
+原生后台锁定策略。0 禁用、期限前离散／连续活动、设置变更规则保留。
+独立的 opaque close attempt 在后端关闭等待期间防重复；已发布关闭后
+重开进入新期限，旧请求迟到的剪贴板完成不能解除新一次关闭的防重。
+手动／焦点／敏感复制的既有 lockVault 合同、后端和 IPC 未变。
+
+原样 idle-deadline-confirmed-probe.mjs 的 SHA-256 比对未变，同一探针
+修复前 5 failed / 3 passed，修复后 8 passed。仓库实际服务图新增 18
+回归，加上菜单 9 项共 27 passed。新增用例覆盖七种活动／恢复事件、
+期限前行为、隐藏恢复、设置、监听器／保存订阅清理、排队重开以及
+合成剪贴板 IPC 的旧／新关闭交错，不使用共享 OS 剪贴板或用户库。
+首次新增集合因设置 debounce 句柄跨 mock 时钟重置而失败；fixture
+在重置前 flush 合成保存队列后完整通过，该搭建问题不计产品缺陷。
+
+verify-idle-deadline.log exit 0：格式、零错误警告 check、150-key 设置
+契约、生产构建、359 frontend、673 Rust、ACL 2、KeePass 25、
+QuickXML 1363（4 ignored）及 clippy 全部通过。Rust 根门串行、
+debug0、无过滤，live clipboard unset；四个原生剪贴板测试体与
+ignored 不计执行覆盖。TODO 更新后的完整 format:check 也已通过。
+QuickXML 临时专项副本的 unused patch 提示与此前一致，不等于应用
+依赖失效；两套来源门均通过。补丁和源码／探针哈希见
+idle-deadline-fix.patch 与 idle-deadline-green-evidence.json。
+
+文档 currency gate 同步 security-model 的实际期限和 pending 生命周期，
+TODO 只检查精确 renderer 范围。已有 SKILL 路由、模块归属、IPC／schema
+和主题合同仍有效，不额外修改维护引用。报告／strict JSON／79 张卡片
+计数与原始 15 项／6.1 基线另行复核。整体目标继续 active；本项不
+代表原生 Android 后台锁定、Keystore、手机另存为新 APK／真机 provider、
+renderer 停止运行时的后端期限约束或完整系统／竞品／UI 工作完成。

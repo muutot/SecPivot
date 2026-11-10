@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "73ec3c6",
+  "remediation_checkpoint": "193fe0a",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "8f6b31c",
       "area": "Delayed idle expiry overwritten by activity/resume and duplicate pending close",
-      "status": "Confirmed, unremediated. Actual-service synthetic probe8 yields5 failed/3 passed. Four delayed activity/resume cases remain open; post-release pending close count2. Earlier pre-release assertion was insufficient and corrected in a separate immutable probe. No native suspend/device/clipboard/user-vault proof; no resource-exhaustion reproduction. Pinned competitor source reviewed without runtime/event-order claims."
+      "status": "Confirmed and remediated for renderer idle deadlines. Check expiry before rearm/activity; focus/visible resume only checks expiry, and opaque pending attempts prevent duplicate queued closes without clearing a newer lifetime on old clipboard completion. Immutable probe8 passes, actual-service idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed. Root Rust serial/debug0/unfiltered/live unset. Security reference and exact renderer TODO synchronized; no CSS/backend/schema/IPC change. Test debounce cleanup corrected as harness isolation, no extra product finding. Native Android background locking/Keystore/APK/provider and backend timing while renderer cannot execute remain pending; original15/6.1 baseline and active goal preserved.",
+      "commit": "193fe0a"
     },
     {
       "id": "SP-S67",
@@ -1339,14 +1340,26 @@
       "android_acl_tests": 2
     },
     "idle_deadline": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated for renderer/service scope",
       "checkpoint": "8f6b31c",
       "probe": "idle-deadline-confirmed-probe.mjs",
       "red_log": "idle-deadline-confirmed-red.log",
       "proof": "idle-deadline-evidence.json",
       "failed": 5,
       "passed": 3,
-      "limitations": "Actual production service graph with synthetic IPC, storage, wall clock and events; no user vault, clipboard, network or device execution"
+      "limitations": "Synthetic IPC/clock/storage/events only. Four native clipboard live bodies and four ignored QuickXML tests not executed. No device/provider/APK/native-suspension/competitor runtime or backend deadline proof.",
+      "fix_checkpoint": "193fe0a",
+      "green_log": "idle-deadline-confirmed-green.log",
+      "green_passed": 8,
+      "targeted_log": "idle-deadline-targeted-complete.log",
+      "idle_tests": 18,
+      "menu_tests": 9,
+      "full_log": "verify-idle-deadline.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 673,
+      "full_acl": 2,
+      "proof_green": "idle-deadline-green-evidence.json"
     }
   },
   "reverification_notes": [
@@ -1430,6 +1443,7 @@
     "92c1d14 SP-S65 confirmed, unremediated: actual native2 red yields48 current/history and50 original-file-open/rewrite changes. Original registry AES1 fixture actual get_xml/ElementTree35 ordinary values intact; seven protection attributes, source/lock/XML/fixture hashes recorded. ASCII blank events skipped at quickxml map boundary; Unicode whitespace also trimmed by cs_opt_string. Final vendor1 pass/1 fail; initial absent-Value expectation was harness error and corrected. Direct Option/String attempts fail and withdrawn. Hashed red source/patch/fixture outside repo; all first-party and five existing vendor source bytes restored. Prior323/668/ACL2 green remains source gate but is not whitespace coverage. Report/TODO and three domain refs clarify pending boundary; original b7c5d9f/15/6.1 unchanged.76 Confirmed1/19/45/11; phone replacement APK/provider, valid costly KDF and remaining full/competitor/UI work continue; goal active.",
     "7c1cbe1 repairs SP-S65 dedicated entry-text fidelity. Red2 to green2, native current/history and original fixture open/rewrite; vendor23, QuickXML1363/ignored4, independent3 and root full323/670/ACL2 passed. Synthetic provenance and live-clipboard opt-out retained. Complete MIT QuickXML0.41 vendor adds only map patch; registry0.42 unchanged. KeePass six patched/54 untouched, original five patch source bytes identical. Raw archive+patch reconstruction and staged60+43 hashes/patch/fixture byte identity pass; earlier EOL reconstruction/unsupported formatter errors are harness-only. Scoped $text preserves ASCII/Unicode and protected/empty/missing/metadata, no raw substitution/global metadata change. SKILL/maintenance/data/security/structure/patch/TODO gates synchronized. System.Xml helper and pinned KeePass source are auxiliary evidence without native competitor/full migration claims. Count76 Confirmed1/19/45/11 and original b7c5d9f/15/6.1 unchanged; active goal continues.",
     "9798b77 SP-S66 confirmed: real Bitwarden command/wire/import/save publishes9 XML1.0-invalid ordinary cases; native exact reopens9, standard ElementTree/System.Xml reject9. Current-library isolated probe own15/invalid9/valid6, helper.NET10.0.14 total6 accepts18 rejects. Pinned KeePass SafeXmlString source sanitizes; no native-client execution. Red test/source/patch/XML saved; root exact source restored. Borrow-type compilation failure excluded as harness error. Planned publication refusal preserves old bytes/live edits/protected Base64; no silent sanitization or all-Unicode-noncharacter rejection. Report/TODO/data/security documentation gates updated; route/ownership unchanged. Count77 Confirmed1/19/46/11; original b7c5d9f15/6.1 and active goal preserved.",
-    "9333209 repairs SP-S66 XML1.0-invalid publication with11-line serializer gate after protected Base64 conversion. Native3 pass for illegal9 imports preserving old-file/live dirty values, historical refusal, legal6/protected-only9 actual save/reopen. Vendor25 with36 illegal key/value/group/meta controls, immutable independent9 refusal/6 legal exact and actual XML standard acceptance, full323/673/ACL2/QuickXML1363 ignored4 pass. Root serial/debug0/unfiltered/live unset; no extra runtime coverage claim. Fresh60hash reconstruction/staged60+43 and patches passed; six existing owned patches/54 upstream unchanged except reviewed XML entry-point; other five patch bytes identical. Recursively formatted child5 restored before full gate; maintain --config skip_children=true. Data/security/structure/maintenance/patch/TODO currency gate synchronized; routes/IPC/schema/defaults unchanged. Report/metadata count77 Confirmed1/19/46/11 and original b7c5d9f15/6.1 preserved. No silent sanitizer/automatic history recovery/full export/client/device/provider/large-vault benchmark/security guarantee; goal active."
+    "9333209 repairs SP-S66 XML1.0-invalid publication with11-line serializer gate after protected Base64 conversion. Native3 pass for illegal9 imports preserving old-file/live dirty values, historical refusal, legal6/protected-only9 actual save/reopen. Vendor25 with36 illegal key/value/group/meta controls, immutable independent9 refusal/6 legal exact and actual XML standard acceptance, full323/673/ACL2/QuickXML1363 ignored4 pass. Root serial/debug0/unfiltered/live unset; no extra runtime coverage claim. Fresh60hash reconstruction/staged60+43 and patches passed; six existing owned patches/54 upstream unchanged except reviewed XML entry-point; other five patch bytes identical. Recursively formatted child5 restored before full gate; maintain --config skip_children=true. Data/security/structure/maintenance/patch/TODO currency gate synchronized; routes/IPC/schema/defaults unchanged. Report/metadata count77 Confirmed1/19/46/11 and original b7c5d9f15/6.1 preserved. No silent sanitizer/automatic history recovery/full export/client/device/provider/large-vault benchmark/security guarantee; goal active.",
+    "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active."
   ]
 }
