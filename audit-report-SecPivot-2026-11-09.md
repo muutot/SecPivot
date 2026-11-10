@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S56；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S57；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
-| High      | 15     | 15        | 0         |
+| High      | 16     | 16        | 0         |
 | Medium    | 40     | 40        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **67** | **67**    | **0**     |
+| **Total** | **68** | **68**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -2836,3 +2836,51 @@ IPC/schema、密码返回改变，未访问用户库/共享 OS 剪贴板/真实 
 当前详细卡片 67 Confirmed（Critical 1 / High 15 / Medium 40 / Low 11），
 原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续其余系统/竞品/UI
 覆盖。手机 v1.6.5 另存为 ACL 源码修复已确认，新 APK/真机/provider 待验证。
+
+### Finding: SP-S57 永久删除未写删除标记，旧副本合并使条目和分组复活（补充发现）
+
+- Severity: High
+- Confidence: High
+- Category: Data integrity / Privacy / Synchronization
+- Status: Confirmed
+- Affected area: delete_entry / delete_entries / delete_group / empty_recycle_bin
+- Evidence:
+  - File: src-tauri/src/vault/entries.rs:600–601/646–647/968–969/1019–1025；src-tauri/vendor/keepass-0.13.22/src/db/types/entry.rs:681–736/812–820、src/db/types/group.rs:589–620/721–756（8dfcf40 修复前）
+  - Function / Module: VaultSession permanent-removal branches and EntryMut/GroupMut vs EntryTrack/GroupTrack removal
+  - Relevant behavior: 五处用户永久删除调用未追踪的 remove；只有 track_changes().remove 写入 DeletedObjects 时间。普通移除清理内存及附件引用，却不保存同步删除意图。分组追踪删除会递归记录整个子树。
+  - Reproduction: permanent-deletion-native-red-corrected.log 的六项实际应用 API 回归全部失败：关闭回收站后单个/批量条目或分组永久删除，已回收的条目/分组再次删除，以及清空回收站。合成库先保存重开并保留旧副本，真实删除后再保存重开；首次与未改动旧副本合并时被删除条目重新出现。初始三个分组 fixture 因查找器没有遍历最深层而失败，已修正，不计产品证据。原始有效红测停止在第一次复活断言，后续反向/合并重开/重复合并及标记检查由最终绿测覆盖。
+  - Independent verification: 没有 Cargo patch 的 registry keepass =0.13.22 两项直接 API 对照（permanent-deletion-registry-independent.log）通过：untracked 删除没有标记，双向合并后对象和子树返回；tracked 删除有标记且重开、双向合并保持删除。这是第一方接口选择错误，不是声称依赖的普通移除接口违约。固定官方 KeePass commit d1eec63f1bd73dc2d5273eaf94528f616b553ce5，MainForm_Functions.cs:5116–5117/5215–5220/5245–5280 明确永久删除写 DeletedObjects，并在组/清空中调用 DeleteAllObjects；PwGroup.cs:1367–1387 递归写每个条目/分组标记。两个 SHA-256 分别 5174c3280e1487e016abb29ce695861fae4a09e471ff3d21eb326be8cefe59bb / 1836977793c3f634bb94e2d3cd2b669f709ae0519bd80a0761b565ed245066d2，来源见 permanent-deletion-reference-provenance.json。未运行官方客户端。
+- Problem: 界面和重开都显示永久删除成功，但 KDBX 没有记录删除意图，下一次同步将旧副本当成新对象重新插入。
+- Why it matters: 用户明确永久删除的凭据、条目和整个分组子树可以悄悄恢复，持久状态不符合删除意图，按 High；未证实秘密被第三方读取或真实用户库发生泄漏。
+- Realistic failure scenario: 手机上永久删除记录并保存，随后另一设备上传仍含旧记录的数据库；选择合并后，被永久删除的记录重新出现在库中。清空回收站中的嵌套分组同样可能返回。
+- Minimal fix: 单个/批量永久删除和清空循环用现有 tracked removal；分组递归写入每个 descendant 的 UUID/time 标记并保留 root 拒绝。临时 merge detachment 继续使用 untracked removal。
+- Better long-term fix: 继续独立验证删除标记生命周期、相同时间/较新移动/嵌套修改冲突及真实客户端双向同步，区分永久删除意图与文件/备份安全擦除。
+- Regression test suggestion: 六条真实 API 路径、三层子树和批量多个条目，KDBX 保存重开、双向旧副本合并、合并后重开及重复合并均不复活；每个 UUID 有具体时间，旧标记/未删除对象保留；普通回收无永久标记，无效批次不改 DB/revision/dirty；确实晚于删除的显式编辑仍按既有策略胜出。
+- Estimated effort: 1–3 小时（真实删除/同步复现、官方/registry 对照及完整验证）
+
+a44d2fd 已修复，8 个新增原生回归通过（permanent-deletion-native-green-final.log）。
+六个主要场景验证旧副本不复活、每个子树对象的删除时间保存，以及未删除对象/
+既有标记保留；两项边界验证 disabled/recycled 批次的无效 UUID 不产生部分
+删除/标记或 dirty/revision 变化，较新真实 flags 编辑保持现有双向 winner 策略。
+实际 `commands/vault` 和 `commands/groups` 转发到这些 VaultSession 方法；
+没有把纯函数手工补 deleted_objects 的旧测试当作用户删除路径证据。
+
+修复首次编译时缺少四处 mut（track_changes 需要 mutable receiver），在测试
+执行前已纠正，不能计为产品回归。旧移动与永久删除时间策略本轮没有直接
+改为 max：固定官方 ApplyDeletions 比较 LastModificationTime，这项不能仅按
+方法名称推断跨客户端期望；后续需单独明确冲突策略。本项确认并修复的是
+实际用户删除缺少标记，不将上述未完成边界标为已解决。
+
+verify-permanent-deletion.log exit 0：323 frontend、645 Rust、ACL 2，format、
+check 零错误警告、150-key 契约、build、clippy 全部通过。Rust 单线程、
+无过滤、临时 CARGO_PROFILE_DEV_DEBUG=0，四个原生 live clipboard body
+保持 opt-out。现有 60 文件/4 补丁 provenance gate 通过，未改 vendor 或
+依赖版本。data-contracts/security-model/project-structure 同步追踪删除契约，
+并纠正过时的“分组内容移到 root”说明；同步 TODO 补充已验证子边界，保持 [~]。
+
+本项无 UI/CSS、IPC/schema 或秘密返回改变。没有真实 Tauri handler、用户库、
+共享 OS 剪贴板、真实 S3/WebDAV/provider/第三方客户端/Android 运行验证，
+也未证明文件系统/备份的安全擦除。报告本轮只增加证据，无额外维护引用更新。
+当前详细卡片 68 Confirmed（Critical 1 / High 16 / Medium 40 / Low 11），
+原始 b7c5d9f 的 15 项/6.1 分保持。整体目标 active，继续其余系统/竞品/UI
+覆盖；手机 v1.6.5 另存为 ACL 源码修复已确认，新 APK/真机/provider 待验证。
