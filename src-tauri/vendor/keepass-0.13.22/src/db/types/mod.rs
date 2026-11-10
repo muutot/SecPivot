@@ -108,7 +108,6 @@ fn attachment_fingerprint(data: &Value<Vec<u8>>) -> AttachmentFingerprint {
     (data.is_protected(), Sha256::digest(data.get()).into())
 }
 
-#[cfg(feature = "_merge")]
 fn collect_entry_attachment_ids(entry: &Entry, ids: &mut std::collections::HashSet<AttachmentId>) {
     ids.extend(entry.attachments.values().copied());
     if let Some(history) = &entry.history {

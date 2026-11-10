@@ -3803,6 +3803,26 @@ fn assert_permanent_delete_propagates(path_kind: u8) {
         .uuid
         .clone();
     let prior_tombstone = uuid::Uuid::new_v4();
+    let attachment_owner_count = entries.len() + 1;
+    for uuid in entries.iter().chain(std::iter::once(&unaffected)) {
+        let parent = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(uuid).unwrap())
+            .unwrap()
+            .parent()
+            .id()
+            .uuid()
+            .to_string();
+        for version in ["old", "current"] {
+            let mut input = entry_input(&parent, "Synthetic attachment holder", "", "", "");
+            input.attachments = vec![AttachmentInput {
+                name: "synthetic.txt".into(),
+                data: Some(BASE64.encode(format!("synthetic {uuid} {version}"))),
+            }];
+            session.update_entry(uuid, &input).unwrap();
+        }
+    }
     {
         let db = session.require_db_mut().unwrap();
         db.deleted_objects
@@ -3826,6 +3846,7 @@ fn assert_permanent_delete_propagates(path_kind: u8) {
     session.close();
     session.open(&path, "master-password", None).unwrap();
     let stale = session.require_db().unwrap().clone();
+    assert_eq!(stale.num_attachments(), 2 * attachment_owner_count);
     if matches!(path_kind, 3 | 5) {
         session.delete_entry(&root_entry).unwrap();
     }
@@ -3864,6 +3885,35 @@ fn assert_permanent_delete_propagates(path_kind: u8) {
     session.save().unwrap();
     session.close();
     session.open(&path, "master-password", None).unwrap();
+    assert_eq!(
+        session.require_db().unwrap().num_attachments(),
+        2 * (attachment_owner_count - entries.len()),
+        "permanent deletion must remove its current/history payloads and preserve other owners"
+    );
+    let survivor = session
+        .require_db()
+        .unwrap()
+        .entry(parse_entry_id(&unaffected).unwrap())
+        .unwrap();
+    assert_eq!(
+        survivor
+            .attachment_by_name("synthetic.txt")
+            .unwrap()
+            .get()
+            .as_slice(),
+        format!("synthetic {unaffected} current").as_bytes()
+    );
+    assert!(
+        (0..survivor.history.as_ref().unwrap().get_entries().len()).any(|index| {
+            survivor
+                .historical(index)
+                .unwrap()
+                .attachment_by_name("synthetic.txt")
+                .is_some_and(|attachment| {
+                    attachment.get().as_slice() == format!("synthetic {unaffected} old").as_bytes()
+                })
+        })
+    );
     let inspect = |db: &Database| {
         for uuid in &entries {
             assert!(

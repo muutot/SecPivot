@@ -13,7 +13,10 @@ Only these upstream files are changed:
   remove only the addressed current/history reverse reference, and reindex after
   snapshot insertion. Entry removal honors prepared merge leases and visits each
   binary ID once even when filenames alias identical payloads. Dedicated tests
-  cover shared attachments and guard unwind. `content_eq` excludes timestamps,
+  cover shared attachments and guard unwind. After a tracked removal, dropping
+  the snapshot lease collects only its released, unowned binary IDs. Recursive
+  current/history owners and remaining leases protect shared payloads; unrelated
+  orphan headers are preserved. `content_eq` excludes timestamps,
   history and current/previous parent bookkeeping; callers check expiration
   separately when it forms part of version identity.
 - `src/db/merge.rs`: merge newer same-parent location time and previous-parent
@@ -57,7 +60,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The eleven dependency-specific tests can be run separately:
+The fourteen dependency-specific tests can be run separately:
 
 ```powershell
 cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_

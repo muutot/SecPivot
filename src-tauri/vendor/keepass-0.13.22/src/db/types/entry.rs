@@ -958,6 +958,30 @@ impl Drop for EntryTrack<'_> {
             }
         }
         self.database.reindex_entry_attachments(self.id);
+        // Removal already erased this entry's reverse references. Released
+        // snapshot leases must still be considered for collection explicitly.
+        let released: HashSet<_> = self
+            .retained_attachments
+            .iter()
+            .copied()
+            .filter(|id| {
+                !self.database.pending_history_attachments.contains_key(id)
+                    && self
+                        .database
+                        .attachments
+                        .get(id)
+                        .is_some_and(|attachment| attachment.entries.is_empty())
+            })
+            .collect();
+        if !released.is_empty() {
+            let mut owned = HashSet::new();
+            for entry in self.database.entries.values() {
+                super::collect_entry_attachment_ids(entry, &mut owned);
+            }
+            self.database
+                .attachments
+                .retain(|id, _| !released.contains(id) || owned.contains(id));
+        }
     }
 }
 
@@ -1151,5 +1175,131 @@ mod tests {
                 .as_slice(),
             b"synthetic-old"
         );
+    }
+
+    #[test]
+    fn secpivot_tracked_removal_collects_released_aliases_only() {
+        let mut db = Database::new();
+        let entry = db.root_mut().add_entry().id();
+        let payload = db
+            .entry_mut(entry)
+            .unwrap()
+            .add_attachment("first.txt", Value::protected(b"synthetic-deleted".to_vec()))
+            .id();
+        db.entries
+            .get_mut(&entry)
+            .unwrap()
+            .attachments
+            .insert("alias.txt".into(), payload);
+        let orphan = db.root_mut().add_entry().id();
+        let orphan_payload = db
+            .entry_mut(orphan)
+            .unwrap()
+            .add_attachment(
+                "orphan.txt",
+                Value::protected(b"synthetic-unrelated".to_vec()),
+            )
+            .id();
+        // Model a preserved, previously unreferenced binary header.
+        db.entries.get_mut(&orphan).unwrap().attachments.clear();
+        db.attachments
+            .get_mut(&orphan_payload)
+            .unwrap()
+            .entries
+            .clear();
+        db.entry_mut(entry).unwrap().track_changes().remove();
+        assert!(db.entry(entry).is_none());
+        assert!(db.attachment(payload).is_none());
+        assert!(db.pending_history_attachments.is_empty());
+        assert_eq!(db.num_attachments(), 1);
+        assert_eq!(
+            db.attachment(orphan_payload).unwrap().get().as_slice(),
+            b"synthetic-unrelated"
+        );
+    }
+
+    #[test]
+    fn secpivot_tracked_removal_keeps_shared_current_and_nested_history() {
+        for nested in [false, true] {
+            let mut db = Database::new();
+            let deleted = db.root_mut().add_entry().id();
+            let payload = db
+                .entry_mut(deleted)
+                .unwrap()
+                .add_attachment("shared.txt", Value::protected(b"synthetic-shared".to_vec()))
+                .id();
+            let survivor = db.root_mut().add_entry().id();
+            if nested {
+                let mut snapshot = super::Entry::new(db.root);
+                snapshot.attachments.insert("shared.txt".into(), payload);
+                let mut outer = super::Entry::new(db.root);
+                outer.history.get_or_insert_default().add_entry(snapshot);
+                db.entries
+                    .get_mut(&survivor)
+                    .unwrap()
+                    .history
+                    .get_or_insert_default()
+                    .entries
+                    .push(outer);
+            } else {
+                db.entries
+                    .get_mut(&survivor)
+                    .unwrap()
+                    .attachments
+                    .insert("shared.txt".into(), payload);
+                db.attachments
+                    .get_mut(&payload)
+                    .unwrap()
+                    .entries
+                    .insert((survivor, None));
+            }
+            db.entry_mut(deleted).unwrap().track_changes().remove();
+            assert!(db.entry(deleted).is_none());
+            assert!(db.entry(survivor).is_some());
+            assert!(db.pending_history_attachments.is_empty());
+            assert_eq!(db.num_attachments(), 1);
+            assert_eq!(
+                db.attachment(payload).unwrap().get().as_slice(),
+                b"synthetic-shared"
+            );
+        }
+    }
+
+    #[test]
+    fn secpivot_tracked_removal_waits_for_the_last_snapshot_lease() {
+        for prepared in [false, true] {
+            let mut db = Database::new();
+            let entry = db.root_mut().add_entry().id();
+            let payload = db
+                .entry_mut(entry)
+                .unwrap()
+                .add_attachment(
+                    "synthetic.txt",
+                    Value::protected(b"synthetic-leased".to_vec()),
+                )
+                .id();
+            if prepared {
+                db.pending_history_attachments.insert(payload, 1);
+            }
+            {
+                let mut mutable = db.entry_mut(entry).unwrap();
+                let mut outer = mutable.track_changes();
+                outer.as_mut().track_changes().remove();
+                assert!(outer.database.entry(entry).is_none());
+                assert_eq!(
+                    outer.database.pending_history_attachments[&payload],
+                    1 + usize::from(prepared)
+                );
+                assert!(outer.database.attachment(payload).is_some());
+            }
+            assert_eq!(db.num_attachments(), usize::from(prepared));
+            assert_eq!(
+                db.pending_history_attachments
+                    .get(&payload)
+                    .copied()
+                    .unwrap_or(0),
+                usize::from(prepared)
+            );
+        }
     }
 }

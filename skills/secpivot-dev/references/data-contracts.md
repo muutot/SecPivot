@@ -81,6 +81,14 @@ retain the existing merge winner policy; deletion is not an unconditional veto.
 Batch UUID validation precedes removals or tombstones. Untracked removal remains
 appropriate for temporary merge detachment, which must not create user deletions.
 
+EntryTrack drop explicitly collects released snapshot attachment IDs after
+permanent removal has erased their reverse references. Collection requires no
+remaining lease or recursive current/history owner. Other shared payloads and
+preexisting unrelated orphan headers remain. Native single/batch/subtree and
+recycled/empty-bin paths verify current/history removal through save/reopen and
+surviving attachment bytes; dependency tests cover aliases and nested guards.
+Prepared merge lease completion and unreferenced merge imports are separate.
+
 Patched native group merge decides each object's deletion independently. A newer
 deep entry/group edit restores its required ancestors, while unchanged siblings
 still follow their own markers. Group removals run child-first after all entry

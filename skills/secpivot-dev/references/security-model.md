@@ -401,6 +401,13 @@ newer explicit remote edits retain the existing conflict policy. These markers
 contain no password or field payload; this is synchronization intent, not secure
 erasure of backups, old copies or filesystem blocks.
 
+Tracked permanent deletion also releases its temporary snapshot binary lease.
+EntryTrack drop collects only the released IDs with no remaining lease or
+recursive current/history owner, including after recursive group/bin deletion.
+Shared owners and unrelated preexisting orphan headers remain; no binary bytes
+or secret fingerprints enter logs or IPC. Save/reopen regressions prove removal
+from the newly saved KDBX, not erasure of old copies or prepared merge imports.
+
 Native group merge cannot implicitly delete surviving descendants. It restores
 required ancestry, finishes moves, then removes only empty candidate groups in
 child-first order. Every descendant uses its own deletion marker; retained
