@@ -1,6 +1,7 @@
 node_modules
 /src-tauri/target
 /src-tauri/vendor/keepass-0.13.22
+/src-tauri/vendor/quick-xml-0.41.0
 /src-tauri/gen
 /src-tauri/plugins/*/target
 /src-tauri/plugins/*/android/.tauri

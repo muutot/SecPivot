@@ -14,12 +14,14 @@ trusted text-only serialization, preserving CR/CRLF in ordinary field values/
 keys, current/history versions and group/meta text. Literal entity text retains
 its escaped spelling and protected fields retain their base64 ciphertext. The
 reader keeps standard XML normalization for raw CR from other producers.
-Pure-whitespace entry decoding remains a confirmed, unremediated boundary:
-quick-xml object mapping skips blank ASCII text before field deserialization,
-and cs_opt_string separately discards Unicode trim-only text. Direct optional/
-String conversion alone does not fix the first layer. Original-registry XML and
-native open/rewrite/current/history red evidence are stored with the audit;
-invalid XML scalars remain separate. This change does not recover lost content.
+Entry StringValue explicitly deserializes `$text` through a direct String
+converter, preserving ASCII and Unicode whitespace. The pinned QuickXML reader
+retains blank events only for structs with a dedicated `$text` field; structural
+maps and generic optional metadata keep their existing rules. Empty Value and
+missing-Value rejection, protected Base64 and current/history semantics remain.
+Original-registry fixture/XML provenance and native open/rewrite/current/history
+regressions cover this boundary. Invalid XML scalars and group/meta whitespace
+remain separate; this change does not recover already-lost content.
 
 CSV export in `utils/csv.ts` and `vault/serialize.rs::escape_csv` adds the
 existing formula guard apostrophe to the field value before RFC 4180 quoting.

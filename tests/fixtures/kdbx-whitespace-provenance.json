@@ -1,0 +1,14 @@
+{
+  "fixture": "kdbx-whitespace.kdbx",
+  "fixture_sha256": "8568b12821ea67bd742c55db1f0c8c19bf0ae3feac994007c59262c87c52cc45",
+  "producer": "original crates.io keepass =0.13.22; save_kdbx4; registry source confirmed by cargo metadata",
+  "archive_sha256": "a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e",
+  "producer_source_sha256": "45648e0b5af536d1ead1d0102836d3bcfa9ec4d92cb546c297c013451feebcf0",
+  "producer_lock_sha256": "5d22b3c61a44131bf488f74610de55798cc3a72bf2e1a5b90d7363984d3d18b4",
+  "key": "synthetic-only public test fixture password",
+  "kdf": "AES with one round",
+  "content": "Seven entirely synthetic entries: space, tab, LF, mixed ASCII whitespace, NBSP+EM SPACE, empty and ordinary control; unprotected common/custom values and protected controls. No user data.",
+  "verification": "Raw internal XML extracted with original Database::get_xml and independently read by Python ElementTree: all 35 ordinary field values intact; seven protected attributes retained. Actual native opening and rewriting are separate tests.",
+  "internal_xml_sha256": "4421191d45b06bddd31a3ebfc679a7ddea063d208d3376134f9f4d919f51cc57",
+  "limitations": "No official/native competitor runtime, Android provider, user vault, CR fixture or optional group/meta whitespace guarantee."
+}

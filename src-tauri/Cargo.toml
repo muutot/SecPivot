@@ -51,7 +51,7 @@ reqwest = { version = "0.13", features = ["rustls", "blocking"] }
 url = "2"
 # Parse WebDAV PROPFIND multistatus responses (same minor as keepass's vendored
 # copy, so no extra crate version enters the lock).
-quick-xml = "0.41"
+quick-xml = "=0.41.0"
 # gzip for the KeePass "Data Exchange" clipboard payload (KeePass stores the
 # package gzipped; the same crate is already in the lock via `keepass`).
 flate2 = "1"
@@ -105,6 +105,7 @@ tempfile = "3"
 # pinned crate with a documented local reference-management patch.
 [patch.crates-io]
 keepass = { path = "vendor/keepass-0.13.22" }
+quick-xml = { path = "vendor/quick-xml-0.41.0" }
 
 # Dev-profile tuning for the fastest possible local `tauri dev` builds:
 # - dependencies stay unoptimized (opt-level 0) with no debug symbols, so the

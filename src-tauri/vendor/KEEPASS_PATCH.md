@@ -56,12 +56,19 @@ Only these upstream files are changed:
   as XML character references so text values/keys retain their line endings.
   The model emits text rather than CDATA; literal entity strings and protected
   base64 remain intact, and the reader still applies standard raw-CR normalization.
-  Pure-whitespace values discarded by optional-string decoding remain separate.
+  Pure-whitespace entry text is handled separately by the entry reader below.
+- `src/format/xml_db/entry.rs`: deserialize entry values through dedicated
+  `$text` and a direct String converter, preserving ASCII/Unicode whitespace.
+  This works with the scoped QuickXML patch described in `QUICK_XML_PATCH.md`;
+  direct conversion alone cannot bypass upstream blank-event skipping. Empty
+  values, missing-Value rejection, protected flags/Base64 and generic optional
+  metadata rules retain their contracts. Current/history and external-file
+  native regressions accompany two direct tests.
 
-The other 55 upstream files are byte-for-byte unchanged. The provenance JSON
-records each original hash and the five reviewed patched hashes. Run
+The other 54 upstream files are byte-for-byte unchanged. The provenance JSON
+records each original hash and the six reviewed patched hashes. Run
 `npm run verify:keepass-patch` after any patch edit; it verifies source hashes,
-Cargo wiring and formatting of the patched Rust files. Update the five patched
+Cargo wiring and formatting of the patched Rust files. Update the six patched
 hashes only after reviewing the changes against the original archive. The
 ordinary `npm run verify` includes this gate.
 
@@ -74,11 +81,15 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The twenty-one dependency-specific tests can be run separately:
+The twenty-three dependency-specific tests can be run separately:
 
 ```powershell
-cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_
+npm run test:keepass-patch
 ```
+
+The helper tests a disposable source copy with the QuickXML path override so
+Cargo can adjust its standalone lock without rewriting the published package.
+The ordinary full verification runs this check and the QuickXML library tests.
 
 An upgrade alone is not a verified fix: the inspected 0.13.25 and 0.17.0 packages
 retain the relevant old attachment-removal and tracking logic. Remove this local

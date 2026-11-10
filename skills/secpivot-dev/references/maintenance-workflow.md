@@ -39,11 +39,21 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 `npm run verify` runs format checks, svelte-check, vite build, Node frontend behavior tests (`tests/*.test.mjs`), Rust tests, and clippy. If an environment prevents a required runtime/visual/platform check, report the missing evidence and keep the corresponding TODO unverified.
 
-It also runs `npm run verify:keepass-patch`, checking the 60 upstream/package
-file hashes, the five explicitly patched Rust files and Cargo wiring. When
-editing this dependency patch, read `src-tauri/vendor/KEEPASS_PATCH.md`, preserve
-untouched upstream bytes/license and update only reviewed patched hashes after
-verification. Do not apply blanket formatting to the upstream package.
+It also runs the KeePass and QuickXML patch provenance gates: 60/43 package
+hashes, six/one explicitly patched Rust files and Cargo wiring. Read
+`src-tauri/vendor/KEEPASS_PATCH.md` and `QUICK_XML_PATCH.md` before patch edits.
+Preserve untouched upstream bytes/licenses and update only reviewed patched
+hashes after verification; do not blanket-format either published package.
+QuickXML's package and byte-preserving patch are exempt from Git text/EOL
+normalization because its upstream files use CRLF. Check staged byte hashes,
+not only working files, before committing a package/provenance change.
+
+`npm run test:keepass-patch` and `npm run test:quickxml-patch` run the 23 KeePass
+specialized tests and QuickXML's serialization-enabled library unit tests in
+disposable source copies, preserving the published standalone Cargo locks.
+Both run in `npm run verify`. The helper validates its created temporary root
+before recursive cleanup and uses the repository target cache; source copies
+contain no user vaults. Upstream ignored tests do not count as executed coverage.
 
 ## Browser vs desktop truth
 

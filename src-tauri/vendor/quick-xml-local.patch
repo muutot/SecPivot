@@ -1,0 +1,59 @@
+--- a/src/de/map.rs
++++ b/src/de/map.rs
+@@ -238,2 +238,7 @@
+-        // TODO: respect the `xml:space` attribute and probably some deserialized type sign
+-        self.de.skip_whitespaces()
++        // A dedicated text field explicitly owns whitespace text too.
++        // Structural maps keep their ordinary indentation-skipping behavior.
++        if self.has_text_field {
++            Ok(())
++        } else {
++            self.de.skip_whitespaces()
++        }
+@@ -1249,0 +1255,46 @@
++
++#[test]
++fn secpivot_explicit_text_preserves_whitespace_and_attributes() {
++    #[derive(Debug, serde::Deserialize)]
++    struct Value {
++        #[serde(rename = "@Protected")]
++        protected: String,
++        #[serde(default, rename = "$text")]
++        text: String,
++    }
++    for (content, expected) in [
++        (" ", " "),
++        ("\t", "\t"),
++        ("\r\n", "\n"),
++        ("&#xD;&#xA;", "\r\n"),
++        ("<![CDATA[ \t\n ]]>", " \t\n "),
++        (" <!--synthetic--><?synthetic?>&#x9;", " \t"),
++        ("\u{a0}\u{2003}", "\u{a0}\u{2003}"),
++        ("", ""),
++        ("IA==", "IA=="),
++    ] {
++        let xml = format!("<Value Protected=\"False\">{content}</Value>");
++        let value: Value = crate::de::from_str(&xml).unwrap();
++        assert_eq!(value.text, expected);
++        assert_eq!(value.protected, "False");
++    }
++}
++
++#[test]
++fn secpivot_structural_maps_keep_indentation_and_value_field_semantics() {
++    #[derive(Debug, serde::Deserialize)]
++    struct Parent {
++        #[serde(rename = "Value")]
++        values: Vec<Child>,
++    }
++    #[derive(Debug, serde::Deserialize)]
++    struct Child {
++        #[serde(default, rename = "$value")]
++        text: Option<String>,
++    }
++    let xml = "<Parent>\n <Value> </Value>\n <Value>synthetic</Value>\n </Parent>";
++    let parent: Parent = crate::de::from_str(xml).unwrap();
++    assert_eq!(parent.values.len(), 2);
++    assert!(parent.values[0].text.is_none());
++    assert_eq!(parent.values[1].text.as_deref(), Some("synthetic"));
++}

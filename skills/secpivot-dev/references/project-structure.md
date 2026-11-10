@@ -59,13 +59,13 @@ collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
 fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
-`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus five
+`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus six
 reviewed attachment/history/location/deletion/serialization/KDF patches. Cargo's local patch keeps
 the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
-Cargo wiring and the five patched files' formatting as part of `npm run verify`.
+Cargo wiring and the six patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and twenty-one
+in the audit scope. Native vault tests cover the application boundary and twenty-three
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after
@@ -96,7 +96,7 @@ removes only empty candidates in child-first order after entry/group moves;
 retained ancestors lose obsolete markers, Deleted events reflect actual removal.
 Native tests cover deep entry/group edits and moved-out descendants; dependency
 tests cover independent ancestor/child markers, unmarked descendants and existing
-equal/missing timestamp policy. The five-file provenance gate applies.
+equal/missing timestamp policy. The six-file provenance gate applies.
 
 Patched crypt/kdf.rs validates the Argon2 u64 iteration count and byte-to-KiB
 memory value with checked u32 conversions before derivation. Unrepresentable
@@ -109,11 +109,24 @@ serializer as character references before KDBX encryption. It preserves current/
 history field values and keys, group/meta text and literal entity strings while
 leaving normal parser normalization and protected base64 unchanged. Native
 entry/history/group/meta and Bitwarden wire regressions accompany two direct
-serializer/parser tests. Pure-whitespace entry decoding is separately confirmed
-and unremediated: quick-xml's map skips blank events before StringValue sees
-them, while cs_opt_string also trims Unicode whitespace. The audit retains the
-red current/history/external-open regressions outside the committed suite;
-direct Option/String conversion attempts were withdrawn after failing.
+serializer/parser tests. Patched format/xml_db/entry.rs opts StringValue into
+dedicated `$text` mapping with direct String conversion, preserving ASCII and
+Unicode whitespace without changing generic optional metadata. Native current/
+history and original-registry open/rewrite regressions use a hashed synthetic
+fixture under tests/fixtures/kdbx-whitespace-*.
+
+`vendor/quick-xml-0.41.0/` preserves the complete 43-file MIT package, with only
+src/de/map.rs patched to retain blank events for dedicated `$text` structs.
+Other maps keep indentation skipping. Its provenance verifier checks all hashes,
+the exact version/path override and owned formatting. Original CRLF bytes and
+the diff payload are preserved by explicit Git attribute exceptions; the other
+42 files remain unchanged. README/schema/ordinary parsing are unchanged and
+the separate registry QuickXML 0.42 dependency is unaffected.
+`scripts/test-dependency-patch.mjs` tests source copies in a validated temporary
+folder so standalone Cargo locks remain original. KeePass's 23 specialized
+and QuickXML's serialize-enabled library tests run through npm and full verify;
+upstream ignored tests remain limits. Patch descriptions/reconstruction are in
+KEEPASS_PATCH.md and QUICK_XML_PATCH.md.
 
 First-party vault/merge.rs::merge_absent_deletion_info runs after restore_bin.
 It unions both original DeletedObjects maps plus existing merged markers for
