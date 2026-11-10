@@ -239,3 +239,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] WebDAV 简单 XML 字段重组（SP-S71）：普通文本／CDATA／标准字符和实体引用按完整字段组合，保留内部空白及字面实体文本；注释／PI 不截断，大小和日期完整后再解析。原样三项确认探针、独立标准 XML 八项控制通过；实际 13 类文件名的列表／GET／PUT／回读 40 次请求保持资源身份和名称相似旁文件。三种字段的 15 类未知引用／嵌套／截断内容拒绝整份列表，错误不含字段内容；空／缺失提示及既有编码／collection 语义保留。此项不代表完整 XML 结构／namespace／propstat 或真实提供商／手机 APK 已验证。
 
 - [x] WebDAV 文档边界（SP-S72）：发布列表前要求单个完整 multistatus 根，错误页面／未闭合根／多个根／根外文本必须报错；保持合法空列表、既有大小写兼容及字段错误契约。原样三项探针、独立 XML 八项控制与实际无凭据 loopback HTTP 八次列表回归通过；合法前后空白／注释／PI 有对照。namespace／propstat／完整 XML 与真实 provider 仍独立待审。
+
+- [x] WebDAV 集合类型请求（SP-S73）：命名属性请求包含 DAV:resourcetype，实际无凭据 loopback 服务按请求返回属性并剔除无尾斜杠集合、保留普通和无扩展名文件及大小／日期；请求属性的 DAV namespace 与精确三项名称有回归。类型／大小／日期缺失不猜测资源种类；原样探针及独立 XML 请求／响应契约通过。propstat／namespace／真实 provider 仍独立待审。

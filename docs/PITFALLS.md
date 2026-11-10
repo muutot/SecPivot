@@ -31,6 +31,12 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **Mocks must respect named-property requests.** WebDAV's collection filter
+  depended on resourcetype even though PROPFIND asked for size/date only; an
+  always-generous mock concealed this. Request the type explicitly and verify
+  the actual DAV property names with a request-driven response. Missing type or
+  size still cannot classify extensionless/zero-byte files as directories.
+
 - **A word in the body does not identify an XML document.** WebDAV's substring
   guard accepted HTML mentioning `multistatus`, while EOF published incomplete
   or multiple-root lists. Validate one completed root before returning objects;

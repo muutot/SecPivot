@@ -762,6 +762,129 @@ fn webdav_list_objects_async_works_from_runtime_worker_thread() {
 }
 
 #[test]
+fn webdav_named_property_request_filters_collections_and_keeps_extensionless_files() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let peer = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("fixture accept: {error}"),
+            }
+        };
+        configure_s3_page_stream(&stream);
+        stream
+            .set_write_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut header = Vec::new();
+        let mut byte = [0];
+        while !header.ends_with(b"\r\n\r\n") {
+            assert!(header.len() < 16 * 1024);
+            stream.read_exact(&mut byte).unwrap();
+            header.push(byte[0]);
+        }
+        let header = String::from_utf8(header).unwrap();
+        assert!(header.starts_with("PROPFIND /dav/vaults/ HTTP/1.1\r\n"));
+        assert!(!header.to_ascii_lowercase().contains("authorization:"));
+        assert!(header.to_ascii_lowercase().contains("depth: 1\r\n"));
+        let length = header
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().unwrap())
+            })
+            .unwrap();
+        assert!(length <= 4096);
+        let mut request = vec![0; length];
+        stream.read_exact(&mut request).unwrap();
+        let request = String::from_utf8(request).unwrap();
+        let mut reader = quick_xml::NsReader::from_str(&request);
+        let mut names = Vec::new();
+        loop {
+            match reader.read_resolved_event().unwrap() {
+                (namespace, quick_xml::events::Event::Empty(element)) => {
+                    assert_eq!(
+                        namespace,
+                        quick_xml::name::ResolveResult::Bound(quick_xml::name::Namespace(b"DAV:"))
+                    );
+                    names.push(String::from_utf8(element.local_name().as_ref().to_vec()).unwrap());
+                }
+                (_, quick_xml::events::Event::Eof) => break,
+                _ => {}
+            }
+        }
+        let mut body = String::from("<d:multistatus xmlns:d=\"DAV:\">");
+        for (href, collection) in [
+            ("/dav/vaults/", true),
+            ("/dav/vaults/archive", true),
+            ("/dav/vaults/a.kdbx", false),
+            ("/dav/vaults/backup", false),
+        ] {
+            let type_property = if !names.iter().any(|name| name == "resourcetype") {
+                ""
+            } else if collection {
+                "<d:resourcetype><d:collection/></d:resourcetype>"
+            } else {
+                "<d:resourcetype/>"
+            };
+            body.push_str(&format!("<d:response><d:href>{href}</d:href><d:propstat><d:prop>{type_property}<d:getcontentlength>3</d:getcontentlength><d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"));
+        }
+        body.push_str("</d:multistatus>");
+        let response = format!("HTTP/1.1 207 Multi-Status\r\nContent-Type: application/xml; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        stream.write_all(response.as_bytes()).unwrap();
+        names
+    });
+    let storage = WebDavStorage {
+        client: super::shared_blocking_client().unwrap().clone(),
+        auth: None,
+        base_url: format!("http://{addr}/dav"),
+        list_timeout: Duration::from_secs(3),
+        io_timeout: Duration::from_secs(3),
+    };
+    let result = storage.list("vaults");
+    let mut requested = peer.join().unwrap();
+    requested.sort();
+    assert_eq!(
+        requested,
+        ["getcontentlength", "getlastmodified", "resourcetype"]
+    );
+    let objects = result.unwrap();
+    assert_eq!(
+        objects
+            .iter()
+            .map(|object| object.key.as_str())
+            .collect::<Vec<_>>(),
+        ["vaults/a.kdbx", "vaults/backup"]
+    );
+    assert!(objects.iter().all(|object| object.size == 3
+        && object.modified.as_deref() == Some("Mon, 01 Jan 2024 00:00:00 GMT")));
+}
+
+#[test]
+fn webdav_unavailable_type_and_metadata_do_not_hide_regular_files() {
+    for props in [
+        "<d:propstat><d:prop><d:resourcetype/></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>",
+        "<d:propstat><d:prop><d:resourcetype/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>",
+        "<d:propstat><d:prop/><d:status>HTTP/1.1 200 OK</d:status></d:propstat>",
+    ] {
+        let body = format!("<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/vaults/backup</d:href>{props}</d:response></d:multistatus>");
+        let objects = parse_multistatus(&body, "http://h/dav", "http://h/dav/vaults/").unwrap();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].key, "vaults/backup");
+        assert_eq!(objects[0].size, 0);
+        assert!(objects[0].modified.is_none());
+    }
+}
+
+#[test]
 fn webdav_parser_keeps_files_and_drops_collections() {
     let storage = WebDavStorage {
         client: reqwest::blocking::Client::new(),
