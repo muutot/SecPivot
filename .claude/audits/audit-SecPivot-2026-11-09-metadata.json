@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S70; historical supplemental tracking notes excluded",
-    "total": 81,
-    "confirmed": 81,
+    "scope": "15 baseline cards plus SP-S05 through SP-S71; historical supplemental tracking notes excluded",
+    "total": 82,
+    "confirmed": 82,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 50,
+      "Medium": 51,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S71",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "5a0edbc",
+      "area": "WebDAV simple XML values lose references and earlier text chunks",
+      "status": "Confirmed, unremediated. Actual root3 red/676 filtered; six filename mismatches with plain control, size12->2/date suffix, one no-auth loopback GET targets /dav/b instead of /dav/vaults/a&b. Independent stdlib XML8 controls pass; immutable fixture/diagnostic/root hashes and exact source restoration recorded. RFC4918 section8.3.1 normative XML-escaped ampersand contract corroborates only format. No real provider/device/vault/write/loss/disclosure/external entity/high-resource proof. Existing a314835 percent-decoding fix remains separate."
+    },
     {
       "id": "SP-S70",
       "severity": "Medium",
@@ -1443,6 +1451,23 @@
       "quickxml_ignored": 4,
       "official_reference": "webdav-uri-official-reference.json",
       "final_proof": "webdav-path-final-proof.json"
+    },
+    "webdav_xml_text": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "5a0edbc",
+      "native_red": "webdav-xml-native-red.log",
+      "native_failed": 3,
+      "native_filtered": 676,
+      "filename_cases": 7,
+      "filename_mismatches": 6,
+      "metadata_mismatches": 2,
+      "native_loopback_gets": 1,
+      "stdlib_passed": 8,
+      "fixture": "webdav-xml-fixtures.json",
+      "provenance": "webdav-xml-red-provenance.json",
+      "source_restored_exactly": true,
+      "official_reference": "webdav-xml-official-reference.json",
+      "limits": "Tiny synthetic XML/URI cases and one no-auth loopback GET. No user config/vault, cloud provider, remote write, mobile device/APK, shared clipboard, external entity resolution or high-resource reproduction."
     }
   },
   "reverification_notes": [

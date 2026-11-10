@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S70；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S71；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 50     | 50        | 0         |
+| Medium    | 51     | 51        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **81** | **81**    | **0**     |
+| **Total** | **82** | **82**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3757,3 +3757,34 @@ webdav-uri-official-reference.json；这是规范旁证，不是竞品／提供�
 属性／提供商语义。手机另存为新 APK／真机 provider、移动端安全
 与其余系统／竞品／UI 仍未全部验证，整体目标 active，累计 81
 Confirmed 含历史已修复项；原始 b7c5d9f／15 项／6.1 分保持。
+
+### Finding: SP-S71 WebDAV XML 实体和分段文本截断文件名与元数据
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data integrity
+- Status: Confirmed
+- Affected area: WebDAV PROPFIND multistatus property text decoding
+- Evidence:
+  - File: src-tauri/src/remote/webdav.rs:229–245, 254–339; src-tauri/src/remote/s3.rs:385–404 (5a0edbc)
+  - Function / Module: parse_multistatus -> record_prop -> RemoteObject.key/size/modified
+  - Relevant behavior: each Text/CDATA event replaces the previous property value, with per-event trimming; GeneralRef is ignored. A valid XML property can contain multiple text chunks and references, so the final chunk is not the whole value. The S3 value reader already accumulates text/CDATA/reference events; this finding is specific to WebDAV.
+  - Reproduction: actual native root diagnostic webdav-xml-native-red.log reports six filename mismatches after a plain control passes: named/decimal references, split CDATA, comment-separated text, referenced percent and literal entity text. Split size12 becomes2 and the modified date becomes only00:00:00 GMT. A separate real no-auth loopback GET for listed a&amp;b.kdbx targets /dav/b.kdbx rather than /dav/vaults/a&b.kdbx. Three tests fail,676 unrelated tests are filtered.
+  - Independent verification: Python stdlib ElementTree joins text and resolves standard XML references for the same eight tiny documents; all expected key/size/date controls pass. Fixture/source/test hashes and exact root source restoration are recorded in webdav-xml-red-provenance.json. Official RFC4918 §8.3.1 explicitly notes legal URI ampersands still require XML escaping; its downloaded text/hash/excerpt is recorded separately.
+- Problem: a successful WebDAV list can publish a truncated logical filename or incorrect metadata from valid XML.
+- Why it matters: normal XML serialization of a filename containing & can make a visible item open a different resource or fail. Metadata hints also become incorrect. Medium reflects the real parser/request identity failure; no genuine cloud-provider, vault overwrite, data loss or credential disclosure is proved.
+- Realistic failure scenario: a provider returns /dav/vaults/a&amp;b.kdbx in its href; the client displays b.kdbx and requests /dav/b.kdbx. XML writers that divide values around CDATA or comments produce the same suffix-only behavior.
+- Minimal fix: collect one complete simple property value through Text/CDATA and standard named/numeric references, then trim once where appropriate. Preserve literal entity text without recursive unescape. Reject unknown references, invalid decoding or nested/truncated property content with content-free errors rather than returning guessed/partial list keys; retain optional size and collection behavior.
+- Better long-term fix: separately audit complete XML structure, namespace/propstat semantics and real-provider interoperability. This patch should not silently imply a complete WebDAV parser rewrite or external entity support.
+- Regression test suggestion: actual production parser and HTTP list-to-GET/PUT/readback for XML-escaped ampersand, character references, adjacent text/CDATA/comments, literal entity text and split metadata; independent standard XML controls; invalid entity/nested/truncated properties reject the entire list; previous URI encoding/root and collection tests remain green.
+- Estimated effort: 1–2 hours for the scoped value reader, native wire regressions and complete verification; provider/device evidence remains separate.
+
+确认阶段未修改应用行为。临时 root 测试已逐字节恢复；原生红测
+0 passed /3 failed /676 filtered，标准库 XML 控制8 passed。仅少量
+合成 XML／路径和一次无凭据 loopback GET，无用户配置／密码库、
+云端／写远程文件、移动设备／APK、共享剪贴板、外部实体解析或
+高资源复现。上一轮路径解码修复 a314835 不修复本项 XML 事件组合。
+
+累计82 Confirmed（Critical1 /High19 /Medium51 /Low11），包含
+历史已修复项；原始 b7c5d9f／15项／6.1分保持。手机另存为新 APK
+和真机 provider、移动端安全、其余系统／竞品／UI 仍待完成，目标 active。
