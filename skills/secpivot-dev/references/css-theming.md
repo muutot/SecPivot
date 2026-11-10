@@ -7,7 +7,7 @@ This is the authoritative style reference for SecPivot UI. Read it before any ma
 1. `src/routes/+page.svelte` and the settings shell define the product's visual language.
 2. `src/lib/types/theme.ts::{DARK_THEME_COLORS,LIGHT_THEME_COLORS}` defines preset values.
 3. `src/lib/utils/theme.ts::applyThemeColors` defines the ThemeColors → CSS-variable mapping.
-4. `src/app.css` provides root defaults, global reset, font variables, the shared modal backdrop/layer modifiers, focus/accessibility rules, and imports shared settings/modal CSS.
+4. `src/app.css` provides root defaults, global reset, font variables, the shared modal backdrop/layer modifiers, focus/accessibility rules, and imports shared settings CSS.
 5. `src/lib/styles/settings-shared.css` owns reusable settings-panel primitives.
 6. `SettingsDialog.svelte` owns settings-shell layout and panel-specific styles.
 7. Component-scoped CSS owns only component-specific layout/visual behavior.
@@ -151,6 +151,13 @@ close button, optional scroll behavior, and the `.modal-actions` footer that
 hosts `<Button>` templates from the caller's `actions` snippet. Dialogs supply
 only their body/action snippets; do not reintroduce parallel modal surfaces,
 header/icon blocks, or footer layouts.
+
+Its Tab trap recomputes enabled, rendered controls on each key. Negative
+tabindex, effective `:disabled` (including fieldsets), inert ancestry and hidden
+layout/visibility never define a wrap boundary. Hidden attachment file inputs
+remain programmatically invoked by their visible Add button. Only the top modal
+handles unconsumed keys. `tests/modal-focus.test.mjs` exercises the production
+handler with a DOM seam; actual native Tab/layout needs browser verification.
 
 ## Viewport menu
 
