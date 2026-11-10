@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S66；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S67；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 46     | 46        | 0         |
+| Medium    | 47     | 47        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **77** | **77**    | **0**     |
+| **Total** | **78** | **78**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3503,3 +3503,42 @@ TODO；SKILL 路由与接口／schema／默认值未变。报告和 strict JSON
 已有非法普通历史仍会阻止保存，需修正或移除；没有自动修复、完整
 文本导入／导出、跨客户端、手机新 APK／provider 或完整安全保证。
 整个审计／竞品／UI 目标 active。
+
+### Finding: SP-S67 欢迎页拒绝后端支持的仅密钥文件凭据
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Frontend state
+- Status: Confirmed
+- Affected area: Welcome local/remote vault open and create forms
+- Evidence:
+  - File: src/lib/components/VaultWelcome.svelte:181/203/275/354 (32c23d9); src-tauri/src/vault/helpers.rs:35; src-tauri/src/vault/tests.rs:8184
+  - Function / Module: confirmOpen / confirmCreate / confirmRemoteOpen / confirmRemoteCreate -> vault service -> build_database_key
+  - Relevant behavior: 四个欢迎页入口在 keyfilePath 已选择时仍以空 password 直接返回；后端接受密码或密钥文件至少一项，LockScreen 的判断也允许仅密钥文件。
+  - Reproduction: welcome-keyfile-red.log 的四个生产 handler 提交用例均未调用 vault service。18 项有界表单探针中 8 failed / 10 passed；另外四个失败是同一提前返回导致后端错误控制无法到达，不计第二项缺陷。VM 使用合成状态和服务替身，不读取文件或网络，不是 Android 运行证据。
+  - Independent verification: welcome-keyfile-native-control.log 中既有原生 keyfile_only 两项通过，实际创建／改密后重开成功，缺少正确密钥组件失败；671 个 Rust 和 2 个 ACL 测试被筛选，不能称完整门。远程支持依据共享 prepare_remote_open/create 的 build_database_key 调用，不声称真实云端验证。
+- Problem: 仅密钥文件的合法数据库无法从欢迎页打开或创建，前端错误要求输入本来不存在的主密码。
+- Why it matters: 用户在安全设置把已有数据库改为仅密钥文件后，欢迎页无法再次打开；锁屏与欢迎页凭据语义不一致。没有发现认证绕过、数据丢失或秘密暴露。
+- Realistic failure scenario: 用户成功以仅密钥文件改密，关闭数据库返回欢迎页，再选择原数据库和密钥文件，点击打开却收到“请输入主密码”，请求未到后端。
+- Minimal fix: 四个入口仅在 password 和 keyfilePath 都为空时拒绝；提示说明可选择密钥文件。保留密码确认、后端验证、密钥文件场景不记忆密码的已有规则。
+- Better long-term fix: 统一各凭据表单的支持条件并增加真实桌面与 Android 文档提供商覆盖；不要把浏览器 demo 或 VM 替身当作原生文件授权证据。
+- Regression test suggestion: 运行四个实际生产 handler，覆盖仅密钥文件、无凭据、仅密码、后端失败和本地密码确认／数据库路径缺失；以原生合成 KDBX 创建、重开和错误凭据控制独立验证后端。
+- Estimated effort: 1–2 hours for form guards, localized copy, regression and verification.
+
+本项确认阶段尚未修改应用源码。证据位于本次任务目录的
+welcome-keyfile-probe.mjs、welcome-keyfile-red.log 和
+welcome-keyfile-native-control.log。累计 78 Confirmed（Critical 1 / High 19 /
+Medium 47 / Low 11）；包含历史已修复项，不等于 78 项未修复。
+原始 b7c5d9f 的 15 项与 6.1 分保持。
+
+2026-11-10 用户要求排查内容拦截并继续有界防御审计。官方
+[Models and Trusted Access](https://learn.chatgpt.com/docs/cyber-safety)
+说明合法安全工作也可能触发防护；本次提示没有具体条款或请求日志，
+不能确定触发原因。异常 KDF 高资源耗尽复现未执行，后续不恢复该计划。
+工具记录目标为 blocked，不能照搬早先交接中的 active；本轮工作依据
+用户明确继续授权执行，不据此宣称全局目标完成或状态已恢复。
+
+密钥文件选择器候选亦已复核：Cargo.lock 锁定 tauri-plugin-dialog 2.7.3，
+其 Android DialogPlugin.kt 使用 ACTION_GET_CONTENT 返回 URI，故“调用
+桌面插件必然不出现手机选择器”的推断不成立，不计确认缺陷。与 SAF
+的持久授权差异、迟到回调、新 APK／真机提供商行为继续保留待验。

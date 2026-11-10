@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S66; historical supplemental tracking notes excluded",
-    "total": 77,
-    "confirmed": 77,
+    "scope": "15 baseline cards plus SP-S05 through SP-S67; historical supplemental tracking notes excluded",
+    "total": 78,
+    "confirmed": 78,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 46,
+      "Medium": 47,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S67",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "32c23d9",
+      "area": "Welcome forms reject backend-supported keyfile-only credentials",
+      "status": "Confirmed, not yet remediated. Four actual extracted production form submissions stop before service calls with a selected synthetic keyfile and empty password. Bounded VM probe18:8 fail/10 pass; four backend-error cases fail through the same early gate. Independent existing native keyfile-only2 pass with actual create/change/reopen and incorrect-credential controls;671 Rust/ACL2 filtered, not a full gate. No real device/provider/remote/client proof. High-resource KDF reproduction was never executed and is abandoned; product notice provides no exact rule or request log. Actual goal record blocked; current defensive work explicitly authorized by user."
+    },
     {
       "id": "SP-S66",
       "severity": "Medium",
