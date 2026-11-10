@@ -207,6 +207,14 @@ Patched History::from_entries builds the sorted list once and strips nested
 history trees instead of repeatedly moving the growing list with add_entry.
 Current-content divergence at an identical timestamp still rejects the merge;
 this is not a complete cross-client merge compatibility guarantee.
+LocationChanged and PreviousParentGroup follow the selected move independently
+of LastModificationTime, even when both copies already have the same parent.
+Current/previous parents do not identify content versions or history duplicates.
+Cycle-safe group staging restores source previous-parent provenance after the
+final move. An opaque previous-parent UUID may refer to a removed group; the
+resolved previous_parent() helper returning None does not imply the UUID is lost.
+Different-parent moves with missing location times retain destination provenance
+and warn; they never stamp an unapplied source move onto the destination.
 Expiration date/enabled are part of first-party version content. Older current
 versions are captured in either merge direction, including expiration-only
 changes. Actual Entry Created/Updated outcomes copy source expiration settings.

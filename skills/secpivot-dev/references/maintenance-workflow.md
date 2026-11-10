@@ -40,7 +40,7 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 `npm run verify` runs format checks, svelte-check, vite build, Node frontend behavior tests (`tests/*.test.mjs`), Rust tests, and clippy. If an environment prevents a required runtime/visual/platform check, report the missing evidence and keep the corresponding TODO unverified.
 
 It also runs `npm run verify:keepass-patch`, checking the 60 upstream/package
-file hashes, the three explicitly patched Rust files and Cargo wiring. When
+file hashes, the four explicitly patched Rust files and Cargo wiring. When
 editing this dependency patch, read `src-tauri/vendor/KEEPASS_PATCH.md`, preserve
 untouched upstream bytes/license and update only reviewed patched hashes after
 verification. Do not apply blanket formatting to the upstream package.

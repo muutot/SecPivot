@@ -13,7 +13,15 @@ Only these upstream files are changed:
   remove only the addressed current/history reverse reference, and reindex after
   snapshot insertion. Entry removal honors prepared merge leases and visits each
   binary ID once even when filenames alias identical payloads. Dedicated tests
-  cover shared attachments and guard unwind.
+  cover shared attachments and guard unwind. `content_eq` excludes timestamps,
+  history and current/previous parent bookkeeping; callers check expiration
+  separately when it forms part of version identity.
+- `src/db/merge.rs`: merge newer same-parent location time and previous-parent
+  provenance independently of content. Relocations and newly created groups keep
+  the source move's previous parent, including after cycle-safe group staging.
+  Content equality ignores both parent locations; true equal-time content
+  conflicts still fail. Different-parent moves with missing timestamps retain
+  the existing destination and never borrow a time for an unapplied move.
 - `src/db/types/mod.rs`: track ephemeral leases separately from persisted data,
   clear leases on database clone, rebuild current/history ownership, and collect
   only payloads affected by an explicit entry/history removal. Loading preserves
@@ -28,10 +36,10 @@ Only these upstream files are changed:
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication.
 
-The other 57 upstream files are byte-for-byte unchanged. The provenance JSON
-records each original hash and the three reviewed patched hashes. Run
+The other 56 upstream files are byte-for-byte unchanged. The provenance JSON
+records each original hash and the four reviewed patched hashes. Run
 `npm run verify:keepass-patch` after any patch edit; it verifies source hashes,
-Cargo wiring and formatting of the patched Rust files. Update the three patched
+Cargo wiring and formatting of the patched Rust files. Update the four patched
 hashes only after reviewing the changes against the original archive. The
 ordinary `npm run verify` includes this gate.
 
@@ -44,10 +52,10 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The seven dependency-specific tests can be run separately:
+The eight dependency-specific tests can be run separately:
 
 ```powershell
-cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge --lib secpivot_
+cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_
 ```
 
 An upgrade alone is not a verified fix: the inspected 0.13.25 and 0.17.0 packages

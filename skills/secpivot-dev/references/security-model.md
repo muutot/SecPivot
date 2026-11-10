@@ -383,3 +383,11 @@ local input. Missing references fail before merged database publication.
 Temporary merge leases protect prepared payloads during entry creation/deletion;
 completion rebuilds reverse ownership before releasing them. Existing leases
 reject preparation instead of overwriting another mutation's ownership.
+
+Merge location bookkeeping is independent of entry/group content timestamps.
+Newer same-parent moves retain LocationChanged and PreviousParentGroup through
+KDBX save/reopen, so an older third-device move cannot undo a return. Structural
+parent differences never mask genuine equal-time field/name conflicts and never
+create duplicate content history. Newer permanent deletion remains authoritative;
+missing-time different-parent moves do not acquire fabricated source provenance.
+These synthetic native tests do not prove real client/device synchronization.

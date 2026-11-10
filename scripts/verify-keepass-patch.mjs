@@ -16,6 +16,7 @@ assert.equal(
   "a845a36b656474a0e73e71bfb7dec34250244df364815b77abe1067f17e59e8e",
 );
 const patched = new Set([
+  "src/db/merge.rs",
   "src/db/types/entry.rs",
   "src/db/types/mod.rs",
   "src/format/xml_db/mod.rs",
@@ -55,4 +56,4 @@ for (const path of patched) {
     `Patched source needs formatting: ${path}`,
   );
 }
-console.log("keepass 0.13.22 provenance: 60 verified files, 3 documented patches; format passed");
+console.log("keepass 0.13.22 provenance: 60 verified files, 4 documented patches; format passed");

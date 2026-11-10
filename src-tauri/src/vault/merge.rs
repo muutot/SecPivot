@@ -61,13 +61,7 @@ fn content_diverged(a: &Entry, b: &Entry) -> bool {
     if expiration_diverged(a, b) {
         return true;
     }
-    let mut a = a.clone();
-    a.times = Times::default();
-    a.history = None;
-    let mut b = b.clone();
-    b.times = Times::default();
-    b.history = None;
-    a != b
+    !a.content_eq(b)
 }
 
 fn expiration_diverged(a: &Entry, b: &Entry) -> bool {

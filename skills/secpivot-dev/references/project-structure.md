@@ -53,13 +53,13 @@ collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
 fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
-`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus three
-reviewed attachment/history/serialization patches. Cargo's local patch keeps
+`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus four
+reviewed attachment/history/location/serialization patches. Cargo's local patch keeps
 the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
-Cargo wiring and the three patched files' formatting as part of `npm run verify`.
+Cargo wiring and the four patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and seven
+in the audit scope. Native vault tests cover the application boundary and eight
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 Canonical binary merge and
@@ -71,7 +71,11 @@ It completes current expiration from actual entry winners and rejects surviving
 equal-time expiration divergence after native deletion decisions; expiration is
 included in losing-version identity and its native save/reopen regressions.
 Patched types/mod.rs provides History::from_entries for linear list construction
-after the wrapper sorts versions; its existing three-file provenance gate applies.
+after the wrapper sorts versions. Patched db/merge.rs merges same-parent location
+times independently of content, carries the winning move's previous parent
+through staged group relocation and retains missing-time destination provenance.
+Entry::content_eq excludes current/previous parent bookkeeping; first-party
+history identity adds expiration. The four-file provenance gate applies.
 
 ## Runtime surfaces
 
