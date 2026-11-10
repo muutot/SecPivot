@@ -22,6 +22,7 @@ mod sessions;
 mod temp_attachments;
 #[cfg(test)]
 mod tests;
+mod website_rules;
 
 use keepass::Database;
 use std::collections::HashMap;
@@ -175,6 +176,7 @@ pub use self::import::{
 };
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::{sweep_stale_temp_attachments, AttachmentTempStore};
+pub use self::website_rules::{ValidatedWebsiteRules, WebsiteMode, WebsiteRule, WebsiteRuleSet};
 
 // ---------------------------------------------------------------------------
 // Session
