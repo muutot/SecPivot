@@ -159,6 +159,14 @@ remain programmatically invoked by their visible Add button. Only the top modal
 handles unconsumed keys. `tests/modal-focus.test.mjs` exercises the production
 handler with a DOM seam; actual native Tab/layout needs browser verification.
 
+EntryEditorDialog's secondary tabs retain compact padding, one-line labels and
+nonshrinking items. The row scrolls horizontally with the existing thin
+scrollbar token when labels, locale or configured font exceed its width. Focus
+entry scrolls the item with nearest block/inline alignment so partially visible
+tabs are fully revealed; the existing focus outline is inset to avoid clipping.
+Keep this overflow inside the tab row,
+including on narrow screens, rather than widening the modal surface.
+
 ## Viewport menu
 
 `ViewportMenuShell.svelte` is the canonical viewport-fixed popover menu: it

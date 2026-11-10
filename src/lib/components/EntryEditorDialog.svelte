@@ -831,6 +831,10 @@
       role="tablist"
       inert={templateLoading}
       aria-label={t(lang, "editor.tabs")}
+      onfocusin={(event) => {
+        if (event.target instanceof HTMLElement)
+          event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }}
     >
       <button
         type="button"
@@ -1540,13 +1544,18 @@
 
   .editor-tabs {
     display: flex;
+    overflow-x: auto;
     gap: 2px;
     margin: -12px 0 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-subtle);
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
   }
 
   .editor-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
     padding: 5px 12px;
     border: 0;
     border-bottom: 2px solid transparent;
@@ -1563,6 +1572,10 @@
   .editor-tab:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .editor-tab:focus-visible {
+    outline-offset: -2px;
   }
 
   .editor-tab.active {
