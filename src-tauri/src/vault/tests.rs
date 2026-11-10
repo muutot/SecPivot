@@ -12035,6 +12035,195 @@ fn merge_history_equal_current_preserves_both_branches_after_reopen() {
 }
 
 #[test]
+fn merge_expiration_enable_survives_both_directions_and_reopen() {
+    assert_expiration_merge(None, Some("2030-01-01T00:00:00"), None, false);
+}
+
+#[test]
+fn merge_expiration_reschedule_survives_both_directions_and_reopen() {
+    assert_expiration_merge(
+        Some("2030-01-01T00:00:00"),
+        Some("2040-01-01T00:00:00"),
+        None,
+        false,
+    );
+}
+
+#[test]
+fn merge_expiration_disable_survives_both_directions_and_reopen() {
+    assert_expiration_merge(Some("2030-01-01T00:00:00"), None, None, false);
+}
+
+#[test]
+fn merge_expiration_divergent_updates_preserve_the_losing_settings() {
+    assert_expiration_merge(
+        Some("2030-01-01T00:00:00"),
+        Some("2040-01-01T00:00:00"),
+        Some("2035-01-01T00:00:00"),
+        false,
+    );
+}
+
+#[test]
+fn merge_expiration_same_time_divergence_is_a_conflict() {
+    assert_expiration_merge(
+        Some("2030-01-01T00:00:00"),
+        Some("2040-01-01T00:00:00"),
+        None,
+        true,
+    );
+}
+
+#[test]
+fn merge_expiration_permanent_deletion_does_not_resurrect_an_updated_entry() {
+    let dir = TempDir::new().unwrap();
+    let (mut base, id) = merge_base_db();
+    base.entry_mut(id).unwrap().times.expires = Some(true);
+    base.entry_mut(id).unwrap().times.expiry = Some(merge_ts(60));
+    let mut remote = base.clone();
+    {
+        let mut entry = remote.entry_mut(id).unwrap();
+        entry.times.last_modification = Some(merge_ts(20));
+        entry.times.expiry = Some(merge_ts(70));
+    }
+    remote.entry_mut(id).unwrap().track_changes().remove();
+    remote.deleted_objects.insert(id.uuid(), Some(merge_ts(30)));
+    for (a, b) in [(&base, &remote), (&remote, &base)] {
+        let merged = merge_databases(a, b).unwrap();
+        assert!(merged.entry(id).is_none());
+        assert_eq!(
+            merged.deleted_objects.get(&id.uuid()),
+            Some(&Some(merge_ts(30)))
+        );
+        let path = dir.path().join("expiration-deleted.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        assert!(reopened.require_db().unwrap().entry(id).is_none());
+        assert!(merge_databases(reopened.require_db().unwrap(), b)
+            .unwrap()
+            .entry(id)
+            .is_none());
+    }
+}
+
+fn assert_expiration_merge(
+    initial: Option<&str>,
+    newer: Option<&str>,
+    intermediate: Option<&str>,
+    same_time: bool,
+) {
+    let dir = TempDir::new().unwrap();
+    let (mut local, local_path) = create_session(&dir);
+    let mut input = entry_input(ROOT_GROUP_UUID, "Synthetic expiration", "", "", "");
+    input.expires = initial.map(str::to_owned);
+    let uuid = local.add_entry(&input).unwrap().root.entries[0]
+        .uuid
+        .clone();
+    let id = parse_entry_id(&uuid).unwrap();
+    let initial_time = if same_time { 20 } else { 10 };
+    pin_times(local.require_db_mut().unwrap(), id, merge_ts(initial_time));
+    local.save().unwrap();
+    local.close();
+    local.open(&local_path, "master-password", None).unwrap();
+    let remote_path = dir.path().join("expiration-remote.kdbx");
+    std::fs::copy(&local_path, &remote_path).unwrap();
+    let mut remote = VaultSession::default();
+    remote.open(&remote_path, "master-password", None).unwrap();
+    if let Some(date) = intermediate {
+        input.expires = Some(date.into());
+        local.update_entry(&uuid, &input).unwrap();
+        pin_times(local.require_db_mut().unwrap(), id, merge_ts(15));
+    }
+    input.expires = newer.map(str::to_owned);
+    remote.update_entry(&uuid, &input).unwrap();
+    pin_times(remote.require_db_mut().unwrap(), id, merge_ts(20));
+    for (session, path) in [(&mut local, &local_path), (&mut remote, &remote_path)] {
+        session.save().unwrap();
+        session.close();
+        session.open(path, "master-password", None).unwrap();
+    }
+    let date = |value: Option<&str>| {
+        value.map(|v| NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S").unwrap())
+    };
+    for (a, b) in [
+        (local.require_db().unwrap(), remote.require_db().unwrap()),
+        (remote.require_db().unwrap(), local.require_db().unwrap()),
+    ] {
+        let result = merge_databases(a, b);
+        if same_time {
+            assert!(
+                result.is_err(),
+                "equal-time expiration divergence must reject merge"
+            );
+            assert!(result.unwrap_err().contains("同一时间戳"));
+            continue;
+        }
+        let merged = result.unwrap();
+        let inspect =
+            |db: &Database| {
+                let entry = db.entry(id).unwrap();
+                assert_eq!(entry.times.expiry, date(newer), "newer expiration must win");
+                assert_eq!(entry.times.expires, Some(newer.is_some()));
+                assert_eq!(entry.times.last_modification, Some(merge_ts(20)));
+                let versions = entry.history.as_ref().unwrap().get_entries();
+                assert!(versions.iter().any(|e| e.times.expiry == date(initial)
+                    && e.times.expires == Some(initial.is_some())));
+                if let Some(expected) = intermediate {
+                    assert!(
+                        versions
+                            .iter()
+                            .any(|e| e.times.expiry == date(Some(expected))),
+                        "losing expiration settings must remain restorable"
+                    );
+                    assert_eq!(versions.len(), 2);
+                } else {
+                    assert_eq!(versions.len(), 1);
+                }
+            };
+        inspect(&merged);
+        let path = dir.path().join("expiration-merged.kdbx");
+        save_database(
+            &merged,
+            &path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "synthetic-only", None).unwrap();
+        inspect(reopened.require_db().unwrap());
+        inspect(&merge_databases(reopened.require_db().unwrap(), b).unwrap());
+        if let Some(expected) = intermediate {
+            let history = reopened
+                .require_db()
+                .unwrap()
+                .entry(id)
+                .unwrap()
+                .history
+                .clone()
+                .unwrap();
+            let index = history
+                .get_entries()
+                .iter()
+                .position(|e| e.times.expiry == date(Some(expected)))
+                .unwrap();
+            reopened.restore_entry_version(&uuid, index).unwrap();
+            reopened.save().unwrap();
+            reopened.close();
+            reopened.open(&path, "synthetic-only", None).unwrap();
+            let entry = reopened.require_db().unwrap().entry(id).unwrap();
+            assert_eq!(entry.times.expiry, date(Some(expected)));
+            assert_eq!(entry.times.expires, Some(true));
+        }
+    }
+}
+
+#[test]
 fn merge_history_same_time_loser_preserves_both_versions_after_reopen() {
     assert_merge_history_branch_fidelity(false);
 }

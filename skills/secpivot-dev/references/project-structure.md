@@ -61,8 +61,11 @@ rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 Canonical binary merge and
 complete local recycle-bin version transplantation live in patched types/mod.rs.
 The first-party vault/merge.rs adds history-only union at equal current times
-and content-aware deduplication of captured local-winner remote snapshots;
+and content-aware deduplication of captured older current versions in either direction;
 current same-time content conflicts still fail before database publication.
+It completes current expiration from actual entry winners and rejects surviving
+equal-time expiration divergence after native deletion decisions; expiration is
+included in losing-version identity and its native save/reopen regressions.
 Patched types/mod.rs provides History::from_entries for linear list construction
 after the wrapper sorts versions; its existing three-file provenance gate applies.
 
