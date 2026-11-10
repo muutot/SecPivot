@@ -4079,7 +4079,7 @@ remote-password-whitespace-final-proof.json保存fix patch、源码、原样
 - Severity: Medium
 - Confidence: High
 - Category: Accessibility
-- Status: Confirmed
+- Status: Confirmed（已修复，7d86e04）
 - Affected area: S3 and WebDAV settings form fields
 - Evidence:
   - File: src/lib/components/settings/RemoteSettingsPanel.svelte:124–385; src/lib/components/templates/form/TextField.svelte:26, 114 (d9c2af4)
@@ -4098,3 +4098,19 @@ remote-password-whitespace-final-proof.json保存fix patch、源码、原样
 密码库／真实凭据／系统剪贴板。累计87 Confirmed含历史已修复项
 （Critical1／High19／Medium55／Low12），原始15项／6.1分保持。
 手机另存为的新版APK／真机provider验证和整体审计／竞品目标仍未完成。
+
+修复与验证（2026-11-11）：7d86e04 为8处TextField传入与可见标题相同
+的本地化ariaLabel，包含S3／WebDAV端点和凭据差异。生产build独立
+localhost中，中英文S3 8项／WebDAV6项名称均与标题一致；深浅色
+1280px桌面／390×844窄屏保持30px控件高度，无页面横向溢出。
+按名称定位与WebDAV端点Tab到用户名、solid焦点outline实际通过。
+预览仅切换隔离origin的主题／语言，恢复中文深色及viewport默认。
+
+check／build／format:check exit0；未为纯prop修复增加实现镜像测试。
+原开发预览在构建目录watch发生EBUSY退出，生产预览启动后HTTP200，
+新浏览器tab成功完成检查；预览进程已停止。remote-form-name-final-proof.json
+保存源码hash及名称／布局结果；桌面和深浅窄屏截图保留。
+theme-token gate使用既有TextField能力，无CSS／token／布局变化；
+currency gate同步settings-panels.md，无IPC／schema／秘密处理变化。
+没有真机读屏／provider／APK证明，不将此局部修复认定全站无障碍完成；
+累计87历史Confirmed及原始15项／6.1分保持，整体目标仍active。

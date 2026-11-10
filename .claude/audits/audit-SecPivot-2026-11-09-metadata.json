@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "ff9efb9234e0b6d8d734c8de9ed5c55c590fd5aa",
+  "remediation_checkpoint": "7d86e04e2ca8f964054b4949818f29d544175c86",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "d9c2af4cfaa6ea2460b88bed54f4f2b0b8060bd5",
       "area": "Remote settings text/password controls have no accessible names",
-      "status": "Confirmed, unremediated. Isolated DOM and native browser AX prove S3 eight/WebDAV six unnamed fields; label/aria-label/aria-labelledby/title absent. Existing TextField supports localized ariaLabel. No user config/vault/credential values/clipboard accessed."
+      "status": "Confirmed and remediated. Eight localized TextField ariaLabel props match existing headings. Production localhost DOM/AX validates Chinese/English S3 eight/WebDAV six; dark/light desktop/narrow retain30px controls and no page horizontal overflow. Name-based locator and actual Tab to named username/solid outline pass. Check/build/format exit0; settings-panels currency updated. No CSS/token/IPC/schema change or native screen-reader/device/APK proof; no broad TODO completed.",
+      "fix_commit": "7d86e04e2ca8f964054b4949818f29d544175c86"
     },
     {
       "id": "SP-S75",
@@ -1696,13 +1697,20 @@
       "quickxml_ignored": 4
     },
     "remote_form_accessible_names": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "d9c2af4cfaa6ea2460b88bed54f4f2b0b8060bd5",
       "before": "remote-form-name-confirmed-before.json",
       "before_sha256": "13219e10913032bc7544a54f5cf4306d80cba772daab143ff74465e8a7745d97",
       "unnamed_s3": 8,
       "unnamed_webdav": 6,
-      "limits": "Isolated localhost DOM/AX names only; no field values or user data accessed"
+      "limits": "Production build at isolated localhost; DOM/AX/layout only, no credentials entered or user config/vault/clipboard accessed. Native screen-reader/provider/device behavior not tested.",
+      "fix_commit": "7d86e04e2ca8f964054b4949818f29d544175c86",
+      "final_proof": "remote-form-name-final-proof.json",
+      "unnamed_s3_after": 0,
+      "unnamed_webdav_after": 0,
+      "check_exit": 0,
+      "build_exit": 0,
+      "format_exit": 0
     }
   },
   "reverification_notes": [
@@ -1795,6 +1803,7 @@
     "fee4565 remediates SP-S73 missing requested type: immutable2 green,actual DAV property/response stdlib controls,request-driven HTTP collection exclusion/extensionless retention,final remote34 and full359/682/ACL2 pass. Pinned KeeWeb directURL capability comparison does not prove listing/runtime or adopt XOR/MOVE. Original15/6.1 and84 historical cards preserved; provider/mobile/namespace/propstat/full audit/competitor/UI remain active.",
     "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active.",
     "94985ce status candidate review: RFC4918 section9.1 forbids duplicate property names; six conforming controls with empty unavailable values and disjoint successful properties all preserve expected metadata/collection behavior. Actual parser1 test/684 filtered and ElementTree6 pass. Initial DTO omitted-date vs null fixture error retained and corrected; source restored exactly. No new finding, source edit or full-status/provider coverage claim; historical85/original15/6.1 unchanged.",
-    "ff9efb9 remediates SP-S75 exact remote credentials. Immutable14/queued7 zero mismatch; native2/targeted3/frontend2, independent stdlib wire12 and full361/687/ACL2 pass. First Clippy failure retained and rerun after byte-slice correction. Original15/6.1 and86 historical Confirmed cards retained; no historical inventory overwritten or whole-project semantic coverage claim. Provider/mobile/competitor/UI goal remains active."
+    "ff9efb9 remediates SP-S75 exact remote credentials. Immutable14/queued7 zero mismatch; native2/targeted3/frontend2, independent stdlib wire12 and full361/687/ACL2 pass. First Clippy failure retained and rerun after byte-slice correction. Original15/6.1 and86 historical Confirmed cards retained; no historical inventory overwritten or whole-project semantic coverage claim. Provider/mobile/competitor/UI goal remains active.",
+    "7d86e04 closes SP-S76 accessible field names with production DOM/AX, locale/theme/narrow and Tab verification. Check/build/format pass; docs currency synchronized; original15/6.1 and87 historical cards retained. No native screen-reader/provider/mobile or whole-project completion assertion."
   ]
 }
