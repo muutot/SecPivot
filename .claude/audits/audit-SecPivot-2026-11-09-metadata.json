@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S73; historical supplemental tracking notes excluded",
-    "total": 84,
-    "confirmed": 84,
+    "scope": "15 baseline cards plus SP-S05 through SP-S74; historical supplemental tracking notes excluded",
+    "total": 85,
+    "confirmed": 85,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 52,
+      "Medium": 53,
       "Low": 12
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S74",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "fb6601b",
+      "area": "WebDAV expanded names and expected parent scopes ignored",
+      "status": "Confirmed, unremediated. Actual parser16-case corpus gives5 compatibility controls green/11 extension/context mismatches; native2 red/1 control green/682 filtered. Foreign href changes real no-auth GET to /dav/other instead of actual; foreign collection/response and rebound/unqualified names alter records or accept wrong/unbound roots. Independent stdlib expanded-name/direct-child16 controls pass; immutable fixture/diagnostic/source hashes and exact restoration recorded. RFC4918 section17 normative unknown-subtree contract. No real provider/vault/remote write/disclosure/loss/device/APK/shared clipboard/high-resource proof; status/propstat/fullXML remain separate."
+    },
     {
       "id": "SP-S73",
       "severity": "Low",
@@ -1583,6 +1591,25 @@
       "changed_existing_paths": 74,
       "new_coverage_paths": 116,
       "limits": "Inventory/hash coverage only, not complete semantic or runtime review. Untracked user/editor data excluded; no real config, vault, OS clipboard or system-wide search. Baseline inventory used a narrower selected path list, so added coverage paths do not all imply newly added source."
+    },
+    "webdav_namespace_context": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "fb6601b",
+      "native_red": "webdav-namespace-native-red.log",
+      "native_failed": 2,
+      "native_passed": 1,
+      "native_filtered": 682,
+      "fixture_cases": 16,
+      "compatibility_cases": 5,
+      "mismatching_cases": 11,
+      "independent_passed": 16,
+      "loopback_gets": 1,
+      "fixture": "webdav-namespace-fixtures.json",
+      "diagnostic": "webdav-namespace-diagnostic.rs",
+      "provenance": "webdav-namespace-red-provenance.json",
+      "normative_reference": "webdav-namespace-normative-reference.json",
+      "source_restored_exactly": true,
+      "limits": "Sixteen tiny synthetic XML cases and one no-auth loopback GET. No user config/vault, credentials, actual provider/client/device/APK/shared clipboard/remote write/data loss/disclosure/external entity/high-resource test. Propstat status semantics and full XML validation remain separate."
     }
   },
   "reverification_notes": [

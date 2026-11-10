@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S73；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S74；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 52     | 52        | 0         |
+| Medium    | 53     | 53        | 0         |
 | Low       | 12     | 12        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **84** | **84**    | **0**     |
+| **Total** | **85** | **85**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3945,3 +3945,31 @@ Confirmed含历史已修复项，原始b7c5d9f／15项／6.1分保持；完整
 first-party-inventory-webdav-collection.json保存路径／哈希／排除／工作树
 状态，仅证明库存覆盖，不把368个文件或119066行称为逐行深读；
 原始252个文件／82147行的基线库存记录保持。
+
+### Finding: SP-S74 WebDAV 忽略命名空间与层级，扩展字段改变真实路径和集合判断
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data integrity
+- Status: Confirmed
+- Affected area: WebDAV XML expanded-name and parent-container interpretation
+- Evidence:
+  - File: src-tauri/src/remote/webdav.rs:252–402 (fb6601b)
+  - Function / Module: parse_multistatus / validate_multistatus_document / local_name
+  - Relevant behavior: local names are lowercased without resolving namespaces, and any href/response/collection inside a response updates the current record regardless of its parent. Unknown extension elements and their children are not skipped. Root namespace and unbound prefixes are unchecked.
+  - Reproduction: webdav-namespace-native-red.log runs actual production parsing for16 tiny documents. Five prefix/default namespace/uppercase/fully unqualified legacy controls pass; eleven foreign/same-name/rebound-prefix/unqualified-in-DAV/unknown-container cases mismatch expected resource or rejection. Two tests fail/one passes,682 unrelated tests filtered. A real no-auth loopback GET after parsing a foreign href targets /dav/other.kdbx instead of /dav/actual.kdbx; no actual cloud vault is loaded or written.
+  - Independent verification: stdlib ElementTree expanded names and direct-child path lookup reproduce all16 expected outcomes. The two non-DAV/unbound-root documents reject, while unrelated extension subtrees leave the actual file, size and date intact. Compatibility rules for uppercase/entirely unqualified legacy XML are explicitly separated from namespace identity. Fixture/diagnostic/source hashes and exact test restoration are recorded in webdav-namespace-red-provenance.json. RFC4918 §17 requires processing as if unrecognized elements and their children were absent.
+- Problem: valid extension data can overwrite the response href/metadata, create an unrelated response or misclassify a regular file as a collection.
+- Why it matters: a server returning ordinary dead/extension properties can make a listed file request another resource on the configured endpoint or disappear. Medium reflects verified resource identity and enumeration failure; no real provider incident, remote write, credential disclosure or data loss is demonstrated.
+- Realistic failure scenario: a PROPFIND response includes its real DAV:href and a separate application namespace's href property. The latter replaces the real path; an unrelated collection or nested response can also alter the visible list.
+- Minimal fix: resolve expanded names, recognize fields only under their expected DAV containers, and ignore unknown/unexpected subtrees including recognized-looking descendants. Require a DAV root, with an explicitly separate entirely unqualified legacy mode; reject unbound prefixes without echoing XML. Preserve prior URI, simple text, empty-list and uppercase compatibility contracts.
+- Better long-term fix: separately audit successful propstat/status policies, duplicate known properties, full XML validity and actual provider/device interoperability; namespace/context correctness does not establish those boundaries.
+- Regression test suggestion: replay immutable16-case expanded-name/context fixture and original GET probe; bounded list-to-GET/PUT/readback must preserve the real file and untouched sibling despite extension href/type/metadata/response fields. Prefix aliases/default/rebinding/uppercase/legacy and previous XML/URI controls remain green; old malformed-property tests must target actual namespaced property locations.
+- Estimated effort: 2–4 hours for scoped namespace/context interpretation, wire regressions, original-probe replay and full verification.
+
+确认阶段未修改应用行为，临时测试逐字节恢复；标准库16控制通过，
+原生两项红测及合法控制通过。仅小型合成XML和一次无凭据loopback
+GET，无用户配置／密码库、云端／写入、共享剪贴板、真机／APK、
+外部实体或高资源复现。累计85 Confirmed（Critical1／High19／Medium53／
+Low12）含历史已修复项，原始b7c5d9f／15项／6.1分保持；整个审计／
+竞品／UI和手机另存为真机验证仍待完成，目标active。
