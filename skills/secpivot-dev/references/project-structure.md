@@ -65,9 +65,13 @@ the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the four patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and eleven
+in the audit scope. Native vault tests cover the application boundary and fourteen
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
+EntryTrack drop explicitly collects its released unowned snapshot IDs after
+tracked removal erased reverse references. Recursive owners, remaining leases
+and unrelated orphan headers are preserved; native tests cover six real
+permanent-delete paths with current/history payloads and KDBX save/reopen.
 Canonical binary merge and
 complete local recycle-bin version transplantation live in patched types/mod.rs.
 The first-party vault/merge.rs adds history-only union at equal current times

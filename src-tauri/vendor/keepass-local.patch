@@ -864,7 +864,8 @@
 +            .entries
 +            .get_mut(&self.id)
 +            .expect("Entry not found")
-@@ -839,0 +946,15 @@
+@@ -838,0 +945,39 @@
++        }
 +        for attachment_id in &self.retained_attachments {
 +            if let Some(count) = self
 +                .database
@@ -880,7 +881,30 @@
 +            }
 +        }
 +        self.database.reindex_entry_attachments(self.id);
-@@ -875 +996,7 @@
++        // Removal already erased this entry's reverse references. Released
++        // snapshot leases must still be considered for collection explicitly.
++        let released: HashSet<_> = self
++            .retained_attachments
++            .iter()
++            .copied()
++            .filter(|id| {
++                !self.database.pending_history_attachments.contains_key(id)
++                    && self
++                        .database
++                        .attachments
++                        .get(id)
++                        .is_some_and(|attachment| attachment.entries.is_empty())
++            })
++            .collect();
++        if !released.is_empty() {
++            let mut owned = HashSet::new();
++            for entry in self.database.entries.values() {
++                super::collect_entry_attachment_ids(entry, &mut owned);
++            }
++            self.database
++                .attachments
++                .retain(|id, _| !released.contains(id) || owned.contains(id));
+@@ -875 +1020,7 @@
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -889,25 +913,25 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -879 +1006,4 @@
+@@ -879 +1030,4 @@
 -        assert_eq!(db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(), "Entry 1");
 +        assert_eq!(
 +            db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(),
 +            "Entry 1"
 +        );
-@@ -885 +1015,4 @@
+@@ -885 +1039,4 @@
 -                crate::db::Value::unprotected(format!("modified_{}", e.get(fields::USERNAME).unwrap())),
 +                crate::db::Value::unprotected(format!(
 +                    "modified_{}",
 +                    e.get(fields::USERNAME).unwrap()
 +                )),
-@@ -888 +1021,4 @@
+@@ -888 +1045,4 @@
 -            e.add_attachment("Attachment 1", Value::protected(b"Attachment data".to_vec()));
 +            e.add_attachment(
 +                "Attachment 1",
 +                Value::protected(b"Attachment data".to_vec()),
 +            );
-@@ -894 +1030,7 @@
+@@ -894 +1054,7 @@
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -916,7 +940,7 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -927 +1069,87 @@
+@@ -927 +1093,213 @@
 -}
 +
 +    #[test]
@@ -1004,6 +1028,132 @@
 +            b"synthetic-old"
 +        );
 +    }
++
++    #[test]
++    fn secpivot_tracked_removal_collects_released_aliases_only() {
++        let mut db = Database::new();
++        let entry = db.root_mut().add_entry().id();
++        let payload = db
++            .entry_mut(entry)
++            .unwrap()
++            .add_attachment("first.txt", Value::protected(b"synthetic-deleted".to_vec()))
++            .id();
++        db.entries
++            .get_mut(&entry)
++            .unwrap()
++            .attachments
++            .insert("alias.txt".into(), payload);
++        let orphan = db.root_mut().add_entry().id();
++        let orphan_payload = db
++            .entry_mut(orphan)
++            .unwrap()
++            .add_attachment(
++                "orphan.txt",
++                Value::protected(b"synthetic-unrelated".to_vec()),
++            )
++            .id();
++        // Model a preserved, previously unreferenced binary header.
++        db.entries.get_mut(&orphan).unwrap().attachments.clear();
++        db.attachments
++            .get_mut(&orphan_payload)
++            .unwrap()
++            .entries
++            .clear();
++        db.entry_mut(entry).unwrap().track_changes().remove();
++        assert!(db.entry(entry).is_none());
++        assert!(db.attachment(payload).is_none());
++        assert!(db.pending_history_attachments.is_empty());
++        assert_eq!(db.num_attachments(), 1);
++        assert_eq!(
++            db.attachment(orphan_payload).unwrap().get().as_slice(),
++            b"synthetic-unrelated"
++        );
++    }
++
++    #[test]
++    fn secpivot_tracked_removal_keeps_shared_current_and_nested_history() {
++        for nested in [false, true] {
++            let mut db = Database::new();
++            let deleted = db.root_mut().add_entry().id();
++            let payload = db
++                .entry_mut(deleted)
++                .unwrap()
++                .add_attachment("shared.txt", Value::protected(b"synthetic-shared".to_vec()))
++                .id();
++            let survivor = db.root_mut().add_entry().id();
++            if nested {
++                let mut snapshot = super::Entry::new(db.root);
++                snapshot.attachments.insert("shared.txt".into(), payload);
++                let mut outer = super::Entry::new(db.root);
++                outer.history.get_or_insert_default().add_entry(snapshot);
++                db.entries
++                    .get_mut(&survivor)
++                    .unwrap()
++                    .history
++                    .get_or_insert_default()
++                    .entries
++                    .push(outer);
++            } else {
++                db.entries
++                    .get_mut(&survivor)
++                    .unwrap()
++                    .attachments
++                    .insert("shared.txt".into(), payload);
++                db.attachments
++                    .get_mut(&payload)
++                    .unwrap()
++                    .entries
++                    .insert((survivor, None));
++            }
++            db.entry_mut(deleted).unwrap().track_changes().remove();
++            assert!(db.entry(deleted).is_none());
++            assert!(db.entry(survivor).is_some());
++            assert!(db.pending_history_attachments.is_empty());
++            assert_eq!(db.num_attachments(), 1);
++            assert_eq!(
++                db.attachment(payload).unwrap().get().as_slice(),
++                b"synthetic-shared"
++            );
++        }
++    }
++
++    #[test]
++    fn secpivot_tracked_removal_waits_for_the_last_snapshot_lease() {
++        for prepared in [false, true] {
++            let mut db = Database::new();
++            let entry = db.root_mut().add_entry().id();
++            let payload = db
++                .entry_mut(entry)
++                .unwrap()
++                .add_attachment(
++                    "synthetic.txt",
++                    Value::protected(b"synthetic-leased".to_vec()),
++                )
++                .id();
++            if prepared {
++                db.pending_history_attachments.insert(payload, 1);
++            }
++            {
++                let mut mutable = db.entry_mut(entry).unwrap();
++                let mut outer = mutable.track_changes();
++                outer.as_mut().track_changes().remove();
++                assert!(outer.database.entry(entry).is_none());
++                assert_eq!(
++                    outer.database.pending_history_attachments[&payload],
++                    1 + usize::from(prepared)
++                );
++                assert!(outer.database.attachment(payload).is_some());
++            }
++            assert_eq!(db.num_attachments(), usize::from(prepared));
++            assert_eq!(
++                db.pending_history_attachments
++                    .get(&payload)
++                    .copied()
++                    .unwrap_or(0),
++                usize::from(prepared)
++            );
++        }
++    }
 +}
 --- a/src/db/types/mod.rs
 +++ b/src/db/types/mod.rs
@@ -1032,7 +1182,7 @@
 +    #[cfg_attr(feature = "serialization", serde(skip))]
 +    pub(crate) pending_history_attachments: HashMap<AttachmentId, usize>,
 +
-@@ -61,0 +80,83 @@
+@@ -61,0 +80,82 @@
 +}
 +
 +/// Fail closed when a merge cannot map every current/historical binary.
@@ -1064,7 +1214,6 @@
 +    (data.is_protected(), Sha256::digest(data.get()).into())
 +}
 +
-+#[cfg(feature = "_merge")]
 +fn collect_entry_attachment_ids(entry: &Entry, ids: &mut std::collections::HashSet<AttachmentId>) {
 +    ids.extend(entry.attachments.values().copied());
 +    if let Some(history) = &entry.history {
@@ -1116,11 +1265,11 @@
 +            deleted_objects: self.deleted_objects.clone(),
 +        }
 +    }
-@@ -91,0 +193 @@
+@@ -91,0 +192 @@
 +            pending_history_attachments: HashMap::new(),
-@@ -109,0 +212 @@
+@@ -109,0 +211 @@
 +            pending_history_attachments: HashMap::new(),
-@@ -141,0 +245,281 @@
+@@ -141,0 +244,281 @@
 +    }
 +
 +    /// Rebuild one entry's current/historical reverse references and collect
@@ -1402,7 +1551,7 @@
 +            map.insert(id, dest_id);
 +        }
 +        map
-@@ -287,0 +672,149 @@
+@@ -287,0 +671,149 @@
 +
 +#[cfg(all(test, feature = "_merge"))]
 +mod secpivot_merge_attachment_tests {
