@@ -13,8 +13,12 @@ KDBX internal text serialization emits CR character references before encryption
 so ordinary text/history/keys/group/meta content does not silently change its
 line endings. This acts on trusted serializer output, whose model has no CDATA;
 it never guesses or repairs reader input. Protected values keep inner encryption
-and literal entity text stays literal. Pure-whitespace decoding and invalid
-scalars need separate verification; no default secret-protection policy changes.
+and literal entity text stays literal. Pure-whitespace ordinary entry values
+still disappear at the quick-xml blank-event and generic optional-string trim
+boundaries (confirmed, pending repair); protected-value controls remain intact.
+Do not apply a global metadata whitespace change or treat a green general suite
+as this case's coverage. Invalid scalars need separate verification; no default
+secret-protection policy changes.
 
 SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 

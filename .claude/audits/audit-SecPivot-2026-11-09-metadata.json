@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S64; historical supplemental tracking notes excluded",
-    "total": 75,
-    "confirmed": 75,
+    "scope": "15 baseline cards plus SP-S05 through SP-S65; historical supplemental tracking notes excluded",
+    "total": 76,
+    "confirmed": 76,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 44,
+      "Medium": 45,
       "Low": 11
     }
   },
@@ -67,6 +67,15 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S65",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "92c1d14",
+      "commit": null,
+      "area": "KDBX reader drops whitespace-only ordinary current/history values before save",
+      "status": "Confirmed, not remediated. Native2 red:48 current/history +50 external-open/rewrite positions changed. Original registry AES1 fixture actual XML/ElementTree35 values intact, registry/source/lock/fixture/XML hashes corroborate. Final vendor1 pass/1 fail; missing-Value harness assumption corrected. Direct Option/String attempts both red and withdrawn. All application/five patched source bytes restored exactly; red regression patch/fixture outside repo. ASCII map skipping and Unicode generic trim are distinct layers of one fidelity issue. Prior323/668/ACL2 full green excludes these uncommitted red tests and does not prove repair. No raw substitution/global metadata change, recovery/default-protection/user-vault/device/provider/competitor runtime claim."
+    },
     {
       "id": "SP-S64",
       "severity": "Medium",
@@ -1186,6 +1195,24 @@
       "reconstruction": "kdbx-carriage-reconstruction.log",
       "reference": "keepass-carriage-reference-provenance.json",
       "limitations": "Synthetic data only. Root full gate serial/debug0/unfiltered/live clipboard unset; independent default profile/threads differ. Actual to_xml fixture uses Plain inner cipher; native/external tests separately cover encrypted save/parse. Pure-whitespace suite stops at first space-only failure and remains unremediated candidate; invalid scalars/unseen model surfaces/client/device/provider/full string fidelity not proved. Official writer factory has no explicit Entitize; no native competitor runtime proof."
+    },
+    "kdbx_whitespace": {
+      "checkpoint": "92c1d14",
+      "result": "Confirmed, pending remediation",
+      "proof": "kdbx-whitespace-evidence-proof.json",
+      "native_red": "kdbx-whitespace-native-red-final.log",
+      "native_failed": 2,
+      "changed_native_current_history_positions": 48,
+      "changed_external_open_rewrite_positions": 50,
+      "vendor_red": "kdbx-whitespace-vendor-red-final.log",
+      "vendor_passed": 1,
+      "vendor_failed": 1,
+      "original_fixture": "kdbx-whitespace-provenance.json",
+      "original_metadata": "kdbx-whitespace-fixture-registry-metadata.json",
+      "reader_reference": "kdbx-whitespace-reader-reference-provenance.json",
+      "regression_patch": "kdbx-whitespace-regressions-red.patch",
+      "source_restored": true,
+      "limitations": "Synthetic bounded data only; root red serial/debug0/live unset; original producer default profile. XML source independent ElementTree read, no independent encrypted decryption/client runtime. Failed attempts removed and root latest full gate still323/668/ACL2; red tests not in committed suite. No group/meta whitespace/scalar/recovery/client/device/provider/full-security claim."
     }
   },
   "reverification_notes": [
@@ -1265,6 +1292,7 @@
     "879d37f fixes SP-S61 final prepared binary collection. Actual native three red after SP-S60 deletion already succeeds; independent prepared two red vs original registry controls, finalized two green. Three native/seventeen specialized/full verify 323/659/ACL2 pass serially/debug=0/no filters/live clipboard. State records only IDs, finalizer after history/bin restores collects unowned prepared IDs, preserves original orphan IDs/later binaries, refuses leases/missing final payloads before mutation. Canonical aliases in both ID orders, late nested histories and failed-state boundaries covered. Fresh 60-hash reconstruction/56 unchanged and no-_merge check pass; docs/patch/TODO gate updated, full sync partial. No UI/IPC/schema/version/user-vault/clipboard/device/provider/physical erasure changes. Original b7c5d9f/15/6.1 preserved; overall goal active and phone APK/provider unverified.",
     "1ce2452 fixes SP-S62 shared Argon2 checked-parameter conversion. Actual local/remote/save 3 red, original registry 2 save/parse red and pinned official checked conversion corroborate. Native3/specialized19/normal vector/external2/full verify 323/662/ACL2 pass serially/debug=0/no filters/live clipboard. All probes compute only1/64KiB; unsupported high declarations rejected, no default/AES change or resource caps claimed. Two empty synthetic fixture hashes preserve original producer, local/remote refusal keeps session and avoids mirror, failed save keeps old file/reopen. Five reviewed patches/55 unchanged/60-hash fresh reconstruction; maintenance/data/security/structure/patch/TODO gate synchronized. TryFrom import for upstream Rust2018 and shell escaping failures excluded. User adds avoid security problems; ordinary Bitwarden unexpected-value candidate and valid expensive KDF resource budget remain pending. No UI/IPC/schema/user-vault/clipboard/device/runtime client/credential leakage or OOM proof. Original b7c5d9f/15/6.1 preserved; goal active and phone replacement APK/provider unverified.",
     "2c71c58 fixes SP-S63 Bitwarden malformed common/field/folder shapes. Diagnostic actual command/wire/batch/KDBX persistence loses4 values and exposes string hidden-type field. Final red3/control1 (63 accepted malformed cases), green30 with4 new, standalone original0/patched3 rejected controls and pinned official contract hashes corroborate. Full verify323/666/ACL2 passes serially/debug0/unfiltered/live clipboard unset; vendor60-hash/5patch unchanged. No coercion, optional null/missing and legacy Text preserve behavior. Docs/data/security/structure/TODO gate updated; SKILL/maintenance routing unchanged. Harness compile/import/uuid failures and initial CRLF control excluded; ordinary-string CRLF retained candidate. i64-to-isize representability safe on current64bit release, not counted. No DTO/UI/IPC/user-vault/native-client/device/provider or full security claim; b7c5d9f/15/6.1 unchanged; goal active.",
-    "41a596c fixes SP-S64 ordinary KDBX XML CR serialization. Actual native2 red (14+4 positions after full persistence); original registry9/9 and Full-level control; native2/vendor21/no-merge/actual-to_xml ElementTree/fresh60hash pass. Independent patchedCR2 pass and whitespace1 remains red (first space-only), not masked by root green. Full verify323/668/ACL2 serial/debug0/unfiltered/live clipboard unset. XML refs affect trusted text-only output; normal reader normalization, protected base64 and literal entities remain; noCR output moves bytes with no benchmark claim. Four existing patch files identical/55 upstream unchanged. Data/security/structure/patch/TODO gate updated; stable routes unchanged. Synthetic Plain XML fixture separate from actual encrypted probes. Pinned official writer/factory lacks explicit Entitize; no competitor runtime exact-CR assertion. Harness lifetime/import/clone and doc context failures excluded. Pure-whitespace/scalar/native-client/device/provider/full security remain pending; original b7c5d9f/15/6.1 and active goal preserved."
+    "41a596c fixes SP-S64 ordinary KDBX XML CR serialization. Actual native2 red (14+4 positions after full persistence); original registry9/9 and Full-level control; native2/vendor21/no-merge/actual-to_xml ElementTree/fresh60hash pass. Independent patchedCR2 pass and whitespace1 remains red (first space-only), not masked by root green. Full verify323/668/ACL2 serial/debug0/unfiltered/live clipboard unset. XML refs affect trusted text-only output; normal reader normalization, protected base64 and literal entities remain; noCR output moves bytes with no benchmark claim. Four existing patch files identical/55 upstream unchanged. Data/security/structure/patch/TODO gate updated; stable routes unchanged. Synthetic Plain XML fixture separate from actual encrypted probes. Pinned official writer/factory lacks explicit Entitize; no competitor runtime exact-CR assertion. Harness lifetime/import/clone and doc context failures excluded. Pure-whitespace/scalar/native-client/device/provider/full security remain pending; original b7c5d9f/15/6.1 and active goal preserved.",
+    "92c1d14 SP-S65 confirmed, unremediated: actual native2 red yields48 current/history and50 original-file-open/rewrite changes. Original registry AES1 fixture actual get_xml/ElementTree35 ordinary values intact; seven protection attributes, source/lock/XML/fixture hashes recorded. ASCII blank events skipped at quickxml map boundary; Unicode whitespace also trimmed by cs_opt_string. Final vendor1 pass/1 fail; initial absent-Value expectation was harness error and corrected. Direct Option/String attempts fail and withdrawn. Hashed red source/patch/fixture outside repo; all first-party and five existing vendor source bytes restored. Prior323/668/ACL2 green remains source gate but is not whitespace coverage. Report/TODO and three domain refs clarify pending boundary; original b7c5d9f/15/6.1 unchanged.76 Confirmed1/19/45/11; phone replacement APK/provider, valid costly KDF and remaining full/competitor/UI work continue; goal active."
   ]
 }

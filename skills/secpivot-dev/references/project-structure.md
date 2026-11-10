@@ -109,7 +109,11 @@ serializer as character references before KDBX encryption. It preserves current/
 history field values and keys, group/meta text and literal entity strings while
 leaving normal parser normalization and protected base64 unchanged. Native
 entry/history/group/meta and Bitwarden wire regressions accompany two direct
-serializer/parser tests; pure-whitespace optional-string decoding is separate.
+serializer/parser tests. Pure-whitespace entry decoding is separately confirmed
+and unremediated: quick-xml's map skips blank events before StringValue sees
+them, while cs_opt_string also trims Unicode whitespace. The audit retains the
+red current/history/external-open regressions outside the committed suite;
+direct Option/String conversion attempts were withdrawn after failing.
 
 First-party vault/merge.rs::merge_absent_deletion_info runs after restore_bin.
 It unions both original DeletedObjects maps plus existing merged markers for

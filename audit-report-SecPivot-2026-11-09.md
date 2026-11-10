@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S64；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S65；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 44     | 44        | 0         |
+| Medium    | 45     | 45        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **75** | **75**    | **0**     |
+| **Total** | **76** | **76**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3339,3 +3339,45 @@ debug=0/无过滤，live clipboard opt-in unset，4 个原生 live 测试体
 边界、有效昂贵 KDF 预算与其余系统/竞品/UI 继续审查；无用户库、
 实际剪贴板、云服务、第三方客户端或完整安全保证证据。75 Confirmed
 （Critical 1 / High 19 / Medium 44 / Low 11），整体目标 active。
+
+### Finding: SP-S65 KDBX 打开和重写会清空纯空白条目值
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Interoperability
+- Status: Confirmed
+- Affected area: Native encrypted-KDBX current/history ordinary string fields and external-file opening
+- Evidence:
+  - File: src-tauri/vendor/keepass-0.13.22/src/format/xml_db/entry.rs::StringValue; custom_serde.rs::cs_opt_string; quick-xml 0.41.0 src/de/map.rs:237–239,274 and src/de/mod.rs::skip_whitespaces (92c1d14)
+  - Function / Module: parse_xml -> ElementMapAccess -> optional string conversion -> xml_to_db_handle
+  - Relevant behavior: XML object mapping skips blank text events before a field can deserialize, and cs_opt_string separately maps Unicode trim-only text to None. xml_to_db_handle turns absent text into an empty string. Unprotected values can therefore disappear on a successful open; protected Base64 values retain their original decoded content.
+  - Reproduction: kdbx-whitespace-native-red-final.log contains two complete native failures: 48 changed current/history positions across six whitespace variants; 50 changed ordinary positions across initial open and save/reopen of the original-registry fixture. Protected values and flags, empty and ordinary controls retain their semantics.
+  - Independent verification: original crates.io keepass =0.13.22 produces a seven-entry AES-1 synthetic encrypted fixture. Database::get_xml extracts its actual internal XML without entry deserialization; Python ElementTree independently confirms all 35 source ordinary values and seven protected attributes. Source/lock/fixture/XML hashes and registry identity are recorded. Direct library final red is one whitespace failure and one empty/missing/protected-contract pass. The earlier independent registry save/parse whitespace failure corroborates this; no native competitor client was run.
+- Problem: valid all-whitespace field content becomes an empty string during ordinary database opening and can then be written back as empty.
+- Why it matters: whitespace can be a legitimate username, imported custom value or an explicitly unprotected password; history can also lose the original value. This is a fidelity failure, with no proved default password exposure, protection downgrade or credential transmission.
+- Realistic failure scenario: an external database contains a single-space ordinary field; SecPivot opens it successfully and an unrelated save persists that field as empty, losing the source value and any affected historical copy.
+- Minimal fix: provide a scoped XML text-decoding path that retains whitespace for String/Value, and keep the generic optional-metadata trim rule out of entry values. Merely removing cs_opt_string or using direct String deserialization does not fix skipped ASCII whitespace; both withdrawn attempts remained red. Preserve inner encryption, empty-value semantics, missing-Value rejection, history and optional metadata behavior.
+- Better long-term fix: establish a supported library-level text-preservation contract and independent client fixtures; avoid an unverified raw-text substitution or applying a global whitespace change to all metadata. Group/meta whitespace, invalid scalars and already-lost values require separate evaluation.
+- Regression test suggestion: reapply the hashed red regression patch with its synthetic fixture; require actual current/history save/reopen, original-file open/rewrite, ASCII/Unicode whitespace, protected/unprotected password controls, empty/missing values and optional metadata. Include interleaved/nested/escaped XML cases appropriate to the final parser design, patch provenance and the complete integration gate.
+- Estimated effort: 4–8 hours for a scoped parser/library fix, independent evidence and integration checks.
+
+此项尚未修复。已撤回两个未通过的限定转换尝试；应用源码与五个现有
+vendor patch 文件全部恢复为 92c1d14 的确切字节。红测 patch、源码快照、
+合成 fixture/provenance、实际内部 XML 和失败日志保存在本任务证据目录。
+fixture 不含用户内容，测试解锁值为公开 synthetic-only，KDF 仅 AES-1。
+纯空白不等于 SP-S64 普通 CR 文本归一化：回车编码修复仍保留，而本项
+在读取现有外部库时就可触发。内部 XML 的 ElementTree 检查只验证源
+数据完整与保护属性，并不证明其独立解密、原生竞品或真实迁移兼容。
+
+测试搭建阶段错误地假设缺少整个 Value 元素会被原实现接受；该控制
+已改为期望原 missing-field 拒绝，最终仅空白复现失败，不计第二个产品
+问题。原版 registry fixture 不含 CR，六种 native 输入另含 CR/混合 CRLF。
+48 与 50 是完成对应检查后的不一致位置数，不是独立 bug 数。根红测
+RUST_TEST_THREADS=1/debug=0/live clipboard unset；外部生产者默认 profile
+独立记录，不混称配置。没有访问用户库、剪贴板、云服务或真机 provider。
+
+源码恢复后沿用 SP-S64 的完整门证据（323 frontend / 668 Rust / ACL 2），
+该全绿结果不能表示本项已覆盖或已修复。新的报告和文档门另行检查。
+当前累计 76 Confirmed（Critical 1 / High 19 / Medium 45 / Low 11）；原
+b7c5d9f 的 15 项/6.1 分保持。手机 v1.6.5 替换 APK/provider、有效昂贵
+KDF 预算、其余系统、竞品与 UI 仍需继续，整个目标 active。
