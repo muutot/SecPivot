@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S71; historical supplemental tracking notes excluded",
-    "total": 82,
-    "confirmed": 82,
+    "scope": "15 baseline cards plus SP-S05 through SP-S72; historical supplemental tracking notes excluded",
+    "total": 83,
+    "confirmed": 83,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 51,
+      "Medium": 52,
       "Low": 11
     }
   },
@@ -67,6 +67,14 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S72",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "28fa586",
+      "area": "WebDAV accepts wrong-root and incomplete/multiple-root document envelopes",
+      "status": "Confirmed, unremediated. Actual parser two red/one valid control,678 filtered; three HTML substring matches become empty success, unclosed/two-root/trailing-text documents publish1/2/1 objects. Independent XML/root8 controls pass; immutable fixture/diagnostic/source hashes and exact restoration recorded. No network/provider/vault/write/disclosure/loss/device/APK/external entity/high-resource evidence. Namespace/propstat/fullXML semantics remain separate."
+    },
     {
       "id": "SP-S71",
       "severity": "Medium",
@@ -1489,6 +1497,22 @@
       "quickxml_passed": 1363,
       "quickxml_ignored": 4,
       "final_proof": "webdav-xml-final-proof.json"
+    },
+    "webdav_document_envelope": {
+      "result": "Confirmed, unremediated",
+      "checkpoint": "28fa586",
+      "native_red": "webdav-structure-native-red.log",
+      "native_failed": 2,
+      "native_passed": 1,
+      "native_filtered": 678,
+      "invalid_cases": 6,
+      "valid_cases": 2,
+      "independent_passed": 8,
+      "fixture": "webdav-structure-fixtures.json",
+      "diagnostic": "webdav-structure-diagnostic.rs",
+      "provenance": "webdav-structure-red-provenance.json",
+      "source_restored_exactly": true,
+      "limits": "Eight tiny synthetic XML documents; actual production parser tests only. No network, credentials, user config/vault, provider/device/APK, shared clipboard, remote writes, external entities or high-resource tests. No data loss or credential disclosure demonstrated."
     }
   },
   "reverification_notes": [

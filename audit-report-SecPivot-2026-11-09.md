@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S71；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S72；SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 51     | 51        | 0         |
+| Medium    | 52     | 52        | 0         |
 | Low       | 11     | 11        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **82** | **82**    | **0**     |
+| **Total** | **83** | **83**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -3818,3 +3818,31 @@ fixture／原样诊断／fix patch／完整日志和参考哈希。
 客户端兼容尚待独立审查。手机另存为新APK／真机provider、移动端
 安全、其余系统／竞品／UI 仍待完成；累计82 Confirmed 含历史已
 修复项，原始 b7c5d9f／15项／6.1分保持，整体目标 active。
+
+### Finding: SP-S72 WebDAV 非列表页面与不完整文档被当成成功列表
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Testing
+- Status: Confirmed
+- Affected area: WebDAV list document envelope validation
+- Evidence:
+  - File: src-tauri/src/remote/webdav.rs:134–166, 254–338; src-tauri/src/remote/mod.rs:180–204 (28fa586)
+  - Function / Module: WebDavStorage::list -> parse_multistatus -> list_objects_async
+  - Relevant behavior: a case-insensitive substring anywhere in the body qualifies as multistatus; EOF ends parsing without requiring a single completed multistatus root. The transport and async command return this result as a successful list.
+  - Reproduction: actual production parser accepts three HTML pages whose text/comment/attribute contains multistatus as successful empty lists; an unclosed root returns one object, two roots return two objects and trailing non-whitespace text returns one object. Valid empty and one-file controls pass. webdav-structure-native-red.log:1 passed/2 failed/678 filtered.
+  - Independent verification: Python stdlib ElementTree full-document parsing plus DAV root identity rejects the six invalid cases and accepts the two controls. Eight tiny fixtures, diagnostic/source hashes and exact root test restoration are recorded in webdav-structure-red-provenance.json; no network or real provider is involved.
+- Problem: provider errors and malformed document envelopes are converted to successful empty or partial object lists.
+- Why it matters: a misconfigured gateway can appear to contain no files, while malformed provider output hides missing results instead of presenting a useful failure. Medium reflects missing error handling; no vault write, credential exposure, permanent data loss or real cloud incident is demonstrated.
+- Realistic failure scenario: an HTTP-success gateway error page mentions multistatus, or a provider's XML document ends after a complete response but before closing its root. SecPivot shows an empty or partial list with no parsing error.
+- Minimal fix: require exactly one completed multistatus document root before publishing any list; reject extra roots, truncated document envelopes and non-whitespace outside the root with content-free errors. Preserve existing valid empty lists, case-compatible tag handling and simple-property error contracts.
+- Better long-term fix: separately audit namespace identity, response/propstat status semantics, XML scalar validity and real-provider interoperability; document-envelope validation alone does not establish all XML or WebDAV semantics.
+- Regression test suggestion: replay the unchanged six wrong-root/boundary fixtures and two valid controls against the production parser; native loopback list responses must reject the same invalid documents; legal comments/PI/whitespace and existing uppercase/property/URI controls stay green.
+- Estimated effort: 1–2 hours for a scoped document envelope gate, regressions and full verification.
+
+确认阶段未改应用行为，临时测试逐字节恢复；两项红测与合法控制
+区分失败边界。仅8个小型合成XML、实际解析函数，无网络／用户配置／
+密码库／共享剪贴板／远程写入／外部实体／高资源复现。完整namespace／
+propstat／真实provider仍待审，手机另存为仍缺新APK／真机验证。
+累计83 Confirmed（Critical1／High19／Medium52／Low11）含历史修复；
+原始 b7c5d9f／15项／6.1分保持，整体目标 active。
