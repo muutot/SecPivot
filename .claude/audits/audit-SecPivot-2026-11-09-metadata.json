@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "fee456501e26169308092b4e7ae0ef042271c3e0",
+  "remediation_checkpoint": "7532f1f64c40eabedd759bb79a72a176ade9aa65",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "fb6601b",
       "area": "WebDAV expanded names and expected parent scopes ignored",
-      "status": "Confirmed, unremediated. Actual parser16-case corpus gives5 compatibility controls green/11 extension/context mismatches; native2 red/1 control green/682 filtered. Foreign href changes real no-auth GET to /dav/other instead of actual; foreign collection/response and rebound/unqualified names alter records or accept wrong/unbound roots. Independent stdlib expanded-name/direct-child16 controls pass; immutable fixture/diagnostic/source hashes and exact restoration recorded. RFC4918 section17 normative unknown-subtree contract. No real provider/vault/remote write/disclosure/loss/device/APK/shared clipboard/high-resource proof; status/propstat/fullXML remain separate."
+      "status": "Confirmed and remediated. 7532f1f resolves DAV expanded names and expected parent containers; ignores entire unexpected subtrees, isolates wholly unqualified legacy XML and rejects wrong roots/unbound prefixes with content-free errors. Immutable namespace3 and prior XML text3 green/684 filtered; original hashes and strictJSON16 values unchanged, temporary source restored exactly. Native no-auth list/GET/PUT/readback4 preserves actual file/metadata and untouched sibling. Existing15 malformed field fixtures only corrected qualification/container, assertions unchanged. Final remote36 and full359/684/ACL2/KeePass25/QuickXML1363 ignored4 exit0; skipped live clipboard/S3/ignored bodies excluded. Docs currency synchronized and format rechecked. Propstat status/duplicates/fullXML/provider/device/APK remain separate.",
+      "fix_commit": "7532f1f64c40eabedd759bb79a72a176ade9aa65"
     },
     {
       "id": "SP-S73",
@@ -1593,7 +1594,7 @@
       "limits": "Inventory/hash coverage only, not complete semantic or runtime review. Untracked user/editor data excluded; no real config, vault, OS clipboard or system-wide search. Baseline inventory used a narrower selected path list, so added coverage paths do not all imply newly added source."
     },
     "webdav_namespace_context": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "fb6601b",
       "native_red": "webdav-namespace-native-red.log",
       "native_failed": 2,
@@ -1609,7 +1610,22 @@
       "provenance": "webdav-namespace-red-provenance.json",
       "normative_reference": "webdav-namespace-normative-reference.json",
       "source_restored_exactly": true,
-      "limits": "Sixteen tiny synthetic XML cases and one no-auth loopback GET. No user config/vault, credentials, actual provider/client/device/APK/shared clipboard/remote write/data loss/disclosure/external entity/high-resource test. Propstat status semantics and full XML validation remain separate."
+      "limits": "Serial/debug0/unfiltered Windows host; live clipboard/S3/config fixture unset. Four native clipboard bodies, S3 live body and four ignored QuickXML tests are not runtime coverage. Synthetic namespace fixtures and one bounded no-auth loopback list/GET/PUT/readback fixture only; no actual provider/client/device/APK/user config/vault/shared clipboard/external entity/high-resource test. Propstat status, duplicate properties and full XML validity remain separate.",
+      "fix_commit": "7532f1f64c40eabedd759bb79a72a176ade9aa65",
+      "immutable_green_proof": "webdav-namespace-green-immutable-proof.json",
+      "final_proof": "webdav-namespace-final-proof.json",
+      "immutable_passed": 3,
+      "prior_xml_immutable_passed": 3,
+      "full_log": "verify-webdav-namespace-final.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 684,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "remote_harness_passed": 36,
+      "wire_list_get_put_readback_requests": 4
     }
   },
   "reverification_notes": [
@@ -1699,6 +1715,7 @@
     "a314835 remediates SP-S70 URI/key double encoding with immutable2 green, bounded seven-file22-request native listGETPUTreadback and13 invalid-path whole-list controls; remote28 harness and full359/676/ACL2 exit0. Live S3/native clipboard/ignored bodies not actual runtime coverage. RFC3986/4918 normative reference only; source/doc currency gate updated. Baseline15/6.1 and cumulative81 preserved; complete provider/device/mobile/URI/XML/competitor/UI work remains active.",
     "82aea43 remediates SP-S71 simple XML text/reference truncation. Immutable3 green, standardXML8, native13 classes40 wire requests and15 invalid controls, remote30 harness/full359/678/ACL2 exit0. First full clippy failure corrected and independently replayed; live native/provider/ignored coverage excluded. Baseline15/6.1 and cumulative82 preserved; full XML/provider/device/competitor/UI audit remains active.",
     "520a69c remediates SP-S72 document-envelope false success. Immutable3,XML8,no-authHTTP8,remote32 and full359/680/ACL2 pass. Compile E0282 corrected before checks; live clipboard/S3/ignored coverage excluded. Original15/6.1 baseline and83 historical Confirmed cards preserved; namespace/propstat/provider/device/competitor/UI work remains active.",
-    "fee4565 remediates SP-S73 missing requested type: immutable2 green,actual DAV property/response stdlib controls,request-driven HTTP collection exclusion/extensionless retention,final remote34 and full359/682/ACL2 pass. Pinned KeeWeb directURL capability comparison does not prove listing/runtime or adopt XOR/MOVE. Original15/6.1 and84 historical cards preserved; provider/mobile/namespace/propstat/full audit/competitor/UI remain active."
+    "fee4565 remediates SP-S73 missing requested type: immutable2 green,actual DAV property/response stdlib controls,request-driven HTTP collection exclusion/extensionless retention,final remote34 and full359/682/ACL2 pass. Pinned KeeWeb directURL capability comparison does not prove listing/runtime or adopt XOR/MOVE. Original15/6.1 and84 historical cards preserved; provider/mobile/namespace/propstat/full audit/competitor/UI remain active.",
+    "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active."
   ]
 }

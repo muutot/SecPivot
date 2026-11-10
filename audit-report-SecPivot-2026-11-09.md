@@ -3951,7 +3951,7 @@ first-party-inventory-webdav-collection.json保存路径／哈希／排除／工
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Data integrity
-- Status: Confirmed
+- Status: Confirmed（已修复，7532f1f）
 - Affected area: WebDAV XML expanded-name and parent-container interpretation
 - Evidence:
   - File: src-tauri/src/remote/webdav.rs:252–402 (fb6601b)
@@ -3973,3 +3973,29 @@ GET，无用户配置／密码库、云端／写入、共享剪贴板、真机�
 外部实体或高资源复现。累计85 Confirmed（Critical1／High19／Medium53／
 Low12）含历史已修复项，原始b7c5d9f／15项／6.1分保持；整个审计／
 竞品／UI和手机另存为真机验证仍待完成，目标active。
+
+修复与验证（2026-11-11）：7532f1f 使用NsReader按DAV命名空间和
+预期父容器读取字段，忽略完整未知／错误位置子树；prefix别名／default
+namespace／uppercase与全无namespace旧格式保持，非DAV根／未绑定
+prefix以无内容错误拒绝。原样namespace三项探针与先前SP-S71文本
+三项探针分别3 passed／684 filtered；诊断／十六项fixture原件哈希未变，
+共享strict JSON值一致，临时测试逐字节恢复。
+
+正式十六项namespace／层级fixture及未知子树复杂后代回归通过；实际
+无凭据loopback列表／GET／PUT／回读四次请求均保持actual.kdbx与大小／
+日期，other.kdbx原字节未变。原十五类错误字段fixture仅修正DAV资格
+及propstat／prop位置，错误值和内容无关断言保持；原样SP-S71另行重播。
+
+verify-webdav-namespace-final.log exit0：359前端／684 Rust／ACL2／
+KeePass25／QuickXML1363（4 ignored），其中remote harness36；
+format／check／build／补丁来源／clippy全通过。完整门后仅澄清相关文档
+并再次format:check。单线程、debug0、无过滤且live clipboard／S3／
+配置fixture未启用；跳过的原生剪贴板／S3与ignored体不计运行覆盖。
+webdav-namespace-final-proof.json保存原样诊断、最终源码、fix patch
+和完整日志哈希；保留fee4565历史库存及其artifact，不将库存称逐行深读。
+
+currency gate同步data-contracts／security-model／PITFALLS及精确TODO；
+无IPC／schema／依赖／vendor／CSS变化。propstat状态、重复属性、
+完整XML／真实provider仍待独立审计；手机另存为仍待新APK／真机选择器
+验证。累计85 Confirmed含历史已修复项（Critical1／High19／Medium53／
+Low12），原始b7c5d9f／15项／6.1分保持；整体审计／竞品／UI目标active。
