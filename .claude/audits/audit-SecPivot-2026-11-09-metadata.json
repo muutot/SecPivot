@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "b6565fb",
       "area": "WebDAV encoded list hrefs re-encoded as logical keys",
-      "status": "Confirmed, unremediated. Actual production parser/url_for3 mismatches with ASCII control and one outgoing native loopback GET target mismatch; root2 failed/674 filtered. Independent stdlib XML/URL reference4 passed. Test source restored exactly; synthetic no-auth one GET only. No cloud provider, vault load, remote write, data loss or device proof. Fix must preserve percent/UTF-8 segment identity and explicitly reject structural ambiguity; existing config diagnostic fix remains independently verified."
+      "status": "Confirmed and remediated. a314835 decodes UTF-8 URI path segments once, preserves plus/percent-looking filenames and encoded endpoint roots; invalid escape/UTF8/structural slash/dot/control/empty segments and outside absolute roots reject whole lists with content-free errors. Original immutable2 green/676 filtered; remote28 harness green including skipped S3 live;7 filename classes/22 exact loopback listGETPUTreadback requests and untouched sibling,13 invalid path controls. Full verify359/676/ACL2/KeePass25/QuickXML1363 ignored4 exit0, serial/debug0/unfiltered/live clipboardS3 unset. Normative RFC3986/4918 hash sources corroborate only contracts. No IPC/schema/dep/vendor/CSS changes. Legacy base-relative semantics, complete URI/XML/client/provider/device/APK/remote authorization remain separate.",
+      "fix_commit": "a3148358b4bf544bbc09454c6918e58459af4c16"
     },
     {
       "id": "SP-S69",
@@ -1409,7 +1410,7 @@
       "probe_unchanged": true
     },
     "webdav_path_identity": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "b6565fb",
       "native_red": "webdav-path-native-red.log",
       "native_failed": 2,
@@ -1421,7 +1422,27 @@
       "independent_passed": 4,
       "provenance": "webdav-path-confirmation-provenance.json",
       "source_restored": true,
-      "limits": "Synthetic tiny XML and path strings plus one no-auth loopback GET. No cloud/device/vault/remote write/shared clipboard/high-resource tests."
+      "limits": "Serial/debug0/unfiltered Windows-host gate, live clipboard/S3 flags unset. Four native clipboard bodies, S3 live test and4 ignored QuickXML tests are not execution evidence. Synthetic loopback payloads only; no user config/vault/provider/device/APK/high-resource reproduction. Complete URI/XML/remote authorization and client interoperability remain unverified.",
+      "fix_commit": "a3148358b4bf544bbc09454c6918e58459af4c16",
+      "immutable_green": "webdav-path-native-green-immutable.log",
+      "immutable_passed": 2,
+      "immutable_green_proof": "webdav-path-green-immutable-proof.json",
+      "targeted_log": "webdav-path-targeted-final.log",
+      "targeted_harness_passed": 28,
+      "targeted_limits": "S3 live body skipped because flag unset; no provider coverage.",
+      "wire_filename_cases": 7,
+      "wire_requests": 22,
+      "invalid_path_cases": 13,
+      "full_log": "verify-webdav-path.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 676,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "official_reference": "webdav-uri-official-reference.json",
+      "final_proof": "webdav-path-final-proof.json"
     }
   },
   "reverification_notes": [
@@ -1507,6 +1528,7 @@
     "9798b77 SP-S66 confirmed: real Bitwarden command/wire/import/save publishes9 XML1.0-invalid ordinary cases; native exact reopens9, standard ElementTree/System.Xml reject9. Current-library isolated probe own15/invalid9/valid6, helper.NET10.0.14 total6 accepts18 rejects. Pinned KeePass SafeXmlString source sanitizes; no native-client execution. Red test/source/patch/XML saved; root exact source restored. Borrow-type compilation failure excluded as harness error. Planned publication refusal preserves old bytes/live edits/protected Base64; no silent sanitization or all-Unicode-noncharacter rejection. Report/TODO/data/security documentation gates updated; route/ownership unchanged. Count77 Confirmed1/19/46/11; original b7c5d9f15/6.1 and active goal preserved.",
     "9333209 repairs SP-S66 XML1.0-invalid publication with11-line serializer gate after protected Base64 conversion. Native3 pass for illegal9 imports preserving old-file/live dirty values, historical refusal, legal6/protected-only9 actual save/reopen. Vendor25 with36 illegal key/value/group/meta controls, immutable independent9 refusal/6 legal exact and actual XML standard acceptance, full323/673/ACL2/QuickXML1363 ignored4 pass. Root serial/debug0/unfiltered/live unset; no extra runtime coverage claim. Fresh60hash reconstruction/staged60+43 and patches passed; six existing owned patches/54 upstream unchanged except reviewed XML entry-point; other five patch bytes identical. Recursively formatted child5 restored before full gate; maintain --config skip_children=true. Data/security/structure/maintenance/patch/TODO currency gate synchronized; routes/IPC/schema/defaults unchanged. Report/metadata count77 Confirmed1/19/46/11 and original b7c5d9f15/6.1 preserved. No silent sanitizer/automatic history recovery/full export/client/device/provider/large-vault benchmark/security guarantee; goal active.",
     "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active.",
-    "SP-S69 remediated in2912963 with native child-process stderr and immutable pinned actual-module probe; full verify359/674/ACL2 exit0. Original baseline and cumulative80 counts preserved; mobile device/provider/storage/background lock remain unverified."
+    "SP-S69 remediated in2912963 with native child-process stderr and immutable pinned actual-module probe; full verify359/674/ACL2 exit0. Original baseline and cumulative80 counts preserved; mobile device/provider/storage/background lock remain unverified.",
+    "a314835 remediates SP-S70 URI/key double encoding with immutable2 green, bounded seven-file22-request native listGETPUTreadback and13 invalid-path whole-list controls; remote28 harness and full359/676/ACL2 exit0. Live S3/native clipboard/ignored bodies not actual runtime coverage. RFC3986/4918 normative reference only; source/doc currency gate updated. Baseline15/6.1 and cumulative81 preserved; complete provider/device/mobile/URI/XML/competitor/UI work remains active."
   ]
 }

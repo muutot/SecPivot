@@ -3697,7 +3697,7 @@ schema、IPC、CSS、依赖或 vendor。无关 .trae/ 保留。此项只关闭�
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Data integrity
-- Status: Confirmed
+- Status: Confirmed（已修复，a314835）
 - Affected area: WebDAV list-to-open and shared object URL construction
 - Evidence:
   - File: src-tauri/src/remote/webdav.rs:73–88, 161–169, 254–340, 355–366; src/lib/services/vault.ts:873–898; src-tauri/src/commands/remote.rs:28–80 (b6565fb)
@@ -3717,9 +3717,43 @@ schema、IPC、CSS、依赖或 vendor。无关 .trae/ 保留。此项只关闭�
 674 filtered，普通路径控制通过，独立标准库参考 4 passed。只用合成
 XML／路径和一次无凭据的 loopback GET；未读取用户库／配置、未访问
 云端／共享剪贴板、未写远程文件或复现高资源输入。之前配置诊断修复
-2912963 的完整门仍有效，但不作为本项修复验证。本项尚未修复。
+2912963 的完整门仍有效，但不作为本项修复验证。当时尚未修复，后续修复见下。
 
 累计 81 Confirmed（Critical 1 / High 19 / Medium 50 / Low 11），含
 历史已修复项；原始 b7c5d9f／15 项／6.1 分不变。整体目标 active，
 手机另存为新 APK／真机 provider、移动端安全、其余系统／竞品／UI
 仍未全部闭环。
+
+修复与验证（2026-11-11）：a314835 在 href 与逻辑键名之间逐段解码
+一次，再由既有 request encoder 编码。编码端点根路径与字面 plus／
+percent-looking 文件名保持；错误百分号／UTF-8、编码斜杠／点／控制
+字符、内部空路径段及绝对路径越出根目录均返回无 href 内容的错误。
+raw path 校验先于 URL 的点路径归一化。请求仍使用配置的 endpoint，
+不采用响应中的 authority；直接创建键和 S3 语义保持。
+
+原样确认诊断源码 SHA256 与红测相同：两项从失败变为通过，676
+无关测试 filtered。最终远程模块 28 项 harness 通过，其中 S3 live
+test 因未启用而跳过，不能计真实服务验证。新原生 HTTP 回归使用
+七类文件名／编码根路径、22 次实际 PROPFIND／GET／PUT／回读，
+精确检查请求路径、回读字节和名称相似旁文件未修改。13 类非法
+路径在已有有效记录之后拒绝整份列表，错误不回显 href。
+
+verify-webdav-path.log 最终 exit 0：359 前端、676 Rust、ACL 2、
+KeePass 25、QuickXML 1363（4 ignored）；format／check／build／
+contract／clippy 均通过。单线程、debug0、无过滤，live clipboard／
+S3 均未启用；四项原生剪贴板体、S3 live 与 ignored 不算实际覆盖。
+webdav-path-final-proof.json 保存源码、原样诊断、fix patch、完整日志
+及独立参考哈希；临时确认测试源码已逐字节恢复为正式回归版本。
+
+官方 [RFC 3986 §2.4](https://www.rfc-editor.org/rfc/rfc3986#section-2.4)
+明确禁止同一字符串重复编码／解码，[RFC 4918 §8.3](https://www.rfc-editor.org/rfc/rfc4918#section-8.3)
+定义 Multi-Status href 的 URI 处理。公开文本和哈希保存于
+webdav-uri-official-reference.json；这是规范旁证，不是竞品／提供商
+运行证据。辅助脚本两次摘录定位失败已修正，不计产品缺陷。
+
+文档 currency gate 同步 data-contracts／security-model／PITFALLS 和
+精确 TODO；未改 IPC／schema／依赖／vendor／CSS。Legacy base-relative
+键仍按旧约定处理，不声称实现全部 RFC reference resolution／XML
+属性／提供商语义。手机另存为新 APK／真机 provider、移动端安全
+与其余系统／竞品／UI 仍未全部验证，整体目标 active，累计 81
+Confirmed 含历史已修复项；原始 b7c5d9f／15 项／6.1 分保持。
