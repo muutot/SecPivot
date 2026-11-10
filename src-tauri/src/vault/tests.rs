@@ -14927,3 +14927,115 @@ fn kdbx_carriage_bitwarden_command_wire_import_survives_save_reopen() {
         "valid imported CR strings were changed by KDBX persistence"
     );
 }
+
+#[test]
+fn kdbx_whitespace_entry_values_and_history_survive_native_save_reopen() {
+    let mut mismatches = 0;
+    for expected in [" ", "\t", "\n", "\r", " \t\r\n ", "\u{a0}\u{2003}"] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let input = |text: &str| {
+            let mut value = entry_input(ROOT_GROUP_UUID, "Synthetic", text, text, text);
+            value.notes = text.into();
+            value.custom_fields = vec![
+                CustomField {
+                    name: "Plain".into(),
+                    value: text.into(),
+                    protected: false,
+                },
+                CustomField {
+                    name: "Hidden".into(),
+                    value: text.into(),
+                    protected: true,
+                },
+            ];
+            value
+        };
+        let state = session.add_entry(&input(expected)).unwrap();
+        let id = state.root.entries[0].uuid.clone();
+        let current = format!("{expected}{expected}");
+        session.update_entry(&id, &input(&current)).unwrap();
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+        let entry = session
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&id).unwrap())
+            .unwrap();
+        let historical = entry.historical(0).unwrap();
+        assert_eq!(historical.fields[FIELD_PASSWORD].get(), expected);
+        assert!(historical.fields[FIELD_PASSWORD].is_protected());
+        assert_eq!(historical.fields["Hidden"].get(), expected);
+        assert!(historical.fields["Hidden"].is_protected());
+        assert_eq!(entry.fields[FIELD_PASSWORD].get(), &current);
+        assert!(entry.fields[FIELD_PASSWORD].is_protected());
+        assert_eq!(entry.fields["Hidden"].get(), &current);
+        assert!(entry.fields["Hidden"].is_protected());
+        for name in [FIELD_USERNAME, FIELD_URL, FIELD_NOTES, "Plain"] {
+            mismatches += usize::from(entry.get(name) != Some(current.as_str()));
+            mismatches += usize::from(historical.get(name) != Some(expected));
+        }
+    }
+    assert_eq!(
+        mismatches, 0,
+        "whitespace-only historical values were emptied after persistence"
+    );
+}
+
+#[test]
+fn kdbx_whitespace_original_registry_fixture_survives_native_open_and_rewrite() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("external.kdbx");
+    std::fs::write(
+        &path,
+        include_bytes!("../../../tests/fixtures/kdbx-whitespace.kdbx"),
+    )
+    .unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-only", None).unwrap();
+    let mut mismatches = 0;
+    for rewrite in [false, true] {
+        if rewrite {
+            session.save().unwrap();
+            session.close();
+            session.open(&path, "synthetic-only", None).unwrap();
+        }
+        let db = session.require_db().unwrap();
+        let root = db.root();
+        for (index, expected) in [
+            " ",
+            "\t",
+            "\n",
+            " \t\n ",
+            "\u{a0}\u{2003}",
+            "",
+            "synthetic normal",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let title = format!("Synthetic {index}");
+            let entry = root
+                .entries()
+                .find(|entry| entry.get(FIELD_TITLE) == Some(title.as_str()))
+                .unwrap();
+            assert_eq!(entry.fields["ProtectedControl"].get(), expected);
+            assert!(entry.fields["ProtectedControl"].is_protected());
+            for name in [
+                FIELD_USERNAME,
+                FIELD_PASSWORD,
+                FIELD_URL,
+                FIELD_NOTES,
+                "Plain",
+            ] {
+                assert!(!entry.fields[name].is_protected());
+                mismatches += usize::from(entry.get(name) != Some(*expected));
+            }
+        }
+    }
+    assert_eq!(
+        mismatches, 0,
+        "valid external whitespace values were emptied by native open/rewrite"
+    );
+}

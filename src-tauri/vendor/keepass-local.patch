@@ -1931,6 +1931,148 @@
 +        );
 +    }
 +}
+--- a/src/format/xml_db/entry.rs
++++ b/src/format/xml_db/entry.rs
+@@ -36 +36,5 @@
+-    #[serde(default, rename = "CustomIconUUID", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        rename = "CustomIconUUID",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -39 +43,5 @@
+-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        with = "cs_opt_string",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -42 +50,5 @@
+-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        with = "cs_opt_string",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -53 +65,5 @@
+-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        with = "cs_opt_string",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -129 +145,3 @@
+-            target.history = Some(crate::db::History { entries: Vec::new() });
++            target.history = Some(crate::db::History {
++                entries: Vec::new(),
++            });
+@@ -272,2 +290,2 @@
+-        rename = "$value",
+-        with = "cs_opt_string",
++        rename = "$text",
++        deserialize_with = "deserialize_field_text",
+@@ -276,0 +295,9 @@
++}
++
++// A dedicated text field owns whitespace too; optional metadata's trim rule
++// is not appropriate for entry values. The reader patch preserves blank events.
++fn deserialize_field_text<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
++where
++    D: serde::Deserializer<'de>,
++{
++    String::deserialize(deserializer).map(Some)
+@@ -328 +355,5 @@
+-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        with = "cs_opt_fromstr",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -331 +362,5 @@
+-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
++    #[serde(
++        default,
++        with = "cs_opt_string",
++        skip_serializing_if = "Option::is_none"
++    )]
+@@ -423,0 +459,43 @@
++    fn secpivot_string_values_keep_whitespace_without_changing_optional_metadata() {
++        for value in [
++            " ",
++            "\t",
++            "\n",
++            "&#xD;",
++            " &#x9;&#xD;&#xA; ",
++            "\u{a0}\u{2003}",
++        ] {
++            let xml = format!("<String><Key>Plain</Key><Value>{value}</Value></String>");
++            let field: Test<StringField> = quick_xml::de::from_str(&xml).unwrap();
++            let expected = value
++                .replace("&#x9;", "\t")
++                .replace("&#xD;", "\r")
++                .replace("&#xA;", "\n");
++            assert_eq!(field.0.value.value.as_deref(), Some(expected.as_str()));
++            assert!(!field.0.value.protected);
++        }
++        let xml = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><OverrideURL> </OverrideURL><Tags>\t</Tags></Entry>";
++        let entry: Test<Entry> = quick_xml::de::from_str(xml).unwrap();
++        assert!(entry.0.override_url.is_none());
++        assert!(entry.0.tags.is_none());
++    }
++
++    #[test]
++    fn secpivot_string_values_keep_empty_missing_and_protected_contracts() {
++        for element in ["<Value/>", "<Value></Value>"] {
++            let xml = format!("<String><Key>Empty</Key>{element}</String>");
++            let field: Test<StringField> = quick_xml::de::from_str(&xml).unwrap();
++            assert_eq!(field.0.value.value.unwrap_or_default(), "");
++            assert!(!field.0.value.protected);
++        }
++        assert!(quick_xml::de::from_str::<Test<StringField>>(
++            "<String><Key>Missing</Key></String>"
++        )
++        .is_err());
++        let xml = "<String><Key>Hidden</Key><Value Protected=\"True\">IA==</Value></String>";
++        let field: Test<StringField> = quick_xml::de::from_str(xml).unwrap();
++        assert!(field.0.value.protected);
++        assert_eq!(field.0.value.value.as_deref(), Some("IA=="));
++    }
++
++    #[test]
+@@ -440 +518,2 @@
+-        let deserialized_protected: Test<StringField> = quick_xml::de::from_str(xml_protected).unwrap();
++        let deserialized_protected: Test<StringField> =
++            quick_xml::de::from_str(xml_protected).unwrap();
+@@ -442 +521,4 @@
+-        assert_eq!(deserialized_protected.0.value.value.unwrap(), "cGFzc3dvcmQ=");
++        assert_eq!(
++            deserialized_protected.0.value.value.unwrap(),
++            "cGFzc3dvcmQ="
++        );
+@@ -574 +656,4 @@
+-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
++            &[
++                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
++                0x0e, 0x0f
++            ]
+@@ -577,2 +662,8 @@
+-        assert_eq!(deserialized.0.foreground_color.unwrap().to_string(), "#FF0000");
+-        assert_eq!(deserialized.0.background_color.unwrap().to_string(), "#00FF00");
++        assert_eq!(
++            deserialized.0.foreground_color.unwrap().to_string(),
++            "#FF0000"
++        );
++        assert_eq!(
++            deserialized.0.background_color.unwrap().to_string(),
++            "#00FF00"
++        );
+@@ -584 +675,5 @@
+-            deserialized.0.string_fields[0].value.value.as_ref().unwrap(),
++            deserialized.0.string_fields[0]
++                .value
++                .value
++                .as_ref()
++                .unwrap(),
 --- a/src/format/xml_db/mod.rs
 +++ b/src/format/xml_db/mod.rs
 @@ -27 +27,2 @@

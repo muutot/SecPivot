@@ -21,6 +21,7 @@ const patched = new Set([
   "src/db/types/entry.rs",
   "src/db/types/mod.rs",
   "src/format/xml_db/mod.rs",
+  "src/format/xml_db/entry.rs",
 ]);
 assert.equal(provenance.files.length, 60);
 const seen = new Set();
@@ -57,4 +58,4 @@ for (const path of patched) {
     `Patched source needs formatting: ${path}`,
   );
 }
-console.log("keepass 0.13.22 provenance: 60 verified files, 5 documented patches; format passed");
+console.log("keepass 0.13.22 provenance: 60 verified files, 6 documented patches; format passed");

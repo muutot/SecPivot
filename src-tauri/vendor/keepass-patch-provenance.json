@@ -209,7 +209,8 @@
     },
     {
       "path": "src/format/xml_db/entry.rs",
-      "upstream_sha256": "fc4006b09a8cabc510f3e7c8c07afd3e7dbb5a27123afdac471d3efdc7cb06ff"
+      "upstream_sha256": "fc4006b09a8cabc510f3e7c8c07afd3e7dbb5a27123afdac471d3efdc7cb06ff",
+      "patched_sha256": "5fb90adf3d3fbd0e189b40d667d49c6ab737e5929f2aac6fff2c2a9f368cca43"
     },
     {
       "path": "src/format/xml_db/group.rs",

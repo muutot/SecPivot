@@ -7,6 +7,11 @@
 # explicit eol=lf overrides core.autocrlf for every text file.
 * text=auto eol=lf
 
+# Preserve the published XML package's original bytes (including CRLF). Its
+# reviewed patch keeps the same line endings and the provenance gate hashes all files.
+/src-tauri/vendor/quick-xml-0.41.0/** -text -eol whitespace=cr-at-eol
+/src-tauri/vendor/quick-xml-local.patch -text -eol whitespace=cr-at-eol
+
 # Binary assets must never be line-ending normalized or diffed as text.
 *.png binary
 *.jpg binary
