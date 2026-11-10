@@ -34,7 +34,7 @@
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
   "stage": "baseline snapshot with remediation evidence",
-  "remediation_checkpoint": "193fe0a",
+  "remediation_checkpoint": "82aea43eb1169f3b78b94656d1e2fa8249971c4b",
   "remediated_findings": [
     "SP-01",
     "SP-02",
@@ -73,7 +73,8 @@
       "confidence": "High",
       "source_checkpoint": "5a0edbc",
       "area": "WebDAV simple XML values lose references and earlier text chunks",
-      "status": "Confirmed, unremediated. Actual root3 red/676 filtered; six filename mismatches with plain control, size12->2/date suffix, one no-auth loopback GET targets /dav/b instead of /dav/vaults/a&b. Independent stdlib XML8 controls pass; immutable fixture/diagnostic/root hashes and exact source restoration recorded. RFC4918 section8.3.1 normative XML-escaped ampersand contract corroborates only format. No real provider/device/vault/write/loss/disclosure/external entity/high-resource proof. Existing a314835 percent-decoding fix remains separate."
+      "status": "Confirmed and remediated. 82aea43 accumulates complete simple XML Text/CDATA/standard reference values, trims once and preserves literal entity text/comments/PI. Unknown/invalid/nested/truncated fields reject whole lists with content-free errors; missing/empty hints and collection/URI contracts retained. Immutable3 green/678 filtered; independent strictJSON XML8; targeted remote30 including skipped S3 body;13 filename classes40 actual loopback listGETPUTreadback and untouched sibling;15 invalid property controls. First full gate failed final clippy collapsible_if; corrected, immutable replay and final full359/678/ACL2/KeePass25/QuickXML1363 ignored4 exit0. Four native clipboard bodies/S3 live/ignored not runtime coverage. No IPC/schema/dependency/vendor/CSS change. Full XML structure/namespace/propstat/provider/client/device/APK remain separate.",
+      "fix_commit": "82aea43eb1169f3b78b94656d1e2fa8249971c4b"
     },
     {
       "id": "SP-S70",
@@ -1453,7 +1454,7 @@
       "final_proof": "webdav-path-final-proof.json"
     },
     "webdav_xml_text": {
-      "result": "Confirmed, unremediated",
+      "result": "Confirmed and remediated",
       "checkpoint": "5a0edbc",
       "native_red": "webdav-xml-native-red.log",
       "native_failed": 3,
@@ -1467,7 +1468,27 @@
       "provenance": "webdav-xml-red-provenance.json",
       "source_restored_exactly": true,
       "official_reference": "webdav-xml-official-reference.json",
-      "limits": "Tiny synthetic XML/URI cases and one no-auth loopback GET. No user config/vault, cloud provider, remote write, mobile device/APK, shared clipboard, external entity resolution or high-resource reproduction."
+      "limits": "Serial/debug0/unfiltered Windows host; live clipboard/S3/config fixture flags unset. Four native clipboard bodies, S3 live body and4 ignored QuickXML tests are not actual runtime coverage. Tiny synthetic XML and loopback listGETPUTreadback only; no user config/vault, real provider/client/device/APK/shared clipboard/external entities/high-resource reproduction. Full XML structure/namespace/propstat semantics remain separate.",
+      "fix_commit": "82aea43eb1169f3b78b94656d1e2fa8249971c4b",
+      "immutable_green": "webdav-xml-native-green-immutable.log",
+      "immutable_passed": 3,
+      "immutable_green_proof": "webdav-xml-green-immutable-proof.json",
+      "independent_fixture_reference": "webdav-xml-fixture-reference-final.json",
+      "targeted_log": "webdav-xml-targeted-post-lint.log",
+      "targeted_harness_passed": 30,
+      "wire_filename_cases": 13,
+      "wire_requests": 40,
+      "invalid_property_cases": 15,
+      "first_full_gate_failure": "verify-webdav-xml.log exited1 at clippy collapsible_if; corrected before unchanged-diagnostic replay and final full exit0",
+      "full_log": "verify-webdav-xml-final.log",
+      "full_exit_code": 0,
+      "full_frontend": 359,
+      "full_rust": 678,
+      "full_acl": 2,
+      "keepass_passed": 25,
+      "quickxml_passed": 1363,
+      "quickxml_ignored": 4,
+      "final_proof": "webdav-xml-final-proof.json"
     }
   },
   "reverification_notes": [
@@ -1554,6 +1575,7 @@
     "9333209 repairs SP-S66 XML1.0-invalid publication with11-line serializer gate after protected Base64 conversion. Native3 pass for illegal9 imports preserving old-file/live dirty values, historical refusal, legal6/protected-only9 actual save/reopen. Vendor25 with36 illegal key/value/group/meta controls, immutable independent9 refusal/6 legal exact and actual XML standard acceptance, full323/673/ACL2/QuickXML1363 ignored4 pass. Root serial/debug0/unfiltered/live unset; no extra runtime coverage claim. Fresh60hash reconstruction/staged60+43 and patches passed; six existing owned patches/54 upstream unchanged except reviewed XML entry-point; other five patch bytes identical. Recursively formatted child5 restored before full gate; maintain --config skip_children=true. Data/security/structure/maintenance/patch/TODO currency gate synchronized; routes/IPC/schema/defaults unchanged. Report/metadata count77 Confirmed1/19/46/11 and original b7c5d9f15/6.1 preserved. No silent sanitizer/automatic history recovery/full export/client/device/provider/large-vault benchmark/security guarantee; goal active.",
     "193fe0a repairs SP-S68 renderer idle expiry and duplicate attempts. Immutable8, idle18/menu9 and full359/673/ACL2/KeePass25/QuickXML1363 ignored4 passed; serial/debug0/unfiltered/live unset. Test debounce handles cleared before clock reset, harness-only correction. Security reference/TODO gate updated, no markup/backend contract change; cumulative79 and baseline15/6.1 preserved. Native mobile lifecycle/secret store/APK/provider, remaining complete audit/competitor/UI work unresolved; goal active.",
     "SP-S69 remediated in2912963 with native child-process stderr and immutable pinned actual-module probe; full verify359/674/ACL2 exit0. Original baseline and cumulative80 counts preserved; mobile device/provider/storage/background lock remain unverified.",
-    "a314835 remediates SP-S70 URI/key double encoding with immutable2 green, bounded seven-file22-request native listGETPUTreadback and13 invalid-path whole-list controls; remote28 harness and full359/676/ACL2 exit0. Live S3/native clipboard/ignored bodies not actual runtime coverage. RFC3986/4918 normative reference only; source/doc currency gate updated. Baseline15/6.1 and cumulative81 preserved; complete provider/device/mobile/URI/XML/competitor/UI work remains active."
+    "a314835 remediates SP-S70 URI/key double encoding with immutable2 green, bounded seven-file22-request native listGETPUTreadback and13 invalid-path whole-list controls; remote28 harness and full359/676/ACL2 exit0. Live S3/native clipboard/ignored bodies not actual runtime coverage. RFC3986/4918 normative reference only; source/doc currency gate updated. Baseline15/6.1 and cumulative81 preserved; complete provider/device/mobile/URI/XML/competitor/UI work remains active.",
+    "82aea43 remediates SP-S71 simple XML text/reference truncation. Immutable3 green, standardXML8, native13 classes40 wire requests and15 invalid controls, remote30 harness/full359/678/ACL2 exit0. First full clippy failure corrected and independently replayed; live native/provider/ignored coverage excluded. Baseline15/6.1 and cumulative82 preserved; full XML/provider/device/competitor/UI audit remains active."
   ]
 }

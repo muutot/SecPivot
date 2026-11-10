@@ -3763,7 +3763,7 @@ Confirmed 含历史已修复项；原始 b7c5d9f／15 项／6.1 分保持。
 - Severity: Medium
 - Confidence: High
 - Category: Stability / Data integrity
-- Status: Confirmed
+- Status: Confirmed（已修复，82aea43）
 - Affected area: WebDAV PROPFIND multistatus property text decoding
 - Evidence:
   - File: src-tauri/src/remote/webdav.rs:229–245, 254–339; src-tauri/src/remote/s3.rs:385–404 (5a0edbc)
@@ -3788,3 +3788,33 @@ Confirmed 含历史已修复项；原始 b7c5d9f／15 项／6.1 分保持。
 累计82 Confirmed（Critical1 /High19 /Medium51 /Low11），包含
 历史已修复项；原始 b7c5d9f／15项／6.1分保持。手机另存为新 APK
 和真机 provider、移动端安全、其余系统／竞品／UI 仍待完成，目标 active。
+
+修复与验证（2026-11-11）：82aea43 将已识别的简单 XML 字段读至
+完整结束，再解释 href／size／modified。Text／CDATA／标准 named 和
+numeric reference 累加，引用仅解码一次；内部空白与字面实体文本
+保留，注释／PI 不截断。未知引用、解码失败、嵌套／截断字段以无
+内容错误拒绝整份列表。缺失／空的大小日期提示及原 collection
+处理保持，URI 解码仍独立执行。
+
+原样三个确认探针从红变绿（678 无关测试 filtered），fixture 和
+诊断源码 SHA256 未变，临时追加源码精确恢复。严格 JSON 的八项
+独立标准 XML／key／size／date 控制通过。远程模块30项 harness
+通过；13类文件名的实际40次 loopback PROPFIND／GET／PUT／回读
+精确核对目标、字节、元数据及名称相似旁文件未变。三种字段共15
+类未知引用／嵌套／截断控制均拒绝整份列表。
+
+首次完整门 verify-webdav-xml.log 在最终 Clippy collapsible_if 规则
+处 exit1；合并条件后重播原样探针并完整重跑。最终
+verify-webdav-xml-final.log exit0：359前端／678 Rust／ACL2／
+KeePass25／QuickXML1363（4 ignored）；format／check／contract／
+build／clippy 全通过。Rust单线程、debug0、无过滤，live clipboard／
+S3／配置诊断fixture开关未启用。四个原生剪贴板体、S3 live体和
+ignored 不计实际运行覆盖。webdav-xml-final-proof.json 保存源码／
+fixture／原样诊断／fix patch／完整日志和参考哈希。
+
+文档 currency gate 同步 data-contracts／security-model／PITFALLS 和
+精确 TODO，未改 IPC／schema／依赖／vendor／CSS。RFC4918 XML转义
+规范只是旁证；完整XML结构／namespace／propstat与真实提供商／
+客户端兼容尚待独立审查。手机另存为新APK／真机provider、移动端
+安全、其余系统／竞品／UI 仍待完成；累计82 Confirmed 含历史已
+修复项，原始 b7c5d9f／15项／6.1分保持，整体目标 active。
