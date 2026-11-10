@@ -3999,3 +3999,22 @@ currency gate同步data-contracts／security-model／PITFALLS及精确TODO；
 完整XML／真实provider仍待独立审计；手机另存为仍待新APK／真机选择器
 验证。累计85 Confirmed含历史已修复项（Critical1／High19／Medium53／
 Low12），原始b7c5d9f／15项／6.1分保持；整体审计／竞品／UI目标active。
+
+追加真实性复核（2026-11-11，94985ce）：propstat状态候选暂不确认。
+RFC4918 §9.1规定同一资源的每个属性只出现一次；用重复成功／失败属性
+或失败块中的非空伪值作主要证据，不能证明合规provider的正常路径失败。
+本次六个合规控制让成功属性与不可用属性集合互不重叠：200元数据／
+404空类型、反序、成功collection／403空元数据、全不可用、status先于
+prop及foreign status扩展。独立ElementTree按200块读取均得到预期值；
+实际生产解析器1 test passed／684 filtered覆盖六例，字段／集合结果
+全部一致，临时源码逐字节恢复，不新增issue card或修复。
+
+首轮harness在第四例比较时把缺省modified错误写成null，而DTO使用
+skip_serializing_if省略该字段；最后两例当时未执行。已纠正fixture／
+oracle格式并完整重跑六例，保留webdav-status-initial-harness-error.log，
+不把这一测试错误归为产品缺陷。webdav-status-candidate-proof.json
+保存fixture／diagnostic／原生日志／源码／RFC哈希及此差异说明。
+本轮无网络请求、真实provider／配置／密码库／剪贴板／真机／APK或
+高资源复现；非空失败值、重复属性、response级／缺失／畸形status与
+完整provider语义仍待独立判断，六例通过不代表全面状态验证。
+累计85历史Confirmed、原始15项／6.1分不变，整体目标仍active。

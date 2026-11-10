@@ -1626,6 +1626,24 @@
       "quickxml_ignored": 4,
       "remote_harness_passed": 36,
       "wire_list_get_put_readback_requests": 4
+    },
+    "webdav_status_candidate": {
+      "checkpoint": "94985cec82f10d74e7147048833db2f4b4a69248",
+      "result": "Not confirmed for six conforming unavailable-property controls; no new finding",
+      "proof": "webdav-status-candidate-proof.json",
+      "fixture": "webdav-status-conforming-controls.json",
+      "native_log": "webdav-status-conforming-native.log",
+      "native_passed": 1,
+      "native_filtered": 684,
+      "fixture_cases": 6,
+      "independent_passed": 6,
+      "source_restored_exactly": true,
+      "initial_harness_error": {
+        "log": "webdav-status-initial-harness-error.log",
+        "sha256": "7e74a082f6f2d73ccd35c7d1b3744647e8edfb178c3d9a3556b1a1936c5ec485",
+        "reason": "Expected JSON included modified:null; the production DTO intentionally omits absent modified. Four cases reached, final two not reached. Fixture/oracle corrected to DTO omission; no application code changed and this failure is not a product finding."
+      },
+      "limits": "Six tiny synthetic XML controls, actual parser and independent ElementTree oracle. No network request, actual provider/vault/config/clipboard/device/APK/high-resource work. This is six cases in one native test, not six native test functions and not comprehensive status validation. Nonempty failed values, forbidden duplicate properties, response-level/missing/malformed status and actual providers remain separate; no complete success-only status interpretation claim."
     }
   },
   "reverification_notes": [
@@ -1716,6 +1734,7 @@
     "82aea43 remediates SP-S71 simple XML text/reference truncation. Immutable3 green, standardXML8, native13 classes40 wire requests and15 invalid controls, remote30 harness/full359/678/ACL2 exit0. First full clippy failure corrected and independently replayed; live native/provider/ignored coverage excluded. Baseline15/6.1 and cumulative82 preserved; full XML/provider/device/competitor/UI audit remains active.",
     "520a69c remediates SP-S72 document-envelope false success. Immutable3,XML8,no-authHTTP8,remote32 and full359/680/ACL2 pass. Compile E0282 corrected before checks; live clipboard/S3/ignored coverage excluded. Original15/6.1 baseline and83 historical Confirmed cards preserved; namespace/propstat/provider/device/competitor/UI work remains active.",
     "fee4565 remediates SP-S73 missing requested type: immutable2 green,actual DAV property/response stdlib controls,request-driven HTTP collection exclusion/extensionless retention,final remote34 and full359/682/ACL2 pass. Pinned KeeWeb directURL capability comparison does not prove listing/runtime or adopt XOR/MOVE. Original15/6.1 and84 historical cards preserved; provider/mobile/namespace/propstat/full audit/competitor/UI remain active.",
-    "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active."
+    "7532f1f remediates SP-S74 namespace/context confusion. Immutable namespace3 plus priorXML3,strictJSON16,no-auth wire4 and full359/684/ACL2 pass. Prior malformed fixtures now exercise actual DAV field locations; original values/assertions retained. Original15/6.1 and85 historical Confirmed cards preserved. fee4565 inventory artifact remains a historical checkpoint; no whole-project semantic coverage claim. Propstat/duplicates/fullXML/provider/mobile/competitor/UI goal remains active.",
+    "94985ce status candidate review: RFC4918 section9.1 forbids duplicate property names; six conforming controls with empty unavailable values and disjoint successful properties all preserve expected metadata/collection behavior. Actual parser1 test/684 filtered and ElementTree6 pass. Initial DTO omitted-date vs null fixture error retained and corrected; source restored exactly. No new finding, source edit or full-status/provider coverage claim; historical85/original15/6.1 unchanged."
   ]
 }
