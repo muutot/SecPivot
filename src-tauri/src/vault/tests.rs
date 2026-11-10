@@ -4507,6 +4507,154 @@ fn deletion_registry_failed_merge_keeps_original_ledgers_and_objects() {
     assert!(!remote.entry(entry).unwrap().quality_check);
 }
 
+fn merge_orphan_fixture(dir: &TempDir, subtree: bool) -> (Database, Vec<String>, EntryId) {
+    let (base, groups, entry, _) = deletion_registry_base(dir, subtree);
+    let path = dir.path().join("orphan-source.kdbx");
+    save_database(
+        &base,
+        &path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-only", None).unwrap();
+    let parent = groups.last().map(String::as_str).unwrap_or(ROOT_GROUP_UUID);
+    let mut input = entry_input(parent, "Synthetic ledger record", "", "", "");
+    input.attachments = vec![AttachmentInput {
+        name: "ledger.txt".into(),
+        data: Some(BASE64.encode(b"synthetic second payload")),
+    }];
+    session
+        .update_entry(&entry.uuid().to_string(), &input)
+        .unwrap();
+    pin_times(session.require_db_mut().unwrap(), entry, merge_ts(20));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-only", None).unwrap();
+    let db = session.require_db().unwrap().clone();
+    assert_eq!(db.num_attachments(), 2);
+    assert_eq!(
+        db.entry(entry)
+            .unwrap()
+            .historical(0)
+            .unwrap()
+            .attachment_by_name("ledger.txt")
+            .unwrap()
+            .get()
+            .as_slice(),
+        b"synthetic ledger payload"
+    );
+    (db, groups, entry)
+}
+
+fn assert_merge_does_not_reintroduce_orphan_payloads(subtree: bool) {
+    let dir = TempDir::new().unwrap();
+    let (stale, groups, entry) = merge_orphan_fixture(&dir, subtree);
+    let deleted = deletion_registry_delete(
+        &dir,
+        &stale,
+        &groups,
+        entry,
+        merge_ts(40),
+        "orphan-deleted.kdbx",
+    );
+    assert_eq!(
+        deleted.num_attachments(),
+        0,
+        "actual deletion must succeed before merge is tested"
+    );
+    for (a, b) in [(&deleted, &stale), (&stale, &deleted)] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "orphan-merged.kdbx");
+        assert!(merged.entry(entry).is_none());
+        assert!(merged
+            .iter_all_attachments()
+            .all(|attachment| attachment.entries(true).next().is_none()));
+        assert_eq!(
+            merged.num_attachments(),
+            0,
+            "merge must not reintroduce rejected current/history payloads"
+        );
+        assert_eq!(merged.deleted_objects[&entry.uuid()], Some(merge_ts(40)));
+        for group in &groups {
+            assert!(merged
+                .group(super::helpers::parse_group_id(group).unwrap())
+                .is_none());
+        }
+        let repeated = super::merge::merge_databases(&merged, b).unwrap();
+        assert_eq!(
+            deletion_registry_reopen(&dir, &repeated, "orphan-repeated.kdbx").num_attachments(),
+            0
+        );
+    }
+    assert_eq!(
+        stale.num_attachments(),
+        2,
+        "merge keeps original inputs intact"
+    );
+}
+
+#[test]
+fn merge_orphan_deleted_entry_does_not_restore_current_and_history_bytes() {
+    assert_merge_does_not_reintroduce_orphan_payloads(false);
+}
+
+#[test]
+fn merge_orphan_deleted_subtree_does_not_restore_current_and_history_bytes() {
+    assert_merge_does_not_reintroduce_orphan_payloads(true);
+}
+
+#[test]
+fn merge_orphan_preserves_only_original_local_orphan_headers() {
+    let dir = TempDir::new().unwrap();
+    let (base, groups, entry) = merge_orphan_fixture(&dir, false);
+    let deleted = deletion_registry_delete(
+        &dir,
+        &base,
+        &groups,
+        entry,
+        merge_ts(40),
+        "orphan-empty.kdbx",
+    );
+    let mut with_orphan = base.clone();
+    with_orphan.entry_mut(entry).unwrap().history = None;
+    with_orphan.rebuild_attachment_references();
+    let with_orphan = deletion_registry_reopen(&dir, &with_orphan, "orphan-original.kdbx");
+    assert_eq!(with_orphan.num_attachments(), 2);
+    assert_eq!(
+        with_orphan
+            .iter_all_attachments()
+            .filter(|attachment| attachment.entries(true).next().is_none())
+            .count(),
+        1
+    );
+    for (a, b, expected) in [(&with_orphan, &deleted, 1), (&deleted, &with_orphan, 0)] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        let merged = deletion_registry_reopen(&dir, &merged, "orphan-original-merged.kdbx");
+        assert!(merged.entry(entry).is_none());
+        assert_eq!(merged.num_attachments(), expected);
+        if expected == 1 {
+            assert_eq!(
+                merged
+                    .iter_all_attachments()
+                    .next()
+                    .unwrap()
+                    .get()
+                    .as_slice(),
+                b"synthetic ledger payload"
+            );
+        }
+        let repeated = super::merge::merge_databases(&merged, b).unwrap();
+        assert_eq!(
+            deletion_registry_reopen(&dir, &repeated, "orphan-original-repeated.kdbx")
+                .num_attachments(),
+            expected
+        );
+    }
+    assert_eq!(with_orphan.num_attachments(), 2);
+    assert_eq!(deleted.num_attachments(), 0);
+}
+
 fn assert_nested_delete_preserves_newer_descendant(group_edit: bool) {
     let dir = TempDir::new().unwrap();
     let (mut deleted, path) = create_session(&dir);

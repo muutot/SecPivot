@@ -97,6 +97,14 @@ pub enum AttachmentMergeError {
     VersionMismatch,
 }
 
+/// The prepared binary pool and preexisting orphan headers of a merge clone.
+/// Consume after all history unions and recycle-bin restoration are complete.
+#[cfg(feature = "_merge")]
+pub struct AttachmentMergeState {
+    prepared_ids: std::collections::HashSet<AttachmentId>,
+    original_orphans: std::collections::HashSet<AttachmentId>,
+}
+
 #[cfg(feature = "_merge")]
 type AttachmentFingerprint = (bool, [u8; 32]);
 #[cfg(feature = "_merge")]
@@ -322,7 +330,7 @@ impl Database {
     pub fn prepare_attachment_merge(
         &mut self,
         source: &mut Self,
-    ) -> Result<(), AttachmentMergeError> {
+    ) -> Result<AttachmentMergeState, AttachmentMergeError> {
         if !self.pending_history_attachments.is_empty()
             || !source.pending_history_attachments.is_empty()
         {
@@ -343,6 +351,12 @@ impl Database {
         {
             return Err(AttachmentMergeError::MissingPayload);
         }
+        let original_orphans = self
+            .attachments
+            .keys()
+            .filter(|id| !dest_ids.contains(id))
+            .copied()
+            .collect();
         let (mut index, dest_map) = self.canonical_attachment_index();
         for entry in self.entries.values_mut() {
             remap_entry_attachment_ids(entry, &dest_map);
@@ -368,7 +382,10 @@ impl Database {
         self.pending_history_attachments
             .extend(self.attachments.keys().copied().map(|id| (id, 1)));
         self.rebuild_attachment_references();
-        Ok(())
+        Ok(AttachmentMergeState {
+            prepared_ids: self.attachments.keys().copied().collect(),
+            original_orphans,
+        })
     }
 
     /// Apply current binary references only for actual source content winners.
@@ -393,6 +410,32 @@ impl Database {
         }
         self.rebuild_attachment_references();
         self.pending_history_attachments.clear();
+    }
+
+    /// Collect only prepared binaries that have no final current/history owner.
+    /// Preexisting orphan headers and binaries added after preparation remain.
+    /// This must run after the caller restores all retained versions and bins.
+    #[cfg(feature = "_merge")]
+    pub fn finalize_attachment_merge(
+        &mut self,
+        state: AttachmentMergeState,
+    ) -> Result<(), AttachmentMergeError> {
+        if !self.pending_history_attachments.is_empty() {
+            return Err(AttachmentMergeError::PendingHistory);
+        }
+        let mut owned = std::collections::HashSet::new();
+        for entry in self.entries.values() {
+            collect_entry_attachment_ids(entry, &mut owned);
+        }
+        if owned.iter().any(|id| !self.attachments.contains_key(id)) {
+            return Err(AttachmentMergeError::MissingPayload);
+        }
+        self.attachments.retain(|id, _| {
+            !state.prepared_ids.contains(id)
+                || state.original_orphans.contains(id)
+                || owned.contains(id)
+        });
+        Ok(())
     }
 
     /// Restore binary references for complete entry/version trees cloned from
@@ -742,6 +785,135 @@ mod secpivot_merge_attachment_tests {
 #[cfg(all(test, feature = "_merge"))]
 mod secpivot_merge_lifetime_tests {
     use super::*;
+    #[test]
+    fn secpivot_merge_finalization_preserves_original_orphan_aliases_and_later_headers() {
+        for orphan_first in [false, true] {
+            let mut dest = Database::new();
+            let active = dest.root_mut().add_entry().id();
+            let orphan = dest.root_mut().add_entry().id();
+            let mut orphan_id = None;
+            for entry in if orphan_first {
+                [orphan, active]
+            } else {
+                [active, orphan]
+            } {
+                let id = dest
+                    .entry_mut(entry)
+                    .unwrap()
+                    .add_attachment("same.txt", Value::protected(b"synthetic-same".to_vec()))
+                    .id();
+                if entry == orphan {
+                    orphan_id = Some(id);
+                }
+            }
+            dest.entries.get_mut(&orphan).unwrap().attachments.clear();
+            dest.rebuild_attachment_references();
+            let mut source = dest.clone();
+            let state = dest.prepare_attachment_merge(&mut source).unwrap();
+            dest.entry_mut(active).unwrap().remove();
+            dest.complete_attachment_merge(&source, &crate::db::merge::MergeLog::default());
+            let late = dest.root_mut().add_entry().id();
+            let late_id = dest
+                .entry_mut(late)
+                .unwrap()
+                .add_attachment("later.txt", Value::unprotected(b"synthetic-later".to_vec()))
+                .id();
+            dest.entries.get_mut(&late).unwrap().attachments.clear();
+            dest.rebuild_attachment_references();
+            dest.finalize_attachment_merge(state).unwrap();
+            assert_eq!(dest.num_attachments(), 2);
+            assert_eq!(
+                dest.attachment(orphan_id.unwrap())
+                    .unwrap()
+                    .get()
+                    .as_slice(),
+                b"synthetic-same"
+            );
+            assert_eq!(
+                dest.attachment(late_id).unwrap().get().as_slice(),
+                b"synthetic-later"
+            );
+        }
+    }
+
+    #[test]
+    fn secpivot_merge_finalization_waits_for_late_nested_history_owners() {
+        let mut dest = Database::new();
+        let entry = dest.root_mut().add_entry().id();
+        let payload = dest
+            .entry_mut(entry)
+            .unwrap()
+            .add_attachment(
+                "synthetic.txt",
+                Value::protected(b"synthetic-history".to_vec()),
+            )
+            .id();
+        let mut source = dest.clone();
+        let state = dest.prepare_attachment_merge(&mut source).unwrap();
+        dest.entries.get_mut(&entry).unwrap().attachments.clear();
+        dest.complete_attachment_merge(&source, &crate::db::merge::MergeLog::default());
+        assert!(
+            dest.attachment(payload).is_some(),
+            "version unions have not yet installed their owners"
+        );
+        let mut historical = Entry::new(dest.root);
+        historical
+            .attachments
+            .insert("synthetic.txt".into(), payload);
+        let mut outer = Entry::new(dest.root);
+        outer
+            .history
+            .get_or_insert_default()
+            .entries
+            .push(historical);
+        dest.entries
+            .get_mut(&entry)
+            .unwrap()
+            .history
+            .get_or_insert_default()
+            .entries
+            .push(outer);
+        dest.finalize_attachment_merge(state).unwrap();
+        assert_eq!(dest.num_attachments(), 1);
+        assert_eq!(
+            dest.attachment(payload).unwrap().get().as_slice(),
+            b"synthetic-history"
+        );
+    }
+
+    #[test]
+    fn secpivot_merge_finalization_refuses_active_leases_and_missing_payloads() {
+        for missing in [false, true] {
+            let mut dest = Database::new();
+            let entry = dest.root_mut().add_entry().id();
+            let payload = dest
+                .entry_mut(entry)
+                .unwrap()
+                .add_attachment(
+                    "synthetic.txt",
+                    Value::protected(b"synthetic-owned".to_vec()),
+                )
+                .id();
+            let mut source = dest.clone();
+            let state = dest.prepare_attachment_merge(&mut source).unwrap();
+            if missing {
+                dest.complete_attachment_merge(&source, &crate::db::merge::MergeLog::default());
+                dest.attachments.remove(&payload);
+            }
+            let before = dest.clone();
+            let leases = dest.pending_history_attachments.clone();
+            let error = dest.finalize_attachment_merge(state).unwrap_err();
+            assert!(matches!(
+                (missing, error),
+                (true, AttachmentMergeError::MissingPayload)
+                    | (false, AttachmentMergeError::PendingHistory)
+            ));
+            assert_eq!(dest.entries, before.entries);
+            assert_eq!(dest.attachments, before.attachments);
+            assert_eq!(dest.pending_history_attachments, leases);
+        }
+    }
+
     #[test]
     fn secpivot_merge_shared_created_owner_survives_local_deletion() {
         let mut dest = Database::new();

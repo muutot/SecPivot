@@ -449,7 +449,8 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     }
 
     // Canonicalize binary references before comparing and capturing versions.
-    dest.prepare_attachment_merge(&mut source)
+    let attachment_merge = dest
+        .prepare_attachment_merge(&mut source)
         .map_err(|error| format!("无法合并附件：{error}"))?;
     let losers = collect_losing_versions(&dest, &source);
     let equal_histories = collect_equal_current_histories(&dest, &source);
@@ -502,6 +503,8 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
     push_losers_into_history(&mut dest, losers);
     dest.rebuild_attachment_references();
     restore_bin(&mut dest, bin, local)?;
+    dest.finalize_attachment_merge(attachment_merge)
+        .map_err(|error| format!("无法合并附件：{error}"))?;
     merge_absent_deletion_info(&mut dest, local, remote);
     Ok(dest)
 }

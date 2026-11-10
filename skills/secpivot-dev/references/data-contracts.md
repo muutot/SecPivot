@@ -87,7 +87,18 @@ remaining lease or recursive current/history owner. Other shared payloads and
 preexisting unrelated orphan headers remain. Native single/batch/subtree and
 recycled/empty-bin paths verify current/history removal through save/reopen and
 surviving attachment bytes; dependency tests cover aliases and nested guards.
-Prepared merge lease completion and unreferenced merge imports are separate.
+The separate merge finalization contract handles prepared imports.
+
+prepare_attachment_merge returns an opaque in-memory AttachmentMergeState with
+the prepared binary IDs and destination's original unreferenced header IDs.
+complete_attachment_merge still installs source winners and releases preparation
+leases without early collection. After equal/losing history union and local bin
+restoration, finalize_attachment_merge validates no remaining leases or missing
+recursive owner payloads and collects unowned prepared IDs. Original destination
+orphan headers and binaries introduced after preparation remain. Source orphan
+headers retain the existing exclusion. Actual deleted entry/subtree merges and
+saved orphan-header fixtures cover both directions and repeated save/reopen;
+existing history/bin/current winner tests protect late owners.
 
 Patched native group merge decides each object's deletion independently. A newer
 deep entry/group edit restores its required ancestors, while unchanged siblings
