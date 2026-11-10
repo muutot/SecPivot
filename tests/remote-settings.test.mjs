@@ -6,9 +6,11 @@ import { get } from "svelte/store";
 register("./lib-alias-loader.mjs", new URL("./helpers/", import.meta.url));
 globalThis.window = globalThis;
 let submitted;
+let writeCount = 0;
 globalThis.__TAURI_INTERNALS__ = {
   invoke: async (command, args) => {
     assert.equal(command, "set_config");
+    writeCount += 1;
     submitted = structuredClone(args.config);
     const masked = structuredClone(args.config);
     for (const profile of masked.remoteProfiles) {
@@ -18,7 +20,9 @@ globalThis.__TAURI_INTERNALS__ = {
     return masked;
   },
 };
-const { appSettings, normalizeRemoteSettings } = await import("../src/lib/services/settings.ts");
+const { appSettings, normalizeRemoteSettings, remoteSecretPresence } =
+  await import("../src/lib/services/settings.ts");
+const { tips, dismissTip } = await import("../src/lib/services/tips.ts");
 const samples = ["", "fixture", " fixture", "fixture ", " fixture ", "   ", "\u00a0fixture\u00a0"];
 
 test("remote secret normalization preserves content while trimming endpoint text", () => {
@@ -34,6 +38,53 @@ test("remote secret normalization preserves content while trimming endpoint text
     for (const secretKey of [undefined, null, 42]) {
       assert.equal(normalizeRemoteSettings({ secretKey }, kind).secretKey, "");
     }
+  }
+});
+
+test("rejected and unchanged remote renames retain hints without warning or persistence", async () => {
+  try {
+    for (const kind of ["s3", "webdav"]) {
+      appSettings.addRemoteProfile(kind, "collision");
+      await appSettings.flush();
+      const path = `${kind}/config_1`;
+      appSettings.updateRemote(path, "secretKey", "synthetic-fixture");
+      await appSettings.flush();
+      for (const name of ["config_1", " config_1 ", "", "   ", "collision"]) {
+        for (const tip of get(tips)) dismissTip(tip.id);
+        const before = get(appSettings);
+        const presenceBefore = get(remoteSecretPresence);
+        const writesBefore = writeCount;
+        appSettings.renameRemoteProfile(path, name);
+        await appSettings.flush();
+        assert.equal(get(appSettings), before, "no-op changed settings identity");
+        assert.equal(get(remoteSecretPresence), presenceBefore, "no-op changed credential hints");
+        assert.equal(get(tips).length, 0, "no-op displayed rename warning");
+        assert.equal(writeCount, writesBefore, "no-op persisted settings");
+      }
+      const before = get(appSettings);
+      const writesBefore = writeCount;
+      appSettings.renameRemoteProfile(`${kind}/missing`, "valid");
+      await appSettings.flush();
+      assert.equal(get(appSettings), before);
+      assert.equal(writeCount, writesBefore);
+      appSettings.renameRemoteProfile(path, "renamed");
+      await appSettings.flush();
+      assert.ok(
+        get(appSettings).remoteProfiles.some(
+          (p) => p.settings.kind === kind && p.name === "renamed",
+        ),
+      );
+      assert.equal(get(remoteSecretPresence)[path], undefined);
+      assert.equal(get(remoteSecretPresence)[`${kind}/renamed`]?.secretKey ?? false, false);
+      assert.equal(get(tips).filter((tip) => tip.kind === "error").length, 1);
+      assert.equal(writeCount, writesBefore + 1);
+      appSettings.renameRemoteProfile(`${kind}/renamed`, "config_1");
+      await appSettings.flush();
+      for (const tip of get(tips)) dismissTip(tip.id);
+    }
+  } finally {
+    appSettings.destroy();
+    for (const tip of get(tips)) dismissTip(tip.id);
   }
 });
 

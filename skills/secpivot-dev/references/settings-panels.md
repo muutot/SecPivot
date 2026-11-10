@@ -28,6 +28,11 @@ current protocol, and entering a tab selects one profile from that protocol.
 The panel displays the canonical path (`s3/config_1`, `webdav/config_1`) and the
 matching local mirror path under `Storage/remote/<kind>/<name>`.
 
+`renameRemoteProfile` validates profile existence, normalized nonempty name,
+unchanged identity and same-protocol collisions before any side effect. Rejected
+or unchanged names retain credential-presence hints and do not warn or persist.
+A successful identity change keeps the existing credential-reset warning.
+
 At narrow widths (`max-width: 720px`), the primary sidebar becomes an off-canvas
 drawer. The section header exposes the menu toggle, the content pane uses the
 full viewport width, and selecting a primary category or pressing the backdrop
