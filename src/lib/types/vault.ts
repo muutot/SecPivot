@@ -193,7 +193,14 @@ export interface SessionInfo {
  *  the delta against its cached `VaultState` instead of receiving a rebuilt
  *  tree. `revision` matches the backend session revision after the mutation. */
 export type MutationDelta =
-  | { kind: "favorite"; revision: number; uuid: string; favorite: boolean }
+  | {
+      kind: "favorite";
+      revision: number;
+      uuid: string;
+      favorite: boolean;
+      modified: string;
+      size: number;
+    }
   | { kind: "groupsExpanded"; revision: number; groups: Record<string, boolean> };
 
 /** One entry offered by the global-hotkey auto-type picker. */

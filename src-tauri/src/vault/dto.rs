@@ -303,6 +303,8 @@ pub enum MutationDelta {
         revision: u64,
         uuid: String,
         favorite: bool,
+        modified: String,
+        size: u64,
     },
     GroupsExpanded {
         revision: u64,

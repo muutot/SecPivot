@@ -8,7 +8,7 @@ use super::helpers::{
     walk_match, walk_match_candidates, walk_ref_match,
 };
 use super::serialize::{
-    collect_favicon_hosts, escape_csv, estimate_entropy, extract_host, format_iso,
+    collect_favicon_hosts, entry_size, escape_csv, estimate_entropy, extract_host, format_iso,
 };
 use super::*;
 use crate::crypto::otp;
@@ -92,7 +92,7 @@ impl VaultSession {
     /// revision + affected entry) instead of rebuilding/serializing the whole
     /// tree — the renderer applies it to its local state.
     pub fn toggle_favorite_delta(&mut self, uuid: &str) -> Result<MutationDelta, String> {
-        let favorite = {
+        let (favorite, modified, size) = {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -105,13 +105,21 @@ impl VaultSession {
             } else {
                 entry.fields.remove(FIELD_FAVORITE);
             }
-            favorite
+            let modified = Times::now();
+            entry.times.last_modification = Some(modified);
+            (
+                favorite,
+                format_iso(modified),
+                entry_size(&entry.as_ref()).total(),
+            )
         };
         self.mark_dirty();
         Ok(MutationDelta::Favorite {
             revision: self.revision,
             uuid: uuid.to_owned(),
             favorite,
+            modified,
+            size,
         })
     }
 
