@@ -6,6 +6,12 @@ entry-editor notify seams. Known failures pass error explicitly; the global
 
 This reference is a source map, not a substitute for reading the current files. Update this map when ownership or entry points change.
 
+`vault/entries.rs` uses tracked Entry/Group removal for all user-facing permanent
+deletes and recycle-bin emptying, persisting DeletedObjects times recursively.
+`vault/tests.rs` covers actual delete APIs, KDBX reopen, stale merge in both
+directions, rejected batches and newer-edit policy. Temporary merge detachment
+still uses untracked removal; it must not manufacture permanent-delete intent.
+
 Frontend `utils/csv.ts::buildCsv` and native `vault/serialize.rs::escape_csv`
 guard formula-like values before RFC quoting. `tests/csv.test.mjs` and the
 native `export_csv_keeps_guarded_cells_inside_rfc_quotes` exercise their wire

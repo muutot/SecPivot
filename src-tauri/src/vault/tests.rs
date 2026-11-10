@@ -3692,6 +3692,353 @@ fn delete_with_recycle_bin_disabled_permanently_removes() {
     );
 }
 
+/// Exercise actual permanent-delete paths, then synchronize with a stale
+/// saved copy. Visible removal alone is insufficient without KDBX tombstones.
+fn assert_permanent_delete_propagates(path_kind: u8) {
+    let dir = TempDir::new().unwrap();
+    let (mut session, path) = create_session(&dir);
+    let group_subject = matches!(path_kind, 2 | 4 | 5);
+    let mut groups = Vec::new();
+    if group_subject {
+        let mut parent = ROOT_GROUP_UUID.to_owned();
+        for name in [
+            "Synthetic deleted parent",
+            "Synthetic child",
+            "Synthetic grandchild",
+        ] {
+            session
+                .add_group(&GroupInput {
+                    parent_uuid: Some(parent.clone()),
+                    name: name.into(),
+                    icon: None,
+                })
+                .unwrap();
+            parent = session
+                .require_db()
+                .unwrap()
+                .iter_all_groups()
+                .find(|group| group.name == name)
+                .unwrap()
+                .id()
+                .uuid()
+                .to_string();
+            groups.push(parent.clone());
+        }
+    }
+    let root_entry = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic root deletion",
+            "",
+            "",
+            "",
+        ))
+        .unwrap()
+        .root
+        .entries[0]
+        .uuid
+        .clone();
+    let mut entries = vec![root_entry.clone()];
+    if path_kind == 1 {
+        entries.push(
+            session
+                .add_entry(&entry_input(
+                    ROOT_GROUP_UUID,
+                    "Synthetic second batch deletion",
+                    "",
+                    "",
+                    "",
+                ))
+                .unwrap()
+                .root
+                .entries
+                .iter()
+                .find(|entry| entry.title == "Synthetic second batch deletion")
+                .unwrap()
+                .uuid
+                .clone(),
+        );
+    }
+    if group_subject {
+        for group in [groups[0].clone(), groups[2].clone()] {
+            session
+                .add_entry(&entry_input(
+                    &group,
+                    "Synthetic subtree deletion",
+                    "",
+                    "",
+                    "",
+                ))
+                .unwrap();
+            let id = super::helpers::parse_group_id(&group).unwrap();
+            entries.push(
+                session
+                    .require_db()
+                    .unwrap()
+                    .group(id)
+                    .unwrap()
+                    .entries()
+                    .next()
+                    .unwrap()
+                    .id()
+                    .uuid()
+                    .to_string(),
+            );
+        }
+    }
+    let unaffected = session
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic survivor",
+            "",
+            "",
+            "",
+        ))
+        .unwrap()
+        .root
+        .entries
+        .iter()
+        .find(|entry| entry.title == "Synthetic survivor")
+        .unwrap()
+        .uuid
+        .clone();
+    let prior_tombstone = uuid::Uuid::new_v4();
+    {
+        let db = session.require_db_mut().unwrap();
+        db.deleted_objects
+            .insert(prior_tombstone, Some(merge_ts(20)));
+        if path_kind <= 2 {
+            db.meta.recyclebin_enabled = Some(false);
+        }
+        let group_ids: Vec<_> = db.iter_all_groups().map(|g| g.id()).collect();
+        for id in group_ids {
+            let mut group = db.group_mut(id).unwrap();
+            group.times.last_modification = Some(merge_ts(10));
+            group.times.location_changed = Some(merge_ts(10));
+        }
+        for uuid in entries.iter().chain(std::iter::once(&unaffected)) {
+            let id = parse_entry_id(uuid).unwrap();
+            pin_times(db, id, merge_ts(10));
+            db.entry_mut(id).unwrap().times.location_changed = Some(merge_ts(10));
+        }
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let stale = session.require_db().unwrap().clone();
+    if matches!(path_kind, 3 | 5) {
+        session.delete_entry(&root_entry).unwrap();
+    }
+    if matches!(path_kind, 4 | 5) {
+        session.delete_group(&groups[0]).unwrap();
+    }
+    if path_kind >= 3 {
+        let db = session.require_db().unwrap();
+        for uuid in entries.iter().chain(groups.iter()) {
+            assert!(
+                !db.deleted_objects
+                    .contains_key(&uuid::Uuid::parse_str(uuid).unwrap()),
+                "ordinary recycling must not create a permanent deletion marker"
+            );
+        }
+        session.save().unwrap();
+        session.close();
+        session.open(&path, "master-password", None).unwrap();
+    }
+    match path_kind {
+        0 | 3 => {
+            session.delete_entry(&root_entry).unwrap();
+        }
+        1 => {
+            session.delete_entries(&entries).unwrap();
+        }
+        2 | 4 => {
+            session.delete_group(&groups[0]).unwrap();
+            entries.remove(0);
+        }
+        5 => {
+            session.empty_recycle_bin().unwrap();
+        }
+        _ => unreachable!(),
+    }
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "master-password", None).unwrap();
+    let inspect = |db: &Database| {
+        for uuid in &entries {
+            assert!(
+                db.entry(parse_entry_id(uuid).unwrap()).is_none(),
+                "a permanent deletion must not be reintroduced by a stale saved copy"
+            );
+        }
+        for uuid in &groups {
+            assert!(
+                db.group(super::helpers::parse_group_id(uuid).unwrap())
+                    .is_none(),
+                "a permanently deleted subtree must not return"
+            );
+        }
+        assert!(db.entry(parse_entry_id(&unaffected).unwrap()).is_some());
+        if matches!(path_kind, 2 | 4) {
+            assert!(db.entry(parse_entry_id(&root_entry).unwrap()).is_some());
+        }
+        assert_eq!(
+            db.deleted_objects.get(&prior_tombstone),
+            Some(&Some(merge_ts(20)))
+        );
+    };
+    inspect(session.require_db().unwrap());
+    for (a, b) in [
+        (session.require_db().unwrap(), &stale),
+        (&stale, session.require_db().unwrap()),
+    ] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        inspect(&merged);
+        let merged_path = dir.path().join("deletion-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        inspect(reopened.require_db().unwrap());
+        inspect(&super::merge::merge_databases(reopened.require_db().unwrap(), &stale).unwrap());
+    }
+    let deleted = session.require_db().unwrap();
+    for uuid in entries.iter().chain(groups.iter()) {
+        let id = uuid::Uuid::parse_str(uuid).unwrap();
+        assert!(
+            deleted
+                .deleted_objects
+                .get(&id)
+                .is_some_and(|time| time.is_some_and(|time| time > merge_ts(10))),
+            "permanent deletion must persist a concrete KDBX deletion time"
+        );
+    }
+}
+
+#[test]
+fn permanent_delete_single_without_bin_survives_stale_merge() {
+    assert_permanent_delete_propagates(0);
+}
+#[test]
+fn permanent_delete_batch_without_bin_survives_stale_merge() {
+    assert_permanent_delete_propagates(1);
+}
+#[test]
+fn permanent_delete_group_without_bin_survives_stale_merge() {
+    assert_permanent_delete_propagates(2);
+}
+#[test]
+fn permanent_delete_recycled_entry_survives_stale_merge() {
+    assert_permanent_delete_propagates(3);
+}
+#[test]
+fn permanent_delete_recycled_group_survives_stale_merge() {
+    assert_permanent_delete_propagates(4);
+}
+#[test]
+fn permanent_delete_empty_bin_survives_stale_merge() {
+    assert_permanent_delete_propagates(5);
+}
+
+#[test]
+fn permanent_delete_invalid_batch_keeps_objects_and_tombstones() {
+    for recycled in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let uuid = session
+            .add_entry(&entry_input(
+                ROOT_GROUP_UUID,
+                "Synthetic rejected delete",
+                "",
+                "",
+                "",
+            ))
+            .unwrap()
+            .root
+            .entries[0]
+            .uuid
+            .clone();
+        if recycled {
+            session.delete_entry(&uuid).unwrap();
+        } else {
+            session.require_db_mut().unwrap().meta.recyclebin_enabled = Some(false);
+        }
+        session.save().unwrap();
+        let before = session.require_db().unwrap().clone();
+        let state = session.state().unwrap().unwrap();
+        assert!(session
+            .delete_entries(&[uuid, "00000000-0000-0000-0000-000000000000".into()])
+            .is_err());
+        assert_eq!(session.require_db().unwrap(), &before);
+        let after = session.state().unwrap().unwrap();
+        assert_eq!((after.revision, after.dirty), (state.revision, state.dirty));
+        assert!(session.delete_group(ROOT_GROUP_UUID).is_err());
+        assert_eq!(session.require_db().unwrap(), &before);
+    }
+}
+
+#[test]
+fn permanent_delete_still_allows_a_genuinely_newer_remote_edit() {
+    let dir = TempDir::new().unwrap();
+    let (mut local, _) = create_session(&dir);
+    let uuid = local
+        .add_entry(&entry_input(
+            ROOT_GROUP_UUID,
+            "Synthetic later edit",
+            "",
+            "",
+            "",
+        ))
+        .unwrap()
+        .root
+        .entries[0]
+        .uuid
+        .clone();
+    local.require_db_mut().unwrap().meta.recyclebin_enabled = Some(false);
+    local.save().unwrap();
+    let stale = local.require_db().unwrap().clone();
+    local.delete_entry(&uuid).unwrap();
+    local.save().unwrap();
+    let id = parse_entry_id(&uuid).unwrap();
+    let deleted_at = local.require_db().unwrap().deleted_objects[&id.uuid()].unwrap();
+    let other_path = dir.path().join("other-edit.kdbx");
+    save_database(
+        &stale,
+        &other_path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut other = VaultSession::default();
+    other.open(&other_path, "synthetic-only", None).unwrap();
+    other
+        .update_entry_flags(&uuid, None, Some(false), None)
+        .unwrap();
+    other
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(id)
+        .unwrap()
+        .times
+        .last_modification = Some(deleted_at + chrono::Duration::minutes(1));
+    other.save().unwrap();
+    other.close();
+    other.open(&other_path, "synthetic-only", None).unwrap();
+    for (a, b) in [
+        (local.require_db().unwrap(), other.require_db().unwrap()),
+        (other.require_db().unwrap(), local.require_db().unwrap()),
+    ] {
+        let merged = super::merge::merge_databases(a, b).unwrap();
+        assert!(
+            !merged.entry(id).unwrap().quality_check,
+            "newer explicit edits retain their existing winner policy"
+        );
+    }
+}
+
 #[test]
 fn delete_entries_moves_all_to_recycle_bin() {
     let dir = TempDir::new().unwrap();

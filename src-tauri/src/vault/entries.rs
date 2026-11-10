@@ -597,8 +597,8 @@ impl VaultSession {
                     None => false,
                 };
                 if recycle_disabled || in_bin {
-                    let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-                    entry.remove();
+                    let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                    entry.track_changes().remove();
                 } else {
                     let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                     let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -643,8 +643,8 @@ impl VaultSession {
                 None => false,
             };
             if recycle_disabled || in_bin {
-                let entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-                entry.remove();
+                let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+                entry.track_changes().remove();
             } else {
                 let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                 let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -966,7 +966,10 @@ impl VaultSession {
                     .unwrap_or(false);
             let mut group = db.group_mut(id).ok_or_else(|| "分组不存在".to_owned())?;
             if permanent {
-                group.remove();
+                group
+                    .track_changes()
+                    .remove()
+                    .map_err(|e| format!("删除分组失败: {e}"))?;
             } else {
                 let bin_id = bin_id.expect("bin exists unless recycling is disabled");
                 group
@@ -1016,13 +1019,16 @@ impl VaultSession {
                 )
             };
             for entry_id in entries {
-                if let Some(entry) = db.entry_mut(entry_id) {
-                    entry.remove();
+                if let Some(mut entry) = db.entry_mut(entry_id) {
+                    entry.track_changes().remove();
                 }
             }
             for child_id in children {
-                if let Some(group) = db.group_mut(child_id) {
-                    group.remove();
+                if let Some(mut group) = db.group_mut(child_id) {
+                    group
+                        .track_changes()
+                        .remove()
+                        .map_err(|e| format!("删除分组失败: {e}"))?;
                 }
             }
         }
