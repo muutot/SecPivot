@@ -800,7 +800,7 @@ export const en: Record<I18nKey, string> = {
   "welcome.noRemoteDb":
     "Remote directory connected, but it holds no database files (.kdbx). Check that the prefix points at a directory with databases, or switch to “New” to create one here",
   "welcome.pickRemoteFile": "Pick a remote database file",
-  "welcome.needPassword": "Enter the master password",
+  "welcome.needPassword": "Enter the master password or pick a key file",
   "welcome.remoteKeyRequired": "Enter the remote object key",
   "welcome.pickDbFile": "Pick a database file",
   "welcome.passwordMismatch": "The two passwords do not match",

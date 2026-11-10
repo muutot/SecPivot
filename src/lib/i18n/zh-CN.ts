@@ -774,7 +774,7 @@ export const zhCN = {
   "welcome.noRemoteDb":
     "远程目录连接成功，但该目录下没有数据库文件（.kdbx）。请确认对象前缀指向包含数据库文件的目录，或切换到“新建”在此目录创建数据库",
   "welcome.pickRemoteFile": "请选择远程数据库文件",
-  "welcome.needPassword": "请输入主密码",
+  "welcome.needPassword": "请输入主密码或选择密钥文件",
   "welcome.remoteKeyRequired": "请输入远程对象键",
   "welcome.pickDbFile": "请选择数据库文件",
   "welcome.passwordMismatch": "两次输入的密码不一致",
