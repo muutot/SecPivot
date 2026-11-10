@@ -194,7 +194,7 @@ fn url_matches_accuracy(
 /// hosting tenants, wildcard suffixes and exceptions. IPs and hosts without
 /// a registrable domain retain their full identity; two lookup failures must
 /// never collapse into the same empty site. No runtime network fetch is needed.
-fn registrable_domain(host: &str) -> &str {
+pub(crate) fn registrable_domain(host: &str) -> &str {
     let host = host.trim_end_matches('.');
     if host.parse::<std::net::IpAddr>().is_ok() {
         return host;

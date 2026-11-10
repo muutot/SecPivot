@@ -4498,3 +4498,42 @@ Never、相同host的Never字段与允许字段并存、不同端口／www／PSL
 本提交不改匹配／导入实现；应用完整门禁仍对应ae29ee1的371／716／ACL2
 及依赖验证。91历史Confirmed含已修复项与原始15项／6.1分保持，整体
 全项目防御审计／竞品／UI目标继续active。
+
+#### 逐网址原生策略 API 阶段（2026-11-11，5afff09 后）
+
+新增website_rules.rs原生公开API和严格独立schema
+`{version:1,rules:[{url,mode}]}`；mode为site／host／exact／never。
+ValidatedWebsiteRules完成整份验证后才可匹配，提供只读config／as_json／
+matches；未知／重复成员、模式／版本和混合损坏规则统一拒绝，错误不回显
+网址内容。128条规则、每URL4096字节、输入及编码JSON64 KiB限额均检查，
+HTTP(S)绝对目标拒绝原始空白／控制／反斜杠／userinfo，不拆分或猜测URI。
+
+Site独立使用固定PSL含私有租户、通配／例外与非可注册目标身份，不受
+既有全局匹配设置影响且不猜厂商关联域；Host沿用canonical host+原始
+显式数值端口，省略与显式默认端口保持不同，这是SecPivot原生契约，
+不是声称完全复制1Password或浏览器默认端口行为。Exact保存整URL字节，
+Never只忽略自己，允许相同网址其他规则仍匹配；空／全Never集合无匹配。
+每条规则的authority在构建时验证并保存，legacy matcher尚未使用此API。
+
+7项新增测试覆盖上述边界与Site／Host／Exact混合，固定官方示例中的
+精确host／www区分及Never组合含义；实际合成KDBX用受保护custom field
+存API JSON，save／close／reopen后经真实secret getter重建策略，Unicode、
+查询大小写／fragment、规则顺序、端口和保护保持。该测试是原生API／
+KDBX容器证据，没有添加受管理存储字段，也没有证明自动匹配、Bridge／
+RPC路由、会话IPC、编辑界面或真实客户端导出。代码没有新增依赖／网络／
+剪贴板访问，序列化JSON拥有Zeroizing；不承诺全部配置／解析临时副本擦除。
+
+TODO新增partial阶段记录，原1PUX及Bitwarden完整迁移缺口保持；后续必须
+验证managed字段保留／清除、OverrideURL与KPRPC优先级、批量编辑／RPC
+写入／交换／历史／会话边界及紧凑UI，再接有证据的来源模式。不能只因
+API测试通过而宣称逐网址功能或完整导入已交付。91历史Confirmed含已修复
+项及原始15项／6.1分保持；这次为能力实施，不新增未经复现的bug卡片。
+
+最终verify-website-rules-native-final.log exit0：frontend371／Rust723／ACL2／
+KeePass25／QuickXML1363（4 ignored不算执行）；format／check／contract／
+build／clippy通过。日志 SHA256
+34280690c210d09fc4bbead272b84afd1cd93c7e698fb1e9f5490e70a828debd，
+website-rules-native-final-proof.json关联API／测试／共享helper与来源hash。
+相关7项重新运行也通过，含每URL／总JSON边界；没有启用SECPIVOT_* live
+选项或高资源KDF/OOM场景。documentation currency gate同步data-contracts、
+security-model、project-structure；没有CSS／markup／IPC命令／存储key变化。

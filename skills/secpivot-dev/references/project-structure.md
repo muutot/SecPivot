@@ -299,6 +299,14 @@ page's `handleImportOnePux` own the new existing-menu/picker route; Node tests i
 seams. Real client export/provider/dialog execution remains separate pending
 evidence; the earlier native-only stages alone did not complete this route.
 
+`vault/website_rules.rs` owns the exported native `WebsiteMode`, `WebsiteRule`,
+`WebsiteRuleSet` and immutable `ValidatedWebsiteRules` API. It shares the pinned
+PSL helper and canonical authority utility, while retaining per-rule modes and
+raw exact URL bytes. `website_rules_tests.rs` covers strict schema/destination/
+resource gates, mixed rules and a synthetic protected KDBX round trip. The
+automatic matcher, native storage/commands, frontend editor and import mapping
+are separate pending integration work; no existing route uses the API yet.
+
 `commands/clipboard/scheduler.rs` provides the shared latest-deadline worker
 for `commands/clipboard.rs`. Text and entry-exchange wipes share one pending
 fingerprint slot; replacement/cancel drops it immediately. Clipboard I/O runs

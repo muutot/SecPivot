@@ -576,3 +576,15 @@ KPRPC blockedURLs vetoes the whole entry. Source per-website host/site modes
 cannot be represented by one entry-wide accuracy flag. Import fidelity must
 not be inferred from these similarly named policies or from source archives;
 their export encoding and per-destination native behavior remain unverified.
+
+`website_rules.rs` validates a complete native rule set before it can match;
+one malformed/unknown member rejects the whole set with a fixed, content-free
+error, without partial or legacy fallback. Requests share the strict HTTP(S)
+destination gate. Site uses private-tenant-aware PSL identity, Host preserves
+explicit ports, Exact preserves URL bytes and Never only ignores one rule.
+Rule count, URL bytes and encoded JSON have finite ceilings; these are not a
+total-heap or constant-time guarantee. The owned encoded JSON uses Zeroizing,
+but config strings/URL-parser temporary allocations are not claimed erased.
+No credential is an API input/result, no I/O/network runs in the matcher, and
+legacy credential routing is unchanged because this native API is not yet wired.
+Synthetic protected KDBX storage/reopen is not managed-storage or IPC proof.

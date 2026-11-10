@@ -1887,6 +1887,16 @@
       "strongbox": "Unverified: challenge response excluded",
       "limits": "Official rendered documentation and first-party source inspection only. No competitor or SecPivot native provider/device run; historical vendor test dates are not current SecPivot evidence. Strongbox challenge response excluded."
     },
+    "native_website_rules_api": {
+      "source_checkpoint": "5afff09",
+      "result": "Native immutable validated per-website API implemented; targeted7 and full verify371 frontend/723 Rust/ACL2/KeePass25/QuickXML1363 pass, ignored4 excluded; integration pending",
+      "schema": "version1/rules[{url,mode:site|host|exact|never}]",
+      "targeted_passed": 7,
+      "verify_exit_code": 0,
+      "verify_log_sha256": "34280690c210d09fc4bbead272b84afd1cd93c7e698fb1e9f5490e70a828debd",
+      "proof": "website-rules-native-final-proof.json",
+      "limits": "No automatic matcher, managed KDBX field, session command, frontend editor or import mapping. Synthetic protected custom-field KDBX round trip invokes native API directly. Exact port identity is the existing native convention, not full vendor equivalence. Prefix/regex source modes and vendor-related-site rules remain pending."
+    },
     "onepassword_uri_policy": {
       "checkpoint": "ae29ee107477a26bb536fd9c38fe60f37b0b4e50",
       "result": "Official per-website Site/Host-with-port/Never semantics and current entry-wide KPRPC differences revalidated; capability gaps, no new bug card",

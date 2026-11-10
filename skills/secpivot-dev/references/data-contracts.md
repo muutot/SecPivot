@@ -713,6 +713,22 @@ and blockedURLs vetoes the entry, so those fields are not interchangeable with
 per-website policies. The public 1PUX specification only documents label/url,
 not export encoding of these behavior settings; no mapping is claimed yet.
 
+`ValidatedWebsiteRules` is a native API re-exported by `vault` from
+`website_rules.rs`.
+Its independent version-1 schema is `{version:1,rules:[{url,mode}]}`, with exact
+mode strings `site`, `host`, `exact`, `never`. Construction/from_json rejects
+unknown/duplicate members, unsupported versions/modes and any invalid rule;
+it exposes immutable config/as_json/matches only. Limits are 128 rules, 4096
+bytes per URL and 64 KiB total encoded JSON (also checked before parsing).
+HTTP(S) absolute URLs have no raw whitespace/control/backslashes or userinfo.
+Site uses the pinned PSL without vendor-related-site aliases or a global mode;
+Host uses canonical host plus explicitly written numeric port (omitted and
+explicit default ports stay distinct); Exact retains complete original bytes;
+Never ignores only that rule. Empty/all-Never sets match nothing.
+This API is not wired to legacy routing, session commands, managed KDBX storage
+or UI. The KDBX test uses a synthetic protected custom field and directly invokes
+the reconstructed API; it does not prove automatic matching or client import.
+
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name
 attachments and size mismatch reject before mutation. Empty files and repeated
