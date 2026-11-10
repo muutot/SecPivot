@@ -3880,7 +3880,7 @@ Confirmed含历史已修复项，原始b7c5d9f／15项／6.1分保持；手机
 - Severity: Low
 - Confidence: High
 - Category: Stability / Testing
-- Status: Confirmed
+- Status: Confirmed（已修复，fee4565）
 - Affected area: WebDAV PROPFIND request and collection classification contract
 - Evidence:
   - File: src-tauri/src/remote/webdav.rs:17–25, 124–164, 299–383; src-tauri/src/remote/tests.rs:624–646, 764–814 (abe8106)
@@ -3910,3 +3910,38 @@ loopback请求和合成成员，无用户配置／密码库、真实云端、真
 共享剪贴板、远程文件写入或高资源复现。累计84 Confirmed含历史
 已修复项（Critical1／High19／Medium52／Low12），原始b7c5d9f／15项／
 6.1分保持；其余审计／竞品／UI与手机另存为真机验证仍待完成。
+
+修复与验证（2026-11-11）：fee4565 在命名属性PROPFIND请求中加入
+DAV:resourcetype，原有集合过滤无需重写；大小／日期仍为提示，
+类型不可用时不猜测普通／无扩展名文件。原样2项诊断全部通过，
+682无关测试filtered，诊断与红测request／response原件SHA256未变；
+临时源码精确恢复。独立标准XML对实际新请求确认三个DAV属性，
+对实际新响应确认四个成员中的两个普通文件。
+
+正式原生HTTP回归校验实际请求的DAV namespace、精确三项属性、
+Depth1、无凭据和请求驱动响应：非斜杠目录排除，kdbx／无扩展名
+文件及大小日期保留。空／缺失／404类型提示对照保留普通文件。
+早期targeted34／clippy通过；提示fixture改为合法propstat结构后，
+原样诊断及最终完整Rust门内34项remote harness再次通过。
+
+verify-webdav-collection-final.log exit0：359前端／682 Rust／ACL2／
+KeePass25／QuickXML1363（4 ignored）；format／check／contract／
+build／clippy全通过。单线程、debug0、无过滤，live clipboard／S3／
+配置fixture开关未启用；四个原生剪贴板体、S3 live和ignored不计
+实际运行覆盖。webdav-collection-final-proof.json保存源码、原样诊断、
+fix patch、完整日志、实际XML和固定竞品参考哈希。
+
+currency gate同步data-contracts／security-model／PITFALLS和精确TODO；
+无IPC／schema／依赖／vendor／CSS变化。真实provider、namespace／
+propstat仍待独立复核；手机另存为仍待替换APK／真机验证。累计84
+Confirmed含历史已修复项，原始b7c5d9f／15项／6.1分保持；完整
+审计／竞品／UI目标仍active。
+
+当前库存复核（fee4565）：已提交第一方文本文件368个、
+119066行；相较初始路径集合74个既有路径哈希变化、116个
+新覆盖路径，后者包含初始库存未纳入的文档／技能等，不等同新增
+应用源文件。vendor的109个跟踪文件在该库存之外，补丁字节与来源
+另由完整门验证；二进制／锁文件和无关未跟踪编辑器数据排除。
+first-party-inventory-webdav-collection.json保存路径／哈希／排除／工作树
+状态，仅证明库存覆盖，不把368个文件或119066行称为逐行深读；
+原始252个文件／82147行的基线库存记录保持。
