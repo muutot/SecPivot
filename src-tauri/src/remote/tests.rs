@@ -1181,17 +1181,175 @@ fn webdav_xml_property_text_preserves_full_values() {
 }
 
 #[test]
+fn webdav_namespaces_and_expected_containers_preserve_resource_identity() {
+    let cases: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/webdav-namespaces.json"
+    ))
+    .unwrap();
+    for case in cases.as_array().unwrap() {
+        let result = parse_multistatus(
+            case["xml"].as_str().unwrap(),
+            "http://h/dav",
+            "http://h/dav/",
+        );
+        if case["reject"] == true {
+            let error = result.unwrap_err();
+            assert!(error.starts_with("WebDAV "));
+            assert!(!error.contains("urn:secpivot:fixture"));
+        } else {
+            assert_eq!(
+                serde_json::to_value(result.unwrap()).unwrap(),
+                case["objects"]
+            );
+        }
+    }
+    let nested_unknown = "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:fixture\"><d:response><d:href>/dav/actual.kdbx</d:href><x:unknown><d:href><d:collection/></d:href><d:response><d:href>/dav/other.kdbx</d:href></d:response></x:unknown></d:response></d:multistatus>";
+    assert_eq!(
+        parse_multistatus(nested_unknown, "http://h/dav", "http://h/dav/").unwrap()[0].key,
+        "actual.kdbx"
+    );
+    let unbound_extension = nested_unknown.replace("<d:collection/>", "<unbound:collection/>");
+    assert_eq!(
+        parse_multistatus(&unbound_extension, "http://h/dav", "http://h/dav/").unwrap_err(),
+        "WebDAV XML 命名空间前缀无效"
+    );
+}
+
+#[test]
+fn webdav_extension_fields_list_get_put_and_read_back_only_the_actual_file() {
+    use std::collections::BTreeMap;
+    use std::io::{Read, Write};
+    let cases: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/webdav-namespaces.json"
+    ))
+    .unwrap();
+    let listing = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == "foreign-href-size-date")
+        .unwrap()["xml"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let initial = BTreeMap::from([
+        ("/dav/actual.kdbx".to_owned(), b"original".to_vec()),
+        ("/dav/other.kdbx".to_owned(), b"untouched".to_vec()),
+    ]);
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let peer = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let mut files = initial;
+        let mut requests = Vec::new();
+        for _ in 0..4 {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(std::time::Instant::now() < deadline);
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("fixture accept: {error}"),
+                }
+            };
+            configure_s3_page_stream(&stream);
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut header = Vec::new();
+            let mut byte = [0];
+            while !header.ends_with(b"\r\n\r\n") {
+                assert!(header.len() < 16 * 1024);
+                stream.read_exact(&mut byte).unwrap();
+                header.push(byte[0]);
+            }
+            let header = String::from_utf8(header).unwrap();
+            assert!(!header.to_ascii_lowercase().contains("authorization:"));
+            let mut first_line = header.lines().next().unwrap().split_whitespace();
+            let method = first_line.next().unwrap();
+            let target = first_line.next().unwrap();
+            let length = header
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            assert!(length <= 1024);
+            let mut data = vec![0; length];
+            stream.read_exact(&mut data).unwrap();
+            let (status, body) = match method {
+                "PROPFIND" if target == "/dav/" => {
+                    ("207 Multi-Status", listing.as_bytes().to_vec())
+                }
+                "GET" if files.contains_key(target) => ("200 OK", files[target].clone()),
+                "PUT" if files.contains_key(target) => {
+                    files.insert(target.to_owned(), data);
+                    ("204 No Content", Vec::new())
+                }
+                _ => ("404 Not Found", Vec::new()),
+            };
+            requests.push((method.to_owned(), target.to_owned()));
+            let response = format!("HTTP/1.1 {status}\r\nContent-Type: application/xml; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len());
+            stream.write_all(response.as_bytes()).unwrap();
+            stream.write_all(&body).unwrap();
+        }
+        (requests, files)
+    });
+    let storage = WebDavStorage {
+        client: super::shared_blocking_client().unwrap().clone(),
+        auth: None,
+        base_url: format!("http://{addr}/dav"),
+        list_timeout: Duration::from_secs(3),
+        io_timeout: Duration::from_secs(3),
+    };
+    let objects = storage.list("").unwrap();
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0].key, "actual.kdbx");
+    assert_eq!(objects[0].size, 12);
+    assert_eq!(
+        objects[0].modified.as_deref(),
+        Some("Mon, 01 Jan 2024 00:00:00 GMT")
+    );
+    assert_eq!(storage.get(&objects[0].key).unwrap(), b"original");
+    storage.put(&objects[0].key, b"updated").unwrap();
+    assert_eq!(storage.get(&objects[0].key).unwrap(), b"updated");
+    let (requests, files) = peer.join().unwrap();
+    assert_eq!(
+        requests,
+        [
+            ("PROPFIND".to_owned(), "/dav/".to_owned()),
+            ("GET".to_owned(), "/dav/actual.kdbx".to_owned()),
+            ("PUT".to_owned(), "/dav/actual.kdbx".to_owned()),
+            ("GET".to_owned(), "/dav/actual.kdbx".to_owned()),
+        ]
+    );
+    assert_eq!(files["/dav/actual.kdbx"], b"updated");
+    assert_eq!(files["/dav/other.kdbx"], b"untouched");
+}
+
+#[test]
 fn webdav_xml_invalid_property_content_rejects_the_entire_list() {
     let valid = "<d:multistatus xmlns:d=\"DAV:\"><d:response><d:href>/dav/valid.kdbx</d:href></d:response><d:response>";
     for property in ["href", "getcontentlength", "getlastmodified"] {
+        // Exercise the real DAV field location, rather than an unqualified
+        // extension or a metadata tag directly beneath response.
+        let (before, after) = if property == "href" {
+            ("", "")
+        } else {
+            ("<d:propstat><d:prop>", "</d:prop></d:propstat>")
+        };
         for value in ["a&missing;b", "a&#x110000;b", "a<part/>b", "a&amp"] {
             let body =
-                format!("{valid}<{property}>{value}</{property}></d:response></d:multistatus>");
+                format!("{valid}{before}<d:{property}>{value}</d:{property}>{after}</d:response></d:multistatus>");
             let error = parse_multistatus(&body, "http://h/dav", "http://h/dav/").unwrap_err();
             assert_eq!(error, "WebDAV 列表字段包含无效 XML 内容");
             assert!(!error.contains(value));
         }
-        let truncated = format!("{valid}<{property}>unfinished");
+        let truncated = format!("{valid}{before}<d:{property}>unfinished");
         assert_eq!(
             parse_multistatus(&truncated, "http://h/dav", "http://h/dav/").unwrap_err(),
             "WebDAV 列表字段包含无效 XML 内容"

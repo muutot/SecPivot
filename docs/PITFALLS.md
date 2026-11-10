@@ -31,6 +31,14 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Backend / vault
 
+- **Expanded names and parent context define WebDAV fields.** Matching only
+  local names let extension href/response/collection properties replace the
+  real file or hide it. Resolve DAV namespaces, use expected parent containers,
+  and ignore entire unexpected subtrees. Prefix aliases and default namespaces
+  are equivalent; an entirely unqualified legacy document is a separate mode.
+  Malformed-property regressions must qualify the field and use its actual DAV
+  container, rather than placing unrelated unqualified metadata under response.
+
 - **Mocks must respect named-property requests.** WebDAV's collection filter
   depended on resourcetype even though PROPFIND asked for size/date only; an
   always-generous mock concealed this. Request the type explicitly and verify

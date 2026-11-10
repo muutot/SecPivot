@@ -26,6 +26,14 @@ PROPFIND, not a filename/size heuristic or unsolicited mock data. The request-dr
 loopback fixture checks exact DAV property names and ordinary/extensionless file
 retention. This improves enumeration and adds no new path or provider authority.
 
+WebDAV extension data cannot select response fields merely by sharing their short
+names. Namespace resolution and expected-parent paths select DAV fields; entire
+unknown subtrees, including DAV-looking descendants, are skipped. Fully unqualified
+legacy XML is isolated from DAV-root parsing. Wrong roots/unbound prefixes fail
+without content, and parser failures no longer expose raw reader diagnostics.
+Native loopback list/GET/PUT/readback verifies the intended file and untouched
+sibling; it is not provider authorization or full XML/status validation evidence.
+
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
 remain after refusal; no text is silently dropped. Protected Base64 still
