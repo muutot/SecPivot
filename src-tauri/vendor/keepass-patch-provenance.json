@@ -93,7 +93,8 @@
     },
     {
       "path": "src/db/merge.rs",
-      "upstream_sha256": "1f2931d05fa4f596688da6dd9ded7feff75f958d9413849882f17ea3d89860b0"
+      "upstream_sha256": "1f2931d05fa4f596688da6dd9ded7feff75f958d9413849882f17ea3d89860b0",
+      "patched_sha256": "a1be28a238606237d786d5cbeb44caf1f37ba1c0985a57ccdc2b38b6a3b30232"
     },
     {
       "path": "src/db/mod.rs",
@@ -130,7 +131,7 @@
     {
       "path": "src/db/types/entry.rs",
       "upstream_sha256": "1e68c36e6906ede54577e7e8e4bf1e80b344bcde6f46ff8ddd6b00e38f11b11b",
-      "patched_sha256": "9bf79103b9ed998741718655e400b7725b588f3d2aec8a52390bab3acdb9a00a"
+      "patched_sha256": "3c449b340c7dd8e9aa9c687ab1aa730ecaff7071e54e57e2f9d864e37e33fcad"
     },
     {
       "path": "src/db/types/group.rs",

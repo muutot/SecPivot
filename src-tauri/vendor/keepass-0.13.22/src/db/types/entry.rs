@@ -125,6 +125,22 @@ impl Entry {
         self.id
     }
 
+    /// Compare entry content without timestamps, history or current/previous
+    /// parent locations. Expiration is part of Times and must be checked by
+    /// callers that include it in their version identity.
+    pub fn content_eq(&self, other: &Self) -> bool {
+        let mut a = self.clone();
+        let mut b = other.clone();
+        a.times = Times::default();
+        b.times = Times::default();
+        a.history = None;
+        b.history = None;
+        a.parent = b.parent;
+        a.previous_parent_group = None;
+        b.previous_parent_group = None;
+        a == b
+    }
+
     /// Get the icon of this entry, if it exists
     pub fn icon(&self) -> Option<&Icon> {
         self.icon.as_ref()

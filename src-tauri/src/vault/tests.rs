@@ -12394,6 +12394,430 @@ fn assert_merge_history_branch_fidelity(equal_current: bool) {
     }
 }
 
+/// A move away and back must remain newer than a third device's older move,
+/// independently of the content timestamp and through actual KDBX persistence.
+fn assert_merge_returned_location(group_subject: bool, changed_content: bool) {
+    let dir = TempDir::new().unwrap();
+    let (mut source, path) = create_session(&dir);
+    let state = source
+        .add_group(&GroupInput {
+            parent_uuid: None,
+            name: "Synthetic archive".into(),
+            icon: None,
+        })
+        .unwrap();
+    let archive_uuid = state.root.children[0].uuid.clone();
+    let archive_id = super::helpers::parse_group_id(&archive_uuid).unwrap();
+    let subject_uuid = if group_subject {
+        let state = source
+            .add_group(&GroupInput {
+                parent_uuid: None,
+                name: "Synthetic returned group".into(),
+                icon: None,
+            })
+            .unwrap();
+        state
+            .root
+            .children
+            .iter()
+            .find(|group| group.name == "Synthetic returned group")
+            .unwrap()
+            .uuid
+            .clone()
+    } else {
+        source
+            .add_entry(&entry_input(
+                ROOT_GROUP_UUID,
+                "Synthetic returned entry",
+                "",
+                "",
+                "",
+            ))
+            .unwrap()
+            .root
+            .entries[0]
+            .uuid
+            .clone()
+    };
+    {
+        let db = source.require_db_mut().unwrap();
+        let ids: Vec<_> = db.iter_all_groups().map(|group| group.id()).collect();
+        for id in ids {
+            let mut group = db.group_mut(id).unwrap();
+            group.times = keepass::db::Times::new();
+            group.times.creation = Some(merge_ts(0));
+            group.times.last_access = Some(merge_ts(0));
+            group.times.last_modification = Some(merge_ts(10));
+            group.times.location_changed = Some(merge_ts(10));
+        }
+        if !group_subject {
+            let id = super::helpers::parse_entry_id(&subject_uuid).unwrap();
+            pin_times(db, id, merge_ts(10));
+            db.entry_mut(id).unwrap().times.location_changed = Some(merge_ts(10));
+        }
+    }
+    source.save().unwrap();
+    source.close();
+    source.open(&path, "master-password", None).unwrap();
+    let baseline = source.require_db().unwrap().clone();
+    let root_id = baseline.root().id();
+    let mut stale = baseline.clone();
+    if group_subject {
+        let id = super::helpers::parse_group_id(&subject_uuid).unwrap();
+        // The public native move API models an older third-device relocation.
+        stale.group_mut(id).unwrap().move_to(archive_id).unwrap();
+        stale.group_mut(id).unwrap().times.location_changed = Some(merge_ts(20));
+        // Delete/restore are actual application paths that return a root group.
+        source.delete_group(&subject_uuid).unwrap();
+        source.restore_group(&subject_uuid).unwrap();
+        source
+            .require_db_mut()
+            .unwrap()
+            .group_mut(id)
+            .unwrap()
+            .times
+            .location_changed = Some(merge_ts(30));
+        if changed_content {
+            source
+                .rename_group(&subject_uuid, "Synthetic changed group")
+                .unwrap();
+            source
+                .require_db_mut()
+                .unwrap()
+                .group_mut(id)
+                .unwrap()
+                .times
+                .last_modification = Some(merge_ts(40));
+        }
+    } else {
+        let id = super::helpers::parse_entry_id(&subject_uuid).unwrap();
+        stale.entry_mut(id).unwrap().move_to(archive_id).unwrap();
+        stale.entry_mut(id).unwrap().times.location_changed = Some(merge_ts(20));
+        source.move_entry(&subject_uuid, &archive_uuid).unwrap();
+        source.move_entry(&subject_uuid, ROOT_GROUP_UUID).unwrap();
+        source
+            .require_db_mut()
+            .unwrap()
+            .entry_mut(id)
+            .unwrap()
+            .times
+            .location_changed = Some(merge_ts(30));
+        if changed_content {
+            source
+                .update_entry_flags(&subject_uuid, None, Some(false), None)
+                .unwrap();
+            source
+                .require_db_mut()
+                .unwrap()
+                .entry_mut(id)
+                .unwrap()
+                .times
+                .last_modification = Some(merge_ts(40));
+        }
+    }
+    source.save().unwrap();
+    source.close();
+    source.open(&path, "master-password", None).unwrap();
+    let stale_path = dir.path().join("stale-device.kdbx");
+    save_database(
+        &stale,
+        &stale_path,
+        DatabaseKey::new().with_password("synthetic-only"),
+    )
+    .unwrap();
+    let mut stale_reopened = VaultSession::default();
+    stale_reopened
+        .open(&stale_path, "synthetic-only", None)
+        .unwrap();
+    let expected_previous_parent = if group_subject {
+        source
+            .require_db()
+            .unwrap()
+            .group(super::helpers::parse_group_id(&subject_uuid).unwrap())
+            .unwrap()
+            .previous_parent()
+            .map(|group| group.id())
+    } else {
+        source
+            .require_db()
+            .unwrap()
+            .entry(super::helpers::parse_entry_id(&subject_uuid).unwrap())
+            .unwrap()
+            .previous_parent()
+            .map(|group| group.id())
+    };
+    let assert_location = |db: &Database| {
+        let (parent, previous_parent, times) = if group_subject {
+            let group = db
+                .group(super::helpers::parse_group_id(&subject_uuid).unwrap())
+                .unwrap();
+            (
+                group.parent().unwrap().id(),
+                group.previous_parent().map(|group| group.id()),
+                group.times.clone(),
+            )
+        } else {
+            let entry = db
+                .entry(super::helpers::parse_entry_id(&subject_uuid).unwrap())
+                .unwrap();
+            (
+                entry.parent().id(),
+                entry.previous_parent().map(|group| group.id()),
+                entry.times.clone(),
+            )
+        };
+        assert_eq!(
+            parent, root_id,
+            "a stale third-device move must not undo the newer return"
+        );
+        assert_eq!(
+            previous_parent,
+            expected_previous_parent.filter(|id| db.group(*id).is_some()),
+            "resolvable previous parent belongs to the winning move"
+        );
+        assert_eq!(
+            times.location_changed,
+            Some(merge_ts(30)),
+            "merge must retain the newer same-parent move time"
+        );
+        assert_eq!(
+            times.last_modification,
+            Some(merge_ts(if changed_content { 40 } else { 10 }))
+        );
+    };
+    for (a, b) in [
+        (&baseline, source.require_db().unwrap()),
+        (source.require_db().unwrap(), &baseline),
+    ] {
+        let merged = merge_databases(a, b).unwrap();
+        assert_location(&merged);
+        let merged_path = dir.path().join("returned-merged.kdbx");
+        save_database(
+            &merged,
+            &merged_path,
+            DatabaseKey::new().with_password("synthetic-only"),
+        )
+        .unwrap();
+        let mut reopened = VaultSession::default();
+        reopened.open(&merged_path, "synthetic-only", None).unwrap();
+        assert_location(reopened.require_db().unwrap());
+        for (current, old) in [
+            (
+                reopened.require_db().unwrap(),
+                stale_reopened.require_db().unwrap(),
+            ),
+            (
+                stale_reopened.require_db().unwrap(),
+                reopened.require_db().unwrap(),
+            ),
+        ] {
+            let repeated = merge_databases(current, old).unwrap();
+            assert_location(&repeated);
+        }
+    }
+}
+
+#[test]
+fn merge_location_entry_return_without_content_edit_survives_third_device() {
+    assert_merge_returned_location(false, false);
+}
+
+#[test]
+fn merge_location_entry_return_with_content_edit_survives_third_device() {
+    assert_merge_returned_location(false, true);
+}
+
+#[test]
+fn merge_location_group_return_without_content_edit_survives_third_device() {
+    assert_merge_returned_location(true, false);
+}
+
+#[test]
+fn merge_location_group_return_with_content_edit_survives_third_device() {
+    assert_merge_returned_location(true, true);
+}
+
+fn merge_location_fixture() -> (
+    Database,
+    EntryId,
+    keepass::db::GroupId,
+    keepass::db::GroupId,
+) {
+    let (mut db, entry) = merge_base_db();
+    let archive = db.root_mut().add_group().id();
+    let subject = db.root_mut().add_group().id();
+    for id in [db.root().id(), archive, subject] {
+        let mut group = db.group_mut(id).unwrap();
+        group.times.last_modification = Some(merge_ts(10));
+        group.times.location_changed = Some(merge_ts(10));
+    }
+    db.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(10));
+    (db, entry, archive, subject)
+}
+
+#[test]
+fn merge_location_different_parent_equal_content_keeps_move_provenance() {
+    let (base, entry, archive, subject) = merge_location_fixture();
+    let root = base.root().id();
+    let mut moved = base.clone();
+    moved.entry_mut(entry).unwrap().move_to(archive).unwrap();
+    moved.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(30));
+    moved.group_mut(subject).unwrap().move_to(archive).unwrap();
+    moved.group_mut(subject).unwrap().times.location_changed = Some(merge_ts(30));
+    for (a, b) in [(&base, &moved), (&moved, &base)] {
+        let merged = merge_databases(a, b).unwrap();
+        let entry = merged.entry(entry).unwrap();
+        assert_eq!(entry.parent().id(), archive);
+        assert_eq!(entry.previous_parent().unwrap().id(), root);
+        assert_eq!(entry.times.location_changed, Some(merge_ts(30)));
+        let group = merged.group(subject).unwrap();
+        assert_eq!(group.parent().unwrap().id(), archive);
+        assert_eq!(group.previous_parent().unwrap().id(), root);
+        assert_eq!(group.times.location_changed, Some(merge_ts(30)));
+    }
+}
+
+#[test]
+fn merge_location_group_parent_swap_keeps_original_previous_parents() {
+    let (mut base, _, a, b) = merge_location_fixture();
+    let root = base.root().id();
+    base.group_mut(b).unwrap().move_to(a).unwrap();
+    base.group_mut(b).unwrap().times.location_changed = Some(merge_ts(10));
+    let mut moved = base.clone();
+    moved.group_mut(b).unwrap().move_to(root).unwrap();
+    moved.group_mut(b).unwrap().times.location_changed = Some(merge_ts(30));
+    moved.group_mut(a).unwrap().move_to(b).unwrap();
+    moved.group_mut(a).unwrap().times.location_changed = Some(merge_ts(30));
+    for (a_db, b_db) in [(&base, &moved), (&moved, &base)] {
+        let merged = merge_databases(a_db, b_db).unwrap();
+        assert_eq!(merged.group(a).unwrap().parent().unwrap().id(), b);
+        assert_eq!(
+            merged.group(a).unwrap().previous_parent().unwrap().id(),
+            root
+        );
+        assert_eq!(merged.group(b).unwrap().parent().unwrap().id(), root);
+        assert_eq!(merged.group(b).unwrap().previous_parent().unwrap().id(), a);
+    }
+}
+
+#[test]
+fn merge_location_metadata_never_masks_equal_time_content_conflicts() {
+    let (base, entry, archive, subject) = merge_location_fixture();
+    for group_subject in [false, true] {
+        let mut source = base.clone();
+        if group_subject {
+            source.group_mut(subject).unwrap().move_to(archive).unwrap();
+            source.group_mut(subject).unwrap().times.location_changed = Some(merge_ts(30));
+            source.group_mut(subject).unwrap().name = "Actual changed content".into();
+        } else {
+            source.entry_mut(entry).unwrap().move_to(archive).unwrap();
+            source.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(30));
+            source
+                .entry_mut(entry)
+                .unwrap()
+                .set_unprotected("Password", "synthetic-conflict");
+        }
+        for (a, b) in [(&base, &source), (&source, &base)] {
+            assert!(merge_databases(a, b).unwrap_err().contains("同一时间戳"));
+        }
+    }
+}
+
+#[test]
+fn merge_location_newer_deletion_does_not_resurrect_returned_objects() {
+    let (base, entry, _, subject) = merge_location_fixture();
+    let mut deleted = base.clone();
+    deleted.entry_mut(entry).unwrap().track_changes().remove();
+    deleted
+        .group_mut(subject)
+        .unwrap()
+        .track_changes()
+        .remove()
+        .unwrap();
+    deleted
+        .deleted_objects
+        .insert(entry.uuid(), Some(merge_ts(40)));
+    deleted
+        .deleted_objects
+        .insert(subject.uuid(), Some(merge_ts(40)));
+    let mut returned = base.clone();
+    returned.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(30));
+    returned.group_mut(subject).unwrap().times.location_changed = Some(merge_ts(30));
+    for (a, b) in [(&deleted, &returned), (&returned, &deleted)] {
+        let merged = merge_databases(a, b).unwrap();
+        assert!(merged.entry(entry).is_none());
+        assert!(merged.group(subject).is_none());
+    }
+}
+
+#[test]
+fn merge_location_missing_time_never_fabricates_different_parent_provenance() {
+    let (mut local, entry, archive, subject) = merge_location_fixture();
+    local.entry_mut(entry).unwrap().times.location_changed = None;
+    local.group_mut(subject).unwrap().times.location_changed = None;
+    let root = local.root().id();
+    let mut source = local.clone();
+    source.entry_mut(entry).unwrap().move_to(archive).unwrap();
+    source.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(30));
+    source.entry_mut(entry).unwrap().times.last_modification = Some(merge_ts(40));
+    source.group_mut(subject).unwrap().move_to(archive).unwrap();
+    source.group_mut(subject).unwrap().times.location_changed = Some(merge_ts(30));
+    source.group_mut(subject).unwrap().times.last_modification = Some(merge_ts(40));
+    let merged = merge_databases(&local, &source).unwrap();
+    assert_eq!(merged.entry(entry).unwrap().parent().id(), root);
+    assert_eq!(merged.entry(entry).unwrap().times.location_changed, None);
+    assert_eq!(merged.group(subject).unwrap().parent().unwrap().id(), root);
+    assert_eq!(merged.group(subject).unwrap().times.location_changed, None);
+    // When the parent agrees there is no unknown relocation to perform.
+    source.entry_mut(entry).unwrap().move_to(root).unwrap();
+    source.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(50));
+    source.group_mut(subject).unwrap().move_to(root).unwrap();
+    source.group_mut(subject).unwrap().times.location_changed = Some(merge_ts(50));
+    let merged = merge_databases(&local, &source).unwrap();
+    assert_eq!(
+        merged.entry(entry).unwrap().times.location_changed,
+        Some(merge_ts(50))
+    );
+    assert_eq!(
+        merged.group(subject).unwrap().times.location_changed,
+        Some(merge_ts(50))
+    );
+}
+
+#[test]
+fn merge_location_history_deduplicates_content_from_different_parents() {
+    let (base, entry, archive, _) = merge_location_fixture();
+    let mut local = base.clone();
+    let mut source = base.clone();
+    let local_snapshot = (*base.entry(entry).unwrap()).clone();
+    source.entry_mut(entry).unwrap().move_to(archive).unwrap();
+    let source_snapshot = (*source.entry(entry).unwrap()).clone();
+    source
+        .entry_mut(entry)
+        .unwrap()
+        .move_to(base.root().id())
+        .unwrap();
+    source.entry_mut(entry).unwrap().times.location_changed = Some(merge_ts(30));
+    local.entry_mut(entry).unwrap().history =
+        Some(keepass::db::History::from_entries(vec![local_snapshot]));
+    source.entry_mut(entry).unwrap().history =
+        Some(keepass::db::History::from_entries(vec![source_snapshot]));
+    for (a, b) in [(&local, &source), (&source, &local)] {
+        let merged = merge_databases(a, b).unwrap();
+        assert_eq!(
+            merged
+                .entry(entry)
+                .unwrap()
+                .history
+                .as_ref()
+                .unwrap()
+                .get_entries()
+                .len(),
+            1
+        );
+    }
+}
+
 /// A genuine conflict: same UUID edited on both sides at the same timestamp
 /// with different content cannot be auto-merged.
 #[test]

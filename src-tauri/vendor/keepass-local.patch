@@ -1,3 +1,358 @@
+--- a/src/db/merge.rs
++++ b/src/db/merge.rs
+@@ -97 +97,4 @@
+-    let last_update = group.times.last_modification.or(group.times.location_changed);
++    let last_update = group
++        .times
++        .last_modification
++        .or(group.times.location_changed);
+@@ -114 +117,5 @@
+-fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
++fn merge_groups(
++    dest_db: &mut Database,
++    source_db: &Database,
++    log: &mut MergeLog,
++) -> Result<(), MergeError> {
+@@ -185 +192,2 @@
+-            #[allow(clippy::expect_used)] // id was selected from source_groups.difference(dest_groups)
++            #[allow(clippy::expect_used)]
++            // id was selected from source_groups.difference(dest_groups)
+@@ -198,0 +207 @@
++            dest_group.previous_parent_group = source.previous_parent_group;
+@@ -225 +234,3 @@
+-            if let (Some(deletion_time), Some(dest_last_updated)) = (deletion_time, dest_last_updated) {
++            if let (Some(deletion_time), Some(dest_last_updated)) =
++                (deletion_time, dest_last_updated)
++            {
+@@ -297 +308 @@
+-                    moves.push((id, parent_id));
++                    moves.push((id, parent_id, source.previous_parent_group));
+@@ -311,0 +323,4 @@
++        } else if source.times.location_changed > dest.times.location_changed {
++            // A move away and back still supersedes an older third-device move.
++            dest.times.location_changed = source.times.location_changed;
++            dest.previous_parent_group = source.previous_parent_group;
+@@ -350 +365,4 @@
+-        dest.times.last_modification = source.times.last_modification.or(dest.times.last_modification);
++        dest.times.last_modification = source
++            .times
++            .last_modification
++            .or(dest.times.last_modification);
+@@ -364 +382 @@
+-    for (group_id, parent_id) in moves {
++    for (group_id, parent_id, previous_parent) in moves {
+@@ -367,0 +386 @@
++        group.previous_parent_group = previous_parent;
+@@ -374 +393,5 @@
+-fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
++fn merge_entries(
++    dest_db: &mut Database,
++    source_db: &Database,
++    log: &mut MergeLog,
++) -> Result<(), MergeError> {
+@@ -426 +449,2 @@
+-        #[allow(clippy::expect_used)] // id was selected from source_entries.difference(dest_entries)
++        #[allow(clippy::expect_used)]
++        // id was selected from source_entries.difference(dest_entries)
+@@ -451 +475,2 @@
+-            if let (Some(deletion_time), Some(dest_update_time)) = (deletion_time, dest_update_time) {
++            if let (Some(deletion_time), Some(dest_update_time)) = (deletion_time, dest_update_time)
++            {
+@@ -494,0 +520 @@
++                        dest_entry.previous_parent_group = source_entry.previous_parent_group;
+@@ -508,0 +535,3 @@
++        } else if source_entry.times.location_changed > dest_entry.times.location_changed {
++            dest_entry.times.location_changed = source_entry.times.location_changed;
++            dest_entry.previous_parent_group = source_entry.previous_parent_group;
+@@ -538 +567,2 @@
+-            log.warnings.push(format!("Source entry {} had no history.", id));
++            log.warnings
++                .push(format!("Source entry {} had no history.", id));
+@@ -549,4 +579 @@
+-        let merged_location_timestamp = dest_entry
+-            .times
+-            .location_changed
+-            .or(source_entry.times.location_changed);
++        let merged_location_timestamp = dest_entry.times.location_changed;
+@@ -592 +619,5 @@
+-fn merge_history(dest: &History, source: &History, log: &mut MergeLog) -> Result<History, MergeError> {
++fn merge_history(
++    dest: &History,
++    source: &History,
++    log: &mut MergeLog,
++) -> Result<History, MergeError> {
+@@ -674 +705,5 @@
+-fn merge_icons(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
++fn merge_icons(
++    dest_db: &mut Database,
++    source_db: &Database,
++    log: &mut MergeLog,
++) -> Result<(), MergeError> {
+@@ -676 +711,5 @@
+-    let source_icons = source_db.custom_icons.keys().cloned().collect::<HashSet<_>>();
++    let source_icons = source_db
++        .custom_icons
++        .keys()
++        .cloned()
++        .collect::<HashSet<_>>();
+@@ -721 +760,2 @@
+-            if let (Some(deletion_time), Some(dest_last_modification)) = (deletion_time, dest_last_modification)
++            if let (Some(deletion_time), Some(dest_last_modification)) =
++                (deletion_time, dest_last_modification)
+@@ -796,0 +837 @@
++    a.previous_parent_group = None;
+@@ -802,0 +844 @@
++    b.previous_parent_group = None;
+@@ -809,11 +851 @@
+-    let new_times = Times::default();
+-
+-    let mut a = a.clone();
+-    a.times = new_times.clone();
+-    a.history = None;
+-
+-    let mut b = b.clone();
+-    b.times = new_times.clone();
+-    b.history = None;
+-
+-    !a.eq(&b)
++    !a.content_eq(b)
+@@ -830 +862,2 @@
+-    const ROOT_GROUP_ID: GroupId = GroupId::from_uuid(uuid!("00000000-0000-0000-0000-000000000001"));
++    const ROOT_GROUP_ID: GroupId =
++        GroupId::from_uuid(uuid!("00000000-0000-0000-0000-000000000001"));
+@@ -836,0 +870,66 @@
++
++    #[test]
++    #[cfg(feature = "save_kdbx4")]
++    fn secpivot_location_previous_parent_survives_missing_group_and_reopen() {
++        fn reopen(db: &Database) -> Database {
++            let mut bytes = Vec::new();
++            db.save(
++                &mut bytes,
++                crate::DatabaseKey::new().with_password("synthetic-only"),
++            )
++            .unwrap();
++            Database::open(
++                &mut std::io::Cursor::new(bytes),
++                crate::DatabaseKey::new().with_password("synthetic-only"),
++            )
++            .unwrap()
++        }
++        let mut dest = Database::new_with_root_id(ROOT_GROUP_ID);
++        dest.root_mut().add_group_with_id(GROUP1_ID).unwrap();
++        dest.root_mut().add_entry_with_id(ENTRY1_ID).unwrap();
++        for id in [ROOT_GROUP_ID, GROUP1_ID] {
++            let mut group = dest.group_mut(id).unwrap();
++            group.times.last_modification = Some(Times::epoch());
++            group.times.location_changed = Some(Times::epoch());
++        }
++        dest.entry_mut(ENTRY1_ID).unwrap().times.last_modification = Some(Times::epoch());
++        dest.entry_mut(ENTRY1_ID).unwrap().times.location_changed = Some(Times::epoch());
++        let mut source = dest.clone();
++        let recent = Times::epoch().date().and_hms_opt(0, 30, 0).unwrap();
++        source.group_mut(GROUP1_ID).unwrap().previous_parent_group = Some(GROUP2_ID);
++        source.group_mut(GROUP1_ID).unwrap().times.location_changed = Some(recent);
++        source.entry_mut(ENTRY1_ID).unwrap().previous_parent_group = Some(GROUP2_ID);
++        source.entry_mut(ENTRY1_ID).unwrap().times.location_changed = Some(recent);
++        // This is opaque KDBX provenance; the old parent need not still exist.
++        let source = reopen(&source);
++        dest.merge(&source).unwrap();
++        let dest = reopen(&dest);
++        assert!(dest.group(GROUP2_ID).is_none());
++        assert_eq!(
++            dest.group(GROUP1_ID).unwrap().previous_parent_group,
++            Some(GROUP2_ID)
++        );
++        assert_eq!(
++            dest.entry(ENTRY1_ID).unwrap().previous_parent_group,
++            Some(GROUP2_ID)
++        );
++        assert_eq!(
++            dest.group(GROUP1_ID).unwrap().times.location_changed,
++            Some(recent)
++        );
++        assert_eq!(
++            dest.entry(ENTRY1_ID).unwrap().times.location_changed,
++            Some(recent)
++        );
++        // Newly created groups must also retain the source's provenance.
++        let mut empty = Database::new_with_root_id(ROOT_GROUP_ID);
++        empty.root_mut().times = source.root().times.clone();
++        empty.merge(&source).unwrap();
++        assert_eq!(
++            reopen(&empty)
++                .group(GROUP1_ID)
++                .unwrap()
++                .previous_parent_group,
++            Some(GROUP2_ID)
++        );
++    }
+@@ -1514 +1613,3 @@
+-        assert!(!destination_db.deleted_objects.contains_key(&new_entry_id.uuid()));
++        assert!(!destination_db
++            .deleted_objects
++            .contains_key(&new_entry_id.uuid()));
+@@ -1653 +1754,4 @@
+-        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            entry.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -1691,3 +1795,6 @@
+-        destination_db.entry_mut(ENTRY2_ID).unwrap().edit_tracking(|e| {
+-            e.set_unprotected("Title", "entry2_modified_in_destination");
+-        });
++        destination_db
++            .entry_mut(ENTRY2_ID)
++            .unwrap()
++            .edit_tracking(|e| {
++                e.set_unprotected("Title", "entry2_modified_in_destination");
++            });
+@@ -1717 +1824,4 @@
+-        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            entry.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -1720,2 +1830,8 @@
+-        assert_eq!(entry.get(fields::TITLE), Some("entry2_modified_in_destination"));
+-        assert_eq!(entry.times.last_modification, Some(entry_modified_timestamp));
++        assert_eq!(
++            entry.get(fields::TITLE),
++            Some("entry2_modified_in_destination")
++        );
++        assert_eq!(
++            entry.times.last_modification,
++            Some(entry_modified_timestamp)
++        );
+@@ -1779 +1895,4 @@
+-        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            entry.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -1783 +1902,4 @@
+-        assert_eq!(entry.times.last_modification, Some(entry_modified_timestamp));
++        assert_eq!(
++            entry.times.last_modification,
++            Some(entry_modified_timestamp)
++        );
+@@ -1813,3 +1935,6 @@
+-        source_db.entry_mut(new_entry_id).unwrap().edit_tracking(|e| {
+-            e.set_unprotected("Title", "new_entry_modified_in_source");
+-        });
++        source_db
++            .entry_mut(new_entry_id)
++            .unwrap()
++            .edit_tracking(|e| {
++                e.set_unprotected("Title", "new_entry_modified_in_source");
++            });
+@@ -1838 +1963,4 @@
+-        assert_eq!(entry.get(fields::TITLE), Some("new_entry_modified_in_source"));
++        assert_eq!(
++            entry.get(fields::TITLE),
++            Some("new_entry_modified_in_source")
++        );
+@@ -1899 +2027,4 @@
+-        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            group.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -1914,3 +2045,6 @@
+-        destination_db.entry_mut(ENTRY1_ID).unwrap().edit_tracking(|e| {
+-            e.set_unprotected("Title", "entry1_updated");
+-        });
++        destination_db
++            .entry_mut(ENTRY1_ID)
++            .unwrap()
++            .edit_tracking(|e| {
++                e.set_unprotected("Title", "entry1_updated");
++            });
+@@ -1924 +2058,6 @@
+-        let merged_history = destination_db.entry(ENTRY1_ID).unwrap().history.clone().unwrap();
++        let merged_history = destination_db
++            .entry(ENTRY1_ID)
++            .unwrap()
++            .history
++            .clone()
++            .unwrap();
+@@ -1965 +2104,6 @@
+-        let merged_history = destination_db.entry(ENTRY1_ID).unwrap().history.clone().unwrap();
++        let merged_history = destination_db
++            .entry(ENTRY1_ID)
++            .unwrap()
++            .history
++            .clone()
++            .unwrap();
+@@ -1997,3 +2141,6 @@
+-        destination_db.entry_mut(ENTRY1_ID).unwrap().edit_tracking(|e| {
+-            e.set_unprotected("Title", "entry1_updated_from_destination");
+-        });
++        destination_db
++            .entry_mut(ENTRY1_ID)
++            .unwrap()
++            .edit_tracking(|e| {
++                e.set_unprotected("Title", "entry1_updated_from_destination");
++            });
+@@ -2049,3 +2196,6 @@
+-        source_db.group_mut(SUBGROUP1_ID).unwrap().edit_tracking(|g| {
+-            g.name = "subgroup1_updated_name".to_string();
+-        });
++        source_db
++            .group_mut(SUBGROUP1_ID)
++            .unwrap()
++            .edit_tracking(|g| {
++                g.name = "subgroup1_updated_name".to_string();
++            });
+@@ -2187 +2337,4 @@
+-        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            group.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -2202,3 +2355,6 @@
+-        source_db.group_mut(SUBGROUP1_ID).unwrap().edit_tracking(|g| {
+-            g.name = "subgroup1_updated_name".to_string();
+-        });
++        source_db
++            .group_mut(SUBGROUP1_ID)
++            .unwrap()
++            .edit_tracking(|g| {
++                g.name = "subgroup1_updated_name".to_string();
++            });
+@@ -2244 +2400,4 @@
+-        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
++        assert_eq!(
++            group.times.location_changed,
++            Some(location_changed_timestamp)
++        );
+@@ -2282,2 +2441,10 @@
+-        source_db.group_mut(GROUP1_ID).unwrap().times.last_modification = None;
+-        source_db.group_mut(GROUP1_ID).unwrap().times.location_changed = None;
++        source_db
++            .group_mut(GROUP1_ID)
++            .unwrap()
++            .times
++            .last_modification = None;
++        source_db
++            .group_mut(GROUP1_ID)
++            .unwrap()
++            .times
++            .location_changed = None;
+@@ -2325,2 +2492,10 @@
+-        source_db.entry_mut(ENTRY1_ID).unwrap().times.last_modification = None;
+-        source_db.entry_mut(ENTRY1_ID).unwrap().times.location_changed = None;
++        source_db
++            .entry_mut(ENTRY1_ID)
++            .unwrap()
++            .times
++            .last_modification = None;
++        source_db
++            .entry_mut(ENTRY1_ID)
++            .unwrap()
++            .times
++            .location_changed = None;
 --- a/src/db/types/entry.rs
 +++ b/src/db/types/entry.rs
 @@ -12,3 +12,3 @@
@@ -7,20 +362,37 @@
 +        fields, Attachment, AttachmentId, AutoType, Color, CustomDataItem, CustomIcon,
 +        CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, GroupId, GroupMut,
 +        GroupRef, History, Icon, Times, Value,
-@@ -279 +279,4 @@
+@@ -127,0 +128,16 @@
++    /// Compare entry content without timestamps, history or current/previous
++    /// parent locations. Expiration is part of Times and must be checked by
++    /// callers that include it in their version identity.
++    pub fn content_eq(&self, other: &Self) -> bool {
++        let mut a = self.clone();
++        let mut b = other.clone();
++        a.times = Times::default();
++        b.times = Times::default();
++        a.history = None;
++        b.history = None;
++        a.parent = b.parent;
++        a.previous_parent_group = None;
++        b.previous_parent_group = None;
++        a == b
++    }
++
+@@ -279 +295,4 @@
 -            (name.as_str(), AttachmentRef::new(self.database, attachment_id))
 +            (
 +                name.as_str(),
 +                AttachmentRef::new(self.database, attachment_id),
 +            )
-@@ -299 +302,5 @@
+@@ -299 +318,5 @@
 -        let entry = self.database.entries.get(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found");
-@@ -385,0 +393,15 @@
+@@ -385,0 +409,15 @@
 +        let retained_attachments: Vec<_> = historical
 +            .attachments
 +            .values()
@@ -36,7 +408,7 @@
 +                .or_default() += 1;
 +        }
 +
-@@ -390 +412,7 @@
+@@ -390 +428,7 @@
 -        }
 +            retained_attachments,
 +        }
@@ -45,7 +417,7 @@
 +    /// Refresh attachment ownership after directly rebuilding this entry's history.
 +    pub fn reindex_attachment_history(&mut self) {
 +        self.database.reindex_entry_attachments(self.id);
-@@ -427 +455,7 @@
+@@ -427 +471,7 @@
 -        let attachments: Vec<AttachmentId> = self.attachments.values().copied().collect();
 +        let attachments: Vec<AttachmentId> = self
 +            .attachments
@@ -54,48 +426,48 @@
 +            .collect::<HashSet<_>>()
 +            .into_iter()
 +            .collect();
-@@ -434 +468,5 @@
+@@ -434 +484,5 @@
 -    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
 +    pub fn add_attachment(
 +        &mut self,
 +        name: impl Into<String>,
 +        data: Value<Vec<u8>>,
 +    ) -> AttachmentMut<'_> {
-@@ -437 +475,2 @@
+@@ -437 +491,2 @@
 -        let entries: HashSet<(EntryId, Option<usize>)> = vec![(self.id, None)].into_iter().collect();
 +        let entries: HashSet<(EntryId, Option<usize>)> =
 +            vec![(self.id, self.history_index)].into_iter().collect();
-@@ -455,0 +495 @@
+@@ -455,0 +511 @@
 +        let history_index = self.history_index;
-@@ -458,0 +499,4 @@
+@@ -458,0 +515,4 @@
 +            let pinned = self
 +                .database
 +                .pending_history_attachments
 +                .contains_key(&attachment_id);
-@@ -460 +504,3 @@
+@@ -460 +520,3 @@
 -                attachment.entries.retain(|&(entry_id, _)| entry_id != id);
 +                attachment
 +                    .entries
 +                    .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
-@@ -463 +509 @@
+@@ -463 +525 @@
 -                if attachment.entries.is_empty() {
 +                if attachment.entries.is_empty() && !pinned {
-@@ -474,0 +521 @@
+@@ -474,0 +537 @@
 +        let history_index = self.history_index;
-@@ -487,0 +535,4 @@
+@@ -487,0 +551,4 @@
 +        let pinned = self
 +            .database
 +            .pending_history_attachments
 +            .contains_key(&attachment_id);
-@@ -489 +540,3 @@
+@@ -489 +556,3 @@
 -            attachment.entries.retain(|&(entry_id, _)| entry_id != id);
 +            attachment
 +                .entries
 +                .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
-@@ -492 +545 @@
+@@ -492 +561 @@
 -            if attachment.entries.is_empty() {
 +            if attachment.entries.is_empty() && !pinned {
-@@ -506,3 +559,5 @@
+@@ -506,3 +575,5 @@
 -                custom_icon.entries.retain(|&(entry_id, entry_history_index)| {
 -                    !(entry_id == id && entry_history_index == history_index)
 -                });
@@ -104,13 +476,13 @@
 +                    .retain(|&(entry_id, entry_history_index)| {
 +                        !(entry_id == id && entry_history_index == history_index)
 +                    });
-@@ -522 +577,4 @@
+@@ -522 +593,4 @@
 -    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
 +    pub fn set_icon_custom(
 +        &mut self,
 +        custom_icon_id: CustomIconId,
 +    ) -> Result<(), CustomIconNotFoundError> {
-@@ -626 +684,7 @@
+@@ -626 +700,7 @@
 -            if attachment.entries.is_empty() {
 +            let attachment_id = attachment.id();
 +            let leased = attachment
@@ -119,55 +491,55 @@
 +                .pending_history_attachments
 +                .contains_key(&attachment_id);
 +            if attachment.entries.is_empty() && !leased {
-@@ -631 +695,5 @@
+@@ -631 +711,5 @@
 -        let entry = self.database.entries.remove(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .remove(&self.id)
 +            .expect("Entry not found");
-@@ -664 +732,5 @@
+@@ -664 +748,5 @@
 -        let entry = self.database.entries.get(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found");
-@@ -680 +752,5 @@
+@@ -680 +768,5 @@
 -        let entry = self.database.entries.get_mut(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get_mut(&self.id)
 +            .expect("Entry not found");
-@@ -698,0 +775 @@
+@@ -698,0 +791 @@
 +    retained_attachments: Vec<AttachmentId>,
-@@ -758 +835,5 @@
+@@ -758 +851,5 @@
 -    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
 +    pub fn add_attachment(
 +        &mut self,
 +        name: impl Into<String>,
 +        data: Value<Vec<u8>>,
 +    ) -> AttachmentMut<'_> {
-@@ -781 +862,4 @@
+@@ -781 +878,4 @@
 -    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
 +    pub fn set_icon_custom(
 +        &mut self,
 +        custom_icon_id: CustomIconId,
 +    ) -> Result<(), CustomIconNotFoundError> {
-@@ -820 +904,4 @@
+@@ -820 +920,4 @@
 -        self.database.entries.get(&self.id).expect("Entry not found")
 +        self.database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found")
-@@ -827 +914,4 @@
+@@ -827 +930,4 @@
 -        self.database.entries.get_mut(&self.id).expect("Entry not found")
 +        self.database
 +            .entries
 +            .get_mut(&self.id)
 +            .expect("Entry not found")
-@@ -839,0 +930,15 @@
+@@ -839,0 +946,15 @@
 +        for attachment_id in &self.retained_attachments {
 +            if let Some(count) = self
 +                .database
@@ -183,7 +555,7 @@
 +            }
 +        }
 +        self.database.reindex_entry_attachments(self.id);
-@@ -875 +980,7 @@
+@@ -875 +996,7 @@
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -192,25 +564,25 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -879 +990,4 @@
+@@ -879 +1006,4 @@
 -        assert_eq!(db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(), "Entry 1");
 +        assert_eq!(
 +            db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(),
 +            "Entry 1"
 +        );
-@@ -885 +999,4 @@
+@@ -885 +1015,4 @@
 -                crate::db::Value::unprotected(format!("modified_{}", e.get(fields::USERNAME).unwrap())),
 +                crate::db::Value::unprotected(format!(
 +                    "modified_{}",
 +                    e.get(fields::USERNAME).unwrap()
 +                )),
-@@ -888 +1005,4 @@
+@@ -888 +1021,4 @@
 -            e.add_attachment("Attachment 1", Value::protected(b"Attachment data".to_vec()));
 +            e.add_attachment(
 +                "Attachment 1",
 +                Value::protected(b"Attachment data".to_vec()),
 +            );
-@@ -894 +1014,7 @@
+@@ -894 +1030,7 @@
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -219,7 +591,7 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -927 +1053,87 @@
+@@ -927 +1069,87 @@
 -}
 +
 +    #[test]
