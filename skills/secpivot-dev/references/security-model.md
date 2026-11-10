@@ -1,5 +1,14 @@
 # Security Model
 
+Argon2d/Argon2id derivation checks that the KDBX u64 iteration count and memory
+in KiB fit the library's u32 parameters before computing. Oversized values return
+TimeTooLarge/MemoryTooMuch through existing cryptographic errors; they must never
+wrap to smaller costs. Local/remote open reject them before session adoption or
+mirror creation, and failed save does not publish a replacement. Synthetic
+registry-produced fixtures exercise these paths without expensive derivation.
+This representability check does not impose a practical resource budget on all
+valid KDF values or prove cross-client/runtime interoperability.
+
 SecPivot stores credentials in standard KDBX 4.0 files. This reference documents the security invariants the frontend and backend must preserve.
 
 Both CSV writers prepend the existing spreadsheet formula guard before quoting

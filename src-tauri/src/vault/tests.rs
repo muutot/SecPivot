@@ -6,6 +6,102 @@ use keepass::config::OuterCipherConfig;
 use keepass::db::Icon;
 use keepass::DatabaseKey;
 
+fn kdf_overflow_fixtures() -> [&'static [u8]; 2] {
+    [
+        include_bytes!("../../../tests/fixtures/kdf-overflow-iterations.kdbx"),
+        include_bytes!("../../../tests/fixtures/kdf-overflow-memory.kdbx"),
+    ]
+}
+
+#[test]
+fn kdf_overflow_local_open_refuses_unrepresentable_parameters_without_replacing_session() {
+    for bytes in kdf_overflow_fixtures() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let before = session.require_db().unwrap().clone();
+        let state = session.state().unwrap().unwrap();
+        let path = dir.path().join("overflow.kdbx");
+        std::fs::write(&path, bytes).unwrap();
+        assert!(
+            session.open(&path, "synthetic-only", None).is_err(),
+            "unrepresentable KDF parameters were accepted by local open"
+        );
+        assert_eq!(session.require_db().unwrap(), &before);
+        let after = session.state().unwrap().unwrap();
+        assert_eq!(
+            (after.path, after.dirty, after.revision),
+            (state.path, state.dirty, state.revision)
+        );
+    }
+}
+
+#[test]
+fn kdf_overflow_remote_open_refuses_parameters_before_mirror_or_session_replacement() {
+    for bytes in kdf_overflow_fixtures() {
+        let dir = TempDir::new().unwrap();
+        let (mut session, _) = create_session(&dir);
+        let before = session.require_db().unwrap().clone();
+        let state = session.state().unwrap().unwrap();
+        let storage = crate::remote::MemoryStorage::default();
+        storage.put("overflow.kdbx", bytes).unwrap();
+        let mirror = dir.path().join("mirror");
+        assert!(
+            session
+                .open_remote(
+                    Arc::new(storage.clone()),
+                    "overflow.kdbx",
+                    "synthetic-only",
+                    None,
+                    RemoteMode::SaveLocal,
+                    &mirror,
+                    3,
+                    DEFAULT_BACKUP_TEMPLATE
+                )
+                .is_err(),
+            "unrepresentable KDF parameters were accepted by remote open"
+        );
+        assert_eq!(session.require_db().unwrap(), &before);
+        let after = session.state().unwrap().unwrap();
+        assert_eq!(
+            (after.path, after.dirty, after.revision),
+            (state.path, state.dirty, state.revision)
+        );
+        assert!(!mirror.exists());
+        assert_eq!(storage.get("overflow.kdbx").unwrap(), bytes);
+    }
+}
+
+#[test]
+fn kdf_overflow_save_refuses_parameters_without_publishing_a_reduced_cost_file() {
+    for memory_overflow in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let (mut session, path) = create_session(&dir);
+        let saved = std::fs::read(&path).unwrap();
+        session.require_db_mut().unwrap().config.kdf_config =
+            keepass::config::KdfConfig::Argon2id {
+                iterations: if memory_overflow { 1 } else { (1u64 << 32) + 1 },
+                memory: if memory_overflow {
+                    ((1u64 << 32) + 64) * 1024
+                } else {
+                    64 * 1024
+                },
+                parallelism: 1,
+                version: argon2::Version::Version13,
+            };
+        assert!(
+            session.save().is_err(),
+            "unrepresentable KDF cost was silently reduced and published"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        let mut reopened = VaultSession::default();
+        reopened.open(&path, "master-password", None).unwrap();
+        assert!(matches!(
+            reopened.require_db().unwrap().config.kdf_config,
+            keepass::config::KdfConfig::Aes { .. }
+        ));
+    }
+}
+
 fn compute_totp_at(seed: &str, unix_time: u64) -> Result<TotpCode, String> {
     let spec = otp::parse_totp_seed(seed)?;
     let code = otp::compute(&spec, unix_time)?;

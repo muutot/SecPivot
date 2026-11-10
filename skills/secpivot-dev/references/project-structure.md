@@ -59,13 +59,13 @@ collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
 fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
-`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus four
-reviewed attachment/history/location/deletion/serialization patches. Cargo's local patch keeps
+`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus five
+reviewed attachment/history/location/deletion/serialization/KDF patches. Cargo's local patch keeps
 the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
-Cargo wiring and the four patched files' formatting as part of `npm run verify`.
+Cargo wiring and the five patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and seventeen
+in the audit scope. Native vault tests cover the application boundary and nineteen
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after
@@ -96,7 +96,13 @@ removes only empty candidates in child-first order after entry/group moves;
 retained ancestors lose obsolete markers, Deleted events reflect actual removal.
 Native tests cover deep entry/group edits and moved-out descendants; dependency
 tests cover independent ancestor/child markers, unmarked descendants and existing
-equal/missing timestamp policy. The four-file provenance gate applies.
+equal/missing timestamp policy. The five-file provenance gate applies.
+
+Patched crypt/kdf.rs validates the Argon2 u64 iteration count and byte-to-KiB
+memory value with checked u32 conversions before derivation. Unrepresentable
+parameters return the existing Argon2 errors instead of wrapping to low costs.
+Shared library read/write paths all use this transform; native fixtures cover
+local/remote open and failed-save publication. Standard KDF defaults are unchanged.
 
 First-party vault/merge.rs::merge_absent_deletion_info runs after restore_bin.
 It unions both original DeletedObjects maps plus existing merged markers for

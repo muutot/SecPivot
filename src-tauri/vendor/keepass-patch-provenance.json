@@ -81,7 +81,8 @@
     },
     {
       "path": "src/crypt/kdf.rs",
-      "upstream_sha256": "8c6f8b6b6f29f1e9a19671cc98f1d235657946fd0fb354b2dca648f07168defe"
+      "upstream_sha256": "8c6f8b6b6f29f1e9a19671cc98f1d235657946fd0fb354b2dca648f07168defe",
+      "patched_sha256": "53385972025ef2235ed2796479f5e18bd09ddf8f37d36bdd73e8c24784e5db66"
     },
     {
       "path": "src/crypt/mod.rs",

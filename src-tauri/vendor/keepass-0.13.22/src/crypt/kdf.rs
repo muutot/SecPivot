@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use aes::Aes256;
 use cipher::{BlockCipherEncrypt, KeyInit};
@@ -65,6 +65,9 @@ impl Kdf for Argon2Kdf {
         &self,
         composite_key: &GenericArray<u8, U32>,
     ) -> Result<GenericArray<u8, U32>, CryptographyError> {
+        let mem_cost =
+            u32::try_from(self.memory / 1024).map_err(|_| argon2::Error::MemoryTooMuch)?;
+        let time_cost = u32::try_from(self.iterations).map_err(|_| argon2::Error::TimeTooLarge)?;
         // Disable Argon2 multithreading on wasm32 targets to avoid panics on platforms without thread support.
         let thread_mode = if cfg!(target_arch = "wasm32") {
             argon2::ThreadMode::Sequential
@@ -77,9 +80,9 @@ impl Kdf for Argon2Kdf {
             ad: &[],
             hash_length: 32,
             lanes: self.parallelism,
-            mem_cost: (self.memory / 1024) as u32,
+            mem_cost,
             secret: &[],
-            time_cost: self.iterations as u32,
+            time_cost,
             variant: self.variant,
             version: self.version,
         };
@@ -98,6 +101,48 @@ mod tests {
     use hybrid_array::{typenum::U32, Array as GenericArray};
 
     use super::{Argon2Kdf, Kdf};
+
+    #[test]
+    fn secpivot_argon2_rejects_overflowing_iterations_before_derivation() {
+        for variant in [Variant::Argon2d, Variant::Argon2id] {
+            let kdf = Argon2Kdf {
+                memory: 64 * 1024,
+                salt: vec![9_u8; 32],
+                iterations: (1u64 << 32) + 1,
+                parallelism: 1,
+                version: Version::Version13,
+                variant,
+            };
+            let result = kdf.transform_key(&GenericArray::<u8, U32>::from([7_u8; 32]));
+            assert!(matches!(
+                result,
+                Err(super::CryptographyError::Argon2(
+                    argon2::Error::TimeTooLarge
+                ))
+            ));
+        }
+    }
+
+    #[test]
+    fn secpivot_argon2_rejects_overflowing_memory_before_derivation() {
+        for variant in [Variant::Argon2d, Variant::Argon2id] {
+            let kdf = Argon2Kdf {
+                memory: ((1u64 << 32) + 64) * 1024,
+                salt: vec![9_u8; 32],
+                iterations: 1,
+                parallelism: 1,
+                version: Version::Version13,
+                variant,
+            };
+            let result = kdf.transform_key(&GenericArray::<u8, U32>::from([7_u8; 32]));
+            assert!(matches!(
+                result,
+                Err(super::CryptographyError::Argon2(
+                    argon2::Error::MemoryTooMuch
+                ))
+            ));
+        }
+    }
 
     #[test]
     fn argon2_memory_is_interpreted_as_bytes() {

@@ -9,6 +9,11 @@ the previously locked registry checksum. The original source is available at
 
 Only these upstream files are changed:
 
+- `src/crypt/kdf.rs`: reject unrepresentable Argon2 iteration and KiB memory
+  values with checked u32 conversions before derivation. Existing Argon2 errors
+  carry the failure instead of silently reducing the cost by integer truncation.
+  Direct tests cover Argon2d and Argon2id; normal parameters retain their values.
+
 - `src/db/types/entry.rs`: lease attachments until tracked snapshots are appended,
   remove only the addressed current/history reverse reference, and reindex after
   snapshot insertion. Entry removal honors prepared merge leases and visits each
@@ -49,10 +54,10 @@ Only these upstream files are changed:
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication.
 
-The other 56 upstream files are byte-for-byte unchanged. The provenance JSON
-records each original hash and the four reviewed patched hashes. Run
+The other 55 upstream files are byte-for-byte unchanged. The provenance JSON
+records each original hash and the five reviewed patched hashes. Run
 `npm run verify:keepass-patch` after any patch edit; it verifies source hashes,
-Cargo wiring and formatting of the patched Rust files. Update the four patched
+Cargo wiring and formatting of the patched Rust files. Update the five patched
 hashes only after reviewing the changes against the original archive. The
 ordinary `npm run verify` includes this gate.
 
@@ -65,7 +70,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The seventeen dependency-specific tests can be run separately:
+The nineteen dependency-specific tests can be run separately:
 
 ```powershell
 cargo test -j 1 --manifest-path src-tauri/vendor/keepass-0.13.22/Cargo.toml --target-dir src-tauri/target --locked --features _merge,save_kdbx4 --lib secpivot_
