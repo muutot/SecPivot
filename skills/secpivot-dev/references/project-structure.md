@@ -1,5 +1,11 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_custom_time_tests.rs` is a test-only child of `vault/exchange.rs`.
+It exercises native CustomData value/time preservation through in-memory framing
+and source/target KDBX reopen, fresh pasted UUIDs, missing legacy timestamps and
+out-of-range rejection. The internal XML/resolved models carry optional item
+timestamps; native commands, renderer DTOs and component ownership are unchanged.
+
 `templates/form/RadioGroup.svelte` owns compact string-valued radio choices,
 selection state, roving Tab and arrow/Home/End focus. DatabaseSettingsDialog
 composes it for KDF/cipher/compression while retaining its save/view ownership.

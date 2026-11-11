@@ -1,5 +1,13 @@
 # Data Contracts
 
+Entry-exchange `XmlCustomDataItem.LastModificationTime` is optional Unix seconds
+in the existing internal dialect. The writer carries each native metadata item's
+whole-second timestamp; preparation resolves it to `NaiveDateTime` and rejects
+out-of-range integers before returning entries. Insertion retains that time while
+the pasted entry itself still gets a fresh UUID and creation metadata. Missing
+timestamps remain None. This does not add an IPC field or official PlainXml
+Base64/ISO timestamp interoperability, and subsecond fidelity is not established.
+
 DatabaseSettingsDialog replaces its three local choice-button blocks with the
 typed `RadioGroup` template. KDF/compression still bind their original values;
 cipher maps the renderer-only keep choice back to null before the unchanged

@@ -244,6 +244,10 @@ pub struct XmlCustomDataItem {
         skip_serializing_if = "Option::is_none"
     )]
     pub value_type: Option<String>,
+    /// Internal exchange uses Unix seconds, like XmlTimes; this is not the
+    /// Base64/ISO timestamp representation of official KDBX PlainXml.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_modification_time: Option<i64>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -474,6 +478,7 @@ fn xml_custom_data(entry: &keepass::db::EntryRef<'_>) -> Option<XmlCustomData> {
                     Some(CustomDataValue::Binary(_)) => Some("Binary".to_owned()),
                     None => Some("None".to_owned()),
                 },
+                last_modification_time: entry.custom_data[key].last_modification_time.map(to_unix),
             })
             .collect(),
     })
@@ -647,6 +652,7 @@ pub struct PastedEntry {
 pub struct PastedCustomDataItem {
     pub key: String,
     pub value: Option<CustomDataValue>,
+    pub last_modification_time: Option<chrono::NaiveDateTime>,
 }
 
 /// Parse a KDBX XML document into entries ready for insertion under fresh
@@ -895,6 +901,14 @@ fn parse_custom_data(
         values.push(PastedCustomDataItem {
             key: item.key.clone(),
             value,
+            last_modification_time: item
+                .last_modification_time
+                .map(|seconds| {
+                    chrono::DateTime::from_timestamp(seconds, 0)
+                        .map(|time| time.naive_utc())
+                        .ok_or_else(|| "自定义数据时间无效".to_owned())
+                })
+                .transpose()?,
         });
     }
     Ok(values)
@@ -953,7 +967,7 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
             item.key.clone(),
             CustomDataItem {
                 value: item.value.clone(),
-                last_modification_time: None,
+                last_modification_time: item.last_modification_time,
             },
         );
     }
@@ -1039,6 +1053,10 @@ mod custom_identity_tests;
 #[cfg(test)]
 #[path = "exchange_custom_value_tests.rs"]
 mod custom_value_tests;
+
+#[cfg(test)]
+#[path = "exchange_custom_time_tests.rs"]
+mod custom_time_tests;
 
 #[cfg(test)]
 #[path = "exchange_icon_identity_tests.rs"]

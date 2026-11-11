@@ -1,5 +1,13 @@
 # Security Model
 
+Internal entry-exchange preserves each CustomData item's optional native
+last-modification timestamp. Date-range validation occurs in preparation before
+target insertion; out-of-range seconds produce a fixed error without metadata
+contents. Values, protection, the shared binary-copy budget and clipboard
+ownership are unchanged. Tests use synthetic framing and temporary AES KDBX
+files with the live clipboard opt-in unset. This is metadata fidelity rather
+than proof of foreign timestamp formats, provider behavior or subsecond support.
+
 Native editor writes retain the current entry's stored AutoType obfuscation
 option when updating visible settings. Both standalone and unified saves use
 the same preservation builder; new configurations keep the prior None default.

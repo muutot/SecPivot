@@ -8,6 +8,7 @@ fn item(key: &str, value: Option<&str>) -> XmlCustomDataItem {
         key: key.to_owned(),
         value: value.map(str::to_owned),
         value_type: None,
+        last_modification_time: None,
     }
 }
 

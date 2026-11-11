@@ -297,3 +297,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 数据库设置单选交互
 
 - [x] 存储选项单选语义与紧凑窄屏（SP-S103）：三组使用RadioGroup模板，radio／checked与单一Tab入口、方向键循环／Home／End同步焦点，原生Space／Enter与ModalShell Tab／Escape归属保持；复用主题token和30px控件，360px以下6px内边距使320px的保留Twofish不再拆行。5项生产handler回归、12个浏览器主题／语言／尺寸／原cipher组合及更改／保留的合成patch，完整452前端／821 Rust／ACL2／KeePass25／QuickXML1363通过。只验证生产renderer与合成服务，不标真正KDBX存储、辅助技术应用／WebView／Android provider完成。
+
+## 审计补充 — 自定义数据时间保真
+
+- [x] 内部条目交换保留自定义数据的最后修改时间（SP-S104）：XML可选Unix秒→原生准备日期→插入保留，缺省None/新条目UUID保持；4项原样红测转绿、exchange62项及完整452前端/825 Rust/ACL2/KeePass25/QuickXML1363通过。合成内存与来源/目标AES KDBX重开对照，不代表正式PlainXml容器、子秒、原生类型推断、共享剪贴板或手机provider已验证。
