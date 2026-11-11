@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_string_identity_tests.rs` is a test-only child of `exchange.rs` for
+ordinary per-entry field identity. Three regressions cover 18 duplicate-key
+refusals, distinct decoded names/two-entry scope and legal repeated binary
+references through native KDBX reopen. `parse_entry` holds borrowed exact keys
+in a per-entry set after handling binary references, refusing a partial parsed
+list without normalizing names. No IPC, dependency or vendor patch changes;
+other metadata identity and foreign-container semantics remain audit areas.
+
 `exchange_gzip_member_tests.rs` is a test-only child of `exchange.rs`. Its five
 regressions cover five legal member partitions, seven suffix refusals, cumulative
 small-budget overflow, later trailers at the exact total limit and synthetic

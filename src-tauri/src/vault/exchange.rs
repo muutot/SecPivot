@@ -750,6 +750,7 @@ fn parse_entry(
 ) -> Result<PastedEntry, String> {
     let mut fields: Vec<(String, String, bool)> = Vec::new();
     let mut attachments: Vec<(String, Vec<u8>, bool)> = Vec::new();
+    let mut field_keys = std::collections::HashSet::new();
 
     for field in &entry.string_fields {
         let protected = field.value.protected == "True";
@@ -759,6 +760,11 @@ fn parse_entry(
             let data = clone_binary_with_budget(data, remaining_binary_bytes)?;
             attachments.push((field.value.value.clone(), data, protected));
             continue;
+        }
+        // Ordinary fields map to one value per exact key. Binary references
+        // above have their own identity and may legitimately repeat.
+        if !field_keys.insert(field.key.as_str()) {
+            return Err("条目字段重复".to_owned());
         }
         fields.push((field.key.clone(), field.value.value.clone(), protected));
     }
@@ -926,6 +932,10 @@ mod document_tests;
 #[cfg(test)]
 #[path = "exchange_gzip_member_tests.rs"]
 mod gzip_member_tests;
+
+#[cfg(test)]
+#[path = "exchange_string_identity_tests.rs"]
+mod string_identity_tests;
 
 #[cfg(test)]
 mod tests {

@@ -279,3 +279,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 内部交换XML文档边界（SP-S95）：解析前要求单个完整KeePassFile根并消费至EOF，13类尾部／四种根控制拒绝且固定错误；六种合法misc及字段CRLF／空值、空及3-byte附件／保护／fresh UUID保存重开通过。四回归／exchange36项及完整门禁447前端／795 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成文档1702 bytes，不代表完整XML schema／encoding、gzip成员／正式容器、OS剪贴板或真机provider。
 
 - [x] 内部交换gzip完整成员消费（SP-S96）：所有连续成员共用输出预算，成功到达底层EOF，后续损坏／尾部垃圾不返回prefix；五种合法分段分别解析／保存重开保留字段／附件／保护，七种拒绝、四个小累计超限、合法总限额／usize::MAX及后续footer回归通过。五项新增／exchange41项及完整门禁447前端／800 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成输出4097 bytes，不代表生产64 MiB／OOM／总堆CPU／完整header／container／OS剪贴板或真机provider。
+
+- [x] 内部交换普通字段身份唯一（SP-S97）：每条目按解码后精确名称拒绝重复普通字段，固定错误且整份不发布；18种保护／同值／字符引用／逆序拒绝，大小写／空白／Unicode组合／字面实体／跨条目及重复BinDes合法对照经实际framing与AES KDBX保存重开保留值／保护／附件。三项新增／exchange44项及完整门禁447前端／803 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成文档2788 bytes，不代表完整schema／其他metadata身份／OS剪贴板／竞品客户端或真机provider。

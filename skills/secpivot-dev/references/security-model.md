@@ -1,5 +1,13 @@
 # Security Model
 
+Entry-exchange preparation rejects duplicate ordinary field identities before
+returning any parsed list for target insertion. Exact decoded per-entry keys
+are checked without logging names or values; an ambiguous later field cannot
+replace the earlier value or protection marker. The check follows independent
+binary-reference handling and preserves valid repeated/shared references and
+distinct names. Synthetic native saved/reopened controls establish this local
+boundary; they do not imply actual OS clipboard or foreign-client proof.
+
 Entry-exchange gzip EOF means the end of the underlying input, not merely the
 first member. `MultiGzDecoder` counts all continuous member output against the
 same admission bound and validates later trailers before returning successful

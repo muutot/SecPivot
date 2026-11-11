@@ -1,5 +1,16 @@
 # Data Contracts
 
+Entry-exchange ordinary field names must be unique within each parsed entry.
+`parse_entry` checks exact decoded keys before adding ordinary values and refuses
+the entire document with a fixed error on duplicates; it does not choose a later
+value/protection flag. Per-entry scope keeps the same field in separate entries
+valid. No trimming, case folding, Unicode normalization or repeated unescaping
+is added. Legacy binary references resolve first in their own namespace, so
+legal repeated/shared attachment references remain supported. Three
+`exchange_string_identity_tests.rs` regressions cover 18 refusals plus distinct
+name and repeated-binary native KDBX reopen controls; full foreign schema/client
+interoperability and other metadata identities remain separate work.
+
 Entry-exchange gzip decoding uses `MultiGzDecoder` through the shared limited
 reader: every continuous member contributes to one output budget, and bounded
 successful output reaches underlying EOF, checking later trailers and rejecting
