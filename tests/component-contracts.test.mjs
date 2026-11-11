@@ -242,8 +242,8 @@ test("database settings reject detached load and save completions", async () => 
   assert.match(dialog, /closeOnEscape=\{!saving\}/);
   assert.match(dialog, /let cipher = \$state<WritableDatabaseCipher \| null>\(null\)/);
   assert.match(dialog, /value\.cipher === "Twofish" \? null : value\.cipher/);
-  assert.match(dialog, /class:active=\{cipher === null\}/);
-  assert.match(dialog, /onclick=\{\(\) => \(cipher = null\)\}/);
+  assert.match(dialog, /value=\{cipher \?\? "keep"\}/);
+  assert.match(dialog, /cipher = value === "keep" \? null : value/);
   assert.match(dialog, /\["Aes256", "ChaCha20"\] as const/);
   assert.match(
     dialog,

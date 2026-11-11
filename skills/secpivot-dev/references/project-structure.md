@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`templates/form/RadioGroup.svelte` owns compact string-valued radio choices,
+selection state, roving Tab and arrow/Home/End focus. DatabaseSettingsDialog
+composes it for KDF/cipher/compression while retaining its save/view ownership.
+`tests/radio-group.test.mjs` runs the real select/navigation handlers with
+deterministic focus peers; browser fixtures separately verify native keys,
+accessibility state, layouts and synthetic save patches. No IPC/backend is added.
+
 `entry_autotype_retention_tests.rs` is a test-only child of `vault/mod.rs`.
 Four regressions exercise both native entry-save APIs from reopened None and
 UseClipboard sources, same/changed visible settings, current/history/time,

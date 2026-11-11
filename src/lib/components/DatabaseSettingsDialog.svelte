@@ -11,6 +11,7 @@
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import RadioGroup from "$lib/components/templates/form/RadioGroup.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
@@ -142,18 +143,14 @@
     {:else if settings}
       <div class="setting-block">
         <span class="setting-label">{t(lang, "database.kdf")}</span>
-        <div class="choice-row" role="radiogroup" aria-label={t(lang, "dbsettings.kdfAria")}>
-          {#each ["Aes", "Argon2", "Argon2id"] as const as value (value)}
-            <button
-              type="button"
-              class="choice-option"
-              class:active={kdf === value}
-              onclick={() => (kdf = value)}
-            >
-              {value}
-            </button>
-          {/each}
-        </div>
+        <RadioGroup
+          ariaLabel={t(lang, "dbsettings.kdfAria")}
+          options={(["Aes", "Argon2", "Argon2id"] as const).map((value) => ({
+            value,
+            label: value,
+          }))}
+          bind:value={kdf}
+        />
       </div>
       <div class="setting-block">
         <span class="setting-label">{t(lang, "database.cipher")}</span>
@@ -162,47 +159,25 @@
             {t(lang, "dbsettings.twofishNote")}
           </span>
         {/if}
-        <div class="choice-row" role="radiogroup" aria-label={t(lang, "dbsettings.cipherAria")}>
-          {#if settings.cipher === "Twofish"}
-            <button
-              type="button"
-              class="choice-option"
-              class:active={cipher === null}
-              onclick={() => (cipher = null)}
-            >
-              {t(lang, "dbsettings.keepTwofish")}
-            </button>
-          {/if}
-          {#each ["Aes256", "ChaCha20"] as const as value (value)}
-            <button
-              type="button"
-              class="choice-option"
-              class:active={cipher === value}
-              onclick={() => (cipher = value)}
-            >
-              {value}
-            </button>
-          {/each}
-        </div>
+        <RadioGroup
+          ariaLabel={t(lang, "dbsettings.cipherAria")}
+          options={[
+            ...(settings.cipher === "Twofish"
+              ? [{ value: "keep" as const, label: t(lang, "dbsettings.keepTwofish") }]
+              : []),
+            ...(["Aes256", "ChaCha20"] as const).map((value) => ({ value, label: value })),
+          ]}
+          value={cipher ?? "keep"}
+          onchange={(value) => (cipher = value === "keep" ? null : value)}
+        />
       </div>
       <div class="setting-block">
         <span class="setting-label">{t(lang, "database.compression")}</span>
-        <div
-          class="choice-row"
-          role="radiogroup"
-          aria-label={t(lang, "dbsettings.compressionAria")}
-        >
-          {#each ["None", "Gzip"] as const as value (value)}
-            <button
-              type="button"
-              class="choice-option"
-              class:active={compression === value}
-              onclick={() => (compression = value)}
-            >
-              {value}
-            </button>
-          {/each}
-        </div>
+        <RadioGroup
+          ariaLabel={t(lang, "dbsettings.compressionAria")}
+          options={(["None", "Gzip"] as const).map((value) => ({ value, label: value }))}
+          bind:value={compression}
+        />
       </div>
       <div class="setting-block">
         <span class="setting-label">{t(lang, "dbsettings.historyMax")}</span>
@@ -267,34 +242,6 @@
 
   .setting-row .setting-label {
     margin-bottom: 0;
-  }
-
-  .choice-row {
-    display: flex;
-    gap: 6px;
-  }
-
-  .choice-option {
-    flex: 1;
-    height: 30px;
-    padding: 0 8px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-muted);
-    background: var(--input-bg);
-    font-size: var(--font-size-secondary, 11px);
-    cursor: pointer;
-  }
-
-  .choice-option:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .choice-option.active {
-    color: var(--selection-color);
-    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
-    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 
   .dialog-hint {

@@ -1,5 +1,13 @@
 # Project-wide UI Style and Theming
 
+DatabaseSettingsDialog composes `templates/form/RadioGroup.svelte` for its three
+storage-choice groups. The template owns the existing 30px choice chrome, 6px gap,
+selection tint and theme variables. Labels stay on one line; complete choices may
+wrap, and below 360px horizontal padding is 6px so default 320px labels fit.
+Each group has one Tab stop; arrows/Home/End select and focus, while native
+Enter/Space and outer Tab/Escape retain ownership. Global focus-visible remains.
+No new color token, modal surface or scrollbar rule is introduced.
+
 History's explicit View rules action stays in the existing wrapped Metadata
 summary. Loaded content spans that row's width; rule rows reuse read-value borders,
 compact Button/inline Feedback and existing muted/secondary text metrics. Full URL

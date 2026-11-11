@@ -1,5 +1,11 @@
 # Data Contracts
 
+DatabaseSettingsDialog replaces its three local choice-button blocks with the
+typed `RadioGroup` template. KDF/compression still bind their original values;
+cipher maps the renderer-only keep choice back to null before the unchanged
+save patch builder. Keep Twofish therefore never becomes a writable algorithm
+or an IPC value. Existing dirty/load/save/session guards are unchanged.
+
 Entry editor AutoType updates replace only the exposed enabled/sequence/association
 settings. `build_entry_autotype(input, previous)` retains the same entry's native
 DataTransferObfuscation; standalone updates and the unified save candidate both

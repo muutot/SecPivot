@@ -293,3 +293,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 编辑器隐藏自动输入选项
 
 - [x] 编辑保留原生混淆标记（SP-S102）：共享builder在独立update_entry_autotype及统一save_entry中携带同一条目的现有DataTransferObfuscation；无配置／创建仍默认None，DTO明确只替换可见设置。四项原生回归由2pass／2fail原样转绿，来源先保存重开，同值／改值×None／UseClipboard的当前／历史／时间及目标保存重开、omission／null／默认和失败回滚对照通过；完整447前端／821 Rust／ACL2／KeePass25／QuickXML1363通过。只确认存储选项，不等于运行混淆效果、正式客户端／任意序列或手机provider完成。
+
+## 审计补充 — 数据库设置单选交互
+
+- [x] 存储选项单选语义与紧凑窄屏（SP-S103）：三组使用RadioGroup模板，radio／checked与单一Tab入口、方向键循环／Home／End同步焦点，原生Space／Enter与ModalShell Tab／Escape归属保持；复用主题token和30px控件，360px以下6px内边距使320px的保留Twofish不再拆行。5项生产handler回归、12个浏览器主题／语言／尺寸／原cipher组合及更改／保留的合成patch，完整452前端／821 Rust／ACL2／KeePass25／QuickXML1363通过。只验证生产renderer与合成服务，不标真正KDBX存储、辅助技术应用／WebView／Android provider完成。

@@ -1,5 +1,11 @@
 # Settings Shell and Panel Patterns
 
+The database settings modal uses `RadioGroup` for KDF, cipher and compression.
+Its compact buttons expose checked radio state and one Tab entry per group;
+arrows/Home/End synchronize selection/focus. Keep Twofish is a renderer-only
+choice mapped to the existing null cipher, so it never requests re-encryption.
+The original session/view guards and save patch logic remain unchanged.
+
 Read this file and `css-theming.md` before changing settings markup or CSS.
 
 ## Navigation and ownership
@@ -125,10 +131,11 @@ A select, segmented control, number input, shortcut binding, or compact action
 group may still use explicit card markup while preserving the same left/right
 hierarchy. Do not force custom right-side controls through the switch template.
 
-Use `.settings-action-button` for compact secondary actions shared across
-panels. Its default height is 26px; add `.settings-action-button--field` only
-when it must align with a 30px settings input. Keep only semantic or local
-layout overrides in the child panel.
+Use `templates/action/Button.svelte` with `variant="action"` for compact
+secondary actions shared across panels (26px), or `variant="field"` when
+aligning with a 30px settings input. The template replaces the retired
+`.settings-action-button` classes and owns the button chrome. Keep local
+layout in the parent rather than targeting the template's scoped classes.
 
 ### Slider card
 
@@ -154,7 +161,7 @@ standard range-card capability is genuinely missing.
 
 ## Feedback and asynchronous state
 
-- Use `.settings-feedback`; add `.success` for success and default to error styling otherwise. Add `.settings-feedback--inline` when the message belongs in the card flow instead of the panel overlay.
+- Use `templates/form/Feedback.svelte` with `message` and optional `success`; default styling is error. Set `inline` when the message belongs in the card flow instead of the panel overlay. The template replaces the retired `.settings-feedback` classes.
 - Clear feedback with a timer whose cleanup is retained when the component can unmount or messages can be replaced.
 - Disable controls or show a saving/loading state during commands that cannot safely overlap.
 - Keep restart-required state explicit for path/config changes that do not apply live.
