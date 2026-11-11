@@ -6,8 +6,8 @@
 use super::{
     AES_KDF_ROUNDS, ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM, FIELD_HMAC_OTP,
     FIELD_KPRPC_CONFIG, FIELD_NOTES, FIELD_OTP, FIELD_PASSWORD, FIELD_STEAM_OTP,
-    FIELD_STEAM_OTP_ALT, FIELD_TIME_OTP, FIELD_URL, FIELD_USERNAME, RESERVED_FIELDS,
-    ROOT_GROUP_UUID,
+    FIELD_STEAM_OTP_ALT, FIELD_TIME_OTP, FIELD_URL, FIELD_USERNAME, FIELD_WEBSITE_RULES,
+    RESERVED_FIELDS, ROOT_GROUP_UUID,
 };
 use crate::crypto::otp;
 use crate::platform::autotype;
@@ -236,6 +236,7 @@ fn host_at_or_below(blocked_url: &str, request_url: &str) -> bool {
 /// for bridge, RPC, and auto-type URL matching. `registrable` selects whether
 /// the Domain tier compares registrable domains (KeePassRPC's PSL behavior)
 /// or strict host/subdomain.
+/// A managed native policy replaces positive legacy rules; legacy blocks still veto.
 pub(crate) fn kprpc_matches_url(
     entry: &keepass::db::EntryRef<'_>,
     request_url: &str,
@@ -253,6 +254,19 @@ pub(crate) fn kprpc_matches_url(
             .any(|r| regex_matches(r, request_url))
     {
         return false;
+    }
+    // Native policies replace all legacy positive rules. Malformed policies and
+    // foreign OverrideURL conflicts fail closed, never falling back to legacy.
+    if let Some(raw) = entry.get(FIELD_WEBSITE_RULES) {
+        if entry
+            .override_url
+            .as_deref()
+            .is_some_and(|u| !u.trim().is_empty())
+        {
+            return false;
+        }
+        return super::ValidatedWebsiteRules::from_json(raw)
+            .is_ok_and(|rules| rules.matches(request_url));
     }
     // A regex match URL wins even if the host tier would miss.
     if cfg.regex_urls.iter().any(|r| regex_matches(r, request_url)) {
@@ -284,7 +298,28 @@ pub(crate) fn entry_primary_url<'a>(entry: &'a keepass::db::EntryRef<'_>) -> &'a
 /// (`OverrideURL` when set, else the `URL` field, space-separated) plus any
 /// KeePassRPC `altURLs`. Entries edited in Kee match their alternative URLs
 /// too; empty entries (no URL, no altURLs) never match.
+/// Native policies expose only non-Never URLs; invalid/conflicting policies expose none.
 pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
+    if let Some(raw) = entry.get(FIELD_WEBSITE_RULES) {
+        if entry
+            .override_url
+            .as_deref()
+            .is_some_and(|u| !u.trim().is_empty())
+        {
+            return Vec::new();
+        }
+        return super::ValidatedWebsiteRules::from_json(raw)
+            .map(|rules| {
+                rules
+                    .config()
+                    .rules
+                    .iter()
+                    .filter(|rule| rule.mode != super::WebsiteMode::Never)
+                    .map(|rule| rule.url.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
     let mut urls: Vec<String> = entry_primary_url(entry)
         .split_whitespace()
         .map(str::to_owned)
@@ -402,6 +437,11 @@ pub(crate) fn walk_match(
         if !searchable {
             break;
         }
+        // A window title cannot establish an HTTP URL/port/path identity.
+        // Native policies therefore never participate in heuristic auto-type.
+        if entry.fields.contains_key(FIELD_WEBSITE_RULES) {
+            continue;
+        }
         let mut score = 0;
         // Blocked lists veto the entry regardless of the window title.
         let cfg = kprpc_config(&entry);
@@ -458,6 +498,9 @@ pub(crate) fn walk_match_candidates(
     for entry in group.entries() {
         if !searchable {
             break;
+        }
+        if entry.fields.contains_key(FIELD_WEBSITE_RULES) {
+            continue;
         }
         let mut score = 0;
         let cfg = kprpc_config(&entry);

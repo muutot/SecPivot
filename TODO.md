@@ -143,7 +143,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ### P2 — KDBX 属性完整度与数据交换
 
-- [~] 逐网址匹配策略：原生 `ValidatedWebsiteRules` API 支持独立 Site／Host／Exact／Never，版本化严格 JSON、数量／字节限额、端口／PSL私有域／Unicode及合成 protected KDBX重开测试；尚未接自动匹配、会话命令、持久化字段管理或紧凑编辑界面。1Password来源规则编码及Bitwarden全部模式映射也未完成，不把基础API标成用户功能交付
+- [~] 逐网址匹配策略：原生 API 与 protected 受管理字段、真实 Bridge／RPC 网址匹配已接线；原生策略替代旧允许规则并保留旧阻止列表，损坏／OverrideURL冲突停止匹配，编辑／历史／KDBX重开／原生XML及内存交换保留策略，RPC拒绝改变生效网址列表及覆盖策略字段。尚未接会话IPC、紧凑编辑／历史策略显示与完整renderer XML迁移验证；1Password来源规则编码及Bitwarden全部模式映射也未完成，不标记完整用户功能交付
 
 - [x] 条目属性·OverrideURL/QualityCheck 可写：`EntryFlags`/`update_entry_flags` 独立写入（字段 absent 保留；OverrideURL 空字符串清除；QualityCheck 显式布尔设置），`VaultEntry.overrideUrl` 暴露并由编辑器保存回调接线；保存重开 round-trip 测试
 - [x] 条目属性·前景色可写：`update_entry_flags` 增加 `foregroundColor`（`#RRGGBB`，空清除/absent 保留），`VaultEntry.foregroundColor` 暴露，编辑对话框前景色选择；round-trip 测试

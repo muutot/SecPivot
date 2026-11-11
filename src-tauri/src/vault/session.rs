@@ -491,7 +491,7 @@ impl VaultSession {
         self.save_failures >= SAVE_FAILURE_READ_ONLY_LIMIT
     }
 
-    fn ensure_writable(&self) -> Result<(), String> {
+    pub(super) fn ensure_writable(&self) -> Result<(), String> {
         if self.is_read_only() {
             return Err(
                 "数据库已进入只读模式：连续保存失败，请使用「另存为」到可写位置后继续".to_owned(),

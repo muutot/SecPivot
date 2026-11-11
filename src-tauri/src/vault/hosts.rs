@@ -11,7 +11,7 @@ use crate::rpc::{
 use crate::util::url_host;
 use crate::vault::{
     entry_match_urls, kprpc_matches_url, parse_entry_id, recycle_bin_id, VaultSession,
-    FIELD_PASSWORD, FIELD_TITLE, FIELD_URL, FIELD_USERNAME, ROOT_GROUP_NAME,
+    FIELD_PASSWORD, FIELD_TITLE, FIELD_URL, FIELD_USERNAME, FIELD_WEBSITE_RULES, ROOT_GROUP_NAME,
 };
 use keepass::db::{EntryId, EntryMut, GroupId, GroupRef, Value};
 use keepass::Database;
@@ -359,6 +359,17 @@ impl VaultSession {
 }
 
 fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<String, RpcError> {
+    let login = match operation {
+        RpcWriteOperation::Add { login, .. } | RpcWriteOperation::Update { login, .. } => login,
+    };
+    if write_custom_fields(login)
+        .iter()
+        .any(|(name, _)| name.trim() == FIELD_WEBSITE_RULES)
+    {
+        return Err(RpcError::InvalidMessage(
+            "逐网址规则不能通过浏览器修改；原规则已保留".into(),
+        ));
+    }
     match operation {
         RpcWriteOperation::Add {
             login,
@@ -397,12 +408,26 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
                 FindEntryOutcome::Found(urls) => urls,
             };
             let merged_urls = merge_urls(&current, &login.urls, *url_merge_mode);
+            let existing = db.entry(id).ok_or(RpcError::EntryNotFound)?;
+            let managed = existing.fields.contains_key(FIELD_WEBSITE_RULES);
+            if managed && merged_urls != current {
+                return Err(RpcError::InvalidMessage(
+                    "此条目使用逐网址规则，未更改网址；可仅更新凭据".into(),
+                ));
+            }
+            // A credential-only RPC update must not replace the display URL
+            // with the policy URL list or erase a malformed/conflicting policy.
+            let stored_urls = if managed {
+                existing.get(FIELD_URL).unwrap_or_default().to_owned()
+            } else {
+                merged_urls.join(" ")
+            };
             // Retention caps must be read before `entry_mut` borrows `db`.
             let (cap, max_history_size) = history_limits(&db.meta);
             let mut entry = db.entry_mut(id).ok_or(RpcError::EntryNotFound)?;
             entry.edit_tracking(|tracked| {
                 let mut this = tracked.as_mut();
-                apply_login_write(&mut this, login, &merged_urls.join(" "));
+                apply_login_write(&mut this, login, &stored_urls);
             });
             // Same retention caps as `set_login`: keep the RPC write path's
             // history bounded.
@@ -685,8 +710,17 @@ fn collect_bridge_logins(
     for entry in group.entries() {
         // Only host identity is case-insensitive. Preserve path/query case
         // for Exact and user regex policies, including form-submit URLs.
-        let matches = kprpc_matches_url(&entry, url, registrable)
-            || submit_url.is_some_and(|s| kprpc_matches_url(&entry, s, registrable));
+        let matches = if entry.fields.contains_key(FIELD_WEBSITE_RULES) {
+            // An allowed submit destination cannot authorize a different page.
+            // When supplied, both page and submit must satisfy the policy.
+            kprpc_matches_url(&entry, url, registrable)
+                && submit_url
+                    .filter(|s| !s.is_empty())
+                    .is_none_or(|s| kprpc_matches_url(&entry, s, registrable))
+        } else {
+            kprpc_matches_url(&entry, url, registrable)
+                || submit_url.is_some_and(|s| kprpc_matches_url(&entry, s, registrable))
+        };
         if matches {
             out.push(BridgeLogin {
                 uuid: entry.id().uuid().to_string(),

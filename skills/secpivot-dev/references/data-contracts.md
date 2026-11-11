@@ -725,9 +725,37 @@ Site uses the pinned PSL without vendor-related-site aliases or a global mode;
 Host uses canonical host plus explicitly written numeric port (omitted and
 explicit default ports stay distinct); Exact retains complete original bytes;
 Never ignores only that rule. Empty/all-Never sets match nothing.
-This API is not wired to legacy routing, session commands, managed KDBX storage
-or UI. The KDBX test uses a synthetic protected custom field and directly invokes
-the reconstructed API; it does not prove automatic matching or client import.
+`VaultSession::get_entry_website_rules(uuid)` returns Option<WebsiteRuleSet>;
+`set_entry_website_rules(uuid, Option<WebsiteRuleSet>)` validates an open/writable
+target, tracks bounded history in a candidate database and publishes one light
+snapshot/revision. Snapshot failure restores data, dirty/revision/time and cache;
+unchanged protected JSON keeps history/revision. None removes the field and
+explicitly restores legacy behavior; an empty set remains an explicit no-match.
+The protected `SecPivot.WebsiteRules` field is reserved: normal full/batch/custom
+edits preserve it, ordinary/current/history wire snapshots hide it. Full history
+restore and native entry exchange retain the field and protection. Native XML
+export writes it explicitly; creation/import validates all supplied policy fields
+before insertion, rejects duplicates or invalid members for the whole batch, and
+stores valid policies protected even if the incoming field was ordinary.
+
+Bridge and RPC URL lookup use native rules as the sole positive policy when the
+field exists, retaining KPRPC blocked URL/regex vetoes. Legacy primary/alt/positive
+regex rules do not widen it. Malformed native policy or nonempty OverrideURL
+conflict yields no URL match/list; setter and flag writes reject this coexistence.
+Native Bridge rules require the page URL and any nonempty submit URL to match;
+an allowed submit alone cannot authorize another page. Legacy submit OR remains.
+RPC DTO URL lists contain only allowed native rules; Never is omitted, not a veto.
+RPC URL mutations that change the effective list reject before persistence;
+credential-only writes preserve the policy and original display URL. RPC custom
+fields cannot create/overwrite the managed field. UUID/text/username queries are
+explicit manual reads and retain their existing behavior. Window-title heuristic
+auto-type skips native-policy entries because titles cannot prove HTTP URL identity;
+manual auto-type remains separate. Entries without the field retain legacy behavior.
+
+Synthetic tests exercise real native Bridge/RPC trait adapters, KDBX persistence,
+history, XML field extraction/import and in-memory entry-exchange documents.
+No Tauri policy command, frontend editor, source-format mapping or real client/
+provider execution is established yet; XML's complete renderer path remains separate.
 
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name

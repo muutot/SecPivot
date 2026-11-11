@@ -1169,6 +1169,9 @@ impl VaultSession {
                     write_string_field(xml, FIELD_OTP, value.get(), value.is_protected());
                 }
             }
+            if let Some(value) = entry.fields.get(FIELD_WEBSITE_RULES) {
+                write_string_field(xml, FIELD_WEBSITE_RULES, value.get(), value.is_protected());
+            }
             let mut names: Vec<&String> = entry
                 .fields
                 .keys()

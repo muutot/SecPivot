@@ -585,6 +585,21 @@ explicit ports, Exact preserves URL bytes and Never only ignores one rule.
 Rule count, URL bytes and encoded JSON have finite ceilings; these are not a
 total-heap or constant-time guarantee. The owned encoded JSON uses Zeroizing,
 but config strings/URL-parser temporary allocations are not claimed erased.
-No credential is an API input/result, no I/O/network runs in the matcher, and
-legacy credential routing is unchanged because this native API is not yet wired.
-Synthetic protected KDBX storage/reopen is not managed-storage or IPC proof.
+No credential is a rule-API input/result and no I/O/network runs in the matcher.
+Native Bridge/RPC URL routing now honors protected `SecPivot.WebsiteRules` as its
+sole positive policy while retaining legacy blocked-list vetoes. Invalid policies
+and nonempty OverrideURL conflicts fail closed without legacy fallback. Setter/
+flag writes reject coexistence; explicit policy removal restores legacy behavior.
+Bridge requires the current page and any nonempty submit URL to satisfy native
+rules independently; an allowed submit cannot authorize a different page.
+Window-title heuristic auto-type skips these entries, since a title cannot prove
+an HTTP destination; explicit manual UUID/text/username reads remain available.
+RPC rejects effective URL-list changes or managed-field custom writes before
+persistence and retains policy/display URL on credential-only updates.
+Generic edits preserve the reserved field, and ordinary/history snapshots hide it.
+Creation/import validates every native policy before insertion; native XML export,
+entry exchange, history restore and KDBX reopen preserve the policy. The setter
+uses candidate publication with exact metadata rollback on final snapshot failure.
+Tests use only synthetic KDBX/credential data and in-memory exchange documents,
+without OS clipboard/network/client execution. IPC/frontend policy editing and
+complete renderer XML migration are still pending; no full memory-erasure claim.
