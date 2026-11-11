@@ -769,6 +769,15 @@ fn parse_entry(
         fields.push((field.key.clone(), field.value.value.clone(), protected));
     }
 
+    if let Some(data) = &entry.custom_data {
+        let mut keys = std::collections::HashSet::new();
+        for item in &data.items {
+            if !keys.insert(item.key.as_str()) {
+                return Err("条目自定义数据重复".to_owned());
+            }
+        }
+    }
+
     let times = entry.times.as_ref();
     Ok(PastedEntry {
         fields,
@@ -936,6 +945,10 @@ mod gzip_member_tests;
 #[cfg(test)]
 #[path = "exchange_string_identity_tests.rs"]
 mod string_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_custom_identity_tests.rs"]
+mod custom_identity_tests;
 
 #[cfg(test)]
 mod tests {

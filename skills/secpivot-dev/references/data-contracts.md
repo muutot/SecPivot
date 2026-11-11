@@ -1,5 +1,14 @@
 # Data Contracts
 
+Entry-exchange custom metadata keys must be unique within each parsed entry.
+`parse_entry` checks exact decoded `CustomData/Item/Key` values in a separate
+per-entry set and returns a fixed error on duplicates before publishing a list.
+Ordinary fields and custom metadata may use the same name; names are not trimmed,
+case-folded or Unicode-normalized. Three `exchange_custom_identity_tests.rs`
+regressions cover nine refusals and distinct-name/entry-scope/ordinary-namespace
+native KDBX reopen controls. Empty/absent metadata value typing, icon definitions
+and foreign-container interoperability remain separate audit work.
+
 Entry-exchange ordinary field names must be unique within each parsed entry.
 `parse_entry` checks exact decoded keys before adding ordinary values and refuses
 the entire document with a fixed error on duplicates; it does not choose a later

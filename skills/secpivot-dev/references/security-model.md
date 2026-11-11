@@ -1,5 +1,12 @@
 # Security Model
 
+Entry-exchange preparation refuses duplicate custom metadata keys with a fixed
+content-free error before target insertion. Metadata identities are independent
+of ordinary fields and scoped per entry; exact decoded keys retain case,
+whitespace and Unicode distinctions. Synthetic native save/reopen tests establish
+this boundary without clipboard or user data. The vendor's Base64-based metadata
+value-type inference, including empty strings, is a separate unresolved behavior.
+
 Entry-exchange preparation rejects duplicate ordinary field identities before
 returning any parsed list for target insertion. Exact decoded per-entry keys
 are checked without logging names or values; an ambiguous later field cannot

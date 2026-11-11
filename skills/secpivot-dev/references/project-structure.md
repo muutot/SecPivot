@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_custom_identity_tests.rs` is a test-only child of `exchange.rs` for
+per-entry custom metadata identity. Three regressions cover nine duplicate-key
+refusals, distinct names/two-entry scope and an independent ordinary-field
+namespace through native KDBX reopen. Production `parse_entry` uses a separate
+borrowed-key set before publishing any list; no IPC/dependency/vendor changes.
+Metadata value typing and custom-icon definition identities remain audit areas.
+
 `exchange_string_identity_tests.rs` is a test-only child of `exchange.rs` for
 ordinary per-entry field identity. Three regressions cover 18 duplicate-key
 refusals, distinct decoded names/two-entry scope and legal repeated binary
