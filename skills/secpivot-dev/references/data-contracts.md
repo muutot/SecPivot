@@ -1,5 +1,14 @@
 # Data Contracts
 
+Entry-exchange `XmlBinary.data` uses default `$text`: self-closing, explicitly
+empty or whitespace-only Base64 elements represent zero-byte attachments.
+`@ID` remains required, and the binary envelope rejects unknown attributes or
+nested data before insertion; invalid Base64 and missing references still reject.
+This is the current internal payload contract, not an implementation of foreign
+binary compression. `exchange_binary_tests.rs` covers mixed empty/nonempty and
+protected/unprotected data through framing, native insertion/save/reopen/re-export,
+equivalent empty forms and malformed controls without OS clipboard access.
+
 Native entry-exchange `XmlStringValue` uses `$text`, including exact empty and
 ASCII/Unicode whitespace values, and the document writer references CR as
 `&#13;` before gzip framing. Field keys and attachment names retain source text;

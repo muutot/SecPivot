@@ -257,3 +257,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 内部条目交换文本
 
 - [x] 内部交换字段文本保真（SP-S87）：普通／protected 空值、ASCII／Unicode纯空白和CR／CRLF通过实际document／flags-gzip／decode／parse／insert及合成AES KDBX保存重开；Key边缘空白、字符引用／字面实体、缺失Value拒绝与空／空白／CR附件名及保护标记控制通过。用独立标准XML decoder核对实际生成字节；不代表OS剪贴板、KeePass容器／保护方言／时间戳／历史或真实跨客户端交换已完成。
+
+## 审计补充 — 零字节条目交换附件
+
+- [x] 内部交换空附件保留（SP-S88）：protected／unprotected零字节及非空混合附件经生产document／flags-gzip／decode／parse／insert、合成AES KDBX保存重开和再交换保持名字／内容／保护。自闭合／显式空／空白Base64接受，缺ID／缺引用／坏Base64／嵌套与未知编码属性拒绝；独立标准XML-Base64检查通过。不代表OS剪贴板／官方压缩与容器／真实跨客户端或手机provider已验证。

@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_binary_tests.rs` is the test-only child module of `exchange.rs` for
+empty binary payloads. Four regressions cover actual document/framing/parse,
+empty XML forms, mixed-byte/native persistence/re-export and malformed binary
+envelopes. `XmlBinary` requires an ID, defaults dedicated text to empty Base64
+and rejects unknown structure. Real clipboard and foreign compressed/container
+formats remain separate compatibility work.
+
 `exchange.rs` owns exact entry-transfer text (`XmlStringValue.$text`, referenced
 CR), with `exchange_text_tests.rs` as its test-only child module. The five native
 regressions cover field/protection values, reference controls, saved/reopened

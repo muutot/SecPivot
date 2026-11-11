@@ -84,6 +84,8 @@ const BINARY_FIELD_PREFIX: &str = "BinDes-";
 // Optional elements are all defaulted so foreign documents with extra or
 // missing elements still parse, matching how KeePass' reader tolerates
 // third-party payloads.
+// Binary envelopes require an ID and simple Base64 text; unknown attributes or
+// nested content reject instead of becoming a guessed empty attachment.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -283,8 +285,11 @@ pub struct Binaries {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct XmlBinary {
-    #[serde(rename = "$value")]
+    // An empty Base64 element is a valid zero-byte attachment. Dedicated text
+    // avoids dropping whitespace; unknown structure must not become empty data.
+    #[serde(rename = "$text", default)]
     pub data: String,
     #[serde(rename = "@ID")]
     pub id: usize,
@@ -784,6 +789,10 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
 #[cfg(test)]
 #[path = "exchange_text_tests.rs"]
 mod text_tests;
+
+#[cfg(test)]
+#[path = "exchange_binary_tests.rs"]
+mod binary_tests;
 
 #[cfg(test)]
 mod tests {
