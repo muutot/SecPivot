@@ -1,5 +1,14 @@
 # Security Model
 
+Whole-entry exchange preserves all representable field text with a dedicated
+`$text` reader and CR character references; protected values keep their flags
+through parsing and native persistence. This fixes transfer fidelity without
+changing the existing plaintext payload, optional DPAPI wrapper, clipboard-wipe
+schedule or masked IPC. Tests frame synthetic bytes in memory and use temporary
+KDBX files; no shared OS clipboard is accessed. The internal `Protected` plaintext
+marker is a legacy SecPivot dialect; official KeePass PlainXml/container and real
+client/provider behavior need their own interoperability evidence.
+
 The renderer's KeePass XML identity gate rejects empty, edge-whitespace or
 duplicate field names before group creation or native bulk writes. It gives a
 content-free localized error and never guesses which credential or managed

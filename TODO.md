@@ -253,3 +253,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 远程密码保真
 
 - [x] 远程密码空白（SP-S75）：secretKey／secret_key 在前端归一化、排队IPC、原生配置与S3／WebDAV构造中保持原字符；空字符串继续表示保留，纯空白作为新密码替换。真实服务回归、Windows临时目录加密保存／重开／空值保留与十二次loopback Basic／SigV4请求通过；原样前端／原生失败探针转绿，Python标准库独立校验十二次实际请求。真实provider／移动密钥存储及历史已被trim值的恢复仍不在此完成范围。
+
+## 审计补充 — 内部条目交换文本
+
+- [x] 内部交换字段文本保真（SP-S87）：普通／protected 空值、ASCII／Unicode纯空白和CR／CRLF通过实际document／flags-gzip／decode／parse／insert及合成AES KDBX保存重开；Key边缘空白、字符引用／字面实体、缺失Value拒绝与空／空白／CR附件名及保护标记控制通过。用独立标准XML decoder核对实际生成字节；不代表OS剪贴板、KeePass容器／保护方言／时间戳／历史或真实跨客户端交换已完成。

@@ -1,5 +1,15 @@
 # Data Contracts
 
+Native entry-exchange `XmlStringValue` uses `$text`, including exact empty and
+ASCII/Unicode whitespace values, and the document writer references CR as
+`&#13;` before gzip framing. Field keys and attachment names retain source text;
+ordinary/protected flags remain unchanged. The payload still uses SecPivot's
+legacy plaintext `Protected` dialect, not official PlainXml `ProtectInMemory`.
+`exchange_text_tests.rs` exercises document/frame/decode/parse/insert and temporary
+AES KDBX save/reopen without clipboard I/O, plus reference/empty/missing Value
+and attachment-name controls. Container/timestamp/history/client compatibility
+and actual OS clipboard behavior remain separate and unverified by those tests.
+
 KeePass XML imports validate complete raw `String/Key` identities before any
 group creation or bulk IPC. Empty names, edge whitespace and duplicate names
 (including standard columns, OTP and managed rules) reject the whole file with

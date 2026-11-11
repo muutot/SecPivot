@@ -30,8 +30,9 @@
 //! that document in a KDBX 4.1 container (outer header + inner header + SHA-256
 //! footer); that container is **not** emitted here, so SecPivot ↔ SecPivot
 //! paste works while cross-client paste is not yet interoperable. The XML
-//! document, the clipboard format name, the framing and the DPAPI scheme all
-//! match KeePass, so the container is the only remaining difference.
+//! document uses SecPivot's legacy plaintext `Protected` marker; official
+//! PlainXml uses `ProtectInMemory`. Container, timestamps and other payload
+//! details still need independent cross-client validation.
 //!
 //! Known gap versus KeePass: entry *history* is not restored on paste, because
 //! the `keepass` crate exposes no API to append a historical entry to an
@@ -184,7 +185,7 @@ pub struct XmlStringField {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct XmlStringValue {
-    #[serde(rename = "$value", default)]
+    #[serde(rename = "$text", default)]
     pub value: String,
     /// KeePass spells booleans `True`/`False`, not `true`/`false`.
     #[serde(
@@ -312,9 +313,9 @@ pub struct XmlCustomIcon {
 /// Serialize the addressed entries into a KDBX XML document for the clipboard.
 ///
 /// Protected fields are written as `Protected="True"` with their **plaintext**
-/// value, exactly like KeePass' `PlainXml` payload: the document itself carries
-/// no encryption, which is why the caller must route the framed payload through
-/// the scheduled clipboard wipe.
+/// value using SecPivot's internal legacy marker. Official KeePass PlainXml uses
+/// `ProtectInMemory`; this internal payload carries no encryption, so the caller
+/// must route the framed payload through the scheduled clipboard wipe.
 pub fn build_entries_document(db: &Database, ids: &[EntryId]) -> Result<Vec<u8>, String> {
     let mut binaries: Vec<XmlBinary> = Vec::new();
     let mut custom_icons: HashMap<String, XmlCustomIcon> = HashMap::new();
@@ -344,7 +345,9 @@ pub fn build_entries_document(db: &Database, ids: &[EntryId]) -> Result<Vec<u8>,
     };
 
     to_string_with_root("KeePassFile", &file)
-        .map(String::into_bytes)
+        // XML readers normalize literal CR/CRLF; character references preserve
+        // the exact source text, including keys and attachment file names.
+        .map(|xml| xml.replace('\r', "&#13;").into_bytes())
         .map_err(|e| format!("序列化失败: {e}"))
 }
 
@@ -777,6 +780,10 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
     }
     Ok(node.as_ref().id().uuid())
 }
+
+#[cfg(test)]
+#[path = "exchange_text_tests.rs"]
+mod text_tests;
 
 #[cfg(test)]
 mod tests {

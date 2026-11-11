@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S86; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 97,
-    "confirmed": 97,
+    "scope": "15 baseline cards plus SP-S05 through SP-S87; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 98,
+    "confirmed": 98,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 61,
+      "Medium": 62,
       "Low": 16
     }
   },
@@ -824,6 +824,23 @@
       ],
       "final_proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\xml-migration-final-proof.json",
       "final_proof_sha256": "61a124db86677a9a60106d47a9858f2f2ba3c75d5c29e3346c33a60754e7a4f6"
+    },
+    {
+      "id": "SP-S87",
+      "severity": "Medium",
+      "confidence": "High",
+      "status": "Confirmed and remediated; exact field text restored through internal exchange, complete client/clipboard interoperability remains pending",
+      "source_checkpoint": "56a2da0ebd16e6b34d9e55740d243950f4b26f29",
+      "evidence": "Native document/frame/decode/parse loses ASCII whitespace and normalizes CR; pasted fields persist altered after synthetic AES KDBX save/reopen. Native actual red1 artifact pass/3 regressions fail; independent ElementTree retains whitespace but normalizes rawCR. No OS clipboard.",
+      "proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-text-original-proof.json",
+      "limits": [
+        "Synthetic in-memory flags/gzip/document/parser/insert pipeline and temporary AES KDBX saved/reopened",
+        "No shared OS clipboard I/O or real vault/config/provider/device",
+        "Native red has three executed failures and one artifact-only pass; failed assertions after saved/reopened fields do not prove later policy/state assertions ran",
+        "Internal legacy Protected dialect and cross-client payload/container semantics not verified"
+      ],
+      "final_proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-text-final-proof.json",
+      "final_proof_sha256": "306436d0b708297d3bffc073f7d04aafb937ec15a08ad6c79c5a0b40ca728f59"
     }
   ],
   "verification": {
@@ -2285,9 +2302,34 @@
         "No CSS/markup, APK/device/provider, real configuration/vault/clipboard, push or release",
         "Complete XML groups/attachments/history, source-specific migrations and remaining whole-project/competitor/UI work continue; goal active"
       ]
+    },
+    "exchange_text": {
+      "exitCode": 0,
+      "frontend": 447,
+      "rust": 770,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "nativeTargeted": 5,
+      "independentXmlFields": 3,
+      "buildJobs": 1,
+      "rustTestThreads": 1,
+      "cargoIncremental": 0,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-text-final-proof.json",
+      "proof_sha256": "306436d0b708297d3bffc073f7d04aafb937ec15a08ad6c79c5a0b40ca728f59",
+      "log_sha256": "e92ad0d093f926ee68ceac902be142bc13e5c7ad562fe1d85352f85db24e0cf1",
+      "limits": [
+        "Synthetic native in-memory payload pipeline and temporary AES KDBX only; no shared OS clipboard/real vault/config/device/provider",
+        "Initial full verification terminated101 at rustc-LLVM allocation failure, not tests. Successful complete retry used CARGO_INCREMENTAL=0; tests/source unchanged",
+        "Legacy internal plaintext Protected dialect, KeePass container/timestamps/history/client interoperability remain incomplete",
+        "No CSS/markup/IPC/schema/vendor/dependency/version change, sibling edit, push/release or APK build/install",
+        "Goal remains active; 98 historical Confirmed include remediated, original baseline b7c5d9f/15/score6.1 unchanged"
+      ]
     }
   },
   "reverification_notes": [
+    "SP-S87 internal exchange whitespace/CR loss fixed with dedicated text and CR references. Native5 and independentXML3 pass, full447/770/ACL2/KeePass25/QuickXML1363 exit0 with incremental disabled after compiler OOM; original failed log preserved, source unchanged. Historical98/baseline15/6.1 retained; whole goal active, no OS clipboard/device/provider/client proof.",
     "SP-S86 XML field identity loss reproduced through actual native-export/Edge IO wire/native save-reopen; smallest whole-file refusal fixed. Targeted25 frontend/native1(3 cases), real browser24, full447/765/ACL2/KeePass25/QuickXML1363 exit0. Historical97 and original baseline15/6.1 preserved; whole goal active.",
     "Selected historical website values connected; native5/frontend26/DOM12+7 pass; full443/764/ACL2/KeePass25/QuickXML1363 exit0. No new finding, historical96 and baseline15/6.1 preserved; whole goal active.",
     "SP-S85 history selection validated before native mutations;6 native/12 service-handler pass, full433/759/ACL2/KeePass25/QuickXML1363 exit0. Historical96 and baseline15/6.1 preserved; whole goal active, historical rule content and mobile/provider pending.",
