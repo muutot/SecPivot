@@ -1,5 +1,16 @@
 # Project Structure and Runtime Surfaces
 
+`vault/entry_save.rs` owns the explicit create/edit request, nullable optional
+editor extras, target/attachment/flag validation, candidate database mutation,
+one complete tracked edit and final publication rollback. `commands/entry_save.rs`
+exposes required-session `save_entry` on desktop/mobile; native tests cover
+origin isolation and synthetic KDBX data/history/rollback. `services/vault.ts`
+publishes the returned UUID/state under the captured Symbol lifetime and applies
+one candidate browser draft. `useEntryEditor` uses that single transaction for
+create/edit and the existing batch mutation for edit-multi; page selection remains
+injected, without newest-created timestamp lookup. `entries.rs` owns the shared
+Auto-Type normalization used by standalone and editor writes.
+
 `services/vault.ts` separates publication-epoch admission from read-only ownership
 checks on completion, uses fresh Symbol lifetime identities to prevent reused-ID
 re-admission collisions, and versions tab-list reads across successful native
@@ -219,7 +230,7 @@ SvelteKit runs as a static SPA: `src/routes/+layout.ts` disables SSR and awaits 
 | `src/lib/composables/usePanelLayout.svelte.ts`      | Main-window panel layout state machine: group/detail widths, detail auto-open with right-click suppression, mobile drawer, pointer-drag resize, persistence ordering (entryColumns written before panelWidths)                                                                                                                                                                                                                  |
 | `src/lib/composables/useVaultSelection.svelte.ts`   | Entry-selection model: single select, shift-range over visible rows, ctrl/cmd toggle, anchor bookkeeping; the page drives flows that react to selection (detail auto-open, post-save rebind) through its accessors                                                                                                                                                                                                              |
 | `src/lib/composables/useEntryFilter.svelte.ts`      | Search/filter pipeline (`useEntryFilter`): lazy search-text memoization per snapshot entry, subtree filtering honoring per-group `enableSearching`, advanced-query integration; sort keys/direction stay in the page + columns service                                                                                                                                                                                          |
-| `src/lib/composables/useEntryEditor.svelte.ts`      | Entry-editor dialog flow (`useEntryEditor`): open modes (create/edit/edit-multi with multi-row fallback to single) and the session-guarded save pipeline (create→newest-entry rebind, multi→selectedEntry-only rebind); the page keeps selection ownership and lookup helpers                                                                                                                                                   |
+| `src/lib/composables/useEntryEditor.svelte.ts`      | Entry-editor dialog flow (`useEntryEditor`): open modes (create/edit/edit-multi with multi-row fallback to single) and the session-guarded save pipeline (create→returned-UUID rebind, multi→selectedEntry-only rebind); the page keeps selection ownership and lookup helpers                                                                                                                                                  |
 | `src/lib/utils/menu-items.ts`                       | Pure builders for the main window's context menus (`buildEntryMenuItems`/`buildBlankMenuItems`/`buildToolbarMenuItems`): state flags in, `ContextMenuItem[]` out; the page keeps only the action dispatchers. Covered by `tests/menu-items.test.mjs`                                                                                                                                                                            |
 | `src/lib/components/AppToolbar.svelte`              | Main-window toolbar (new/save/save-as/lock, search box + advanced-filter toggle, overflow menu or detail/report/export/settings actions, window controls); owns all toolbar-scoped styles incl. 720px/420px responsive rules; page passes state flags + callbacks, binds `search` two-way, and calls the exposed `focusSearch()` for Ctrl+K                                                                                     |
 | `src/lib/components/AutotypePickDialog.svelte`      | TCATO/global auto-type candidate picker over `ModalShell`: performs the `autotype_pick` invoke itself (failure surfaced via `onerror` → page toast) and closes immediately for responsive UX                                                                                                                                                                                                                                    |

@@ -423,6 +423,7 @@ pub fn run() {
             commands::save_vault_as,
             commands::change_master_key,
             commands::add_entry,
+            commands::save_entry,
             commands::import_entries,
             commands::import_1pux_file,
             commands::update_entry,

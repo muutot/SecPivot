@@ -11,6 +11,7 @@ pub(crate) mod config;
 #[cfg(desktop)]
 pub(crate) mod credential;
 pub(crate) mod entries;
+pub(crate) mod entry_save;
 pub(crate) mod favicon;
 pub(crate) mod groups;
 pub(crate) mod import;
@@ -31,6 +32,7 @@ pub(crate) use self::config::*;
 #[cfg(desktop)]
 pub(crate) use self::credential::*;
 pub(crate) use self::entries::*;
+pub(crate) use self::entry_save::*;
 pub(crate) use self::favicon::*;
 pub(crate) use self::groups::*;
 pub(crate) use self::import::*;

@@ -30,8 +30,6 @@ export type EntryEditorOptions = {
   notify: (message: string, kind?: TipKind) => void;
   /** Resolve an entry by uuid inside a fresh snapshot (page helper). */
   findEntry: (state: VaultState | null, uuid: string | null) => VaultEntry | null;
-  /** Locate the just-created entry (backend generates the uuid). */
-  findNewestInGroup: (state: VaultState, groupUuid: string) => VaultEntry | null;
   /** Rebind the single selection after a successful save (create/edit). */
   setSingleSelection: (entry: VaultEntry | null) => void;
   /** Replace the single-selection highlight without touching the multi-row
@@ -113,33 +111,18 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
     const targetEntries = [...editEntries];
     try {
       if (mode === "create" && input) {
-        let state = await vault.callInSession(sessionId, () => vault.addEntry(input));
-        // The entry exists backend-side the moment addEntry resolves: creation
-        // is committed. Close and rebind selection immediately so a failed
-        // follow-up can never cause a duplicate entry on retry.
-        const created = options.findNewestInGroup(state, input.groupUuid);
-        if (options.sessionView.isCurrent(view)) {
-          options.setSingleSelection(options.findEntry(state, created?.uuid ?? null));
-          editorOpen = false;
-          options.notify(t(lang(), "editor.createdEntry"));
-        }
-        if (created && (autotype || flags)) {
-          try {
-            if (autotype) {
-              state = await vault.callInSession(sessionId, () =>
-                vault.updateEntryAutoType(created.uuid, autotype),
-              );
-            }
-            if (flags) {
-              state = await vault.callInSession(sessionId, () =>
-                vault.updateEntryFlags(created.uuid, flags),
-              );
-            }
-          } catch (e) {
-            if (options.sessionView.isCurrent(view))
-              options.notify(t(lang(), "editor.followUpFailed", { e: String(e) }), "error");
-          }
-        }
+        const { state, uuid } = await vault.callInSession(sessionId, () =>
+          vault.saveEntry({
+            target: { mode: "create" },
+            input,
+            autoType: autotype,
+            flags,
+          }),
+        );
+        if (!options.sessionView.isCurrent(view)) return;
+        options.setSingleSelection(options.findEntry(state, uuid));
+        editorOpen = false;
+        options.notify(t(lang(), "editor.createdEntry"));
       } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
         const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
@@ -153,15 +136,14 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         options.notify(t(lang(), "editor.updatedEntries", { n: uuids.length }));
       } else if (mode === "edit" && input && targetEntry) {
         const uuid = targetEntry.uuid;
-        let state = await vault.callInSession(sessionId, () => vault.updateEntry(uuid, input));
-        if (autotype) {
-          state = await vault.callInSession(sessionId, () =>
-            vault.updateEntryAutoType(uuid, autotype),
-          );
-        }
-        if (flags) {
-          state = await vault.callInSession(sessionId, () => vault.updateEntryFlags(uuid, flags));
-        }
+        const { state } = await vault.callInSession(sessionId, () =>
+          vault.saveEntry({
+            target: { mode: "edit", uuid },
+            input,
+            autoType: autotype,
+            flags,
+          }),
+        );
         if (!options.sessionView.isCurrent(view)) return;
         options.setSingleSelection(options.findEntry(state, uuid));
         editorOpen = false;

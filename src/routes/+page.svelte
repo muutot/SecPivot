@@ -713,18 +713,6 @@
     return findEntryIn(state.root, uuid);
   }
 
-  /** The just-created entry is the one with the newest `created` stamp in its
-   *  target group (the backend generates its uuid, so we locate it this way). */
-  function findNewestEntryInGroup(state: VaultState, groupUuid: string): VaultEntry | null {
-    const group = findGroupIn(state.root, groupUuid);
-    if (!group) return null;
-    let newest: VaultEntry | null = null;
-    for (const entry of group.entries) {
-      if (!newest || (entry.created ?? "") >= (newest.created ?? "")) newest = entry;
-    }
-    return newest;
-  }
-
   function setSingleSelection(entry: VaultEntry | null): void {
     selection.setSingleSelection(entry);
   }
@@ -1272,7 +1260,6 @@
     sessionView,
     notify: flash,
     findEntry: findEntryByUuid,
-    findNewestInGroup: findNewestEntryInGroup,
     setSingleSelection,
     setSelectedEntry: (entry) => (selection.selectedEntry = entry),
     getSelectedEntry: () => selection.selectedEntry,
