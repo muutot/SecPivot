@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_icon_identity_tests.rs` is a test-only child of `exchange.rs` for
+custom icon definition identity. Three regressions cover ten duplicate refusals,
+unique/empty/unused and shared-reference controls, native shared-definition
+generation and temporary KDBX reopen. The parser checks exact decoded XML UUID
+text globally before data filtering; entry reference sharing stays independent.
+No IPC, vendor, dependency or UI change; UUID canonicalization and invalid/missing
+unique-icon/reference semantics remain separate audit work.
+
 `exchange_custom_value_tests.rs` is a test-only child of `exchange.rs` for
 complete custom metadata value transfer. Four regressions exercise native
 String/Binary/None memory transfer, reopened-source/target KDBX comparisons,

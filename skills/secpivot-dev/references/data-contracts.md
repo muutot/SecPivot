@@ -1,5 +1,14 @@
 # Data Contracts
 
+Entry-exchange custom icon definitions have one exact decoded XML UUID text
+identity per document. Preparation checks all definitions before filtering
+missing/invalid data, rejects duplicates with a fixed error and publishes no
+partial entry list. Reordered unique definitions and repeated entry references
+remain valid, including empty/unused definitions. This gate adds no trimming,
+UUID canonicalization or new policy for unique malformed/missing data or
+unresolved references. `exchange_icon_identity_tests.rs` covers ten refusals,
+native shared-definition generation and temporary KDBX reopen controls.
+
 Internal entry exchange carries every custom metadata value and key.
 Unmarked `CustomData/Item` values retain the legacy exact `Option<String>`
 contract; `SecPivotType="Binary"` requires a present Base64 Value and

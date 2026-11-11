@@ -720,10 +720,16 @@ fn parse_entries_document_limited(
         }
         None => HashMap::new(),
     };
-    let custom_icons: HashMap<String, Vec<u8>> = file
-        .meta
-        .custom_icons
-        .map(|icons| {
+    let custom_icons: HashMap<String, Vec<u8>> = match file.meta.custom_icons {
+        Some(icons) => {
+            // Validate every definition before filtering data. Missing or
+            // damaged data must not hide a repeated exact XML identity.
+            let mut ids = std::collections::HashSet::new();
+            for icon in &icons.icons {
+                if !ids.insert(icon.uuid.as_str()) {
+                    return Err("自定义图标编号重复".to_owned());
+                }
+            }
             icons
                 .icons
                 .into_iter()
@@ -733,8 +739,9 @@ fn parse_entries_document_limited(
                     Some((icon.uuid, bytes))
                 })
                 .collect()
-        })
-        .unwrap_or_default();
+        }
+        None => HashMap::new(),
+    };
 
     // Attachment/icon references and resolved metadata share one binary-copy
     // budget across all entries; preparation refuses the whole list on overflow.
@@ -1010,6 +1017,10 @@ mod custom_identity_tests;
 #[cfg(test)]
 #[path = "exchange_custom_value_tests.rs"]
 mod custom_value_tests;
+
+#[cfg(test)]
+#[path = "exchange_icon_identity_tests.rs"]
+mod icon_identity_tests;
 
 #[cfg(test)]
 mod tests {

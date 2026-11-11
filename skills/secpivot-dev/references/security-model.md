@@ -1,5 +1,12 @@
 # Security Model
 
+Entry-exchange preparation rejects repeated exact decoded XML icon UUID text
+before data filtering, so missing/invalid bytes cannot hide a duplicate.
+The fixed error contains no identifiers or image data, and no partial parsed
+list reaches insertion. Shared references remain valid. This low-risk malformed
+input gate does not establish UUID canonicalization, valid image rendering or
+missing/invalid unique-definition and unresolved-reference handling.
+
 Whole-entry exchange no longer silently omits Binary or absent-value custom
 metadata. Explicit internal type markers preserve actual native value kinds;
 unmarked text is never guessed as Base64. Preparation resolves all bytes and
