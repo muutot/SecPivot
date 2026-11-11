@@ -13,8 +13,7 @@ use super::serialize::{
 };
 use super::*;
 use keepass::db::{
-    AutoType, AutoTypeAssociation, DataTransferObfuscation, EntryId, EntryRef, GroupId, Icon, Meta,
-    Times, Value,
+    AutoType, AutoTypeAssociation, EntryId, EntryRef, GroupId, Icon, Meta, Times, Value,
 };
 use std::collections::HashMap;
 
@@ -25,11 +24,17 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
-pub(super) fn build_entry_autotype(input: &EntryAutoTypeInput) -> AutoType {
+/// Replace exposed settings while retaining native options absent from the editor DTO.
+pub(super) fn build_entry_autotype(
+    input: &EntryAutoTypeInput,
+    previous: Option<&AutoType>,
+) -> AutoType {
     AutoType {
         enabled: input.enabled,
         default_sequence: normalize_optional_sequence(input.default_sequence.as_deref()),
-        data_transfer_obfuscation: DataTransferObfuscation::None,
+        data_transfer_obfuscation: previous
+            .map(|config| config.data_transfer_obfuscation.clone())
+            .unwrap_or_default(),
         associations: input
             .associations
             .iter()
@@ -1387,7 +1392,7 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            let autotype = Some(build_entry_autotype(input));
+            let autotype = Some(build_entry_autotype(input, entry.autotype.as_ref()));
             if entry.autotype != autotype {
                 entry.autotype = autotype;
                 entry.times.last_modification = Some(Times::now());

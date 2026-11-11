@@ -289,3 +289,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 内部交换自定义图标定义唯一（SP-S100）：全部精确解码XML UUID文本在Data过滤前校验，10类重复含缺值／坏编码／未引用／字符引用别名整份拒绝且固定错误；不同UUID／重排／空／未引用与共享条目引用、原生writer一个共享定义经实际framing和临时AES KDBX保存重开控制通过。三项新增／exchange54项及完整门禁447前端／813 Rust／ACL2／KeePass25／QuickXML1363通过；UUID规范化、唯一坏／缺Data和缺失引用、真实渲染／OS剪贴板／客户端与手机provider仍独立待审。
 
 - [x] 内部交换自动输入混淆选项保留（SP-S101）：明确0／1标记在准备阶段解析为原生AutoType，缺标记沿用None，合法整数别名保留，六类非法代码整份拒绝；四种原生配置经实际framing／insert及来源和目标AES KDBX保存重开保真，六种旧缺省／零和五种1对照通过。四项新增／exchange58项及完整门禁447前端／817 Rust／ACL2／KeePass25／QuickXML1363通过；旧sample_db实际初始化并比较AutoType。只确认存储配置，不代表运行混淆效果、普通编辑隐藏选项／任意文本／正式客户端或手机provider完成。
+
+## 审计补充 — 编辑器隐藏自动输入选项
+
+- [x] 编辑保留原生混淆标记（SP-S102）：共享builder在独立update_entry_autotype及统一save_entry中携带同一条目的现有DataTransferObfuscation；无配置／创建仍默认None，DTO明确只替换可见设置。四项原生回归由2pass／2fail原样转绿，来源先保存重开，同值／改值×None／UseClipboard的当前／历史／时间及目标保存重开、omission／null／默认和失败回滚对照通过；完整447前端／821 Rust／ACL2／KeePass25／QuickXML1363通过。只确认存储选项，不等于运行混淆效果、正式客户端／任意序列或手机provider完成。

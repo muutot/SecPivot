@@ -507,8 +507,8 @@ pub struct EntryPatch {
     pub tags: Option<String>,
 }
 
-/// Full replacement for an entry's Auto-Type config. `enabled` defaults to
-/// true (KeePass default); an empty `defaultSequence` clears it; `associations`
+/// Replace an entry's exposed Auto-Type settings; native obfuscation is retained.
+/// `enabled` defaults to true (KeePass default); an empty `defaultSequence` clears it; `associations`
 /// replaces the stored window-association list.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

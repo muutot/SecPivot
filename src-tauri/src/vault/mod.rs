@@ -5,6 +5,8 @@
 mod breach;
 pub mod dto;
 mod entries;
+#[cfg(test)]
+mod entry_autotype_retention_tests;
 mod entry_save;
 #[cfg(test)]
 mod entry_save_tests;

@@ -101,8 +101,8 @@ impl VaultSession {
         // degradation. Persistence continues to enforce its own writable gate.
         let db = self.require_db()?;
         let group_id = resolve_group_id(db, &request.input.group_uuid)?;
-        let (id, existing_rules, existing_override) = match &request.target {
-            EntrySaveTarget::Create {} => (None, false, None),
+        let (id, existing_rules, existing_override, existing_autotype) = match &request.target {
+            EntrySaveTarget::Create {} => (None, false, None, None),
             EntrySaveTarget::Edit { uuid } => {
                 let id = parse_entry_id(uuid)?;
                 let entry = db.entry(id).ok_or("条目不存在")?;
@@ -110,6 +110,7 @@ impl VaultSession {
                     Some(id),
                     entry.fields.contains_key(FIELD_WEBSITE_RULES),
                     entry.override_url.clone(),
+                    entry.autotype.clone(),
                 )
             }
         };
@@ -160,7 +161,7 @@ impl VaultSession {
         let autotype = request
             .auto_type
             .as_ref()
-            .map(super::entries::build_entry_autotype);
+            .map(|input| super::entries::build_entry_autotype(input, existing_autotype.as_ref()));
         let payloads = decode_attachments(&request.input.attachments)?;
         let (cap, max_size) = super::entries::history_limits(&db.meta);
         let mut candidate = db.clone();

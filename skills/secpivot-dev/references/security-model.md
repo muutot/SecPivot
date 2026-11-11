@@ -1,12 +1,19 @@
 # Security Model
 
+Native editor writes retain the current entry's stored AutoType obfuscation
+option when updating visible settings. Both standalone and unified saves use
+the same preservation builder; new configurations keep the prior None default.
+This changes metadata fidelity and prevents a false standalone modification-time
+change; it adds no replay behavior or claim about key logging resistance.
+Temporary KDBX tests exercise prior/current/history and failed save rollback.
+
 Entry-exchange retains the stored AutoType None/UseClipboard metadata option
 instead of silently replacing it with None. Preparation validates the known
 0/1 integer domain and resolves native configuration before insertion; unknown
 or damaged codes return a fixed content-free error without a partial list.
 This is configuration fidelity only: it adds no auto-type execution, OS clipboard
 operation or claim that replay implements that option or defeats key loggers.
-Editor retention, full foreign formats and arbitrary metadata text remain separate.
+Full foreign formats and arbitrary metadata text remain separate.
 
 Entry-exchange preparation rejects repeated exact decoded XML icon UUID text
 before data filtering, so missing/invalid bytes cannot hide a duplicate.
