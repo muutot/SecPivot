@@ -1,5 +1,16 @@
 # Data Contracts
 
+Entry-exchange `XmlCustomIcon` retains an optional dedicated-text Name and
+optional Unix-second LastModificationTime. Resolved `PastedCustomIcon` owns
+data/name/native time, with no source identity. Insertion creates a fresh icon
+then restores both optional metadata values, including None instead of the
+native constructor's current-time default. Dedicated name text keeps empty,
+whitespace, Unicode and CR bytes in the internal dialect. Each independent icon
+copy charges image bytes plus UTF-8 name bytes against the shared preparation
+budget before either allocation. Invalid dates reject during preparation;
+unique missing/invalid image data and unresolved references remain separate.
+No IPC/renderer schema or official-client/container proof is added.
+
 Entry-exchange `XmlCustomDataItem.LastModificationTime` is optional Unix seconds
 in the existing internal dialect. The writer carries each native metadata item's
 whole-second timestamp; preparation resolves it to `NaiveDateTime` and rejects
@@ -50,7 +61,8 @@ types and bytes into `PastedCustomDataItem` before target insertion; unknown
 types, invalid combinations or damaged encoding refuse the whole document with
 fixed errors. Binary bytes share the existing attachment/icon copy budget,
 including padded exact boundaries. This is a SecPivot internal extension;
-KDBX metadata type inference/timestamps and official client formats remain separate.
+KDBX metadata type inference, subsecond/foreign timestamp formats and official
+client interoperability remain separate.
 
 Entry-exchange custom metadata keys must be unique within each parsed entry.
 `parse_entry` checks exact decoded `CustomData/Item/Key` values in a separate
@@ -58,7 +70,7 @@ per-entry set and returns a fixed error on duplicates before publishing a list.
 Ordinary fields and custom metadata may use the same name; names are not trimmed,
 case-folded or Unicode-normalized. Three `exchange_custom_identity_tests.rs`
 regressions cover nine refusals and distinct-name/entry-scope/ordinary-namespace
-native KDBX reopen controls. Empty/absent metadata value typing, icon definitions
+native KDBX reopen controls. Native KDBX metadata typing, icon UUID canonicalization
 and foreign-container interoperability remain separate audit work.
 
 Entry-exchange ordinary field names must be unique within each parsed entry.
@@ -88,8 +100,9 @@ declaration/DOCTYPE handling is retained; these events after root start reject.
 Malformed/trailing envelopes return a fixed content-free error before any list
 is published. `exchange_document_tests.rs` covers 13 invalid suffixes, four root
 controls, legal surrounding misc and synthetic native KDBX reopen fidelity.
-This gate does not establish full XML schema/encoding, gzip members or foreign
-container interoperability; the field and binary model contracts still apply.
+This envelope gate does not establish full XML schema/encoding or foreign
+container interoperability; gzip-member validation is described above and the
+field and binary model contracts still apply.
 
 Entry-exchange encoding caps both the uncompressed document and complete framed
 payload at 64 MiB, matching the receiver. Input rejects before compression;
@@ -99,12 +112,13 @@ including native Windows DPAPI overhead. XML generation and total allocation
 costs are separate; no production-sized or clipboard/client proof is implied.
 
 Entry-exchange parsing shares a 64 MiB budget for owned attachment, custom-icon
-and marked metadata bytes across every entry. References charge their complete
+image/name and marked metadata bytes across every entry. References charge their complete
 byte length before cloning; metadata decoding uses bounded scratch and charges
 complete output before publication. Overflow returns a fixed size error and no
-partial parsed list. Empty/unreferenced definitions consume no copy budget.
+partial parsed list. Unreferenced definitions consume no copy budget; zero-byte
+images still charge any copied name bytes.
 `exchange_expansion_tests.rs` uses small injected budgets and synthetic fixtures,
-including valid shared-reference KDBX reopen checks. This bounds binary copies,
+including valid shared-reference KDBX reopen checks. This bounds binary/name copies,
 not total heap, definition-pool, XML-model, insertion or copy-side costs.
 
 Native entry-exchange gzip output uses `gunzip_limited`, called with the existing

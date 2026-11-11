@@ -301,3 +301,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 自定义数据时间保真
 
 - [x] 内部条目交换保留自定义数据的最后修改时间（SP-S104）：XML可选Unix秒→原生准备日期→插入保留，缺省None/新条目UUID保持；4项原样红测转绿、exchange62项及完整452前端/825 Rust/ACL2/KeePass25/QuickXML1363通过。合成内存与来源/目标AES KDBX重开对照，不代表正式PlainXml容器、子秒、原生类型推断、共享剪贴板或手机provider已验证。
+
+## 审计补充 — 图标元数据保真
+
+- [x] 内部条目交换保留图标名称和修改时间（SP-S105）：独立文本保留名称，原生准备/插入恢复可选时间（含None）及新图标身份，每份图片加UTF-8名称在分配前扣共享预算；4项原样红测转绿、新增预算回归，exchange67项/完整452前端/830 Rust/ACL2/KeePass25/QuickXML1363通过。七组名称/时间内存对照、普通命名共享来源和目标AES KDBX重开验证，不等于原生空白名称/图片渲染、缺失引用、官方容器、共享剪贴板或手机provider完成。

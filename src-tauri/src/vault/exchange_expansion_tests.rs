@@ -42,7 +42,7 @@ fn expanded_size(entries: &[PastedEntry]) -> usize {
                 .iter()
                 .map(|(_, b, _)| b.len())
                 .sum::<usize>()
-                + entry.custom_icon.as_ref().map_or(0, Vec::len)
+                + entry.custom_icon.as_ref().map_or(0, |icon| icon.data.len())
         })
         .sum()
 }
@@ -97,7 +97,7 @@ fn exchange_expansion_exact_and_unlimited_control_preserve_shared_bytes() {
         for (index, entry) in parsed.iter().enumerate() {
             assert_eq!(entry.attachments[0].1, vec![0, 1, 2, 255]);
             assert_eq!(entry.attachments[0].2, index == 0);
-            assert_eq!(entry.custom_icon, Some(vec![5, 6, 7, 8]));
+            assert_eq!(entry.custom_icon.as_ref().unwrap().data, vec![5, 6, 7, 8]);
         }
     }
 }

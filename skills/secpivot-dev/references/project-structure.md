@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_icon_metadata_tests.rs` is a test-only child of `vault/exchange.rs`.
+Four red regressions establish dropped names and replaced/created icon times;
+five final tests exercise complete metadata, shared source definitions, native
+source/target reopen and combined UTF-8-name/image copy budgets. `XmlIconName`
+preserves optional text; `PastedCustomIcon` resolves data/name/time for insertion.
+Existing icon-identity/expansion tests read its data member and retain their
+original identity, byte ownership and budget assertions. No IPC/UI is added.
+
 `exchange_custom_time_tests.rs` is a test-only child of `vault/exchange.rs`.
 It exercises native CustomData value/time preservation through in-memory framing
 and source/target KDBX reopen, fresh pasted UUIDs, missing legacy timestamps and
@@ -45,15 +53,15 @@ legacy plain text and strict internal type/shared-byte-budget controls.
 `XmlCustomDataItem.value_type` owns the optional SecPivotType wire extension;
 `PastedCustomDataItem` holds resolved native values. `parse_custom_data` and
 `decode_custom_binary` validate before insertion. No Tauri/TS IPC, dependency
-or vendor change; official formats, native metadata typing and timestamps remain
-separate audit areas.
+or vendor change; official formats, native metadata typing and subsecond/foreign
+timestamp formats remain separate audit areas.
 
 `exchange_custom_identity_tests.rs` is a test-only child of `exchange.rs` for
 per-entry custom metadata identity. Three regressions cover nine duplicate-key
 refusals, distinct names/two-entry scope and an independent ordinary-field
 namespace through native KDBX reopen. Production `parse_entry` uses a separate
 borrowed-key set before publishing any list; no IPC/dependency/vendor changes.
-Metadata value typing and custom-icon definition identities remain audit areas.
+Native KDBX value typing and custom-icon UUID canonicalization remain audit areas.
 
 `exchange_string_identity_tests.rs` is a test-only child of `exchange.rs` for
 ordinary per-entry field identity. Three regressions cover 18 duplicate-key

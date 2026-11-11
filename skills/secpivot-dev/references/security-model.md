@@ -1,5 +1,14 @@
 # Security Model
 
+Internal entry-exchange retains custom-icon names and optional native times
+while assigning fresh target identities. Preparation validates date range and
+charges each independent image/name copy before allocating; shared names cannot
+expand outside the existing 64 MiB copy budget. Empty and absent names remain
+distinct. Names/times stay inside native preparation and vault storage, with no
+new IPC/log/config path. Synthetic metadata and small-budget tests do not prove
+image rendering, unique damaged-data handling, full heap bounds or native
+client/provider interoperability.
+
 Internal entry-exchange preserves each CustomData item's optional native
 last-modification timestamp. Date-range validation occurs in preparation before
 target insertion; out-of-range seconds produce a fixed error without metadata
@@ -78,9 +87,9 @@ Oversize errors contain no content and occur before the copy command can publish
 the returned payload. This is a framing admission bound, not a total-heap bound
 or a cap on XML generation; small native tests use synthetic data only.
 
-The entry-exchange XML size cap does not bound repeated binary references.
-Parsing separately caps cumulative owned attachment, custom-icon and marked
-metadata bytes at 64 MiB across all entries, refusing a partial result. Reference
+The entry-exchange XML size cap does not bound repeated binary/name references.
+Parsing separately caps cumulative owned attachment, custom-icon image/name and
+marked metadata bytes at 64 MiB across all entries, refusing a partial result. Reference
 clones charge before copying; metadata scratch is bounded and complete output
 charges before publication. Small-budget tests prove the enforcement mechanism; no production-sized
 allocation/OOM or total-heap bound is claimed. Shared definitions remain legal.

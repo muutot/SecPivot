@@ -321,6 +321,18 @@ pub struct XmlCustomIcon {
     pub uuid: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<XmlIconName>,
+    /// Unix seconds in SecPivot's internal exchange dialect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_modification_time: Option<i64>,
+}
+
+/// Dedicated text preserves an explicitly empty or whitespace-only icon name.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct XmlIconName {
+    #[serde(rename = "$text", default)]
+    pub value: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +439,8 @@ fn serialize_entry(
                 .or_insert_with(|| XmlCustomIcon {
                     uuid: uuid.clone(),
                     data: Some(base64_engine::STANDARD.encode(&icon.data)),
+                    name: icon.name.clone().map(|value| XmlIconName { value }),
+                    last_modification_time: icon.last_modification_time.map(to_unix),
                 });
         }
     }
@@ -640,7 +654,7 @@ pub struct PastedEntry {
     pub tags: Vec<String>,
     pub quality_check: bool,
     pub icon: Option<i64>,
-    pub custom_icon: Option<Vec<u8>>,
+    pub custom_icon: Option<PastedCustomIcon>,
     pub foreground_color: Option<String>,
     pub background_color: Option<String>,
     pub override_url: Option<String>,
@@ -652,6 +666,13 @@ pub struct PastedEntry {
 pub struct PastedCustomDataItem {
     pub key: String,
     pub value: Option<CustomDataValue>,
+    pub last_modification_time: Option<chrono::NaiveDateTime>,
+}
+
+/// Resolved icon metadata and bytes; source identity is deliberately omitted.
+pub struct PastedCustomIcon {
+    pub data: Vec<u8>,
+    pub name: Option<String>,
     pub last_modification_time: Option<chrono::NaiveDateTime>,
 }
 
@@ -735,7 +756,7 @@ fn parse_entries_document_limited(
         }
         None => HashMap::new(),
     };
-    let custom_icons: HashMap<String, Vec<u8>> = match file.meta.custom_icons {
+    let custom_icons: HashMap<String, PastedCustomIcon> = match file.meta.custom_icons {
         Some(icons) => {
             // Validate every definition before filtering data. Missing or
             // damaged data must not hide a repeated exact XML identity.
@@ -745,20 +766,36 @@ fn parse_entries_document_limited(
                     return Err("自定义图标编号重复".to_owned());
                 }
             }
-            icons
-                .icons
-                .into_iter()
-                .filter_map(|icon| {
-                    let data = icon.data?;
-                    let bytes = base64_engine::STANDARD.decode(data.trim()).ok()?;
-                    Some((icon.uuid, bytes))
-                })
-                .collect()
+            let mut map = HashMap::with_capacity(icons.icons.len());
+            for icon in icons.icons {
+                let last_modification_time = icon
+                    .last_modification_time
+                    .map(|seconds| {
+                        chrono::DateTime::from_timestamp(seconds, 0)
+                            .map(|time| time.naive_utc())
+                            .ok_or_else(|| "自定义图标时间无效".to_owned())
+                    })
+                    .transpose()?;
+                if let Some(data) = icon
+                    .data
+                    .and_then(|data| base64_engine::STANDARD.decode(data.trim()).ok())
+                {
+                    map.insert(
+                        icon.uuid,
+                        PastedCustomIcon {
+                            data,
+                            name: icon.name.map(|name| name.value),
+                            last_modification_time,
+                        },
+                    );
+                }
+            }
+            map
         }
         None => HashMap::new(),
     };
 
-    // Attachment/icon references and resolved metadata share one binary-copy
+    // Attachment/icon references, icon names and resolved metadata share one copy
     // budget across all entries; preparation refuses the whole list on overflow.
     let mut remaining_binary_bytes = max_expanded_binary_bytes;
     file.root
@@ -776,10 +813,31 @@ fn clone_binary_with_budget(data: &[u8], remaining: &mut usize) -> Result<Vec<u8
     Ok(data.to_vec())
 }
 
+fn clone_custom_icon_with_budget(
+    icon: &PastedCustomIcon,
+    remaining: &mut usize,
+) -> Result<PastedCustomIcon, String> {
+    // One shared name can otherwise expand independently of its image bytes.
+    // Charge the complete independent copy before allocating either value.
+    let bytes = icon
+        .data
+        .len()
+        .checked_add(icon.name.as_ref().map_or(0, String::len))
+        .ok_or_else(|| "剪贴板数据过大".to_owned())?;
+    *remaining = remaining
+        .checked_sub(bytes)
+        .ok_or_else(|| "剪贴板数据过大".to_owned())?;
+    Ok(PastedCustomIcon {
+        data: icon.data.clone(),
+        name: icon.name.clone(),
+        last_modification_time: icon.last_modification_time,
+    })
+}
+
 fn parse_entry(
     entry: &XmlEntry,
     binaries: &HashMap<usize, Vec<u8>>,
-    custom_icons: &HashMap<String, Vec<u8>>,
+    custom_icons: &HashMap<String, PastedCustomIcon>,
     remaining_binary_bytes: &mut usize,
 ) -> Result<PastedEntry, String> {
     let mut fields: Vec<(String, String, bool)> = Vec::new();
@@ -829,7 +887,7 @@ fn parse_entry(
             .custom_icon_uuid
             .as_ref()
             .and_then(|uuid| custom_icons.get(uuid))
-            .map(|data| clone_binary_with_budget(data, remaining_binary_bytes))
+            .map(|icon| clone_custom_icon_with_budget(icon, remaining_binary_bytes))
             .transpose()?,
         foreground_color: entry.foreground_color.clone(),
         background_color: entry.background_color.clone(),
@@ -998,10 +1056,12 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
     if let Some(url) = &entry.override_url {
         node.override_url = Some(url.clone());
     }
-    if let Some(data) = &entry.custom_icon {
+    if let Some(icon) = &entry.custom_icon {
         // A pasted custom icon becomes a fresh icon in the target database, so
         // no cross-database icon id has to be remapped.
-        let _ = node.set_icon_custom_new(data.clone());
+        let mut restored = node.set_icon_custom_new(icon.data.clone());
+        restored.name = icon.name.clone();
+        restored.last_modification_time = icon.last_modification_time;
     } else if let Some(icon) = entry.icon.filter(|icon| *icon >= 0) {
         // The clipboard payload is untrusted: a negative icon id would wrap
         // into a huge usize and corrupt the built-in icon lookup.
@@ -1061,6 +1121,10 @@ mod custom_time_tests;
 #[cfg(test)]
 #[path = "exchange_icon_identity_tests.rs"]
 mod icon_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_icon_metadata_tests.rs"]
+mod icon_metadata_tests;
 
 #[cfg(test)]
 #[path = "exchange_autotype_tests.rs"]

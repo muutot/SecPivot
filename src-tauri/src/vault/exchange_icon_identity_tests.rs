@@ -60,7 +60,10 @@ fn saved_icons(entries: &[PastedEntry]) -> Vec<Option<Vec<u8>>> {
             let actual = session.require_db().unwrap().entry(*id).unwrap();
             assert_eq!(actual.get_title(), Some(expected.fields[0].1.as_str()));
             let bytes = actual.custom_icon().map(|icon| icon.data.clone());
-            assert_eq!(bytes, expected.custom_icon);
+            assert_eq!(
+                bytes,
+                expected.custom_icon.as_ref().map(|icon| icon.data.clone())
+            );
             if bytes.is_none() {
                 assert_eq!(actual.icon(), Some(&Icon::BuiltIn(9)));
             }
@@ -141,13 +144,13 @@ fn exchange_icon_identity_keeps_unique_shared_and_unreferenced_controls() {
     assert_eq!(
         parsed
             .iter()
-            .map(|entry| entry.custom_icon.clone())
+            .map(|entry| entry.custom_icon.as_ref().map(|icon| icon.data.clone()))
             .collect::<Vec<_>>(),
         expected
     );
     assert_ne!(
-        parsed[0].custom_icon.as_ref().unwrap().as_ptr(),
-        parsed[2].custom_icon.as_ref().unwrap().as_ptr()
+        parsed[0].custom_icon.as_ref().unwrap().data.as_ptr(),
+        parsed[2].custom_icon.as_ref().unwrap().data.as_ptr()
     );
     assert_eq!(saved_icons(&parsed), expected);
 }
