@@ -1,5 +1,20 @@
 # Data Contracts
 
+`get_history_website_rules({sessionId:String, request:{uuid,index,selectionToken,source}})`
+returns `WebsiteRuleSet|null`. The strict request requires every field; source is
+`version` or `current`, with content-free rejection for unknown source strings.
+Both sides validate the original selection and historical existence under the
+session lock, so current values cannot come from a later revision. None means no
+managed field; an empty valid set remains enabled/no-match; malformed stored JSON
+rejects. The current and historical readers share the native validated parser.
+The renderer read requires a HistorySelection and original session epoch and
+rejects closed/replaced results. HistoryVersionDialog receives sessionId from
+EntryDetail and uses HistoryRuleView for explicit loads, source changes, retry,
+hide and disposal. Switching/hiding drops prior contents immediately; late
+responses cannot publish after an operation, selection, owner or lifetime change.
+Ordinary snapshots keep presence/diff hints only. Twelve isolated DOM cases and
+synthetic service/native tests are separate from real WebView/provider proof.
+
 `get_entry_history` now requires `sessionId: String`. Every `HistoryVersion`
 includes `selectionToken`, formed from a random native database lifetime, its
 u64 revision, canonical entry UUID and index. `restore_entry_version` and
@@ -15,7 +30,7 @@ and guard read/write completions against closed or replaced Symbol lifetimes.
 EntryDetail forwards the retained version, closes an obsolete preview and
 invalidates its cached list on refusal; selecting History again reloads it.
 Synthetic native/real-service/extracted-handler tests cover these boundaries;
-historical policy values and live WebView/Android behavior remain separate.
+explicit historical policy reads use the contract above; live WebView/Android behavior remains separate.
 
 `save_entry({sessionId: String, request: EntrySaveRequest}) -> EntrySaveResult`
 owns single-entry editor creation and editing. `request.target` is explicitly
@@ -68,9 +83,9 @@ The managed field stays excluded from ordinary custom-field arrays and differenc
 lists. `HistoryVersion.hasWebsiteRules` remains only a presence hint, including
 for malformed foreign policies. History details include the boolean in their
 count and Metadata indicator and can switch the historical/current presence
-summary; the timeline labels it Website rules. Neither view fetches policy values.
+summary; the timeline labels it Website rules. Presence summaries do not fetch policy values; history offers a separate explicit read.
 An exact same stored value/protection is unchanged; no field and an empty foreign
-field differ. On-demand historical rule content remains a separate pending flow.
+field differ. On-demand rule content is read only through the validated historical selection contract above.
 
 Native renderer state publication registers an addressed session's epoch at
 admission, including valid explicit IDs not listed yet. Each admission after
@@ -858,8 +873,7 @@ after close or remote replacement. `setEntryWebsiteRules(uuid,rules)` rejects
 undefined before IPC and uses the existing epoch-guarded state commit. Browser
 preview rejects both methods explicitly; `callInSession` binds parked origins.
 These real-service/native orchestration tests use synthetic seams. The frontend
-editor uses save_entry; history rule-value reader, source-format mapping and real WebView/client/
-provider execution remain pending; XML's complete renderer path remains separate.
+editor uses save_entry and history uses the selection-bound rule reader. Source-format mapping and real WebView/client/provider execution remain pending; XML's complete renderer path remains separate.
 
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name

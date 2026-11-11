@@ -2213,9 +2213,40 @@
         "No live opt-ins, OS clipboard, real config, secrets, KDF/OOM workload, sibling edits, push, release, APK build or install",
         "96 historical confirmed include remediated; baseline b7c5d9f/15/score6.1 and active whole goal unchanged"
       ]
+    },
+    "history_rule_view": {
+      "exitCode": 0,
+      "frontend": 443,
+      "rust": 764,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "source_checkpoint": "db75cc4",
+      "native_targeted": 5,
+      "frontend_targeted": 26,
+      "renderer_cases": 12,
+      "renderer_flows": 7,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\history-policy-final-proof.json",
+      "proof_sha256": "12763d8ccd7e74cda7dbbb8d0e7706630a70c0ec1ec19e0e2d93ec23d8d67683",
+      "log_sha256": "ed702b45d26025f081a3fbf3416961d1de496f94a610467a02aeb90dc874d20c",
+      "limits": [
+        "Feature integration, no new confirmed finding. 96 historical cards include remediated; original b7c5d9f/15/score6.1 and active whole goal preserved",
+        "Native actual synthetic AES KDBX and required-session orchestration tests; no real vault or provider/network/device timing",
+        "Two command tests selected by history_rule filter; three content tests independently executed by historical_rule filter",
+        "Real frontend services and HistoryRuleView with synthetic native/view seams. Actual Svelte DOM in isolated headless Edge, not a shipped WebView",
+        "Current source reads are bound to selected native revision; normal DTOs keep content masked; explicit reads stay in dialog memory without config/log/storage writes",
+        "Exact absence, enabled empty set, malformed policy and read failure remain distinct; source/hide/retry/disposal races do not publish old content",
+        "Keyboard View/Hide activation/focus, End-key inner-list scrolling and Close reachability verified; noninteractive-tabindex annotation exists only for the actual scrollable list",
+        "Initial Node strip-only parameter-property limitation, harness text locators and new-row CSS specificity were corrected, not recorded as product findings",
+        "Source format mappings, complete renderer XML, mobile v1.6.5 ACL new APK/provider proof and remaining full audit/competitor/UI coverage still pending",
+        "No live opt-ins, real config/vault/OS clipboard access, sibling edits, KDF/OOM workloads, push/release or APK build/install",
+        "No JS heap/allocator erasure or Android target ABI/NDK compilation claim"
+      ]
     }
   },
   "reverification_notes": [
+    "Selected historical website values connected; native5/frontend26/DOM12+7 pass; full443/764/ACL2/KeePass25/QuickXML1363 exit0. No new finding, historical96 and baseline15/6.1 preserved; whole goal active.",
     "SP-S85 history selection validated before native mutations;6 native/12 service-handler pass, full433/759/ACL2/KeePass25/QuickXML1363 exit0. Historical96 and baseline15/6.1 preserved; whole goal active, historical rule content and mobile/provider pending.",
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
     "Retract mock-expiry attribution: later HTTP 502 peer differed from loopback fixture endpoint and system proxy was enabled; 2cb9449 disables proxies only in the test client and full verify passed",

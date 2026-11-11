@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { onDestroy, untrack } from "svelte";
   import type {
     VaultEntry,
     HistoryVersion,
     HistoryItemChange,
     CustomField,
     AttachmentInfo,
+    WebsiteMode,
   } from "$lib/types/vault";
   import { formatLocalDate } from "$lib/utils/date";
   import { formatBytes } from "$lib/utils/format";
@@ -13,15 +15,18 @@
   import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import Feedback from "$lib/components/templates/form/Feedback.svelte";
+  import { HistoryRuleView, initialHistoryRuleView } from "$lib/utils/history-rule-view";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     entry: VaultEntry;
     version: HistoryVersion;
+    sessionId: string;
     onclose: () => void;
   }
 
-  let { entry, version, onclose }: Props = $props();
+  let { entry, version, sessionId, onclose }: Props = $props();
 
   let s = $state($appSettings);
   $effect(() => {
@@ -40,9 +45,54 @@
    * historical version value. */
   let showCurrent = $state<Record<string, boolean>>({});
   let activeTab = $state<"fields" | "meta" | "custom" | "data" | "attachments">("fields");
+  let ruleView = $state(initialHistoryRuleView());
+  let ruleController: HistoryRuleView | null = null;
+
+  $effect(() => {
+    const origin = sessionId;
+    const uuid = entry.uuid;
+    const selection = { index: version.index, selectionToken: version.selectionToken };
+    untrack(() => {
+      showCurrent.websiteRules = false;
+      ruleView = initialHistoryRuleView();
+    });
+    const controller = new HistoryRuleView(
+      (source) =>
+        vault.callInSession(origin, () => vault.getHistoryWebsiteRules(uuid, selection, source)),
+      (state) => {
+        ruleView = state;
+      },
+      () =>
+        sessionId === origin &&
+        entry.uuid === uuid &&
+        version.index === selection.index &&
+        version.selectionToken === selection.selectionToken,
+    );
+    ruleController = controller;
+    return () => {
+      controller.dispose();
+      if (ruleController === controller) ruleController = null;
+    };
+  });
+  onDestroy(() => ruleController?.dispose());
+
+  function viewRules(): void {
+    if (ruleView.visible) ruleController?.hide();
+    else void ruleController?.load(showCurrent.websiteRules ? "current" : "version");
+  }
+
+  function ruleModeLabel(mode: WebsiteMode): string {
+    if (mode === "host") return t(lang, "editor.websiteHost");
+    if (mode === "site") return t(lang, "editor.websiteSite");
+    if (mode === "exact") return t(lang, "editor.websiteExact");
+    return t(lang, "editor.websiteNever");
+  }
 
   function toggleValue(key: string): void {
     showCurrent[key] = !showCurrent[key];
+    if (key === "websiteRules" && ruleView.visible) {
+      void ruleController?.load(showCurrent.websiteRules ? "current" : "version");
+    }
   }
 
   // Change flags come from the backend diff, which sees the password and
@@ -453,6 +503,50 @@
                 : t(lang, "history.websiteRulesAbsent")}</span
             >
             {#if websiteRulesDiff}{@render swapBtn("websiteRules")}{/if}
+            <Button variant="action" onclick={viewRules}>
+              {t(lang, ruleView.visible ? "history.websiteHide" : "history.websiteView")}
+            </Button>
+            {#if ruleView.visible}
+              <div class="website-content" aria-busy={ruleView.loading}>
+                <p class="website-source">
+                  {t(
+                    lang,
+                    ruleView.source === "current" ? "history.currentValue" : "history.historyValue",
+                  )}
+                </p>
+                {#if ruleView.loading}
+                  <p class="website-source" role="status">{t(lang, "history.websiteLoading")}</p>
+                {:else if ruleView.error}
+                  <Feedback inline message={t(lang, "history.websiteReadFailed")} />
+                  <Button
+                    variant="action"
+                    onclick={() =>
+                      void ruleController?.load(showCurrent.websiteRules ? "current" : "version")}
+                    >{t(lang, "editor.websiteRetry")}</Button
+                  >
+                {:else if ruleView.ready}
+                  {#if ruleView.value === null}
+                    <p class="website-source">{t(lang, "history.websiteUnset")}</p>
+                  {:else if ruleView.value.rules.length === 0}
+                    <p class="website-source">{t(lang, "editor.websiteEmpty")}</p>
+                  {:else}
+                    <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must focus this bounded list to scroll its complete rule contents.) -->
+                    <ol
+                      class="website-rules"
+                      tabindex="0"
+                      aria-label={t(lang, "editor.websiteRules")}
+                    >
+                      {#each ruleView.value.rules as rule, index (index)}
+                        <li class="read-value website-rule">
+                          <span class="website-mode">{ruleModeLabel(rule.mode)}</span>
+                          <span class="read-text mono website-url">{rule.url}</span>
+                        </li>
+                      {/each}
+                    </ol>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
           </div>
         {/if}
         <div class="read-value" class:changed={hasTotpDiff}>
@@ -676,6 +770,48 @@
 
   .website-policy .read-text {
     flex: 1 1 140px;
+  }
+
+  .website-content {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+
+  .website-source {
+    margin: 6px 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .website-rules {
+    display: grid;
+    gap: 6px;
+    max-height: min(240px, 30vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+    margin: 6px 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .website-rules .website-rule {
+    align-items: flex-start;
+    padding-block: 6px;
+  }
+
+  .website-mode {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+  }
+
+  .website-rule .website-url {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .color-swatch {

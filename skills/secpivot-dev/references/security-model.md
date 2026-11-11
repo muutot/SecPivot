@@ -1,5 +1,16 @@
 # Security Model
 
+Historical rule values cross IPC only after the explicit View rules action.
+The required-session getter validates the selected version token and existence
+for both version/current sources before parsing protected policy contents; stale
+or malformed data never falls back to current values or no rules. Unknown source
+strings return a content-free error. Current/history snapshots remain masked.
+HistoryRuleView keeps values only in ephemeral dialog memory, drops them on hide/
+source switch and cancels older reads on retry, disposal or changed ownership.
+The component passes its captured session, UUID and token; renderer epoch checks
+reject late closed/replaced reads. No rules enter config/logs/storage, and no heap
+erasure, real WebView or Android/provider behavior is implied by synthetic tests.
+
 History restore/deletion require an originating String session ID and the token
 returned with the selected version. Native checks database lifetime, revision,
 entry and index under the session lock before changing fields or history. The
@@ -8,8 +19,7 @@ refresh/merge advance revision. No password/field/attachment hash identifies a
 snapshot, and no token is persisted to vault/config. Conservative invalidation
 on any revision requires explicit reselection. Renderer history reads and
 mutations reject disposed/replaced epochs before returning or publishing; parked
-owners remain supported. Policy contents remain masked and historical policy
-value access is still pending. Synthetic fixtures do not prove live WebView,
+owners remain supported. Policy contents remain masked in ordinary DTOs; explicit historical value access requires the original selection token. Synthetic fixtures do not prove live WebView,
 Android provider timing or heap erasure.
 
 Single-entry editor `save_entry` requires an explicit String origin session ID
@@ -667,5 +677,4 @@ sanitize structural rule errors before validated native publication. Renderer
 reads reject disposed/replaced owners, writes share the existing Symbol epoch
 guard, and browser preview rejects native policy operations. Only presence hints
 enter current/history DTOs, including foreign malformed policy presence.
-Frontend policy editing, history rule-value reading and complete renderer XML
-migration remain pending; no real WebView or full memory-erasure claim.
+Frontend policy editing and selection-bound historical rule reads are connected. Complete renderer XML migration and real WebView/provider proof remain pending; no full memory-erasure claim.

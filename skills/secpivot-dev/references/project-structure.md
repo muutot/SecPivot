@@ -1,5 +1,17 @@
 # Project Structure and Runtime Surfaces
 
+`website_rules.rs` owns HistoryRuleSource and get_history_website_rules, sharing
+the validated parser with the current reader and reusing entries.rs selection
+validation. commands/website_rules.rs exposes a strict required-session read
+envelope, registered for both desktop/mobile in lib.rs. services/vault.ts validates
+selection/source and response lifetime. utils/history-rule-view.ts cancels stale
+reads and owns ephemeral rule content; HistoryVersionDialog composes the compact
+read-only rows with Button/Feedback. EntryDetail passes the originating session.
+Native history_rule_tests.rs and command tests cover exact sides, absence/empty/
+invalid states, shifted/reopened versions, parked/closed origins and KDBX reopen.
+Frontend utility/service tests and isolated DOM fixtures cover cancellation,
+focus, language/theme/narrow/long-URL rendering; real WebView/provider is separate.
+
 `entries.rs` owns history selection tokens and validates them before restore or
 delete. `session.rs` regenerates `VaultSession.history_lifetime` for each local/
 remote adoption; revision changes reject old selections. `dto.rs::HistoryVersion`
@@ -10,7 +22,7 @@ an obsolete preview/cache on refusal. `vault/history_selection_tests.rs` covers
 native insertion/deletion/reopen/remote-adoption/registry boundaries; its legacy
 fixture convenience methods exist only under cfg(test). Frontend service and
 extracted production-handler tests cover payload/lifetime/notification behavior.
-No policy-value reader or appearance change is part of this stage.
+Historical protected-content reading uses the separate selection-bound command described below.
 
 Shared `vault/website_rules.rs` imports `parse_entry_id` from `vault/helpers.rs`
 directly. The parent vault aliases for browser matching remain desktop-only;
@@ -43,7 +55,7 @@ and browser refusal. Native editor tests cover policy history/KDBX and rollback.
 `entries.rs::history_diff` and `dto.rs::HistoryDiff.website_rules` provide one
 managed-policy change flag to entry history and `security.rs::change_timeline`.
 `HistoryVersionDialog` includes it in counts/Metadata presence summaries;
-`ChangeTimelineDialog` supplies its localized chip. No rule-value reader is added.
+`ChangeTimelineDialog` supplies its localized chip. The history dialog separately offers explicit rule reading.
 `website_rules_storage_tests.rs` covers native policy-only changes, raw/protection/
 presence controls and KDBX reopen while keeping DTO content masked.
 

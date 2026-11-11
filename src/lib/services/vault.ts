@@ -22,6 +22,7 @@ import type {
   TotpCode,
   HistoryVersion,
   HistorySelection,
+  HistoryRuleSource,
   EntryStorage,
   AttachmentPreview,
   TempAttachmentRef,
@@ -144,6 +145,11 @@ interface VaultStore {
   moveEntry: (uuid: string, groupUuid: string) => Promise<VaultState>;
   restoreEntry: (uuid: string) => Promise<VaultState>;
   getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
+  getHistoryWebsiteRules: (
+    uuid: string,
+    selection: HistorySelection,
+    source: HistoryRuleSource,
+  ) => Promise<WebsiteRuleSet | null>;
   deleteEntryHistory: (uuid: string, selection: HistorySelection) => Promise<VaultState>;
   getEntryStorage: (uuid: string) => Promise<EntryStorage>;
   restoreEntryVersion: (uuid: string, selection: HistorySelection) => Promise<VaultState>;
@@ -581,15 +587,7 @@ async function mutateSelectedHistory(
   uuid: string,
   selection: HistorySelection,
 ): Promise<VaultState> {
-  if (
-    !selection ||
-    !Number.isSafeInteger(selection.index) ||
-    selection.index < 0 ||
-    typeof selection.selectionToken !== "string" ||
-    !selection.selectionToken
-  ) {
-    throw new Error(t(lang(), "error.historyStale"));
-  }
+  requireHistorySelection(selection);
   const sessionId = captureSessionId();
   const epoch = captureSessionEpoch(sessionId);
   try {
@@ -607,6 +605,18 @@ async function mutateSelectedHistory(
       throw new Error(t(lang(), "error.historyStale"));
     }
     throw error;
+  }
+}
+
+function requireHistorySelection(selection: HistorySelection): void {
+  if (
+    !selection ||
+    !Number.isSafeInteger(selection.index) ||
+    selection.index < 0 ||
+    typeof selection.selectionToken !== "string" ||
+    !selection.selectionToken
+  ) {
+    throw new Error(t(lang(), "error.historyStale"));
   }
 }
 
@@ -1890,6 +1900,28 @@ export const vault: VaultStore = {
       return result;
     }
     return [];
+  },
+
+  async getHistoryWebsiteRules(
+    uuid: string,
+    selection: HistorySelection,
+    source: HistoryRuleSource,
+  ): Promise<WebsiteRuleSet | null> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featWebsiteRules");
+    requireHistorySelection(selection);
+    if (source !== "version" && source !== "current")
+      throw new Error(t(lang(), "error.historyStale"));
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<WebsiteRuleSet | null>(
+      "get_history_website_rules",
+      {
+        request: { uuid, index: selection.index, selectionToken: selection.selectionToken, source },
+      },
+      sessionId,
+    );
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.historyStale"));
+    return result;
   },
 
   async deleteEntryHistory(uuid: string, selection: HistorySelection): Promise<VaultState> {

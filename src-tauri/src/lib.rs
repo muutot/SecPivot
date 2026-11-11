@@ -473,6 +473,7 @@ pub fn run() {
             commands::get_entry_totp,
             commands::get_custom_field_value,
             commands::get_entry_website_rules,
+            commands::get_history_website_rules,
             commands::set_entry_website_rules,
             commands::get_entry_storage,
             commands::security_report,

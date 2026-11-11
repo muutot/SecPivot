@@ -4756,3 +4756,19 @@ documentation currency gate更新data-contracts／security-model／project-struc
 最终verify-history-selection-final.log exit0：frontend433／Rust759／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过，root无过滤／单线程Rust／dev-test debug0／live未启用。完整日志SHA256 4a6e10b54ef72bf35650da5c444d7661dfbd7dea1ba06755f6ae915359f0ed02；history-selection-final-proof.json SHA256 752f960385777018647fb32fd330de47b9ced2762f9d33b291905fddc1d69507关联原样源码／两项原生红测／专项和最终源码及门禁。verified-source清单在门禁前后逐文件一致；提交前另核验staged内容与最终format。
 
 documentation currency gate更新data-contracts／security-model／project-structure及历史操作IPC／类型表；TODO逐网址仍[~]。SKILL／maintenance稳定路由无需更改；历史策略值读取、来源规则映射、完整renderer XML、手机新APK／provider及其余全仓／竞品／视觉复核继续，整体目标active。96历史Confirmed（1／19／60／16）及原始b7c5d9f／15项／6.1分保持。
+
+### 历史网址规则显式查看阶段复核
+
+本阶段在db75cc4版本选择校验基础上完成独立功能接线，不新增Confirmed卡片。get_history_website_rules要求来源sessionId与严格request：uuid／index／selectionToken／source，source仅version／current。两侧在同一原生会话锁内先校验历史选择与存在，再共用受保护策略读取器；current也绑定原差异revision，不能读取另一版本或较新的current冒充原对照。未设置返回null；空启用列表保持空策略；外部损坏规则固定错误拒绝。普通DTO继续只给存在／差异提示。
+
+HistoryVersionDialog接收EntryDetail原来源sessionId，点击查看后才读取，使用HistoryRuleView保存临时内容；切换来源／隐藏立即清空，重试／关闭／更换选择使旧响应失效。失败有明确反馈与重试，不表示无规则。规则用紧凑只读行显示模式与完整网址，沿用原theme tokens、Button／Feedback／read-value；长网址换行，模式顶部对齐，没有新增链接导航或编辑写入。
+
+原生读取3项与命令编排／严格结构2项、前端新增view5／service5（含既有历史／i18n专项合计26）通过；合成AES KDBX证明两个来源准确、保存重开、DTO隐藏、空／缺失／损坏区别、索引变化与缺失current侧拒绝、停放／跨库／关闭会话。首次Rust过滤history_rule仅跑命令2项，另用historical_rule确实运行3项，不把filter日志误记为5项。初次Node的parameter property strip限制改为普通字段；渲染夹具假设的旧文案定位已纠正，历史加载不复用“保存可用”编辑器文案，不计产品缺陷。
+
+隔离headless Edge实际Svelte组件12个深／浅／自定义×中／英×1100×720／360×600组合通过，另有未设置／空／读取失败重试／长网址／来源乱序／隐藏晚到／关闭晚到7项流程，无pageerror。手工观察窄屏深色与长网址浅色截图；CSS specificity修正了新增长行模式标签的垂直居中。极长规则列表改为min(240px,30vh)有界内部滚动，键盘End可浏览完整内容，沿用theme scrollbar／focus，Close保持可达。此证据用合成服务与选中版本边界，不证明真实WebView／Android/provider。完整门禁与最终源码哈希核验通过。
+
+documentation currency gate同步data-contracts／security-model／project-structure／css-theming与TODO；稳定SKILL／maintenance路由无需变化。96历史Confirmed（1／19／60／16）和原始b7c5d9f／15项／6.1分保持。完整renderer XML、来源格式模式映射、手机新APK／provider及剩余全仓／竞品／UI复核继续，逐网址TODO仍[~]，整体目标active。
+
+历史规则查看最终verify-history-policy-final.log exit0：frontend443／Rust764／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy全部通过；root无过滤，单线程Rust／dev-test debug0／live未启用。完整日志SHA256 ed702b45d26025f081a3fbf3416961d1de496f94a610467a02aeb90dc874d20c；history-policy-final-proof.json SHA256 12763d8ccd7e74cda7dbbb8d0e7706630a70c0ec1ec19e0e2d93ec23d8d67683关联原生分开执行的2＋3专项、前端26专项、renderer12组合／7流程与最终源码／截图。verified-source清单门禁前后逐文件一致；最终format、严格metadata和staged内容另行核验。
+
+最终documentation currency gate已更新历史读取IPC／来源枚举、临时视图状态与主题内滚动模式，并纠正旧引用中“历史reader未实现”的描述；SKILL／maintenance稳定路由无需改动。历史规则不从current getter回填，UI初始不开启读取，失败不清空策略且隐藏不落盘。普通DTO／配置／日志保持隐藏规则内容；目标与96历史卡片、原始15项／6.1分不变。真实WebView／Android/provider、来源迁移、完整renderer XML与剩余全仓复核继续，整体goal active。

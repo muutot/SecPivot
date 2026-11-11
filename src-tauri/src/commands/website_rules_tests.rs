@@ -3,6 +3,88 @@ use crate::vault::{EntryInput, WebsiteMode};
 use serde_json::{json, Value};
 use std::path::Path;
 
+fn history_read(uuid: &str, index: usize, token: &str, source: &str) -> HistoryWebsiteRulesRead {
+    serde_json::from_value(
+        json!({"uuid":uuid,"index":index,"selectionToken":token,"source":source}),
+    )
+    .unwrap()
+}
+
+#[test]
+fn history_rules_request_requires_exact_selection_and_valid_source() {
+    for value in [
+        json!({}),
+        json!({"uuid":"synthetic","index":0,"source":"version"}),
+        json!({"uuid":"synthetic","index":0,"selectionToken":"synthetic"}),
+        json!({"uuid":"synthetic","index":-1,"selectionToken":"synthetic","source":"version"}),
+        json!({"uuid":"synthetic","index":0,"selectionToken":"synthetic","source":"version","extra":true}),
+    ] {
+        assert!(serde_json::from_value::<HistoryWebsiteRulesRead>(value).is_err());
+    }
+    for source in ["version", "current"] {
+        history_read("synthetic", 0, "synthetic", source);
+    }
+    let error = serde_json::from_value::<HistoryWebsiteRulesRead>(json!({"uuid":"synthetic","index":0,"selectionToken":"synthetic","source":"synthetic-private-marker"})).err().unwrap();
+    assert!(!error.to_string().contains("synthetic-private-marker"));
+}
+
+#[test]
+fn addressed_history_rule_read_keeps_parked_origin_and_rejects_closed_origin() {
+    let dir = tempfile::tempdir().unwrap();
+    let vaults = VaultSessions::default();
+    let active = Mutex::new(VaultSession::default());
+    let (a, uuid) = open(&vaults, &active, &dir.path().join("a.kdbx"));
+    set_for_session(&vaults, &active, &a, write(&uuid, policy())).unwrap();
+    let selected = with_vault_session(&vaults, &active, Some(&a), |target| {
+        target.get_entry_history(&uuid)
+    })
+    .unwrap()[0]
+        .clone();
+    let (b, _) = open(&vaults, &active, &dir.path().join("b.kdbx"));
+    let before_b = serde_json::to_value(active.lock().unwrap().state().unwrap()).unwrap();
+    assert!(get_history_for_session(
+        &vaults,
+        &active,
+        &a,
+        history_read(&uuid, selected.index, &selected.selection_token, "version")
+    )
+    .unwrap()
+    .is_none());
+    assert_eq!(
+        serde_json::to_value(
+            get_history_for_session(
+                &vaults,
+                &active,
+                &a,
+                history_read(&uuid, selected.index, &selected.selection_token, "current")
+            )
+            .unwrap()
+            .unwrap()
+        )
+        .unwrap(),
+        policy()
+    );
+    assert!(get_history_for_session(
+        &vaults,
+        &active,
+        &b,
+        history_read(&uuid, selected.index, &selected.selection_token, "current")
+    )
+    .is_err());
+    assert_eq!(
+        serde_json::to_value(active.lock().unwrap().state().unwrap()).unwrap(),
+        before_b
+    );
+    vaults.close(&mut active.lock().unwrap(), Some(&a)).unwrap();
+    assert!(get_history_for_session(
+        &vaults,
+        &active,
+        &a,
+        history_read(&uuid, selected.index, &selected.selection_token, "current")
+    )
+    .is_err());
+}
+
 fn write(uuid: &str, rules: Value) -> WebsiteRulesWrite {
     serde_json::from_value(json!({"uuid": uuid, "rules": rules})).unwrap()
 }

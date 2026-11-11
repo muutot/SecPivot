@@ -807,7 +807,7 @@ impl VaultSession {
         )
     }
 
-    fn validate_history_selection(
+    pub(super) fn validate_history_selection(
         &self,
         id: EntryId,
         index: usize,

@@ -1,5 +1,17 @@
 # Project-wide UI Style and Theming
 
+History's explicit View rules action stays in the existing wrapped Metadata
+summary. Loaded content spans that row's width; rule rows reuse read-value borders,
+compact Button/inline Feedback and existing muted/secondary text metrics. Full URL
+bytes render as read-only, pre-wrapped text with anywhere wrapping; mode labels
+align at the first line via the scoped .website-rules .website-rule selector.
+Source changes and hide clear contents immediately. No new tokens or native links
+are introduced. The focusable list scrolls within min(240px,30vh), using existing
+scrollbar/focus tokens and contained overscroll; shared modal scrolling keeps Close reachable;
+the list's scoped noninteractive-tabindex annotation documents keyboard scrolling
+and is backed by the rendered End-key scroll check, without changing its list semantics.
+Keyboard activation retains focus on View/Hide and existing swap controls.
+
 This is the authoritative style reference for SecPivot UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
 
 ## Style source-of-truth order
