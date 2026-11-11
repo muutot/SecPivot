@@ -71,9 +71,9 @@ const CLIP_DOMAIN_SEP: [u8; 8] = [0xF8, 0x03, 0xFA, 0x51, 0x87, 0x18, 0x49, 0x5D
 /// backend allocate without limit.
 const MAX_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 
-/// KeePass stores attachment bytes out of line: the entry keeps a
-/// `BinDes-<id>` string field holding the file name and the payload lives in
-/// the document's `<Binaries>` list.
+/// SecPivot's legacy exchange stores attachment bytes out of line: the entry
+/// keeps a `BinDes-<id>` string field holding the file name and the payload lives
+/// in the document's `<Binaries>` list. Ordinary fields must not use this prefix.
 const BINARY_FIELD_PREFIX: &str = "BinDes-";
 
 // ---------------------------------------------------------------------------
@@ -361,6 +361,15 @@ fn serialize_entry(
     binaries: &mut Vec<XmlBinary>,
     custom_icons: &mut HashMap<String, XmlCustomIcon>,
 ) -> Result<XmlEntry, String> {
+    // The legacy reader cannot distinguish these ordinary fields from its
+    // attachment references. Refuse before publishing a lossy clipboard blob.
+    if entry
+        .fields
+        .keys()
+        .any(|key| key.starts_with(BINARY_FIELD_PREFIX))
+    {
+        return Err("条目包含与附件交换格式冲突的字段名".to_owned());
+    }
     let mut keys: Vec<&String> = entry.fields.keys().collect();
     keys.sort();
     let mut string_fields: Vec<XmlStringField> = keys
@@ -793,6 +802,10 @@ mod text_tests;
 #[cfg(test)]
 #[path = "exchange_binary_tests.rs"]
 mod binary_tests;
+
+#[cfg(test)]
+#[path = "exchange_field_identity_tests.rs"]
+mod field_identity_tests;
 
 #[cfg(test)]
 mod tests {

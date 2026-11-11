@@ -1,5 +1,16 @@
 # Data Contracts
 
+Native entry-exchange document generation refuses any ordinary field whose
+original name starts with the exact `BinDes-` prefix. The legacy String-based
+attachment references share that namespace, so numeric names could become
+attachments and other suffixes could prevent pasting. The fixed error contains
+no field names/values, and any conflict aborts the whole selection before a
+document is returned for clipboard framing/writing. Source data is unchanged;
+near-prefix names and real empty/nonempty attachments retain their identity.
+Full prefix-field preservation needs a distinct attachment representation and
+independent legacy/foreign-client compatibility work; old ambiguous blobs are
+not repaired or guessed by this writer gate.
+
 Entry-exchange `XmlBinary.data` uses default `$text`: self-closing, explicitly
 empty or whitespace-only Base64 elements represent zero-byte attachments.
 `@ID` remains required, and the binary envelope rejects unknown attributes or
