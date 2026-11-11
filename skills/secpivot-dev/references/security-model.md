@@ -1,5 +1,11 @@
 # Security Model
 
+Entry-exchange preparation rejects duplicate numeric binary definitions rather
+than selecting later bytes. Identity validation covers unreferenced definitions
+too and returns a content-free error before target insertion; shared references
+to one unique definition stay valid. Synthetic tests and independent fixture
+decoding do not access the OS clipboard, user data or native clients.
+
 Whole-entry copying checks ordinary field names for the legacy `BinDes-`
 attachment-reference namespace before serializing their values. A conflict
 returns a content-free error before any completed document or clipboard write,

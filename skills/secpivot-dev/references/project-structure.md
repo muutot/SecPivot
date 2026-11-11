@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_binary_tests.rs` also owns duplicate binary-ID regressions, using
+`tests/fixtures/exchange-binary-identity.json`. Six duplicate-definition cases
+reject during `parse_entries_document`; three unique sparse/reordered/shared
+controls exercise native persistence and re-export. Definitions require unique
+numeric IDs across the whole document, while references may share one ID.
+Existing empty-binary tests and actual clipboard/foreign-format limits remain.
+
 `exchange_field_identity_tests.rs` is a test-only child of `exchange.rs` for
 ordinary field collisions with the legacy attachment-reference namespace.
 Two regressions cover 16 outgoing-refusal combinations and legitimate near-prefix

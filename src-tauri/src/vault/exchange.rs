@@ -613,7 +613,11 @@ pub fn parse_entries_document(document: &[u8]) -> Result<Vec<PastedEntry>, Strin
                 let data = base64_engine::STANDARD
                     .decode(binary.data.trim())
                     .map_err(|_| "附件数据无效".to_owned())?;
-                map.insert(binary.id, data);
+                // Definitions must have one numeric identity; shared entry
+                // references are valid, but duplicate definitions are not.
+                if map.insert(binary.id, data).is_some() {
+                    return Err("附件编号重复".to_owned());
+                }
             }
             map
         }

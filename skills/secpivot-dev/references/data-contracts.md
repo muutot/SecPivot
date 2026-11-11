@@ -1,5 +1,15 @@
 # Data Contracts
 
+Entry-exchange binary definitions require globally unique numeric IDs. The
+parser rejects duplicate definitions before publishing any entries, including
+identical/empty bytes, numeric aliases and unreferenced duplicates; the fixed
+error contains no IDs or content. Sparse/reordered unique definitions and
+multiple entry references remain valid. Unreferenced unique definitions are
+accepted but are not inserted as attachments. The shared synthetic fixture
+`tests/fixtures/exchange-binary-identity.json` covers six refusals and three
+valid native framing/parse/insert/save/reopen/re-export controls with independent
+XML/Base64 analysis; this does not establish foreign-container interoperability.
+
 Native entry-exchange document generation refuses any ordinary field whose
 original name starts with the exact `BinDes-` prefix. The legacy String-based
 attachment references share that namespace, so numeric names could become

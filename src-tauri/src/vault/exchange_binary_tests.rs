@@ -150,3 +150,99 @@ fn exchange_empty_binary_controls_reject_corrupt_text_structure_and_references()
     let missing = document("");
     assert!(parse_entries_document(missing.as_bytes()).is_err());
 }
+
+#[derive(Deserialize)]
+struct BinaryIdentityFixture {
+    duplicates: Vec<String>,
+    unique: Vec<String>,
+}
+
+fn binary_identity_fixture() -> BinaryIdentityFixture {
+    serde_json::from_str(include_str!(
+        "../../../tests/fixtures/exchange-binary-identity.json"
+    ))
+    .unwrap()
+}
+
+#[test]
+fn exchange_duplicate_binary_ids_reject_the_complete_document() {
+    let fixture = binary_identity_fixture();
+    assert_eq!(fixture.duplicates.len(), 6);
+    let mut accepted = Vec::new();
+    for (index, binaries) in fixture.duplicates.iter().enumerate() {
+        let xml = Zeroizing::new(document(binaries));
+        let framed = Zeroizing::new(encode_payload(xml.as_bytes(), false).unwrap());
+        let decoded = Zeroizing::new(decode_payload(&framed).unwrap());
+        match parse_entries_document(&decoded) {
+            Ok(_) => accepted.push(index),
+            Err(error) => assert_eq!(error, "附件编号重复"),
+        }
+    }
+    assert!(
+        accepted.is_empty(),
+        "accepted duplicate-ID cases: {accepted:?}"
+    );
+}
+
+#[test]
+fn exchange_unique_binary_ids_keep_sparse_order_and_shared_references_after_reopen() {
+    let fixture = binary_identity_fixture();
+    assert_eq!(fixture.unique.len(), 3);
+    let entry = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><String><Key>BinDes-0</Key><Value Protected=\"True\">nonempty.bin</Value></String><String><Key>BinDes-7</Key><Value>empty.bin</Value></String></Entry>";
+    for (index, binaries) in fixture.unique.iter().enumerate() {
+        let xml = Zeroizing::new(format!("<KeePassFile><Root><Group><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID>{entry}{entry}</Group></Root><Binaries>{binaries}</Binaries></KeePassFile>"));
+        let framed = Zeroizing::new(encode_payload(xml.as_bytes(), false).unwrap());
+        let decoded = Zeroizing::new(decode_payload(&framed).unwrap());
+        let parsed = parse_entries_document(&decoded).unwrap();
+        assert_eq!(parsed.len(), 2);
+        let dir = TempDir::new().unwrap();
+        let path = dir
+            .path()
+            .join(format!("synthetic-binary-identity-{index}.kdbx"));
+        let mut target = VaultSession::default();
+        target
+            .create(&path, "synthetic-master", "Aes", "Aes256", "None", None)
+            .unwrap();
+        let ids: Vec<_> = parsed
+            .iter()
+            .map(|entry| {
+                insert_entry(&mut target.require_db_mut().unwrap().root_mut(), entry).unwrap()
+            })
+            .collect();
+        assert_ne!(ids[0], ids[1]);
+        target.mark_dirty();
+        target.save().unwrap();
+        target.close();
+        target.open(&path, "synthetic-master", None).unwrap();
+        for id in &ids {
+            let entry = target
+                .require_db()
+                .unwrap()
+                .entry(EntryId::from_uuid(*id))
+                .unwrap();
+            assert_eq!(entry.attachments_named().count(), 2);
+            for (name, bytes, protected) in [
+                ("nonempty.bin", vec![0, 1, 2, 255], true),
+                ("empty.bin", Vec::new(), false),
+            ] {
+                assert!(entry
+                    .attachments_named()
+                    .any(|(actual, attachment)| actual == name
+                        && attachment.data.get() == &bytes
+                        && attachment.data.is_protected() == protected));
+            }
+        }
+        let document = Zeroizing::new(
+            build_entries_document(
+                target.require_db().unwrap(),
+                &ids.iter()
+                    .map(|id| EntryId::from_uuid(*id))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap(),
+        );
+        let reparsed = parse_entries_document(&document).unwrap();
+        assert_eq!(reparsed.len(), 2);
+        assert!(reparsed.iter().all(|entry| entry.attachments.len() == 2));
+    }
+}

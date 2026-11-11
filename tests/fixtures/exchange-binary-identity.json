@@ -1,0 +1,15 @@
+{
+  "duplicates": [
+    "<Binary ID=\"0\">AQ==</Binary><Binary ID=\"0\">Ag==</Binary>",
+    "<Binary ID=\"0\">Ag==</Binary><Binary ID=\"0\">AQ==</Binary>",
+    "<Binary ID=\"0\">AQ==</Binary><Binary ID=\"0\">AQ==</Binary>",
+    "<Binary ID=\"0\">AQ==</Binary><Binary ID=\"00\">Ag==</Binary>",
+    "<Binary ID=\"0\">AQ==</Binary><Binary ID=\"9\">AQ==</Binary><Binary ID=\"9\">Ag==</Binary>",
+    "<Binary ID=\"0\"/><Binary ID=\"0\">AQ==</Binary>"
+  ],
+  "unique": [
+    "<Binary ID=\"0\">AAEC/w==</Binary><Binary ID=\"7\"/>",
+    "<Binary ID=\"7\"></Binary><Binary ID=\"0\">AAEC/w==</Binary>",
+    "<Binary ID=\"99\">AQ==</Binary><Binary ID=\"7\"> </Binary><Binary ID=\"0\">AAEC/w==</Binary>"
+  ]
+}
