@@ -10,6 +10,21 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
+pub enum WebsiteRulesChange {
+    Clear {},
+    Set { rules: WebsiteRuleSet },
+}
+
+fn deserialize_website_rules_change<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<WebsiteRulesChange>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    serde_json::from_value(value)
+        .map_err(|_| serde::de::Error::custom("网址规则格式无效；未应用任何规则"))
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
 pub enum EntrySaveTarget {
     Create {},
     Edit { uuid: String },
@@ -30,6 +45,9 @@ pub struct EntrySaveRequest {
     pub input: EntryInput,
     pub auto_type: Option<EntryAutoTypeInput>,
     pub flags: Option<EntryFlagsInput>,
+    /// Missing/null preserves policy; clear and set are explicit draft edits.
+    #[serde(default, deserialize_with = "deserialize_website_rules_change")]
+    pub website_rules: Option<WebsiteRulesChange>,
 }
 
 #[derive(Serialize)]
@@ -45,10 +63,22 @@ fn write_editor_fields(
     payloads: &[AttachmentPayload],
     autotype: &Option<AutoType>,
     foreground: Option<Option<Color>>,
+    rules_change: Option<Option<&ValidatedWebsiteRules>>,
 ) {
     write_fields(entry, &request.input);
     sync_custom_fields(entry, &request.input.custom_fields);
     sync_attachments(entry, &request.input.attachments, payloads);
+    if let Some(rules) = rules_change {
+        match rules {
+            Some(rules) => entry.set(
+                FIELD_WEBSITE_RULES,
+                Value::protected(rules.as_json().to_owned()),
+            ),
+            None => {
+                entry.fields.remove(FIELD_WEBSITE_RULES);
+            }
+        }
+    }
     if let Some(autotype) = autotype {
         entry.autotype = Some(autotype.clone());
     }
@@ -71,26 +101,47 @@ impl VaultSession {
         // degradation. Persistence continues to enforce its own writable gate.
         let db = self.require_db()?;
         let group_id = resolve_group_id(db, &request.input.group_uuid)?;
-        let (id, existing_rules) = match &request.target {
-            EntrySaveTarget::Create {} => (None, false),
+        let (id, existing_rules, existing_override) = match &request.target {
+            EntrySaveTarget::Create {} => (None, false, None),
             EntrySaveTarget::Edit { uuid } => {
                 let id = parse_entry_id(uuid)?;
                 let entry = db.entry(id).ok_or("条目不存在")?;
-                (Some(id), entry.fields.contains_key(FIELD_WEBSITE_RULES))
+                (
+                    Some(id),
+                    entry.fields.contains_key(FIELD_WEBSITE_RULES),
+                    entry.override_url.clone(),
+                )
             }
         };
-        let rules = if id.is_none() {
+        let input_rules = if id.is_none() {
             super::website_rules::input_rules(&request.input.custom_fields)?
         } else {
             None // Generic content editing preserves the existing managed policy.
         };
-        let has_rules = rules.is_some() || existing_rules;
+        if input_rules.is_some() && request.website_rules.is_some() {
+            return Err("网址规则来源重复；未应用任何规则".into());
+        }
+        let changed = request.website_rules.is_some() || input_rules.is_some();
+        let rules = match &request.website_rules {
+            Some(WebsiteRulesChange::Clear {}) => None,
+            Some(WebsiteRulesChange::Set { rules }) => {
+                Some(ValidatedWebsiteRules::new(rules.clone())?)
+            }
+            None => input_rules,
+        };
+        let has_rules = if changed {
+            rules.is_some()
+        } else {
+            existing_rules
+        };
+        let override_write = request
+            .flags
+            .as_ref()
+            .and_then(|flags| flags.override_url.as_deref());
+        let effective_override = override_write.or(existing_override.as_deref());
         if has_rules
-            && request
-                .flags
-                .as_ref()
-                .and_then(|f| f.override_url.as_deref())
-                .is_some_and(|url| !url.trim().is_empty())
+            && (changed || override_write.is_some())
+            && effective_override.is_some_and(|url| !url.trim().is_empty())
         {
             return Err("逐网址规则与覆盖网址不能同时启用".into());
         }
@@ -129,6 +180,7 @@ impl VaultSession {
                     &payloads,
                     &autotype,
                     foreground,
+                    changed.then_some(rules.as_ref()),
                 );
                 tracked.times.last_modification = Some(keepass::db::Times::now());
             }
@@ -139,13 +191,14 @@ impl VaultSession {
         } else {
             let mut group = candidate.group_mut(group_id).ok_or("目标分组不存在")?;
             let mut entry = group.add_entry();
-            write_editor_fields(&mut entry, request, &payloads, &autotype, foreground);
-            if let Some(rules) = rules {
-                entry.set(
-                    FIELD_WEBSITE_RULES,
-                    Value::protected(rules.as_json().to_owned()),
-                );
-            }
+            write_editor_fields(
+                &mut entry,
+                request,
+                &payloads,
+                &autotype,
+                foreground,
+                changed.then_some(rules.as_ref()),
+            );
             entry.id().to_string()
         };
         let original = self.db.replace(candidate);

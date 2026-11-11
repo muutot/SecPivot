@@ -106,6 +106,52 @@ test("native transaction refusal leaves the published state unchanged", async ()
   await assert.rejects(result, /Synthetic refusal/);
   assert.equal(vault.get(), before);
 });
+test("website draft changes cross IPC in the one editor save envelope", async () => {
+  const id = await fixture();
+  for (const websiteRules of [
+    null,
+    { mode: "clear" },
+    { mode: "set", rules: { version: 1, rules: [] } },
+  ]) {
+    const payload = { ...request, websiteRules };
+    const result = vault.saveEntry(payload);
+    const write = pending.at(-1);
+    assert.deepEqual(write.args, { sessionId: id, request: payload });
+    write.resolve({ uuid: "synthetic-id", state: snapshot(id, 2) });
+    await result;
+  }
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ["save_entry", "save_entry", "save_entry"],
+  );
+});
+
+test("browser preview refuses policy edits before publishing any part of a draft", async () => {
+  await fixture();
+  await vault.closeAll();
+  delete globalThis.__TAURI_INTERNALS__;
+  try {
+    const created = await vault.saveEntry({ ...request, websiteRules: null });
+    const before = structuredClone(vault.get());
+    for (const websiteRules of [
+      { mode: "clear" },
+      { mode: "set", rules: { version: 1, rules: [] } },
+    ]) {
+      await assert.rejects(
+        vault.saveEntry({
+          ...request,
+          target: { mode: "edit", uuid: created.uuid },
+          input: { ...input, title: "Refused" },
+          websiteRules,
+        }),
+        /浏览器预览/,
+      );
+      assert.deepEqual(vault.get(), before);
+    }
+  } finally {
+    globalThis.__TAURI_INTERNALS__ = backend;
+  }
+});
 test("closed save cannot return a UUID or repopulate state", async () => {
   const id = await fixture();
   const result = Promise.allSettled([vault.saveEntry(request)]);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { get } from "svelte/store";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import type {
     EntryInput,
     EntryPatch,
@@ -10,6 +10,7 @@
     CustomField,
     AttachmentInput,
     EntryAutoTypeConfig,
+    WebsiteRulesChange,
   } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
@@ -28,8 +29,11 @@
   import TotpQrButtons from "$lib/components/TotpQrButtons.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
+  import WebsiteRulesPanel from "$lib/components/WebsiteRulesPanel.svelte";
+  import { initialWebsiteDraft, WebsiteRulesDraft } from "$lib/utils/website-rule-draft";
 
   import Button from "$lib/components/templates/action/Button.svelte";
+  import Feedback from "$lib/components/templates/form/Feedback.svelte";
   interface Props {
     mode: "create" | "edit" | "edit-multi";
     groups: VaultGroup[];
@@ -46,6 +50,7 @@
       patch: EntryPatch | null,
       autotype: EntryAutoTypeConfig | null,
       flags?: EntryFlags | null,
+      websiteRules?: WebsiteRulesChange | null,
     ) => Promise<void> | void;
   }
 
@@ -112,6 +117,17 @@
   let overrideUrl = $state(multi ? "" : (initialEntry?.overrideUrl ?? ""));
   let qualityCheck = $state(multi ? true : (initialEntry?.qualityCheck ?? true));
   let foregroundHex = $state(multi ? "" : (initialEntry?.foregroundColor ?? ""));
+  let website = $state(initialWebsiteDraft(!!initialEntry?.hasWebsiteRules));
+  const websiteDraft = new WebsiteRulesDraft(
+    !!initialEntry?.hasWebsiteRules,
+    (value) => {
+      website = value;
+    },
+    () =>
+      templateAlive &&
+      vault.getActiveSessionId() === editorSessionId &&
+      get(vault)?.path === editorPath,
+  );
   let totp = $state("");
   let totpLoading = $state(false);
   /** Whether the current TOTP seed is known. Same data-loss reasoning as
@@ -143,9 +159,9 @@
   const headerIconName = $derived(keepassIconName(iconIndex ?? initialEntry?.icon ?? -1));
   let colorHex = $state(multi ? "" : (initialEntry?.color ?? ""));
   let targetGroupUuid = $state(initialEntry?.groupUuid ?? initialGroupUuid);
-  let activeTab = $state<"fields" | "meta" | "autotype" | "keyvault" | "custom" | "attachments">(
-    "fields",
-  );
+  let activeTab = $state<
+    "fields" | "meta" | "autotype" | "keyvault" | "custom" | "attachments" | "websites"
+  >("fields");
   let showPassword = $state(false);
   let generatorError = $state("");
   let customFields = $state<CustomField[]>(
@@ -527,7 +543,7 @@
   /** Switch tabs; re-parse the KeyVault state when entering its tab so raw
    * edits made in the custom-fields tab are reflected structurally. */
   function activateTab(
-    tab: "fields" | "meta" | "autotype" | "custom" | "attachments" | "keyvault",
+    tab: "fields" | "meta" | "autotype" | "custom" | "attachments" | "keyvault" | "websites",
   ): void {
     activeTab = tab;
     if (tab === "keyvault") {
@@ -603,20 +619,36 @@
   let templateError = $state("");
   let templateOperation = 0;
   let templateAlive = true;
+  let editorCurrent = $state(true);
   let appliedTemplateUuid = "";
   const editorSessionId = vault.getActiveSessionId();
   const editorPath = get(vault)?.path;
   const unsubscribeTemplateSession = vault.subscribe((state) => {
     if (vault.getActiveSessionId() !== editorSessionId || state?.path !== editorPath) {
+      editorCurrent = false;
       templateOperation += 1;
       templateLoading = false;
+      websiteDraft.dispose();
     }
   });
   onDestroy(() => {
     templateAlive = false;
     templateOperation += 1;
     unsubscribeTemplateSession();
+    websiteDraft.dispose();
   });
+
+  function loadWebsiteRules(): void {
+    if (multi || !initialEntry || !editorSessionId || saving || templateLoading) return;
+    void websiteDraft.load(() =>
+      vault.callInSession(editorSessionId, () => vault.getEntryWebsiteRules(initialEntry.uuid)),
+    );
+  }
+  $effect(() => {
+    if (!multi && initialEntry?.hasWebsiteRules) untrack(loadWebsiteRules);
+  });
+  const websiteConflict = $derived(!multi && website.enabled && !!overrideUrl.trim());
+  const websiteUnavailable = $derived(!multi && (!website.ready || website.loading));
 
   /** Prefill the new entry from the selected template. Values hidden from the
    *  snapshot are fetched on demand (same pattern as the edit-mode effects
@@ -654,8 +686,10 @@
               totp: () => vault.callInSession(sessionId, () => vault.getEntryTotp(uuid)),
               field: (name) =>
                 vault.callInSession(sessionId, () => vault.getCustomFieldValue(uuid, name)),
+              websiteRules: () =>
+                vault.callInSession(sessionId, () => vault.getEntryWebsiteRules(uuid)),
             })
-          : { password: "", totp: "", customFields: [] };
+          : { password: "", totp: "", customFields: [], websiteRules: null };
       if (!current()) return;
       title = template.title;
       username = template.username;
@@ -673,6 +707,7 @@
       customIconSelected = false;
       totp = resolved.totp;
       customFields = resolved.customFields;
+      websiteDraft.replace(resolved.websiteRules);
       revealedCustomFields = new Set();
       autoTypeEnabled = template.autoType?.enabled ?? true;
       autoTypeDefaultSeq = template.autoType?.defaultSequence ?? "";
@@ -688,7 +723,16 @@
   }
 
   function submit(): void {
-    if (!multi && (!passwordReady || !totpReady || !protectedFieldsReady || templateLoading))
+    if (
+      !editorCurrent ||
+      websiteConflict ||
+      (!multi &&
+        (!passwordReady ||
+          !totpReady ||
+          !protectedFieldsReady ||
+          templateLoading ||
+          websiteUnavailable))
+    )
       return;
     if (multi) {
       const patch: EntryPatch = {};
@@ -772,6 +816,7 @@
         null,
         autotype,
         { overrideUrl: overrideUrl.trim(), qualityCheck, foregroundColor: foregroundHex },
+        websiteDraft.change(),
       ),
     );
   }
@@ -808,7 +853,10 @@
       onclick={submit}
       aria-label={t(lang, "common.save")}
       title={t(lang, "common.save")}
-      disabled={saving ||
+      disabled={!editorCurrent ||
+        websiteConflict ||
+        websiteUnavailable ||
+        saving ||
         templateLoading ||
         (!multi && (!passwordReady || !totpReady || !protectedFieldsReady))}
     >
@@ -861,6 +909,16 @@
           type="button"
           role="tab"
           class="editor-tab"
+          class:active={activeTab === "websites"}
+          aria-selected={activeTab === "websites"}
+          onclick={() => activateTab("websites")}
+        >
+          {t(lang, "editor.websiteRules")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="editor-tab"
           class:active={activeTab === "autotype"}
           aria-selected={activeTab === "autotype"}
           onclick={() => activateTab("autotype")}
@@ -903,6 +961,44 @@
         </button>
       {/if}
     </div>
+
+    {#if !editorCurrent}
+      <Feedback inline message={t(lang, "error.websiteRulesStale")} />
+    {:else if !multi && activeTab !== "websites" && (websiteUnavailable || websiteConflict)}
+      <div class="website-notice">
+        <Feedback
+          inline
+          message={t(
+            lang,
+            websiteConflict
+              ? "editor.websiteOverrideConflict"
+              : website.error
+                ? "editor.websiteLoadFailed"
+                : "editor.websiteLoading",
+          )}
+        />
+        <Button variant="action" onclick={() => activateTab("websites")}
+          >{t(lang, "editor.websiteRules")}</Button
+        >
+      </div>
+    {/if}
+
+    {#if !multi && activeTab === "websites"}
+      <div role="tabpanel">
+        <WebsiteRulesPanel
+          state={website}
+          {lang}
+          disabled={saving || templateLoading || !editorCurrent}
+          conflict={websiteConflict}
+          onretry={loadWebsiteRules}
+          onclear={() => websiteDraft.replace(null)}
+          onenable={(enabled) => websiteDraft.enable(enabled, url)}
+          onadd={() => websiteDraft.add()}
+          onedit={(index, patch) => websiteDraft.edit(index, patch)}
+          onremove={(index) => websiteDraft.remove(index)}
+        />
+      </div>
+    {/if}
 
     {#if activeTab === "fields"}
       <div class="form-grid" role="tabpanel" inert={templateLoading}>
@@ -1540,6 +1636,14 @@
 
   .template-row {
     grid-column: 1 / -1;
+  }
+
+  .website-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
   .editor-tabs {

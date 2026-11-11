@@ -14,6 +14,7 @@ const commonjs = ts.transpile(compiled, { module: ts.ModuleKind.CommonJS });
 function fixture(failAt = "flags") {
   let live = { root: { entries: [{ uuid: "synthetic-entry", title: "Before" }] } };
   const calls = [];
+  const requests = [];
   const notices = [];
   let current = true;
   const vault = {
@@ -22,6 +23,7 @@ function fixture(failAt = "flags") {
       return run();
     },
     saveEntry: async (request) => {
+      requests.push(request);
       calls.push("save");
       assert.equal(request.input.title, "After");
       assert.equal(request.autoType.enabled, false);
@@ -60,6 +62,7 @@ function fixture(failAt = "flags") {
   return {
     editor,
     calls,
+    requests,
     notices,
     getLive: () => live,
     obsolete: () => {
@@ -70,6 +73,21 @@ function fixture(failAt = "flags") {
 const input = { groupUuid: "root", title: "After", username: "", password: "", url: "", notes: "" };
 const autoType = { enabled: false, associations: [] };
 const flags = { foregroundColor: "invalid" };
+
+test("single edit and creation forward website rules in the same transaction", async () => {
+  const policy = {
+    mode: "set",
+    rules: { version: 1, rules: [{ url: "https://synthetic.example", mode: "host" }] },
+  };
+  for (const create of [false, true]) {
+    const f = fixture(null);
+    if (create) f.editor.openCreate();
+    await f.editor.handleSave(input, null, autoType, {}, policy);
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0].websiteRules, policy);
+    assert.deepEqual(f.calls, ["save", "selection"]);
+  }
+});
 
 test("failed editor save leaves the whole draft uncommitted", async () => {
   const f = fixture();

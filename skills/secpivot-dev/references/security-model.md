@@ -15,6 +15,18 @@ Candidate clones stay inside native session memory, without a total-heap,
 allocator-erasure or large-vault performance claim. Compiled editor service seams
 and synthetic native KDBX tests do not establish live WebView/Android behavior.
 
+Editor website changes are explicit set/clear patches in the same `save_entry`
+transaction. Missing/null keeps policy. Policy validation and effective override
+conflict checks run before any candidate write. A failed policy read cannot be
+treated as empty or silently removed; retry and explicit removal are separate
+user choices. A template with a policy presence hint must resolve that policy
+alongside hidden values before changing the draft. The controlled rule panel
+never calls the standalone setter. Untracked initial loading, operation/disposal
+guards and the editor's origin guard preserve draft ownership. Browser rejects
+native policy patches before publishing content; blank no-policy templates omit
+the patch. DOM tests with synthetic session/read/save seams prove rendering and
+component flow, not native WebView, Android providers or heap erasure.
+
 After backend lock succeeds, renderer snapshots/tabs/session/icon/epoch caches
 are cleared synchronously before pending temp-cleanup IPC settles. State replies
 admitted before close/lock cannot recreate a disposed epoch or cache old content;

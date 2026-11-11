@@ -41,6 +41,14 @@ file; keep the compact visible label unchanged. A remote session becomes local.
 
 ## Theme color contract
 
+The entry editor's Website rules tab follows its existing compact, single-line,
+scrolling tab row. `WebsiteRulesPanel` uses shared 30px TextField/Select/field
+Button controls and Toggle/inline Feedback. Local CSS owns flex layout and hint
+spacing only, using existing text/theme metrics without new tokens. Below 480px
+each URL occupies a full row with scope/remove controls below it. Add/remove
+restores focus to the new/nearest URL (or Add URL when empty). Load failures and
+OverrideURL conflicts have visible recovery text; tab changes preserve the draft.
+
 The `ThemeColors` interface has 21 semantic values (identical names to Clipboard plus `linkColor` for URL/contact links):
 
 | CSS variable          | ThemeColors key    | Purpose                           |
@@ -222,7 +230,7 @@ shared rule into the owning template.
 - Toggle card: label/icon/description on the left, `<Toggle>` on the right in one row.
 - Slider card: heading/value on one row, unwrapped `input[type="range"].transparency-slider` below, and `--slider-pct` updated from the current value.
 - Number input: `TextField numeric` — textfield appearance, WebKit spin buttons hidden by the template.
-- Select: use the shared `Select.svelte` component (self-drawn trigger + fixed-position listbox, keyboard nav, `role="combobox"`/`listbox`); never introduce raw `<select>` markup. Trigger matches settings control size/radius/colors; the list is a `--surface-bg` popover at the popover z-index with a short pop-in animation that respects reduced motion.
+- Select: use the shared `Select.svelte` component (button trigger with `aria-haspopup="listbox"`, fixed-position `role="listbox"` and keyboard navigation); never introduce raw `<select>` markup. Trigger matches settings control size/radius/colors; the list is a `--surface-bg` popover at the popover z-index with a short pop-in animation that respects reduced motion.
 - Feedback: use `templates/form/Feedback.svelte` (`success` palette; `inline` for card-contained messages), dismissible by time and accessible.
 - Buttons and inputs need visible focus. Never remove outline without a replacement.
 - Segmented groups (theme/KDF/charset chips): 1px border, `--settings-control-radius`, active = selection-tinted.

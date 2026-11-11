@@ -1,4 +1,4 @@
-import type { CustomField, VaultEntry, VaultGroup } from "$lib/types/vault";
+import type { CustomField, VaultEntry, VaultGroup, WebsiteRuleSet } from "$lib/types/vault";
 
 /** Resolve every hidden value before a template can replace the editor draft.
  * A missing protected field/OTP is a failed read, never an empty default. */
@@ -8,9 +8,15 @@ export async function resolveTemplateSecrets(
     password: () => Promise<string>;
     totp: () => Promise<string | null>;
     field: (name: string) => Promise<string | null>;
+    websiteRules?: () => Promise<WebsiteRuleSet | null>;
   },
-): Promise<{ password: string; totp: string; customFields: CustomField[] }> {
-  const [password, totp, customFields] = await Promise.all([
+): Promise<{
+  password: string;
+  totp: string;
+  customFields: CustomField[];
+  websiteRules: WebsiteRuleSet | null;
+}> {
+  const [password, totp, customFields, websiteRules] = await Promise.all([
     readers.password(),
     entry.hasTotp
       ? readers.totp().then((value) => {
@@ -26,8 +32,16 @@ export async function resolveTemplateSecrets(
         return { ...field, value };
       }),
     ),
+    entry.hasWebsiteRules
+      ? Promise.resolve().then(async () => {
+          if (!readers.websiteRules) throw new Error("Template website rules reader unavailable");
+          const value = await readers.websiteRules();
+          if (value === null) throw new Error("Template website rules unavailable");
+          return value;
+        })
+      : Promise.resolve(null),
   ]);
-  return { password, totp, customFields };
+  return { password, totp, customFields, websiteRules };
 }
 
 /**
