@@ -283,3 +283,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 内部交换普通字段身份唯一（SP-S97）：每条目按解码后精确名称拒绝重复普通字段，固定错误且整份不发布；18种保护／同值／字符引用／逆序拒绝，大小写／空白／Unicode组合／字面实体／跨条目及重复BinDes合法对照经实际framing与AES KDBX保存重开保留值／保护／附件。三项新增／exchange44项及完整门禁447前端／803 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成文档2788 bytes，不代表完整schema／其他metadata身份／OS剪贴板／竞品客户端或真机provider。
 
 - [x] 内部交换自定义元数据键唯一（SP-S98）：每条目在独立命名空间按解码后精确键拒绝重复CustomData，固定错误且整份不发布；九种同值／不同值／空或缺Value／Unicode空白／字符引用／逆序拒绝，非空合法键大小写／空白／实际NFC-NFD／字面实体／跨条目及普通字段同名元数据经实际framing与AES KDBX保存重开保留身份和值。三项新增／exchange47项及完整门禁447前端／806 Rust／ACL2／KeePass25／QuickXML1363通过；空或省略元数据的保存类型、图标定义／完整schema／OS剪贴板／竞品客户端或真机provider仍未完成。
+
+- [x] 内部交换自定义元数据值完整携带（SP-S99）：Binary／None以明确内部SecPivotType表示，旧文本无标记原样保留；11种当前值／键经实际framing与原生插入完整保留，来源已保存重开的9项在目标内存／保存重开后逐项相同；6种错误组合整份拒绝，1／2／3／4-byte padding及附件＋元数据的小共享预算边界通过。四项新增／exchange51项及完整门禁447前端／810 Rust／ACL2／KeePass25／QuickXML1363通过；不代表原生KDBX类型推断／元数据时间戳／正式容器／旧客户端或OS剪贴板／真机provider完成。

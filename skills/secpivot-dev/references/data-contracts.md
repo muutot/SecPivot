@@ -1,5 +1,16 @@
 # Data Contracts
 
+Internal entry exchange carries every custom metadata value and key.
+Unmarked `CustomData/Item` values retain the legacy exact `Option<String>`
+contract; `SecPivotType="Binary"` requires a present Base64 Value and
+`SecPivotType="None"` requires an absent Value. The writer marks only Binary/None
+and leaves ordinary text unmarked. Preparation validates exact per-entry keys,
+types and bytes into `PastedCustomDataItem` before target insertion; unknown
+types, invalid combinations or damaged encoding refuse the whole document with
+fixed errors. Binary bytes share the existing attachment/icon copy budget,
+including padded exact boundaries. This is a SecPivot internal extension;
+KDBX metadata type inference/timestamps and official client formats remain separate.
+
 Entry-exchange custom metadata keys must be unique within each parsed entry.
 `parse_entry` checks exact decoded `CustomData/Item/Key` values in a separate
 per-entry set and returns a fixed error on duplicates before publishing a list.
@@ -46,10 +57,11 @@ before return. `exchange_encode_tests.rs` covers small injected boundaries,
 including native Windows DPAPI overhead. XML generation and total allocation
 costs are separate; no production-sized or clipboard/client proof is implied.
 
-Entry-exchange parsing shares a 64 MiB budget for owned attachment and custom-icon
-bytes across every entry. Each resolved reference charges its complete byte length
-with checked subtraction before copying; overflow returns a fixed size error and
-no partial parsed list. Empty/unreferenced definitions consume no copy budget.
+Entry-exchange parsing shares a 64 MiB budget for owned attachment, custom-icon
+and marked metadata bytes across every entry. References charge their complete
+byte length before cloning; metadata decoding uses bounded scratch and charges
+complete output before publication. Overflow returns a fixed size error and no
+partial parsed list. Empty/unreferenced definitions consume no copy budget.
 `exchange_expansion_tests.rs` uses small injected budgets and synthetic fixtures,
 including valid shared-reference KDBX reopen checks. This bounds binary copies,
 not total heap, definition-pool, XML-model, insertion or copy-side costs.

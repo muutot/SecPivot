@@ -7,6 +7,7 @@ fn item(key: &str, value: Option<&str>) -> XmlCustomDataItem {
     XmlCustomDataItem {
         key: key.to_owned(),
         value: value.map(str::to_owned),
+        value_type: None,
     }
 }
 
@@ -121,8 +122,7 @@ fn saved(file: &KeePassFile) {
         assert_eq!(entry.custom_data.len(), expected.custom_data.len());
         for item in &expected.custom_data {
             assert!(
-                entry.custom_data[&item.key].value
-                    == item.value.clone().map(CustomDataValue::String),
+                entry.custom_data[&item.key].value == item.value,
                 "saved custom value"
             );
         }

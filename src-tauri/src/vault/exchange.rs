@@ -37,10 +37,9 @@
 //! Known gap versus KeePass: entry *history* is not restored on paste, because
 //! the `keepass` crate exposes no API to append a historical entry to an
 //! existing entry (`History::add_entry` needs a fully built `Entry`). History
-//! items are therefore not written to the payload either. Binary
-//! `CustomData` items are skipped for the same reason (the KDBX XML `<Value>`
-//! element cannot tell a text value from a base64 one), while text items
-//! round-trip.
+//! items are therefore not written to the payload either. CustomData values
+//! retain their native kinds through SecPivot's internal `SecPivotType`
+//! extension; this does not establish official PlainXml interoperability.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -236,6 +235,13 @@ pub struct XmlCustomDataItem {
     pub key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    /// Local exchange extension: unmarked values remain legacy text.
+    #[serde(
+        rename = "@SecPivotType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub value_type: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -444,15 +450,7 @@ fn serialize_entry(
 }
 
 fn xml_custom_data(entry: &keepass::db::EntryRef<'_>) -> Option<XmlCustomData> {
-    let mut keys: Vec<&String> = entry
-        .custom_data
-        .iter()
-        // Binary items are skipped: the KDBX XML <Value> element cannot tell a
-        // text value from a base64 one, so carrying them would either corrupt
-        // them or silently turn them into text on paste.
-        .filter(|(_, item)| matches!(item.value, Some(CustomDataValue::String(_))))
-        .map(|(key, _)| key)
-        .collect();
+    let mut keys: Vec<&String> = entry.custom_data.keys().collect();
     if keys.is_empty() {
         return None;
     }
@@ -464,7 +462,15 @@ fn xml_custom_data(entry: &keepass::db::EntryRef<'_>) -> Option<XmlCustomData> {
                 key: key.clone(),
                 value: match &entry.custom_data[key].value {
                     Some(CustomDataValue::String(value)) => Some(value.clone()),
-                    _ => None,
+                    Some(CustomDataValue::Binary(bytes)) => {
+                        Some(base64_engine::STANDARD.encode(bytes))
+                    }
+                    None => None,
+                },
+                value_type: match &entry.custom_data[key].value {
+                    Some(CustomDataValue::String(_)) => None,
+                    Some(CustomDataValue::Binary(_)) => Some("Binary".to_owned()),
+                    None => Some("None".to_owned()),
                 },
             })
             .collect(),
@@ -616,7 +622,7 @@ pub struct PastedEntry {
     pub fields: Vec<(String, String, bool)>,
     pub attachments: Vec<(String, Vec<u8>, bool)>,
     pub auto_type: Option<XmlAutoType>,
-    pub custom_data: Vec<XmlCustomDataItem>,
+    pub custom_data: Vec<PastedCustomDataItem>,
     pub tags: Vec<String>,
     pub quality_check: bool,
     pub icon: Option<i64>,
@@ -626,6 +632,12 @@ pub struct PastedEntry {
     pub override_url: Option<String>,
     pub expiry_time: Option<i64>,
     pub expires: bool,
+}
+
+/// A resolved native metadata value, validated before target insertion.
+pub struct PastedCustomDataItem {
+    pub key: String,
+    pub value: Option<CustomDataValue>,
 }
 
 /// Parse a KDBX XML document into entries ready for insertion under fresh
@@ -724,8 +736,8 @@ fn parse_entries_document_limited(
         })
         .unwrap_or_default();
 
-    // Shared definitions can be referenced repeatedly. Count each owned copy,
-    // across all entries and both attachments/icons, before allocating it.
+    // Attachment/icon references and resolved metadata share one binary-copy
+    // budget across all entries; preparation refuses the whole list on overflow.
     let mut remaining_binary_bytes = max_expanded_binary_bytes;
     file.root
         .group
@@ -769,25 +781,14 @@ fn parse_entry(
         fields.push((field.key.clone(), field.value.value.clone(), protected));
     }
 
-    if let Some(data) = &entry.custom_data {
-        let mut keys = std::collections::HashSet::new();
-        for item in &data.items {
-            if !keys.insert(item.key.as_str()) {
-                return Err("条目自定义数据重复".to_owned());
-            }
-        }
-    }
+    let custom_data = parse_custom_data(entry.custom_data.as_ref(), remaining_binary_bytes)?;
 
     let times = entry.times.as_ref();
     Ok(PastedEntry {
         fields,
         attachments,
         auto_type: entry.auto_type.clone(),
-        custom_data: entry
-            .custom_data
-            .as_ref()
-            .map(|data| data.items.clone())
-            .unwrap_or_default(),
+        custom_data,
         tags: entry
             .tags
             .as_deref()
@@ -816,6 +817,62 @@ fn parse_entry(
             .map(|expires| expires == "True")
             .unwrap_or(false),
     })
+}
+
+fn parse_custom_data(
+    data: Option<&XmlCustomData>,
+    remaining_binary_bytes: &mut usize,
+) -> Result<Vec<PastedCustomDataItem>, String> {
+    let Some(data) = data else {
+        return Ok(Vec::new());
+    };
+    let mut keys = std::collections::HashSet::new();
+    let mut values = Vec::with_capacity(data.items.len());
+    for item in &data.items {
+        if !keys.insert(item.key.as_str()) {
+            return Err("条目自定义数据重复".to_owned());
+        }
+        let value = match item.value_type.as_deref() {
+            None | Some("String") => item.value.clone().map(CustomDataValue::String),
+            Some("None") if item.value.is_none() => None,
+            Some("Binary") => {
+                let encoded = item
+                    .value
+                    .as_deref()
+                    .ok_or_else(|| "自定义数据无效".to_owned())?;
+                Some(CustomDataValue::Binary(decode_custom_binary(
+                    encoded,
+                    remaining_binary_bytes,
+                )?))
+            }
+            _ => return Err("自定义数据类型无效".to_owned()),
+        };
+        values.push(PastedCustomDataItem {
+            key: item.key.clone(),
+            value,
+        });
+    }
+    Ok(values)
+}
+
+fn decode_custom_binary(encoded: &str, remaining: &mut usize) -> Result<Vec<u8>, String> {
+    let encoded = encoded.trim();
+    // Base64's conservative decoded-size estimate can exceed the actual size
+    // by two padding bytes. Allow a bounded three-byte lookahead, then charge
+    // only the complete decoded value before publishing it.
+    let capacity = base64::decoded_len_estimate(encoded.len()).min(remaining.saturating_add(3));
+    let mut bytes = zeroize::Zeroizing::new(vec![0; capacity]);
+    let count = base64_engine::STANDARD
+        .decode_slice(encoded, &mut bytes[..])
+        .map_err(|error| match error {
+            base64::DecodeSliceError::OutputSliceTooSmall => "剪贴板数据过大".to_owned(),
+            base64::DecodeSliceError::DecodeError(_) => "自定义数据无效".to_owned(),
+        })?;
+    *remaining = remaining
+        .checked_sub(count)
+        .ok_or_else(|| "剪贴板数据过大".to_owned())?;
+    bytes.truncate(count);
+    Ok(std::mem::take(&mut *bytes))
 }
 
 /// Insert one parsed entry into `group` under a fresh UUID, restoring fields,
@@ -850,7 +907,7 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
         node.custom_data.insert(
             item.key.clone(),
             CustomDataItem {
-                value: item.value.clone().map(CustomDataValue::String),
+                value: item.value.clone(),
                 last_modification_time: None,
             },
         );
@@ -949,6 +1006,10 @@ mod string_identity_tests;
 #[cfg(test)]
 #[path = "exchange_custom_identity_tests.rs"]
 mod custom_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_custom_value_tests.rs"]
+mod custom_value_tests;
 
 #[cfg(test)]
 mod tests {

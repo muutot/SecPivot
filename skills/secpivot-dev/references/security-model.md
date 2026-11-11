@@ -1,5 +1,14 @@
 # Security Model
 
+Whole-entry exchange no longer silently omits Binary or absent-value custom
+metadata. Explicit internal type markers preserve actual native value kinds;
+unmarked text is never guessed as Base64. Preparation resolves all bytes and
+validates keys before target insertion. Binary decoding uses a zeroizing scratch
+buffer capped by the remaining shared copy budget plus three padding/lookahead
+bytes, then charges complete output before publishing any parsed list. Fixed
+type/data/size errors reveal no metadata contents. This does not bound total
+heap or change native KDBX type inference, clipboard ownership or client formats.
+
 Entry-exchange preparation refuses duplicate custom metadata keys with a fixed
 content-free error before target insertion. Metadata identities are independent
 of ordinary fields and scoped per entry; exact decoded keys retain case,
@@ -40,9 +49,10 @@ the returned payload. This is a framing admission bound, not a total-heap bound
 or a cap on XML generation; small native tests use synthetic data only.
 
 The entry-exchange XML size cap does not bound repeated binary references.
-Parsing separately caps cumulative owned attachment and custom-icon copies at
-64 MiB, charging before allocation across all entries and refusing a partial
-result. Small-budget tests prove the enforcement mechanism; no production-sized
+Parsing separately caps cumulative owned attachment, custom-icon and marked
+metadata bytes at 64 MiB across all entries, refusing a partial result. Reference
+clones charge before copying; metadata scratch is bounded and complete output
+charges before publication. Small-budget tests prove the enforcement mechanism; no production-sized
 allocation/OOM or total-heap bound is claimed. Shared definitions remain legal.
 
 Entry-exchange inflate output must finish within its64 MiB production bound.
