@@ -1,5 +1,16 @@
 # Data Contracts
 
+Native entry-exchange gzip output uses `gunzip_limited`, called with the existing
+64 MiB bound by `gunzip`. It reads up to limit+1, rejects overflow without returning
+a prefix, and reaches real gzip EOF for within-limit output so existing flate2
+CRC32/ISIZE/truncated-footer checks run even at the exact limit. Size and damaged
+data use fixed errors. Saturating limit arithmetic also supports an empty stream
+at usize::MAX. Four native tests inject limits at most4096 bytes (plus one overflow
+byte) and cover a parseable XML prefix, footer damage and legal boundaries;
+production wrappers have small valid/corrupt framing controls. No direct64 MiB,
+clipboard, allocation/OOM or cross-client proof is implied. Single-member/trailing
+data semantics and attachment expansion/copy-side budgets remain separate work.
+
 Entry-exchange binary definitions require globally unique numeric IDs. The
 parser rejects duplicate definitions before publishing any entries, including
 identical/empty bytes, numeric aliases and unreferenced duplicates; the fixed

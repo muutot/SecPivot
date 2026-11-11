@@ -545,13 +545,21 @@ pub fn decode_payload(payload: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn gunzip(body: &[u8]) -> Result<Vec<u8>, String> {
+    gunzip_limited(body, MAX_PAYLOAD_BYTES)
+}
+
+fn gunzip_limited(body: &[u8], max_output_bytes: usize) -> Result<Vec<u8>, String> {
     let decoder = flate2::read::GzDecoder::new(body);
     let mut out = Vec::new();
-    // Bound the inflate output too: a tiny payload can expand enormously.
+    // One extra byte detects overflow and reaches real EOF at the exact limit,
+    // allowing GzDecoder to validate its trailer before publishing the bytes.
     decoder
-        .take(MAX_PAYLOAD_BYTES as u64)
+        .take(max_output_bytes.saturating_add(1) as u64)
         .read_to_end(&mut out)
         .map_err(|_| "剪贴板数据已损坏".to_owned())?;
+    if out.len() > max_output_bytes {
+        return Err("剪贴板数据过大".to_owned());
+    }
     Ok(out)
 }
 
@@ -810,6 +818,10 @@ mod binary_tests;
 #[cfg(test)]
 #[path = "exchange_field_identity_tests.rs"]
 mod field_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_inflate_tests.rs"]
+mod inflate_tests;
 
 #[cfg(test)]
 mod tests {

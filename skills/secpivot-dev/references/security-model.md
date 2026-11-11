@@ -1,5 +1,13 @@
 # Security Model
 
+Entry-exchange inflate output must finish within its64 MiB production bound.
+The shared limited reader observes one overflow byte, rejects oversize prefixes,
+and consumes real gzip EOF for valid-sized output so flate2's existing trailer
+checks cannot be skipped merely by exhausting the limit. Fixed errors publish
+no input contents. Small injected-budget tests establish the algorithm and
+wrapper wiring; no production-limit allocation, resource exhaustion, target
+mutation or OS clipboard/client behavior was exercised.
+
 Entry-exchange preparation rejects duplicate numeric binary definitions rather
 than selecting later bytes. Identity validation covers unreferenced definitions
 too and returns a content-free error before target insertion; shared references

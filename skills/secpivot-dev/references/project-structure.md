@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_inflate_tests.rs` is a test-only child of `exchange.rs` for the gzip
+output bound. Four regressions use `gunzip_limited` with small limits to cover
+overflow refusal, exact-limit CRC/ISIZE/truncation, legal boundaries and a
+parseable truncated XML prefix. `gunzip` keeps the64 MiB production constant;
+the helper reads limit+1 with saturating arithmetic and rejects before returning
+output. Expanded attachment budgets and complete gzip/XML/container semantics
+remain independent audit areas.
+
 `exchange_binary_tests.rs` also owns duplicate binary-ID regressions, using
 `tests/fixtures/exchange-binary-identity.json`. Six duplicate-definition cases
 reject during `parse_entries_document`; three unique sparse/reordered/shared
