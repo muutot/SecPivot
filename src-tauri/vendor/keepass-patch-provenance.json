@@ -235,7 +235,8 @@
     },
     {
       "path": "src/format/xml_db/timestamp.rs",
-      "upstream_sha256": "85ee56738d684019ef6cc97a774bd71030bff564d84ff294a71b8da8747b2246"
+      "upstream_sha256": "85ee56738d684019ef6cc97a774bd71030bff564d84ff294a71b8da8747b2246",
+      "patched_sha256": "1b3c6b4c644dccf7efc743b9be051358e441f7c7a50f9bedf3fda7c88c90946a"
     },
     {
       "path": "src/key/mod.rs",

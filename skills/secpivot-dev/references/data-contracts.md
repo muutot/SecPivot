@@ -1,5 +1,13 @@
 # Data Contracts
 
+Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
+bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid
+lengths or unrepresentable dates return fixed errors with no source content.
+ISO parsing and representable signed seconds retain the previous contract;
+optional missing/blank timestamps are unchanged. Synthetic native inner XML
+checks and normal KDBX save/reopen controls do not establish damaged encrypted
+KDBX/Tauri handler/device/official-client behavior or a whole-process crash.
+
 Entry-exchange `XmlCustomIcon` retains an optional dedicated-text Name and
 optional Unix-second LastModificationTime. Resolved `PastedCustomIcon` owns
 data/name/native time, with no source identity. Insertion creates a fresh icon

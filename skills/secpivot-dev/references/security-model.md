@@ -1,5 +1,13 @@
 # Security Model
 
+Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
+bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid
+lengths or unrepresentable dates return fixed errors with no source content.
+ISO parsing and representable signed seconds retain the previous contract;
+optional missing/blank timestamps are unchanged. Synthetic native inner XML
+checks and normal KDBX save/reopen controls do not establish damaged encrypted
+KDBX/Tauri handler/device/official-client behavior or a whole-process crash.
+
 Internal entry-exchange retains custom-icon names and optional native times
 while assigning fresh target identities. Preparation validates date range and
 charges each independent image/name copy before allocating; shared names cannot

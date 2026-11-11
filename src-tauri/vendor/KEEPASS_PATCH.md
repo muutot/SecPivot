@@ -69,10 +69,18 @@ Only these upstream files are changed:
   metadata rules retain their contracts. Current/history and external-file
   native regressions accompany two direct tests.
 
-The other 54 upstream files are byte-for-byte unchanged. The provenance JSON
-records each original hash and the six reviewed patched hashes. Run
+- `src/format/xml_db/timestamp.rs`: require exactly eight decoded Base64 bytes,
+  validate the signed-second duration and checked addition to the year-one epoch.
+  Short/long values and out-of-range dates return fixed errors instead of panic
+  or silently truncating trailing bytes. Existing ISO parsing, signed seconds,
+  serialization and optional/missing-date rules are preserved. Four specialized
+  tests cover small invalid inputs, valid chrono bounds/negative seconds/ISO,
+  the complete inner XML reader and a normal AES KDBX save/reopen control.
+
+The other 53 upstream files are byte-for-byte unchanged. The provenance JSON
+records each original hash and the seven reviewed patched hashes. Run
 `npm run verify:keepass-patch` after any patch edit; it verifies source hashes,
-Cargo wiring and formatting of the patched Rust files. Update the six patched
+Cargo wiring and formatting of the patched Rust files. Update the seven patched
 hashes only after reviewing the changes against the original archive. The
 ordinary `npm run verify` includes this gate.
 
@@ -85,7 +93,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The twenty-five dependency-specific tests can be run separately:
+The twenty-nine dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch
