@@ -1,5 +1,12 @@
 # Security Model
 
+Zero-byte entry-exchange attachments are preserved as valid empty Base64 text,
+including their protected flag. Empty text is distinct from missing binary IDs,
+unresolved references, invalid encoding or nested/unknown binary structure;
+those inputs reject before insertion. Unsupported compression attributes are
+never guessed as raw/empty bytes. Synthetic native pipeline and temporary KDBX
+tests establish this contract without reading or writing the shared clipboard.
+
 Whole-entry exchange preserves all representable field text with a dedicated
 `$text` reader and CR character references; protected values keep their flags
 through parsing and native persistence. This fixes transfer fidelity without

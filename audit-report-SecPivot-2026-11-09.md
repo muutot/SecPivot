@@ -40,10 +40,10 @@
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 62     | 62        | 0         |
+| Medium    | 63     | 63        | 0         |
 | Low       | 16     | 16        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **98** | **98**    | **0**     |
+| **Total** | **99** | **99**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4847,3 +4847,41 @@ SP-S87最小修复仅改变内部字段文本contract：XmlStringValue声明$tex
 documentation currency gate更新data-contracts／security-model／project-structure及专属文本TODO，SKILL／maintenance稳定路由无需变动。98历史Confirmed（1／19／62／16）包括已修复项，原始b7c5d9f／15项／6.1分保持。完整XML分组／附件／历史、来源规则迁移、内部交换其他字段／空二进制及跨客户端、手机v1.6.5另存为新APK／provider、其余全仓／竞品／UI继续；整体goal active。
 
 完整成功日志SHA256 e92ad0d093f926ee68ceac902be142bc13e5c7ad562fe1d85352f85db24e0cf1；exchange-text-final-proof.json SHA256 306436d0b708297d3bffc073f7d04aafb937ec15a08ad6c79c5a0b40ca728f59，关联三项原生红测、独立标准XML原始／最终控制、五项green、302源码清单、编译内存失败与最终完整门禁。提交前另核验最终format／严格metadata／报告lint和staged内容。
+
+### Finding: SP-S88 零字节附件导致条目交换整份粘贴失败
+
+- Severity: Medium
+- Confidence: High
+- Category: Stability / Data Exchange correctness
+- Status: Confirmed（零字节binary解析修复；专项与完整门禁通过）
+- Affected area: Native entry-exchange binary XML decoding.
+- Evidence:
+  - File: src-tauri/src/vault/exchange.rs:286; src-tauri/src/vault/exchange.rs:598; src-tauri/src/vault/security.rs:593.
+  - Function / Module: XmlBinary / parse_entries_document / paste_entries_from_exchange.
+  - Relevant behavior: Empty attachment bytes become an empty Base64 Binary element; required `$value` String has no default, so the valid empty element cannot deserialize. The real parser rejects the complete generated document before insertion.
+  - Checkpoint: 9c69d2e。实际合成DB含两个zero-byte附件（protected／unprotected）和一个4-byte附件，生产document→flags-gzip→decode→parse拒绝。独立empty XML形式和原生粘贴／保存重开测试均在parse处失败；exchange-empty-native-red.log exit101／2pass3fail。通过项为artifact-only和损坏内容／引用控制。
+  - 原始独立ElementTree＋严格Base64 decoder接受当时生成的XML，解析到3个合法且完整引用的binary，大小0／0／4，两个零字节的保护位分别True／False。exchange-empty-original-proof.json记录原始哈希；源码／测试／red日志和独立summary仍保留，原始raw XML被覆盖后的可用性缺口详见下方correction。
+- Problem: 合法零字节附件被当作缺少必要文本，导致整个条目或混合附件交换无法粘贴。这与SP-S87普通字段文本不同，是二进制载荷的空值契约。
+- Why it matters: 用户复制带空文件的条目后无法迁移该条目，非空附件和字段也不会粘贴。此复现未执行target insertion／save，不表述为已写坏文件或部分提交。
+- Realistic failure scenario: 条目包含空占位文件或合法零字节附件，执行条目交换复制和粘贴；文档写出成功，但粘贴报告解析失败。
+- Minimal fix: Read Binary text as `$text` with a default empty Base64 string. Keep ID required and reject malformed/nested binary content, invalid Base64 or missing references; do not drop empty attachments.
+- Better long-term fix: 独立补齐官方KeePass二进制编码／压缩／容器与真实客户端交换；未知编码不能猜测为零字节。
+- Regression test suggestion: protected/unprotected empty＋nonempty混合附件经真实build/frame/decode/parse/insert/save/reopen/re-export；自闭合／显式空／空白Base64、正常非空、错误编码／缺ID／嵌套内容／缺引用对照，独立标准XML及Base64核对实际字节。
+- Estimated effort: 空binary契约、回归与跨层复核1–2小时；跨客户端二进制编码另行评估。
+- Verification limits: 合成DB及内存payload，不接触系统剪贴板／Tauri IPC／真实provider或客户端；red save/reopen断言尚未执行。
+
+新增SP-S88后为99历史Confirmed（Critical1／High19／Medium63／Low16），包括已修复项；原始b7c5d9f／15项／6.1分保持，整体goal active。
+
+SP-S88原始artifact归档修正：临时artifact-only probe在green执行时复用了exchange-empty-original-document.xml路径，覆盖了原始XML的随机UUID字节。原始raw XML已不可获得，不能再声称该项原样hash完整保留；原始production源码／三项失败测试与log／独立XML-Base64原始summary仍逐项hash匹配，Confirmed结论依据这些实际失败与源码控制流。exchange-empty-artifact-correction.json保留原始proof hash、丢失项原始hash及原因，不伪造恢复样本。当前green实际XML另存exchange-empty-final-document.xml并重新通过独立标准XML-Base64控制。探针已归档移除，routine tests不再写证据路径；此归档错误不新增产品卡片或修改基线。
+
+### 零字节交换附件最终复核
+
+SP-S88修复XmlBinary的专属$text空值contract：默认空文本解为合法零字节Base64，ID仍必要；binary envelope只允许ID与文本，未知属性／嵌套内容拒绝，避免新default把无法判断的结构当成空文件。坏Base64／缺引用仍整份失败，合法空附件不丢弃。未改变现有protected flags、framing／DPAPI、clipboard wipe或IPC。
+
+四项正式native回归通过，targeted green日志5pass包含一个artifact-only probe（不计功能覆盖，已移除），完整root确实执行四项。两个protected／unprotected零字节与一个4-byte混合附件经生产document／flags-gzip／decode／parse、fresh UUID insert、合成AES KDBX save/reopen、名字／bytes／flags以及再次交换保持完整。自闭合／显式空／空白Base64与正常非空对照通过；坏encoding／缺ID／嵌套data／未知Compressed属性／缺引用拒绝。独立ElementTree＋严格Base64检查当前真实XML的3个载荷0／0／4；原始summary及原始源码／红测3fail证据仍保留。原始raw XML已被临时probe覆盖的证据缺口按前述correction记录，不声称原始该文件hash仍完整。
+
+verify-exchange-empty-final.log exit0：frontend447／Rust774／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过；root无过滤、单线程Rust、dev-test debug0、CARGO_INCREMENTAL=0、live未开启。303个执行源码／测试／工具清单hash门禁前后逐一一致。真实OS剪贴板／KeePass客户端／压缩与容器、重复binary ID等其他交换语义和手机provider没有在本项完成。
+
+documentation currency gate更新data-contracts／security-model／project-structure和专属空附件TODO；maintenance-workflow新增封存证据路径不可复用、red／green分离及覆盖缺口必须如实记录的规则，防止归档错误重复。SKILL稳定路由无需变动。99历史Confirmed（1／19／63／16）含已修复项；原始b7c5d9f／15项／6.1分保持。其余全仓／来源迁移／竞品与界面复核、手机v1.6.5另存为新APK及provider继续；整体goal active。
+
+完整日志SHA256 a57c3b66f6ec8bd06a3d88141cb5755c3efbe698aff02de36f8aca611a40da71；exchange-empty-final-proof.json SHA256 551246ec751b54586eb795f1fdc668e444bc9b29f61a4ee5c27fcb50592f81fd关联保留的原始来源／红测、artifact缺口修正、最终XML／独立decoder、green／四正式regressions和完整门禁；最终format／严格metadata／report lint／staged另行核验。

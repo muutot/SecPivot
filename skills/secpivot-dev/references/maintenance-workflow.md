@@ -59,6 +59,12 @@ contain no user vaults. Upstream ignored tests do not count as executed coverage
 
 ## Browser vs desktop truth
 
+- Audit evidence paths become immutable once their hashes are recorded. Use
+  separate red/green artifact names and archive or remove temporary emitters
+  before running ordinary tests again. Verify earlier hashes before sealing the
+  next stage. If an artifact was overwritten, record its availability gap and
+  retain the original hash; never regenerate a sample and label it original.
+
 - Every test that accesses the actual OS clipboard must check
   `SECPIVOT_CLIPBOARD_LIVE=1` before any native read, write or usability probe.
   A crate mutex does not isolate the user's clipboard from other processes.
