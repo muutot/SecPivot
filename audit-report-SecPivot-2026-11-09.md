@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S84；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S89；含已修复项，不代表尚未修复数量。SP-15 已由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
-| Severity  | Count  | Confirmed | Suspected |
-| --------- | ------ | --------- | --------- |
-| Critical  | 1      | 1         | 0         |
-| High      | 19     | 19        | 0         |
-| Medium    | 63     | 63        | 0         |
-| Low       | 16     | 16        | 0         |
-| Info      | 0      | 0         | 0         |
-| **Total** | **99** | **99**    | **0**     |
+| Severity  | Count   | Confirmed | Suspected |
+| --------- | ------- | --------- | --------- |
+| Critical  | 1       | 1         | 0         |
+| High      | 19      | 19        | 0         |
+| Medium    | 64      | 64        | 0         |
+| Low       | 16      | 16        | 0         |
+| Info      | 0       | 0         | 0         |
+| **Total** | **100** | **100**   | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4885,3 +4885,43 @@ verify-exchange-empty-final.log exit0：frontend447／Rust774／ACL2／KeePass25
 documentation currency gate更新data-contracts／security-model／project-structure和专属空附件TODO；maintenance-workflow新增封存证据路径不可复用、red／green分离及覆盖缺口必须如实记录的规则，防止归档错误重复。SKILL稳定路由无需变动。99历史Confirmed（1／19／63／16）含已修复项；原始b7c5d9f／15项／6.1分保持。其余全仓／来源迁移／竞品与界面复核、手机v1.6.5另存为新APK及provider继续；整体goal active。
 
 完整日志SHA256 a57c3b66f6ec8bd06a3d88141cb5755c3efbe698aff02de36f8aca611a40da71；exchange-empty-final-proof.json SHA256 551246ec751b54586eb795f1fdc668e444bc9b29f61a4ee5c27fcb50592f81fd关联保留的原始来源／红测、artifact缺口修正、最终XML／独立decoder、green／四正式regressions和完整门禁；最终format／严格metadata／report lint／staged另行核验。
+
+### Finding: SP-S89 自定义字段与内部交换附件引用前缀冲突
+
+- Severity: Medium
+- Confidence: High
+- Category: Data-integrity / BoundaryContract
+- Status: Confirmed（冲突字段复制前拒绝；专项与完整门禁通过）
+- Affected area: Native whole-entry exchange writer and field classification.
+- Evidence:
+  - File: src-tauri/src/vault/exchange.rs:365; src-tauri/src/vault/exchange.rs:652; src-tauri/src/vault/entries.rs:546.
+  - Function / Module: serialize_entry / parse_entry / update_custom_field.
+  - Relevant behavior: Custom-field creation permits BinDes-prefixed names. The exchange writer emits every ordinary field as String, while the reader treats every exact BinDes- prefix as an attachment index. Numeric names can alias real binary IDs; empty or nonnumeric names reject at parse time.
+  - Checkpoint: 43a1d81。四种名称BinDes-／BinDes-0／BinDes-00／BinDes-custom × 普通／protected × 有／无附件共16组合，生产build／flags-gzip／decode／parse实际执行：16个文档写出，12个解析失败，4个解析完成但原字段不在fields中而被分类为附件。无冲突选择条目在前亦不能避免；原条目内容／保护位／附件数保持。红测1pass1fail／exit101；通过项为相近字段名、空／非空附件的原生insert／save／reopen对照。
+  - 首次按文件名筛选执行0测试，exchange-field-identity-red.log保留但不计证据。实际红测为exchange-field-identity-native-red.log；源码、测试与两日志哈希由exchange-field-identity-original-proof.json关联。未发出raw XML artifact，无覆盖或原始XML字节保留声明。
+- Problem: 普通自定义字段与附件代理String字段共用身份空间，正常可保存的字段无法安全复制。存在真实同号附件时，字段值被当成文件名，普通字段身份丢失；没有匹配附件或非数值后缀则整份粘贴失败。
+- Why it matters: 用户的有效条目交换可能失败或改变数据含义。protected标记不能阻止字段被重分类；本轮不声称已观察真实秘密泄漏或损坏的已保存target。
+- Realistic failure scenario: 创建名为BinDes-0的自定义字段并添加一个附件，复制后粘贴；解析将该字段和真正的附件引用都当成附件，原普通字段不保留。
+- Minimal fix: Reject the complete outgoing document before clipboard publication when an ordinary field has the exact reserved prefix. Use a content-free error and preserve source fields; do not rename or silently drop them.
+- Better long-term fix: 使用独立的attachment节点／明确版本字段身份，实现完整自定义字段保真并单独验证旧载荷与正式KeePass容器。不能盲目改读旧含歧义载荷或只靠数字后缀猜测。
+- Regression test suggestion: 所有16组合与多条选择在document返回前拒绝，原字段／保护／附件保持；大小写／缺横杠／非首部／首部空格相近名称与空／非空附件经framing／parse／insert／save／reopen保持。错误不回显任何字段名或值。
+- Estimated effort: 最小发布拒绝与回归1–2小时；完整格式迁移另行评估。
+- Verification limits: Synthetic native pipeline only; malformed target insertion/save, clipboard/IPC and foreign clients were not exercised. Duplicate binary IDs remain a separate unconfirmed candidate.
+
+100历史Confirmed（Critical1／High19／Medium64／Low16）含已修复项；原始b7c5d9f／15项／6.1分保持，整体goal active。
+
+原始来源与红测proof SHA256 15ad768feb1776b533421a089970a76ef2ddda17c332fbc36f7fc1674cca0831。
+
+### 内部交换字段身份最终复核
+
+SP-S89最小修复在serialize_entry读取普通字段值前检查原始名称：精确BinDes-前缀整份document拒绝，错误不含名称或值。没有重命名、丢弃或猜测字段；源条目字段／保护／附件保持。copy_entries_to_exchange只有build成功后才执行encode与clipboard写入，因而此拒绝发生在发布前；这里只是源码控制流证明，没有触碰真实OS剪贴板。旧含歧义载荷没有修复，完整BinDes前缀字段交换支持仍未完成。
+
+两项正式回归及完整exchange17项通过：16组合包括四种后缀、两种字段保护、有无真实附件与无冲突选择项在前；全部拒绝并验证固定错误及源数据保持。大小写／缺横杠／非首部／首部空格相近名称和空／非空真实附件经生产document／flags-gzip／decode／parse／insert及合成AES KDBX保存重开保持身份／字节／保护。原始红测1pass1fail／16写出12解析拒绝4重分类和来源哈希保留；首次零测试日志不计覆盖，未生成或覆盖raw XML artifact。
+
+竞品参考为既有固定KeePass镜像d1eec63f1bd73dc2d5273eaf94528f616b553ce5，KdbxFile.Read.Streamed.cs:467／469／509／517分别进入和读取独立EntryString／EntryBinary，hash a656ccb387b9593626dfe7549387e2a5cb0d65da71ee7ae93bc2e01b8eaf1e43复核匹配。取其字段身份分离作为后续格式设计依据，本次只完成安全发布拒绝；未运行竞品或证明正式容器互操作。此前临时导航行号以最终competitor-final精确行号取代，原导航记录保留。
+
+verify-exchange-field-identity-final.log exit0：frontend447／Rust776／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过。304个执行源码／测试／工具在完整门禁前后hash逐项一致；CARGO_INCREMENTAL=0、单构建作业和单线程Rust、dev-test debug0，live未开启。无原生真机／provider／新APK或用户库／配置证据。
+
+documentation currency gate更新data-contracts／security-model／project-structure及专属最小拒绝TODO，纠正源码将legacy代理字段归于KeePass正式格式的注释；稳定SKILL／maintenance路由无需变动。报告统计范围同步至SP-S89，100历史Confirmed（1／19／64／16）包含已修复项，原始b7c5d9f／15项／6.1分保持。重复binary ID仍只作未确认候选，来源迁移／全仓复审／紧凑界面及手机v1.6.5另存为新APK／provider继续，整体goal active。
+
+最终proof SHA256 0f870463993b3caf01a3515a375d8d43fc2b7f9c9aed01147b66d0910025b355；完整日志SHA256 ef784ea06efbac13a15059521ed57eac6a01562ee86d804ac81faeedccfe9228。最终format／严格metadata／report lint／staged另行核验。

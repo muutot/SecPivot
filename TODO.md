@@ -261,3 +261,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 零字节条目交换附件
 
 - [x] 内部交换空附件保留（SP-S88）：protected／unprotected零字节及非空混合附件经生产document／flags-gzip／decode／parse／insert、合成AES KDBX保存重开和再交换保持名字／内容／保护。自闭合／显式空／空白Base64接受，缺ID／缺引用／坏Base64／嵌套与未知编码属性拒绝；独立标准XML-Base64检查通过。不代表OS剪贴板／官方压缩与容器／真实跨客户端或手机provider已验证。
+
+## 审计补充 — 内部交换字段身份
+
+- [x] 附件引用前缀冲突的复制拒绝（SP-S89）：普通字段名以精确BinDes-前缀开头时在完整document发布前报错，保留原字段／保护／附件；有界16组合及相近名称和真实附件的保存重开控制与完整门禁通过。这是避免错误分类的最小拒绝，不等于此类字段完整交换保真、旧载荷恢复、OS剪贴板或跨客户端支持。

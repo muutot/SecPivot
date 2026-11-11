@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_field_identity_tests.rs` is a test-only child of `exchange.rs` for
+ordinary field collisions with the legacy attachment-reference namespace.
+Two regressions cover 16 outgoing-refusal combinations and legitimate near-prefix
+fields with empty/nonempty attachments through native save/reopen. `serialize_entry`
+rejects exact `BinDes-` prefixes before document publication; full field identity
+support and malformed/foreign document identities remain separate work.
+
 `exchange_binary_tests.rs` is the test-only child module of `exchange.rs` for
 empty binary payloads. Four regressions cover actual document/framing/parse,
 empty XML forms, mixed-byte/native persistence/re-export and malformed binary

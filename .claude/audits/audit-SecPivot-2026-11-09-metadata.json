@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S88; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 99,
-    "confirmed": 99,
+    "scope": "15 baseline cards plus SP-S05 through SP-S89; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 100,
+    "confirmed": 100,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 63,
+      "Medium": 64,
       "Low": 16
     }
   },
@@ -861,6 +861,23 @@
       "artifact_correction_sha256": "54d7ac5650f23a18f9924d890de6219f02a069d23102f6926f642d5ed8045441",
       "final_proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-empty-final-proof.json",
       "final_proof_sha256": "551246ec751b54586eb795f1fdc668e444bc9b29f61a4ee5c27fcb50592f81fd"
+    },
+    {
+      "id": "SP-S89",
+      "severity": "Medium",
+      "confidence": "High",
+      "status": "Confirmed and remediated with outgoing reserved-prefix refusal; full field-preserving exchange remains incomplete",
+      "source_checkpoint": "43a1d8130e8cd946b399e4364b8791992a6150a3",
+      "evidence": "Actual native16 cases: emitted16, parse rejection12, reclassified4; one failed regression and one legitimate near-prefix/native persistence control passed",
+      "proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-field-identity-original-proof.json",
+      "proof_sha256": "15ad768feb1776b533421a089970a76ef2ddda17c332fbc36f7fc1674cca0831",
+      "limits": [
+        "Initial filter ran zero tests; excluded",
+        "No malformed target persistence, clipboard/IPC/real vault/config/client",
+        "Full prefix preservation and duplicate binary identities remain separate work; whole goal active"
+      ],
+      "final_proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-field-identity-final-proof.json",
+      "final_proof_sha256": "0f870463993b3caf01a3515a375d8d43fc2b7f9c9aed01147b66d0910025b355"
     }
   ],
   "verification": {
@@ -2372,9 +2389,36 @@
         "No CSS/markup/IPC/schema/vendor/dependency/version change, sibling edit, push/release or APK build/install",
         "99 historical Confirmed include remediated, original b7c5d9f/15/score6.1 preserved; goal active"
       ]
+    },
+    "exchange_field_identity": {
+      "exitCode": 0,
+      "frontend": 447,
+      "rust": 776,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "targetedExchange": 17,
+      "newRegressions": 2,
+      "conflictCases": 16,
+      "sourceFiles": 304,
+      "cargoIncremental": 0,
+      "buildJobs": 1,
+      "rustTestThreads": 1,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\exchange-field-identity-final-proof.json",
+      "proof_sha256": "0f870463993b3caf01a3515a375d8d43fc2b7f9c9aed01147b66d0910025b355",
+      "limits": [
+        "Initial filter executed zero tests and is excluded; genuine red1pass1fail, emitted16/parseRejected12/reclassified4",
+        "Small outgoing refusal only; prefix-field preservation and legacy ambiguous blob recovery remain incomplete",
+        "No malformed target persistence, shared clipboard, IPC, real vault/config/provider/device/client or mobile APK evidence",
+        "Pinned competitor source comparison only; no cross-client interoperability proof",
+        "No CSS/markup/IPC/schema/vendor/dependency/version change or sibling edit, push/release",
+        "100 historical Confirmed include remediated; original b7c5d9f/15/6.1 unchanged; whole goal active"
+      ]
     }
   },
   "reverification_notes": [
+    "SP-S89 native16 cases emitted16/parseRejected12/reclassified4 confirmed; smallest outgoing prefix refusal and near-prefix/native persistence controls pass. Targeted17 and full447/776/ACL2/KeePass25/QuickXML1363 exit0; source304 hashes unchanged. Zero-test initial filter excluded, original evidence preserved; pinned competitor separate String/Binary identity reference only. Historical100 and original15/6.1 retained; whole goal active.",
     "SP-S88 empty entry-exchange binaries fixed with dedicated default text and strict binary envelope. Four formal regressions/native persistence and independent0/0/4-byte check pass; full447/774/ACL2/KeePass25/QuickXML1363 exit0, incremental0. Temporary green artifact probe overwrote original raw XML, original-byte claim withdrawn and correction recorded; source/tests/red log/original decoder summary retained. Historical99/baseline15/6.1, whole goal active.",
     "SP-S87 internal exchange whitespace/CR loss fixed with dedicated text and CR references. Native5 and independentXML3 pass, full447/770/ACL2/KeePass25/QuickXML1363 exit0 with incremental disabled after compiler OOM; original failed log preserved, source unchanged. Historical98/baseline15/6.1 retained; whole goal active, no OS clipboard/device/provider/client proof.",
     "SP-S86 XML field identity loss reproduced through actual native-export/Edge IO wire/native save-reopen; smallest whole-file refusal fixed. Targeted25 frontend/native1(3 cases), real browser24, full447/765/ACL2/KeePass25/QuickXML1363 exit0. Historical97 and original baseline15/6.1 preserved; whole goal active.",

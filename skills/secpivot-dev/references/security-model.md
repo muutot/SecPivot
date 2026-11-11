@@ -1,5 +1,13 @@
 # Security Model
 
+Whole-entry copying checks ordinary field names for the legacy `BinDes-`
+attachment-reference namespace before serializing their values. A conflict
+returns a content-free error before any completed document or clipboard write,
+preserving the source fields and avoiding reclassification of ordinary/protected
+values as attachment names. Synthetic native tests cover both protection flags
+and whole-selection refusal; this does not sanitize old clipboard payloads or
+establish OS clipboard behavior or foreign-client interoperability.
+
 Zero-byte entry-exchange attachments are preserved as valid empty Base64 text,
 including their protected flag. Empty text is distinct from missing binary IDs,
 unresolved references, invalid encoding or nested/unknown binary structure;
