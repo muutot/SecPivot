@@ -1,5 +1,18 @@
 # Security Model
 
+After backend lock succeeds, renderer snapshots/tabs/session/icon/epoch caches
+are cleared synchronously before pending temp-cleanup IPC settles. State replies
+admitted before close/lock cannot recreate a disposed epoch or cache old content;
+remote replacement uses the same owner check. Late tab-list replies from a prior
+successful registry transition are discarded. Publication identities are fresh
+Symbols, including after a failed re-admission of a disposed ID; an older reply
+cannot regain ownership through reused initial epochs.
+Failed closes retain the lifetime;
+parked live sessions and uncached listed sessions remain supported. These guards
+are real-service behavior tested through synthetic Tauri seams, without real
+vaults/OS clipboard/native cleanup timing. They do not prove JS heap erasure or
+replace explicit secret-getter/component view guards and backend key zeroization.
+
 Remote passwords and signing keys must be preserved exactly, not trimmed as form
 text. The blank-keep configuration contract applies only to an exact empty string;
 whitespace-only replacement must not silently reuse an older stored credential.

@@ -1,5 +1,15 @@
 # Project Structure and Runtime Surfaces
 
+`services/vault.ts` separates publication-epoch admission from read-only ownership
+checks on completion, uses fresh Symbol lifetime identities to prevent reused-ID
+re-admission collisions, and versions tab-list reads across successful native
+registry transitions. Backend lock acknowledgement clears renderer state before
+temp cleanup. `tests/vault-session-publication.test.mjs` runs the real service
+graph with synthetic invoke/storage seams for late mutation/refresh/tab-list
+replies, lock cleanup, failed closes, explicit/uncached IDs and retained-session
+ordering. This adds no IPC schema or native module; policy IPC/editor integration
+remains pending.
+
 Main-page feedback preserves `TipKind` across `flash` and the IO/group/favicon/
 entry-editor notify seams. Known failures pass error explicitly; the global
 `TipsHost` keeps its existing semantic danger styles and success default.

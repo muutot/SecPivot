@@ -1,5 +1,22 @@
 # Data Contracts
 
+Native renderer state publication registers an addressed session's epoch at
+admission, including valid explicit IDs not listed yet. Each admission after
+disposal and each replacement uses a fresh Symbol identity, so failed re-admission
+of an old ID cannot match earlier responses; no disposed-ID ledger is retained.
+Completion reads the
+current epoch without recreating a missing lifetime. A disposed owner rejects
+with the existing no-open-database error; replacement epochs retain the current
+snapshot instead of caching the old response or its icons. Remote replacement
+uses the same captured epoch. `list_sessions` reads capture `topologyRevision`;
+successful open/create/close/switch transitions invalidate older tab-list results.
+Listed uncached sessions receive an initial epoch and remain activatable.
+Successful backend `close_all_vaults` immediately clears renderer state, tabs and
+session/icon/epoch caches before awaiting temp cleanup. Cleanup tokens retain
+their existing retry behavior. Synthetic real-service regressions cover these
+boundaries; IPC schemas/native persistence, secret getters and UI view guards
+remain separate contracts.
+
 Remote `secretKey`/`secret_key` is an opaque password or signing key: frontend
 normalization, queued `set_config`, native normalization, protected persistence
 and transport construction preserve every character, including edge whitespace.

@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S80; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 91,
-    "confirmed": 91,
+    "scope": "15 baseline cards plus SP-S05 through SP-S81; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 92,
+    "confirmed": 92,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
       "Medium": 57,
-      "Low": 14
+      "Low": 15
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
@@ -1937,6 +1937,66 @@
         "quickxml_ignored": 4
       },
       "limits": "No policy session IPC/frontend editor/history policy display yet; No complete renderer XML migration/native client/provider/device proof; 1PUX source policy encoding and full Bitwarden mode mapping pending; Title-only heuristic auto-type skips native-policy entries; manual reads remain separate; Not a total-heap/URL temporary-memory erasure guarantee; Main full Rust suite preceded two RPC feedback-copy updates; final-source targeted17 and final clippy compiled the current feedback"
+    },
+    "closed_session_publication": {
+      "source_checkpoint": "40d2479",
+      "result": "SP-S81 confirmed and remediated: original14 red10/control4, immutable15 red11/control4 and immutable16 red12/control4. Intermediate readmission collision red1/other15 pass; fresh Symbol identities fix it. Final actual-service16/related41 and full387/733/ACL2/KeePass25/QuickXML1363 ignored4 passed serial/debug0/live unset. No IPC/UI/schema/native change. Original15/6.1 baseline and active comprehensive goal preserved.",
+      "baseline_source_sha256": "46d09eedafed2ac4c44d23788514249040472821c5c6c8df2f05cbc7150d1cdc",
+      "red": {
+        "original14": {
+          "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-publication-complete-red.log",
+          "sha256": "54811731717db37bbe398af2a52d14b45b774decc5faa77ffa3efec2a2aeabdc",
+          "tests": 14,
+          "pass": 4,
+          "fail": 10
+        },
+        "immutable15": {
+          "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-publication-immutable-red.log",
+          "sha256": "55d8bed0fbaa37b3e44f27012cce505c5d2fb51548e6bc2599c1bae040f2e3a5",
+          "tests": 15,
+          "pass": 4,
+          "fail": 11
+        },
+        "immutable16": {
+          "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-publication-immutable-sealed-red.log",
+          "sha256": "9c68dce3666e32e6376789f8f9b53cdb4dc2e7add79f6678885dcb9cabf3a9e6",
+          "tests": 16,
+          "pass": 4,
+          "fail": 12
+        },
+        "intermediate_readmission16": {
+          "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-readmission-red.log",
+          "sha256": "1951f2927a6c6561d34ade924f60ccc50dca38c2bcc9b8704a0a8fe72c78fa67",
+          "tests": 16,
+          "pass": 15,
+          "fail": 1
+        }
+      },
+      "targeted_passed": 16,
+      "related_passed": 41,
+      "targeted_log": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-publication-green-sealed.log",
+      "full_gate": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\verify-closed-session-publication-sealed.log",
+        "sha256": "477aec93b649d4d4aa3165a722f0eefa3a715ba57b496ae9ff39b4c86a3230f0",
+        "command": "npm run verify",
+        "exit_code": 0,
+        "frontend_passed": 387,
+        "rust_passed": 733,
+        "android_acl_passed": 2,
+        "keepass_specialized_passed": 25,
+        "quickxml_passed": 1363,
+        "quickxml_ignored_not_executed": 4,
+        "format_check_build_contract_clippy": "passed",
+        "rust_threads": 1,
+        "dev_test_debug": 0,
+        "live_opt_in_variables": "unset",
+        "root_rust_test_filter": "none"
+      },
+      "proof": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\closed-session-publication-final-proof.json",
+        "sha256": "8a106e9fbdc5e42d344df0dade058119999547ac9f440678bdbd7f2c30d9297a"
+      },
+      "limits": "No actual user config/vault/shared clipboard, Tauri runtime or device/provider cleanup timing. No password/master-key disclosure or JS heap erasure demonstrated. Policy IPC/editor and comprehensive audit remain pending."
     }
   },
   "reverification_notes": [

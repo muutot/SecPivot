@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S80；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S81；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
 | Medium    | 57     | 57        | 0         |
-| Low       | 14     | 14        | 0         |
+| Low       | 15     | 15        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **91** | **91**    | **0**     |
+| **Total** | **92** | **92**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4577,3 +4577,38 @@ website-rules-storage-final-proof.json关联最终源码与日志哈希。两条
 恢复高资源KDF/OOM复现或访问真实密码库／共享剪贴板。documentation
 currency gate更新data-contracts／security-model／project-structure，
 SKILL与稳定maintenance路由不需改动；没有CSS／markup／新依赖变化。
+
+### Finding: SP-S81 已关闭会话被晚到状态或列表响应重新发布
+
+- Severity: Low
+- Confidence: High
+- Category: Frontend state / Session disposal
+- Status: Confirmed（真实服务状态／元数据边界已修复，最终专项与完整门禁通过）
+- Affected area: services/vault.ts epoch publication, refreshTabs, refreshRemote and closeAll.
+- Evidence:
+  - File / Function: src/lib/services/vault.ts:234 (sessionEpochs), :282 (captureSessionEpoch), :291 (commitSessionStateAtEpoch), :605 (refreshTabs), :850 (closeAll).
+  - Source checkpoint: 40d2479; original source SHA256 46d09eedafed2ac4c44d23788514249040472821c5c6c8df2f05cbc7150d1cdc, copied to closed-session-publication-baseline.ts.
+  - Actual service graph with synthetic invoke/localStorage seams: original14 tests execute with10 failures/4 passing controls in closed-session-publication-complete-red.log. Independent immutable-source replay of15 tests has11 failures/4 controls in closed-session-publication-immutable-red.log. Current16 plus related25 tests pass in closed-session-publication-green-sealed.log.
+  - Two pending mutation replies are delivered after close/closeTab/closeAll: the first revision99 refills the closed cache, and the second independently supplied revision2 returns revision99. This demonstrates retained cross-response cache state rather than only a successful Promise.
+  - An older list_sessions reply delivered after closeAll restores a closed active id; a deferred cleanup_attachment_temp reply leaves the old renderer snapshot/tab visible in the service until cleanup settles.
+  - Failed-close, retained parked A→B→A, remote replacement and newest-revision controls pass on the original source. A final extra case validates explicit unlisted-session admission and close invalidation; it is not counted in the original14 red executions.
+  - Final review found reused epoch0 after failed re-admission of a disposed id: closed-session-readmission-red.log executes16 tests with15 passes/1 failure on the intermediate repair. A fresh Symbol identity per admission/replacement fixes that collision without retaining a closed-ID ledger. The earlier386-test full gate predates this final correction and is retained only as intermediate evidence.
+  - 最终16项在原始不可变源码上再次独立回放，12项失败／4项正常对照通过（closed-session-publication-immutable-sealed-red.log）；无需临时回退工作树源码。
+- Problem: epoch absence is coerced to initial0; mismatch fallback can normalize stale icons when no current session exists. Tab-list publication has no registry-generation check, and lock clears renderer state after asynchronous cleanup.
+- Why it matters: a disposed frontend session can regain metadata/icon cache entries or an active tab identity, and slow cleanup delays renderer clearing. Native snapshots mask passwords and protected custom values; this test does not demonstrate actual password/master-key disclosure or normal UI exposure.
+- Realistic failure scenario: 编辑或刷新请求已发出，用户随后关闭／锁定密码库；较早响应在原生关闭确认后送达。临时附件清理缓慢时，旧快照也持续留在服务状态；失败的旧ID激活重试不能使先前响应重新获得发布资格。
+- Minimal fix: register fresh Symbol publication identities at admission/replacement, read current ownership without re-registering, reject absent owners; generation-check list replies across successful registry changes; use the same ownership check for remote replacement; clear renderer stores/caches immediately after successful backend lock before temp cleanup.
+- Better long-term fix: 后续会话IPC与组件视图守卫复用独立会话生命周期契约；将秘密读取和真实平台清理时序分别验证，保持原生锁定为权威边界。
+- Regression test suggestion: 保留真实service模块的16项隔离回归，覆盖关闭／锁定、旧列表、重新登记碰撞及失败关闭／停放会话／远程替换对照；真机另行验证用户界面与provider清理。
+- Estimated effort: 修复与隔离测试1–2天；真机／provider时序验证另计。
+- Preserved behavior: failed closes retain ownership, parked and initially uncached/explicit sessions still work, valid newest revisions and remote replacement epochs retain precedence, temp-token retry semantics remain.
+- Verification limits: real production service modules run with synthetic API/storage seams. No user configuration/vault/shared clipboard, actual Tauri reply ordering, native cleanup/provider/device timing or JS heap-erasure proof is involved. Ordinary secret getter view guards and native key zeroization remain separate.
+
+本项按服务状态／元数据缺陷评为Low，不把缓存回填扩大成密码外泄结论。
+当前92张历史Confirmed含已修复项（Critical1／High19／Medium57／Low15），
+原始b7c5d9f／15项／6.1分不变。新逐网址IPC与紧凑编辑器尚未实现；先修
+共享关闭／发布边界是后续接线的必要基础，整体审计与竞品／界面目标继续。
+
+最终完整门禁 verify-closed-session-publication-sealed.log exit0：frontend387／Rust733／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root Rust无过滤、live选项未启用。完整日志SHA256 477aec93b649d4d4aa3165a722f0eefa3a715ba57b496ae9ff39b4c86a3230f0；closed-session-publication-final-proof.json关联原始源码、两次不可变回放、最终16项回放、中间重登记失败、41项绿色专项及最终源码／loader／日志哈希。前一轮386项完整验证不用于证明最终Symbol修复。
+
+documentation currency gate更新data-contracts／security-model／project-structure，说明独立生命周期身份、关闭后的只读归属检查、列表拓扑版本与原生锁定确认后立即清空renderer；SKILL和稳定维护路由不需更新。仅此共享服务缺陷完成，逐网址IPC／编辑器与全仓复审、竞品、视觉和手机provider仍待继续。
