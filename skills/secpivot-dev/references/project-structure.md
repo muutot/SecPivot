@@ -7,8 +7,16 @@ registry transitions. Backend lock acknowledgement clears renderer state before
 temp cleanup. `tests/vault-session-publication.test.mjs` runs the real service
 graph with synthetic invoke/storage seams for late mutation/refresh/tab-list
 replies, lock cleanup, failed closes, explicit/uncached IDs and retained-session
-ordering. This adds no IPC schema or native module; policy IPC/editor integration
+ordering. The following policy IPC is a separate integration; the compact editor
 remains pending.
+
+`commands/website_rules.rs` owns registered explicit-session policy get/set IPC
+and a required nullable write envelope. `website_rules_tests.rs` covers native
+orchestration/serialization/session isolation and current/history presence hints.
+`tests/website-rules-service.test.mjs` executes actual vault service methods with
+synthetic storage/invoke seams for envelopes, lifecycle guards and browser refusal.
+`types/vault.ts` mirrors version-1 modes/rules and `hasWebsiteRules`; rules remain
+outside ordinary/history snapshots. No platform/dependency changes are required.
 
 Main-page feedback preserves `TipKind` across `flash` and the IO/group/favicon/
 entry-editor notify seams. Known failures pass error explicitly; the global

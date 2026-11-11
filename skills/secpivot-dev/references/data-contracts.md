@@ -771,8 +771,23 @@ manual auto-type remains separate. Entries without the field retain legacy behav
 
 Synthetic tests exercise real native Bridge/RPC trait adapters, KDBX persistence,
 history, XML field extraction/import and in-memory entry-exchange documents.
-No Tauri policy command, frontend editor, source-format mapping or real client/
-provider execution is established yet; XML's complete renderer path remains separate.
+`commands/website_rules.rs` registers `get_entry_website_rules({sessionId,uuid})`
+and `set_entry_website_rules({sessionId,request:{uuid,rules}})` on desktop/mobile.
+Both require a String session ID and always resolve that explicit origin. The
+write envelope denies unknown fields; `rules` must be present, with null restoring
+legacy and `{version:1,rules:[]}` retaining explicit no-match. The required nullable
+wrapper first deserializes Value through deserialize_any; using a transparent
+Option would let missing fields become None. Invalid structural rule contents
+produce a fixed error before native semantic validation/publication.
+Current/history DTOs expose `hasWebsiteRules` only, including for malformed foreign
+policies; managed rule content remains excluded from their custom-field arrays.
+`vault.getEntryWebsiteRules(uuid)` captures session/lifetime and rejects reads
+after close or remote replacement. `setEntryWebsiteRules(uuid,rules)` rejects
+undefined before IPC and uses the existing epoch-guarded state commit. Browser
+preview rejects both methods explicitly; `callInSession` binds parked origins.
+These real-service/native orchestration tests use synthetic seams. Frontend
+editor, history rule-value reader, source-format mapping and real WebView/client/
+provider execution remain pending; XML's complete renderer path remains separate.
 
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name

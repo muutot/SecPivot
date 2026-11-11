@@ -717,6 +717,7 @@ impl VaultSession {
                     _ => None,
                 },
                 has_totp: entry_has_otp(&historical),
+                has_website_rules: historical.fields.contains_key(FIELD_WEBSITE_RULES),
                 icon: match historical.icon() {
                     Some(Icon::BuiltIn(id)) => Some(*id as u32),
                     _ => None,

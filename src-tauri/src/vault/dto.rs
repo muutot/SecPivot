@@ -69,6 +69,9 @@ pub struct VaultEntry {
     /// of the snapshot: the renderer fetches codes via `totp_code` or the
     /// seed on demand via `get_entry_totp`.
     pub has_totp: bool,
+    /// Presence only, including malformed foreign policies. Rules are fetched
+    /// explicitly; managed content never enters ordinary or history snapshots.
+    pub has_website_rules: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
     /// UUID of the referenced database custom icon (a favicon stored in the
@@ -577,6 +580,8 @@ pub struct HistoryVersion {
     /// Whether the snapshot carried a TOTP seed. The seed itself never leaves
     /// the backend, mirroring `VaultEntry.has_totp`.
     pub has_totp: bool,
+    /// Managed policy presence for this version; rules stay out of the snapshot.
+    pub has_website_rules: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<u32>,
     /// UUID of the referenced database custom icon, if the snapshot used one.

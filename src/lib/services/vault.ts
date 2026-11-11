@@ -36,6 +36,7 @@ import type {
   SessionInfo,
   RemoteObject,
   RemoteMode,
+  WebsiteRuleSet,
 } from "$lib/types/vault";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
@@ -154,6 +155,8 @@ interface VaultStore {
   pasteEntriesExchange: (groupUuid: string) => Promise<{ uuids: string[]; state: VaultState }>;
   getEntryTotp: (uuid: string) => Promise<string | null>;
   getCustomFieldValue: (uuid: string, name: string) => Promise<string | null>;
+  getEntryWebsiteRules: (uuid: string) => Promise<WebsiteRuleSet | null>;
+  setEntryWebsiteRules: (uuid: string, rules: WebsiteRuleSet | null) => Promise<VaultState>;
   /** Update one custom field's value in place, keeping its protected flag and
    *  every other field untouched. Used by the detail panel inline editor. */
   updateCustomFieldValue: (
@@ -1289,6 +1292,27 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.customFields?.find((f) => f.name === name)?.value ?? null;
+  },
+
+  async getEntryWebsiteRules(uuid: string): Promise<WebsiteRuleSet | null> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featWebsiteRules");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<WebsiteRuleSet | null>(
+      "get_entry_website_rules",
+      { uuid },
+      sessionId,
+    );
+    if (currentSessionEpoch(sessionId) !== epoch) {
+      throw new Error(t(lang(), "error.websiteRulesStale"));
+    }
+    return result;
+  },
+
+  async setEntryWebsiteRules(uuid: string, rules: WebsiteRuleSet | null): Promise<VaultState> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featWebsiteRules");
+    if (rules === undefined) throw new Error(t(lang(), "error.websiteRulesRequired"));
+    return invokeSessionState("set_entry_website_rules", { request: { uuid, rules } });
   },
 
   /** Write back a custom field value, preserving or setting its protected
