@@ -27,6 +27,13 @@ native policy patches before publishing content; blank no-policy templates omit
 the patch. DOM tests with synthetic session/read/save seams prove rendering and
 component flow, not native WebView, Android providers or heap erasure.
 
+Managed website policies participate in native history and timeline differences
+through a boolean that compares field presence, raw stored content and protection.
+Rule content remains hidden from normal history/current DTOs and their custom
+field difference lists. History presence summaries and timeline chips do not
+call a policy-value getter or parse foreign JSON. A stored hint does not promise
+that a foreign policy validates or matches; it only reports field existence.
+
 After backend lock succeeds, renderer snapshots/tabs/session/icon/epoch caches
 are cleared synchronously before pending temp-cleanup IPC settles. State replies
 admitted before close/lock cannot recreate a disposed epoch or cache old content;

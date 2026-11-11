@@ -490,6 +490,8 @@ export interface HistoryDiff {
   favorite: boolean;
   qualityCheck: boolean;
   customFields: HistoryItemChange[];
+  /** Native rule presence/content/protection changed; no rule values here. */
+  websiteRules: boolean;
   customData: HistoryItemChange[];
   attachments: HistoryItemChange[];
 }

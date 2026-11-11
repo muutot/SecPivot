@@ -28,6 +28,13 @@ template policy with its hidden values atomically. `tests/website-rule-draft.tes
 exercises real draft operations/lifetimes; editor/service tests cover forwarding
 and browser refusal. Native editor tests cover policy history/KDBX and rollback.
 
+`entries.rs::history_diff` and `dto.rs::HistoryDiff.website_rules` provide one
+managed-policy change flag to entry history and `security.rs::change_timeline`.
+`HistoryVersionDialog` includes it in counts/Metadata presence summaries;
+`ChangeTimelineDialog` supplies its localized chip. No rule-value reader is added.
+`website_rules_storage_tests.rs` covers native policy-only changes, raw/protection/
+presence controls and KDBX reopen while keeping DTO content masked.
+
 `services/vault.ts` separates publication-epoch admission from read-only ownership
 checks on completion, uses fresh Symbol lifetime identities to prevent reused-ID
 re-admission collisions, and versions tab-list reads across successful native

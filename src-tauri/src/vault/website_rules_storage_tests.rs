@@ -72,6 +72,114 @@ fn stored(session: &VaultSession, id: &str) -> String {
 }
 
 #[test]
+fn website_policy_history_diff_marks_policy_only_changes_without_leaking_values() {
+    let (dir, mut session, id) = session();
+    session
+        .set_entry_website_rules(
+            &id,
+            Some(config(&[(
+                "https://synthetic.example:443/A?x=%2f#b",
+                WebsiteMode::Exact,
+            )])),
+        )
+        .unwrap();
+    let history = session.get_entry_history(&id).unwrap();
+    let diff = serde_json::to_value(&history[0].diff).unwrap();
+    assert_eq!(
+        diff.get("websiteRules"),
+        Some(&serde_json::Value::Bool(true)),
+        "policy-only changes must have an authoritative diff flag"
+    );
+    assert!(
+        diff.as_object()
+            .unwrap()
+            .iter()
+            .all(|(key, value)| key == "websiteRules"
+                || value == &serde_json::Value::Bool(false)
+                || value == &serde_json::json!([])),
+        "no unrelated fields changed"
+    );
+    let timeline = serde_json::to_value(session.change_timeline().unwrap()).unwrap();
+    assert_eq!(timeline[0]["diff"]["websiteRules"], true);
+    for payload in [
+        serde_json::to_string(&history).unwrap(),
+        timeline.to_string(),
+    ] {
+        assert!(!payload.contains("/A?x=%2f#b"));
+        assert!(!payload.contains(FIELD_WEBSITE_RULES));
+    }
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened
+        .open(&dir.path().join("synthetic.kdbx"), "synthetic-master", None)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(reopened.get_entry_history(&id).unwrap()[0].diff.clone()).unwrap()
+            ["websiteRules"],
+        true
+    );
+}
+
+#[test]
+fn website_policy_history_diff_tracks_bytes_protection_and_presence() {
+    let (_dir, mut session, id) = session();
+    session
+        .set_entry_website_rules(
+            &id,
+            Some(config(&[("https://synthetic.example", WebsiteMode::Host)])),
+        )
+        .unwrap();
+    let entry_id = parse_entry_id(&id).unwrap();
+    let baseline = session.require_db().unwrap().clone();
+    let raw = stored(&session, &id);
+    for (value, expected) in [
+        (Some(keepass::db::Value::protected(raw.clone())), false),
+        (Some(keepass::db::Value::unprotected(raw.clone())), true),
+        (
+            Some(keepass::db::Value::protected(raw.replace("host", "site"))),
+            true,
+        ),
+        (Some(keepass::db::Value::protected(String::new())), true),
+        (None, true),
+    ] {
+        let db = session.require_db_mut().unwrap();
+        let mut entry = db.entry_mut(entry_id).unwrap();
+        match value {
+            Some(value) => {
+                entry.fields.insert(FIELD_WEBSITE_RULES.to_owned(), value);
+            }
+            None => {
+                entry.fields.remove(FIELD_WEBSITE_RULES);
+            }
+        }
+        let diff = super::super::entries::history_diff(
+            &baseline.entry(entry_id).unwrap(),
+            &entry.as_ref(),
+        );
+        assert_eq!(diff.website_rules, expected);
+        assert!(diff.custom_fields.is_empty());
+    }
+    let absent = session.require_db().unwrap().clone();
+    session
+        .require_db_mut()
+        .unwrap()
+        .entry_mut(entry_id)
+        .unwrap()
+        .set(
+            FIELD_WEBSITE_RULES,
+            keepass::db::Value::protected(String::new()),
+        );
+    let diff = super::super::entries::history_diff(
+        &absent.entry(entry_id).unwrap(),
+        &session.require_db().unwrap().entry(entry_id).unwrap(),
+    );
+    assert!(
+        diff.website_rules,
+        "an empty foreign field still differs from no policy"
+    );
+}
+
+#[test]
 fn managed_policy_replaces_legacy_positive_rules_and_survives_native_reopen() {
     let (_dir, mut session, id) = session();
     session.update_custom_field(&id, FIELD_KPRPC_CONFIG, r#"{"altURLs":["https://alt.example"],"regExURLs":["legacy|alt"],"blockedURLs":["https://blocked.site.example"],"regExBlockedURLs":["/deny$"]}"#, true).unwrap();

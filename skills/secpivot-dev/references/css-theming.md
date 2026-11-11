@@ -49,6 +49,15 @@ each URL occupies a full row with scope/remove controls below it. Add/remove
 restores focus to the new/nearest URL (or Add URL when empty). Load failures and
 OverrideURL conflicts have visible recovery text; tab changes preserve the draft.
 
+History details reuse the existing Metadata grid, read-value change border,
+tab-dot and swap button for the website-policy presence summary. The rule change
+also contributes to the existing difference count and timeline chip mapping.
+Stored/Not set describes presence only, without fetching or exposing JSON rules.
+The summary spans the Metadata grid width and wraps its compact controls on
+narrow screens. History tabs reuse the editor's one-line, nonshrinking horizontal
+scroll pattern, nearest focus scrolling and inset focus outline; localized labels
+must not enlarge the modal content box.
+
 The `ThemeColors` interface has 21 semantic values (identical names to Clipboard plus `linkColor` for URL/contact links):
 
 | CSS variable          | ThemeColors key    | Purpose                           |

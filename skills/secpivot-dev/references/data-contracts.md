@@ -44,6 +44,17 @@ draft; missing/null policy reads for a presence hint reject the whole prefill.
 policy changes before publishing any draft fields. Its isolated renderer fixture
 uses synthetic read/session/save seams; native persistence is tested separately.
 
+`HistoryDiff.websiteRules` compares managed-field presence, complete stored bytes
+and its protection flag inside the native session; it sends only the boolean.
+Both per-entry history and consecutive timeline transitions use this comparison.
+The managed field stays excluded from ordinary custom-field arrays and difference
+lists. `HistoryVersion.hasWebsiteRules` remains only a presence hint, including
+for malformed foreign policies. History details include the boolean in their
+count and Metadata indicator and can switch the historical/current presence
+summary; the timeline labels it Website rules. Neither view fetches policy values.
+An exact same stored value/protection is unchanged; no field and an empty foreign
+field differ. On-demand historical rule content remains a separate pending flow.
+
 Native renderer state publication registers an addressed session's epoch at
 admission, including valid explicit IDs not listed yet. Each admission after
 disposal and each replacement uses a fresh Symbol identity, so failed re-admission

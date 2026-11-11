@@ -64,6 +64,7 @@
     tags: "detail.tags",
     favorite: "history.favorite",
     qualityCheck: "editor.qualityCheck",
+    websiteRules: "editor.websiteRules",
   };
 
   function diffChips(event: ChangeTimelineEvent): string[] {

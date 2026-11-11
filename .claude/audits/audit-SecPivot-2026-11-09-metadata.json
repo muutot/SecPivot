@@ -21,15 +21,15 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S83; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 94,
-    "confirmed": 94,
+    "scope": "15 baseline cards plus SP-S05 through SP-S84; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 95,
+    "confirmed": 95,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
       "Medium": 59,
-      "Low": 15
+      "Low": 16
     }
   },
   "report_path": "audit-report-SecPivot-2026-11-09.md",
@@ -67,6 +67,16 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S84",
+      "severity": "Low",
+      "confidence": "High",
+      "source_checkpoint": "4474027",
+      "area": "Native managed website policy changes are absent from history/timeline diff flags",
+      "status": "Confirmed and remediated; native boolean diff, history presence/count/metadata and timeline chip;2 native regressions,24 renderer cases and full421/753/ACL2/KeePass25/QuickXML1363 pass; ignored4 excluded",
+      "evidence": "Actual get_entry_history diff contains no websiteRules flag; native red0pass/1fail exits101 before later timeline/reopen assertions",
+      "limitations": "No history loss, secret disclosure, matching failure, or real platform claim"
+    },
     {
       "id": "SP-S83",
       "severity": "Medium",
@@ -2143,6 +2153,30 @@
         "No APK build/install, provider/device test, release, push, sibling mutation or high-resource KDF/OOM reproduction",
         "History policy-value reader, source-format mappings and complete renderer XML migration remain partial; full per-website feature TODO stays partial",
         "Historical94 confirmed include remediated cards; baseline b7c5d9f/15/score6.1 and overall active goal remain unchanged"
+      ]
+    },
+    "website_rule_history_diff": {
+      "exitCode": 0,
+      "frontend": 421,
+      "rust": 753,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "source_checkpoint": "4474027",
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\website-history-diff-final-proof.json",
+      "proof_sha256": "f19cdcafe344a8fae2db44710ea210ce6602344928f95b556002eaa43dd1ec30",
+      "log_sha256": "b7049644bf185e9cc67d8194640b19e58bd2452ac09d2e993a3d261481b50d21",
+      "native_targeted": 2,
+      "renderer_cases": 24,
+      "limits": [
+        "Original native red only reaches missing policy flag assertion; later timeline/reopen assertions are green coverage",
+        "Native comparison controls use actual EntryRef values; masking/timeline/save/reopen use temporary synthetic AES KDBX",
+        "Actual Svelte DOM in isolated headless Edge with synthetic history/session/timeline seams; no rule-value getter calls",
+        "Initial harness runtime-import assumption and exact tab accessible-name locator were corrected; intermediate English narrow history tab overflow and clipped policy summary were fixed within the history surface",
+        "No real WebView/Android/provider, user vault/configuration/clipboard, release/APK/push or high-resource KDF/OOM work",
+        "Historical per-rule content, stable historical identity reads, source rule mappings and full renderer XML remain pending; per-website TODO stays partial",
+        "95 historical confirmed include remediated findings; original b7c5d9f/15/score6.1 and overall active goal remain unchanged"
       ]
     }
   },

@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S83；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S84；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
 | Medium    | 59     | 59        | 0         |
-| Low       | 15     | 15        | 0         |
+| Low       | 16     | 16        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **94** | **94**    | **0**     |
+| **Total** | **95** | **95**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4692,3 +4692,35 @@ save_entry新增websiteRules：省略／null保留，clear显式删除，set写�
 专项前端38（新增11）与新增原生事务5通过。最终verify-website-editor-final.log exit0：frontend421／Rust751／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy全部通过。完整日志SHA256 a05f92f41628e1d4f8409fe134c4044248279ce387196dfecee8abf13b31b416；website-editor-final-proof.json SHA256 893a9578ac6efb7b84ecdb45320684c463160f7a9841d0129d1efadcf80e2d76关联当前源码、锁文件、渲染夹具／截图和完整日志。首次检查的state属性与$state命名冲突、首次渲染夹具Fields选择器匹配Custom fields已改正，保留记录但不新增历史问题。
 
 documentation currency gate更新data-contracts／security-model／project-structure／css-theming并纠正旧Auto-Type分步保存描述；SKILL／maintenance稳定工作流无需变动。逐网址TODO仍[~]：历史策略值读取、来源规则映射、完整renderer XML迁移、真实WebView／Android provider未闭环。手机v1.6.5另存为ACL源码修复与新APK真机证明分开；本阶段不构建或安装APK。94历史Confirmed及原始b7c5d9f／15项／6.1分保持，整体目标active。
+
+### Finding: SP-S84 逐网址规则变更未进入历史差异标记
+
+- Severity: Low
+- Confidence: High
+- Category: Observability / UX correctness
+- Status: Confirmed（差异标记、历史摘要及时间线分类修复，专项与完整门禁通过）
+- Affected area: native history_diff, per-entry history detail and vault-wide change timeline.
+- Evidence:
+  - File / Function: src-tauri/src/vault/entries.rs history_diff / visible_custom_fields; src-tauri/src/vault/dto.rs HistoryDiff; HistoryVersionDialog totalDiffs / metaGroupDiff; ChangeTimelineDialog FIELD_LABELS.
+  - Source checkpoint: 4474027. Native managed policy is a reserved field, filtered from visible custom-field differences; HistoryDiff has no managed-policy flag. Frontend difference count and timeline chip mapping similarly have no rule marker.
+  - Actual temporary synthetic AES KDBX: set_entry_website_rules adds a valid Exact policy without changing ordinary fields. get_entry_history()[0].diff has no websiteRules member. website-history-diff-native-red.log exits101 with left None versus expected Some(Bool(true)); pass0/fail1. The failure occurs before later timeline/reopen assertions, so they are not counted as red execution evidence. Original source/test/log hashes are retained in website-history-diff-original-proof.json.
+- Problem: Historical policy presence is serialized and the complete policy persists in native history, but its changes are excluded from the authoritative difference flags. Both the history count and the timeline omit the kind of change.
+- Why it matters: Users reviewing only a matching-rule change cannot identify it from the change summary. This does not establish loss of history, incorrect current matching, encrypted-file corruption or secret exposure.
+- Realistic failure scenario: 用户只新增、修改或移除逐网址规则，再打开历史详情或变更时间线；时间与历史记录存在，但差异计数／分类没有显示网址规则变更。
+- Minimal fix: Compare presence, stored rule bytes and protection flag inside the native session, expose only a websiteRules boolean, and include that flag in the history count/meta marker and timeline chip. Keep rule values out of ordinary DTOs.
+- Better long-term fix: 单独实现绑定历史版本身份与会话生命周期的按需规则查看；不得用current规则冒充历史内容，也不得因读取失败恢复为无规则。
+- Regression test suggestion: 原生合成库覆盖规则新增／修改／删除／不变、空字段与无字段、保护状态变化、history／timeline及KDBX重开；实际renderer证明计数、标记、中文／英文、主题／窄屏和不请求规则值。
+- Estimated effort: 差异契约与界面标记修复及复核1–2小时；完整历史规则查看独立完成。
+- Verification limits: 当前只确认原生缺失flag及对应源码排除链，未声称已执行red frontend/timeline/reopen断言或真实WebView／Android场景。
+
+新增SP-S84后为95历史Confirmed（Critical1／High19／Medium59／Low16），含已修复项；原始b7c5d9f／15项／6.1分保持。整体目标active。
+
+最终SP-S84修复：HistoryDiff.websiteRules在native比较受管理字段的存在、完整字节与保护状态；普通customFields／差异列表继续排除该字段，只传布尔变更。历史详情计数及元属性dot包含标记，受保护规则仅展示历史／当前存在摘要，时间线增加本地化网址规则chip。规则相同则无变更；空外部字段与不存在不同。没有新增规则值读取，不用当前策略冒充历史内容。
+
+原生专项2项通过：合法策略新增、实际history／timeline／masked DTO与合成AES KDBX重开；对照相同值／模式字节／保护变化／删除／空字段。i18n／primitives6项和check零错误警告通过。隔离headless Edge实际组件24个history／timeline×深／浅／自定义×中文／英文×1100×720／360×600组合通过，history计数／metadata存在切换／变更dot、timeline唯一规则chip、规则值读取0、页签键盘焦点／单行／就近滚动及viewport边界验证。手工观察窄屏历史与浅色时间线截图，摘要可读且没有横向溢出。
+
+实现过程中的renderer runtime路径假设及tab accessible-name严格定位错误已纠正，不计新产品问题。窄屏英文历史页签导致modal scrollWidth394>318的视觉门禁失败、规则摘要截断也已修正：沿用既有单行横向滚动／焦点样式，规则摘要跨grid并在窄屏换行，仅涉及同一历史review界面。中间日志保留；最终website-history-render-final.log exit0／24组合无pageerror。
+
+最终verify-website-history-final.log exit0：frontend421／Rust753／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过，单线程Rust／dev-test debug0／root无过滤／live未开启。完整日志SHA256 b7049644bf185e9cc67d8194640b19e58bd2452ac09d2e993a3d261481b50d21；website-history-diff-final-proof.json SHA256 f19cdcafe344a8fae2db44710ea210ce6602344928f95b556002eaa43dd1ec30关联原样源码／聚焦原生失败／最终源码／渲染截图与完整门禁。
+
+documentation currency gate更新data-contracts／security-model／project-structure／css-theming及TODO存在摘要进展；SKILL／maintenance稳定路由无需改动。历史策略值读取与版本身份／会话边界、来源规则映射、完整renderer XML、手机新APK／provider仍待完成；不把presence摘要称为完整历史规则查看。95历史Confirmed（1／19／59／16）与原始15项／6.1分保留，整体目标active。
