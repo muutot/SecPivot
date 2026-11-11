@@ -1,5 +1,13 @@
 # Security Model
 
+Entry-exchange retains the stored AutoType None/UseClipboard metadata option
+instead of silently replacing it with None. Preparation validates the known
+0/1 integer domain and resolves native configuration before insertion; unknown
+or damaged codes return a fixed content-free error without a partial list.
+This is configuration fidelity only: it adds no auto-type execution, OS clipboard
+operation or claim that replay implements that option or defeats key loggers.
+Editor retention, full foreign formats and arbitrary metadata text remain separate.
+
 Entry-exchange preparation rejects repeated exact decoded XML icon UUID text
 before data filtering, so missing/invalid bytes cannot hide a duplicate.
 The fixed error contains no identifiers or image data, and no partial parsed

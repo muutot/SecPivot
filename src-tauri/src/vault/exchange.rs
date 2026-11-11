@@ -46,8 +46,8 @@ use std::io::{Read, Write};
 
 use base64::{engine::general_purpose as base64_engine, Engine as _};
 use keepass::db::{
-    AutoType, AutoTypeAssociation, CustomDataItem, CustomDataValue, Database, EntryId, GroupMut,
-    Icon, Value,
+    AutoType, AutoTypeAssociation, CustomDataItem, CustomDataValue, DataTransferObfuscation,
+    Database, EntryId, GroupMut, Icon, Value,
 };
 use quick_xml::se::to_string_with_root;
 use serde::{Deserialize, Serialize};
@@ -202,6 +202,8 @@ pub struct XmlStringValue {
 pub struct XmlAutoType {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enabled: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_transfer_obfuscation: Option<String>,
     #[serde(
         default,
         rename = "DefaultSequence",
@@ -480,6 +482,13 @@ fn xml_custom_data(entry: &keepass::db::EntryRef<'_>) -> Option<XmlCustomData> {
 fn xml_auto_type(auto_type: &AutoType) -> XmlAutoType {
     XmlAutoType {
         enabled: Some(bool_xml(auto_type.enabled)),
+        data_transfer_obfuscation: Some(
+            match auto_type.data_transfer_obfuscation {
+                DataTransferObfuscation::None => "0",
+                DataTransferObfuscation::UseClipboard => "1",
+            }
+            .to_owned(),
+        ),
         default_sequence: auto_type.default_sequence.clone(),
         associations: auto_type
             .associations
@@ -621,7 +630,7 @@ fn unprotect(_data: &[u8]) -> Result<Vec<u8>, String> {
 pub struct PastedEntry {
     pub fields: Vec<(String, String, bool)>,
     pub attachments: Vec<(String, Vec<u8>, bool)>,
-    pub auto_type: Option<XmlAutoType>,
+    pub auto_type: Option<AutoType>,
     pub custom_data: Vec<PastedCustomDataItem>,
     pub tags: Vec<String>,
     pub quality_check: bool,
@@ -789,12 +798,13 @@ fn parse_entry(
     }
 
     let custom_data = parse_custom_data(entry.custom_data.as_ref(), remaining_binary_bytes)?;
+    let auto_type = parse_auto_type(entry.auto_type.as_ref())?;
 
     let times = entry.times.as_ref();
     Ok(PastedEntry {
         fields,
         attachments,
-        auto_type: entry.auto_type.clone(),
+        auto_type,
         custom_data,
         tags: entry
             .tags
@@ -824,6 +834,34 @@ fn parse_entry(
             .map(|expires| expires == "True")
             .unwrap_or(false),
     })
+}
+
+/// Resolve the known metadata option before any target entry is inserted.
+fn parse_auto_type(auto_type: Option<&XmlAutoType>) -> Result<Option<AutoType>, String> {
+    let Some(auto_type) = auto_type else {
+        return Ok(None);
+    };
+    let data_transfer_obfuscation = match auto_type.data_transfer_obfuscation.as_deref() {
+        None => DataTransferObfuscation::None,
+        Some(value) => match value.trim().parse::<u32>() {
+            Ok(0) => DataTransferObfuscation::None,
+            Ok(1) => DataTransferObfuscation::UseClipboard,
+            _ => return Err("条目自动输入配置无效".to_owned()),
+        },
+    };
+    Ok(Some(AutoType {
+        enabled: auto_type.enabled.as_deref() == Some("True"),
+        default_sequence: auto_type.default_sequence.clone(),
+        data_transfer_obfuscation,
+        associations: auto_type
+            .associations
+            .iter()
+            .map(|association| AutoTypeAssociation {
+                window: association.window.clone(),
+                sequence: association.keystroke_sequence.clone(),
+            })
+            .collect(),
+    }))
 }
 
 fn parse_custom_data(
@@ -920,23 +958,7 @@ pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uui
         );
     }
     if let Some(auto_type) = &entry.auto_type {
-        node.autotype = Some(AutoType {
-            enabled: auto_type
-                .enabled
-                .as_deref()
-                .map(|enabled| enabled == "True")
-                .unwrap_or(false),
-            default_sequence: auto_type.default_sequence.clone(),
-            data_transfer_obfuscation: Default::default(),
-            associations: auto_type
-                .associations
-                .iter()
-                .map(|association| AutoTypeAssociation {
-                    window: association.window.clone(),
-                    sequence: association.keystroke_sequence.clone(),
-                })
-                .collect(),
-        });
+        node.autotype = Some(auto_type.clone());
     }
     if entry.expires {
         node.times.expires = Some(true);
@@ -1023,6 +1045,10 @@ mod custom_value_tests;
 mod icon_identity_tests;
 
 #[cfg(test)]
+#[path = "exchange_autotype_tests.rs"]
+mod autotype_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use keepass::db::fields;
@@ -1041,6 +1067,15 @@ mod tests {
             entry.set_unprotected(fields::URL, "https://github.com");
             entry.set_unprotected("KDBX Custom Field", "custom-value");
             entry.tags = vec!["work".to_owned(), "mail".to_owned()];
+            entry.autotype = Some(AutoType {
+                enabled: true,
+                default_sequence: Some("{USERNAME}{TAB}{PASSWORD}{ENTER}".to_owned()),
+                data_transfer_obfuscation: DataTransferObfuscation::UseClipboard,
+                associations: vec![AutoTypeAssociation {
+                    window: "Synthetic browser *".to_owned(),
+                    sequence: "{USERNAME}".to_owned(),
+                }],
+            });
             entry.override_url = Some("https://github.com/*".to_owned());
             entry.background_color = Some("#336699".parse().expect("color"));
             entry.custom_data.insert(
@@ -1108,6 +1143,10 @@ mod tests {
         assert_eq!(entry.override_url.as_deref(), Some("https://github.com/*"));
         assert_eq!(entry.background_color.as_deref(), Some("#336699"));
         assert!(entry.expires);
+        assert_eq!(
+            entry.auto_type.as_ref(),
+            db.entry(id).unwrap().autotype.as_ref()
+        );
         assert_eq!(entry.custom_data.len(), 1);
         assert_eq!(entry.custom_data[0].key, "plugin");
         assert_eq!(entry.attachments.len(), 1);

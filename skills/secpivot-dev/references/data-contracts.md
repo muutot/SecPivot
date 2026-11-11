@@ -1,5 +1,15 @@
 # Data Contracts
 
+Entry-exchange AutoType writes `DataTransferObfuscation` as canonical `0`/`1`.
+`parse_auto_type` resolves it into native `AutoType` before insertion, preserving
+the known None/UseClipboard setting. Missing markers retain the legacy None
+default; trimmed unsigned integer aliases of 0/1 are accepted, while unknown,
+empty or damaged codes refuse the whole document with a fixed error.
+`PastedEntry.auto_type` holds the resolved native configuration and insertion
+clones it. Existing enabled/sequence/association behavior is unchanged. Synthetic
+tests cover known configuration transfer, not arbitrary text or replay efficacy;
+ordinary editor option retention and official client formats remain separate.
+
 Entry-exchange custom icon definitions have one exact decoded XML UUID text
 identity per document. Preparation checks all definitions before filtering
 missing/invalid data, rejects duplicates with a fixed error and publishes no

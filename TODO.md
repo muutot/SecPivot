@@ -287,3 +287,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 内部交换自定义元数据值完整携带（SP-S99）：Binary／None以明确内部SecPivotType表示，旧文本无标记原样保留；11种当前值／键经实际framing与原生插入完整保留，来源已保存重开的9项在目标内存／保存重开后逐项相同；6种错误组合整份拒绝，1／2／3／4-byte padding及附件＋元数据的小共享预算边界通过。四项新增／exchange51项及完整门禁447前端／810 Rust／ACL2／KeePass25／QuickXML1363通过；不代表原生KDBX类型推断／元数据时间戳／正式容器／旧客户端或OS剪贴板／真机provider完成。
 
 - [x] 内部交换自定义图标定义唯一（SP-S100）：全部精确解码XML UUID文本在Data过滤前校验，10类重复含缺值／坏编码／未引用／字符引用别名整份拒绝且固定错误；不同UUID／重排／空／未引用与共享条目引用、原生writer一个共享定义经实际framing和临时AES KDBX保存重开控制通过。三项新增／exchange54项及完整门禁447前端／813 Rust／ACL2／KeePass25／QuickXML1363通过；UUID规范化、唯一坏／缺Data和缺失引用、真实渲染／OS剪贴板／客户端与手机provider仍独立待审。
+
+- [x] 内部交换自动输入混淆选项保留（SP-S101）：明确0／1标记在准备阶段解析为原生AutoType，缺标记沿用None，合法整数别名保留，六类非法代码整份拒绝；四种原生配置经实际framing／insert及来源和目标AES KDBX保存重开保真，六种旧缺省／零和五种1对照通过。四项新增／exchange58项及完整门禁447前端／817 Rust／ACL2／KeePass25／QuickXML1363通过；旧sample_db实际初始化并比较AutoType。只确认存储配置，不代表运行混淆效果、普通编辑隐藏选项／任意文本／正式客户端或手机provider完成。

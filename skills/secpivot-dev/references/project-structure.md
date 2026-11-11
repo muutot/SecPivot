@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_autotype_tests.rs` is a test-only child of `exchange.rs` for the stored
+AutoType obfuscation option. Four regressions cover four native configurations
+in memory and reopened-source/target KDBX comparisons, six absent/zero controls,
+five known-one integer spellings and six invalid codes. `XmlAutoType` carries
+the optional wire code; `parse_auto_type` resolves native `PastedEntry.auto_type`
+before insertion. The existing in-file sample now actually initializes AutoType
+and compares it, matching its stated scope. No IPC, vendor, dependency or UI
+change; runtime efficacy and ordinary editor retention remain separate audit work.
+
 `exchange_icon_identity_tests.rs` is a test-only child of `exchange.rs` for
 custom icon definition identity. Three regressions cover ten duplicate refusals,
 unique/empty/unused and shared-reference controls, native shared-definition
