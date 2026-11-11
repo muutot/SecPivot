@@ -1140,6 +1140,8 @@ export const zhCN = {
   "error.websiteRulesRequired": "请明确指定网址规则，或选择恢复旧匹配规则",
   "error.websiteRulesStale": "数据库会话已关闭或内容已替换，请重新读取网址规则",
   "editor.websiteRules": "网址规则",
+  "history.websiteRulesPresent": "已存储",
+  "history.websiteRulesAbsent": "未设置",
   "editor.websiteEnable": "使用逐网址匹配规则",
   "editor.websiteHint": "每个网址单独选择匹配范围；保存条目时一并应用。",
   "editor.websiteLegacy": "未启用时，沿用条目网址及 KeyVault 匹配设置。",

@@ -635,6 +635,8 @@ pub struct HistoryDiff {
     pub tags: bool,
     pub favorite: bool,
     pub quality_check: bool,
+    /// Managed rule presence/content/protection changed; values stay native.
+    pub website_rules: bool,
     pub custom_fields: Vec<HistoryItemChange>,
     pub custom_data: Vec<HistoryItemChange>,
     pub attachments: Vec<HistoryItemChange>,

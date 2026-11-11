@@ -59,6 +59,7 @@
   const iconDiff = $derived(diff.icon);
   const colorDiff = $derived(diff.color);
   const qualityCheckDiff = $derived(diff.qualityCheck);
+  const websiteRulesDiff = $derived(diff.websiteRules === true);
   const favoriteDiff = $derived(diff.favorite);
   const passwordDiff = $derived(diff.password);
 
@@ -66,7 +67,7 @@
     titleDiff || usernameDiff || expiresDiff || urlDiff || notesDiff || tagsDiff || passwordDiff,
   );
   const metaGroupDiff = $derived(
-    hasTotpDiff || iconDiff || favoriteDiff || qualityCheckDiff || colorDiff,
+    hasTotpDiff || iconDiff || favoriteDiff || qualityCheckDiff || colorDiff || websiteRulesDiff,
   );
 
   type FieldChange = "unchanged" | "added" | "removed" | "modified";
@@ -217,6 +218,7 @@
       (colorDiff ? 1 : 0) +
       (qualityCheckDiff ? 1 : 0) +
       (favoriteDiff ? 1 : 0) +
+      (websiteRulesDiff ? 1 : 0) +
       customFieldChangedCount +
       customDataChangedCount +
       attachmentChangedCount,
@@ -277,7 +279,15 @@
 >
   {#snippet icon()}<AppIcon name="clock" size={18} />{/snippet}
   {#snippet children()}
-    <div class="editor-tabs" role="tablist" aria-label={t(lang, "history.tabs")}>
+    <div
+      class="editor-tabs"
+      role="tablist"
+      aria-label={t(lang, "history.tabs")}
+      onfocusin={(event) => {
+        if (event.target instanceof HTMLElement)
+          event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }}
+    >
       <button
         type="button"
         role="tab"
@@ -431,6 +441,20 @@
       </div>
     {:else if activeTab === "meta"}
       <div class="meta-grid" role="tabpanel">
+        {#if websiteRulesDiff || version.hasWebsiteRules || entry.hasWebsiteRules}
+          <div class="read-value website-policy" class:changed={websiteRulesDiff}>
+            {#if websiteRulesDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
+            <AppIcon name="globe" size={12} />
+            <span class="read-text"
+              >{t(lang, "editor.websiteRules")}: {(
+                showCurrent.websiteRules ? entry.hasWebsiteRules : version.hasWebsiteRules
+              )
+                ? t(lang, "history.websiteRulesPresent")
+                : t(lang, "history.websiteRulesAbsent")}</span
+            >
+            {#if websiteRulesDiff}{@render swapBtn("websiteRules")}{/if}
+          </div>
+        {/if}
         <div class="read-value" class:changed={hasTotpDiff}>
           {#if hasTotpDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="key" size={12} />
@@ -644,6 +668,16 @@
     gap: 6px;
   }
 
+  .website-policy {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    padding-block: 4px;
+  }
+
+  .website-policy .read-text {
+    flex: 1 1 140px;
+  }
+
   .color-swatch {
     width: 12px;
     height: 12px;
@@ -655,6 +689,9 @@
 
   .editor-tabs {
     display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
     gap: 2px;
     margin: -12px 0 12px;
     padding-bottom: 8px;
@@ -662,6 +699,8 @@
   }
 
   .editor-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
     display: inline-flex;
     align-items: flex-start;
     gap: 3px;
@@ -686,6 +725,10 @@
   .editor-tab.active {
     color: var(--text-primary);
     border-bottom-color: var(--selection-color);
+  }
+
+  .editor-tab:focus-visible {
+    outline-offset: -2px;
   }
 
   .tab-dot {

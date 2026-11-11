@@ -252,6 +252,8 @@ pub(crate) fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) ->
         favorite: (historical.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE))
             != (current.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE)),
         quality_check: historical.quality_check != current.quality_check,
+        website_rules: historical.fields.get(FIELD_WEBSITE_RULES)
+            != current.fields.get(FIELD_WEBSITE_RULES),
         custom_fields: diff_custom_fields(&historical_fields, &current_fields),
         custom_data: diff_custom_data(
             &custom_data_entries(&historical.custom_data),
