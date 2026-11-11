@@ -1,5 +1,6 @@
 //! Validated, managed per-website policies for native browser URL routing.
-use super::{parse_entry_id, VaultSession, VaultState, FIELD_WEBSITE_RULES};
+use super::helpers::parse_entry_id;
+use super::{VaultSession, VaultState, FIELD_WEBSITE_RULES};
 use crate::util::{url_authority, UrlAuthority};
 use keepass::db::Value;
 use serde::{Deserialize, Serialize};

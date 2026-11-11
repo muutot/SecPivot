@@ -50,6 +50,13 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ## 后续必建（需工具链环境，按顺序执行）
 
+> 验证状态（2026-11-11，共享逐网址模块 SP-S83）：
+>
+> - `vault/website_rules.rs` 原来从父模块导入 `parse_entry_id`，该父级重导出仅在 `cfg(desktop)` 存在，共享模块在移动端因此缺少该符号。已改成直接引用共享 `vault/helpers.rs`，不扩大桌面别名的导出范围。
+> - 实际完整逐网址源码、原样父级条件导出与真实固定版本 host 依赖经纯编译探针复核：原始源码在 desktop 关闭时产生 E0432，desktop 对照通过；修复后两种条件均通过。外围会话/helper仅为未执行的签名桩，该探针只证明此模块名称解析，不等同 Android target 编译或运行测试。
+> - 当前 `cargo check --offline --locked --lib --target aarch64-linux-android` 仍在 `aws-lc-sys` 因缺少 `aarch64-linux-android-clang` / `clang.exe` 停止，尚未到项目源码；此环境失败不算产品缺陷复现或成功 Android 构建。仍需完整 NDK 的 CI 编译、两个64位APK与真机验证。
+> - 此缺陷影响新源码构建，不是已经证明的用户 v1.6.5 `plugin:safe` 选择器 ACL 报错根因；后者仍按下面独立记录与新APK/真机证据跟进。
+
 > 验证状态（2026-11-09，SAF ACL）：
 >
 > - 用户确认安装版本为 v1.6.5，原始反馈“另存为失败: Command plugin:safe|create_document not allowed by ACL”，选择器未启动。当前源码注册/调用的是 `saf`，反馈中 `safe` 的拼写差异仍需安装包或原始设备日志核实。源码另有已确认权限问题：Android capability 误用 `screens`，Tauri 会忽略该字段，导致 `saf:default` 没有匹配主窗口；已改为 `windows: ["main"]`。

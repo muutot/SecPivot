@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S82; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 93,
-    "confirmed": 93,
+    "scope": "15 baseline cards plus SP-S05 through SP-S83; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 94,
+    "confirmed": 94,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 58,
+      "Medium": 59,
       "Low": 15
     }
   },
@@ -67,6 +67,17 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S83",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "bbb0fb9",
+      "introduced_at": "40d2479",
+      "area": "Shared native website policy module imports parser through desktop-only parent alias",
+      "status": "Confirmed and remediated; complete-module mobile/desktop cfg typecheck green,22 native tests and full410 frontend/746 Rust/ACL2/KeePass25/QuickXML1363 pass; actual Android target check still blocked before project source by missing NDK/clang",
+      "evidence": "Complete actual website_rules module typechecked with exact gated parent alias and real pinned host dependency artifacts: original cfg mobile failsE0432 while desktop passes; fixed both pass. Source/dependency/harness hashes retained in mobile-website-original/fixed-proof.json.",
+      "limitations": "Inert surrounding signatures are not executed. Real Android cargo check stops at missing NDK/clang before project sources. No complete target/ABI/JNI/Kotlin/APK/provider/device proof; separate from installed v1.6.5 picker ACL error."
+    },
     {
       "id": "SP-S82",
       "severity": "Medium",
@@ -2068,6 +2079,45 @@
         "No user configuration/vault, shared clipboard, provider, WebView, APK or competitor runtime execution",
         "Candidate database clones stay in session memory; no heap-erasure or large-vault performance guarantee",
         "Baseline b7c5d9f / 15 findings / score6.1 retained; 93 historical confirmed cards include remediated findings; overall goal remains active"
+      ]
+    },
+    "mobile_website_import": {
+      "exitCode": 0,
+      "frontend": 410,
+      "rust": 746,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "source_checkpoint": "bbb0fb9",
+      "native_targeted": 22,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\mobile-website-import-final-proof.json",
+      "proof_sha256": "c0f7022da44e2d6560e3dea11c703ff31fa989bc7a2e4d591607dac87017a97a",
+      "log_sha256": "cd60a181071881fa7e96e9c83062316e605134ecfbf4337e7f6e3db2f5059280",
+      "android_check": {
+        "exitCode": 101,
+        "stage": "aws-lc-sys native compiler discovery",
+        "projectSourceReached": false,
+        "missing": ["aarch64-linux-android-clang", "clang.exe"]
+      },
+      "cfg_compilation": {
+        "original": {
+          "mobileExit": 1,
+          "desktopExit": 0,
+          "diagnostic": "E0432 unresolved super::parse_entry_id"
+        },
+        "fixed": {
+          "mobileExit": 0,
+          "desktopExit": 0
+        }
+      },
+      "limitations": [
+        "Compile-only full production website module with inert surrounding signatures, real pinned host dependencies and actual parent cfg alias",
+        "The cfg mapping is corroborated by locked tauri-build source; no fixture function executes",
+        "No full Android crate/target ABI/JNI/Kotlin/link/APK/provider/device/clipboard or user-vault proof",
+        "Separate from installed v1.6.5 plugin:safe picker ACL feedback; new APK/provider still required",
+        "Full host verification uses one Rust job/thread, dev/test debug0, unfiltered tests and no SECPIVOT live opt-in; ignored/early-return live bodies are not platform coverage",
+        "Original15/6.1 and94 historical confirmed cards retained; full audit/competitor/UI goal remains active"
       ]
     }
   },

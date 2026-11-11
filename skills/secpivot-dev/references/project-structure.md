@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+Shared `vault/website_rules.rs` imports `parse_entry_id` from `vault/helpers.rs`
+directly. The parent vault aliases for browser matching remain desktop-only;
+shared modules must not use those aliases for cross-platform helpers. A host
+compiler fixture covers this complete module with desktop enabled/absent and
+real pinned host dependencies; it is supplemental cfg-name evidence, not an
+Android crate/ABI/NDK/JNI/APK or device runtime gate. See `docs/android.md` for
+the current toolchain limit and separate real-platform requirements.
+
 `vault/entry_save.rs` owns the explicit create/edit request, nullable optional
 editor extras, target/attachment/flag validation, candidate database mutation,
 one complete tracked edit and final publication rollback. `commands/entry_save.rs`

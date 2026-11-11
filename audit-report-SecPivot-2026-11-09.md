@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S82；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S83；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 58     | 58        | 0         |
+| Medium    | 59     | 59        | 0         |
 | Low       | 15     | 15        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **93** | **93**    | **0**     |
+| **Total** | **94** | **94**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4651,3 +4651,30 @@ TS新增模式／规则类型及真实vault服务读写；读取绑定Symbol生�
 最终专项新增前端13／含策略及i18n共27、原生8通过。首次专项误用了不存在的关闭测试文件名，仅计实际27项；完整门包含真实vault-session-publication测试。原生夹具auto_type拼写编译错误与中间create unit分支忽略多余UUID的失败已保留并修正，不新增问题卡。最终verify-editor-save-final.log exit0：frontend410／Rust746／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy全部通过；单线程Rust、dev/test debug0、root无过滤、live选项未启用。完整日志SHA256 68e15bc00cf89e8f2c44b971581f7820740d7544c7c05fb2b7283a144b70ed05；editor-save-final-proof.json SHA256 53f3ff88dcabeadf1ba991be2e6ef59d5ea0326ce986bb626a578ea358a16147关联原始编排、聚焦持久化失败、专项／最终源码与日志。
 
 documentation currency gate同步data-contracts／security-model／project-structure与Auto-Type TODO保存契约，SKILL与稳定maintenance路由无需改动；仅page脚本删除旧UUID猜测，无CSS／markup／依赖／发布更改。93历史Confirmed及原始15项／6.1分保持；逐网址编辑／历史值读取／来源迁移、真机另存为、新APK及剩余全仓／竞品／视觉复核继续，整体目标active。
+
+### Finding: SP-S83 共享逐网址模块依赖桌面限定重导出
+
+- Severity: Medium
+- Confidence: High
+- Category: Release / Mobile module boundary
+- Status: Confirmed（共享 helper 直接导入已修复，条件编译与完整host门禁通过）
+- Affected area: vault::website_rules compilation with desktop disabled.
+- Evidence:
+  - File / Function: src-tauri/src/vault/website_rules.rs:2 imports super::parse_entry_id; src-tauri/src/vault/mod.rs:43–44 exports that alias only under cfg(desktop), while mod website_rules is unconditional.
+  - Source checkpoint: bbb0fb9; the defective parent-alias import was added by managed-storage integration at 40d2479 (the pure policy module began at c4e5e9c). mobile-website-original-source.rs preserves the original bytes at this checkpoint.
+  - Native Android cargo check --offline --locked --lib --target aarch64-linux-android exits101 at aws-lc-sys because aarch64-linux-android-clang/clang.exe is unavailable. android-boundary-native-check.log does not reach application source and is not proof of a product compile error or successful mobile build.
+  - probe-mobile-website-import.mjs typechecks the complete production website_rules module against real pinned host keepass/serde/serde_json/url/zeroize artifacts, with inert surrounding session/helper signatures and the exact parent cfg-gated re-export. No fixture functions run. With cfg(mobile) and desktop absent, rustc exits1 with E0432, no parse_entry_id in vault; identical cfg(desktop) control exits0. Logs and source/dependency/harness hashes are saved in mobile-website-original-proof.json.
+- Problem: A shared module resolves its parser through an alias that does not exist in the mobile namespace, rather than through its shared helper owner.
+- Why it matters: New Android builds cannot compile this module after native dependencies succeed. This is a source availability defect, not the cause proven for the already-installed v1.6.5 picker ACL error.
+- Realistic failure scenario: Android CI or a machine with the complete NDK reaches SecPivot Rust sources; desktop is disabled and the newly shared module import fails. Host-only desktop verification misses that namespace.
+- Minimal fix: Import parse_entry_id directly from super::helpers, matching the other shared vault modules; retain the desktop-only aliases for their desktop consumers.
+- Better long-term fix: 在真实Android target CI中编译共享模块；条件名称解析探针只能补充本机缺NDK时的局部证据，不能替代完整目标编译、打包与真机运行。
+- Regression test suggestion: 保留原始/修复后的实际完整模块条件编译对照，并在具备NDK的CI运行cargo check及两个64位APK构建；不得以桌面门禁勾选手机可用性。
+- Estimated effort: 局部导入修复与条件编译复核1–2小时；完整Android工具链/设备闭环另计。
+- Verification limits: The compile-only fixture verifies this module's cfg name boundary with real host libraries, not the entire Android crate, target ABI, JNI, Kotlin, linked APK, picker or provider behavior. No runtime stub behavior, real vault, user configuration, clipboard or secret exposure is involved.
+
+新增SP-S83后为94历史Confirmed（Critical1／High19／Medium59／Low15），含已修复项；原始b7c5d9f／15项／6.1分保持。完整Android构建与真机验证仍缺证，整体目标active。
+
+最终SP-S83复核：锁定tauri-build2.6.3 src/lib.rs:474–477按Android/iOS启用mobile并关闭desktop，证明名称条件与真实构建映射一致。完整模块原始条件编译mobile失败E0432／desktop通过，修复后两种条件均通过；周围签名桩未执行，不扩大为完整目标或运行证明。原生逐网址22项通过。完整verify-mobile-website-import-final.log exit0：frontend410／Rust746／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root无过滤、live未启用；完整日志SHA256 cd60a181071881fa7e96e9c83062316e605134ecfbf4337e7f6e3db2f5059280，mobile-website-import-final-proof.json SHA256 c0f7022da44e2d6560e3dea11c703ff31fa989bc7a2e4d591607dac87017a97a关联原样／修复源码、固定依赖、条件探针与锁定构建映射及所有日志。
+
+documentation currency gate更新project-structure与docs/android的共享helper归属和验证限制；运行时IPC／schema／匹配／密钥／保存语义未变，data-contracts／security-model／SKILL／maintenance无需改动。没有CSS／markup／依赖／版本／发布变化，手机TODO不标完成。真实Android cargo检查在NDK/clang之前置缺失停下；不恢复高资源复现或构建APK。94历史Confirmed（1／19／59／15）及原始b7c5d9f／15项／6.1分保持，整体目标active。
