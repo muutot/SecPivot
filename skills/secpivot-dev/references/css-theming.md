@@ -51,6 +51,20 @@ The Save As toolbar tooltip and Appearance toolbar description use the same
 localized key. Explain that successful Save As switches future saves to the new
 file; keep the compact visible label unchanged. A remote session becomes local.
 
+AppToolbar reserves at least 160px for its search area. Left/right action groups
+stay within their allocated width and scroll horizontally when custom visibility,
+side assignments or labels exceed it. Buttons and the read-only badge do not
+shrink; groups reuse the thin scrollbar token and contained horizontal overscroll.
+Button focus keeps the existing theme outline inset so scrolling does not clip it.
+Focus entry scrolls the button instantly with nearest block/inline alignment;
+browser automatic focus scrolling alone can briefly leave the final button clipped.
+At 420px and below the two-row grid uses a minimum 160px search track and a shrinkable
+secondary track; the primary group is capped to the full row. All action buttons,
+including the more-specific primary button rule, retain 32px touch targets there.
+Sparse configurations remain compact without adding a scrollbar when they fit.
+Actual rendered geometry and native keyboard traversal in the browser fixture
+cover the access path; this is not Android/WebView or vault-operation evidence.
+
 ## Theme color contract
 
 The entry editor's Website rules tab follows its existing compact, single-line,

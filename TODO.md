@@ -34,6 +34,8 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ## Stage 4 — Search & productivity
 
+- [x] 自定义工具栏窄屏布局：搜索保留可用宽度，左右过长工具组有界滚动、按钮不收缩，焦点即时完整显示；稀疏／全部显示／全部移左配置经生产组件的深浅主题、中英、320–1100px 共42个浏览器场景与Tab／Enter复核（SP-S94；真实Android/WebView与原生窗口操作不在本项证据范围）
+
 - [x] TOTP display with countdown for `otp`/`totp` fields (`totp_code` command + `TotpWidget`)
 - [x] Password strength meter in entry editor (`estimateEntropy`/`entropyLabel`, `password.ts`)
 - [x] URL quick-open via `@tauri-apps/plugin-opener` (detail + list rows)

@@ -151,6 +151,12 @@
 
   let searchInputEl = $state<HTMLInputElement | null>(null);
 
+  function revealFocusedAction(event: FocusEvent): void {
+    if (event.target instanceof HTMLButtonElement) {
+      event.target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    }
+  }
+
   /** Focus the search input. When `seed` is given (type-to-search), the
    *  character is appended first and the caret moves to the end, so the very
    *  first typed character is not lost. */
@@ -174,7 +180,7 @@
      never leave. Buttons and the search input still block dragging because
      the hit-test walk stops at clickable elements. -->
 <div class="toolbar" role="presentation" data-tauri-drag-region="deep">
-  <div class="toolbar-left">
+  <div class="toolbar-left" onfocusin={revealFocusedAction}>
     <button
       class="mobile-nav-toggle"
       class:active={mobileNavOpen}
@@ -425,7 +431,7 @@
     </div>
   </div>
 
-  <div class="toolbar-right">
+  <div class="toolbar-right" onfocusin={revealFocusedAction}>
     {#if readOnly}
       <span class="readonly-badge" title={t(lang, "toolbar.readonlyTitle")}
         >{t(lang, "toolbar.readonly")}</span
@@ -729,6 +735,21 @@
   .toolbar-center {
     flex: 1;
     justify-content: center;
+    min-width: min(160px, 100%);
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+
+  .toolbar-left button:focus-visible,
+  .toolbar-right button:focus-visible {
+    outline-offset: -2px;
   }
 
   .search-box {
@@ -846,6 +867,7 @@
   .tool-button {
     display: inline-flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 6px;
     height: 28px;
     padding: 0 10px;
@@ -874,6 +896,7 @@
   }
 
   .readonly-badge {
+    flex: 0 0 auto;
     padding: 2px 7px;
     border: 1px solid color-mix(in srgb, var(--danger-color) 45%, transparent);
     border-radius: 10px;
@@ -909,7 +932,6 @@
     .toolbar-center {
       flex: 1;
       justify-content: flex-start;
-      min-width: 0;
     }
 
     .search-box {
@@ -941,7 +963,7 @@
   @media (max-width: 420px) {
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(160px, 1fr) minmax(0, max-content);
       grid-template-areas:
         "primary primary"
         "search secondary";
@@ -969,6 +991,7 @@
 
     .mobile-nav-toggle,
     .tool-button,
+    .tool-button.primary,
     .icon-action {
       width: 32px;
       height: 32px;
