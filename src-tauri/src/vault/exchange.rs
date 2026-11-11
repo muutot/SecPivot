@@ -567,10 +567,11 @@ fn gunzip(body: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn gunzip_limited(body: &[u8], max_output_bytes: usize) -> Result<Vec<u8>, String> {
-    let decoder = flate2::read::GzDecoder::new(body);
+    let decoder = flate2::read::MultiGzDecoder::new(body);
     let mut out = Vec::new();
     // One extra byte detects overflow and reaches real EOF at the exact limit,
-    // allowing GzDecoder to validate its trailer before publishing the bytes.
+    // validating all member trailers and refusing trailing garbage before
+    // publishing any bytes, rather than treating the first member as EOF.
     decoder
         .take(max_output_bytes.saturating_add(1) as u64)
         .read_to_end(&mut out)
@@ -921,6 +922,10 @@ mod inflate_tests;
 #[cfg(test)]
 #[path = "exchange_document_tests.rs"]
 mod document_tests;
+
+#[cfg(test)]
+#[path = "exchange_gzip_member_tests.rs"]
+mod gzip_member_tests;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,14 @@
 # Data Contracts
 
+Entry-exchange gzip decoding uses `MultiGzDecoder` through the shared limited
+reader: every continuous member contributes to one output budget, and bounded
+successful output reaches underlying EOF, checking later trailers and rejecting
+trailing garbage. Empty members and byte-split XML/UTF-8 are valid; XML validation
+runs only after their complete output is assembled. Fixed damage/size errors
+publish no prefix. Five `exchange_gzip_member_tests.rs` regressions use at most
+4097 synthetic output bytes, including native KDBX reopen checks; this is not
+production-limit/OOM, full gzip-header or foreign-container interoperability.
+
 Entry-exchange parsing validates the complete XML envelope before Serde reads
 the model: exactly one complete `KeePassFile` root and real EOF, with only XML
 whitespace, comments and processing instructions outside it. Existing pre-root
@@ -33,8 +42,8 @@ data use fixed errors. Saturating limit arithmetic also supports an empty stream
 at usize::MAX. Four native tests inject limits at most4096 bytes (plus one overflow
 byte) and cover a parseable XML prefix, footer damage and legal boundaries;
 production wrappers have small valid/corrupt framing controls. No direct64 MiB,
-clipboard, allocation/OOM or cross-client proof is implied. Single-member/trailing
-data semantics and XML-generation budgets remain separate work; attachment/icon copy
+clipboard, allocation/OOM or cross-client proof is implied. Full gzip-header/container
+semantics and XML-generation budgets remain separate work; attachment/icon copy
 expansion now has the independent cumulative bound described above.
 
 Entry-exchange binary definitions require globally unique numeric IDs. The

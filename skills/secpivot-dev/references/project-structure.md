@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_gzip_member_tests.rs` is a test-only child of `exchange.rs`. Its five
+regressions cover five legal member partitions, seven suffix refusals, cumulative
+small-budget overflow, later trailers at the exact total limit and synthetic
+native KDBX reopen fidelity. The shared `gunzip_limited` uses `MultiGzDecoder`
+from the existing pinned flate2 dependency, reaching underlying EOF for successful
+bounded output before XML parsing. No IPC, dependency or vendor patch changes;
+full header/container semantics and allocation/CPU costs remain audit areas.
+
 `exchange_document_tests.rs` is a test-only child of `exchange.rs`. Four tests
 cover complete envelope refusal, named-root controls, legal surrounding misc
 and actual synthetic KDBX saved/reopened values. `validate_entries_document`

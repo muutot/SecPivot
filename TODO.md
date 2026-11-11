@@ -277,3 +277,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 交换发送尺寸一致性（SP-S93）：压缩前文档与DPAPI之后含flags的完整载荷均遵守64 MiB接收上限；小预算可压缩超限／gzip开销／合法字节与Windows DPAPI四项回归及完整门禁通过。最大合成文档4097 bytes，不等于XML生成预算／总堆／生产64 MiB／OOM／OS剪贴板或Android与客户端证明。
 
 - [x] 内部交换XML文档边界（SP-S95）：解析前要求单个完整KeePassFile根并消费至EOF，13类尾部／四种根控制拒绝且固定错误；六种合法misc及字段CRLF／空值、空及3-byte附件／保护／fresh UUID保存重开通过。四回归／exchange36项及完整门禁447前端／795 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成文档1702 bytes，不代表完整XML schema／encoding、gzip成员／正式容器、OS剪贴板或真机provider。
+
+- [x] 内部交换gzip完整成员消费（SP-S96）：所有连续成员共用输出预算，成功到达底层EOF，后续损坏／尾部垃圾不返回prefix；五种合法分段分别解析／保存重开保留字段／附件／保护，七种拒绝、四个小累计超限、合法总限额／usize::MAX及后续footer回归通过。五项新增／exchange41项及完整门禁447前端／800 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成输出4097 bytes，不代表生产64 MiB／OOM／总堆CPU／完整header／container／OS剪贴板或真机provider。

@@ -1,5 +1,14 @@
 # Security Model
 
+Entry-exchange gzip EOF means the end of the underlying input, not merely the
+first member. `MultiGzDecoder` counts all continuous member output against the
+same admission bound and validates later trailers before returning successful
+bounded output. Damaged/trailing compressed input yields a content-free error;
+fully expanded extra XML is rejected by the independent envelope gate. No
+prefix is published or inserted. Synthetic tests establish member consumption
+and native KDBX fidelity without OS clipboard access; production-limit/OOM,
+heap/CPU budgets, full header/container and native-client behavior are separate.
+
 Entry-exchange model deserialization alone does not prove complete consumption.
 An independent streaming envelope pass now requires a single complete named
 `KeePassFile` root through EOF before model parsing or target insertion. Root-
