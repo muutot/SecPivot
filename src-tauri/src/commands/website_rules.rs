@@ -1,6 +1,6 @@
 //! Explicit-session access to the managed per-website matching policy.
 use super::with_vault_session;
-use crate::vault::{VaultSession, VaultSessions, VaultState, WebsiteRuleSet};
+use crate::vault::{HistoryRuleSource, VaultSession, VaultSessions, VaultState, WebsiteRuleSet};
 use serde::{Deserialize, Deserializer};
 use std::sync::Mutex;
 
@@ -42,6 +42,41 @@ fn get_for_session(
 ) -> Result<Option<WebsiteRuleSet>, String> {
     with_vault_session(vaults, session, Some(session_id), |target| {
         target.get_entry_website_rules(uuid)
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct HistoryWebsiteRulesRead {
+    uuid: String,
+    index: usize,
+    selection_token: String,
+    source: HistoryRuleSource,
+}
+
+#[tauri::command]
+pub(crate) fn get_history_website_rules(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+    request: HistoryWebsiteRulesRead,
+) -> Result<Option<WebsiteRuleSet>, String> {
+    get_history_for_session(vaults.inner(), session.inner(), &session_id, request)
+}
+
+fn get_history_for_session(
+    vaults: &VaultSessions,
+    session: &Mutex<VaultSession>,
+    session_id: &str,
+    request: HistoryWebsiteRulesRead,
+) -> Result<Option<WebsiteRuleSet>, String> {
+    with_vault_session(vaults, session, Some(session_id), |target| {
+        target.get_history_website_rules(
+            &request.uuid,
+            request.index,
+            &request.selection_token,
+            request.source,
+        )
     })
 }
 

@@ -1363,11 +1363,15 @@
   </div>
 
   {#if viewingVersion}
-    <HistoryVersionDialog
-      {entry}
-      version={viewingVersion}
-      onclose={() => (viewingVersion = null)}
-    />
+    {@const historySessionId = detailSessionId()}
+    {#if historySessionId}
+      <HistoryVersionDialog
+        {entry}
+        version={viewingVersion}
+        sessionId={historySessionId}
+        onclose={() => (viewingVersion = null)}
+      />
+    {/if}
   {/if}
 
   {#if previewAttachmentName}

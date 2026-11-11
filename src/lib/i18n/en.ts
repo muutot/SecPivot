@@ -1178,6 +1178,12 @@ export const en: Record<I18nKey, string> = {
   "error.websiteRulesRequired": "Specify website rules or explicitly restore legacy matching",
   "error.websiteRulesStale": "The database session was closed or replaced; reload website rules",
   "error.historyStale": "The database changed. Refresh history and select the version again.",
+  "history.websiteView": "View rules",
+  "history.websiteLoading": "Loading rules…",
+  "history.websiteUnset": "No website rules are stored. Existing URL matching applies.",
+  "history.websiteHide": "Hide rules",
+  "history.websiteReadFailed":
+    "Unable to read these rules. If the database changed, close this view and select the history version again.",
   "editor.websiteRules": "Website rules",
   "history.websiteRulesPresent": "Stored",
   "history.websiteRulesAbsent": "Not set",

@@ -502,6 +502,8 @@ export interface HistorySelection {
   selectionToken: string;
 }
 
+export type HistoryRuleSource = "version" | "current";
+
 export interface HistoryVersion extends HistorySelection {
   modified: string | null;
   title: string;

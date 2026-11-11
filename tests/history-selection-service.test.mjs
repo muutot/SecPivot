@@ -63,6 +63,7 @@ const backend = {
         return Promise.resolve(state);
       }
       case "get_entry_history":
+      case "get_history_website_rules":
       case "restore_entry_version":
       case "delete_entry_history":
         return new Promise((resolve, reject) => pending.push({ command, args, resolve, reject }));
@@ -92,6 +93,76 @@ test("history read retains the exact token and originating session", async () =>
   const history = [{ ...selection, title: "Synthetic selected" }];
   pending[0].resolve(history);
   assert.equal(await request, history);
+});
+
+test("historical rule read binds both sources to the exact selected token", async () => {
+  for (const source of ["version", "current"]) {
+    const id = await fixture();
+    const task = vault.getHistoryWebsiteRules("synthetic-entry", selection, source);
+    assert.deepEqual(pending[0].args, {
+      sessionId: id,
+      request: { uuid: "synthetic-entry", ...selection, source },
+    });
+    const policy = {
+      version: 1,
+      rules: [{ url: "https://synthetic.example/exact?x=1", mode: "exact" }],
+    };
+    pending[0].resolve(policy);
+    assert.equal(await task, policy);
+    assert.equal(vault.get().revision, 1);
+  }
+});
+
+test("history rule null and empty policies are returned distinctly; failures reject", async () => {
+  await fixture();
+  for (const value of [null, { version: 1, rules: [] }]) {
+    const task = vault.getHistoryWebsiteRules("synthetic-entry", selection, "version");
+    pending.at(-1).resolve(value);
+    assert.equal(await task, value);
+  }
+  const task = Promise.allSettled([
+    vault.getHistoryWebsiteRules("synthetic-entry", selection, "version"),
+  ]);
+  pending.at(-1).reject("synthetic-invalid-policy");
+  assert.equal((await task)[0].status, "rejected");
+});
+
+test("invalid history rule selection or source never reaches IPC", async () => {
+  await fixture();
+  await assert.rejects(vault.getHistoryWebsiteRules("synthetic-entry", 1, "version"));
+  await assert.rejects(vault.getHistoryWebsiteRules("synthetic-entry", selection));
+  await assert.rejects(vault.getHistoryWebsiteRules("synthetic-entry", selection, "unknown"));
+  assert.equal(calls.length, 0);
+});
+
+test("closed or replaced history rule reads reject late protected values", async () => {
+  for (const replace of [false, true]) {
+    await fixture();
+    const task = Promise.allSettled([
+      vault.getHistoryWebsiteRules("synthetic-entry", selection, "version"),
+    ]);
+    if (replace) await vault.refreshRemote();
+    else await vault.closeAll();
+    pending[0].resolve({ version: 1, rules: [] });
+    assert.equal((await task)[0].status, "rejected");
+  }
+});
+
+test("parked history rule reads use their explicit origin and browser rejects them", async () => {
+  const owner = await fixture();
+  await vault.open("C:/synthetic/other.kdbx", "synthetic-master");
+  const task = vault.callInSession(owner, () =>
+    vault.getHistoryWebsiteRules("synthetic-entry", selection, "version"),
+  );
+  assert.equal(pending[0].args.sessionId, owner);
+  pending[0].resolve(null);
+  assert.equal(await task, null);
+  delete globalThis.__TAURI_INTERNALS__;
+  try {
+    await assert.rejects(vault.getHistoryWebsiteRules("synthetic-entry", selection, "version"));
+  } finally {
+    globalThis.__TAURI_INTERNALS__ = backend;
+  }
 });
 
 test("both history mutations require the selected token and publish the result", async () => {

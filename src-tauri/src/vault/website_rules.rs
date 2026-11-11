@@ -6,6 +6,25 @@ use keepass::db::Value;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+/// Both sides are read under the selected history revision, never from a newer
+/// current entry after the user's diff was captured.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HistoryRuleSource {
+    Version,
+    Current,
+}
+
+impl<'de> Deserialize<'de> for HistoryRuleSource {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match String::deserialize(deserializer)?.as_str() {
+            "version" => Ok(Self::Version),
+            "current" => Ok(Self::Current),
+            _ => Err(serde::de::Error::custom("历史规则来源无效")),
+        }
+    }
+}
+
 const MAX_JSON_BYTES: usize = 64 * 1024;
 const MAX_RULES: usize = 128;
 const MAX_URL_BYTES: usize = 4096;
@@ -151,15 +170,34 @@ impl ValidatedWebsiteRules {
 }
 
 impl VaultSession {
+    /// Explicit protected-content read for the original historical selection.
+    /// Absence is None; malformed or stale records fail rather than look empty.
+    pub fn get_history_website_rules(
+        &self,
+        uuid: &str,
+        index: usize,
+        selection_token: &str,
+        source: HistoryRuleSource,
+    ) -> Result<Option<WebsiteRuleSet>, String> {
+        let id = parse_entry_id(uuid)?;
+        self.validate_history_selection(id, index, selection_token)?;
+        let db = self.require_db()?;
+        let entry = db.entry(id).ok_or("条目不存在")?;
+        // Validate existence for either side, even if current rules are requested.
+        let historical = entry.historical(index).ok_or("历史版本不存在")?;
+        let selected = match source {
+            HistoryRuleSource::Version => &historical,
+            HistoryRuleSource::Current => &entry,
+        };
+        read_rules(selected)
+    }
+
     /// None denotes legacy matching; an empty rule set explicitly matches nothing.
     pub fn get_entry_website_rules(&self, uuid: &str) -> Result<Option<WebsiteRuleSet>, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
         let entry = db.entry(id).ok_or("条目不存在")?;
-        entry
-            .get(FIELD_WEBSITE_RULES)
-            .map(|raw| ValidatedWebsiteRules::from_json(raw).map(|rules| rules.config().clone()))
-            .transpose()
+        read_rules(&entry)
     }
 
     /// Validate first, track history, then publish once. Snapshot failure rolls back
@@ -231,6 +269,17 @@ impl VaultSession {
         }
     }
 }
+
+fn read_rules(entry: &keepass::db::EntryRef<'_>) -> Result<Option<WebsiteRuleSet>, String> {
+    entry
+        .get(FIELD_WEBSITE_RULES)
+        .map(|raw| ValidatedWebsiteRules::from_json(raw).map(|rules| rules.config().clone()))
+        .transpose()
+}
+
+#[cfg(test)]
+#[path = "history_rule_tests.rs"]
+mod history_tests;
 
 #[cfg(test)]
 #[path = "website_rules_tests.rs"]

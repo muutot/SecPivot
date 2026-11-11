@@ -185,7 +185,9 @@ pub use self::import::{
 };
 pub use self::sessions::VaultSessions;
 pub use self::temp_attachments::{sweep_stale_temp_attachments, AttachmentTempStore};
-pub use self::website_rules::{ValidatedWebsiteRules, WebsiteMode, WebsiteRule, WebsiteRuleSet};
+pub use self::website_rules::{
+    HistoryRuleSource, ValidatedWebsiteRules, WebsiteMode, WebsiteRule, WebsiteRuleSet,
+};
 
 // ---------------------------------------------------------------------------
 // Session
