@@ -12,6 +12,18 @@ export interface OnePuxImportResult {
   counts: OnePuxCounts;
 }
 
+export type WebsiteMode = "site" | "host" | "exact" | "never";
+
+export interface WebsiteRule {
+  url: string;
+  mode: WebsiteMode;
+}
+
+export interface WebsiteRuleSet {
+  version: 1;
+  rules: WebsiteRule[];
+}
+
 export interface VaultEntry {
   uuid: string;
   groupUuid: string;
@@ -29,6 +41,9 @@ export interface VaultEntry {
    * the snapshot: fetch codes via `vault.totpCode` or the seed on demand via
    * `vault.getEntryTotp`; present only in the browser demo fallback. */
   hasTotp: boolean;
+  /** Native policy presence only; fetch current rules explicitly.
+   * Absent in browser preview snapshots. */
+  hasWebsiteRules?: boolean;
   totp?: string;
   icon?: number;
   /** UUID of the database custom icon (favicon stored in the KDBX Meta
@@ -471,6 +486,8 @@ export interface HistoryVersion {
   expires: string | null;
   /** Whether this snapshot carried a TOTP seed. */
   hasTotp: boolean;
+  /** Managed policy presence only; policy values remain native. */
+  hasWebsiteRules?: boolean;
   /** Built-in KeePass icon index the snapshot used, if any. */
   icon?: number;
   /** UUID of the database custom icon the snapshot used, if any. */

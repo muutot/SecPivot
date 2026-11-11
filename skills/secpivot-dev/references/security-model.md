@@ -614,5 +614,12 @@ Creation/import validates every native policy before insertion; native XML expor
 entry exchange, history restore and KDBX reopen preserve the policy. The setter
 uses candidate publication with exact metadata rollback on final snapshot failure.
 Tests use only synthetic KDBX/credential data and in-memory exchange documents,
-without OS clipboard/network/client execution. IPC/frontend policy editing and
-complete renderer XML migration are still pending; no full memory-erasure claim.
+without OS clipboard/network/client execution. The policy IPC now requires an
+explicit originating String session ID; unknown/closed/empty IDs never fall back
+to the backend-active vault. Writes require a present nullable rules field and
+sanitize structural rule errors before validated native publication. Renderer
+reads reject disposed/replaced owners, writes share the existing Symbol epoch
+guard, and browser preview rejects native policy operations. Only presence hints
+enter current/history DTOs, including foreign malformed policy presence.
+Frontend policy editing, history rule-value reading and complete renderer XML
+migration remain pending; no real WebView or full memory-erasure claim.

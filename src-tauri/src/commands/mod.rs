@@ -22,6 +22,7 @@ pub(crate) mod tcato;
 #[cfg(test)]
 mod tests;
 pub(crate) mod vault;
+pub(crate) mod website_rules;
 
 #[cfg(desktop)]
 pub(crate) use self::bridge::*;
@@ -39,6 +40,7 @@ pub(crate) use self::remote::*;
 #[cfg(desktop)]
 pub(crate) use self::tcato::*;
 pub(crate) use self::vault::*;
+pub(crate) use self::website_rules::*;
 
 /// Resolve one renderer-originated command against the session id captured by
 /// the frontend. Omitting the id remains a compatibility fallback to the

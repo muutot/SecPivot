@@ -183,6 +183,7 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
             Some(entry.tags.join(", "))
         },
         favorite: entry.get(FIELD_FAVORITE) == Some(FIELD_FAVORITE_TRUE),
+        has_website_rules: entry.fields.contains_key(super::FIELD_WEBSITE_RULES),
         color: entry.background_color.as_ref().map(ToString::to_string),
         override_url: entry.override_url.clone(),
         foreground_color: entry.foreground_color.as_ref().map(ToString::to_string),

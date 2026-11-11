@@ -4612,3 +4612,13 @@ SKILL与稳定maintenance路由不需改动；没有CSS／markup／新依赖变�
 最终完整门禁 verify-closed-session-publication-sealed.log exit0：frontend387／Rust733／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root Rust无过滤、live选项未启用。完整日志SHA256 477aec93b649d4d4aa3165a722f0eefa3a715ba57b496ae9ff39b4c86a3230f0；closed-session-publication-final-proof.json关联原始源码、两次不可变回放、最终16项回放、中间重登记失败、41项绿色专项及最终源码／loader／日志哈希。前一轮386项完整验证不用于证明最终Symbol修复。
 
 documentation currency gate更新data-contracts／security-model／project-structure，说明独立生命周期身份、关闭后的只读归属检查、列表拓扑版本与原生锁定确认后立即清空renderer；SKILL和稳定维护路由不需更新。仅此共享服务缺陷完成，逐网址IPC／编辑器与全仓复审、竞品、视觉和手机provider仍待继续。
+
+#### 逐网址策略会话IPC阶段（2026-11-11，97b520c 后）
+
+新 commands/website_rules.rs 注册 get_entry_website_rules 与 set_entry_website_rules，均要求来源 sessionId String；切库不能重定向，未知／空／关闭ID拒绝。写入 request:{uuid,rules} 中 rules 是必填可空字段：null 明确恢复旧匹配，空规则集保持无匹配；Option透明封装会吞掉遗漏，当前实现先经Value的deserialize_any检查存在，再解析版本1类型并以固定文案拒绝格式错误。核对锁定Tauri2.11.5 ipc/command.rs 与 tauri-macros2.6.3 wrapper.rs 的deserialize_string／struct／option及camelCase参数契约；不是实际WebView执行证明。
+
+TS新增模式／规则类型及真实vault服务读写；读取绑定Symbol生命周期，关闭或远程替换后拒绝旧结果；写入undefined在IPC前拒绝，结果沿用已验证的会话发布守卫，停放会话保持独立。浏览器预览明确不支持。当前条目与历史DTO只新增hasWebsiteRules提示，保留protected受管理内容隐藏；外部损坏策略仍给存在提示、合法读取拒绝，明确清除可恢复。
+
+前端10项新增服务回归与关闭／i18n合计30项通过；原生5项编排／严格serde／跨库／历史提示／损坏来源回归通过。测试首次使用错误的历史DTO形状及EntryId／泛型构造编译失败均已修正，不作为产品缺陷复现证据。当前阶段是功能接线，不增加Confirmed卡片，也不修改原始b7c5d9f／15项／6.1分。最终完整门禁通过；紧凑编辑器、历史规则值读取、来源模式映射、完整renderer XML路径及真实WebView／APK／provider仍未交付，不把这些专项称为完整用户功能。
+
+最终 verify-website-rules-ipc-final.log exit0：frontend397／Rust738／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root无过滤、live选项未启用。日志SHA256 bfa596bc0a60b9ca29d684df4367960eee979595dde791f4fcdb2c1746e39e63；website-rules-ipc-final-proof.json记录实际专项、最终源码、锁定Tauri契约源码与日志哈希及明确证据限制。documentation currency gate更新data-contracts／security-model／project-structure；SKILL／稳定维护路由无需更新。仅IPC／服务／提示完成，TODO逐网址完整功能仍为部分完成，92历史卡片与原始15项／6.1分保持，整体目标继续。

@@ -143,7 +143,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ### P2 — KDBX 属性完整度与数据交换
 
-- [~] 逐网址匹配策略：原生 API 与 protected 受管理字段、真实 Bridge／RPC 网址匹配已接线；原生策略替代旧允许规则并保留旧阻止列表，损坏／OverrideURL冲突停止匹配，编辑／历史／KDBX重开／原生XML及内存交换保留策略，RPC拒绝改变生效网址列表及覆盖策略字段。尚未接会话IPC、紧凑编辑／历史策略显示与完整renderer XML迁移验证；1Password来源规则编码及Bitwarden全部模式映射也未完成，不标记完整用户功能交付
+- [~] 逐网址匹配策略：原生 API 与 protected 受管理字段、真实 Bridge／RPC 网址匹配已接线；原生策略替代旧允许规则并保留旧阻止列表，损坏／OverrideURL冲突停止匹配，编辑／历史／KDBX重开／原生XML及内存交换保留策略，RPC拒绝改变生效网址列表及覆盖策略字段。显式来源会话IPC与TS服务已接线，写入遗漏不会变成清除，快照／历史仅给存在提示；关闭／替换后读取拒绝、写入守卫复用，原生5／前端专项30及最终完整门禁397前端／738 Rust／ACL2／KeePass25／QuickXML1363通过（4 ignored不计执行）。紧凑编辑／历史策略显示与完整renderer XML迁移验证、1Password来源规则编码及Bitwarden全部模式映射仍未完成，不标记完整用户功能交付
 
 - [x] 条目属性·OverrideURL/QualityCheck 可写：`EntryFlags`/`update_entry_flags` 独立写入（字段 absent 保留；OverrideURL 空字符串清除；QualityCheck 显式布尔设置），`VaultEntry.overrideUrl` 暴露并由编辑器保存回调接线；保存重开 round-trip 测试
 - [x] 条目属性·前景色可写：`update_entry_flags` 增加 `foregroundColor`（`#RRGGBB`，空清除/absent 保留），`VaultEntry.foregroundColor` 暴露，编辑对话框前景色选择；round-trip 测试

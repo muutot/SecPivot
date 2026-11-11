@@ -1997,6 +1997,45 @@
         "sha256": "8a106e9fbdc5e42d344df0dade058119999547ac9f440678bdbd7f2c30d9297a"
       },
       "limits": "No actual user config/vault/shared clipboard, Tauri runtime or device/provider cleanup timing. No password/master-key disclosure or JS heap erasure demonstrated. Policy IPC/editor and comprehensive audit remain pending."
+    },
+    "website_rules_ipc": {
+      "source_checkpoint": "97b520c",
+      "result": "Session-bound per-website get/set IPC, mandatory nullable request, typed frontend service and masked current/history presence hints implemented. Native5/frontend new10/related30/full397/738/ACL2/KeePass25/QuickXML1363 ignored4 passed. No UI/dependency/platform changes or new issue card; original15/6.1 baseline and active goal preserved.",
+      "native": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\website-rules-ipc-native-final.log",
+        "sha256": "6244df52ee3110641c63e09b2cc2ab86c6d89c13dadd83c9d5f1026f4b095965",
+        "passed": 5,
+        "data": "temporary synthetic vaults and protected synthetic markers only"
+      },
+      "frontend": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\website-rules-ipc-frontend-final.log",
+        "sha256": "13d892dff5ac49714bdbf6030070d3ec6028d2596e6b6f03d56e483d17e1cc09",
+        "new_service_passed": 10,
+        "related_total_passed": 30,
+        "data": "actual service modules, synthetic invoke/localStorage seams"
+      },
+      "full_gate": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\verify-website-rules-ipc-final.log",
+        "sha256": "bfa596bc0a60b9ca29d684df4367960eee979595dde791f4fcdb2c1746e39e63",
+        "command": "npm run verify",
+        "exit_code": 0,
+        "frontend_passed": 397,
+        "rust_passed": 738,
+        "android_acl_passed": 2,
+        "keepass_passed": 25,
+        "quickxml_passed": 1363,
+        "quickxml_ignored_not_executed": 4,
+        "format_check_build_contract_clippy": "passed",
+        "root_rust_filter": "none",
+        "rust_threads": 1,
+        "dev_test_debug": 0,
+        "live_opt_in_variables": "unset"
+      },
+      "proof": {
+        "path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\website-rules-ipc-final-proof.json",
+        "sha256": "e2714b3e698635deb7b7daf84b24f885ba603fea5504405a02b210f880fef06d"
+      },
+      "limits": "No actual Tauri WebView/device/provider/APK, real vault/config or shared clipboard. Compact editor/history rule-value reader, source mapping/full renderer XML migration and comprehensive goal remain pending. No total-heap erasure guarantee."
     }
   },
   "reverification_notes": [
