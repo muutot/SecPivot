@@ -1,5 +1,11 @@
 # Security Model
 
+The entry-exchange XML size cap does not bound repeated binary references.
+Parsing separately caps cumulative owned attachment and custom-icon copies at
+64 MiB, charging before allocation across all entries and refusing a partial
+result. Small-budget tests prove the enforcement mechanism; no production-sized
+allocation/OOM or total-heap bound is claimed. Shared definitions remain legal.
+
 Entry-exchange inflate output must finish within its64 MiB production bound.
 The shared limited reader observes one overflow byte, rejects oversize prefixes,
 and consumes real gzip EOF for valid-sized output so flate2's existing trailer

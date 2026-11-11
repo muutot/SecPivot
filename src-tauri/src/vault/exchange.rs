@@ -612,6 +612,13 @@ pub struct PastedEntry {
 /// Parse a KDBX XML document into entries ready for insertion under fresh
 /// UUIDs. Source UUIDs are intentionally dropped.
 pub fn parse_entries_document(document: &[u8]) -> Result<Vec<PastedEntry>, String> {
+    parse_entries_document_limited(document, MAX_PAYLOAD_BYTES)
+}
+
+fn parse_entries_document_limited(
+    document: &[u8],
+    max_expanded_binary_bytes: usize,
+) -> Result<Vec<PastedEntry>, String> {
     let file: KeePassFile =
         quick_xml::de::from_reader(document).map_err(|e| format!("剪贴板数据解析失败: {e}"))?;
     let binaries: HashMap<usize, Vec<u8>> = match file.binaries {
@@ -647,18 +654,29 @@ pub fn parse_entries_document(document: &[u8]) -> Result<Vec<PastedEntry>, Strin
         })
         .unwrap_or_default();
 
+    // Shared definitions can be referenced repeatedly. Count each owned copy,
+    // across all entries and both attachments/icons, before allocating it.
+    let mut remaining_binary_bytes = max_expanded_binary_bytes;
     file.root
         .group
         .entries
         .iter()
-        .map(|entry| parse_entry(entry, &binaries, &custom_icons))
+        .map(|entry| parse_entry(entry, &binaries, &custom_icons, &mut remaining_binary_bytes))
         .collect()
+}
+
+fn clone_binary_with_budget(data: &[u8], remaining: &mut usize) -> Result<Vec<u8>, String> {
+    *remaining = remaining
+        .checked_sub(data.len())
+        .ok_or_else(|| "剪贴板数据过大".to_owned())?;
+    Ok(data.to_vec())
 }
 
 fn parse_entry(
     entry: &XmlEntry,
     binaries: &HashMap<usize, Vec<u8>>,
     custom_icons: &HashMap<String, Vec<u8>>,
+    remaining_binary_bytes: &mut usize,
 ) -> Result<PastedEntry, String> {
     let mut fields: Vec<(String, String, bool)> = Vec::new();
     let mut attachments: Vec<(String, Vec<u8>, bool)> = Vec::new();
@@ -667,10 +685,8 @@ fn parse_entry(
         let protected = field.value.protected == "True";
         if let Some(binary_id) = field.key.strip_prefix(BINARY_FIELD_PREFIX) {
             let id: usize = binary_id.parse().map_err(|_| "附件索引无效".to_owned())?;
-            let data = binaries
-                .get(&id)
-                .cloned()
-                .ok_or_else(|| "缺少附件数据".to_owned())?;
+            let data = binaries.get(&id).ok_or_else(|| "缺少附件数据".to_owned())?;
+            let data = clone_binary_with_budget(data, remaining_binary_bytes)?;
             attachments.push((field.value.value.clone(), data, protected));
             continue;
         }
@@ -703,7 +719,9 @@ fn parse_entry(
         custom_icon: entry
             .custom_icon_uuid
             .as_ref()
-            .and_then(|uuid| custom_icons.get(uuid).cloned()),
+            .and_then(|uuid| custom_icons.get(uuid))
+            .map(|data| clone_binary_with_budget(data, remaining_binary_bytes))
+            .transpose()?,
         foreground_color: entry.foreground_color.clone(),
         background_color: entry.background_color.clone(),
         override_url: entry.override_url.clone(),
@@ -818,6 +836,10 @@ mod binary_tests;
 #[cfg(test)]
 #[path = "exchange_field_identity_tests.rs"]
 mod field_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_expansion_tests.rs"]
+mod expansion_tests;
 
 #[cfg(test)]
 #[path = "exchange_inflate_tests.rs"]
