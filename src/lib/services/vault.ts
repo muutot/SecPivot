@@ -231,7 +231,7 @@ const sessionStates = new Map<string, VaultState>();
 /** Epoch changes when a session is intentionally replaced from an external
  * source (remote download). A pre-replacement response must be rejected even
  * if its edit revision happens to be numerically higher. */
-const sessionEpochs = new Map<string, number>();
+const sessionEpochs = new Map<string, symbol>();
 /** Tokens of attachments extracted to the temp dir, bound to the session they
  * originated from; discarded on lock/close. */
 let tempAttachmentTokens = new Map<string, string>();
@@ -243,6 +243,8 @@ const iconCaches = new Map<string, Record<string, string>>();
  * matching frontend publish completes in invocation order. Ordinary renderer
  * commands do not wait because they address their captured session id. */
 const topologyQueue = new SessionSwitchQueue();
+/** Invalidate tab-list reads admitted before a successful registry transition. */
+let topologyRevision = 0;
 /** Temporary override used only while one async service method executes its
  * synchronous pre-await capture. Composite actions must wrap each nested
  * service call separately; a global async context would be unsafe when two
@@ -272,23 +274,35 @@ function commitSessionState(sessionId: string, result: VaultState): VaultState {
   return committed;
 }
 
-function captureSessionEpoch(sessionId: string): number {
-  return sessionEpochs.get(sessionId) ?? 0;
+function currentSessionEpoch(sessionId: string): symbol | undefined {
+  // Reading a completion's owner must never recreate a disposed lifetime.
+  return sessionEpochs.get(sessionId);
+}
+
+function captureSessionEpoch(sessionId: string): symbol {
+  // Explicit callers can address a valid backend session before its first list
+  // or snapshot. Register at admission so a subsequent close invalidates it too.
+  // A fresh identity also prevents failed re-admission of a disposed id from
+  // matching an older reply. It requires no retained list of closed sessions.
+  if (!sessionEpochs.has(sessionId)) sessionEpochs.set(sessionId, Symbol());
+  return sessionEpochs.get(sessionId)!;
 }
 
 function commitSessionStateAtEpoch(
   sessionId: string,
-  epoch: number,
+  epoch: symbol,
   result: VaultState,
 ): VaultState {
-  if (captureSessionEpoch(sessionId) !== epoch) {
-    return sessionStates.get(sessionId) ?? applyBackendState(result, sessionId);
+  if (currentSessionEpoch(sessionId) !== epoch) {
+    const current = sessionStates.get(sessionId);
+    if (!current) throw new Error(t(lang(), "error.noOpenDb"));
+    return current;
   }
   return commitSessionState(sessionId, result);
 }
 
 function replaceSessionState(sessionId: string, result: VaultState): VaultState {
-  sessionEpochs.set(sessionId, captureSessionEpoch(sessionId) + 1);
+  sessionEpochs.set(sessionId, Symbol());
   const normalized = applyBackendState(result, sessionId);
   sessionStates.set(sessionId, normalized);
   if (activeSessionId === sessionId) state.set(normalized);
@@ -562,7 +576,7 @@ async function invokeSessionDelta(
   const sessionId = captureSessionId();
   const epoch = captureSessionEpoch(sessionId);
   const delta = await invokeSession<MutationDelta>(command, args, sessionId);
-  if (captureSessionEpoch(sessionId) !== epoch) {
+  if (currentSessionEpoch(sessionId) !== epoch) {
     const current = sessionStates.get(sessionId);
     if (!current) throw new Error(t(lang(), "error.noOpenDb"));
     return current;
@@ -574,11 +588,11 @@ async function invokeSessionDelta(
 
 async function refreshInternal(sessionId = activeSessionId): Promise<VaultState | null> {
   if (isTauriRuntime()) {
-    const epoch = sessionId ? captureSessionEpoch(sessionId) : 0;
+    const epoch = sessionId ? captureSessionEpoch(sessionId) : undefined;
     const value = await backendInvoke<VaultState | null>("get_vault_state", {
       sessionId,
     });
-    if (value && sessionId) return commitSessionStateAtEpoch(sessionId, epoch, value);
+    if (value && sessionId && epoch) return commitSessionStateAtEpoch(sessionId, epoch, value);
     return value;
   }
   const value = browserState ? deepClone(browserState) : null;
@@ -590,7 +604,13 @@ async function refreshInternal(sessionId = activeSessionId): Promise<VaultState 
 /** Refresh the tab-bar session list from the backend. */
 async function refreshTabs(): Promise<void> {
   if (isTauriRuntime()) {
+    const topology = topologyRevision;
     const list = await backendInvoke<SessionInfo[]>("list_sessions");
+    if (topology !== topologyRevision) return;
+    // Existing backend tabs may be listed before their first snapshot is loaded.
+    for (const tab of list) {
+      captureSessionEpoch(tab.sessionId);
+    }
     activeSessionId = resolveListedActiveId(activeSessionId, list);
     tabs.set(list);
     activeId.set(activeSessionId);
@@ -717,8 +737,9 @@ export const vault: VaultStore = {
           password,
           keyfile: keyfile || null,
         });
+        topologyRevision++;
         activeSessionId = result.sessionId;
-        sessionEpochs.set(result.sessionId, 0);
+        sessionEpochs.set(result.sessionId, Symbol());
         commitSessionState(result.sessionId, result.state);
         remembered.set({
           path: result.state.path,
@@ -748,8 +769,9 @@ export const vault: VaultStore = {
           ...request,
           keyfile: request.keyfile || null,
         });
+        topologyRevision++;
         activeSessionId = result.sessionId;
-        sessionEpochs.set(result.sessionId, 0);
+        sessionEpochs.set(result.sessionId, Symbol());
         commitSessionState(result.sessionId, result.state);
         remembered.set({
           path: result.state.path,
@@ -787,6 +809,7 @@ export const vault: VaultStore = {
         if (!closingId) return;
         const path = get(tabs).find((t) => t.sessionId === closingId)?.path ?? get(state)?.path;
         await backendInvoke("close_vault", { sessionId: closingId });
+        topologyRevision++;
         sessionStates.delete(closingId);
         iconCaches.delete(closingId);
         sessionEpochs.delete(closingId);
@@ -842,13 +865,8 @@ export const vault: VaultStore = {
         if (activePath) openPaths.add(activePath);
         const dropSaved = !get(appSettings).security.rememberPassword;
         await backendInvoke("close_all_vaults");
-        if (dropSaved) {
-          for (const path of openPaths) {
-            void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
-          }
-        }
+        topologyRevision++;
         activeSessionId = null;
-        await discardTempAttachments();
         browserState = null;
         sessionStates.clear();
         iconCaches.clear();
@@ -856,6 +874,12 @@ export const vault: VaultStore = {
         state.set(null);
         tabs.set([]);
         activeId.set(null);
+        if (dropSaved) {
+          for (const path of openPaths) {
+            void backendInvoke("clear_saved_credential", { path }).catch(() => undefined);
+          }
+        }
+        await discardTempAttachments();
       });
     }
     if (whenCurrent && !whenCurrent()) return;
@@ -896,8 +920,9 @@ export const vault: VaultStore = {
         keyfile: keyfile || null,
         mode,
       });
+      topologyRevision++;
       activeSessionId = result.sessionId;
-      sessionEpochs.set(result.sessionId, 0);
+      sessionEpochs.set(result.sessionId, Symbol());
       commitSessionState(result.sessionId, result.state);
       // A remote session cannot be reopened from the lock screen; clear the
       // remembered local path so unlocking never silently targets the old vault.
@@ -924,8 +949,9 @@ export const vault: VaultStore = {
         keyfile: keyfile || null,
         mode,
       });
+      topologyRevision++;
       activeSessionId = result.sessionId;
-      sessionEpochs.set(result.sessionId, 0);
+      sessionEpochs.set(result.sessionId, Symbol());
       commitSessionState(result.sessionId, result.state);
       // See `openRemote`: a remote session is never the lock-screen quick-reopen
       // target, so drop any stale remembered local path.
@@ -961,8 +987,12 @@ export const vault: VaultStore = {
   async refreshRemote(): Promise<VaultState> {
     if (!isTauriRuntime()) throw browserUnsupported("browser.featRemoteRefresh");
     const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
     const result = await invokeSession<VaultState>("refresh_remote_vault", {}, sessionId);
-    const replaced = replaceSessionState(sessionId, result);
+    const replaced =
+      currentSessionEpoch(sessionId) === epoch
+        ? replaceSessionState(sessionId, result)
+        : commitSessionStateAtEpoch(sessionId, epoch, result);
     await refreshTabs();
     return replaced;
   },
@@ -1358,7 +1388,7 @@ export const vault: VaultStore = {
       sessionId,
       uuids: uuids && uuids.length > 0 ? uuids : undefined,
     });
-    if (captureSessionEpoch(sessionId) === epoch) await refreshInternal(sessionId);
+    if (currentSessionEpoch(sessionId) === epoch) await refreshInternal(sessionId);
     await refreshTabs();
     return report;
   },
@@ -1830,6 +1860,7 @@ export const vault: VaultStore = {
       activate: async () => backendInvoke<VaultState>("set_active_session", { sessionId }),
       commit: (incoming) => commitSessionStateAtEpoch(sessionId, epoch, incoming),
       publish: async (committed) => {
+        topologyRevision++;
         activeSessionId = sessionId;
         activeId.set(sessionId);
         state.set(committed);
@@ -1855,6 +1886,7 @@ export const vault: VaultStore = {
       // replaced the tab list between the click and this operation running.
       const tab = get(tabs).find((t) => t.sessionId === sessionId);
       await backendInvoke("close_vault", { sessionId });
+      topologyRevision++;
       sessionStates.delete(sessionId);
       iconCaches.delete(sessionId);
       sessionEpochs.delete(sessionId);

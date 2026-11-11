@@ -246,6 +246,10 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] WebDAV 扩展元素归属（SP-S74）：按 DAV namespace 与预期容器读取 href／metadata／collection，忽略未知子树包括熟悉短名的后代；DAV prefix／default／重绑定与全无namespace旧格式分离，未知prefix或非DAV根拒绝。原样三项探针、先前XML文本三项原样探针与独立XML十六项控制通过；实际无凭据loopback列表／GET／PUT／回读四次请求保持真实文件、大小／日期及名称相似旁文件。propstat状态／重复属性／完整XML及真机provider仍独立待审。
 
+## 审计补充 — 关闭响应
+
+- [x] 关闭后旧响应发布（SP-S81）：真实服务复现关闭／锁定后缓存与active id回填、临时清理等待时快照保留；已加入只读epoch归属检查、独立Symbol生命周期防止旧ID重新登记碰撞、tab-list拓扑版本与成功锁定后的立即renderer清空。16项新增回归与41项相关服务测试通过；最终完整门禁387前端／733 Rust／ACL2／KeePass25／QuickXML1363通过（4 ignored不计执行）。只确认服务状态／元数据边界，不等同密码或主密钥泄露、原生cleanup时序或JS堆擦除证明
+
 ## 审计补充 — 远程密码保真
 
 - [x] 远程密码空白（SP-S75）：secretKey／secret_key 在前端归一化、排队IPC、原生配置与S3／WebDAV构造中保持原字符；空字符串继续表示保留，纯空白作为新密码替换。真实服务回归、Windows临时目录加密保存／重开／空值保留与十二次loopback Basic／SigV4请求通过；原样前端／原生失败探针转绿，Python标准库独立校验十二次实际请求。真实provider／移动密钥存储及历史已被trim值的恢复仍不在此完成范围。
