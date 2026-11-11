@@ -1175,6 +1175,7 @@ export const zhCN = {
   "error.sessionNotOpen": "数据库会话未打开",
   "error.createGroupFailed": "创建分组失败",
   "error.invalidXml": "文件不是有效的 XML",
+  "error.unsupportedXmlFields": "XML 字段名为空、重复或含边缘空白。为保留原值，已停止整份导入。",
   "error.invalidCsv": "CSV 引号格式无效。请检查文件是否完整及引号是否正确转义。",
   "error.invalidCsvFavorite": "CSV 收藏标记无效。请使用 true/false、1/0 或空单元格。",
   "error.invalidXmlExport": "无法导出 XML：内容含 XML 无法表示的字符，原值已保留。",

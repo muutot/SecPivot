@@ -4,7 +4,99 @@ import { register } from "node:module";
 
 register("./helpers/lib-alias-loader.mjs", import.meta.url);
 
-const { buildKeePassXml } = await import("../src/lib/utils/kdbx-xml.ts");
+const { buildKeePassXml, parseKdbxXml } = await import("../src/lib/utils/kdbx-xml.ts");
+const { t } = await import("../src/lib/i18n/index.ts");
+
+// Exercise the production identity guard with a DOM-shaped entry tree. Actual
+// XML tokenization is verified separately with an isolated browser DOMParser.
+function parseEntryFields(fields, language = "en", preceding = []) {
+  const element = (tagName, textContent = "", children = [], attrs = {}) => ({
+    tagName,
+    textContent,
+    children,
+    nodeType: 1,
+    getAttribute: (name) => attrs[name] ?? null,
+  });
+  const entry = (items) =>
+    element(
+      "Entry",
+      "",
+      items.map(({ name, value, protected: protect }) =>
+        element("String", "", [
+          element("Key", name),
+          element("Value", value, [], protect ? { ProtectInMemory: "True" } : {}),
+        ]),
+      ),
+    );
+  const root = element("Group", "", [...preceding.map(entry), entry(fields)]);
+  const original = globalThis.DOMParser;
+  globalThis.DOMParser = class {
+    parseFromString() {
+      return {
+        querySelector: (selector) => (selector === "KeePassFile > Root > Group" ? root : null),
+        querySelectorAll: () => [],
+      };
+    }
+  };
+  try {
+    return parseKdbxXml("synthetic DOM-shaped input", language);
+  } finally {
+    if (original === undefined) delete globalThis.DOMParser;
+    else globalThis.DOMParser = original;
+  }
+}
+
+test("XML import rejects noncanonical field identities before returning any rows", () => {
+  const marker = "synthetic-sensitive-value";
+  for (const language of ["en", "zh-CN"]) {
+    for (const name of [
+      "",
+      " \t ",
+      " Password ",
+      " PIN ",
+      "\u00a0PIN\u00a0",
+      "\ufeffPIN",
+      " SecPivot.WebsiteRules ",
+    ]) {
+      assert.throws(
+        () =>
+          parseEntryFields([{ name, value: marker, protected: true }], language, [
+            [{ name: "Title", value: "Earlier valid entry" }],
+          ]),
+        (error) =>
+          error.message === t(language, "error.unsupportedXmlFields") &&
+          !error.message.includes(marker),
+      );
+    }
+  }
+});
+
+test("XML import rejects duplicate standard, custom and managed identities", () => {
+  for (const name of ["Title", "Password", "PIN", "otp", "SecPivot.WebsiteRules"]) {
+    assert.throws(
+      () =>
+        parseEntryFields([
+          { name, value: "first", protected: true },
+          { name, value: "second", protected: false },
+        ]),
+      (error) => error.message === t("en", "error.unsupportedXmlFields"),
+    );
+  }
+});
+
+test("XML identity guard preserves exact names, raw values and protection", () => {
+  const fields = [
+    { name: "PIN name", value: " \r\n\t<&实体>😀 ", protected: true },
+    { name: "pin name", value: " \r\t ", protected: false },
+    { name: "SecPivot.WebsiteRules", value: '{"version":1,"rules":[]}', protected: true },
+  ];
+  const [entry] = parseEntryFields([
+    { name: "Password", value: "synthetic-standard", protected: true },
+    ...fields,
+  ]);
+  assert.equal(entry.password, "synthetic-standard");
+  assert.deepEqual(entry.customFields, fields);
+});
 
 test("XML export refuses unrepresentable characters instead of changing credentials", () => {
   const base = {

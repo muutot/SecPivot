@@ -143,7 +143,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 ### P2 — KDBX 属性完整度与数据交换
 
-- [~] 逐网址匹配策略：原生 API 与 protected 受管理字段、真实 Bridge／RPC 网址匹配已接线；原生策略替代旧允许规则并保留旧阻止列表，损坏／OverrideURL冲突停止匹配，编辑／历史／KDBX重开／原生XML及内存交换保留策略，RPC拒绝改变生效网址列表及覆盖策略字段。显式来源会话IPC与TS服务已接线，写入遗漏不会变成清除，快照／历史仅给存在提示；关闭／替换后读取拒绝、写入守卫复用。紧凑网址规则页签与模板规则读取已接入；set／clear／null／省略通过同一次save_entry事务处理，失败读取不能隐式清除，OverrideURL冲突可见；原生事务5项、前端专项38项、隔离Edge组件18个主题／语言／尺寸组合及加载／模板／取消／会话／焦点流程通过。历史／时间线新增规则变更布尔标记与存在摘要（SP-S84）；历史已接入显式查看版本／对应当前规则，严格来源选择校验、未设置／空列表／损坏／失败区分及隐藏／切换／关闭取消。历史恢复／删除已加入随机数据库生命周期＋revision＋UUID＋索引选择标识（SP-S85），旧选择拒绝且缓存可重载；历史策略值读取已通过原生5项／前端新增10项及隔离DOM12个主题／语言／尺寸组合与7项流程；完整renderer XML迁移验证、1Password来源规则编码及Bitwarden全部模式映射、真实WebView／Android provider仍未完成，不标记完整用户功能交付
+- [~] 逐网址匹配策略：原生 API 与 protected 受管理字段、真实 Bridge／RPC 网址匹配已接线；原生策略替代旧允许规则并保留旧阻止列表，损坏／OverrideURL冲突停止匹配，编辑／历史／KDBX重开／原生XML及内存交换保留策略，RPC拒绝改变生效网址列表及覆盖策略字段。显式来源会话IPC与TS服务已接线，写入遗漏不会变成清除，快照／历史仅给存在提示；关闭／替换后读取拒绝、写入守卫复用。紧凑网址规则页签与模板规则读取已接入；set／clear／null／省略通过同一次save_entry事务处理，失败读取不能隐式清除，OverrideURL冲突可见；原生事务5项、前端专项38项、隔离Edge组件18个主题／语言／尺寸组合及加载／模板／取消／会话／焦点流程通过。历史／时间线新增规则变更布尔标记与存在摘要（SP-S84）；历史已接入显式查看版本／对应当前规则，严格来源选择校验、未设置／空列表／损坏／失败区分及隐藏／切换／关闭取消。历史恢复／删除已加入随机数据库生命周期＋revision＋UUID＋索引选择标识（SP-S85），旧选择拒绝且缓存可重载；历史策略值读取已通过原生5项／前端新增10项及隔离DOM12个主题／语言／尺寸组合与7项流程；renderer XML四模式／空／无规则及受保护字段已用真实DOMParser／IO wire／原生保存重开复核，异常字段身份整份拒绝（SP-S86）；分组／附件／历史等完整XML迁移、1Password来源规则编码及Bitwarden全部模式映射、真实WebView／Android provider仍未完成，不标记完整用户功能交付
 
 - [x] 条目属性·OverrideURL/QualityCheck 可写：`EntryFlags`/`update_entry_flags` 独立写入（字段 absent 保留；OverrideURL 空字符串清除；QualityCheck 显式布尔设置），`VaultEntry.overrideUrl` 暴露并由编辑器保存回调接线；保存重开 round-trip 测试
 - [x] 条目属性·前景色可写：`update_entry_flags` 增加 `foregroundColor`（`#RRGGBB`，空清除/absent 保留），`VaultEntry.foregroundColor` 暴露，编辑对话框前景色选择；round-trip 测试
@@ -159,7 +159,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] CSV 导出公式前缀先加入字段值，再执行 RFC 引号转义；前端和实际原生文件的六种前缀/逗号/引号/CRLF/原有撇号保持列边界与防护值，独立 Python CSV reader 复核通过（SP-S27）。此项不声称防护前缀可无损导回或真实表格软件执行验证。
 - [x] CSV 导入遇到未闭合/非法位置/引用后多余字符时整份拒绝，页面显示无字段内容的本地化错误并停止写入；合法 BOM/双引号/多行/空引用字段保真，实际页面 handler 与独立标准 writer 语料复核通过（SP-S29），不猜测修复历史损坏文件。
 - [x] XML 导入捕获现有 parser 的损坏/加密字段拒绝并显示本地化反馈；只提供 XML filter，过时选择结果不解析/不写入；真实浏览器文件选择与 DOMParser、页面 handler 验证通过（SP-S30），完整 XML 保真/原生互操作仍按原项目保持待验证。
-- [~] 导出·KeePass XML：`export_xml`（嵌套分组 UUID+名称、标准字段、otp 种子、自定义字段；密码/受保护字段按官方 PlainXml 原文转义 + `ProtectInMemory="True"`；CR 字符引用保留回车，无法表示的字符明确拒绝且不改原值/旧目标，SP-S18）。浏览器回退同边界；字段保真及原生互操作继续验证，明文确认对话框不变（`tests/kdbx-xml.test.mjs`、KDBX/真实 DOMParser 回归）
+- [~] 导出·KeePass XML：`export_xml`（嵌套分组 UUID+名称、标准字段、otp 种子、自定义字段；密码/受保护字段按官方 PlainXml 原文转义 + `ProtectInMemory="True"`；CR 字符引用保留回车，无法表示的字符明确拒绝且不改原值/旧目标，SP-S18）。浏览器回退同边界；正常字段与规则的真实DOMParser／生产IO wire／原生保存重开及再导出合成验证通过；空／边缘空白／重复字段身份整份拒绝（SP-S86）。分组／附件／历史及完整原生互操作继续验证，明文确认对话框不变（`tests/kdbx-xml.test.mjs`、KDBX/真实 DOMParser 回归）
 - [x] 列表·密码列遮蔽与就地显示：快照新增 `hasPassword` 标志（值不出会话），密码列显示 `••••••` 遮蔽符，点击经 `get_entry_password` 就地显示（二次点击/移出/10 秒/卸载自动遮回，绑定当前会话视图）
 - [x] 数据库维护·相似密码检查：`similar_passwords` 服务端分析（编辑距离 ≤ 2 聚类、回收站排除、2000 条上限、密码不外传），`SimilarPasswordsDialog` 报告并可定位条目
 - [x] 数据库维护·历史清理：`clear_all_history` 全库清理（返回清理数量 + 刷新状态，当前条目保留，保存/重开验证），菜单入口带确认

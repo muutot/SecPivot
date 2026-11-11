@@ -1,0 +1,208 @@
+{
+  "provenance": "Synthetic native PlainXml export -> isolated Edge DOMParser -> production xmlToImportEntries/importEntries captured IPC input; expected fields independently decoded by Python ElementTree. No real credentials.",
+  "cases": [
+    {
+      "label": "valid",
+      "input": {
+        "groupUuid": "root",
+        "title": "Synthetic",
+        "username": "synthetic-user",
+        "password": "synthetic-fixture",
+        "url": "https://legacy.example",
+        "notes": "",
+        "customFields": [
+          {
+            "name": "SecPivot.WebsiteRules",
+            "value": "{\"version\":1,\"rules\":[{\"url\":\"https://safe.example:8443/A?Case=%2f#B\",\"mode\":\"host\"},{\"url\":\"https://tenant.example/A\",\"mode\":\"site\"},{\"url\":\"https://exact.example/中文?Case=%2f#B\",\"mode\":\"exact\"},{\"url\":\"https://ignored.example\",\"mode\":\"never\"}]}",
+            "protected": true
+          },
+          {
+            "name": "PIN",
+            "value": " synthetic\r\n\t<&实体>😀 ",
+            "protected": true
+          },
+          {
+            "name": "Visible",
+            "value": " \r\t ",
+            "protected": false
+          }
+        ],
+        "attachments": []
+      },
+      "expectedFields": [
+        {
+          "name": "Title",
+          "value": "Synthetic",
+          "protected": false
+        },
+        {
+          "name": "UserName",
+          "value": "synthetic-user",
+          "protected": false
+        },
+        {
+          "name": "Password",
+          "value": "synthetic-fixture",
+          "protected": true
+        },
+        {
+          "name": "URL",
+          "value": "https://legacy.example",
+          "protected": false
+        },
+        {
+          "name": "Notes",
+          "value": "",
+          "protected": false
+        },
+        {
+          "name": "SecPivot.WebsiteRules",
+          "value": "{\"version\":1,\"rules\":[{\"url\":\"https://safe.example:8443/A?Case=%2f#B\",\"mode\":\"host\"},{\"url\":\"https://tenant.example/A\",\"mode\":\"site\"},{\"url\":\"https://exact.example/中文?Case=%2f#B\",\"mode\":\"exact\"},{\"url\":\"https://ignored.example\",\"mode\":\"never\"}]}",
+          "protected": true
+        },
+        {
+          "name": "PIN",
+          "value": " synthetic\r\n\t<&实体>😀 ",
+          "protected": true
+        },
+        {
+          "name": "Visible",
+          "value": " \r\t ",
+          "protected": false
+        }
+      ]
+    },
+    {
+      "label": "empty",
+      "input": {
+        "groupUuid": "root",
+        "title": "Synthetic",
+        "username": "synthetic-user",
+        "password": "synthetic-fixture",
+        "url": "https://legacy.example",
+        "notes": "",
+        "customFields": [
+          {
+            "name": "SecPivot.WebsiteRules",
+            "value": "{\"version\":1,\"rules\":[]}",
+            "protected": true
+          },
+          {
+            "name": "PIN",
+            "value": " synthetic\r\n\t<&实体>😀 ",
+            "protected": true
+          },
+          {
+            "name": "Visible",
+            "value": " \r\t ",
+            "protected": false
+          }
+        ],
+        "attachments": []
+      },
+      "expectedFields": [
+        {
+          "name": "Title",
+          "value": "Synthetic",
+          "protected": false
+        },
+        {
+          "name": "UserName",
+          "value": "synthetic-user",
+          "protected": false
+        },
+        {
+          "name": "Password",
+          "value": "synthetic-fixture",
+          "protected": true
+        },
+        {
+          "name": "URL",
+          "value": "https://legacy.example",
+          "protected": false
+        },
+        {
+          "name": "Notes",
+          "value": "",
+          "protected": false
+        },
+        {
+          "name": "SecPivot.WebsiteRules",
+          "value": "{\"version\":1,\"rules\":[]}",
+          "protected": true
+        },
+        {
+          "name": "PIN",
+          "value": " synthetic\r\n\t<&实体>😀 ",
+          "protected": true
+        },
+        {
+          "name": "Visible",
+          "value": " \r\t ",
+          "protected": false
+        }
+      ]
+    },
+    {
+      "label": "absent",
+      "input": {
+        "groupUuid": "root",
+        "title": "Synthetic",
+        "username": "synthetic-user",
+        "password": "synthetic-fixture",
+        "url": "https://legacy.example",
+        "notes": "",
+        "customFields": [
+          {
+            "name": "PIN",
+            "value": " synthetic\r\n\t<&实体>😀 ",
+            "protected": true
+          },
+          {
+            "name": "Visible",
+            "value": " \r\t ",
+            "protected": false
+          }
+        ],
+        "attachments": []
+      },
+      "expectedFields": [
+        {
+          "name": "Title",
+          "value": "Synthetic",
+          "protected": false
+        },
+        {
+          "name": "UserName",
+          "value": "synthetic-user",
+          "protected": false
+        },
+        {
+          "name": "Password",
+          "value": "synthetic-fixture",
+          "protected": true
+        },
+        {
+          "name": "URL",
+          "value": "https://legacy.example",
+          "protected": false
+        },
+        {
+          "name": "Notes",
+          "value": "",
+          "protected": false
+        },
+        {
+          "name": "PIN",
+          "value": " synthetic\r\n\t<&实体>😀 ",
+          "protected": true
+        },
+        {
+          "name": "Visible",
+          "value": " \r\t ",
+          "protected": false
+        }
+      ]
+    }
+  ]
+}

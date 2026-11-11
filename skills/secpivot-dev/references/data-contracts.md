@@ -1,5 +1,16 @@
 # Data Contracts
 
+KeePass XML imports validate complete raw `String/Key` identities before any
+group creation or bulk IPC. Empty names, edge whitespace and duplicate names
+(including standard columns, OTP and managed rules) reject the whole file with
+`error.unsupportedXmlFields`; the current native full-field writer normalizes
+custom names, so these inputs cannot be safely guessed. Supported raw values,
+protection flags and rule modes are unchanged. The shared synthetic
+`tests/fixtures/xml-migration-wire.json` records actual Edge DOMParser/production
+IO wire inputs with independently decoded native PlainXml expectations; native
+tests exercise serde/import/save/reopen/re-export and masked snapshots. This
+does not establish full XML group, history, attachment or foreign-client fidelity.
+
 `get_history_website_rules({sessionId:String, request:{uuid,index,selectionToken,source}})`
 returns `WebsiteRuleSet|null`. The strict request requires every field; source is
 `version` or `current`, with content-free rejection for unknown source strings.

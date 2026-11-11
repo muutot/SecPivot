@@ -701,3 +701,131 @@ fn native_xml_export_and_batch_import_preserve_policy_and_reject_invalid_batches
         assert_eq!(session.revision, revision);
     }
 }
+
+#[test]
+fn renderer_xml_wire_preserves_fields_and_policy_through_native_reopen() {
+    #[derive(serde::Deserialize)]
+    struct XmlDocument {
+        #[serde(rename = "Root")]
+        root: XmlRoot,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlRoot {
+        #[serde(rename = "Group")]
+        group: XmlGroup,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlGroup {
+        #[serde(rename = "Entry")]
+        entries: Vec<XmlEntry>,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlEntry {
+        #[serde(rename = "String")]
+        fields: Vec<XmlField>,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlField {
+        #[serde(rename = "Key")]
+        key: String,
+        #[serde(rename = "Value")]
+        value: XmlValue,
+    }
+    #[derive(serde::Deserialize)]
+    struct XmlValue {
+        #[serde(rename = "$text", default)]
+        text: String,
+        #[serde(rename = "@ProtectInMemory", default)]
+        protect: String,
+    }
+    // Captured from production TS IO after actual browser DOMParser; expected
+    // fields were independently decoded from native PlainXml with ElementTree.
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/xml-migration-wire.json"
+    ))
+    .unwrap();
+    let cases = fixture["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 3);
+    for case in cases {
+        let input: ImportEntryInput = serde_json::from_value(case["input"].clone()).unwrap();
+        let (_dir, mut target, existing_id) = session();
+        let state = target.import_entries(&[input]).unwrap();
+        let id = state
+            .root
+            .entries
+            .iter()
+            .find(|entry| entry.uuid != existing_id)
+            .unwrap()
+            .uuid
+            .clone();
+        let masked = serde_json::to_string(&state).unwrap();
+        assert!(!masked.contains("synthetic-fixture"));
+        assert!(!masked.contains("实体"));
+        assert!(!masked.contains("exact.example"));
+        target.save().unwrap();
+        let path = target.path.clone().unwrap();
+        target.close();
+        target
+            .open(std::path::Path::new(&path), "synthetic-master", None)
+            .unwrap();
+        let entry = target
+            .require_db()
+            .unwrap()
+            .entry(parse_entry_id(&id).unwrap())
+            .unwrap();
+        for expected in case["expectedFields"].as_array().unwrap() {
+            let field = entry
+                .fields
+                .get(expected["name"].as_str().unwrap())
+                .unwrap();
+            assert_eq!(field.get(), expected["value"].as_str().unwrap());
+            assert_eq!(
+                field.is_protected(),
+                expected["protected"].as_bool().unwrap()
+            );
+        }
+        let policy = target.get_entry_website_rules(&id).unwrap();
+        match case["label"].as_str().unwrap() {
+            "valid" => {
+                assert_eq!(policy.unwrap().rules.len(), 4);
+                matches(&target, &id, "https://exact.example/中文?Case=%2f#B", true);
+                matches(&target, &id, "https://exact.example/中文?Case=%2F#B", false);
+                matches(&target, &id, "https://safe.example:8443/other", true);
+                matches(&target, &id, "https://safe.example/other", false);
+                matches(&target, &id, "https://ignored.example", false);
+            }
+            "empty" => {
+                assert!(policy.unwrap().rules.is_empty());
+                matches(&target, &id, "https://legacy.example", false);
+            }
+            "absent" => {
+                assert!(policy.is_none());
+                matches(&target, &id, "https://legacy.example", true);
+            }
+            _ => panic!("unexpected synthetic fixture case"),
+        }
+        // PlainXml's text and protection markers have their own test DTO. The
+        // internal entry-exchange schema uses a different protection dialect.
+        let xml = Zeroizing::new(target.export_xml_content().unwrap());
+        let file: XmlDocument = quick_xml::de::from_str(&xml).unwrap();
+        let exported = file
+            .root
+            .group
+            .entries
+            .iter()
+            .find(|entry| entry.fields.iter().any(|field| field.key == "PIN"))
+            .unwrap();
+        for expected in case["expectedFields"].as_array().unwrap() {
+            let field = exported
+                .fields
+                .iter()
+                .find(|field| field.key == expected["name"].as_str().unwrap())
+                .unwrap();
+            assert_eq!(field.value.text, expected["value"].as_str().unwrap());
+            assert_eq!(
+                field.value.protect == "True",
+                expected["protected"].as_bool().unwrap()
+            );
+        }
+    }
+}

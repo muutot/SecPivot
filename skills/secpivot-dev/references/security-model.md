@@ -1,5 +1,13 @@
 # Security Model
 
+The renderer's KeePass XML identity gate rejects empty, edge-whitespace or
+duplicate field names before group creation or native bulk writes. It gives a
+content-free localized error and never guesses which credential or managed
+policy an ambiguous field should replace. Supported PlainXml remains an explicit
+plaintext exchange with protection markers; native snapshots still mask values.
+Actual isolated browser/production IO and synthetic native saved/reopened wire
+tests are evidence for this boundary, not real WebView or mobile provider proof.
+
 Historical rule values cross IPC only after the explicit View rules action.
 The required-session getter validates the selected version token and existence
 for both version/current sources before parsing protected policy contents; stale
