@@ -1919,6 +1919,24 @@
       "file_count": 370,
       "line_count": 120566,
       "limits": "Specification and source review only; no 1PUX implementation, native client export, device/provider test or hostile archive/resource-exhaustion probe. Proposed architecture is not current runtime behavior."
+    },
+    "native_website_rules_storage": {
+      "source_checkpoint": "c4e5e9c",
+      "result": "Managed protected native policy storage and real Bridge/RPC routing implemented; full verify and final-source targeted17 pass",
+      "storage_key": "SecPivot.WebsiteRules",
+      "targeted_passed": 17,
+      "verify_exit_code": 0,
+      "verify_log_sha256": "a27d193084eed8be48d226a9c639da42fff31fdb86b1bbff512b2bb1061427b8",
+      "proof": "website-rules-storage-final-proof.json",
+      "counts": {
+        "frontend": 371,
+        "rust": 733,
+        "acl": 2,
+        "keepass": 25,
+        "quickxml": 1363,
+        "quickxml_ignored": 4
+      },
+      "limits": "No policy session IPC/frontend editor/history policy display yet; No complete renderer XML migration/native client/provider/device proof; 1PUX source policy encoding and full Bitwarden mode mapping pending; Title-only heuristic auto-type skips native-policy entries; manual reads remain separate; Not a total-heap/URL temporary-memory erasure guarantee; Main full Rust suite preceded two RPC feedback-copy updates; final-source targeted17 and final clippy compiled the current feedback"
     }
   },
   "reverification_notes": [

@@ -4537,3 +4537,43 @@ website-rules-native-final-proof.json关联API／测试／共享helper与来源h
 相关7项重新运行也通过，含每URL／总JSON边界；没有启用SECPIVOT_* live
 选项或高资源KDF/OOM场景。documentation currency gate同步data-contracts、
 security-model、project-structure；没有CSS／markup／IPC命令／存储key变化。
+
+### 原生逐网址规则：受管理持久化与匹配接线
+
+在 c4e5e9c 基础上接通 `SecPivot.WebsiteRules` protected 字段与原生
+getter／setter。专用setter完整验证目标／只读／规则／OverrideURL互斥，
+在候选数据库中记录受限历史并一次发布；最终snapshot失败还原数据库、
+dirty／revision／modifiedAt／cache。相同protected JSON或已缺失字段的
+清除保持revision与history。None显式恢复legacy；空集合仍明确无匹配。
+
+原生Bridge／RPC网址查询以策略为唯一允许来源，旧KPRPC阻止列表继续
+否决；旧主网址／alt／正向regex不叠加扩大范围。损坏字段与非空OverrideURL
+冲突不降回legacy。Bridge当前页面与非空submit均需满足策略，只有submit
+允许不能授权别的页面；无策略条目的旧行为保留。RPC网址列表只列非Never
+规则；UUID／text／username仍为显式手工查询，不能等同自动填充验证。
+窗口标题无法确定完整HTTP目的地，因此带策略条目退出启发式auto-type
+匹配；手工auto-type独立。未猜来源格式flag或厂商关联域行为。
+
+通用完整／批量／custom编辑保留受管理字段，普通与history wire快照隐藏
+它；历史restore及原生内存entry exchange保留值／保护。XML原生导出显式
+写字段，创建／批量导入在任何条目插入前验证全部策略并强制protected；
+重复／损坏策略拒绝整批条目。RPC改变生效网址列表或custom覆盖受管理
+字段会在持久化前报错；凭据更新保留策略与原display URL，不成功写入与
+规则不一致的新网址。这是本阶段引入的整合约束，不新增历史bug卡片。
+
+待交付范围保留：会话IPC、紧凑编辑器／history策略显示、完整renderer XML
+迁移、来源网址模式映射、真实扩展／provider／手机APK。本文不把直接
+Rust trait适配器或XML字段提取测试称为真实扩展或完整用户流程。当前
+91历史Confirmed（含已修复项）及原始b7c5d9f／15项／6.1分保持。
+
+最终完整 verify-website-rules-storage-final.log exit0：frontend371／Rust733／
+ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／
+build／clippy通过。日志SHA256 a27d193084eed8be48d226a9c639da42fff31fdb86b1bbff512b2bb1061427b8；
+website-rules-storage-final-proof.json关联最终源码与日志哈希。两条RPC反馈
+文案在完整Rust运行期间调整，未改变策略逻辑；结束后最终源码专项17项
+重新编译运行通过，覆盖页面／submit门禁和上述存储／RPC路径，clippy也
+编译了最终反馈。最初测试编译错误及第一次完整gate的测试clone lint失败
+均不作为产品复现证据；lint修正后完整gate重新通过。没有启用live选项、
+恢复高资源KDF/OOM复现或访问真实密码库／共享剪贴板。documentation
+currency gate更新data-contracts／security-model／project-structure，
+SKILL与稳定maintenance路由不需改动；没有CSS／markup／新依赖变化。

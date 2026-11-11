@@ -266,6 +266,7 @@ pub(crate) fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) ->
 
 impl VaultSession {
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
+        let rules = super::website_rules::input_rules(&input.custom_fields)?;
         // Decode all attachment payloads before touching the database so a
         // bad payload aborts the whole mutation (no half-applied entry).
         let payloads = decode_attachments(&input.attachments)?;
@@ -281,6 +282,12 @@ impl VaultSession {
             let mut entry = group.add_entry();
             write_fields(&mut entry, input);
             sync_custom_fields(&mut entry, &input.custom_fields);
+            if let Some(rules) = &rules {
+                entry.set(
+                    FIELD_WEBSITE_RULES,
+                    Value::protected(rules.as_json().to_owned()),
+                );
+            }
             sync_attachments(&mut entry, &input.attachments, &payloads);
         }
         self.mark_dirty();
@@ -312,6 +319,10 @@ impl VaultSession {
         if inputs.is_empty() {
             return self.snapshot_without_icons();
         }
+        let rules: Vec<_> = inputs
+            .iter()
+            .map(|(input, _, _)| super::website_rules::input_rules(&input.custom_fields))
+            .collect::<Result<_, _>>()?;
         let payloads: Vec<Vec<AttachmentPayload>> = inputs
             .iter()
             .map(|(input, _, _)| decode_attachments(&input.attachments))
@@ -330,7 +341,9 @@ impl VaultSession {
         }
         {
             let db = self.require_db_mut()?;
-            for ((input, quality_check, favorite), payload) in inputs.iter().zip(&payloads) {
+            for (((input, quality_check, favorite), payload), rules) in
+                inputs.iter().zip(&payloads).zip(&rules)
+            {
                 let mut group = if input.group_uuid == ROOT_GROUP_UUID {
                     db.root_mut()
                 } else {
@@ -344,6 +357,12 @@ impl VaultSession {
                 }
                 write_fields(&mut entry, input);
                 sync_custom_fields(&mut entry, &input.custom_fields);
+                if let Some(rules) = rules {
+                    entry.set(
+                        FIELD_WEBSITE_RULES,
+                        Value::protected(rules.as_json().to_owned()),
+                    );
+                }
                 if favorite == &Some(true) {
                     entry.fields.insert(
                         FIELD_FAVORITE.to_owned(),
@@ -416,6 +435,13 @@ impl VaultSession {
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
             // Validate before any write: an Err must not mutate matching flags
             // while leaving the cached snapshot and dirty revision unchanged.
+            if entry.fields.contains_key(FIELD_WEBSITE_RULES)
+                && override_url
+                    .as_deref()
+                    .is_some_and(|u| !u.trim().is_empty())
+            {
+                return Err("逐网址规则与覆盖网址不能同时启用".into());
+            }
             let parsed_color = match foreground_color.as_deref().map(str::trim) {
                 None => None,
                 Some("") => Some(None),

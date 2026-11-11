@@ -130,10 +130,12 @@ const FIELD_ORIGINAL_GROUP: &str = "SecPivot.OriginalGroup";
 /// edited in Kee match against their extra/custom URLs, regex rules and block
 /// lists at the configured accuracy (see `helpers::kprpc_matches_url`).
 pub(crate) const FIELD_KPRPC_CONFIG: &str = "KPRPC JSON";
+/// Protected, managed per-website policy. Generic field edits cannot replace it.
+pub(crate) const FIELD_WEBSITE_RULES: &str = "SecPivot.WebsiteRules";
 
-/// Standard fields that are surfaced through the entry's own columns and must
-/// not leak into the generic custom-fields list.
-pub(crate) const RESERVED_FIELDS: [&str; 8] = [
+/// Standard columns and managed fields excluded from generic custom-field edits
+/// and snapshots. Native exports must preserve managed fields explicitly.
+pub(crate) const RESERVED_FIELDS: [&str; 9] = [
     FIELD_TITLE,
     FIELD_USERNAME,
     FIELD_PASSWORD,
@@ -142,6 +144,7 @@ pub(crate) const RESERVED_FIELDS: [&str; 8] = [
     FIELD_OTP,
     FIELD_FAVORITE,
     FIELD_ORIGINAL_GROUP,
+    FIELD_WEBSITE_RULES,
 ];
 
 // Argon2 parameters for newly created vaults (OWASP-recommended).
