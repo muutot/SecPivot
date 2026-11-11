@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`kdbx-xml.ts` owns the pre-IPC XML field identity gate (empty, edge-whitespace or
+duplicate names reject). `tests/kdbx-xml.test.mjs` covers the production guard
+with DOM-shaped trees; actual DOMParser/page/IO evidence is recorded separately.
+`tests/fixtures/xml-migration-wire.json` holds synthetic browser-captured bulk
+inputs and independent native-export expectations, replayed by IO tests and
+`vault/website_rules_storage_tests.rs` through native persistence/re-export.
+
 `website_rules.rs` owns HistoryRuleSource and get_history_website_rules, sharing
 the validated parser with the current reader and reusing entries.rs selection
 validation. commands/website_rules.rs exposes a strict required-session read

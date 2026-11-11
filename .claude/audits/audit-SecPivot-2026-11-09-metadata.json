@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S85; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 96,
-    "confirmed": 96,
+    "scope": "15 baseline cards plus SP-S05 through SP-S86; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 97,
+    "confirmed": 97,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 60,
+      "Medium": 61,
       "Low": 16
     }
   },
@@ -807,6 +807,23 @@
       "source_checkpoint": "564751d",
       "commit": "d6501ab",
       "status": "Confirmed and remediated. Thirty-three wrapped cases in 36 actual-browser baseline renders; final 36 pass one-line geometry, native Tab visibility and dialog bounds. Scoped check/build/323 frontend/full format passed; native full gate retained at ac810e0. CSS-only intermediate focus visibility failures led to nearest scrolling; existing theme tokens and compact metrics retained."
+    },
+    {
+      "id": "SP-S86",
+      "severity": "Medium",
+      "confidence": "High",
+      "status": "Confirmed and remediated; XML ambiguous identities reject before any write; complete raw-name migration remains unsupported",
+      "checkpoint": "f36d3394ccd9a2e5204e60cd67010d324fbf092b",
+      "evidence": "Native PlainXml export -> isolated Edge DOMParser/production IO bulk payload -> native serde/import/save/reopen: paddedPassword/paddedCustom/blankKey lose identity. Actual native red0pass1fail; initial compilation failure excluded.",
+      "proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\xml-migration-original-proof.json",
+      "limits": [
+        "Synthetic temporary AES KDBX only",
+        "Actual isolated Edge DOMParser and production TS IO; captured IPC replayed through native serde/import/save/reopen",
+        "Initial native compile failure excluded",
+        "No real user data, provider, Android APK or WebView"
+      ],
+      "final_proof": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\xml-migration-final-proof.json",
+      "final_proof_sha256": "61a124db86677a9a60106d47a9858f2f2ba3c75d5c29e3346c33a60754e7a4f6"
     }
   ],
   "verification": {
@@ -2243,9 +2260,35 @@
         "No live opt-ins, real config/vault/OS clipboard access, sibling edits, KDF/OOM workloads, push/release or APK build/install",
         "No JS heap/allocator erasure or Android target ABI/NDK compilation claim"
       ]
+    },
+    "xml_field_identity": {
+      "exitCode": 0,
+      "frontend": 447,
+      "rust": 765,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "frontendTargeted": 25,
+      "nativeTargeted": 1,
+      "nativeCases": 3,
+      "browserCases": 24,
+      "browserAccepted": 6,
+      "browserRejected": 18,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\xml-migration-final-proof.json",
+      "proof_sha256": "61a124db86677a9a60106d47a9858f2f2ba3c75d5c29e3346c33a60754e7a4f6",
+      "log_sha256": "9ef41755f08c00b44fd4f9b3b5c6438443762e36c97e5895c46d01ff57af9eb0",
+      "limits": [
+        "Synthetic temporary databases and isolated headless Edge only",
+        "DOM-shaped permanent tests are separate from actual browser DOMParser proof",
+        "Original native compile error excluded; auxiliary internal-exchange DTO whitespace result is a separate pending candidate, not failed native persistence or export",
+        "No CSS/markup, APK/device/provider, real configuration/vault/clipboard, push or release",
+        "Complete XML groups/attachments/history, source-specific migrations and remaining whole-project/competitor/UI work continue; goal active"
+      ]
     }
   },
   "reverification_notes": [
+    "SP-S86 XML field identity loss reproduced through actual native-export/Edge IO wire/native save-reopen; smallest whole-file refusal fixed. Targeted25 frontend/native1(3 cases), real browser24, full447/765/ACL2/KeePass25/QuickXML1363 exit0. Historical97 and original baseline15/6.1 preserved; whole goal active.",
     "Selected historical website values connected; native5/frontend26/DOM12+7 pass; full443/764/ACL2/KeePass25/QuickXML1363 exit0. No new finding, historical96 and baseline15/6.1 preserved; whole goal active.",
     "SP-S85 history selection validated before native mutations;6 native/12 service-handler pass, full433/759/ACL2/KeePass25/QuickXML1363 exit0. Historical96 and baseline15/6.1 preserved; whole goal active, historical rule content and mobile/provider pending.",
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",

@@ -57,14 +57,21 @@ function parseEntry(entry: Element, group: string, lang: Language): XmlImportEnt
     expires: "",
     customFields: [],
   };
+  const keys = new Set<string>();
   for (const child of childElements(entry)) {
     if (child.tagName === "Times") {
       out.expires = parseExpiryTime(child);
       continue;
     }
     if (child.tagName !== "String") continue;
-    const key = textOf(childElements(child).find((e) => e.tagName === "Key"));
-    if (!key) continue;
+    // Keys are identities, not formatting. The native full-field writer trims
+    // custom names, so accepting these names would merge/drop values or turn a
+    // custom field into a standard column. Refuse the entire file before IPC.
+    const key = childElements(child).find((e) => e.tagName === "Key")?.textContent ?? "";
+    if (!key || key !== key.trim() || keys.has(key)) {
+      throw new Error(t(lang, "error.unsupportedXmlFields"));
+    }
+    keys.add(key);
     const valueEl = childElements(child).find((e) => e.tagName === "Value");
     const protectedValue = valueEl?.getAttribute("Protected")?.toLowerCase() === "true";
     const protectInMemory = valueEl?.getAttribute("ProtectInMemory")?.toLowerCase() === "true";

@@ -40,10 +40,10 @@
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 60     | 60        | 0         |
+| Medium    | 61     | 61        | 0         |
 | Low       | 16     | 16        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **96** | **96**    | **0**     |
+| **Total** | **97** | **97**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4772,3 +4772,41 @@ documentation currency gate同步data-contracts／security-model／project-struc
 历史规则查看最终verify-history-policy-final.log exit0：frontend443／Rust764／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy全部通过；root无过滤，单线程Rust／dev-test debug0／live未启用。完整日志SHA256 ed702b45d26025f081a3fbf3416961d1de496f94a610467a02aeb90dc874d20c；history-policy-final-proof.json SHA256 12763d8ccd7e74cda7dbbb8d0e7706630a70c0ec1ec19e0e2d93ec23d8d67683关联原生分开执行的2＋3专项、前端26专项、renderer12组合／7流程与最终源码／截图。verified-source清单门禁前后逐文件一致；最终format、严格metadata和staged内容另行核验。
 
 最终documentation currency gate已更新历史读取IPC／来源枚举、临时视图状态与主题内滚动模式，并纠正旧引用中“历史reader未实现”的描述；SKILL／maintenance稳定路由无需改动。历史规则不从current getter回填，UI初始不开启读取，失败不清空策略且隐藏不落盘。普通DTO／配置／日志保持隐藏规则内容；目标与96历史卡片、原始15项／6.1分不变。真实WebView／Android/provider、来源迁移、完整renderer XML与剩余全仓复核继续，整体goal active。
+
+### Finding: SP-S86 XML 字段名规范化覆盖或丢弃原内容
+
+- Severity: Medium
+- Confidence: High
+- Category: Data Integrity / Import correctness
+- Status: Confirmed（字段身份整份拒绝修复；专项与完整门禁通过）
+- Affected area: KeePass PlainXml renderer import and native bulk persistence.
+- Evidence:
+  - File: src/lib/utils/kdbx-xml.ts:66; src/lib/services/io.ts:329; src-tauri/src/vault/serialize.rs:660.
+  - Function / Module: parseEntry / xmlToImportEntries / importEntries / sync_custom_fields.
+  - Relevant behavior: XML Key 经 textOf.trim 后再识别标准字段；普通自定义字段最终也经原生 trim 和 HashMap 合并。纯空白名被跳过。
+  - Checkpoint: f36d339。原生实际 export_xml_content 生成合成文件；隔离 headless Edge 实际 DOMParser＋生产 TS IO 产生真实 import_entries payload；原生 serde 解码该 payload、导入临时 AES KDBX、保存重开，三项仍损失。xml-migration-wire-native-red-final.log exit101／0pass1fail明确列出 paddedPassword／paddedCustom／blankKey。
+  - XML browser red records 中 en／zh-CN 全部14个样本已解析并提交。浏览器拒绝断言先停在 blankKey，不能把后续断言称为执行成功；独立原生循环确实保存重开了三种字段损失。首次Rust缺失常量导入的编译失败已排除。原样源码、探针、生成XML、wire和日志哈希保留于xml-migration-original-proof.json。
+- Problem: 合法外部字段名的边缘空白被当作可忽略格式，改变字段身份；`Password` 覆盖标准密码，`PIN` 与 `PIN` 合并为末值，纯空白名内容丢弃。
+- Why it matters: XML迁移报告成功，但导入副本的字段内容已改变且保存后无法恢复。原始来源未被修改；没有真实用户凭据或已丢失历史文件证据。
+- Realistic failure scenario: 用户打开含边缘空白字段名的外部KDBX并导出PlainXml，再导入另一个库。标准密码或自定义字段被不同字段替代，保存／重开后仍错误。
+- Minimal fix: XML parser在任何group create／bulk IPC前检查完整原始Key；不能无损通过现有写入契约的空／边缘空白名以及重复身份整份拒绝，返回不含字段值的中英文说明。保留来源并避免猜测修复。
+- Better long-term fix: 独立实现带原始字段身份的原生迁移契约，并单独验证group层级／附件／历史／元数据；不可用现有标准列映射宣称完整XML兼容。
+- Regression test suggestion: 实际DOMParser验证边缘空白／纯空白／重复标准和custom key在所有记录解析完成前拒绝；有效policy四模式／空／缺失、protected custom fields、CR／Unicode通过真实TS bulk wire到原生serde／保存重开，masked DTO无值。
+- Estimated effort: 有界拒绝、跨层回归及证据复核1–2小时；原始身份迁移独立评估。
+- Verification limits: 只确认上述字段身份路径；分组空白／路径分隔符、完整XML格式、附件／历史、真实跨客户端和手机provider另行待审。
+
+新增SP-S86后为97历史Confirmed（Critical1／High19／Medium61／Low16），含已修复项；原始b7c5d9f／15项／6.1分不变，整体goal active。
+
+### XML 字段身份最终复核
+
+SP-S86已通过最小拒绝修复：XML读取完整原始Key，空／边缘空白／同条目重复字段名在返回任何记录前拒绝，现有页面handler给中英文无内容错误并停止group create／bulk IPC。标准列、自定义字段、otp和受管理策略共用身份检查。现有原生编辑writer仍有名称规范化行为；本项避免XML迁移静默覆盖，不宣称已提供原始名称的无损迁移。
+
+前端专项25通过（新增guard3／IO replay1），永久guard测试使用DOM形状树，不冒充真正XML解析。隔离headless Edge实际DOMParser／生产xmlToImportEntries／importEntries和transpile的实际页面handler24项通过：6项正常四模式／空策略／未设置，两种语言18项空／边缘空白／重复标准／custom／policy及较晚坏记录拒绝，错误反馈severity明确且零IPC／零pageerror。浏览器和临时Vite均已关闭。
+
+共享严格JSON夹具来自实际原生PlainXml导出和Edge生产IO wire，期望字段由独立ElementTree解析。新增原生1项包含正常／空／无规则三组，真实serde、import_entries、临时AES KDBX保存重开、protected/raw CR／Unicode／纯空白字段、规则模式字节、Exact／Host／Never／空策略与旧URL匹配、masked DTO和再导出值／保护标记通过。此前使用内部entry-exchange的$value DTO作为PlainXml复核器时空白值被省略，改为正确$text／ProtectInMemory测试DTO；保存重开断言当时已通过，不能把这个辅助reader结果称为本轮XML导出损失。内部exchange完整空白值语义作为独立待审候选，不新增卡片。初始常量缺失编译失败排除。
+
+完整verify-xml-field-identity-final.log exit0：frontend447／Rust765／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy全部通过；root无过滤、单线程Rust／dev-test debug0／live未启用。301个执行源码／测试／工具／清单哈希门禁前后逐一一致，原始红测及探针哈希保留。统计表首次lint的96／97差异已修正，严格metadata／fixture及报告lint通过。
+
+documentation currency gate更新data-contracts／security-model／project-structure及部分TODO；SKILL／maintenance稳定路由无需变化，无CSS／markup变更。97历史Confirmed（1／19／61／16）包含已修复项；原始b7c5d9f／15项／6.1分保持。完整XML分组／附件／历史、来源规则映射、手机v1.6.5另存为新APK／provider与剩余全仓／竞品／UI继续；逐网址与XML TODO仍[~]，整体goal active。
+
+完整日志SHA256 9ef41755f08c00b44fd4f9b3b5c6438443762e36c97e5895c46d01ff57af9eb0；xml-migration-final-proof.json SHA256 61a124db86677a9a60106d47a9858f2f2ba3c75d5c29e3346c33a60754e7a4f6，关联原始红测、最终源码清单、前端／原生／真实浏览器证据及门禁。原版浏览器红测脚本和扩展后最终脚本分别保存，原始proof所有哈希复核一致。

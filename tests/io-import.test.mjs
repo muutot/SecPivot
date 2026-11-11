@@ -70,6 +70,35 @@ test("structured import retains protected flags and OTP through the real bulk IP
   assert.equal(notices.length, 1);
 });
 
+test("browser XML wire fixtures retain their fields through the production bulk mapping", async () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL("./fixtures/xml-migration-wire.json", import.meta.url), "utf8"),
+  );
+  assert.equal(fixture.cases.length, 3);
+  for (const item of fixture.cases) {
+    calls.length = 0;
+    const sessionView = new SessionViewGuard();
+    sessionView.activate("xml-wire-owner");
+    const { groupUuid: _groupUuid, attachments: _attachments, ...row } = item.input;
+    await importEntries(
+      {
+        sessionView,
+        operations: new LatestOperationGuard(),
+        setBusy: () => {},
+        currentState: () => state,
+        notify: () => {},
+      },
+      [{ ...row, group: "" }],
+      sessionView.capture(),
+      null,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, "import_entries");
+    assert.equal(calls[0].args.sessionId, "xml-wire-owner");
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0].args.inputs[0])), item.input);
+  }
+});
+
 test("structured import preserves explicit quality flags and legacy defaults in each bulk row", async () => {
   calls.length = 0;
   const row = {
