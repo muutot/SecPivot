@@ -74,6 +74,7 @@ npm run test:frontend
 npm run test:keepass-patch
 npm run test:quickxml-patch
 npm run test:rust
+npm run test:vault-credentials
 npm run lint:rust
 npm run format:check
 npm run verify

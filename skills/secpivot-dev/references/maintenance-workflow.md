@@ -57,6 +57,17 @@ Both run in `npm run verify`. The helper validates its created temporary root
 before recursive cleanup and uses the repository target cache; source copies
 contain no user vaults. Upstream ignored tests do not count as executed coverage.
 
+`npm run test:vault-credentials` executes six synthetic command-control-flow
+tests in a disposable Cargo fixture, with a private copy of the repository lock
+and offline dependencies. It extracts the four current open/create handler
+bodies; only the password parameter is replaced by an observed payload. The
+actual guarded-password implementation is included unchanged. Tauri state,
+configuration, persistence and adoption remain stubs; real Tokio workers/abort
+and JSON string parsing execute. This proves owned-command cleanup paths,
+not native IPC, provider/KDBX behavior or complete process-memory erasure.
+The ordinary full gate runs current sources. `--source-ref <commit>` is an
+explicit read-only audit comparison, never the ordinary gate's source.
+
 ## Browser vs desktop truth
 
 - Audit evidence paths become immutable once their hashes are recorded. Use

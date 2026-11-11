@@ -309,3 +309,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 原生KDBX日期拒绝
 
 - [x] 原生KDBX日期异常处理：Base64必须恰好8字节、秒数和日期加法检查范围，损坏值返回错误；4项依赖回归覆盖短/长/极值/正常边界/ISO及完整内层XML，正常AES KDBX保存重开对照及完整452前端/830 Rust/ACL2/KeePass29/QuickXML1363门禁通过（SP-S106；损坏加密库实际IPC/真机/provider及完整日期互操作仍待验证）。
+
+## 审计补充 — 命令临时主密码所有权
+
+- [x] 四个新建/打开命令的临时主密码清理（SP-S107）：JSON字符串在参数反序列化时进入VaultPassword/Zeroizing，覆盖未poll就释放、前置错误、等待取消、worker panic及会话采用失败；六项合成回归覆盖42条生命周期路径/九个JSON对照，原提交21条遗漏到全部清理，完整452前端/830 Rust/ACL2/凭据fixture6/KeePass29/QuickXML1363门禁通过。真实Tauri/renderer/framework缓冲、keyfile、更换主密钥及全进程内存擦除仍独立待审。

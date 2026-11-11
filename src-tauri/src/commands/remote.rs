@@ -2,6 +2,7 @@
 //! (extracted from commands.rs).
 
 use super::config::normalize_backup_template;
+use super::credentials::VaultPassword;
 use super::vault::apply_capture_guard;
 use crate::config::ConfigStore;
 use crate::remote::{local_storage_dir, make_storage, RemoteObject};
@@ -9,7 +10,7 @@ use crate::vault;
 use crate::vault::{RemoteMode, VaultOpenResult, VaultSession, VaultSessions};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 // ---------------------------------------------------------------------------
 // Remote vault commands
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ pub(crate) async fn open_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     profile: String,
     key: String,
-    mut password: String,
+    mut password: VaultPassword,
     keyfile: Option<String>,
     mode: String,
 ) -> Result<VaultOpenResult, String> {
@@ -64,10 +65,9 @@ pub(crate) async fn open_remote_vault(
     // async worker thread: the remote transport blocks on its own runtime, which
     // panics on a runtime worker (the command future would abort and the
     // invoke would never resolve — the UI would stay on "正在加载…").
-    // Wrap in Zeroizing so the copy moved into the blocking task is zeroized
-    // on drop even if the task panics (JoinError) before returning it.
+    // The password owns its wipe guard from argument deserialization, including
+    // preflight errors, cancelled futures and a blocking-task panic (JoinError).
     let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
-        let password = Zeroizing::new(password);
         let result = vault::prepare_remote_open(
             storage_for_network,
             &key,
@@ -102,7 +102,7 @@ pub(crate) async fn open_remote_vault(
         }
         Err(e) => Err(e),
     };
-    // `password` is a Zeroizing<String>: dropping it here zeroizes the copy
+    // `password` is a VaultPassword: dropping it here zeroizes the copy
     // that came back from the blocking task.
     if result.is_ok() {
         apply_capture_guard(&app, &config);
@@ -120,7 +120,7 @@ pub(crate) async fn create_remote_vault(
     config: tauri::State<'_, ConfigStore>,
     profile: String,
     key: String,
-    mut password: String,
+    mut password: VaultPassword,
     kdf: String,
     cipher: String,
     compression: String,
@@ -147,10 +147,9 @@ pub(crate) async fn create_remote_vault(
     // KDF, serialization, upload and local mirror run without the lock, off
     // the async worker thread (the remote transport must not block a runtime
     // worker — see the comment in `open_remote_vault`).
-    // Wrap in Zeroizing so the copy moved into the blocking task is zeroized
-    // on drop even if the task panics (JoinError) before returning it.
+    // The owned password guard also covers preflight/permit cancellation and
+    // a blocking-task panic, before any session adopts a borrowed value.
     let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
-        let password = Zeroizing::new(password);
         let result = vault::prepare_remote_create(
             storage_for_network,
             &key,
@@ -188,7 +187,7 @@ pub(crate) async fn create_remote_vault(
         }
         Err(e) => Err(e),
     };
-    // `password` is a Zeroizing<String>: dropping it here zeroizes the copy
+    // `password` is a VaultPassword: dropping it here zeroizes the copy
     // that came back from the blocking task.
     if result.is_ok() {
         apply_capture_guard(&app, &config);

@@ -1,5 +1,18 @@
 # Project Structure and Runtime Surfaces
 
+`commands/credentials.rs` owns the String-shaped `VaultPassword` argument guard
+for local/remote open/create. It deserializes directly into Zeroizing ownership
+before future polling, has no Debug/Serialize/extraction surface and borrows
+unchanged values for native preparation/adoption. It is distinct from desktop
+`commands/credential.rs`, which handles the OS saved-credential store.
+`scripts/test-vault-credentials.mjs` compiles six checks from exact handler
+blocks and the actual guard module; only the password payload type is observed.
+`tests/fixtures/vault-command-credentials.rs` covers42 owned paths/nine JSON
+controls, using stub Tauri/config/persistence/adoption APIs and real Tokio worker
+abort. Its disposable manifest seeds the repository lock, is offline and shares
+the target cache; full verify runs it before root Rust tests. No native IPC/
+KDBX/provider or full process-memory claim follows from these fixtures.
+
 Native KDBX `format/xml_db/timestamp.rs` now validates exactly eight Base64
 bytes and checked signed-second/year-one date arithmetic before publishing
 a Timestamp. Four dependency regressions cover invalid lengths/date bounds,

@@ -1,5 +1,16 @@
 # Security Model
 
+The four local/remote open/create commands accept `credentials::VaultPassword`
+with the same JSON string shape. Its default String-only Deserialize wraps the
+owned value in Zeroizing before the async command future is created/polled;
+the guard moves into blocking work and back, covering preflight rejection,
+unpolled/waiting-future cancellation, worker panic and failed session adoption.
+Borrowed password values used by preparation/adoption are unchanged. Local
+normal completion drops the guard before capture-guard application. The internal
+generic payload supports safe destructor observation in synthetic tests; there
+is no Debug/Serialize or raw-value extraction API. Renderer/framework IPC
+buffers, keyfiles, master-key replacement and other secrets remain separate.
+
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid
 lengths or unrepresentable dates return fixed errors with no source content.

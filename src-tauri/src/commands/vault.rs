@@ -1,6 +1,7 @@
-//! Vault lifecycle + entry/group CRUD IPC commands. Thin wrappers; passwords
-//! and keys never cross IPC (extracted from commands.rs).
+//! Vault lifecycle + entry/group CRUD IPC commands. Authentication accepts
+//! sensitive inputs; command results never return master passwords or keys.
 
+use super::credentials::VaultPassword;
 use super::{with_resolved_vault_session, with_vault_session};
 use crate::config::ConfigStore;
 #[cfg(desktop)]
@@ -41,7 +42,7 @@ pub(crate) async fn open_vault(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
-    password: String,
+    password: VaultPassword,
     keyfile: Option<String>,
 ) -> Result<VaultOpenResult, String> {
     // Slow work (file read, KDF, parse) runs outside the session lock and off
@@ -49,7 +50,7 @@ pub(crate) async fn open_vault(
     let path_for_work = PathBuf::from(&path);
     let keyfile_path = keyfile.map(PathBuf::from);
     let path_for_closure = path_for_work.clone();
-    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+    let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
         let result =
             vault::prepare_local_open(&path_for_closure, &password, keyfile_path.as_deref());
         (result, password)
@@ -65,7 +66,7 @@ pub(crate) async fn open_vault(
         }
         Err(e) => Err(e),
     };
-    password.zeroize();
+    drop(password);
     if result.is_ok() {
         apply_capture_guard(&app, &config);
     }
@@ -88,7 +89,7 @@ pub(crate) async fn create_vault(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     path: String,
-    mut password: String,
+    mut password: VaultPassword,
     kdf: String,
     cipher: String,
     compression: String,
@@ -106,7 +107,7 @@ pub(crate) async fn create_vault(
     let path_for_work = PathBuf::from(&path);
     let keyfile_path = keyfile.map(PathBuf::from);
     let path_for_closure = path_for_work.clone();
-    let (prepared, mut password) = tauri::async_runtime::spawn_blocking(move || {
+    let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
         let result = vault::prepare_local_create(
             &path_for_closure,
             &password,
@@ -128,7 +129,7 @@ pub(crate) async fn create_vault(
         }
         Err(e) => Err(e),
     };
-    password.zeroize();
+    drop(password);
     if result.is_ok() {
         apply_capture_guard(&app, &config);
     }

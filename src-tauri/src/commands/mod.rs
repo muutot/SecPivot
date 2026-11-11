@@ -1,5 +1,6 @@
 //! Tauri IPC command handlers, grouped by domain. Thin wrappers around the
-//! backend services; passwords and keys never cross IPC.
+//! backend services. Authentication accepts sensitive inputs; command results
+//! never return master passwords or keys.
 
 use crate::vault::{VaultSession, VaultSessions};
 use std::sync::Mutex;
@@ -10,6 +11,7 @@ pub(crate) mod clipboard;
 pub(crate) mod config;
 #[cfg(desktop)]
 pub(crate) mod credential;
+mod credentials;
 pub(crate) mod entries;
 pub(crate) mod entry_save;
 pub(crate) mod favicon;
