@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S81; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 92,
-    "confirmed": 92,
+    "scope": "15 baseline cards plus SP-S05 through SP-S82; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 93,
+    "confirmed": 93,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 57,
+      "Medium": 58,
       "Low": 15
     }
   },
@@ -67,6 +67,16 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S82",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "0d76404",
+      "area": "Single editor submission leaves persisted partial content when flags follow-up rejects",
+      "status": "Confirmed and remediated; required-session atomic editor transaction, targeted13 frontend/8 native and full410 frontend/746 Rust/ACL2/KeePass25/QuickXML1363 pass; ignored4 excluded",
+      "evidence": "Actual compiled editor original3 has1 failing integrity assertion and2 controls; native focused save/reopen title assertion fails in editor-save-original-native-title.log. Synthetic data only.",
+      "limitations": "No real vault, live WebView/mobile/provider or credential disclosure; invalid-color UI reachability not claimed. Candidate clones need separate large-vault memory evaluation."
+    },
     {
       "id": "SP-S80",
       "severity": "Low",
@@ -2036,6 +2046,29 @@
         "sha256": "e2714b3e698635deb7b7daf84b24f885ba603fea5504405a02b210f880fef06d"
       },
       "limits": "No actual Tauri WebView/device/provider/APK, real vault/config or shared clipboard. Compact editor/history rule-value reader, source mapping/full renderer XML migration and comprehensive goal remain pending. No total-heap erasure guarantee."
+    },
+    "entry_editor_save": {
+      "exitCode": 0,
+      "frontend": 410,
+      "rust": 746,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "source_checkpoint": "0d76404",
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\editor-save-final-proof.json",
+      "proof_sha256": "53f3ff88dcabeadf1ba991be2e6ef59d5ea0326ce986bb626a578ea358a16147",
+      "log_sha256": "68e15bc00cf89e8f2c44b971581f7820740d7544c7c05fb2b7283a144b70ed05",
+      "limitations": [
+        "Actual Svelte server-compilation of editor orchestration with synthetic service seams; no live client DOM proof",
+        "Actual service modules with synthetic Tauri/localStorage seams; actual native temporary AES KDBX save/reopen",
+        "Original whole-database comparison is secondary; the retained focused persisted-title failure is the native baseline",
+        "Initial native test DTO spelling error and intermediate unit-create unknown-field acceptance are retained in separate logs; not additional product findings",
+        "Targeted command originally named a nonexistent closed-session-publication file, so only 27 executed tests count; full410 includes real vault-session-publication tests",
+        "No user configuration/vault, shared clipboard, provider, WebView, APK or competitor runtime execution",
+        "Candidate database clones stay in session memory; no heap-erasure or large-vault performance guarantee",
+        "Baseline b7c5d9f / 15 findings / score6.1 retained; 93 historical confirmed cards include remediated findings; overall goal remains active"
+      ]
     }
   },
   "reverification_notes": [

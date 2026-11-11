@@ -405,6 +405,20 @@ export interface EntryFlags {
   foregroundColor?: string;
 }
 
+/** One logical editor submission. Edit requires an explicit UUID; optional
+ * Auto-Type/flags preserve their values when omitted or null. */
+export interface EntrySaveRequest {
+  target: { mode: "create" } | { mode: "edit"; uuid: string };
+  input: EntryInput;
+  autoType?: EntryAutoTypeConfig | null;
+  flags?: EntryFlags | null;
+}
+
+export interface EntrySaveResult {
+  uuid: string;
+  state: VaultState;
+}
+
 export interface GroupInput {
   parentUuid: string | null;
   name: string;

@@ -25,6 +25,22 @@ fn normalize_optional_sequence(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
+pub(super) fn build_entry_autotype(input: &EntryAutoTypeInput) -> AutoType {
+    AutoType {
+        enabled: input.enabled,
+        default_sequence: normalize_optional_sequence(input.default_sequence.as_deref()),
+        data_transfer_obfuscation: DataTransferObfuscation::None,
+        associations: input
+            .associations
+            .iter()
+            .map(|a| AutoTypeAssociation {
+                window: a.window.trim().to_owned(),
+                sequence: a.sequence.clone(),
+            })
+            .collect(),
+    }
+}
+
 /// KeePass's per-entry history byte budget when the metadata omits it.
 const DEFAULT_HISTORY_SIZE: isize = 6 * 1024 * 1024;
 
@@ -1337,19 +1353,7 @@ impl VaultSession {
             let db = self.require_db_mut()?;
             let id = parse_entry_id(uuid)?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
-            let autotype = Some(AutoType {
-                enabled: input.enabled,
-                default_sequence: normalize_optional_sequence(input.default_sequence.as_deref()),
-                data_transfer_obfuscation: DataTransferObfuscation::None,
-                associations: input
-                    .associations
-                    .iter()
-                    .map(|a| AutoTypeAssociation {
-                        window: a.window.trim().to_owned(),
-                        sequence: a.sequence.clone(),
-                    })
-                    .collect(),
-            });
+            let autotype = Some(build_entry_autotype(input));
             if entry.autotype != autotype {
                 entry.autotype = autotype;
                 entry.times.last_modification = Some(Times::now());

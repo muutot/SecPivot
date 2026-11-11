@@ -1,5 +1,28 @@
 # Data Contracts
 
+`save_entry({sessionId: String, request: EntrySaveRequest}) -> EntrySaveResult`
+owns single-entry editor creation and editing. `request.target` is explicitly
+`{mode:"create"}` or `{mode:"edit",uuid}`; an omitted edit UUID or extra create
+UUID rejects, never defaults to creation. `input` retains the full-field contract;
+optional/null `autoType` and `flags` preserve their current values. Flag members
+retain absent/null keep, empty-string clear and explicit-value set behavior.
+The native candidate validates target, attachments, foreground and managed-policy
+conflicts before writing, then applies content/Auto-Type/flags in one tracking
+scope for edits, trims history and publishes one revision. A final snapshot error
+restores the original database, dirty/revision/modified metadata and snapshot cache.
+Creation returns its exact UUID with the masked state and creates no initial
+history. Memory-only CRUD remains available after save degradation, like existing
+editor commands; persistence retains its own writable gate. Standalone mutations
+remain available for other callers, and edit-multi retains `update_entries`.
+Renderer UUID/state publication requires the captured Symbol lifetime even after
+remote replacement; a closed/replaced response rejects. The editor uses the
+returned UUID for selection rather than comparing creation timestamps. Browser
+preview applies one cloned draft and validates its targets/foreground, without
+proving native history, KDBX or provider behavior. Native candidates temporarily
+clone decrypted data within the session; no large-vault memory benchmark or
+allocator-erasure guarantee is implied. Website-rule value editing is separate
+pending work and must join a logical editor transaction before UI integration.
+
 Native renderer state publication registers an addressed session's epoch at
 admission, including valid explicit IDs not listed yet. Each admission after
 disposal and each replacement uses a fresh Symbol identity, so failed re-admission
@@ -322,9 +345,9 @@ save/reopen. Existing absent/empty/valid values and target-error order remain.
 `Times.last_modification` with `Times::now()` when normalized attributes change,
 so an old timestamp does not obstruct a standalone edit's merge. Repeated
 equal values retain the timestamp. Their existing dirty/revision and history
-behavior stays intact; the editor's primary full-field write still creates its
-pre-edit snapshot before the attribute follow-ups. This does not establish
-atomicity or complete history for every standalone attribute command.
+behavior stays intact. The editor now uses `save_entry` for one complete pre-edit
+snapshot instead of attribute follow-ups. This does not establish complete
+history for every standalone attribute command.
 Times retain KDBX second precision; same-second divergence is a separate
 merge boundary, not a monotonic timestamp guarantee.
 

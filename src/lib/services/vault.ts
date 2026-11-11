@@ -6,6 +6,8 @@ import type {
   VaultGroup,
   VaultEntry,
   EntryInput,
+  EntrySaveRequest,
+  EntrySaveResult,
   ImportEntryInput,
   OnePuxImportResult,
   OnePuxCounts,
@@ -126,6 +128,7 @@ interface VaultStore {
   saveAs: (path: string, label?: VaultLabel) => Promise<VaultState>;
   changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
+  saveEntry: (request: EntrySaveRequest) => Promise<EntrySaveResult>;
   addEntries: (inputs: ImportEntryInput[]) => Promise<VaultState>;
   importOnePux: (
     path: string,
@@ -1051,6 +1054,84 @@ export const vault: VaultStore = {
       return committed;
     }
     return vault.save();
+  },
+
+  async saveEntry(request: EntrySaveRequest): Promise<EntrySaveResult> {
+    if (isTauriRuntime()) {
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
+      const result = await invokeSession<EntrySaveResult>("save_entry", { request }, sessionId);
+      // The UUID belongs to this database lifetime, not a replacement snapshot.
+      if (currentSessionEpoch(sessionId) !== epoch) {
+        throw new Error(t(lang(), "error.noOpenDb"));
+      }
+      return {
+        uuid: result.uuid,
+        state: commitSessionStateAtEpoch(sessionId, epoch, result.state),
+      };
+    }
+    const { target, input, autoType, flags } = request;
+    if (target.mode !== "create" && target.mode !== "edit")
+      throw new Error("invalid editor target");
+    if (input.customFields?.some((field) => field.name.trim() === "SecPivot.WebsiteRules")) {
+      throw new Error(
+        t(lang(), "browser.unsupported", { feature: t(lang(), "browser.featWebsiteRules") }),
+      );
+    }
+    const foreground = flags?.foregroundColor?.trim();
+    if (foreground && !/^#[0-9a-f]{6}$/i.test(foreground))
+      throw new Error("invalid foreground color");
+    let uuid = "";
+    const result = applyEdit((draft) => {
+      const group = findGroup(draft.root, input.groupUuid);
+      if (!group) throw new Error("target group not found");
+      let entry: VaultEntry;
+      if (target.mode === "edit") {
+        const existing = findEntry(draft.root, target.uuid);
+        if (!existing) throw new Error("entry not found");
+        entry = existing;
+        if (entry.hasWebsiteRules && flags?.overrideUrl?.trim())
+          throw new Error("website rules conflict");
+        if (entry.groupUuid !== input.groupUuid) {
+          const origin = collectAllGroups(draft.root).find((g) => g.entries.includes(entry));
+          if (!origin) throw new Error("source group not found");
+          origin.entries = origin.entries.filter((e) => e !== entry);
+          pushEntry(group, entry);
+        }
+      } else {
+        entry = {
+          uuid: newUuid(),
+          groupUuid: input.groupUuid,
+          title: "",
+          username: "",
+          password: "",
+          url: "",
+          notes: "",
+          created: new Date().toISOString(),
+          hasTotp: false,
+        };
+        pushEntry(group, entry);
+      }
+      uuid = entry.uuid;
+      const { icon, attachments, ...fields } = input;
+      Object.assign(entry, fields, {
+        hasTotp: Boolean(input.totp),
+        totp: input.totp || undefined,
+        expires: input.expires || undefined,
+        modified: new Date().toISOString(),
+        attachments: attachments?.map((a) => ({ name: a.name, size: a.data?.length ?? 0 })),
+      });
+      if (icon === null) entry.icon = undefined;
+      else if (icon !== undefined) entry.icon = icon;
+      if (autoType) entry.autoType = deepClone(autoType);
+      if (flags?.overrideUrl !== undefined)
+        entry.overrideUrl = flags.overrideUrl.trim() || undefined;
+      if (flags?.qualityCheck !== undefined) entry.qualityCheck = flags.qualityCheck;
+      if (flags?.foregroundColor !== undefined) entry.foregroundColor = foreground || undefined;
+    });
+    const committed = applyBackendState(result);
+    state.set(committed);
+    return { uuid, state: committed };
   },
 
   async addEntry(input: EntryInput): Promise<VaultState> {

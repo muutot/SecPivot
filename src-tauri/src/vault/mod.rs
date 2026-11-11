@@ -5,6 +5,9 @@
 mod breach;
 pub mod dto;
 mod entries;
+mod entry_save;
+#[cfg(test)]
+mod entry_save_tests;
 pub mod exchange;
 pub(crate) mod file_io;
 pub(crate) mod helpers;
@@ -173,6 +176,7 @@ pub use self::dto::{
 
 pub use self::breach::BreachFinding;
 pub(crate) use self::breach::HIBP_RANGE_URL;
+pub use self::entry_save::{EntrySaveRequest, EntrySaveResult};
 pub use self::import::{
     parse_1pif, parse_1pux_archive, parse_bitwarden_json, prepare_1pux_import, ImportCustomField,
     ImportRow, OnePuxArchive, OnePuxCounts, OnePuxImport,

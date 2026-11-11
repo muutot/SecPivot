@@ -34,16 +34,16 @@
 
 ### Finding Statistics
 
-当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S81；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
+当前详细卡片统计包含原 15 张卡片与新增 SP-S05–SP-S82；含已修复项，不代表尚未修复数量。SP-15 本轮由 Suspected 复核为 Confirmed。其他历史补充跟踪记录不计入本表。下方单独保留 `b7c5d9f` 原始 15 项统计与 6.1 分判断，不将复核进展静默改写为基线结果。
 
 | Severity  | Count  | Confirmed | Suspected |
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 57     | 57        | 0         |
+| Medium    | 58     | 58        | 0         |
 | Low       | 15     | 15        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **92** | **92**    | **0**     |
+| **Total** | **93** | **93**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4622,3 +4622,32 @@ TS新增模式／规则类型及真实vault服务读写；读取绑定Symbol生�
 前端10项新增服务回归与关闭／i18n合计30项通过；原生5项编排／严格serde／跨库／历史提示／损坏来源回归通过。测试首次使用错误的历史DTO形状及EntryId／泛型构造编译失败均已修正，不作为产品缺陷复现证据。当前阶段是功能接线，不增加Confirmed卡片，也不修改原始b7c5d9f／15项／6.1分。最终完整门禁通过；紧凑编辑器、历史规则值读取、来源模式映射、完整renderer XML路径及真实WebView／APK／provider仍未交付，不把这些专项称为完整用户功能。
 
 最终 verify-website-rules-ipc-final.log exit0：frontend397／Rust738／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root无过滤、live选项未启用。日志SHA256 bfa596bc0a60b9ca29d684df4367960eee979595dde791f4fcdb2c1746e39e63；website-rules-ipc-final-proof.json记录实际专项、最终源码、锁定Tauri契约源码与日志哈希及明确证据限制。documentation currency gate更新data-contracts／security-model／project-structure；SKILL／稳定维护路由无需更新。仅IPC／服务／提示完成，TODO逐网址完整功能仍为部分完成，92历史卡片与原始15项／6.1分保持，整体目标继续。
+
+### Finding: SP-S82 单条编辑末步失败仍留下可持久化的部分修改
+
+- Severity: Medium
+- Confidence: High
+- Category: Data integrity / Editor transaction
+- Status: Confirmed（一次事务修复；专项与完整门禁通过）
+- Affected area: useEntryEditor.handleSave single-entry content / Auto-Type / flags pipeline.
+- Evidence:
+  - File / Function: src/lib/composables/useEntryEditor.svelte.ts handleSave; src-tauri/src/vault/entries.rs update_entry / update_entry_autotype / update_entry_flags.
+  - Source checkpoint: 0d76404. editor-save-original-source.ts retains the production editor source before repair.
+  - Production rune module compiled with the actual Svelte compiler and synthetic service seams: editor-save-original-frontend.log runs 3 cases, with 1 failed atomicity assertion and 2 passing primary-refusal / successful-save controls. The editor reports editor.opFailed and remains open, while its previously committed title is already After.
+  - Actual native APIs on an empty synthetic AES KDBX: update_entry succeeds, invalid foreground makes update_entry_flags reject; subsequent save/open returns After rather than Before. editor-save-original-native-title.log records the failed persisted-title assertion. The earlier whole-database comparison is secondary evidence; the focused title check avoids relying on serialization equality.
+- Problem: One editor submission performs several independently committed writes. A later error cannot undo earlier fields, history or revisions; retry may add redundant history. Creation already warns about follow-up failure, but its configuration is also submitted separately.
+- Why it matters: The failure message does not represent the whole draft's commit outcome. Users can persist changed credentials or fields after an apparently failed edit. No password disclosure or corruption of encrypted file bytes is established.
+- Realistic failure scenario: 单条内容已写入，标志校验拒绝、来源会话关闭或后续调用失败；编辑器保留草稿并提示失败，之后保存数据库会保留前面的修改。原生无效前景色是有界验证输入，正常UI颜色控件的可达性未证明；受管理网址规则与覆盖网址冲突也是合法拒绝边界。
+- Minimal fix: Submit content, Auto-Type and flags through one required-session native request; mutate a candidate database with one logical history snapshot and publish only on complete success. Return the created UUID explicitly.
+- Better long-term fix: 后续网址规则编辑复用同一逻辑事务，保持省略／清除／设置契约明确；真实WebView与手机provider另行验证。
+- Regression test suggestion: 保留实际编译的编辑编排与原生合成库回归，覆盖末步拒绝／首步拒绝／正常保存、单次revision及历史、附件保护与保留限制、创建失败重试、来源会话隔离及最终快照失败回滚。
+- Estimated effort: 原生事务与服务接线、回归和维护文档1–2天；真实平台验证另计。
+- Verification limits: Synthetic vaults and service seams only; no user data, shared clipboard, live WebView, actual Android provider or password/master-key disclosure claim. This is a bounded integrity finding, not a new broad cybersecurity capability.
+
+本阶段新增SP-S82后为93历史Confirmed（Critical1／High19／Medium58／Low15），包含已修复项；原始b7c5d9f／15项／6.1分保持。整体目标继续，手机新APK／provider与逐网址完整编辑尚待验证。
+
+最终修复：save_entry要求来源sessionId String与明确create/edit目标，edit遗漏UUID或create多余UUID拒绝。内容／Auto-Type／标志／附件经一次候选数据库与一次编辑tracking提交，快照失败恢复原始库、dirty／revision／modified／cache；创建返回准确UUID且无初始历史。旧独立命令与多选批量契约保留。前端关闭／替换响应不得发布旧UUID，browser仅为一次草稿对照，不证明原生历史。
+
+最终专项新增前端13／含策略及i18n共27、原生8通过。首次专项误用了不存在的关闭测试文件名，仅计实际27项；完整门包含真实vault-session-publication测试。原生夹具auto_type拼写编译错误与中间create unit分支忽略多余UUID的失败已保留并修正，不新增问题卡。最终verify-editor-save-final.log exit0：frontend410／Rust746／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy全部通过；单线程Rust、dev/test debug0、root无过滤、live选项未启用。完整日志SHA256 68e15bc00cf89e8f2c44b971581f7820740d7544c7c05fb2b7283a144b70ed05；editor-save-final-proof.json SHA256 53f3ff88dcabeadf1ba991be2e6ef59d5ea0326ce986bb626a578ea358a16147关联原始编排、聚焦持久化失败、专项／最终源码与日志。
+
+documentation currency gate同步data-contracts／security-model／project-structure与Auto-Type TODO保存契约，SKILL与稳定maintenance路由无需改动；仅page脚本删除旧UUID猜测，无CSS／markup／依赖／发布更改。93历史Confirmed及原始15项／6.1分保持；逐网址编辑／历史值读取／来源迁移、真机另存为、新APK及剩余全仓／竞品／视觉复核继续，整体目标active。

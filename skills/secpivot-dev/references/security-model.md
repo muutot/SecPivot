@@ -1,5 +1,20 @@
 # Security Model
 
+Single-entry editor `save_entry` requires an explicit String origin session ID
+and a create/edit target with a mandatory edit UUID. A closed/unknown/empty origin
+never falls back to the active database. Content, Auto-Type, flags and attachments
+commit through one candidate database and one edit-history tracking scope; invalid
+targets/payloads/colors or managed-policy conflicts leave the original untouched.
+Snapshot failure restores database and publication metadata. Optional extras keep
+their values, explicit empty matching/color strings clear them, and generic edits
+preserve protected managed policies. Ordinary response/history DTOs remain masked;
+the exact created UUID carries no secret. Renderer completions reject disposed or
+replaced Symbol lifetimes before UUID publication. In-memory CRUD after save
+degradation retains its prior contract; disk writes enforce writability separately.
+Candidate clones stay inside native session memory, without a total-heap,
+allocator-erasure or large-vault performance claim. Compiled editor service seams
+and synthetic native KDBX tests do not establish live WebView/Android behavior.
+
 After backend lock succeeds, renderer snapshots/tabs/session/icon/epoch caches
 are cleared synchronously before pending temp-cleanup IPC settles. State replies
 admitted before close/lock cannot recreate a disposed epoch or cache old content;
