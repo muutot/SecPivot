@@ -496,8 +496,13 @@ export interface HistoryDiff {
   attachments: HistoryItemChange[];
 }
 
-export interface HistoryVersion {
+/** Required native expectation; never reconstruct it from an index. */
+export interface HistorySelection {
   index: number;
+  selectionToken: string;
+}
+
+export interface HistoryVersion extends HistorySelection {
   modified: string | null;
   title: string;
   username: string;

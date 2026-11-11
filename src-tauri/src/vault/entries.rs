@@ -708,7 +708,7 @@ impl VaultSession {
 
     /// List the historical snapshots of an entry, newest first. Passwords are
     /// intentionally excluded from the payload — the renderer restores by
-    /// index, and the plaintext must not leave the backend.
+    /// index plus selection token, and plaintext must not leave the backend.
     pub fn get_entry_history(&self, uuid: &str) -> Result<Vec<HistoryVersion>, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;
@@ -721,6 +721,7 @@ impl VaultSession {
             .filter_map(|index| entry.historical(index).map(|h| (index, h)))
             .map(|(index, historical)| HistoryVersion {
                 index,
+                selection_token: self.history_selection_token(id, index),
                 diff: history_diff(&historical, &entry),
                 modified: historical.times.last_modification.map(format_iso),
                 title: historical.get_title().unwrap_or_default().to_owned(),
@@ -796,6 +797,29 @@ impl VaultSession {
             .collect())
     }
 
+    /// Selection expectations expose only random lifetime and public metadata,
+    /// never a hash/fingerprint of a protected snapshot. Any revision change
+    /// conservatively requires reselection, even if this entry stayed unchanged.
+    pub(super) fn history_selection_token(&self, id: EntryId, index: usize) -> String {
+        format!(
+            "{}:{}:{}:{}",
+            self.history_lifetime, self.revision, id, index
+        )
+    }
+
+    fn validate_history_selection(
+        &self,
+        id: EntryId,
+        index: usize,
+        selection_token: &str,
+    ) -> Result<(), String> {
+        self.require_db()?;
+        if selection_token != self.history_selection_token(id, index) {
+            return Err("HISTORY_SELECTION_STALE: 历史列表已变化，请刷新后重新选择".to_owned());
+        }
+        Ok(())
+    }
+
     /// Byte-size breakdown of everything the entry stores: its own field text,
     /// attachment data, and all historical snapshots (fields + attachments).
     /// Uses in-memory sizes, so protected values count like any other field.
@@ -818,8 +842,10 @@ impl VaultSession {
         &mut self,
         uuid: &str,
         index: usize,
+        selection_token: &str,
     ) -> Result<VaultState, String> {
         let id = parse_entry_id(uuid)?;
+        self.validate_history_selection(id, index, selection_token)?;
         let (version, attachments) = {
             let db = self.require_db()?;
             let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
@@ -903,8 +929,14 @@ impl VaultSession {
 
     /// Permanently delete one historical snapshot from an entry's history.
     /// The current state is untouched and no new snapshot is created.
-    pub fn delete_entry_history(&mut self, uuid: &str, index: usize) -> Result<VaultState, String> {
+    pub fn delete_entry_history(
+        &mut self,
+        uuid: &str,
+        index: usize,
+        selection_token: &str,
+    ) -> Result<VaultState, String> {
         let id = parse_entry_id(uuid)?;
+        self.validate_history_selection(id, index, selection_token)?;
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;

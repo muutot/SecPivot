@@ -564,12 +564,14 @@ pub struct TotpCode {
 }
 
 /// A single historical snapshot of an entry (see `Entry.history`). Passwords
-/// are never serialized: restoring a version happens server-side by index.
+/// are never serialized: restoring a version validates its selection token.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryVersion {
     /// Position in the history list (0 = most recent snapshot).
     pub index: usize,
+    /// Database lifetime/revision/entry/index expectation, unrelated to secrets.
+    pub selection_token: String,
     pub modified: Option<String>,
     pub title: String,
     pub username: String,

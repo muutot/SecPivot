@@ -1,5 +1,17 @@
 # Security Model
 
+History restore/deletion require an originating String session ID and the token
+returned with the selected version. Native checks database lifetime, revision,
+entry and index under the session lock before changing fields or history. The
+random lifetime is regenerated for local/remote opens and cleared on close;
+refresh/merge advance revision. No password/field/attachment hash identifies a
+snapshot, and no token is persisted to vault/config. Conservative invalidation
+on any revision requires explicit reselection. Renderer history reads and
+mutations reject disposed/replaced epochs before returning or publishing; parked
+owners remain supported. Policy contents remain masked and historical policy
+value access is still pending. Synthetic fixtures do not prove live WebView,
+Android provider timing or heap erasure.
+
 Single-entry editor `save_entry` requires an explicit String origin session ID
 and a create/edit target with a mandatory edit UUID. A closed/unknown/empty origin
 never falls back to the active database. Content, Auto-Type, flags and attachments

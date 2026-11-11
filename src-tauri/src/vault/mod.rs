@@ -11,6 +11,8 @@ mod entry_save_tests;
 pub mod exchange;
 pub(crate) mod file_io;
 pub(crate) mod helpers;
+#[cfg(test)]
+mod history_selection_tests;
 #[cfg(desktop)]
 mod hosts;
 mod import;
@@ -244,6 +246,9 @@ pub struct VaultSession {
     modified_at: String,
     remote: Option<RemoteTarget>,
     revision: u64,
+    /// Random identity for history selections in this database lifetime.
+    /// Independent of decrypted contents; renewed even on same-path reopen.
+    history_lifetime: uuid::Uuid,
     cached_snapshot: Option<(u64, VaultState)>,
     /// Browser-bridge client keys (KeePassHttp `Id` → AES key). Session-held
     /// only, never persisted: `close()` wipes them so the loopback server

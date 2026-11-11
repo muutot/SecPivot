@@ -1,5 +1,17 @@
 # Project Structure and Runtime Surfaces
 
+`entries.rs` owns history selection tokens and validates them before restore or
+delete. `session.rs` regenerates `VaultSession.history_lifetime` for each local/
+remote adoption; revision changes reject old selections. `dto.rs::HistoryVersion`
+serializes the metadata-only token. `commands/vault.rs` requires String session
+IDs and mutation tokens; `services/vault.ts` accepts `HistorySelection` and guards
+completion epochs. `EntryDetail` passes the original selected version and clears
+an obsolete preview/cache on refusal. `vault/history_selection_tests.rs` covers
+native insertion/deletion/reopen/remote-adoption/registry boundaries; its legacy
+fixture convenience methods exist only under cfg(test). Frontend service and
+extracted production-handler tests cover payload/lifetime/notification behavior.
+No policy-value reader or appearance change is part of this stage.
+
 Shared `vault/website_rules.rs` imports `parse_entry_id` from `vault/helpers.rs`
 directly. The parent vault aliases for browser matching remain desktop-only;
 shared modules must not use those aliases for cross-platform helpers. A host
