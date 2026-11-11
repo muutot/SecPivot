@@ -20,8 +20,29 @@ returned UUID for selection rather than comparing creation timestamps. Browser
 preview applies one cloned draft and validates its targets/foreground, without
 proving native history, KDBX or provider behavior. Native candidates temporarily
 clone decrypted data within the session; no large-vault memory benchmark or
-allocator-erasure guarantee is implied. Website-rule value editing is separate
-pending work and must join a logical editor transaction before UI integration.
+allocator-erasure guarantee is implied.
+
+`EntrySaveRequest.websiteRules` is optional/nullable: missing/null keeps the
+managed policy, `{mode:"clear"}` removes it, and `{mode:"set",rules:WebsiteRuleSet}`
+replaces it (including an empty explicit no-match set). Unknown members and
+malformed structures reject with a fixed message without echoing input values.
+Create requests cannot combine the custom-field policy source with this patch.
+Validation uses the effective OverrideURL after flags: adding rules rejects an
+inherited nonempty override, explicitly clearing it in the same save is allowed,
+and clearing rules permits a new override. Content, flags and policy share the
+candidate, tracked history, revision and snapshot rollback above.
+
+`EntryEditorDialog` owns a `WebsiteRulesDraft` across tab changes. An initial
+presence hint triggers one untracked explicit-session read; failures keep save
+disabled until retry or explicit removal. Latest-operation and disposal guards
+prevent stale publication; save-state changes never reload the draft. No policy
+baseline plus a final disabled draft omits the patch, including blank templates.
+Templates resolve policy and every hidden value together before replacing the
+draft; missing/null policy reads for a presence hint reject the whole prefill.
+`WebsiteRulesPanel` is controlled metadata UI with host default, exact URL bytes,
+128-row ceiling and visible override conflicts. Browser preview refuses explicit
+policy changes before publishing any draft fields. Its isolated renderer fixture
+uses synthetic read/session/save seams; native persistence is tested separately.
 
 Native renderer state publication registers an addressed session's epoch at
 admission, including valid explicit IDs not listed yet. Each admission after
@@ -627,7 +648,7 @@ The root group is the virtual top-level (uuid `"root"`); it is not persisted as 
 
 Every mutating command keeps the frontend `vault` store in sync with the backend session. Entry/group CRUD and db-meta mutations return a **light snapshot**: `customIcons` is omitted so favicon image bytes are not re-transmitted on every small edit. Favorite and group-expansion mutations go further and return a `MutationDelta` (revision + affected ids) that the renderer applies to its cached `VaultState` — no tree is rebuilt or serialized for those small changes. `VaultState.customIcons` is authoritative only on open/create/full refresh (`open_vault`/`create_vault`/`get_vault_state`/save paths, including an explicit empty map); `src/lib/services/vault.ts` keeps a module-level icon cache, replaces it whenever an authoritative snapshot arrives, and merges it back into every light mutation result. `favorite` is always present on `VaultEntry` and is persisted as a custom field `SecPivot.Favorite = "true"` (absent when not pinned); the browser fallback mirrors the same boolean on the demo state. `totp_code` computes the entry's one-time password from its OTP seed field (see the OTP field contract below) via the pure primitives in `src-tauri/src/crypto/otp.rs` (RFC 6238 TOTP, RFC 4226 HOTP, Steam Guard). The frontend `TotpWidget`/`EntryTotpBadge` count down locally and refetch at each period boundary; HOTP kinds fetch once and show a static code (their counter only advances when a code is requested).
 
-**Auto-Type contract:** `VaultEntry.autoType?` mirrors KDBX `Entry/AutoType` (`enabled`, `defaultSequence?`, `associations: { window, sequence }[]`) and `VaultGroup.autoType?` mirrors the group flags (`enabled?`, `defaultSequence?`); both are absent when the object stores nothing (group absent = inherit). `update_entry_autotype` replaces the entry config wholesale; `update_group_autotype` replaces the enabled choice (true/false sets, absent/null restores inheritance); its `defaultSequence` is partial (absent keeps, empty clears). The entry editor's 自动填充 tab collects the config and the page applies it via `update_entry_autotype` right after the main add/update save (the entry uuid exists only then); the entire fields → Auto-Type → flags chain reuses the starting `sessionId`, and only selects from the final snapshot when that session is still visible. The group context menu's 自动填充设置 dialog writes via `update_group_autotype` with an inherit/enable/disable choice plus default sequence. Resolution order for a global-hotkey run is: entry `enabled=false` or an ancestor group `enable_autotype=false` disables the entry entirely; otherwise the first association whose `window` matches the focused window title (case-insensitive, `*` glob) wins, then the entry default sequence, then the nearest ancestor group default. `resolve_autotype_sequence_for_window` exposes this server-side. When the global hotkey matches several entries, the backend emits `autotype-pick-request` with `AutotypeCandidate[]` (`{ sessionId, uuid, title, username }`, best first, recycle bin excluded, capped at 8), remembers the focused window title in that session, and the renderer calls `autotype_pick` with both the originating session id and chosen uuid. Passwords/sequences never leave the backend except through the `auto_type`/`autotype_pick` replay commands.
+**Auto-Type contract:** `VaultEntry.autoType?` mirrors KDBX `Entry/AutoType` (`enabled`, `defaultSequence?`, `associations: { window, sequence }[]`) and `VaultGroup.autoType?` mirrors the group flags (`enabled?`, `defaultSequence?`); both are absent when the object stores nothing (group absent = inherit). `update_entry_autotype` replaces the entry config wholesale; `update_group_autotype` replaces the enabled choice (true/false sets, absent/null restores inheritance); its `defaultSequence` is partial (absent keeps, empty clears). The entry editor's 自动填充 tab supplies this config to the required-session `save_entry` transaction together with content, flags, attachments and any website-rule patch. The one result supplies the exact saved UUID and masked state; selection applies only to the captured visible epoch. Standalone `update_entry_autotype` remains available to other callers. The group context menu's 自动填充设置 dialog writes via `update_group_autotype` with an inherit/enable/disable choice plus default sequence. Resolution order for a global-hotkey run is: entry `enabled=false` or an ancestor group `enable_autotype=false` disables the entry entirely; otherwise the first association whose `window` matches the focused window title (case-insensitive, `*` glob) wins, then the entry default sequence, then the nearest ancestor group default. `resolve_autotype_sequence_for_window` exposes this server-side. When the global hotkey matches several entries, the backend emits `autotype-pick-request` with `AutotypeCandidate[]` (`{ sessionId, uuid, title, username }`, best first, recycle bin excluded, capped at 8), remembers the focused window title in that session, and the renderer calls `autotype_pick` with both the originating session id and chosen uuid. Passwords/sequences never leave the backend except through the `auto_type`/`autotype_pick` replay commands.
 
 **OTP field contract** (`src-tauri/src/crypto/otp.rs`, resolved in priority order by `VaultSession::totp_code`): `otp`/`TimeOtp` = TOTP seed (an `otpauth://totp/...` URI honoring `secret`/`algorithm`/`digits`/`period`, or a bare Base32 key defaulting to SHA-1 / 6 digits / 30 s — KeePassXC/KeeWeb compatible); `HmacOtp` = HOTP seed `<Base32>[:<digits>][:<counter>]` (6/0 defaults), whose counter advances on each code request and is written back to the same field (no history snapshot — showing a code never pollutes history, but it does leave the vault dirty so the next save persists the new counter; the entry's `last_modification` is stamped like any other edit so timestamp-based remote merge keeps ordering the counter forward); `SteamOtp`/`steam` = Steam Guard seed (bare Base32; SHA-1 TOTP over 30 s truncated to a 5-character Steam alphabet). A declared `digits` of 0 or above 9 is rejected when computing a code (`compute` returns an error instead of emitting a wrong or empty string — the 31-bit RFC 4226 §5.3 truncation cannot reach a 10-digit modulus). These OTP field names are not part of `RESERVED_FIELDS`, so they round-trip as ordinary custom fields and can be entered from the editor's custom-fields tab. The `otp` field stays reserved and is what the editor's dedicated seed input reads/writes.
 
@@ -808,8 +829,8 @@ policies; managed rule content remains excluded from their custom-field arrays.
 after close or remote replacement. `setEntryWebsiteRules(uuid,rules)` rejects
 undefined before IPC and uses the existing epoch-guarded state commit. Browser
 preview rejects both methods explicitly; `callInSession` binds parked origins.
-These real-service/native orchestration tests use synthetic seams. Frontend
-editor, history rule-value reader, source-format mapping and real WebView/client/
+These real-service/native orchestration tests use synthetic seams. The frontend
+editor uses save_entry; history rule-value reader, source-format mapping and real WebView/client/
 provider execution remain pending; XML's complete renderer path remains separate.
 
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`

@@ -19,6 +19,15 @@ create/edit and the existing batch mutation for edit-multi; page selection remai
 injected, without newest-created timestamp lookup. `entries.rs` owns the shared
 Auto-Type normalization used by standalone and editor writes.
 
+`EntryEditorDialog.svelte` owns `utils/website-rule-draft.ts` for editor-local
+policy reads and draft changes across tabs; `WebsiteRulesPanel.svelte` composes
+shared Toggle/TextField/Select/Button/Feedback controls. The dialog sends the
+optional set/clear website patch as the fifth `onsaved` argument through page
+and `useEntryEditor` to the same native editor transaction. `templates.ts` resolves
+template policy with its hidden values atomically. `tests/website-rule-draft.test.mjs`
+exercises real draft operations/lifetimes; editor/service tests cover forwarding
+and browser refusal. Native editor tests cover policy history/KDBX and rollback.
+
 `services/vault.ts` separates publication-epoch admission from read-only ownership
 checks on completion, uses fresh Symbol lifetime identities to prevent reused-ID
 re-admission collisions, and versions tab-list reads across successful native
@@ -26,8 +35,8 @@ registry transitions. Backend lock acknowledgement clears renderer state before
 temp cleanup. `tests/vault-session-publication.test.mjs` runs the real service
 graph with synthetic invoke/storage seams for late mutation/refresh/tab-list
 replies, lock cleanup, failed closes, explicit/uncached IDs and retained-session
-ordering. The following policy IPC is a separate integration; the compact editor
-remains pending.
+ordering. The following standalone policy IPC remains available to non-editor
+callers; the compact editor uses the atomic save transaction.
 
 `commands/website_rules.rs` owns registered explicit-session policy get/set IPC
 and a required nullable write envelope. `website_rules_tests.rs` covers native

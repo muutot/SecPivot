@@ -1071,6 +1071,7 @@ export const vault: VaultStore = {
       };
     }
     const { target, input, autoType, flags } = request;
+    if (request.websiteRules) throw browserUnsupported("browser.featWebsiteRules");
     if (target.mode !== "create" && target.mode !== "edit")
       throw new Error("invalid editor target");
     if (input.customFields?.some((field) => field.name.trim() === "SecPivot.WebsiteRules")) {

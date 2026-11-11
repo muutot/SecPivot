@@ -55,6 +55,44 @@ function group(uuid, entries = [], children = []) {
   return { uuid, name: uuid, isRecycleBin: false, isExpanded: true, entries, children };
 }
 
+it("copies a template's policy through its reader before publishing the draft", async () => {
+  const policy = {
+    version: 1,
+    rules: [{ url: "https://synthetic.example/A?x=%2f", mode: "exact" }],
+  };
+  const template = { ...entry("t"), hasWebsiteRules: true };
+  const result = await resolveTemplateSecrets(template, {
+    password: async () => "synthetic",
+    totp: async () => null,
+    field: async () => null,
+    websiteRules: async () => policy,
+  });
+  assert.deepEqual(result.websiteRules, policy);
+  assert.equal(template.hasWebsiteRules, true);
+});
+
+it("missing, failed and null template policy reads reject the complete prefill", async () => {
+  const template = { ...entry("t"), hasWebsiteRules: true };
+  const readers = {
+    password: async () => "synthetic",
+    totp: async () => null,
+    field: async () => null,
+  };
+  await assert.rejects(resolveTemplateSecrets(template, readers));
+  await assert.rejects(
+    resolveTemplateSecrets(template, { ...readers, websiteRules: async () => null }),
+  );
+  await assert.rejects(
+    resolveTemplateSecrets(template, {
+      ...readers,
+      websiteRules: async () => {
+        throw new Error("Synthetic refusal");
+      },
+    }),
+  );
+  assert.deepEqual(template, { ...entry("t"), hasWebsiteRules: true });
+});
+
 function entry(uuid) {
   return { uuid, groupUuid: "parent", title: `entry-${uuid}` };
 }

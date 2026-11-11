@@ -32,6 +32,225 @@ fn fixture() -> (tempfile::TempDir, VaultSession, String) {
     (dir, session, state.root.entries[0].uuid.clone())
 }
 
+fn with_rules(uuid: Option<&str>, policy: Value, flags: Value) -> EntrySaveRequest {
+    let mut body = json!({
+        "target":uuid.map(|id|json!({"mode":"edit","uuid":id})).unwrap_or(json!({"mode":"create"})),
+        "input":input("After"), "flags":flags,
+    });
+    body["websiteRules"] = policy;
+    serde_json::from_value(body).unwrap()
+}
+fn exact_policy() -> Value {
+    json!({"version":1,"rules":[{"url":"https://synthetic.example:443/A?x=%2f#b","mode":"exact"}]})
+}
+
+#[test]
+fn editor_policy_set_clear_history_masking_and_reopen_are_atomic() {
+    let (dir, mut session, uuid) = fixture();
+    let revision = session.revision;
+    let policy = exact_policy();
+    let saved = session
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"set","rules":policy}),
+            json!({"qualityCheck":false}),
+        ))
+        .unwrap();
+    assert_eq!(saved.state.revision, revision + 1);
+    assert_eq!(session.get_entry_history(&uuid).unwrap().len(), 1);
+    assert!(saved.state.root.entries[0].has_website_rules);
+    assert!(!serde_json::to_string(&saved.state)
+        .unwrap()
+        .contains("/A?x=%2f#b"));
+    session.save().unwrap();
+    let mut reopened = VaultSession::default();
+    reopened
+        .open(&dir.path().join("synthetic.kdbx"), "synthetic-master", None)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(reopened.get_entry_website_rules(&uuid).unwrap()).unwrap(),
+        policy
+    );
+    let prior = reopened.revision;
+    reopened
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"clear"}),
+            json!({"overrideUrl":"https://override.example"}),
+        ))
+        .unwrap();
+    assert_eq!(reopened.revision, prior + 1);
+    assert!(reopened.get_entry_website_rules(&uuid).unwrap().is_none());
+    let db = reopened.require_db().unwrap();
+    let entry = db
+        .entry(super::helpers::parse_entry_id(&uuid).unwrap())
+        .unwrap();
+    assert_eq!(
+        entry.override_url.as_deref(),
+        Some("https://override.example")
+    );
+    assert!(entry
+        .historical(0)
+        .unwrap()
+        .fields
+        .contains_key(FIELD_WEBSITE_RULES));
+    assert!(
+        !serde_json::to_string(&reopened.get_entry_history(&uuid).unwrap())
+            .unwrap()
+            .contains(FIELD_WEBSITE_RULES)
+    );
+    reopened.save().unwrap();
+    let mut final_db = VaultSession::default();
+    final_db
+        .open(&dir.path().join("synthetic.kdbx"), "synthetic-master", None)
+        .unwrap();
+    assert!(final_db.get_entry_website_rules(&uuid).unwrap().is_none());
+}
+
+#[test]
+fn editor_policy_null_omission_and_empty_set_have_distinct_intent() {
+    let (_dir, mut session, uuid) = fixture();
+    session
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"set","rules":exact_policy()}),
+            Value::Null,
+        ))
+        .unwrap();
+    session
+        .save_entry(&with_rules(Some(&uuid), Value::Null, Value::Null))
+        .unwrap();
+    session
+        .save_entry(&request(Some(&uuid), "Omitted", Value::Null))
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(session.get_entry_website_rules(&uuid).unwrap()).unwrap(),
+        exact_policy()
+    );
+    session
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"set","rules":{"version":1,"rules":[]}}),
+            Value::Null,
+        ))
+        .unwrap();
+    assert!(session
+        .get_entry_website_rules(&uuid)
+        .unwrap()
+        .unwrap()
+        .rules
+        .is_empty());
+    assert!(session.state().unwrap().unwrap().root.entries[0].has_website_rules);
+}
+
+#[test]
+fn editor_policy_invalid_values_do_not_publish_content_or_creation() {
+    let (_dir, mut session, uuid) = fixture();
+    let before = session.require_db().unwrap().clone();
+    let revision = session.revision;
+    for target in [None, Some(uuid.as_str())] {
+        for rules in [
+            json!({"version":2,"rules":[]}),
+            json!({"version":1,"rules":[{"url":"not a URL","mode":"host"}]}),
+        ] {
+            assert!(session
+                .save_entry(&with_rules(
+                    target,
+                    json!({"mode":"set","rules":rules}),
+                    Value::Null
+                ))
+                .is_err());
+            assert!(session.require_db().unwrap() == &before);
+            assert_eq!(session.revision, revision);
+            assert!(!session.dirty);
+        }
+    }
+    for invalid in [
+        json!({"mode":"clear","rules":exact_policy()}),
+        json!({"mode":"set"}),
+        json!({"mode":"set","rules":{"version":1,"rules":[{"url":"synthetic-private-marker","mode":"unknown"}]}}),
+        json!({"mode":"unknown"}),
+    ] {
+        let error = serde_json::from_value::<EntrySaveRequest>(
+            json!({"target":{"mode":"create"},"input":input("After"),"websiteRules":invalid}),
+        )
+        .err()
+        .unwrap();
+        assert!(!error.to_string().contains("synthetic-private-marker"));
+    }
+}
+
+#[test]
+fn editor_policy_checks_inherited_override_and_duplicate_creation_sources() {
+    let (_dir, mut session, uuid) = fixture();
+    session
+        .update_entry_flags(&uuid, Some("https://override.example".into()), None, None)
+        .unwrap();
+    let before = session.require_db().unwrap().clone();
+    assert!(session
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"set","rules":exact_policy()}),
+            Value::Null
+        ))
+        .is_err());
+    assert!(session.require_db().unwrap() == &before);
+    session
+        .save_entry(&with_rules(
+            Some(&uuid),
+            json!({"mode":"set","rules":exact_policy()}),
+            json!({"overrideUrl":""}),
+        ))
+        .unwrap();
+    assert!(session.get_entry_website_rules(&uuid).unwrap().is_some());
+    let mut duplicate = with_rules(None, json!({"mode":"clear"}), Value::Null);
+    duplicate.input.custom_fields = serde_json::from_value(
+        json!([{"name":FIELD_WEBSITE_RULES,"value":exact_policy().to_string(),"protected":true}]),
+    )
+    .unwrap();
+    let before = session.require_db().unwrap().clone();
+    assert!(session.save_entry(&duplicate).is_err());
+    assert!(session.require_db().unwrap() == &before);
+    let created = session
+        .save_entry(&with_rules(
+            None,
+            json!({"mode":"set","rules":exact_policy()}),
+            Value::Null,
+        ))
+        .unwrap();
+    assert!(session
+        .get_entry_website_rules(&created.uuid)
+        .unwrap()
+        .is_some());
+    assert!(session.get_entry_history(&created.uuid).unwrap().is_empty());
+}
+
+#[test]
+fn editor_policy_snapshot_failure_restores_every_publication_field() {
+    let (_dir, mut session, uuid) = fixture();
+    session.snapshot().unwrap();
+    let before = session.require_db().unwrap().clone();
+    let revision = session.revision;
+    let modified = session.modified_at.clone();
+    let cache = serde_json::to_value(&session.cached_snapshot).unwrap();
+    let path = session.path.take();
+    for target in [None, Some(uuid.as_str())] {
+        assert!(session
+            .save_entry(&with_rules(
+                target,
+                json!({"mode":"set","rules":exact_policy()}),
+                Value::Null
+            ))
+            .is_err());
+        assert!(session.require_db().unwrap() == &before);
+        assert!(!session.dirty);
+        assert_eq!(session.revision, revision);
+        assert_eq!(session.modified_at, modified);
+        assert!(serde_json::to_value(&session.cached_snapshot).unwrap() == cache);
+    }
+    session.path = path;
+}
+
 #[test]
 fn editor_save_failure_does_not_publish_or_persist_partial_content() {
     for policy_conflict in [false, true] {

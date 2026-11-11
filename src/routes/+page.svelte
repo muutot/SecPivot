@@ -2160,7 +2160,8 @@
       patch: EntryPatch | null,
       autotype: EntryAutoTypeConfig | null | undefined,
       flags: EntryFlags | null | undefined,
-    ) => editor.handleSave(input, patch, autotype ?? null, flags ?? null)}
+      websiteRules?: import("$lib/types/vault").WebsiteRulesChange | null,
+    ) => editor.handleSave(input, patch, autotype ?? null, flags ?? null, websiteRules ?? null)}
   />
 {/if}
 

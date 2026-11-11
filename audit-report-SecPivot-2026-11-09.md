@@ -4678,3 +4678,17 @@ documentation currency gate同步data-contracts／security-model／project-struc
 最终SP-S83复核：锁定tauri-build2.6.3 src/lib.rs:474–477按Android/iOS启用mobile并关闭desktop，证明名称条件与真实构建映射一致。完整模块原始条件编译mobile失败E0432／desktop通过，修复后两种条件均通过；周围签名桩未执行，不扩大为完整目标或运行证明。原生逐网址22项通过。完整verify-mobile-website-import-final.log exit0：frontend410／Rust746／ACL2／KeePass25／QuickXML1363（4 ignored不计执行），format／check／contract／build／clippy通过。单线程Rust、dev/test debug0、root无过滤、live未启用；完整日志SHA256 cd60a181071881fa7e96e9c83062316e605134ecfbf4337e7f6e3db2f5059280，mobile-website-import-final-proof.json SHA256 c0f7022da44e2d6560e3dea11c703ff31fa989bc7a2e4d591607dac87017a97a关联原样／修复源码、固定依赖、条件探针与锁定构建映射及所有日志。
 
 documentation currency gate更新project-structure与docs/android的共享helper归属和验证限制；运行时IPC／schema／匹配／密钥／保存语义未变，data-contracts／security-model／SKILL／maintenance无需改动。没有CSS／markup／依赖／版本／发布变化，手机TODO不标完成。真实Android cargo检查在NDK/clang之前置缺失停下；不恢复高资源复现或构建APK。94历史Confirmed（1／19／59／15）及原始b7c5d9f／15项／6.1分保持，整体目标active。
+
+### 逐网址规则编辑与原子保存阶段复核
+
+本阶段完成独立编辑功能接线，不新增Confirmed问题卡。网址规则页签复用紧凑页签与Toggle／TextField／Select／Button／Feedback；Host默认，Site／Exact／Never可选，最多128行。Exact输入保留原始网址字节，空启用规则不匹配，关闭规则恢复旧匹配，Never仅忽略当前行。窄于480px时网址与范围控件分行，增删后恢复输入焦点。
+
+save_entry新增websiteRules：省略／null保留，clear显式删除，set写入版本1规则（含空列表）。结构错误固定消息，创建的customFields策略与显式patch重复来源拒绝；新策略检查继承OverrideURL，同事务清空override允许，clear后可设置override。内容／标志／附件／策略共用一次候选库、编辑history tracking及revision，快照失败恢复库与发布元数据。原生合成KDBX保存重开、历史保护／DTO隐藏、无效策略整事务拒绝均验证。
+
+实际WebsiteRulesDraft覆盖读取失败不得默认清除、latest retry／dispose／切换守卫、URL字节／Host默认／行上限和无策略baseline omission；空模板不会误发clear。实际模板helper把策略与秘密读取一起完成，来源presence hint缺reader／null／失败拒绝整份prefill。实际编译编辑编排和真实服务测试证明第5参进入同一次save_entry，browser拒绝显式native策略前不发布其他草稿字段。
+
+隔离headless Edge实际Svelte组件验证18个深／浅／自定义主题×中文／英文×1100×720／420×600／360×320组合，控件及Select菜单无横向溢出。加载拒绝／重试、增删焦点、页签草稿保留、保存状态不触发重载、override冲突与clear同次提交、模板规则／回空模板、会话切换／取消／卸载焦点通过。手工观察桌面深色、窄屏浅色、低高度自定义截图：低高度内容由既有modal内部滚动承接。使用合成getter／session／onsaved回调边界，不能称为真实原生WebView、Android或provider证明。
+
+专项前端38（新增11）与新增原生事务5通过。最终verify-website-editor-final.log exit0：frontend421／Rust751／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy全部通过。完整日志SHA256 a05f92f41628e1d4f8409fe134c4044248279ce387196dfecee8abf13b31b416；website-editor-final-proof.json SHA256 893a9578ac6efb7b84ecdb45320684c463160f7a9841d0129d1efadcf80e2d76关联当前源码、锁文件、渲染夹具／截图和完整日志。首次检查的state属性与$state命名冲突、首次渲染夹具Fields选择器匹配Custom fields已改正，保留记录但不新增历史问题。
+
+documentation currency gate更新data-contracts／security-model／project-structure／css-theming并纠正旧Auto-Type分步保存描述；SKILL／maintenance稳定工作流无需变动。逐网址TODO仍[~]：历史策略值读取、来源规则映射、完整renderer XML迁移、真实WebView／Android provider未闭环。手机v1.6.5另存为ACL源码修复与新APK真机证明分开；本阶段不构建或安装APK。94历史Confirmed及原始b7c5d9f／15项／6.1分保持，整体目标active。

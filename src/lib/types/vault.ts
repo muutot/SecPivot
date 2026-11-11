@@ -412,7 +412,11 @@ export interface EntrySaveRequest {
   input: EntryInput;
   autoType?: EntryAutoTypeConfig | null;
   flags?: EntryFlags | null;
+  websiteRules?: WebsiteRulesChange | null;
 }
+
+/** Omitted/null keeps policy; an explicit clear restores legacy matching. */
+export type WebsiteRulesChange = { mode: "clear" } | { mode: "set"; rules: WebsiteRuleSet };
 
 export interface EntrySaveResult {
   uuid: string;

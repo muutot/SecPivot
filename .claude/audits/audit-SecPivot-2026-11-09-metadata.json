@@ -2119,6 +2119,31 @@
         "Full host verification uses one Rust job/thread, dev/test debug0, unfiltered tests and no SECPIVOT live opt-in; ignored/early-return live bodies are not platform coverage",
         "Original15/6.1 and94 historical confirmed cards retained; full audit/competitor/UI goal remains active"
       ]
+    },
+    "website_rule_editor": {
+      "exitCode": 0,
+      "frontend": 421,
+      "rust": 751,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "ignoredQuickXml": 4,
+      "source_checkpoint": "679da8c",
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\website-editor-final-proof.json",
+      "proof_sha256": "893a9578ac6efb7b84ecdb45320684c463160f7a9841d0129d1efadcf80e2d76",
+      "log_sha256": "a05f92f41628e1d4f8409fe134c4044248279ce387196dfecee8abf13b31b416",
+      "renderer_cases": 18,
+      "targeted_frontend": 38,
+      "new_native_tests": 5,
+      "limitations": [
+        "Actual Svelte DOM in isolated headless Edge with synthetic vault getter/session/save callback seams; no native WebView or Android proof",
+        "Native tests use synthetic temporary AES KDBX save/reopen; no user vault, master key, configuration or shared clipboard accessed",
+        "Full native verification is unfiltered, one Rust job/thread, DEV/TEST debug0 and no SECPIVOT live opt-ins; dependency ignored4 are not execution coverage",
+        "Initial Svelte state-prop/rune conflict and renderer fixture non-exact Fields selector were corrected during implementation; neither is a new historical confirmed finding",
+        "No APK build/install, provider/device test, release, push, sibling mutation or high-resource KDF/OOM reproduction",
+        "History policy-value reader, source-format mappings and complete renderer XML migration remain partial; full per-website feature TODO stays partial",
+        "Historical94 confirmed include remediated cards; baseline b7c5d9f/15/score6.1 and overall active goal remain unchanged"
+      ]
     }
   },
   "reverification_notes": [
