@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_document_tests.rs` is a test-only child of `exchange.rs`. Four tests
+cover complete envelope refusal, named-root controls, legal surrounding misc
+and actual synthetic KDBX saved/reopened values. `validate_entries_document`
+streams to EOF before `parse_entries_document_limited` deserializes or resolves
+binaries; it publishes no partial list and retains pre-root header handling.
+No IPC, dependency or vendor patch changes. Full XML schema/encoding and
+gzip/container interoperability remain distinct audit areas.
+
 `exchange_encode_tests.rs` covers `encode_payload_limited`, called by the public
 encoder with 64 MiB for both document and full frame. Four Windows-host tests
 exercise compressible input, gzip/flags overhead, legal byte round trips and
@@ -17,7 +25,7 @@ overflow refusal, exact-limit CRC/ISIZE/truncation, legal boundaries and a
 parseable truncated XML prefix. `gunzip` keeps the64 MiB production constant;
 the helper reads limit+1 with saturating arithmetic and rejects before returning
 output. Attachment/icon copies have the separate cumulative budget above;
-XML-generation costs and complete gzip/XML/container semantics remain audit areas.
+XML-generation costs and full gzip/XML-schema/container semantics remain audit areas.
 
 `exchange_binary_tests.rs` also owns duplicate binary-ID regressions, using
 `tests/fixtures/exchange-binary-identity.json`. Six duplicate-definition cases
@@ -31,7 +39,7 @@ ordinary field collisions with the legacy attachment-reference namespace.
 Two regressions cover 16 outgoing-refusal combinations and legitimate near-prefix
 fields with empty/nonempty attachments through native save/reopen. `serialize_entry`
 rejects exact `BinDes-` prefixes before document publication; full field identity
-support and malformed/foreign document identities remain separate work.
+support and foreign schema/container compatibility remain separate work.
 
 `exchange_binary_tests.rs` is the test-only child module of `exchange.rs` for
 empty binary payloads. Four regressions cover actual document/framing/parse,

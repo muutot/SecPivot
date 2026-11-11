@@ -633,10 +633,61 @@ pub fn parse_entries_document(document: &[u8]) -> Result<Vec<PastedEntry>, Strin
     parse_entries_document_limited(document, MAX_PAYLOAD_BYTES)
 }
 
+/// Serde reads one model, which does not prove the remaining bytes form a
+/// complete document. Check the envelope before publishing any parsed entries.
+fn validate_entries_document(document: &[u8]) -> Result<(), String> {
+    use quick_xml::events::Event;
+
+    let invalid = || "剪贴板文档格式无效".to_owned();
+    let mut reader = quick_xml::Reader::from_reader(document);
+    reader.config_mut().check_comments = true;
+    let mut depth = 0usize;
+    let mut seen_root = false;
+    loop {
+        match reader.read_event().map_err(|_| invalid())? {
+            Event::Start(element) => {
+                if depth == 0 {
+                    if seen_root || element.name().as_ref() != b"KeePassFile" {
+                        return Err(invalid());
+                    }
+                    seen_root = true;
+                }
+                depth = depth.checked_add(1).ok_or_else(invalid)?;
+            }
+            Event::Empty(element) if depth == 0 => {
+                if seen_root || element.name().as_ref() != b"KeePassFile" {
+                    return Err(invalid());
+                }
+                seen_root = true;
+            }
+            Event::End(_) => depth = depth.checked_sub(1).ok_or_else(invalid)?,
+            Event::Text(text) if depth == 0 => {
+                if !text
+                    .iter()
+                    .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+                {
+                    return Err(invalid());
+                }
+            }
+            Event::CData(_) | Event::GeneralRef(_) if depth == 0 => return Err(invalid()),
+            Event::Decl(_) | Event::DocType(_) if seen_root => return Err(invalid()),
+            Event::Eof => {
+                return if seen_root && depth == 0 {
+                    Ok(())
+                } else {
+                    Err(invalid())
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
 fn parse_entries_document_limited(
     document: &[u8],
     max_expanded_binary_bytes: usize,
 ) -> Result<Vec<PastedEntry>, String> {
+    validate_entries_document(document)?;
     let file: KeePassFile =
         quick_xml::de::from_reader(document).map_err(|e| format!("剪贴板数据解析失败: {e}"))?;
     let binaries: HashMap<usize, Vec<u8>> = match file.binaries {
@@ -866,6 +917,10 @@ mod expansion_tests;
 #[cfg(test)]
 #[path = "exchange_inflate_tests.rs"]
 mod inflate_tests;
+
+#[cfg(test)]
+#[path = "exchange_document_tests.rs"]
+mod document_tests;
 
 #[cfg(test)]
 mod tests {

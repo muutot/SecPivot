@@ -1,5 +1,14 @@
 # Security Model
 
+Entry-exchange model deserialization alone does not prove complete consumption.
+An independent streaming envelope pass now requires a single complete named
+`KeePassFile` root through EOF before model parsing or target insertion. Root-
+external text/CDATA/references, extra or unfinished roots and trailing header
+events reject with a fixed content-free error. Existing pre-root headers and
+legal surrounding whitespace/comments/PI stay supported; no external entity
+resolution is added. Synthetic framing and KDBX tests prove this boundary, not
+full schema/encoding, gzip/container interoperability or OS clipboard behavior.
+
 The entry-exchange encoder checks document length before gzip and complete frame
 length after optional DPAPI, including flags, using the receiver's 64 MiB cap.
 Oversize errors contain no content and occur before the copy command can publish

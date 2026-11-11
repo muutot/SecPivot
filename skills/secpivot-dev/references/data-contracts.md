@@ -1,5 +1,15 @@
 # Data Contracts
 
+Entry-exchange parsing validates the complete XML envelope before Serde reads
+the model: exactly one complete `KeePassFile` root and real EOF, with only XML
+whitespace, comments and processing instructions outside it. Existing pre-root
+declaration/DOCTYPE handling is retained; these events after root start reject.
+Malformed/trailing envelopes return a fixed content-free error before any list
+is published. `exchange_document_tests.rs` covers 13 invalid suffixes, four root
+controls, legal surrounding misc and synthetic native KDBX reopen fidelity.
+This gate does not establish full XML schema/encoding, gzip members or foreign
+container interoperability; the field and binary model contracts still apply.
+
 Entry-exchange encoding caps both the uncompressed document and complete framed
 payload at 64 MiB, matching the receiver. Input rejects before compression;
 checked frame length includes gzip, optional DPAPI and the four-byte flags word

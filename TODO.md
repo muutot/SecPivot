@@ -275,3 +275,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 交换二进制引用复制预算（SP-S92）：所有条目附件与自定义图标共用64 MiB复制预算，下一次复制超限前拒绝且不返回部分列表；小预算四种超限与空／恰好／共享字节、临时KDBX重开五项回归及完整门禁通过。最大合成展开16 KiB，不等于总堆／XML模型／定义池／目标插入／复制端预算或OOM与真机证明。
 
 - [x] 交换发送尺寸一致性（SP-S93）：压缩前文档与DPAPI之后含flags的完整载荷均遵守64 MiB接收上限；小预算可压缩超限／gzip开销／合法字节与Windows DPAPI四项回归及完整门禁通过。最大合成文档4097 bytes，不等于XML生成预算／总堆／生产64 MiB／OOM／OS剪贴板或Android与客户端证明。
+
+- [x] 内部交换XML文档边界（SP-S95）：解析前要求单个完整KeePassFile根并消费至EOF，13类尾部／四种根控制拒绝且固定错误；六种合法misc及字段CRLF／空值、空及3-byte附件／保护／fresh UUID保存重开通过。四回归／exchange36项及完整门禁447前端／795 Rust／ACL2／KeePass25／QuickXML1363通过；最大合成文档1702 bytes，不代表完整XML schema／encoding、gzip成员／正式容器、OS剪贴板或真机provider。
