@@ -1961,7 +1961,7 @@ fn entry_history_tracks_versions_and_restores() {
 
     // Restoring the snapshot replaces fields and pushes the pre-restore
     // state into the history itself.
-    let state = session.restore_entry_version(&uuid, 0).unwrap();
+    let state = session.restore_history_fixture(&uuid, 0).unwrap();
     assert_eq!(state.root.entries[0].title, "B");
     assert_eq!(session.get_entry_password(&uuid).unwrap(), "p2");
     let history = session.get_entry_history(&uuid).unwrap();
@@ -1973,7 +1973,7 @@ fn entry_history_tracks_versions_and_restores() {
     assert!(state.root.entries[0].attachments.is_empty());
 
     assert!(session
-        .restore_entry_version(&uuid, 99)
+        .restore_history_fixture(&uuid, 99)
         .is_err_and(|err| err.contains("历史版本不存在")));
 }
 
@@ -2021,7 +2021,7 @@ fn restore_history_attachment_set_survives_reopen_undo_and_retention() {
         session.close();
         session.open(&path, "master-password", None).unwrap();
         session.require_db_mut().unwrap().meta.history_max_items = Some(cap);
-        session.restore_entry_version(&uuid, 0).unwrap();
+        session.restore_history_fixture(&uuid, 0).unwrap();
         session.save().unwrap();
         session.close();
         session.open(&path, "master-password", None).unwrap();
@@ -2045,7 +2045,7 @@ fn restore_history_attachment_set_survives_reopen_undo_and_retention() {
         }
         assert_eq!(history.len(), if cap == 1 { 1 } else { 2 });
         assert_eq!(history[0].title, "Synthetic new");
-        session.restore_entry_version(&uuid, 0).unwrap();
+        session.restore_history_fixture(&uuid, 0).unwrap();
         session.save().unwrap();
         session.close();
         session.open(&path, "master-password", None).unwrap();
@@ -2086,7 +2086,7 @@ fn attachment_history_reindex_reclaims_only_deleted_versions() {
         session.update_entry(&uuid, &input).unwrap();
     }
     assert_eq!(session.require_db().unwrap().num_attachments(), 3);
-    session.delete_entry_history(&uuid, 0).unwrap();
+    session.delete_history_fixture(&uuid, 0).unwrap();
     let db = session.require_db().unwrap();
     assert_eq!(db.num_attachments(), 2);
     let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
@@ -2655,7 +2655,7 @@ fn entry_history_supports_manual_delete() {
     assert_eq!(history[1].title, "v1");
 
     // Deleting the newest snapshot leaves only the older one, reordered.
-    let state = session.delete_entry_history(&uuid, 0).unwrap();
+    let state = session.delete_history_fixture(&uuid, 0).unwrap();
     assert_eq!(state.root.entries[0].title, "v3");
     assert_eq!(session.get_entry_password(&uuid).unwrap(), "p3");
     let history = session.get_entry_history(&uuid).unwrap();
@@ -2663,16 +2663,16 @@ fn entry_history_supports_manual_delete() {
     assert_eq!(history[0].title, "v1");
 
     // Deleting the remaining snapshot empties the history.
-    session.delete_entry_history(&uuid, 0).unwrap();
+    session.delete_history_fixture(&uuid, 0).unwrap();
     assert!(session.get_entry_history(&uuid).unwrap().is_empty());
 
     // Out-of-range and nonexistent indices error out.
     session.update_entry(&uuid, &input("v4", "p4")).unwrap();
     assert!(session
-        .delete_entry_history(&uuid, 99)
+        .delete_history_fixture(&uuid, 99)
         .is_err_and(|err| err.contains("历史版本不存在")));
     assert!(session
-        .delete_entry_history(&uuid, 99)
+        .delete_history_fixture(&uuid, 99)
         .is_err_and(|err| err.contains("历史版本不存在")));
     let _ = session.add_entry(&EntryInput {
         group_uuid: ROOT_GROUP_UUID.to_owned(),
@@ -2691,7 +2691,7 @@ fn entry_history_supports_manual_delete() {
     });
     let fresh_uuid = session.snapshot().unwrap().root.entries[1].uuid.clone();
     assert!(session
-        .delete_entry_history(&fresh_uuid, 0)
+        .delete_history_fixture(&fresh_uuid, 0)
         .is_err_and(|err| err.contains("历史版本不存在")));
 }
 
@@ -7282,7 +7282,7 @@ fn import_attachment_from_temp_replaces_bytes_and_persists() {
     let entry = db.entry(parse_entry_id(&uuid).unwrap()).unwrap();
     let old = entry.historical(0).unwrap();
     assert!(old.attachment_by_name("note.txt").unwrap().get().as_slice() == b"original");
-    reopened.restore_entry_version(&uuid, 0).unwrap();
+    reopened.restore_history_fixture(&uuid, 0).unwrap();
     assert!(reopened.attachment_data(&uuid, "note.txt").unwrap() == b"original");
 
     // Unknown tokens are rejected; arbitrary paths are never accepted.
@@ -7994,7 +7994,7 @@ fn protected_custom_fields_round_trip_and_history() {
     assert!(old_secret.protected);
     assert_eq!(old_secret.value, "");
     session
-        .restore_entry_version(&uuid, history.len() - 1)
+        .restore_history_fixture(&uuid, history.len() - 1)
         .unwrap();
     let restored = session.snapshot().unwrap();
     let entry = &restored
@@ -12818,7 +12818,9 @@ fn merge_attachment_branched_histories_keep_payloads_and_protection() {
         .unwrap();
         let mut reopened = VaultSession::default();
         reopened.open(&path, "synthetic-only", None).unwrap();
-        reopened.restore_entry_version(&uuid, local_index).unwrap();
+        reopened
+            .restore_history_fixture(&uuid, local_index)
+            .unwrap();
         assert!(reopened.attachment_data(&uuid, "same.txt").unwrap() == b"local-version");
         reopened.save().unwrap();
         reopened.close();
@@ -12884,7 +12886,7 @@ fn merge_attachment_source_removal_keeps_only_historical_bytes() {
         let mut reopened = VaultSession::default();
         reopened.open(&path, "synthetic-only", None).unwrap();
         assert!(reopened.attachment_data(&uuid, "removed.txt").is_err());
-        reopened.restore_entry_version(&uuid, 0).unwrap();
+        reopened.restore_history_fixture(&uuid, 0).unwrap();
         assert!(reopened.attachment_data(&uuid, "removed.txt").unwrap() == b"retained-history");
     }
 }
@@ -13078,7 +13080,7 @@ fn merge_attachment_bin_preserves_historical_payloads_after_reopen() {
     let mut reopened = VaultSession::default();
     reopened.open(&path, "synthetic-only", None).unwrap();
     reopened.restore_entry(&uuid).unwrap();
-    reopened.restore_entry_version(&uuid, 0).unwrap();
+    reopened.restore_history_fixture(&uuid, 0).unwrap();
     assert!(reopened.attachment_data(&uuid, "version.txt").unwrap() == b"bin-old");
 }
 
@@ -13154,7 +13156,7 @@ fn merge_attachment_updated_source_retains_current_and_history_bytes() {
         let mut reopened = VaultSession::default();
         reopened.open(&merged_path, "synthetic-only", None).unwrap();
         assert!(reopened.attachment_data(&uuid, "shared.txt").unwrap() == b"synthetic-new");
-        reopened.restore_entry_version(&uuid, 0).unwrap();
+        reopened.restore_history_fixture(&uuid, 0).unwrap();
         assert!(reopened.attachment_data(&uuid, "shared.txt").unwrap() == b"synthetic-old");
     }
 }
@@ -13581,7 +13583,7 @@ fn assert_expiration_merge(
                 .iter()
                 .position(|e| e.times.expiry == date(Some(expected)))
                 .unwrap();
-            reopened.restore_entry_version(&uuid, index).unwrap();
+            reopened.restore_history_fixture(&uuid, index).unwrap();
             reopened.save().unwrap();
             reopened.close();
             reopened.open(&path, "synthetic-only", None).unwrap();
@@ -13637,7 +13639,7 @@ fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
             let mut restored = VaultSession::default();
             restored.open(&path, "synthetic-only", None).unwrap();
             restored
-                .restore_entry_version(&id.to_string(), index)
+                .restore_history_fixture(&id.to_string(), index)
                 .unwrap();
             let entry = restored.require_db().unwrap().entry(id).unwrap();
             assert_eq!(entry.times.expiry, Some(expected));

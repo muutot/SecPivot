@@ -1177,6 +1177,7 @@ export const en: Record<I18nKey, string> = {
   "browser.featWebsiteRules": "per-website matching rules",
   "error.websiteRulesRequired": "Specify website rules or explicitly restore legacy matching",
   "error.websiteRulesStale": "The database session was closed or replaced; reload website rules",
+  "error.historyStale": "The database changed. Refresh history and select the version again.",
   "editor.websiteRules": "Website rules",
   "history.websiteRulesPresent": "Stored",
   "history.websiteRulesAbsent": "Not set",

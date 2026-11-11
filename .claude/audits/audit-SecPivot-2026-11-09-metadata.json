@@ -21,14 +21,14 @@
   "confirmed": 14,
   "suspected": 1,
   "current_issue_card_counts": {
-    "scope": "15 baseline cards plus SP-S05 through SP-S84; includes remediated cards; historical supplemental tracking notes excluded",
-    "total": 95,
-    "confirmed": 95,
+    "scope": "15 baseline cards plus SP-S05 through SP-S85; includes remediated cards; historical supplemental tracking notes excluded",
+    "total": 96,
+    "confirmed": 96,
     "suspected": 0,
     "by_severity": {
       "Critical": 1,
       "High": 19,
-      "Medium": 59,
+      "Medium": 60,
       "Low": 16
     }
   },
@@ -67,6 +67,16 @@
     }
   },
   "supplemental_findings": [
+    {
+      "id": "SP-S85",
+      "severity": "Medium",
+      "confidence": "High",
+      "source_checkpoint": "834e3c5",
+      "area": "History index shifts target another snapshot during restore or deletion",
+      "status": "Confirmed and remediated; strict lifetime/revision/UUID/index selection tokens;6 native and12 service/handler regressions pass; full433/759/ACL2/KeePass25/QuickXML1363 exit0;ignored4 excluded",
+      "evidence": "Actual synthetic AES vault: native red0pass/2fail exit101, restored B instead of selected A; deletion retained B instead of A",
+      "limitations": "No real vault or renderer concurrency reproduction; no password disclosure"
+    },
     {
       "id": "SP-S84",
       "severity": "Low",
@@ -2178,9 +2188,35 @@
         "Historical per-rule content, stable historical identity reads, source rule mappings and full renderer XML remain pending; per-website TODO stays partial",
         "95 historical confirmed include remediated findings; original b7c5d9f/15/score6.1 and overall active goal remain unchanged"
       ]
+    },
+    "history_selection": {
+      "exitCode": 0,
+      "frontend": 433,
+      "rust": 759,
+      "androidAcl": 2,
+      "keepassPatch": 25,
+      "quickXmlPatch": 1363,
+      "quickXmlIgnored": 4,
+      "source_checkpoint": "834e3c5",
+      "native_targeted": 6,
+      "frontend_targeted": 16,
+      "proof_path": "C:\\Users\\admin\\.codex\\visualizations\\2026\\11\\09\\01a1bdb0-8e63-7852-9eb6-a1a31f5feb94\\history-selection-final-proof.json",
+      "proof_sha256": "752f960385777018647fb32fd330de47b9ced2762f9d33b291905fddc1d69507",
+      "log_sha256": "4a6e10b54ef72bf35650da5c444d7661dfbd7dea1ba06755f6ae915359f0ed02",
+      "limits": [
+        "Original restore/deletion red assertions prove wrong snapshot in synthetic memory only; no real user vault, renderer concurrency or persisted wrong-target file proof",
+        "Reopen, remote refresh/merge completion and parked/closed registry coverage are native synthetic tests, no provider/network access",
+        "Frontend real service and transpiled production handlers use synthetic platform/view seams; no markup/CSS change or DOM/appearance claim",
+        "First green harness missing mut binding, legacy VaultStore interface and replacement-completion expectation were corrected; no additional finding cards",
+        "History identity contains random lifetime plus native revision/public entry/index metadata, no protected-content fingerprint and no persistence",
+        "History rule values, source mappings, full renderer XML and live mobile v1.6.5 ACL/provider proof remain pending",
+        "No live opt-ins, OS clipboard, real config, secrets, KDF/OOM workload, sibling edits, push, release, APK build or install",
+        "96 historical confirmed include remediated; baseline b7c5d9f/15/score6.1 and active whole goal unchanged"
+      ]
     }
   },
   "reverification_notes": [
+    "SP-S85 history selection validated before native mutations;6 native/12 service-handler pass, full433/759/ACL2/KeePass25/QuickXML1363 exit0. Historical96 and baseline15/6.1 preserved; whole goal active, historical rule content and mobile/provider pending.",
     "SP-13 narrowed: old self allowed same-origin HMR; numeric fallback was rejected by connect-src",
     "Retract mock-expiry attribution: later HTTP 502 peer differed from loopback fixture endpoint and system proxy was enabled; 2cb9449 disables proxies only in the test client and full verify passed",
     "39697a0 atomically compares and clears Windows clipboard content; SP-11 lifecycle retention remains partially unresolved",

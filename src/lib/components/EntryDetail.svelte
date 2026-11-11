@@ -238,14 +238,18 @@
     const view = detailView.capture();
     if (!sessionId || !view) return;
     try {
-      await vault.callInSession(sessionId, () => vault.restoreEntryVersion(uuid, version.index));
+      await vault.callInSession(sessionId, () => vault.restoreEntryVersion(uuid, version));
       if (!detailView.isCurrent(view)) return;
       historyLoadedUuid = null;
       await loadHistory(true);
       if (!detailView.isCurrent(view)) return;
       flash("restored");
-    } catch {
-      if (detailView.isCurrent(view)) flash("error");
+    } catch (error) {
+      if (detailView.isCurrent(view)) {
+        historyLoadedUuid = null;
+        viewingVersion = null;
+        showTip(error instanceof Error ? error.message : t(lang, "detail.opFailed"), "error");
+      }
     }
   }
 
@@ -259,14 +263,18 @@
     const view = detailView.capture();
     if (!sessionId || !view) return;
     try {
-      await vault.callInSession(sessionId, () => vault.deleteEntryHistory(uuid, version.index));
+      await vault.callInSession(sessionId, () => vault.deleteEntryHistory(uuid, version));
       if (!detailView.isCurrent(view)) return;
       historyLoadedUuid = null;
       await loadHistory(true);
       if (!detailView.isCurrent(view)) return;
       flash("deleted");
-    } catch {
-      if (detailView.isCurrent(view)) flash("error");
+    } catch (error) {
+      if (detailView.isCurrent(view)) {
+        historyLoadedUuid = null;
+        viewingVersion = null;
+        showTip(error instanceof Error ? error.message : t(lang, "detail.opFailed"), "error");
+      }
     }
   }
 

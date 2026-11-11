@@ -259,6 +259,7 @@ impl VaultSession {
             self.rpc_keys_expiry = None;
         }
         self.db = None;
+        self.history_lifetime = uuid::Uuid::nil();
         self.dirty = false;
         self.modified_at.clear();
         self.remote = None;
@@ -445,6 +446,7 @@ impl VaultSession {
         wipe_replaced_password(&mut self.password, password);
         self.keyfile = keyfile;
         self.db = Some(db);
+        self.history_lifetime = uuid::Uuid::new_v4();
         self.dirty = false;
         self.modified_at = now_iso();
         // New database identity: IO failures against the previous target must
@@ -462,6 +464,7 @@ impl VaultSession {
         wipe_replaced_password(&mut self.password, password);
         self.keyfile = keyfile;
         self.db = Some(db);
+        self.history_lifetime = uuid::Uuid::new_v4();
         self.dirty = false;
         self.modified_at = now_iso();
         self.remote = None;

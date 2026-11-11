@@ -711,13 +711,13 @@ pub(crate) fn delete_entries(
 pub(crate) fn get_entry_history(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
-    session_id: Option<String>,
+    session_id: String,
     uuid: String,
 ) -> Result<Vec<HistoryVersion>, String> {
     with_vault_session(
         vaults.inner(),
         session.inner(),
-        session_id.as_deref(),
+        Some(&session_id),
         |target| target.get_entry_history(&uuid),
     )
 }
@@ -726,15 +726,16 @@ pub(crate) fn get_entry_history(
 pub(crate) fn restore_entry_version(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
-    session_id: Option<String>,
+    session_id: String,
     uuid: String,
     index: usize,
+    selection_token: String,
 ) -> Result<VaultState, String> {
     with_vault_session(
         vaults.inner(),
         session.inner(),
-        session_id.as_deref(),
-        |target| target.restore_entry_version(&uuid, index),
+        Some(&session_id),
+        |target| target.restore_entry_version(&uuid, index, &selection_token),
     )
 }
 
@@ -742,15 +743,16 @@ pub(crate) fn restore_entry_version(
 pub(crate) fn delete_entry_history(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
-    session_id: Option<String>,
+    session_id: String,
     uuid: String,
     index: usize,
+    selection_token: String,
 ) -> Result<VaultState, String> {
     with_vault_session(
         vaults.inner(),
         session.inner(),
-        session_id.as_deref(),
-        |target| target.delete_entry_history(&uuid, index),
+        Some(&session_id),
+        |target| target.delete_entry_history(&uuid, index, &selection_token),
     )
 }
 

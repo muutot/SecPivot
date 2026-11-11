@@ -40,10 +40,10 @@
 | --------- | ------ | --------- | --------- |
 | Critical  | 1      | 1         | 0         |
 | High      | 19     | 19        | 0         |
-| Medium    | 59     | 59        | 0         |
+| Medium    | 60     | 60        | 0         |
 | Low       | 16     | 16        | 0         |
 | Info      | 0      | 0         | 0         |
-| **Total** | **95** | **95**    | **0**     |
+| **Total** | **96** | **96**    | **0**     |
 
 #### 原始基线统计（保持不变）
 
@@ -4724,3 +4724,35 @@ documentation currency gate更新data-contracts／security-model／project-struc
 最终verify-website-history-final.log exit0：frontend421／Rust753／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过，单线程Rust／dev-test debug0／root无过滤／live未开启。完整日志SHA256 b7049644bf185e9cc67d8194640b19e58bd2452ac09d2e993a3d261481b50d21；website-history-diff-final-proof.json SHA256 f19cdcafe344a8fae2db44710ea210ce6602344928f95b556002eaa43dd1ec30关联原样源码／聚焦原生失败／最终源码／渲染截图与完整门禁。
 
 documentation currency gate更新data-contracts／security-model／project-structure／css-theming及TODO存在摘要进展；SKILL／maintenance稳定路由无需改动。历史策略值读取与版本身份／会话边界、来源规则映射、完整renderer XML、手机新APK／provider仍待完成；不把presence摘要称为完整历史规则查看。95历史Confirmed（1／19／59／16）与原始15项／6.1分保留，整体目标active。
+
+### Finding: SP-S85 历史索引变化后恢复或删除了另一份快照
+
+- Category: Data Integrity / Concurrency
+- Severity: Medium
+- Confidence: High
+- Status: Confirmed（版本选择校验修复；专项与完整门禁通过）
+- Affected area: Entry history selection, restore and deletion.
+- Evidence:
+  - File / Function: src-tauri/src/vault/entries.rs get_entry_history / restore_entry_version / delete_entry_history; commands/vault.rs and services/vault.ts transmit only index; EntryDetail.svelte passes the retained version.index.
+  - Source checkpoint: 834e3c5; original production entries.rs and regression tests preserved in history-selection-original-entries.rs / history-selection-original-tests.rs.
+  - Actual temporary synthetic AES KDBX: list [B,A], select index1 A, update current C to D, restore index1 returns B. Independent deletion control lists [C,B,A], selects index1 B, deletes index0 C then index1; remaining version is B instead of A. history-selection-native-red.log exits101 with 0pass/2fail. Only native in-memory mutation assertions ran; no real vault or renderer concurrency reproduction.
+- Problem: A historical position is reused after the collection changes, without validating the version the user selected.
+- Why it matters: Restore reports success with different content; deletion can permanently remove an unintended historical snapshot. This establishes wrong-target history operations, not current vault corruption or password disclosure.
+- Realistic failure scenario: 用户保留历史选择时，浏览器集成或另一操作新增／删除历史，然后确认恢复或删除；原索引仍存在但对应另一版本。
+- Minimal fix: Require the originating session and a selection token bound to database lifetime, native revision, entry UUID and index; reject changed selections before mutation and refresh for explicit reselection.
+- Better long-term fix: 后续历史规则按需读取复用同一版本校验，不用当前规则冒充历史规则；版本标识不得从密码或受保护内容派生。
+- Regression test suggestion: 原生覆盖插入／删除／恢复后旧选择拒绝、状态无副作用、刷新后正常操作、同路径同UUID同revision重开与跨库隔离；真实服务覆盖关闭／替换晚到读取及写入发布，组件传递原选中版本。
+- Estimated effort: 独立版本选择修复与跨层验证1–2小时；规则查看另行交付。
+- Verification limits: 合成数据与原生两项红测；尚无真实WebView／Android、远程provider或已保存错版本的文件证据。
+
+新增SP-S85后为96历史Confirmed（Critical1／High19／Medium60／Low16），包含已修复历史卡片；原始b7c5d9f／15项／6.1分保持。整体目标active。
+
+最终SP-S85修复：get_entry_history要求来源sessionId String并返回selectionToken；恢复／删除在同一session锁内先校验随机数据库生命周期、原生u64 revision、UUID和索引，变化即固定错误拒绝，数据／历史／dirty／revision无副作用。新打开本地／远程库重新生成随机生命周期，关闭清除；同路径同UUID同revision重开也不能复用旧选择。普通无编辑保存保留选择，refresh／merge的revision推进使旧选择失效。标识不从密码／受保护内容派生，也不保存到KDBX／config。
+
+原生新增6项覆盖插入、删除、恢复后失效、重选后正常操作、同路径重开与KDBX恢复结果、跨库同revision、错UUID／索引／空token、remote refresh／merge实际完成及停放／关闭registry边界。旧原生附件／保留／merge回归仅改为cfg(test)同步选择工厂，生产操作没有省略token入口。前端真实服务8项和实际transpile的详情handler4项（含i18n合计16）通过：严格payload／裸索引拒绝／来源停放库／关闭与替换晚到读取和写入／本地化错误／旧preview与cache清空／取消／视图失效不通知。无markup／CSS变化；不扩展为DOM、真实WebView或Android证明。
+
+初次green fixture缺少mut绑定、VaultStore旧接口声明及替换完成仍返回保留快照的中间预期失败已修正；相关日志保留，不新增产品卡片。引用表更新脚本的PowerShell转义错误改为独立文件执行，未改变产品行为。
+
+最终verify-history-selection-final.log exit0：frontend433／Rust759／ACL2／KeePass25／QuickXML1363（ignored4不计执行），format／check／contract／build／clippy通过，root无过滤／单线程Rust／dev-test debug0／live未启用。完整日志SHA256 4a6e10b54ef72bf35650da5c444d7661dfbd7dea1ba06755f6ae915359f0ed02；history-selection-final-proof.json SHA256 752f960385777018647fb32fd330de47b9ced2762f9d33b291905fddc1d69507关联原样源码／两项原生红测／专项和最终源码及门禁。verified-source清单在门禁前后逐文件一致；提交前另核验staged内容与最终format。
+
+documentation currency gate更新data-contracts／security-model／project-structure及历史操作IPC／类型表；TODO逐网址仍[~]。SKILL／maintenance稳定路由无需更改；历史策略值读取、来源规则映射、完整renderer XML、手机新APK／provider及其余全仓／竞品／视觉复核继续，整体目标active。96历史Confirmed（1／19／60／16）及原始b7c5d9f／15项／6.1分保持。

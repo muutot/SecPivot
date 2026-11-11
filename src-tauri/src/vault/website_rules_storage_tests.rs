@@ -412,7 +412,7 @@ fn full_batch_custom_edits_and_history_restore_preserve_managed_policy() {
             Some(config(&[("https://other.example", WebsiteMode::Exact)])),
         )
         .unwrap();
-    session.restore_entry_version(&id, 0).unwrap();
+    session.restore_history_fixture(&id, 0).unwrap();
     assert!(session.get_entry_website_rules(&id).unwrap() == Some(rules));
     assert_eq!(stored(&session, &id), json);
     matches(&session, &id, "https://safe.example/path", true);

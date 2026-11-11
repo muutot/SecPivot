@@ -1139,6 +1139,7 @@ export const zhCN = {
   "browser.featWebsiteRules": "逐网址匹配规则",
   "error.websiteRulesRequired": "请明确指定网址规则，或选择恢复旧匹配规则",
   "error.websiteRulesStale": "数据库会话已关闭或内容已替换，请重新读取网址规则",
+  "error.historyStale": "数据库已变化，请刷新历史后重新选择版本",
   "editor.websiteRules": "网址规则",
   "history.websiteRulesPresent": "已存储",
   "history.websiteRulesAbsent": "未设置",

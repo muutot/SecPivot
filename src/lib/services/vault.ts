@@ -21,6 +21,7 @@ import type {
   CreateVaultRequest,
   TotpCode,
   HistoryVersion,
+  HistorySelection,
   EntryStorage,
   AttachmentPreview,
   TempAttachmentRef,
@@ -143,9 +144,9 @@ interface VaultStore {
   moveEntry: (uuid: string, groupUuid: string) => Promise<VaultState>;
   restoreEntry: (uuid: string) => Promise<VaultState>;
   getEntryHistory: (uuid: string) => Promise<HistoryVersion[]>;
-  deleteEntryHistory: (uuid: string, index: number) => Promise<VaultState>;
+  deleteEntryHistory: (uuid: string, selection: HistorySelection) => Promise<VaultState>;
   getEntryStorage: (uuid: string) => Promise<EntryStorage>;
-  restoreEntryVersion: (uuid: string, index: number) => Promise<VaultState>;
+  restoreEntryVersion: (uuid: string, selection: HistorySelection) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
   /** KeePass `Entry → Data Exchange → Copy Entry`: put the entries on the
@@ -573,6 +574,40 @@ async function invokeSessionState(
   const epoch = captureSessionEpoch(sessionId);
   const result = await invokeSession<VaultState>(command, args, sessionId);
   return commitSessionStateAtEpoch(sessionId, epoch, result);
+}
+
+async function mutateSelectedHistory(
+  command: "restore_entry_version" | "delete_entry_history",
+  uuid: string,
+  selection: HistorySelection,
+): Promise<VaultState> {
+  if (
+    !selection ||
+    !Number.isSafeInteger(selection.index) ||
+    selection.index < 0 ||
+    typeof selection.selectionToken !== "string" ||
+    !selection.selectionToken
+  ) {
+    throw new Error(t(lang(), "error.historyStale"));
+  }
+  const sessionId = captureSessionId();
+  const epoch = captureSessionEpoch(sessionId);
+  try {
+    const result = await invokeSession<VaultState>(
+      command,
+      { uuid, index: selection.index, selectionToken: selection.selectionToken },
+      sessionId,
+    );
+    if (currentSessionEpoch(sessionId) !== epoch) {
+      throw new Error(t(lang(), "error.historyStale"));
+    }
+    return commitSessionStateAtEpoch(sessionId, epoch, result);
+  } catch (error) {
+    if (String(error).includes("HISTORY_SELECTION_STALE:")) {
+      throw new Error(t(lang(), "error.historyStale"));
+    }
+    throw error;
+  }
 }
 
 async function invokeSessionDelta(
@@ -1842,14 +1877,24 @@ export const vault: VaultStore = {
 
   async getEntryHistory(uuid: string): Promise<HistoryVersion[]> {
     if (isTauriRuntime()) {
-      return invokeSession<HistoryVersion[]>("get_entry_history", { uuid });
+      const sessionId = captureSessionId();
+      const epoch = captureSessionEpoch(sessionId);
+      const result = await invokeSession<HistoryVersion[]>(
+        "get_entry_history",
+        { uuid },
+        sessionId,
+      );
+      if (currentSessionEpoch(sessionId) !== epoch) {
+        throw new Error(t(lang(), "error.historyStale"));
+      }
+      return result;
     }
     return [];
   },
 
-  async deleteEntryHistory(uuid: string, index: number): Promise<VaultState> {
+  async deleteEntryHistory(uuid: string, selection: HistorySelection): Promise<VaultState> {
     if (isTauriRuntime()) {
-      return invokeSessionState("delete_entry_history", { uuid, index });
+      return mutateSelectedHistory("delete_entry_history", uuid, selection);
     }
     throw browserModeUnsupported("browser.featHistoryDelete");
   },
@@ -1861,9 +1906,9 @@ export const vault: VaultStore = {
     return { fields: 0, attachments: 0, history: 0, total: 0 };
   },
 
-  async restoreEntryVersion(uuid: string, index: number): Promise<VaultState> {
+  async restoreEntryVersion(uuid: string, selection: HistorySelection): Promise<VaultState> {
     if (isTauriRuntime()) {
-      return invokeSessionState("restore_entry_version", { uuid, index });
+      return mutateSelectedHistory("restore_entry_version", uuid, selection);
     }
     throw browserModeUnsupported("browser.featHistoryRestore");
   },
