@@ -1,5 +1,11 @@
 # Security Model
 
+The entry-exchange encoder checks document length before gzip and complete frame
+length after optional DPAPI, including flags, using the receiver's 64 MiB cap.
+Oversize errors contain no content and occur before the copy command can publish
+the returned payload. This is a framing admission bound, not a total-heap bound
+or a cap on XML generation; small native tests use synthetic data only.
+
 The entry-exchange XML size cap does not bound repeated binary references.
 Parsing separately caps cumulative owned attachment and custom-icon copies at
 64 MiB, charging before allocation across all entries and refusing a partial

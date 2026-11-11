@@ -1,5 +1,10 @@
 # Project Structure and Runtime Surfaces
 
+`exchange_encode_tests.rs` covers `encode_payload_limited`, called by the public
+encoder with 64 MiB for both document and full frame. Four Windows-host tests
+exercise compressible input, gzip/flags overhead, legal byte round trips and
+native DPAPI size overhead; the DPAPI test is Windows-only. No IPC is added.
+
 `exchange_expansion_tests.rs` and `tests/fixtures/exchange-expanded-binaries.json`
 cover the shared attachment/custom-icon copy budget in `exchange.rs`. The public
 parser delegates to a limited helper with 64 MiB; each copy debits one cumulative
@@ -12,7 +17,7 @@ overflow refusal, exact-limit CRC/ISIZE/truncation, legal boundaries and a
 parseable truncated XML prefix. `gunzip` keeps the64 MiB production constant;
 the helper reads limit+1 with saturating arithmetic and rejects before returning
 output. Attachment/icon copies have the separate cumulative budget above;
-copy-side costs and complete gzip/XML/container semantics remain audit areas.
+XML-generation costs and complete gzip/XML/container semantics remain audit areas.
 
 `exchange_binary_tests.rs` also owns duplicate binary-ID regressions, using
 `tests/fixtures/exchange-binary-identity.json`. Six duplicate-definition cases

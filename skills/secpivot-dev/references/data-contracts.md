@@ -1,5 +1,12 @@
 # Data Contracts
 
+Entry-exchange encoding caps both the uncompressed document and complete framed
+payload at 64 MiB, matching the receiver. Input rejects before compression;
+checked frame length includes gzip, optional DPAPI and the four-byte flags word
+before return. `exchange_encode_tests.rs` covers small injected boundaries,
+including native Windows DPAPI overhead. XML generation and total allocation
+costs are separate; no production-sized or clipboard/client proof is implied.
+
 Entry-exchange parsing shares a 64 MiB budget for owned attachment and custom-icon
 bytes across every entry. Each resolved reference charges its complete byte length
 with checked subtraction before copying; overflow returns a fixed size error and
@@ -17,7 +24,7 @@ at usize::MAX. Four native tests inject limits at most4096 bytes (plus one overf
 byte) and cover a parseable XML prefix, footer damage and legal boundaries;
 production wrappers have small valid/corrupt framing controls. No direct64 MiB,
 clipboard, allocation/OOM or cross-client proof is implied. Single-member/trailing
-data semantics and copy-side budgets remain separate work; attachment/icon copy
+data semantics and XML-generation budgets remain separate work; attachment/icon copy
 expansion now has the independent cumulative bound described above.
 
 Entry-exchange binary definitions require globally unique numeric IDs. The

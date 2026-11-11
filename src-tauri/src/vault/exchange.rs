@@ -66,7 +66,7 @@ const FLAG_ENCRYPTED: u32 = 1;
 #[cfg(target_os = "windows")]
 const CLIP_DOMAIN_SEP: [u8; 8] = [0xF8, 0x03, 0xFA, 0x51, 0x87, 0x18, 0x49, 0x5D];
 
-/// Bound both the clipboard read and the inflate output: any local app can
+/// Bound exchange documents, complete frames and owned binary copies: any local app can
 /// write this format, so an attacker-chosen blob must not be able to make the
 /// backend allocate without limit.
 const MAX_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
@@ -505,6 +505,18 @@ fn encode_uuid(uuid: Uuid) -> String {
 /// Frame a KDBX XML document for the clipboard: gzip it, DPAPI-wrap it when
 /// `encrypt` is set, and prepend KeePass' `flags` word.
 pub fn encode_payload(document: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
+    encode_payload_limited(document, encrypt, MAX_PAYLOAD_BYTES)
+}
+
+fn encode_payload_limited(
+    document: &[u8],
+    encrypt: bool,
+    max_payload_bytes: usize,
+) -> Result<Vec<u8>, String> {
+    // The receiver also bounds the inflated document, even when gzip is tiny.
+    if document.len() > max_payload_bytes {
+        return Err("剪贴板数据过大".to_owned());
+    }
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     encoder
         .write_all(document)
@@ -520,7 +532,13 @@ pub fn encode_payload(document: &[u8], encrypt: bool) -> Result<Vec<u8>, String>
         (0u32, compressed)
     };
 
-    let mut payload = Vec::with_capacity(body.len() + 4);
+    // Count gzip/DPAPI overhead and the flags word before publishing a frame.
+    let payload_len = body
+        .len()
+        .checked_add(4)
+        .filter(|length| *length <= max_payload_bytes)
+        .ok_or_else(|| "剪贴板数据过大".to_owned())?;
+    let mut payload = Vec::with_capacity(payload_len);
     payload.extend_from_slice(&flags.to_le_bytes());
     payload.extend_from_slice(&body);
     Ok(payload)
@@ -836,6 +854,10 @@ mod binary_tests;
 #[cfg(test)]
 #[path = "exchange_field_identity_tests.rs"]
 mod field_identity_tests;
+
+#[cfg(test)]
+#[path = "exchange_encode_tests.rs"]
+mod encode_tests;
 
 #[cfg(test)]
 #[path = "exchange_expansion_tests.rs"]
