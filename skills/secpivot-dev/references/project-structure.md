@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`exchange.rs` owns exact entry-transfer text (`XmlStringValue.$text`, referenced
+CR), with `exchange_text_tests.rs` as its test-only child module. The five native
+regressions cover field/protection values, reference controls, saved/reopened
+insertions and attachment names without system clipboard access. Its current
+payload uses a legacy plaintext `Protected` marker; the omitted KeePass container
+is one of the remaining interoperability differences, not a completeness claim.
+
 `kdbx-xml.ts` owns the pre-IPC XML field identity gate (empty, edge-whitespace or
 duplicate names reject). `tests/kdbx-xml.test.mjs` covers the production guard
 with DOM-shaped trees; actual DOMParser/page/IO evidence is recorded separately.
