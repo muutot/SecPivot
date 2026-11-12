@@ -505,9 +505,7 @@ impl VaultSession {
 
     pub(crate) fn note_save_failure(&mut self) {
         self.save_failures = self.save_failures.saturating_add(1);
-        // The read-only flag lives in the snapshot; invalidate the cache so
-        // the next `state()` reflects it.
-        self.cached_snapshot = None;
+        self.bump_status_revision();
     }
 
     pub(crate) fn adopt_persisted(&mut self, outcome: PersistOutcome) {
@@ -516,7 +514,22 @@ impl VaultSession {
             remote.base_hash = outcome.hash;
         }
         self.mirror_warning = outcome.mirror_warning;
+        self.bump_status_revision();
+    }
+
+    fn bump_status_revision(&mut self) {
+        self.status_revision += 1;
         self.cached_snapshot = None;
+    }
+
+    pub(super) fn mutation_status(&self) -> MutationStatus {
+        MutationStatus {
+            status_revision: self.status_revision,
+            dirty: self.dirty,
+            read_only: self.is_read_only(),
+            mirror_warning: self.mirror_warning.clone(),
+            modified_at: self.modified_at.clone(),
+        }
     }
 
     pub(crate) fn note_save_success(&mut self) {
@@ -582,6 +595,7 @@ impl VaultSession {
             mirror_warning: self.mirror_warning.clone(),
             modified_at: self.modified_at.clone(),
             revision: self.revision,
+            status_revision: self.status_revision,
             custom_icons: include_icons.then(|| {
                 db.iter_all_custom_icons()
                     .map(|icon| (icon.id().uuid().to_string(), icon_to_data_url(&icon.data)))

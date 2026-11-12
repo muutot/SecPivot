@@ -116,6 +116,7 @@ impl VaultSession {
         self.mark_dirty();
         Ok(MutationDelta::Favorite {
             revision: self.revision,
+            status: self.mutation_status(),
             uuid: uuid.to_owned(),
             favorite,
             modified,

@@ -186,6 +186,8 @@ export interface VaultState {
   modifiedAt: string;
   /** Monotonic session edit revision; every mutation bumps it. */
   revision: number;
+  /** Orders persistence status changes within the same edit revision. */
+  statusRevision: number;
   /** Database custom icons (favicons) keyed by custom-icon UUID; values are
    * `data:` URLs ready for `<img>`. Present only when the DB carries icons. */
   customIcons?: Record<string, string>;
@@ -220,17 +222,23 @@ export interface SessionInfo {
 
 /** Lightweight mutation result for small state changes: the renderer applies
  *  the delta against its cached `VaultState` instead of receiving a rebuilt
- *  tree. `revision` matches the backend session revision after the mutation. */
-export type MutationDelta =
-  | {
-      kind: "favorite";
-      revision: number;
-      uuid: string;
-      favorite: boolean;
-      modified: string;
-      size: number;
-    }
-  | { kind: "groupsExpanded"; revision: number; groups: Record<string, boolean> };
+ *  tree. `revision` matches the backend session revision after the mutation.
+ * Native replies include all persistence status fields; legacy replies omit
+ * those additive fields and retain the original delta contract. */
+export type MutationDelta = Partial<
+  Pick<VaultState, "statusRevision" | "dirty" | "readOnly" | "mirrorWarning" | "modifiedAt">
+> &
+  (
+    | {
+        kind: "favorite";
+        revision: number;
+        uuid: string;
+        favorite: boolean;
+        modified: string;
+        size: number;
+      }
+    | { kind: "groupsExpanded"; revision: number; groups: Record<string, boolean> }
+  );
 
 /** One entry offered by the global-hotkey auto-type picker. */
 export interface AutotypeCandidate {

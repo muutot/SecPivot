@@ -498,7 +498,9 @@ fn group_expand_delta_maps_uuids_and_bumps_revision() {
         .set_groups_expanded_delta(std::slice::from_ref(&mail_uuid), false)
         .unwrap();
     match delta {
-        MutationDelta::GroupsExpanded { revision, groups } => {
+        MutationDelta::GroupsExpanded {
+            revision, groups, ..
+        } => {
             assert!(revision > before);
             assert_eq!(groups.get(&mail_uuid), Some(&false));
         }

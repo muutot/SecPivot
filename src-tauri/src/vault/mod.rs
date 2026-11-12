@@ -22,6 +22,8 @@ mod merge;
 mod persist;
 #[cfg(test)]
 mod save_as_snapshot_tests;
+#[cfg(test)]
+mod save_status_snapshot_tests;
 mod security;
 mod serialize;
 mod session;
@@ -176,8 +178,9 @@ pub use self::dto::{
     EntryStorage, ExpiredEntry, FaviconFetch, FaviconJob, FaviconProgress, FaviconReport,
     GroupAutoTypeConfig, GroupAutoTypeInput, GroupInput, HibpProgress, HistoryCleanResult,
     HistoryDiff, HistoryItemChange, HistoryVersion, ImportEntryInput, MutationDelta,
-    SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup, TempAttachmentRef, TotpCode,
-    VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry, WritableDatabaseCipher,
+    MutationStatus, SecurityReport, SessionInfo, SimilarEntry, SimilarPasswordGroup,
+    TempAttachmentRef, TotpCode, VaultEntry, VaultGroup, VaultOpenResult, VaultState, WeakEntry,
+    WritableDatabaseCipher,
 };
 
 pub use self::breach::BreachFinding;
@@ -252,6 +255,9 @@ pub struct VaultSession {
     modified_at: String,
     remote: Option<RemoteTarget>,
     revision: u64,
+    /// Orders persistence-status changes without invalidating edit/history
+    /// identities. Snapshot ordering compares revision first, then this value.
+    status_revision: u64,
     /// Random identity for history selections in this database lifetime.
     /// Independent of decrypted contents; renewed even on same-path reopen.
     history_lifetime: uuid::Uuid,

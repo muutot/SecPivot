@@ -1,5 +1,18 @@
 # Data Contracts
 
+SP-S116 adds `statusRevision` to native VaultState and both MutationDelta variants.
+The renderer compares edit `revision` first, then this persistence-status counter;
+it rejects stale status before touching icon caches or applying tree deltas.
+adopt_persisted and note_save_failure advance the counter and invalidate snapshots
+without changing the edit revision used by SaveJob/history selection. Deltas also
+carry dirty/readOnly/mirrorWarning/modifiedAt from the current native session.
+Legacy delta fields remain optional in TypeScript and retain the old delta
+contract; missing statusRevision sorts as zero. Demo creation/loading supplies zero.
+Eight actual-service controls and eight temporary native KDBX controls pass.
+The configured full gate passes after the test-only Clippy correction and earlier
+resource-guard interruption. Ordinary save retains valid history choices; these
+controls do not prove actual IPC/device/provider scheduling.
+
 Successful `complete_save_as` compares the captured edit revision before
 advancing the session revision and invalidating the full snapshot cache.
 Concurrent edits retain their dirty flag and modification time; the completion

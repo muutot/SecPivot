@@ -55,6 +55,7 @@ import {
 } from "$lib/utils/tree";
 import {
   commitNewestSessionState,
+  isOlderSessionState,
   resolveListedActiveId,
   SessionSwitchQueue,
   switchSession,
@@ -280,7 +281,7 @@ function captureSessionId(): string {
 /** Cache one session result and publish it only if that tab is still visible. */
 function commitSessionState(sessionId: string, result: VaultState): VaultState {
   const current = sessionStates.get(sessionId);
-  if (current && result.revision < current.revision) return current;
+  if (current && isOlderSessionState(result, current)) return current;
   const normalized = applyBackendState(result, sessionId);
   const committed = commitNewestSessionState(sessionStates, sessionId, normalized);
   if (activeSessionId === sessionId) state.set(committed);
@@ -328,6 +329,7 @@ function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState 
   const current =
     sessionStates.get(sessionId) ?? (activeSessionId === sessionId ? get(state) : null);
   if (!current) return null;
+  if (isOlderSessionState(delta, current)) return current;
   let entryPatches: Map<string, Partial<VaultEntry>> | null = null;
   let groupPatches: Map<string, Partial<VaultGroup>> | null = null;
   if (delta.kind === "favorite") {
@@ -339,14 +341,18 @@ function applyBackendDelta(sessionId: string, delta: MutationDelta): VaultState 
       Object.entries(delta.groups).map(([uuid, expanded]) => [uuid, { isExpanded: expanded }]),
     );
   }
-  const next = { ...current, revision: delta.revision };
-  if (delta.kind === "favorite") {
-    // The backend marks the vault dirty on favorite toggle; the lightweight
-    // delta carries no dirty flag, so reflect it locally (groupsExpanded uses
-    // bump_revision and intentionally stays clean).
-    next.dirty = true;
-    next.modifiedAt = new Date().toISOString();
-  }
+  const next = {
+    ...current,
+    revision: delta.revision,
+    statusRevision: delta.statusRevision ?? 0,
+    // Native deltas carry the complete status. Legacy deltas retain their
+    // prior contract: favorite marks dirty, expansion retains cached status.
+    dirty: delta.dirty ?? (delta.kind === "favorite" ? true : current.dirty),
+    readOnly: delta.readOnly ?? current.readOnly,
+    mirrorWarning: delta.mirrorWarning === undefined ? current.mirrorWarning : delta.mirrorWarning,
+    modifiedAt:
+      delta.modifiedAt ?? (delta.kind === "favorite" ? delta.modified : current.modifiedAt),
+  };
   next.root = applyTreeDelta(current.root, entryPatches, groupPatches);
   return commitSessionState(sessionId, next);
 }
@@ -445,6 +451,7 @@ async function browserLoad(): Promise<VaultState | null> {
     if (raw) {
       const parsed = JSON.parse(raw) as VaultState;
       parsed.revision ??= 0;
+      parsed.statusRevision ??= 0;
       return parsed;
     }
   } catch {

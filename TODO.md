@@ -345,3 +345,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 原生另存为快照发布
 
 - [x] 成功切换保存目标后发布新版本并清除全快照缓存（SP-S115）：比较捕获revision后再递增，保留并发dirty/修改时间；8条真实根库临时KDBX回归从3通过/5失败到全部通过，覆盖热缓存路径/只读/警告、连续目标版本及正常/失败/后续保存重开对照，原文件或MemoryStorage对象保持不变。指定根包codegen-units=256配置的完整458前端/847 Rust/ACL2/凭据25/剪贴板14/KeePass29/QuickXML1363门禁通过，临时配置已清理。刻意排列的并发、合成计数/warning与MemoryStorage不代表实际IPC时序、手机APK/选择器/provider或竞品互通验证。
+
+## 审计补充 — 持久化状态回复排序
+
+- [x] 同一编辑版本的较早读取不得回退保存/改密/只读/镜像状态（SP-S116）：独立statusRevision与原生delta状态、比较前拒绝旧图标/树回复已实现；真实服务8条/前端466、原生KDBX8条及指定配置完整verify根Rust855/ACL2等通过。并发dirty/修改时间、普通save有效history选择和失败文件保持控制覆盖；编辑版本仍用于SaveJob/history，前期测试clone警告和资源中断保留证据。真实IPC时序、手机APK/选择器/provider和其他平台不属于本项完成证明。

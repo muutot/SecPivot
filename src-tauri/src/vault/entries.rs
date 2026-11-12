@@ -1331,6 +1331,7 @@ impl VaultSession {
         if uuids.is_empty() {
             return Ok(MutationDelta::GroupsExpanded {
                 revision: self.revision,
+                status: self.mutation_status(),
                 groups: HashMap::new(),
             });
         }
@@ -1352,6 +1353,7 @@ impl VaultSession {
         let groups = uuids.iter().cloned().map(|uuid| (uuid, expanded)).collect();
         Ok(MutationDelta::GroupsExpanded {
             revision: self.revision,
+            status: self.mutation_status(),
             groups,
         })
     }

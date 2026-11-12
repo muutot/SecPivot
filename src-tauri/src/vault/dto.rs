@@ -223,6 +223,8 @@ pub struct VaultState {
     /// exposed so the renderer can order/merge snapshots and later apply
     /// delta results.
     pub revision: u64,
+    /// Orders save/recovery status changes within the same edit revision.
+    pub status_revision: u64,
     /// Database custom icons (favicons) that live in the KDBX Meta section,
     /// keyed by custom-icon UUID; values are `data:` URLs for direct display.
     /// `Some(map)` is authoritative (open/create/full refresh, including an
@@ -304,6 +306,8 @@ pub struct TempAttachmentRef {
 pub enum MutationDelta {
     Favorite {
         revision: u64,
+        #[serde(flatten)]
+        status: MutationStatus,
         uuid: String,
         favorite: bool,
         modified: String,
@@ -311,8 +315,22 @@ pub enum MutationDelta {
     },
     GroupsExpanded {
         revision: u64,
+        #[serde(flatten)]
+        status: MutationStatus,
         groups: HashMap<String, bool>,
     },
+}
+
+/// Persistence status carried with every delta, so a newer edit cannot reuse
+/// status from a renderer snapshot captured before the latest save completed.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MutationStatus {
+    pub status_revision: u64,
+    pub dirty: bool,
+    pub read_only: bool,
+    pub mirror_warning: Option<String>,
+    pub modified_at: String,
 }
 
 /// One entry offered by the global-hotkey picker when several entries match

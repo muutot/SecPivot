@@ -10,6 +10,7 @@ export function buildDemoVaultState(): VaultState {
     readOnly: false,
     modifiedAt: new Date().toISOString(),
     revision: 0,
+    statusRevision: 0,
     root: {
       uuid: "root",
       parentUuid: null,

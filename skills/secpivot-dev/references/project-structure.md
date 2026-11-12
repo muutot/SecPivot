@@ -1,5 +1,15 @@
 # Project Structure and Runtime Surfaces
 
+`vault/save_status_snapshot_tests.rs` covers the new statusRevision publication,
+actual temporary KDBX save/change/reopen, deliberate concurrent edits, failures,
+history selection and delta/status serialization. Eight native tests pass under
+the explicit root dev codegen-units256 configuration and4/2GiB resource guard;
+the configured full gate passes after the test-only Clippy correction and
+earlier runtime resource interruption. `tests/vault-save-status.test.mjs` executes the
+real service graph with synthetic invoke/storage; eight controls include delayed
+reads, status-bearing deltas and stale icon-cache refusal. statusRevision belongs
+to persistence status; the existing edit revision remains SaveJob/history identity.
+
 `vault/save_as_snapshot_tests.rs` exercises the actual native session and
 temporary KDBX persistence with prepare/edit/cache/persist/complete ordering.
 Save-as target adoption now advances revision and clears the full snapshot cache

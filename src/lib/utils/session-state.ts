@@ -1,17 +1,33 @@
 /**
  * Store a vault snapshot only when it is at least as new as the cached
- * revision. Late IPC responses from the same session must never roll the
+ * edit revision and persistence-status version. Late IPC responses must never roll the
  * renderer back after a newer mutation has already completed.
  */
 import type { Language } from "$lib/types/settings";
 import { t } from "$lib/i18n";
-export function commitNewestSessionState<T extends { revision: number }>(
+
+interface SessionStateVersion {
+  revision: number;
+  /** Missing only on legacy demo snapshots and callers predating status IPC. */
+  statusRevision?: number;
+}
+
+export function isOlderSessionState(
+  incoming: SessionStateVersion,
+  current: SessionStateVersion,
+): boolean {
+  return incoming.revision === current.revision
+    ? (incoming.statusRevision ?? 0) < (current.statusRevision ?? 0)
+    : incoming.revision < current.revision;
+}
+
+export function commitNewestSessionState<T extends SessionStateVersion>(
   states: Map<string, T>,
   sessionId: string,
   incoming: T,
 ): T {
   const current = states.get(sessionId);
-  if (current && incoming.revision < current.revision) return current;
+  if (current && isOlderSessionState(incoming, current)) return current;
   states.set(sessionId, incoming);
   return incoming;
 }

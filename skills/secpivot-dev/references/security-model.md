@@ -1,5 +1,14 @@
 # Security Model
 
+SP-S116 uses a separate nonsecret statusRevision for save/recovery publication.
+It never changes edit-conflict or history-selection identities. Native deltas
+carry the session's current persistence flags; the renderer rejects older status
+before changing icons/tree state. Backend ensure_writable still enforces read-only
+restrictions independently. Eight actual-service controls use synthetic invoke/
+storage; eight native temporary KDBX/control tests and the configured full gate
+pass. Earlier test-only Clippy and resource stops remain audit evidence; this is
+not a device/IPC or complete process-memory claim.
+
 Native save-as target adoption advances the snapshot revision after testing
 whether concurrent edits occurred. It clears cached path/recovery/warning state
 without marking those edits saved. Later persistence continues to the new local
