@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`persist.rs` owns guarded credential fields on SaveJob/RemoteRefreshJob/RemoteMergeJob.
+Five session factories wrap existing clones immediately; consumers rely on field
+destruction while preserving database/result moves and error classification.
+`tests/fixtures/persistence-job-credentials.rs` extracts three job declarations,
+five factories and four consumers. Only credential payload/parameter types are
+observed; database/KDF/parser/storage/settings boundaries remain stubs. Five added
+groups cover80 paths/120 owned values, including real Tokio queued versus running
+abort behavior. The shared credential suite now executes25 groups.
+
 `commands/credentials.rs` owns the String-shaped `VaultPassword` argument guard
 for local/remote open/create and master-key replacement. It deserializes directly
 into Zeroizing ownership
@@ -39,7 +48,7 @@ extracts four preparation bodies with observed return payloads; boundary read/KD
 parse/storage/mirror functions are stubs. The command fixture adds20 keyfile paths,
 including post-adoption registry refusal, active-slot poison and discarded worker
 output. It extracts actual registry open and does not supply implicit session Drop.
-These six added checks cover62 paths/52 buffers; the credential runner now executes20 checks.
+These six added checks cover62 paths/52 buffers within the shared credential suite.
 
 Native KDBX `format/xml_db/timestamp.rs` now validates exactly eight Base64
 bytes and checked signed-second/year-one date arithmetic before publishing

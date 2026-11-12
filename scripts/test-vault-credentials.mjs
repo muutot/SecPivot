@@ -171,6 +171,69 @@ const preparationModule = preparationFixture
   .replace("// PREPARATION_IMPORTS", preparedGuarded ? "use zeroize::Zeroizing;" : "")
   .replace("// PREPARED_KEYFILE_TYPE", keyfileType)
   .replace("// PREPARATION_FUNCTIONS", preparationFunctions.join("\n\n"));
+const jobFixture = readFileSync(
+  join(root, "tests/fixtures/persistence-job-credentials.rs"),
+  "utf8",
+);
+const jobDeclarations = ["SaveJob", "RemoteRefreshJob", "RemoteMergeJob"].map((name) => {
+  const matches = [
+    ...preparationSource.matchAll(new RegExp(`^pub\\(crate\\) struct ${name} \\{[^]*?^}`, "gm")),
+  ];
+  assert.equal(matches.length, 1, `Missing complete production ${name}`);
+  return matches[0][0]
+    .replaceAll("pub password: String,", "pub password: ObservedString,")
+    .replaceAll("pub password: Zeroizing<String>,", "pub password: Zeroizing<ObservedString>,")
+    .replaceAll("pub keyfile: Option<Vec<u8>>,", "pub keyfile: Option<ObservedBytes>,")
+    .replaceAll(
+      "pub keyfile: Zeroizing<Option<Vec<u8>>>,",
+      "pub keyfile: Zeroizing<Option<ObservedBytes>>,",
+    );
+});
+const jobConsumers = [
+  "persist_save",
+  "persist_save_with_db",
+  "persist_remote_refresh",
+  "persist_remote_merge",
+].map((name) => {
+  const matches = [
+    ...preparationSource.matchAll(new RegExp(`^pub\\(crate\\) fn ${name}\\([^]*?^}`, "gm")),
+  ];
+  assert.equal(matches.length, 1, `Missing complete production ${name}`);
+  return matches[0][0];
+});
+for (const marker of [
+  "// JOB_DECLARATIONS",
+  "// WIPE_HELPERS",
+  "// PERSISTENCE_CONSUMERS",
+  "// JOB_FACTORIES",
+]) {
+  assert.equal(jobFixture.split(marker).length, 2);
+}
+const jobModule = jobFixture
+  .replace("// JOB_DECLARATIONS", jobDeclarations.join("\n\n"))
+  .replace(
+    "// WIPE_HELPERS",
+    wipeHelpers
+      .map((body) =>
+        body
+          .replace("&mut String", "&mut ObservedString")
+          .replace("&mut Vec<u8>", "&mut ObservedBytes"),
+      )
+      .join("\n\n"),
+  )
+  .replace("// PERSISTENCE_CONSUMERS", jobConsumers.join("\n\n"))
+  .replace(
+    "// JOB_FACTORIES",
+    [
+      "prepare_save",
+      "prepare_save_as",
+      "prepare_remote_refresh",
+      "prepare_database_settings_update",
+      "prepare_remote_merge",
+    ]
+      .map(sessionMethod)
+      .join("\n\n"),
+  );
 const fixture = readFileSync(join(root, "tests/fixtures/vault-command-credentials.rs"), "utf8");
 const registrySource = readSource("src-tauri/src/vault/sessions.rs");
 const registryMatches = [...registrySource.matchAll(/^    pub fn open\([^]*?^    }/gm)];
@@ -196,7 +259,7 @@ try {
       .replace("// PASSWORD_TYPE", passwordType)
       .replace("// REGISTRY_OPEN", registryMatches[0][0])
       .replace("// PREPARED_KEYFILE_TYPE", keyfileType) +
-      `\nmod master_change {\n${masterModule}\n}\nmod keyfile_replacement {\n${replacementModule}\n}\nmod keyfile_preparation {\n${preparationModule}\n}\nmod crypto { pub fn sha256_bytes(_: &[u8]) -> [u8; 32] { [0; 32] } }\n`,
+      `\nmod master_change {\n${masterModule}\n}\nmod keyfile_replacement {\n${replacementModule}\n}\nmod keyfile_preparation {\n${preparationModule}\n}\nmod persistence_jobs {\n${jobModule}\n}\nmod crypto { pub fn sha256_bytes(_: &[u8]) -> [u8; 32] { [0; 32] } }\n`,
   );
   writeFileSync(
     join(workspace, "Cargo.toml"),

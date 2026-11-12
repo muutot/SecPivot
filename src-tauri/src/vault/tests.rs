@@ -6207,6 +6207,186 @@ fn keyfile_preparation_refusals_keep_the_existing_session() {
 }
 
 #[test]
+fn persistence_job_native_local_keyfile_contracts() {
+    for factor in [false, true] {
+        for boundary in 0..3 {
+            let dir = TempDir::new().unwrap();
+            let path = dir.path().join("synthetic.kdbx");
+            let destination = dir.path().join("synthetic-as.kdbx");
+            let keyfile = dir.path().join("synthetic.key");
+            std::fs::write(&keyfile, [5u8; 32]).unwrap();
+            let keyfile_path = factor.then_some(keyfile.as_path());
+            let mut session = VaultSession::default();
+            session
+                .create(
+                    &path,
+                    "synthetic-only",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    keyfile_path,
+                )
+                .unwrap();
+            session
+                .add_entry(&entry_input(ROOT_GROUP_UUID, "Synthetic job", "", "", ""))
+                .unwrap();
+            let patch = DatabaseSettingsPatch {
+                compression: Some("Gzip".into()),
+                ..DatabaseSettingsPatch::default()
+            };
+            let prepare = |session: &VaultSession| match boundary {
+                0 => session.prepare_save(false),
+                1 => session.prepare_save_as(&destination),
+                _ => session.prepare_database_settings_update(&patch),
+            };
+            let before = session.require_db().unwrap().clone();
+            let bytes = std::fs::read(&path).unwrap();
+            let revision = session.revision;
+            let job = prepare(&session).unwrap();
+            assert!(job.password.as_str() == "synthetic-only");
+            assert_eq!(job.keyfile.is_some(), factor);
+            drop(job);
+            assert_eq!(session.require_db().unwrap(), &before);
+            assert_eq!(session.revision, revision);
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+            assert!(!destination.exists());
+            let job = prepare(&session).unwrap();
+            let (db, outcome) = super::persist::persist_save_with_db(job).unwrap();
+            match boundary {
+                0 => {
+                    session.complete_save(revision, outcome).unwrap();
+                }
+                1 => {
+                    session
+                        .complete_save_as(destination.clone(), revision)
+                        .unwrap();
+                }
+                _ => {
+                    session
+                        .complete_database_settings_update(&patch, revision, db, outcome)
+                        .unwrap();
+                }
+            }
+            assert!(session.password.as_deref() == Some("synthetic-only"));
+            assert_eq!(session.keyfile.is_some(), factor);
+            let written = if boundary == 1 { &destination } else { &path };
+            session.close();
+            session
+                .open(written, "synthetic-only", keyfile_path)
+                .unwrap();
+            assert!(session
+                .require_db()
+                .unwrap()
+                .root()
+                .entries()
+                .any(|entry| entry.get(FIELD_TITLE) == Some("Synthetic job")));
+            if boundary == 2 {
+                assert_eq!(
+                    session.database_settings().unwrap().unwrap().compression,
+                    "Gzip"
+                );
+            }
+            session.close();
+        }
+    }
+}
+
+#[test]
+fn persistence_job_native_remote_keyfile_contracts() {
+    for factor in [false, true] {
+        for merge in [false, true] {
+            let dir = TempDir::new().unwrap();
+            let path = dir.path().join("synthetic.kdbx");
+            let keyfile = dir.path().join("synthetic.key");
+            std::fs::write(&keyfile, [5u8; 32]).unwrap();
+            let keyfile_path = factor.then_some(keyfile.as_path());
+            let mut source = VaultSession::default();
+            source
+                .create(
+                    &path,
+                    "synthetic-only",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    keyfile_path,
+                )
+                .unwrap();
+            source
+                .add_entry(&entry_input(
+                    ROOT_GROUP_UUID,
+                    "Synthetic remote job",
+                    "",
+                    "",
+                    "",
+                ))
+                .unwrap();
+            source.save().unwrap();
+            source.close();
+            let storage = crate::remote::MemoryStorage::default();
+            let bytes = std::fs::read(&path).unwrap();
+            storage.seed("synthetic.kdbx", bytes.clone());
+            let mut session = VaultSession::default();
+            session
+                .open_remote(
+                    Arc::new(storage.clone()),
+                    "synthetic.kdbx",
+                    "synthetic-only",
+                    keyfile_path,
+                    RemoteMode::InMemory,
+                    dir.path(),
+                    0,
+                    DEFAULT_BACKUP_TEMPLATE,
+                )
+                .unwrap();
+            let before = session.require_db().unwrap().clone();
+            let revision = session.revision;
+            if merge {
+                drop(session.prepare_remote_merge().unwrap());
+            } else {
+                drop(session.prepare_remote_refresh().unwrap());
+            }
+            assert_eq!(session.require_db().unwrap(), &before);
+            assert_eq!(session.revision, revision);
+            assert_eq!(storage.get("synthetic.kdbx").unwrap(), bytes);
+            if merge {
+                let result =
+                    super::persist::persist_remote_merge(session.prepare_remote_merge().unwrap())
+                        .unwrap();
+                session.complete_remote_merge(revision, result).unwrap();
+            } else {
+                let result = super::persist::persist_remote_refresh(
+                    session.prepare_remote_refresh().unwrap(),
+                )
+                .unwrap();
+                session.complete_remote_refresh(revision, result).unwrap();
+            }
+            assert!(session.password.as_deref() == Some("synthetic-only"));
+            assert_eq!(session.keyfile.is_some(), factor);
+            session.close();
+            session
+                .open_remote(
+                    Arc::new(storage.clone()),
+                    "synthetic.kdbx",
+                    "synthetic-only",
+                    keyfile_path,
+                    RemoteMode::InMemory,
+                    dir.path(),
+                    0,
+                    DEFAULT_BACKUP_TEMPLATE,
+                )
+                .unwrap();
+            assert!(session
+                .require_db()
+                .unwrap()
+                .root()
+                .entries()
+                .any(|entry| entry.get(FIELD_TITLE) == Some("Synthetic remote job")));
+            session.close();
+        }
+    }
+}
+
+#[test]
 fn delete_group_moves_whole_subtree_to_recycle_bin_and_restores() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

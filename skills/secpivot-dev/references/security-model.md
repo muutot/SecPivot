@@ -1,5 +1,19 @@
 # Security Model
 
+Persistence jobs now guard their own credential clones from factory creation
+through job/worker destruction, using Zeroizing fields rather than manual tail
+cleanup. This covers discarded jobs, abort before a Tokio blocking worker starts,
+and unwinding consumers. A running blocking worker still completes after abort;
+its credentials stay valid until then. The job fixture extracts three declarations,
+five complete factories and four complete consumers, substituting only observed
+credential payload types. Actual wipe helper bodies execute with observed parameters.
+Five groups cover80 paths/120 owned values; KDF/database/parser/storage/settings
+are stubs, including the injected panic. Queue/worker behavior is real Tokio, with
+one blocker and tiny values. Observers record before their own synthetic cleanup,
+while still owning values; no released-memory reads or raw pointers are used.
+These checks establish lifetime cleanup, not a native panic input trigger, actual
+IPC/provider behavior, DatabaseKey/decrypted database copies or process-wide erasure.
+
 The four local/remote open/create commands accept `credentials::VaultPassword`
 with the same JSON string shape. Its default String-only Deserialize wraps the
 owned value in Zeroizing before the async command future is created/polled;

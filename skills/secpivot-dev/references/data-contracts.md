@@ -1,5 +1,14 @@
 # Data Contracts
 
+SaveJob, RemoteRefreshJob and RemoteMergeJob own cloned password/keyfile values
+as Zeroizing<String>/Zeroizing<Option<Vec<u8>>>. All five session factories wrap
+the existing copies immediately, without adding a clone. Guards survive job
+handoff, queued cancellation and consumer unwind; successful or Err returns drop
+them too. Save can still move its database into the result because the job itself
+has no Drop implementation. Refresh/merge result, target, revision, error
+classification and IPC/DTO shapes stay unchanged. DatabaseKey, decrypted database,
+framework and renderer copies remain separate ownership surfaces.
+
 The four local/remote open/create commands accept `credentials::VaultPassword`
 with the same JSON string shape. Its default String-only Deserialize wraps the
 owned value in Zeroizing before the async command future is created/polled;

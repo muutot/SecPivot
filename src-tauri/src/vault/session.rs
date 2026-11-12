@@ -607,8 +607,8 @@ impl VaultSession {
         let (db, target, revision) = self.prepare_change()?;
         Ok(SaveJob {
             db,
-            password: self.require_password()?.to_owned(),
-            keyfile: self.keyfile.clone(),
+            password: Zeroizing::new(self.require_password()?.to_owned()),
+            keyfile: Zeroizing::new(self.keyfile.clone()),
             target,
             revision,
             force,
@@ -622,8 +622,8 @@ impl VaultSession {
         let db = self.require_db()?.clone();
         Ok(SaveJob {
             db,
-            password: self.require_password()?.to_owned(),
-            keyfile: self.keyfile.clone(),
+            password: Zeroizing::new(self.require_password()?.to_owned()),
+            keyfile: Zeroizing::new(self.keyfile.clone()),
             target: SaveTarget::Local(path.to_path_buf()),
             revision: self.revision,
             force: false,
@@ -640,8 +640,8 @@ impl VaultSession {
         Ok(RemoteRefreshJob {
             storage: remote.storage.clone(),
             key: remote.key.clone(),
-            password: self.require_password()?.to_owned(),
-            keyfile: self.keyfile.clone(),
+            password: Zeroizing::new(self.require_password()?.to_owned()),
+            keyfile: Zeroizing::new(self.keyfile.clone()),
             mode: remote.mode,
             local_dir: remote.local_dir.clone(),
             backup_count: remote.backup_count,
@@ -671,8 +671,8 @@ impl VaultSession {
         }
         Ok(SaveJob {
             db,
-            password: self.require_password()?.to_owned(),
-            keyfile: self.keyfile.clone(),
+            password: Zeroizing::new(self.require_password()?.to_owned()),
+            keyfile: Zeroizing::new(self.keyfile.clone()),
             target,
             revision,
             force: false,
@@ -742,8 +742,8 @@ impl VaultSession {
             local_db: self.require_db()?.clone(),
             storage: remote.storage.clone(),
             key: remote.key.clone(),
-            password: self.require_password()?.to_owned(),
-            keyfile: self.keyfile.clone(),
+            password: Zeroizing::new(self.require_password()?.to_owned()),
+            keyfile: Zeroizing::new(self.keyfile.clone()),
             mode: remote.mode,
             local_dir: remote.local_dir.clone(),
             backup_count: remote.backup_count,

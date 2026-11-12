@@ -57,7 +57,7 @@ Both run in `npm run verify`. The helper validates its created temporary root
 before recursive cleanup and uses the repository target cache; source copies
 contain no user vaults. Upstream ignored tests do not count as executed coverage.
 
-`npm run test:vault-credentials` executes twenty synthetic credential-control-flow
+`npm run test:vault-credentials` executes twenty-five synthetic credential-control-flow
 tests in a disposable Cargo fixture, with a private copy of the repository lock
 and offline dependencies. It extracts the four current open/create handler
 bodies plus change_master_key; only the password parameter is replaced by an
@@ -89,6 +89,18 @@ cover62 paths/52 buffers with real Tokio panic/worker/abort. Type aliases and
 guarded result shapes follow current source; ordinary verification never uses
 source-ref. These checks are ownership evidence, not actual IPC/provider or
 whole-process memory-erasure proof.
+
+The persistence-job fixture extracts three job declarations, five complete
+session factories and four complete consumers. Credential payload types and wipe
+helper parameter types are observed; production bodies remain unchanged. Five
+added groups cover80 paths/120 owned values, including ordinary Err controls,
+direct job drop, panic, real Tokio abort before worker start and abort after start.
+Database/KDF/parser/storage/settings are stubs. The injected KDF panic proves an
+unwind path, not a native input trigger. Observers record while still owning the
+value, then wipe synthetic test payloads without altering the recorded result.
+The fixture uses one queued blocker and tiny values; it never reads released memory,
+user vaults, native providers or the shared clipboard. Source-ref remains an
+explicit audit comparison; ordinary verification always extracts current sources.
 
 ## Browser vs desktop truth
 

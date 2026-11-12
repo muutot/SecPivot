@@ -325,3 +325,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 新密钥文件准备与采用
 
 - [x] 新建/打开keyfile的临时准备及结果所有权（SP-S110）：PreparedKeyfile守护成功read结果到实际session采用；Unregistered清理真实registry未登记fresh。更强固定源码复核62路径/52观察buffer原48个遗漏全部清理，20组fixture、10项原生keyfile与完整452前端/836 Rust/ACL2/凭据20/KeePass29/QuickXML1363通过；初版桩缺口和一次原因未明的完整进程异常退出证据保留。job/framework/renderer及真机/provider仍独立待验证。
+
+## 审计补充 — 持久化任务凭据克隆
+
+- [x] 三类job从准备到整个任务退出守护临时密码/keyfile（SP-S111）：五个factory以Zeroizing立即持有既有克隆，consumer移除手动尾部清理；80路径/120观察值的45个drop/panic/queued-abort遗漏全部清理，75个原正确值保持，25组fixture、12项原生keyfile（新增10个保存/另存/设置/刷新/合并控制）及完整452前端/838 Rust/ACL2/凭据25/KeePass29/QuickXML1363通过。DatabaseKey本体已有ZeroizeOnDrop；其临时派生值、框架/renderer/全进程与手机provider仍独立待审。

@@ -4,7 +4,7 @@
 
 use super::helpers::{
     apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
-    probe_vault_bytes, save_database, wipe_secret_bytes, wipe_secret_string, write_database_bytes,
+    probe_vault_bytes, save_database, write_database_bytes,
 };
 use super::RemoteMode;
 use crate::remote::backup::{remote_key_basename, validate_remote_key, write_local_copy};
@@ -61,13 +61,13 @@ pub(crate) type PreparedKeyfile = Zeroizing<Option<Vec<u8>>>;
 type PreparedRemote = (Database, PreparedKeyfile, String, PersistOutcome);
 
 /// Everything `persist_save` needs. `password`/`keyfile` are clones so the
-/// KDF can run without the lock; both are zeroized after use. `revision`
+/// KDF can run without the lock; both stay guarded until the job exits. `revision`
 /// records the session's edit counter so the completion step can tell whether
 /// edits landed while the save ran.
 pub(crate) struct SaveJob {
     pub db: Database,
-    pub password: String,
-    pub keyfile: Option<Vec<u8>>,
+    pub password: Zeroizing<String>,
+    pub keyfile: Zeroizing<Option<Vec<u8>>>,
     pub target: SaveTarget,
     pub revision: u64,
     /// Skip the remote conflict check (explicit "覆盖远程" user choice).
@@ -79,8 +79,8 @@ pub(crate) struct SaveJob {
 pub(crate) struct RemoteRefreshJob {
     pub storage: Arc<dyn RemoteStorage>,
     pub key: String,
-    pub password: String,
-    pub keyfile: Option<Vec<u8>>,
+    pub password: Zeroizing<String>,
+    pub keyfile: Zeroizing<Option<Vec<u8>>>,
     pub mode: RemoteMode,
     pub local_dir: PathBuf,
     pub backup_count: usize,
@@ -95,8 +95,8 @@ pub(crate) struct RemoteMergeJob {
     pub local_db: Database,
     pub storage: Arc<dyn RemoteStorage>,
     pub key: String,
-    pub password: String,
-    pub keyfile: Option<Vec<u8>>,
+    pub password: Zeroizing<String>,
+    pub keyfile: Zeroizing<Option<Vec<u8>>>,
     pub mode: RemoteMode,
     pub local_dir: PathBuf,
     pub backup_count: usize,
@@ -380,17 +380,9 @@ pub(crate) fn persist_save(job: SaveJob) -> Result<PersistOutcome, String> {
 /// Persist a save job and return its database snapshot for a later locked
 /// adoption step. Secret clones are wiped even when key construction fails.
 pub(crate) fn persist_save_with_db(job: SaveJob) -> Result<(Database, PersistOutcome), String> {
-    let result = (|| {
-        let key = build_database_key(&job.password, job.keyfile.as_deref())?;
-        let hash = persist_snapshot(&job.db, &key, &job.target, job.force)?;
-        Ok(hash)
-    })();
-    let mut password = job.password;
-    wipe_secret_string(&mut password);
-    if let Some(mut keyfile) = job.keyfile {
-        wipe_secret_bytes(&mut keyfile);
-    }
-    result.map(|hash| (job.db, hash))
+    let key = build_database_key(&job.password, job.keyfile.as_deref())?;
+    let hash = persist_snapshot(&job.db, &key, &job.target, job.force)?;
+    Ok((job.db, hash))
 }
 
 /// Lock-free persist with an externally supplied master key (used by
@@ -408,34 +400,26 @@ pub(crate) fn persist_change(
 /// Download, decrypt and optionally mirror the latest remote database. Runs
 /// entirely outside the session lock; cloned secrets are always zeroized.
 pub(crate) fn persist_remote_refresh(job: RemoteRefreshJob) -> Result<RemoteRefreshResult, String> {
-    let result = (|| {
-        let data = job
-            .storage
-            .get(&job.key)
-            .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
-        let db_key = build_database_key(&job.password, job.keyfile.as_deref())?;
-        let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
-        if job.mode == RemoteMode::SaveLocal {
-            write_local_copy(
-                &job.local_dir,
-                &remote_key_basename(&job.key),
-                &data,
-                job.backup_count,
-                &job.backup_template,
-            )
-            .map_err(|e| format!("刷新本地副本失败: {e}"))?;
-        }
-        Ok(RemoteRefreshResult {
-            db,
-            base_hash: crate::crypto::sha256_bytes(&data),
-        })
-    })();
-    let mut password = job.password;
-    wipe_secret_string(&mut password);
-    if let Some(mut keyfile) = job.keyfile {
-        wipe_secret_bytes(&mut keyfile);
+    let data = job
+        .storage
+        .get(&job.key)
+        .map_err(|e| format!("下载远程最新版本失败: {e}"))?;
+    let db_key = build_database_key(&job.password, job.keyfile.as_deref())?;
+    let db = Database::parse(&data, db_key).map_err(classify_open_error)?;
+    if job.mode == RemoteMode::SaveLocal {
+        write_local_copy(
+            &job.local_dir,
+            &remote_key_basename(&job.key),
+            &data,
+            job.backup_count,
+            &job.backup_template,
+        )
+        .map_err(|e| format!("刷新本地副本失败: {e}"))?;
     }
-    result
+    Ok(RemoteRefreshResult {
+        db,
+        base_hash: crate::crypto::sha256_bytes(&data),
+    })
 }
 
 /// Download, decrypt, merge and upload a remote database outside the session
@@ -444,57 +428,47 @@ pub(crate) fn persist_remote_refresh(job: RemoteRefreshJob) -> Result<RemoteRefr
 pub(crate) fn persist_remote_merge(
     job: RemoteMergeJob,
 ) -> Result<RemoteMergeResult, RemoteMergeError> {
-    let result = (|| {
-        let db_key =
-            build_database_key(&job.password, job.keyfile.as_deref()).map_err(|message| {
-                RemoteMergeError {
-                    message,
-                    persist_failure: false,
-                }
-            })?;
-        let data = job.storage.get(&job.key).map_err(|e| RemoteMergeError {
-            message: format!("下载远程最新版本失败: {e}"),
+    let db_key = build_database_key(&job.password, job.keyfile.as_deref()).map_err(|message| {
+        RemoteMergeError {
+            message,
             persist_failure: false,
-        })?;
-        let remote_db = Database::parse(&data, db_key.clone()).map_err(|e| RemoteMergeError {
-            message: classify_open_error(e),
+        }
+    })?;
+    let data = job.storage.get(&job.key).map_err(|e| RemoteMergeError {
+        message: format!("下载远程最新版本失败: {e}"),
+        persist_failure: false,
+    })?;
+    let remote_db = Database::parse(&data, db_key.clone()).map_err(|e| RemoteMergeError {
+        message: classify_open_error(e),
+        persist_failure: false,
+    })?;
+    let merged = super::merge::merge_databases(&job.local_db, &remote_db).map_err(|message| {
+        RemoteMergeError {
+            message,
             persist_failure: false,
-        })?;
-        let merged =
-            super::merge::merge_databases(&job.local_db, &remote_db).map_err(|message| {
-                RemoteMergeError {
-                    message,
-                    persist_failure: false,
-                }
-            })?;
-        let target = SaveTarget::Remote {
-            storage: job.storage.clone(),
-            key: job.key.clone(),
-            mode: job.mode,
-            local_dir: job.local_dir.clone(),
-            backup_count: job.backup_count,
-            backup_template: job.backup_template.clone(),
-            base_hash: crate::crypto::sha256_bytes(&data),
-        };
-        let base_hash = persist_snapshot(&merged, &db_key, &target, false).map_err(|message| {
-            let persist_failure = !message.starts_with(REMOTE_CHANGED_MARKER);
-            RemoteMergeError {
-                message,
-                persist_failure,
-            }
-        })?;
-        Ok(RemoteMergeResult {
-            db: merged,
-            base_hash: base_hash.hash,
-            mirror_warning: base_hash.mirror_warning,
-        })
-    })();
-    let mut password = job.password;
-    wipe_secret_string(&mut password);
-    if let Some(mut keyfile) = job.keyfile {
-        wipe_secret_bytes(&mut keyfile);
-    }
-    result
+        }
+    })?;
+    let target = SaveTarget::Remote {
+        storage: job.storage.clone(),
+        key: job.key.clone(),
+        mode: job.mode,
+        local_dir: job.local_dir.clone(),
+        backup_count: job.backup_count,
+        backup_template: job.backup_template.clone(),
+        base_hash: crate::crypto::sha256_bytes(&data),
+    };
+    let base_hash = persist_snapshot(&merged, &db_key, &target, false).map_err(|message| {
+        let persist_failure = !message.starts_with(REMOTE_CHANGED_MARKER);
+        RemoteMergeError {
+            message,
+            persist_failure,
+        }
+    })?;
+    Ok(RemoteMergeResult {
+        db: merged,
+        base_hash: base_hash.hash,
+        mirror_warning: base_hash.mirror_warning,
+    })
 }
 
 /// Write attachment bytes extracted under the lock (file I/O outside it).
