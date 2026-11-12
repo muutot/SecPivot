@@ -104,6 +104,18 @@ explicit audit comparison; ordinary verification always extracts current sources
 
 ## Browser vs desktop truth
 
+`npm run test:clipboard-write` runs fourteen independent text/binary write checks
+in a disposable offline Cargo project with the repository's pinned zeroize.
+It extracts the complete platform clipboard module, replacing only the Win32
+import root and platform cfg selector with a synthetic API. Real byte copies and
+zeroize execute on still-owned aligned storage at most128 bytes; the fake API
+records clearing before releasing that storage. No OS clipboard or released
+memory is accessed. The ordinary gate uses current source; explicit source-ref
+is a read-only comparison. A separate native Rust test only creates/destroys the
+invisible message-only owner window. Neither check proves live clipboard/client
+interoperability or external identical-copy ownership. Temporary cleanup verifies
+the resolved created directory stays inside the system temp root before deletion.
+
 - Audit evidence paths become immutable once their hashes are recorded. Use
   separate red/green artifact names and archive or remove temporary emitters
   before running ordinary tests again. Verify earlier hashes before sealing the

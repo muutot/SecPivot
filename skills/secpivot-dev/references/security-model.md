@@ -545,6 +545,20 @@ arguments use `env:` references; final staged APK signatures and exact native
 ABI contents are verified before checksums/upload. Synthetic shell tests prove
 control flow and cleanup, not genuine APK signatures or CI execution.
 
+Windows native writes create a same-thread message-only STATIC window as the
+clipboard owner. Unpublished GlobalAlloc bytes stay guarded and locked through
+publication; errors zeroize owned bytes, unlock and free them. Successful
+SetClipboardData transfers memory to the OS, so only unlock follows success.
+Allocation preparation precedes OpenClipboard/EmptyClipboard, and failed emptying
+never proceeds to publication. The temporary owner is destroyed after close;
+its HWND is not a persistent copy-identity token. The UTF-16 staging Vec is
+Zeroizing. The API fixture substitutes only imports/cfg in the complete platform
+module and covers fourteen independent text/binary success/error paths, with
+synthetic aligned owned buffers at most128 bytes. A separate native test creates
+and destroys only the owner window, without clipboard access. These checks do
+not prove live clipboard transfer, external identical-copy ownership, native
+provider/client interoperability or whole-process memory erasure.
+
 Windows conditional clipboard wipes use `clipboard_clear_if_matches` with a
 32-byte fingerprint (no repeated plaintext IPC) and the
 platform `clear_clipboard_text_if` / `clear_clipboard_bytes_if` helpers. Each

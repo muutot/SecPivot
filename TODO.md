@@ -333,3 +333,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 大字号窄屏选项显示
 
 - [x] 共享主题/语言按钮完整显示（SP-S112）：完整按钮按需换行、标签单行、色点12px；64个中英/默认与最大字号/四种宽度渲染案例及320px原生Tab/Enter通过，完整452前端/838 Rust/ACL2/凭据25/KeePass29/QuickXML1363门禁通过。保留30px高度、6px间距及语义主题变量；不据browser证据关闭Android选择器、provider、任意配色对比度或其他界面验证。
+
+## 审计补充 — 原生剪贴板写入所有权
+
+- [x] Win32写入参数与失败分配生命周期（SP-S113）：同线程message-only窗口提供有效owner，准备分配先于打开/清空，失败空操作不发布，未转移字节zeroize/解锁/释放，成功只解锁并转移系统所有权。14条文本/二进制合成路径从2pass/12fail转绿，实际窗口独立与根项目1pass，完整452前端/839 Rust/ACL2/凭据25/剪贴板14/KeePass29/QuickXML1363门禁通过。未调用共享OS剪贴板，不代表实际复制/客户端、外部相同内容代次、跨renderer顺序或手机provider已验证；SP-11仍为部分完成。

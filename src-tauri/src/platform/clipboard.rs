@@ -5,13 +5,14 @@
 
 #[cfg(target_os = "windows")]
 use windows_sys::{
-    Win32::Foundation::HGLOBAL,
+    Win32::Foundation::{GlobalFree, HGLOBAL, HWND},
     Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
     },
     Win32::System::Memory::{
         GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE, GMEM_ZEROINIT,
     },
+    Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, HWND_MESSAGE},
 };
 
 #[cfg(target_os = "windows")]
@@ -33,11 +34,126 @@ impl Drop for OpenClipboardGuard {
 
 #[cfg(target_os = "windows")]
 fn open_clipboard() -> Result<OpenClipboardGuard, String> {
-    // SAFETY: null HWND selects the current thread's window station.
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
+    open_clipboard_for(std::ptr::null_mut())
+}
+
+#[cfg(target_os = "windows")]
+fn open_clipboard_for(owner: HWND) -> Result<OpenClipboardGuard, String> {
+    // SAFETY: null is valid for read/clear; writes pass a live same-thread owner.
+    if unsafe { OpenClipboard(owner) } == 0 {
         return Err("打开剪贴板失败".to_owned());
     }
     Ok(OpenClipboardGuard)
+}
+
+#[cfg(target_os = "windows")]
+struct ClipboardWriterOwner(HWND);
+
+#[cfg(target_os = "windows")]
+impl ClipboardWriterOwner {
+    fn new() -> Result<Self, String> {
+        const STATIC_CLASS: &[u16] = &[83, 84, 65, 84, 73, 67, 0];
+        // SAFETY: STATIC is a built-in window class. This message-only window
+        // stays invisible, owns no user data, and is destroyed on this thread.
+        let owner = unsafe {
+            CreateWindowExW(
+                0,
+                STATIC_CLASS.as_ptr(),
+                std::ptr::null(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        if owner.is_null() {
+            return Err("创建剪贴板窗口失败".to_owned());
+        }
+        Ok(Self(owner))
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ClipboardWriterOwner {
+    fn drop(&mut self) {
+        // SAFETY: this guard uniquely owns the same-thread window. The
+        // clipboard lock has already closed; published memory belongs to OS.
+        unsafe { DestroyWindow(self.0) };
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct ClipboardWriteBuffer {
+    handle: HGLOBAL,
+    locked: *mut u8,
+    len: usize,
+}
+
+#[cfg(target_os = "windows")]
+impl ClipboardWriteBuffer {
+    fn new(bytes: &[u8]) -> Result<Self, String> {
+        // SAFETY: the guard owns this allocation until successful publication.
+        let handle = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes.len()) };
+        if handle.is_null() {
+            return Err("分配剪贴板内存失败".to_owned());
+        }
+        let mut buffer = Self {
+            handle,
+            locked: std::ptr::null_mut(),
+            len: bytes.len(),
+        };
+        buffer.locked = unsafe { GlobalLock(handle) }.cast();
+        if buffer.locked.is_null() {
+            return Err("锁定剪贴板内存失败".to_owned());
+        }
+        // SAFETY: GlobalLock pins this uniquely owned bytes.len() allocation.
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.locked, bytes.len()) };
+        Ok(buffer)
+    }
+
+    fn publish(mut self, format: u32) -> Result<(), String> {
+        // SAFETY: caller holds the clipboard lock with a live owner. Win32
+        // permits the allocation to remain locked until CloseClipboard.
+        if unsafe { SetClipboardData(format, self.handle) }.is_null() {
+            return Err("写入剪贴板失败".to_owned());
+        }
+        unsafe { GlobalUnlock(self.handle) };
+        // SetClipboardData transferred ownership. Never wipe/free OS memory.
+        self.handle = std::ptr::null_mut();
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ClipboardWriteBuffer {
+    fn drop(&mut self) {
+        if self.handle.is_null() {
+            return;
+        }
+        if !self.locked.is_null() {
+            // SAFETY: unpublished bytes remain uniquely owned and locked.
+            let bytes = unsafe { std::slice::from_raw_parts_mut(self.locked, self.len) };
+            zeroize::Zeroize::zeroize(bytes);
+            unsafe {
+                GlobalUnlock(self.handle);
+            }
+        }
+        unsafe { GlobalFree(self.handle) };
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn write_clipboard_data(format: u32, bytes: &[u8]) -> Result<(), String> {
+    let owner = ClipboardWriterOwner::new()?;
+    let buffer = ClipboardWriteBuffer::new(bytes)?;
+    let _open = open_clipboard_for(owner.0)?;
+    empty_open()?;
+    buffer.publish(format)
 }
 
 #[cfg(target_os = "windows")]
@@ -135,34 +251,14 @@ pub fn clear_clipboard() -> Result<(), String> {
 #[allow(dead_code)]
 #[cfg(target_os = "windows")]
 pub fn write_clipboard_text(text: &str) -> Result<(), String> {
-    // SAFETY: standard Win32 clipboard flow; the global memory is owned by
-    // the clipboard after SetClipboardData, so no manual free.
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
-        return Err("打开剪贴板失败".to_owned());
-    }
-    unsafe { EmptyClipboard() };
-    let encoded: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-    let bytes = encoded.len() * 2;
-    let hmem: HGLOBAL = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes) };
-    if hmem.is_null() {
-        unsafe { CloseClipboard() };
-        return Err("分配剪贴板内存失败".to_owned());
-    }
-    let dest = unsafe { GlobalLock(hmem) } as *mut u16;
-    if dest.is_null() {
-        unsafe { CloseClipboard() };
-        return Err("锁定剪贴板内存失败".to_owned());
-    }
-    unsafe {
-        std::ptr::copy_nonoverlapping(encoded.as_ptr(), dest, encoded.len());
-        GlobalUnlock(hmem);
-    }
-    let ok = unsafe { SetClipboardData(CF_UNICODETEXT, hmem) };
-    unsafe { CloseClipboard() };
-    if ok.is_null() {
-        return Err("写入剪贴板失败".to_owned());
-    }
-    Ok(())
+    let encoded = zeroize::Zeroizing::new(
+        text.encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>(),
+    );
+    // SAFETY: view only our live-owned UTF-16 allocation as native-endian bytes.
+    let bytes = unsafe { std::slice::from_raw_parts(encoded.as_ptr().cast(), encoded.len() * 2) };
+    write_clipboard_data(CF_UNICODETEXT, bytes)
 }
 
 /// Non-Windows stub: webview clipboard writes are done by the renderer.
@@ -256,33 +352,8 @@ pub fn read_clipboard_bytes(_format: &str) -> Result<Option<Vec<u8>>, String> {
 /// the clipboard held. The clipboard takes ownership of the global memory.
 #[cfg(target_os = "windows")]
 pub fn write_clipboard_bytes(format: &str, bytes: &[u8]) -> Result<(), String> {
-    use windows_sys::Win32::System::DataExchange::SetClipboardData;
-
     let id = register_format(format)?;
-    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
-        return Err("打开剪贴板失败".to_owned());
-    }
-    unsafe { EmptyClipboard() };
-    let hmem: HGLOBAL = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes.len()) };
-    if hmem.is_null() {
-        unsafe { CloseClipboard() };
-        return Err("分配剪贴板内存失败".to_owned());
-    }
-    let dest = unsafe { GlobalLock(hmem) } as *mut u8;
-    if dest.is_null() {
-        unsafe { CloseClipboard() };
-        return Err("锁定剪贴板内存失败".to_owned());
-    }
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
-        GlobalUnlock(hmem);
-    }
-    let ok = unsafe { SetClipboardData(id, hmem) };
-    unsafe { CloseClipboard() };
-    if ok.is_null() {
-        return Err("写入剪贴板失败".to_owned());
-    }
-    Ok(())
+    write_clipboard_data(id, bytes)
 }
 
 /// Non-Windows stub: the renderer has no binary clipboard bridge.
@@ -295,6 +366,18 @@ pub fn write_clipboard_bytes(_format: &str, _bytes: &[u8]) -> Result<(), String>
 pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn clipboard_writer_owner_is_invisible_and_released_without_clipboard_access() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, IsWindowVisible};
+        let owner = ClipboardWriterOwner::new().unwrap();
+        let handle = owner.0;
+        assert_ne!(unsafe { IsWindow(handle) }, 0);
+        assert_eq!(unsafe { IsWindowVisible(handle) }, 0);
+        drop(owner);
+        assert_eq!(unsafe { IsWindow(handle) }, 0);
+    }
 
     #[cfg(target_os = "windows")]
     #[test]

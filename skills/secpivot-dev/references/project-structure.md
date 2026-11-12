@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`platform/clipboard.rs` shares a same-thread message-only writer owner and guarded
+GlobalAlloc buffer across text/binary publication. Failed writes wipe/free owned
+bytes; successful publication transfers memory to OS. No IPC signature changes.
+`scripts/test-clipboard-write.mjs` extracts the complete module with only imports/
+cfg redirected to `tests/fixtures/clipboard-native-write.rs`'s synthetic API.
+Fourteen independent paths run in an offline disposable Cargo fixture; the native
+owner-window check in the platform module uses no clipboard API. Actual clipboard
+interop and external identical-copy/cross-renderer scheduling remain separate.
+
 `persist.rs` owns guarded credential fields on SaveJob/RemoteRefreshJob/RemoteMergeJob.
 Five session factories wrap existing clones immediately; consumers rely on field
 destruction while preserving database/result moves and error classification.
