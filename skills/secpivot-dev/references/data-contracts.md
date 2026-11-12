@@ -1,5 +1,13 @@
 # Data Contracts
 
+`vault.saveAs` updates the lock-screen quick-reopen path/display name only when
+its reply is the snapshot actually accepted by the revision/epoch gate and its
+session is still active. A rejected reply returns the current cache without
+replacing that target. Its successfully written destination can still enter the
+recent-files list. Six real-service synthetic tests cover ordering, replacement,
+normal selection labels, parked/closed sessions and invoke rejection; they do
+not validate native save-as snapshot revisions, Android IPC or provider writes.
+
 SaveJob, RemoteRefreshJob and RemoteMergeJob own cloned password/keyfile values
 as Zeroizing<String>/Zeroizing<Option<Vec<u8>>>. All five session factories wrap
 the existing copies immediately, without adding a clone. Guards survive job

@@ -1064,7 +1064,9 @@ export const vault: VaultStore = {
       const epoch = captureSessionEpoch(sessionId);
       const result = await backendInvoke<VaultState>("save_vault_as", { sessionId, path });
       const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
-      if (activeSessionId === sessionId) {
+      // The picked name belongs to this response. A rejected revision/epoch
+      // must not replace the newer lock-screen target or its display name.
+      if (activeSessionId === sessionId && committed === result) {
         remembered.set({ path: result.path, fileName: label?.name ?? result.fileName });
       }
       rememberRecent(result.path, label);

@@ -337,3 +337,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 原生剪贴板写入所有权
 
 - [x] Win32写入参数与失败分配生命周期（SP-S113）：同线程message-only窗口提供有效owner，准备分配先于打开/清空，失败空操作不发布，未转移字节zeroize/解锁/释放，成功只解锁并转移系统所有权。14条文本/二进制合成路径从2pass/12fail转绿，实际窗口独立与根项目1pass，完整452前端/839 Rust/ACL2/凭据25/剪贴板14/KeePass29/QuickXML1363门禁通过。未调用共享OS剪贴板，不代表实际复制/客户端、外部相同内容代次、跨renderer顺序或手机provider已验证；SP-11仍为部分完成。
+
+## 审计补充 — 另存为锁屏重开目标
+
+- [x] 被拒绝回复不得覆盖锁屏重开路径或显示名（SP-S114）：实际vault/settings服务图的6条合成回归从4pass/2fail转为全部通过，458条前端测试、Svelte检查及构建通过。正常选择名、旧revision/epoch、停放/关闭和invoke拒绝均有对照；成功写过的旧目标仍可加入最近文件。原生另存为revision/缓存、实际文件写入、手机选择器/provider及跨客户端行为不由本项关闭。

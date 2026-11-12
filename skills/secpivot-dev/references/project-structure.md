@@ -1,5 +1,11 @@
 # Project Structure and Runtime Surfaces
 
+`tests/vault-save-as-reopen.test.mjs` runs the actual vault/settings service graph
+with synthetic invoke/storage and cloned replies. The save-as quick-reopen side
+effect accepts only the gate-adopted reply from the active session; six controls
+cover stale revision/epoch, selection labels, parked/closed sessions and rejection.
+No native save-as, IPC or Android provider is exercised by these frontend checks.
+
 `platform/clipboard.rs` shares a same-thread message-only writer owner and guarded
 GlobalAlloc buffer across text/binary publication. Failed writes wipe/free owned
 bytes; successful publication transfers memory to OS. No IPC signature changes.

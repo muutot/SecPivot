@@ -1,5 +1,11 @@
 # Security Model
 
+Save-as reply rejection also gates the lock-screen quick-reopen path and picked
+display name: only an adopted reply from the active session may change them.
+Successful older destinations remain eligible for the recent-files list. Six
+synthetic frontend service tests prove this publication boundary, not actual
+file persistence, native snapshot ordering, Android providers or process erasure.
+
 Persistence jobs now guard their own credential clones from factory creation
 through job/worker destruction, using Zeroizing fields rather than manual tail
 cleanup. This covers discarded jobs, abort before a Tokio blocking worker starts,
