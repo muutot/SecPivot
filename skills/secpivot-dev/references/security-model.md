@@ -9,7 +9,17 @@ Borrowed password values used by preparation/adoption are unchanged. Local
 normal completion drops the guard before capture-guard application. The internal
 generic payload supports safe destructor observation in synthetic tests; there
 is no Debug/Serialize or raw-value extraction API. Renderer/framework IPC
-buffers, keyfiles, master-key replacement and other secrets remain separate.
+buffers, open/create keyfiles and other secrets remain separate. The following
+contract covers only the new master-change inputs.
+
+Master-key replacement now uses the same argument-time password guard and
+guards each successfully read new keyfile before preflight/worker execution.
+The guards survive worker cancellation/panic and completion errors; completion
+borrows and copies only when a session accepts the new credentials. Synchronous
+session replacement guards the new read buffer too. Four synthetic tests cover
+14 command paths/26 observed values, including legitimate adoption retained until
+simulated close. Native temporary KDBX controls cover adoption and refusal state,
+not whole-process erasure, actual IPC buffers or the old keyfile being replaced.
 
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid

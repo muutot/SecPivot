@@ -5966,6 +5966,50 @@ fn change_master_key_reencrypts_and_reopens_with_new_credentials() {
 }
 
 #[test]
+fn change_master_key_refusals_keep_existing_credentials_and_session() {
+    let dir = TempDir::new().unwrap();
+    let keyfile = dir.path().join("synthetic-new.key");
+    std::fs::write(&keyfile, b"0123456789abcdef0123456789abcdef").unwrap();
+
+    let mut closed = VaultSession::default();
+    assert!(closed
+        .change_master_key("synthetic-new", Some(&keyfile))
+        .is_err());
+    assert!(closed.password.is_none());
+    assert!(closed.keyfile.is_none());
+
+    let (mut session, path) = create_session(&dir);
+    let original = std::fs::read(&path).unwrap();
+    assert!(session
+        .change_master_key("synthetic-new", Some(&dir.path().join("missing.key")))
+        .is_err());
+    assert!(session.password.as_deref() == Some("master-password"));
+    assert!(session.keyfile.is_none());
+
+    // An owned empty directory at the file target forces a write refusal.
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert!(session
+        .change_master_key("synthetic-new", Some(&keyfile))
+        .is_err());
+    assert!(session.password.as_deref() == Some("master-password"));
+    assert!(session.keyfile.is_none());
+    assert!(path.is_dir());
+    assert!(session.state().unwrap().is_some());
+    assert!(!session.is_read_only());
+
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::write(&path, original).unwrap();
+    assert!(session.save().is_ok());
+    session.close();
+    let mut reopened = VaultSession::default();
+    assert!(reopened
+        .open(&path, "synthetic-new", Some(&keyfile))
+        .is_err());
+    assert!(reopened.open(&path, "master-password", None).is_ok());
+}
+
+#[test]
 fn change_master_key_supports_keyfile_only_and_keeps_session_alive() {
     let dir = TempDir::new().unwrap();
     let (mut session, path) = create_session(&dir);

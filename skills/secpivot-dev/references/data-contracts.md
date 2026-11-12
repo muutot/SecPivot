@@ -9,7 +9,17 @@ Borrowed password values used by preparation/adoption are unchanged. Local
 normal completion drops the guard before capture-guard application. The internal
 generic payload supports safe destructor observation in synthetic tests; there
 is no Debug/Serialize or raw-value extraction API. Renderer/framework IPC
-buffers, keyfiles, master-key replacement and other secrets remain separate.
+buffers, open/create keyfiles and other secrets remain separate. The following
+contract covers only the new master-change inputs.
+
+`change_master_key` also accepts VaultPassword with the same JSON string shape.
+Its successfully read new keyfile is immediately guarded by Zeroizing; both
+temporary values move through the worker and remain owned until completion.
+`VaultSession::complete_change` borrows `&str`/`Option<&[u8]>` and copies only
+inside the resolved session callback. The synchronous session method guards
+its new keyfile too. PersistOutcome adoption, revision handling and persistent
+save-error counting are unchanged. Prior keyfile replacement and buffers inside
+read/preparation/framework/renderer code remain separate audit surfaces.
 
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid

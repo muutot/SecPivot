@@ -313,3 +313,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 命令临时主密码所有权
 
 - [x] 四个新建/打开命令的临时主密码清理（SP-S107）：JSON字符串在参数反序列化时进入VaultPassword/Zeroizing，覆盖未poll就释放、前置错误、等待取消、worker panic及会话采用失败；六项合成回归覆盖42条生命周期路径/九个JSON对照，原提交21条遗漏到全部清理，完整452前端/830 Rust/ACL2/凭据fixture6/KeePass29/QuickXML1363门禁通过。真实Tauri/renderer/framework缓冲、keyfile、更换主密钥及全进程内存擦除仍独立待审。
+
+## 审计补充 — 更换主密钥临时凭据
+
+- [x] 更换主密钥的新临时密码/keyfile清理（SP-S108）：VaultPassword/Zeroizing跨越未poll/read/许可/prepare/worker/完成路径，completion借用并仅在session采用时复制；14条command路径/26个自有值从8条遗漏到全部清理，10组fixture与3项原生KDBX更换/重开及拒绝后旧凭据保持控制通过，完整452前端/831 Rust/ACL2/凭据10/KeePass29/QuickXML1363门禁通过。旧keyfile替换、read内部缓冲、框架/renderer、手机新APK/真机/provider不属于本项完成证据。

@@ -15,7 +15,7 @@ use crate::vault::{
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// Fallback sequence when an entry resolves no explicit Auto-Type sequence
 /// (mirrors `lib.rs::GLOBAL_AUTOTYPE_SEQUENCE`).
@@ -481,63 +481,34 @@ pub(crate) async fn change_master_key(
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     session_id: Option<String>,
-    mut password: String,
+    password: VaultPassword,
     keyfile: Option<String>,
 ) -> Result<VaultState, String> {
     // Keyfile read, KDF and persistence all happen without the session lock,
     // and the KDF + serialization + transport run off the async worker thread.
-    let mut keyfile_bytes = vault::read_keyfile(keyfile.as_deref().map(Path::new))?;
-    let _persistence = match vaults.acquire_persistence_async().await {
-        Ok(permit) => permit,
-        Err(error) => {
-            password.zeroize();
-            if let Some(bytes) = keyfile_bytes.as_deref_mut() {
-                bytes.zeroize();
-            }
-            return Err(error);
-        }
-    };
+    let keyfile_bytes = Zeroizing::new(vault::read_keyfile(keyfile.as_deref().map(Path::new))?);
+    let _persistence = vaults.acquire_persistence_async().await?;
     let (session_id, (db, target, revision)) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
             target.prepare_change()
         })?
     };
-    let (persisted, mut password, mut keyfile_bytes) =
-        tauri::async_runtime::spawn_blocking(move || {
-            let result = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
-            (result, password, keyfile_bytes)
-        })
-        .await
-        .map_err(|e| format!("更换主密钥任务异常: {e}"))?;
-    let result = match persisted {
+    let (persisted, password, keyfile_bytes) = tauri::async_runtime::spawn_blocking(move || {
+        let result = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
+        (result, password, keyfile_bytes)
+    })
+    .await
+    .map_err(|e| format!("更换主密钥任务异常: {e}"))?;
+    match persisted {
         Ok(new_hash) => {
-            let mut password_slot = Some(password);
-            let mut keyfile_slot = Some(keyfile_bytes);
-            let result = match session.lock() {
-                Ok(mut active) => {
-                    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                        target.complete_change(
-                            password_slot.take().expect("password is available"),
-                            keyfile_slot.take().expect("keyfile is available"),
-                            revision,
-                            new_hash,
-                        )
-                    })
-                }
-                Err(_) => Err("数据库锁已损坏".to_owned()),
-            };
-            if let Some(mut remaining) = password_slot {
-                remaining.zeroize();
-            }
-            if let Some(Some(mut remaining)) = keyfile_slot {
-                remaining.zeroize();
-            }
-            result
+            let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+            vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+                target.complete_change(&password, keyfile_bytes.as_deref(), revision, new_hash)
+            })
         }
-        // The failure path must not leave the new master password (or keyfile
-        // bytes) on the heap; the success path moved them into the session,
-        // which zeroizes them on close.
+        // Both temporary credentials stay guarded through completion, including
+        // cancellation and errors. Only successful adoption copies into a session.
         Err(e) => {
             if matches!(
                 vault::classify_save_error(&e),
@@ -550,14 +521,9 @@ pub(crate) async fn change_master_key(
                     });
                 }
             }
-            password.zeroize();
-            if let Some(bytes) = keyfile_bytes.as_deref_mut() {
-                bytes.zeroize();
-            }
             Err(e)
         }
-    };
-    result
+    }
 }
 
 #[tauri::command]

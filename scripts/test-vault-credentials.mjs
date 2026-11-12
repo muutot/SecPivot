@@ -54,6 +54,46 @@ const implementation = guarded
 const passwordType = guarded
   ? "type ObservedPassword = credentials::VaultPassword<ObservedSecret>;\ntype WirePassword = credentials::VaultPassword;\nfn observed(value: ObservedSecret) -> ObservedPassword { credentials::VaultPassword::new(value) }"
   : "type ObservedPassword = ObservedSecret;\ntype WirePassword = String;\nfn observed(value: ObservedSecret) -> ObservedPassword { value }";
+const masterSource = readSource("src-tauri/src/commands/vault.rs");
+const masterMatches = [
+  ...masterSource.matchAll(/^pub\(crate\) async fn change_master_key\([^]*?^}/gm),
+];
+assert.equal(masterMatches.length, 1);
+const masterHandler = masterMatches[0][0];
+const masterParameters = [...masterHandler.matchAll(/\bpassword: (String|VaultPassword),/g)];
+assert.equal(masterParameters.length, 1);
+const masterGuarded = masterParameters[0][1] === "VaultPassword";
+assert(!masterGuarded || guarded, "Master-change guard requires the shared credential type");
+const completion = readSource("src-tauri/src/vault/session.rs").match(
+  /pub\(crate\) fn complete_change\([^]*?\) -> Result<VaultState, String>/,
+);
+assert(completion, "Missing actual master-change completion contract");
+const completionBorrowed = /password: &str,/.test(completion[0]);
+assert.equal(completionBorrowed, masterGuarded);
+const masterTypes = masterGuarded
+  ? "use zeroize::Zeroizing;\ntype Password = super::credentials::VaultPassword<Secret>;\nfn observed(value: Secret) -> Password { super::credentials::VaultPassword::new(value) }"
+  : "type Password = Secret;\nfn observed(value: Secret) -> Password { value }";
+const masterCompletion = completionBorrowed
+  ? `fn complete_change(&mut self, password: &str, keyfile: Option<&[u8]>, _: u64, _: ()) -> Result<VaultState, String> {
+      check_adoption(password, keyfile); self.copied_password = password.to_owned(); self.copied_keyfile = keyfile.map(Vec::from); finish_adoption()
+    }`
+  : `fn complete_change(&mut self, password: Password, keyfile: Option<SecretBytes>, _: u64, _: ()) -> Result<VaultState, String> {
+      check_adoption(&password, keyfile.as_deref()); self.owned_password = Some(password); self.owned_keyfile = keyfile; finish_adoption()
+    }`;
+const masterFixture = readFileSync(
+  join(root, "tests/fixtures/master-change-credentials.rs"),
+  "utf8",
+);
+for (const marker of ["// MASTER_HANDLER", "// MASTER_TYPES", "// MASTER_COMPLETION"]) {
+  assert.equal(masterFixture.split(marker).length, 2);
+}
+const masterModule = masterFixture
+  .replace(
+    "// MASTER_HANDLER",
+    masterHandler.replace(/\bpassword: (String|VaultPassword),/, "password: Password,"),
+  )
+  .replace("// MASTER_TYPES", masterTypes)
+  .replace("// MASTER_COMPLETION", masterCompletion);
 const fixture = readFileSync(join(root, "tests/fixtures/vault-command-credentials.rs"), "utf8");
 for (const marker of ["// PRODUCTION_HANDLERS", "// PASSWORD_IMPLEMENTATION", "// PASSWORD_TYPE"]) {
   assert.equal(fixture.split(marker).length, 2);
@@ -67,7 +107,7 @@ try {
     fixture
       .replace("// PRODUCTION_HANDLERS", handlers.join("\n\n"))
       .replace("// PASSWORD_IMPLEMENTATION", implementation)
-      .replace("// PASSWORD_TYPE", passwordType),
+      .replace("// PASSWORD_TYPE", passwordType) + `\nmod master_change {\n${masterModule}\n}\n`,
   );
   writeFileSync(
     join(workspace, "Cargo.toml"),

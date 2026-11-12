@@ -17,6 +17,7 @@ use keepass::Database;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 /// Consecutive failed saves before the vault degrades to read-only.
 const SAVE_FAILURE_READ_ONLY_LIMIT: u32 = 3;
@@ -370,7 +371,7 @@ impl VaultSession {
         password: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let keyfile_bytes = read_keyfile(keyfile)?;
+        let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
         let (db, target, revision) = self.prepare_change()?;
         let new_hash = match persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
             Ok(hash) => hash,
@@ -384,7 +385,7 @@ impl VaultSession {
                 return Err(e);
             }
         };
-        self.complete_change(password.to_owned(), keyfile_bytes, revision, new_hash)
+        self.complete_change(password, keyfile_bytes.as_deref(), revision, new_hash)
     }
 
     /// Save As: persist the current database (same master key) to a new local
@@ -838,8 +839,8 @@ impl VaultSession {
     /// and re-snapshot. Only called after the persist succeeded.
     pub(crate) fn complete_change(
         &mut self,
-        password: String,
-        keyfile: Option<Vec<u8>>,
+        password: &str,
+        keyfile: Option<&[u8]>,
         revision: u64,
         new_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
@@ -849,8 +850,8 @@ impl VaultSession {
         if let Some(mut old) = self.password.take() {
             wipe_secret_string(&mut old);
         }
-        self.password = Some(password);
-        self.keyfile = keyfile;
+        self.password = Some(password.to_owned());
+        self.keyfile = keyfile.map(Vec::from);
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
