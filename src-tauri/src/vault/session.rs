@@ -482,9 +482,8 @@ impl VaultSession {
         self.modified_at = now_iso();
     }
 
-    /// Advance the revision for an in-memory-only mutation (group
-    /// expand/collapse) so snapshot ordering stays consistent without marking
-    /// the vault as having unsaved database changes.
+    /// Advance the revision for a session-visible change (group expansion or
+    /// save-target replacement) without adding unsaved database changes.
     pub(crate) fn bump_revision(&mut self) {
         self.revision += 1;
         self.cached_snapshot = None;
@@ -793,8 +792,10 @@ impl VaultSession {
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
-            self.cached_snapshot = None;
         }
+        // The saved target and recovery flags changed even when edits arrived
+        // meanwhile. Publish a new revision without marking those edits clean.
+        self.bump_revision();
         self.snapshot()
     }
 

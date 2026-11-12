@@ -1,5 +1,11 @@
 # Security Model
 
+Native save-as target adoption advances the snapshot revision after testing
+whether concurrent edits occurred. It clears cached path/recovery/warning state
+without marking those edits saved. Later persistence continues to the new local
+target; the original file/remote object remains unchanged in native synthetic
+controls. These tests do not prove actual IPC timing, provider or device behavior.
+
 Save-as reply rejection also gates the lock-screen quick-reopen path and picked
 display name: only an adopted reply from the active session may change them.
 Successful older destinations remain eligible for the recent-files list. Six

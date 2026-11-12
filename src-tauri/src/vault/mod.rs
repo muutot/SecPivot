@@ -20,6 +20,8 @@ mod hosts;
 mod import;
 mod merge;
 mod persist;
+#[cfg(test)]
+mod save_as_snapshot_tests;
 mod security;
 mod serialize;
 mod session;
@@ -233,9 +235,9 @@ pub struct RemoteTarget {
 
 /// The currently open vault. `db` holds the decrypted database; `password`
 /// and `keyfile` are kept only for save and cleared on close. `remote`
-/// is set when the vault came from S3. `revision` counts edits so a save
-/// completing after a concurrent edit does not clear the dirty flag, and so
-/// `snapshot` can reuse a cached tree instead of rebuilding it every call.
+/// is set when the vault came from S3. `revision` orders edits and save-target
+/// changes; a save completing after a concurrent edit preserves the dirty
+/// flag, and unchanged snapshots can reuse the cached tree.
 #[derive(Default)]
 pub struct VaultSession {
     pub(crate) path: Option<String>,

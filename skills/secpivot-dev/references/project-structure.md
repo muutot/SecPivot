@@ -1,5 +1,11 @@
 # Project Structure and Runtime Surfaces
 
+`vault/save_as_snapshot_tests.rs` exercises the actual native session and
+temporary KDBX persistence with prepare/edit/cache/persist/complete ordering.
+Save-as target adoption now advances revision and clears the full snapshot cache
+while retaining concurrent edits. Counter/warning injection and MemoryStorage
+are synthetic boundaries; actual Tauri/device/provider behavior is separate.
+
 `tests/vault-save-as-reopen.test.mjs` runs the actual vault/settings service graph
 with synthetic invoke/storage and cloned replies. The save-as quick-reopen side
 effect accepts only the gate-adopted reply from the active session; six controls

@@ -341,3 +341,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 另存为锁屏重开目标
 
 - [x] 被拒绝回复不得覆盖锁屏重开路径或显示名（SP-S114）：实际vault/settings服务图的6条合成回归从4pass/2fail转为全部通过，458条前端测试、Svelte检查及构建通过。正常选择名、旧revision/epoch、停放/关闭和invoke拒绝均有对照；成功写过的旧目标仍可加入最近文件。原生另存为revision/缓存、实际文件写入、手机选择器/provider及跨客户端行为不由本项关闭。
+
+## 审计补充 — 原生另存为快照发布
+
+- [x] 成功切换保存目标后发布新版本并清除全快照缓存（SP-S115）：比较捕获revision后再递增，保留并发dirty/修改时间；8条真实根库临时KDBX回归从3通过/5失败到全部通过，覆盖热缓存路径/只读/警告、连续目标版本及正常/失败/后续保存重开对照，原文件或MemoryStorage对象保持不变。指定根包codegen-units=256配置的完整458前端/847 Rust/ACL2/凭据25/剪贴板14/KeePass29/QuickXML1363门禁通过，临时配置已清理。刻意排列的并发、合成计数/warning与MemoryStorage不代表实际IPC时序、手机APK/选择器/provider或竞品互通验证。

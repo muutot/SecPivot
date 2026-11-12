@@ -1,5 +1,13 @@
 # Data Contracts
 
+Successful `complete_save_as` compares the captured edit revision before
+advancing the session revision and invalidating the full snapshot cache.
+Concurrent edits retain their dirty flag and modification time; the completion
+publishes the new local path/name and cleared read-only/mirror-warning state.
+Target-only changes therefore participate in frontend revision ordering.
+Native temporary-KDBX tests deliberately interleave prepare/edit/full-read/
+persist/complete; counter/warning states are injected and remote is MemoryStorage.
+
 `vault.saveAs` updates the lock-screen quick-reopen path/display name only when
 its reply is the snapshot actually accepted by the revision/epoch gate and its
 session is still active. A rejected reply returns the current cache without
