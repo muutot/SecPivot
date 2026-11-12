@@ -21,6 +21,18 @@ its new keyfile too. PersistOutcome adoption, revision handling and persistent
 save-error counting are unchanged. Buffers inside read/preparation/framework/
 renderer code remain separate audit surfaces; stored replacement is covered below.
 
+Four local/remote open/create preparations return PreparedKeyfile, a Zeroizing
+Option<Vec<u8>> established immediately after successful read_keyfile. It remains
+guarded through preparation errors, worker return/panic and discarded outputs.
+Commands take the bytes only inside VaultSessions::open's actual adoption callback.
+An active-slot mutex refusal drops the guarded result. Registry open adopts first
+and locks its registry afterwards: its local Unregistered guard closes the fresh
+session on callback error, registry poison or unwind. Successful registration moves
+the session out, leaving an empty guard. Direct session methods transfer only at
+immediate adoption. Session-owned inputs and IPC JSON/DTO shapes stay
+unchanged, with no extra keyfile clone. Stored replacement/close still wipe the
+adopted Vec. Save/refresh/merge job clones and framework/renderer buffers are separate.
+
 `session::wipe_replaced_keyfile` takes/wipes the previous stored Vec before
 adopting a new Option<Vec<u8>>. Local replace, remote adoption and complete_change
 all use it, including removal to None. Owned local/remote inputs still move

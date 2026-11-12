@@ -6146,6 +6146,67 @@ fn keyfile_replacement_master_keeps_new_credentials_through_save_and_reopen() {
 }
 
 #[test]
+fn keyfile_preparation_refusals_keep_the_existing_session() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let keyfile = dir.path().join("synthetic-factor.key");
+    std::fs::write(&keyfile, [5u8; 32]).unwrap();
+    let broken = dir.path().join("broken.kdbx");
+    std::fs::write(&broken, b"synthetic invalid database").unwrap();
+    let storage = crate::remote::MemoryStorage::default();
+    storage.seed("broken.kdbx", b"synthetic invalid database".to_vec());
+    let mut refuse = |attempt: &mut dyn FnMut(&mut VaultSession) -> Result<VaultState, String>| {
+        let before = session.require_db().unwrap().clone();
+        let path = session.path.clone();
+        assert!(attempt(&mut session).is_err());
+        assert_eq!(session.require_db().unwrap(), &before);
+        assert_eq!(session.path, path);
+        assert!(session.password.as_deref() == Some("master-password"));
+        assert!(session.keyfile.is_none());
+    };
+    refuse(&mut |session| session.open(&broken, "synthetic-new", Some(&keyfile)));
+    refuse(&mut |session| {
+        session.create(
+            &dir.path().join("new.kdbx"),
+            "synthetic-new",
+            "Aes",
+            "invalid-cipher",
+            "None",
+            Some(&keyfile),
+        )
+    });
+    refuse(&mut |session| {
+        session.open_remote(
+            Arc::new(storage.clone()),
+            "broken.kdbx",
+            "synthetic-new",
+            Some(&keyfile),
+            RemoteMode::InMemory,
+            dir.path(),
+            0,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+    });
+    refuse(&mut |session| {
+        session.create_remote(
+            Arc::new(storage.clone()),
+            "new.kdbx",
+            "synthetic-new",
+            "Aes",
+            "Aes256",
+            "invalid-compression",
+            Some(&keyfile),
+            RemoteMode::InMemory,
+            dir.path(),
+            0,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+    });
+    assert!(!dir.path().join("new.kdbx").exists());
+    assert!(storage.get("new.kdbx").is_err());
+}
+
+#[test]
 fn delete_group_moves_whole_subtree_to_recycle_bin_and_restores() {
     let dir = TempDir::new().unwrap();
     let (mut session, _) = create_session(&dir);

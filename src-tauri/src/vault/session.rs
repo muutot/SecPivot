@@ -100,8 +100,8 @@ impl VaultSession {
         password: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes) = prepare_local_open(path, password, keyfile)?;
-        self.adopt_local(db, path, password, keyfile_bytes)
+        let (db, mut keyfile_bytes) = prepare_local_open(path, password, keyfile)?;
+        self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))
     }
 
     /// Create an empty vault with the given KDF / cipher / compression and
@@ -115,9 +115,9 @@ impl VaultSession {
         compression: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes) =
+        let (db, mut keyfile_bytes) =
             prepare_local_create(path, password, kdf, cipher, compression, keyfile)?;
-        self.adopt_local(db, path, password, keyfile_bytes)
+        self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))
     }
 
     /// Open an existing vault stored on S3. `key` is the object key (e.g.
@@ -134,7 +134,7 @@ impl VaultSession {
         backup_count: usize,
         backup_template: &str,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes, key, base_hash) = prepare_remote_open(
+        let (db, mut keyfile_bytes, key, base_hash) = prepare_remote_open(
             storage.clone(),
             key,
             password,
@@ -149,7 +149,7 @@ impl VaultSession {
             storage,
             &key,
             password,
-            keyfile_bytes,
+            std::mem::take(&mut *keyfile_bytes),
             mode,
             local_dir,
             backup_count,
@@ -174,7 +174,7 @@ impl VaultSession {
         backup_count: usize,
         backup_template: &str,
     ) -> Result<VaultState, String> {
-        let (db, keyfile_bytes, key, base_hash) = prepare_remote_create(
+        let (db, mut keyfile_bytes, key, base_hash) = prepare_remote_create(
             storage.clone(),
             key,
             password,
@@ -192,7 +192,7 @@ impl VaultSession {
             storage,
             &key,
             password,
-            keyfile_bytes,
+            std::mem::take(&mut *keyfile_bytes),
             mode,
             local_dir,
             backup_count,

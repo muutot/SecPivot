@@ -32,6 +32,23 @@ until close; native temporary KDBX controls validate later save/reopen. Neither
 these tests nor the new-input guards prove framework/renderer/read/job buffers
 or complete process-memory erasure.
 
+Open/create preparation now owns new keyfile bytes in PreparedKeyfile/Zeroizing
+from successful read until actual session adoption. The guard travels in returned
+tuples and worker results; commands extract only inside the registry callback,
+so active-slot refusal/cancellation discards guarded bytes. Registry open adopts
+before locking the registry; a local Unregistered guard explicitly closes the fresh
+session on adoption error, registry poison or unwind, until registration transfers
+ownership. VaultSession has no global Drop cleanup. Direct session methods transfer
+at immediate adoption; registered new values remain valid until session close.
+Six added fixture groups cover62 paths/52 observed buffers across actual preparation
+bodies and complete command control flow, including actual registry open. Registry
+poison is injected after adoption; the session stub has explicit close and no Drop
+cleanup. Boundary reads/KDF/parsing/storage and state/adoption remain stubs, while
+Tokio workers/panic/abort and std mutex poison run. No raw pointer or
+released-memory observation is used. Native KDBX controls verify preserved sessions
+on refusal and credential fidelity. Existing read_capped error buffers are guarded;
+job clones, IPC/renderer buffers and whole-process erasure remain separate.
+
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid
 lengths or unrepresentable dates return fixed errors with no source content.

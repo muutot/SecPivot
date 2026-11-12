@@ -321,3 +321,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 会话旧密钥文件替换
 
 - [x] 替换或移除旧keyfile时擦除（SP-S109）：三入口共用wipe_replaced_keyfile；25条合成路径/25个自有buffer观察从12条遗漏到全部清理，14组fixture及三项/六种原生KDBX采用/保存/重开控制通过，完整452前端/834 Rust/ACL2/凭据14/KeePass29/QuickXML1363门禁通过。此项不关闭read/prepare/job/framework/renderer与真机/provider验证。
+
+## 审计补充 — 新密钥文件准备与采用
+
+- [x] 新建/打开keyfile的临时准备及结果所有权（SP-S110）：PreparedKeyfile守护成功read结果到实际session采用；Unregistered清理真实registry未登记fresh。更强固定源码复核62路径/52观察buffer原48个遗漏全部清理，20组fixture、10项原生keyfile与完整452前端/836 Rust/ACL2/凭据20/KeePass29/QuickXML1363通过；初版桩缺口和一次原因未明的完整进程异常退出证据保留。job/framework/renderer及真机/provider仍独立待验证。

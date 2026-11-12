@@ -13,6 +13,7 @@ use keepass::{Database, DatabaseKey};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use zeroize::Zeroizing;
 
 /// A successful authoritative commit can carry a failed optional mirror.
 /// Callers must adopt its hash/key and surface the warning, never retry as if
@@ -51,9 +52,13 @@ pub(crate) enum SaveTarget {
 /// the same wire format).
 pub(crate) const REMOTE_CHANGED_MARKER: &str = crate::remote::REMOTE_CONFLICT_MARKER;
 
-/// Result of a remote open/create: database, keyfile bytes, normalized key and
-/// the SHA-256 of the remote file bytes (the sync base hash).
-type PreparedRemote = (Database, Option<Vec<u8>>, String, PersistOutcome);
+/// New keyfile bytes stay guarded through preparation and result handoff.
+/// Transfer the bytes only when a session actually adopts them.
+pub(crate) type PreparedKeyfile = Zeroizing<Option<Vec<u8>>>;
+
+/// Result of a remote open/create: database, guarded keyfile, normalized key
+/// and the SHA-256 of the remote file bytes (the sync base hash).
+type PreparedRemote = (Database, PreparedKeyfile, String, PersistOutcome);
 
 /// Everything `persist_save` needs. `password`/`keyfile` are clones so the
 /// KDF can run without the lock; both are zeroized after use. `revision`
@@ -152,8 +157,8 @@ pub(crate) fn prepare_local_open(
     path: &Path,
     password: &str,
     keyfile: Option<&Path>,
-) -> Result<(Database, Option<Vec<u8>>), String> {
-    let keyfile_bytes = read_keyfile(keyfile)?;
+) -> Result<(Database, PreparedKeyfile), String> {
+    let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let data = super::file_io::read(path, "数据库文件")?;
     // Reuse the bytes just read: probing from disk again doubles I/O and
@@ -176,8 +181,8 @@ pub(crate) fn prepare_local_create(
     cipher: &str,
     compression: &str,
     keyfile: Option<&Path>,
-) -> Result<(Database, Option<Vec<u8>>), String> {
-    let keyfile_bytes = read_keyfile(keyfile)?;
+) -> Result<(Database, PreparedKeyfile), String> {
+    let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let mut db = Database::new();
     apply_kdf(&mut db, kdf)?;
@@ -202,7 +207,7 @@ pub(crate) fn prepare_remote_open(
     backup_template: &str,
 ) -> Result<PreparedRemote, String> {
     let key = validate_remote_key(key)?;
-    let keyfile_bytes = read_keyfile(keyfile)?;
+    let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
     let data = storage
         .get(&key)
@@ -244,7 +249,7 @@ pub(crate) fn prepare_remote_create(
     backup_template: &str,
 ) -> Result<PreparedRemote, String> {
     let key = validate_remote_key(key)?;
-    let keyfile_bytes = read_keyfile(keyfile)?;
+    let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
     let mut db = Database::new();
     apply_kdf(&mut db, kdf)?;

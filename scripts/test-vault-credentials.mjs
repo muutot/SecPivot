@@ -20,6 +20,15 @@ function readSource(path) {
     : readFileSync(join(root, path), "utf8");
 }
 const lock = readSource("src-tauri/Cargo.lock");
+const preparationSource = readSource("src-tauri/src/vault/persist.rs");
+const preparedAlias = preparationSource.match(/^pub\(crate\) type PreparedKeyfile = [^;]+;/m);
+const preparedGuarded = Boolean(preparedAlias);
+if (preparedGuarded) {
+  assert.equal(preparedAlias[0], "pub(crate) type PreparedKeyfile = Zeroizing<Option<Vec<u8>>>;");
+}
+const keyfileType = preparedGuarded
+  ? "type PreparedKeyfile = zeroize::Zeroizing<Option<ObservedBytes>>;"
+  : "type PreparedKeyfile = Option<ObservedBytes>;";
 function version(name) {
   const match = lock.match(new RegExp(`^name = "${name}"\\r?\\nversion = "([0-9.]+)"\\r?$`, "m"));
   assert(match, `Missing locked ${name} version`);
@@ -139,8 +148,40 @@ const replacementModule = replacementFixture
       sessionHelper("wipe_replaced_keyfile", false),
     ].join("\n\n"),
   );
+const preparationFixture = readFileSync(
+  join(root, "tests/fixtures/keyfile-preparation.rs"),
+  "utf8",
+);
+for (const marker of ["// PREPARED_KEYFILE_TYPE", "// PREPARATION_FUNCTIONS"]) {
+  assert.equal(preparationFixture.split(marker).length, 2);
+}
+const preparationFunctions = [
+  "prepare_local_open",
+  "prepare_local_create",
+  "prepare_remote_open",
+  "prepare_remote_create",
+].map((name) => {
+  const matches = [
+    ...preparationSource.matchAll(new RegExp(`^pub\\(crate\\) fn ${name}\\([^]*?^}`, "gm")),
+  ];
+  assert.equal(matches.length, 1, `Missing complete production ${name}`);
+  return matches[0][0].replaceAll("Option<Vec<u8>>", "Option<ObservedBytes>");
+});
+const preparationModule = preparationFixture
+  .replace("// PREPARATION_IMPORTS", preparedGuarded ? "use zeroize::Zeroizing;" : "")
+  .replace("// PREPARED_KEYFILE_TYPE", keyfileType)
+  .replace("// PREPARATION_FUNCTIONS", preparationFunctions.join("\n\n"));
 const fixture = readFileSync(join(root, "tests/fixtures/vault-command-credentials.rs"), "utf8");
-for (const marker of ["// PRODUCTION_HANDLERS", "// PASSWORD_IMPLEMENTATION", "// PASSWORD_TYPE"]) {
+const registrySource = readSource("src-tauri/src/vault/sessions.rs");
+const registryMatches = [...registrySource.matchAll(/^    pub fn open\([^]*?^    }/gm)];
+assert.equal(registryMatches.length, 1, "Missing complete production registry open");
+for (const marker of [
+  "// PRODUCTION_HANDLERS",
+  "// PASSWORD_IMPLEMENTATION",
+  "// PASSWORD_TYPE",
+  "// PREPARED_KEYFILE_TYPE",
+  "// REGISTRY_OPEN",
+]) {
   assert.equal(fixture.split(marker).length, 2);
 }
 const temporaryRoot = realpathSync(tmpdir());
@@ -152,8 +193,10 @@ try {
     fixture
       .replace("// PRODUCTION_HANDLERS", handlers.join("\n\n"))
       .replace("// PASSWORD_IMPLEMENTATION", implementation)
-      .replace("// PASSWORD_TYPE", passwordType) +
-      `\nmod master_change {\n${masterModule}\n}\nmod keyfile_replacement {\n${replacementModule}\n}\n`,
+      .replace("// PASSWORD_TYPE", passwordType)
+      .replace("// REGISTRY_OPEN", registryMatches[0][0])
+      .replace("// PREPARED_KEYFILE_TYPE", keyfileType) +
+      `\nmod master_change {\n${masterModule}\n}\nmod keyfile_replacement {\n${replacementModule}\n}\nmod keyfile_preparation {\n${preparationModule}\n}\nmod crypto { pub fn sha256_bytes(_: &[u8]) -> [u8; 32] { [0; 32] } }\n`,
   );
   writeFileSync(
     join(workspace, "Cargo.toml"),

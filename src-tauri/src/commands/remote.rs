@@ -83,7 +83,7 @@ pub(crate) async fn open_remote_vault(
     .await
     .map_err(|e| format!("远程打开任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, keyfile_bytes, key, base_hash)) => {
+        Ok((db, mut keyfile_bytes, key, base_hash)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
                 fresh.adopt_remote(
@@ -91,7 +91,7 @@ pub(crate) async fn open_remote_vault(
                     storage,
                     &key,
                     &password,
-                    keyfile_bytes,
+                    std::mem::take(&mut *keyfile_bytes),
                     mode,
                     &local_dir,
                     cfg.backup_count.clamp(0, 10) as usize,
@@ -168,7 +168,7 @@ pub(crate) async fn create_remote_vault(
     .await
     .map_err(|e| format!("远程创建任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, keyfile_bytes, key, base_hash)) => {
+        Ok((db, mut keyfile_bytes, key, base_hash)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
                 fresh.adopt_remote(
@@ -176,7 +176,7 @@ pub(crate) async fn create_remote_vault(
                     storage,
                     &key,
                     &password,
-                    keyfile_bytes,
+                    std::mem::take(&mut *keyfile_bytes),
                     mode,
                     &local_dir,
                     cfg.backup_count.clamp(0, 10) as usize,

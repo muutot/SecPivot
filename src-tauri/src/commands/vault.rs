@@ -58,10 +58,15 @@ pub(crate) async fn open_vault(
     .await
     .map_err(|e| format!("数据库打开任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, keyfile_bytes)) => {
+        Ok((db, mut keyfile_bytes)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
-                fresh.adopt_local(db, &path_for_work, &password, keyfile_bytes)
+                fresh.adopt_local(
+                    db,
+                    &path_for_work,
+                    &password,
+                    std::mem::take(&mut *keyfile_bytes),
+                )
             })
         }
         Err(e) => Err(e),
@@ -121,10 +126,15 @@ pub(crate) async fn create_vault(
     .await
     .map_err(|e| format!("数据库创建任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, keyfile_bytes)) => {
+        Ok((db, mut keyfile_bytes)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
-                fresh.adopt_local(db, &path_for_work, &password, keyfile_bytes)
+                fresh.adopt_local(
+                    db,
+                    &path_for_work,
+                    &password,
+                    std::mem::take(&mut *keyfile_bytes),
+                )
             })
         }
         Err(e) => Err(e),

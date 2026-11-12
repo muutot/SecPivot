@@ -57,7 +57,7 @@ Both run in `npm run verify`. The helper validates its created temporary root
 before recursive cleanup and uses the repository target cache; source copies
 contain no user vaults. Upstream ignored tests do not count as executed coverage.
 
-`npm run test:vault-credentials` executes fourteen synthetic credential-control-flow
+`npm run test:vault-credentials` executes twenty synthetic credential-control-flow
 tests in a disposable Cargo fixture, with a private copy of the repository lock
 and offline dependencies. It extracts the four current open/create handler
 bodies plus change_master_key; only the password parameter is replaced by an
@@ -77,6 +77,18 @@ the method bodies; database/storage/UUID/snapshot/outcome boundaries remain
 stubs. Four checks cover25 replacement/close paths and25 old/new buffers. This
 proves omitted stored-value clearing and adoption controls, not raw-memory
 disclosure or native IPC/provider behavior.
+
+The new-keyfile fixture extracts four complete preparation bodies; only the
+local return payload type is replaced by an observed live-owned buffer. Its
+read/KDF/parser/transport/mirror boundaries remain stubs. The command fixture
+also supplies observed preparation outputs and extracts actual registry open.
+The stub session has explicit close and no implicit Drop; registry poison is injected
+after adoption. Registered values remain valid until simulated close, while fresh
+values are closed by the production Unregistered guard on refusal. Six added checks
+cover62 paths/52 buffers with real Tokio panic/worker/abort. Type aliases and
+guarded result shapes follow current source; ordinary verification never uses
+source-ref. These checks are ownership evidence, not actual IPC/provider or
+whole-process memory-erasure proof.
 
 ## Browser vs desktop truth
 

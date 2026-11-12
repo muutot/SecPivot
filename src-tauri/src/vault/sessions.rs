@@ -313,8 +313,17 @@ impl VaultSessions {
         active: &mut VaultSession,
         adopt: impl FnOnce(&mut VaultSession) -> Result<VaultState, String>,
     ) -> Result<VaultOpenResult, String> {
-        let mut fresh = VaultSession::default();
-        let state = adopt(&mut fresh)?;
+        // A session owns credentials before registry insertion. Wipe them on
+        // adoption failure, registry poison or unwind until ownership transfers.
+        struct Unregistered(VaultSession);
+        impl Drop for Unregistered {
+            fn drop(&mut self) {
+                self.0.close();
+            }
+        }
+        let mut pending = Unregistered(VaultSession::default());
+        let fresh = &mut pending.0;
+        let state = adopt(fresh)?;
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         fresh.match_registrable_domain = inner.match_registrable_domain;
         fresh.rpc_session_timeout_secs = inner.rpc_session_timeout_secs;
@@ -336,7 +345,7 @@ impl VaultSessions {
             inner.order.push(current_id);
         }
         let id = inner.alloc_id();
-        *active = fresh;
+        *active = std::mem::take(fresh);
         inner.active_id = Some(id.clone());
         drop(inner);
         #[cfg(desktop)]
@@ -698,6 +707,64 @@ mod tests {
             let path = dir.path().join(name);
             fresh.create(&path, "master", "Aes", "Aes256", "None", None)
         }
+    }
+
+    #[test]
+    fn keyfile_adoption_refusal_and_unwind_keep_the_registered_session() {
+        let dir = TempDir::new().unwrap();
+        let keyfile = dir.path().join("synthetic-factor.key");
+        let candidate_path = dir.path().join("candidate.kdbx");
+        std::fs::write(&keyfile, [5u8; 32]).unwrap();
+        let mut candidate = VaultSession::default();
+        candidate
+            .create(
+                &candidate_path,
+                "synthetic-new",
+                "Aes",
+                "Aes256",
+                "None",
+                Some(&keyfile),
+            )
+            .unwrap();
+        candidate.close();
+        let candidate_bytes = std::fs::read(&candidate_path).unwrap();
+        let registry = VaultSessions::default();
+        let mut active = VaultSession::default();
+        let registered = registry
+            .open(&mut active, create_vault(&dir, "active.kdbx"))
+            .unwrap();
+        let previous = active.require_db().unwrap().clone();
+        let previous_path = active.path.clone();
+        for unwind in [false, true] {
+            let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                registry.open(&mut active, |fresh| {
+                    fresh.open(&candidate_path, "synthetic-new", Some(&keyfile))?;
+                    assert!(fresh.is_open());
+                    if unwind {
+                        panic!("synthetic refusal after keyfile adoption");
+                    }
+                    Err("synthetic refusal after keyfile adoption".into())
+                })
+            }));
+            if unwind {
+                assert!(attempt.is_err());
+            } else {
+                assert!(attempt.unwrap().is_err());
+            }
+            assert_eq!(active.require_db().unwrap(), &previous);
+            assert_eq!(active.path, previous_path);
+            assert!(active.password.as_deref() == Some("master"));
+            assert!(active.keyfile.is_none());
+            let inner = registry.inner.lock().unwrap();
+            assert_eq!(
+                inner.active_id.as_deref(),
+                Some(registered.session_id.as_str())
+            );
+            assert!(inner.parked.is_empty());
+            assert!(inner.order.is_empty());
+            assert_eq!(std::fs::read(&candidate_path).unwrap(), candidate_bytes);
+        }
+        registry.close_all(&mut active, false).unwrap();
     }
 
     #[test]

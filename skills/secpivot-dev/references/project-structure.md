@@ -26,8 +26,20 @@ remote adoption and master completion, including removal to None.
 `tests/fixtures/keyfile-replacement.rs` extracts five actual session methods
 and wipe helpers with Vec bound to a live-owned buffer observer. Four checks
 cover25 paths/25 old-and-new buffers while state/storage/snapshot/UUID/outcome
-boundaries are stubs. The shared credential runner now executes14 checks;
+boundaries are stubs. These four groups run in the shared credential suite;
 native temporary KDBX controls separately exercise three replacement boundaries.
+
+`persist.rs::PreparedKeyfile` guards each successfully read open/create keyfile
+through all four preparation functions and returned tuples. Direct session methods
+transfer immediately at adoption; commands take only inside the registry callback.
+`sessions.rs::open` owns an Unregistered guard until registration; failure or unwind
+closes the fresh session, while success moves it out. No global VaultSession Drop,
+IPC shape or session storage type changes. `tests/fixtures/keyfile-preparation.rs`
+extracts four preparation bodies with observed return payloads; boundary read/KDF/
+parse/storage/mirror functions are stubs. The command fixture adds20 keyfile paths,
+including post-adoption registry refusal, active-slot poison and discarded worker
+output. It extracts actual registry open and does not supply implicit session Drop.
+These six added checks cover62 paths/52 buffers; the credential runner now executes20 checks.
 
 Native KDBX `format/xml_db/timestamp.rs` now validates exactly eight Base64
 bytes and checked signed-second/year-one date arithmetic before publishing
