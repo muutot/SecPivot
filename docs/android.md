@@ -63,6 +63,8 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 > - `src-tauri/tests/android_acl.rs` 使用 Tauri 实际 ACL 解析器和构建生成的插件权限清单，在 Windows host 上按 Android target 复现修复前拒绝、验证修复后打开/新建命令可用于本地主窗口，并验证不授权其他窗口、远程网页或桌面/iOS。
 > - ACL 修复需重新构建安装 APK 后生效；系统选择器及提供商写入仍需真机复测。
 
+> 安装包归属复核（2026-11-12）：本地v1.6.5标签为006b810a349f7c2358b9bb775e91091e7bba5bdb，其前端调用/插件注册均为saf，Android capability仍使用screens而非windows。当前源码的windows主窗口修复不能视为用户已安装包的证明；反馈中的safe拼写仍缺包内字节或设备原始日志。此次无凭据GitHub Release/tag-ref API请求均返回HTTP403，没有取得发布APK或核对远端标签映射。五组固定标签/当前源码快照和403记录封存在mobile-release-v1-source-proof.json（SHA256 1d2aa3877fd457d7155962b1c42db802a244cd9b0a67f07e64e1a93c5da1e2ee）；选择器/provider仍未标记完成。
+
 ### 1. 工具链与脚手架
 
 - 安装 JDK（`tauri android init` 硬要求）、Android Studio / SDK（platform + build-tools + NDK）、Gradle
