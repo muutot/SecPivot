@@ -51,6 +51,10 @@ full viewport width, and selecting a primary category or pressing the backdrop
 closes the drawer. Keep the secondary row horizontally scrollable instead of
 wrapping labels character-by-character.
 
+Theme-mode and language options use the shared wrapping `.theme-segmented` group.
+Labels remain single-line within 30px buttons; complete options move to another
+row when larger configured fonts need more space. Theme swatches retain 12px.
+
 The `/settings` route wrapper (`.settings-shell`) owns `100dvh` and
 `env(safe-area-inset-*)` padding, while `SettingsDialog` fills its content box;
 do not put a second `100dvh` on the dialog or it will overflow the reserved

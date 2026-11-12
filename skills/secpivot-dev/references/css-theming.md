@@ -193,6 +193,10 @@ name reappears in any component outside `templates/`. Extend its
 
 `src/app.css` imports this file globally. Child panels must rely on these
 layout classes and add only their panel-specific layout.
+The theme/language option group wraps complete buttons when the available width
+cannot fit their single-line labels. Buttons share each row's remaining space,
+retain 30px height and 6px group gaps, and theme swatches never shrink below 12px.
+Check both locales at the allowed maximum secondary font size on narrow screens.
 `SettingToggleCard.svelte` and `SettingRangeCard.svelte` own the canonical
 standard-card markup and consume these classes without defining parallel scoped
 styles. Migrating these layout blocks into template components is planned

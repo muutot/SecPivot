@@ -368,14 +368,15 @@ header p {
 
 /* ── segmented control (theme mode / language) ── */
 .theme-segmented {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
 }
 
 .theme-segment {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -385,6 +386,7 @@ header p {
   color: var(--text-secondary);
   background: var(--input-bg);
   font-size: var(--settings-control-size, var(--font-size-secondary, 11px));
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -397,6 +399,7 @@ header p {
 .swatch {
   width: 12px;
   height: 12px;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 1px solid rgba(128, 128, 128, 0.5);
 }

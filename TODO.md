@@ -329,3 +329,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 持久化任务凭据克隆
 
 - [x] 三类job从准备到整个任务退出守护临时密码/keyfile（SP-S111）：五个factory以Zeroizing立即持有既有克隆，consumer移除手动尾部清理；80路径/120观察值的45个drop/panic/queued-abort遗漏全部清理，75个原正确值保持，25组fixture、12项原生keyfile（新增10个保存/另存/设置/刷新/合并控制）及完整452前端/838 Rust/ACL2/凭据25/KeePass29/QuickXML1363通过。DatabaseKey本体已有ZeroizeOnDrop；其临时派生值、框架/renderer/全进程与手机provider仍独立待审。
+
+## 审计补充 — 大字号窄屏选项显示
+
+- [x] 共享主题/语言按钮完整显示（SP-S112）：完整按钮按需换行、标签单行、色点12px；64个中英/默认与最大字号/四种宽度渲染案例及320px原生Tab/Enter通过，完整452前端/838 Rust/ACL2/凭据25/KeePass29/QuickXML1363门禁通过。保留30px高度、6px间距及语义主题变量；不据browser证据关闭Android选择器、provider、任意配色对比度或其他界面验证。
