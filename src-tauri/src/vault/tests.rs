@@ -6050,6 +6050,101 @@ fn change_master_key_supports_keyfile_only_and_keeps_session_alive() {
     assert_eq!(state.root.entries[0].title, "After");
 }
 
+#[derive(Clone, Copy)]
+enum KeyfileReplacementBoundary {
+    Local,
+    Remote,
+    Master,
+}
+
+fn check_native_keyfile_replacement(boundary: KeyfileReplacementBoundary) {
+    for next_has_keyfile in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let old_keyfile = dir.path().join("old.key");
+        let next_keyfile = dir.path().join("next.key");
+        std::fs::write(&old_keyfile, [3u8; 32]).unwrap();
+        std::fs::write(&next_keyfile, [7u8; 32]).unwrap();
+        let old_path = dir.path().join("old.kdbx");
+        let next_path = dir.path().join("next.kdbx");
+        let storage = crate::remote::MemoryStorage::default();
+        let mut session = VaultSession::default();
+        session
+            .create(
+                &old_path,
+                "synthetic-old",
+                "Aes",
+                "Aes256",
+                "None",
+                Some(&old_keyfile),
+            )
+            .unwrap();
+        let next_file = next_has_keyfile.then_some(next_keyfile.as_path());
+        match boundary {
+            KeyfileReplacementBoundary::Local => session
+                .create(
+                    &next_path,
+                    "synthetic-new",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    next_file,
+                )
+                .unwrap(),
+            KeyfileReplacementBoundary::Remote => session
+                .create_remote(
+                    Arc::new(storage.clone()),
+                    "next.kdbx",
+                    "synthetic-new",
+                    "Aes",
+                    "Aes256",
+                    "None",
+                    next_file,
+                    RemoteMode::InMemory,
+                    dir.path(),
+                    3,
+                    DEFAULT_BACKUP_TEMPLATE,
+                )
+                .unwrap(),
+            KeyfileReplacementBoundary::Master => session
+                .change_master_key("synthetic-new", next_file)
+                .unwrap(),
+        };
+        let next_bytes = next_has_keyfile.then_some(&[7u8; 32][..]);
+        assert!(session.keyfile.as_deref() == next_bytes);
+        assert!(session.password.as_deref() == Some("synthetic-new"));
+        session.require_db_mut().unwrap().meta.database_name = Some("Synthetic retained".into());
+        session.mark_dirty();
+        assert!(!session.save().unwrap().dirty);
+        session.close();
+
+        let persisted = match boundary {
+            KeyfileReplacementBoundary::Local => std::fs::read(&next_path).unwrap(),
+            KeyfileReplacementBoundary::Remote => storage.get("next.kdbx").unwrap(),
+            KeyfileReplacementBoundary::Master => std::fs::read(&old_path).unwrap(),
+        };
+        let old = super::helpers::build_database_key("synthetic-old", Some(&[3u8; 32])).unwrap();
+        assert!(keepass::Database::parse(&persisted, old).is_err());
+        let next = super::helpers::build_database_key("synthetic-new", next_bytes).unwrap();
+        let reopened = keepass::Database::parse(&persisted, next).unwrap();
+        assert!(reopened.meta.database_name.as_deref() == Some("Synthetic retained"));
+    }
+}
+
+#[test]
+fn keyfile_replacement_local_keeps_new_credentials_through_save_and_reopen() {
+    check_native_keyfile_replacement(KeyfileReplacementBoundary::Local);
+}
+
+#[test]
+fn keyfile_replacement_remote_keeps_new_credentials_through_save_and_reopen() {
+    check_native_keyfile_replacement(KeyfileReplacementBoundary::Remote);
+}
+
+#[test]
+fn keyfile_replacement_master_keeps_new_credentials_through_save_and_reopen() {
+    check_native_keyfile_replacement(KeyfileReplacementBoundary::Master);
+}
+
 #[test]
 fn delete_group_moves_whole_subtree_to_recycle_bin_and_restores() {
     let dir = TempDir::new().unwrap();

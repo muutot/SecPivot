@@ -57,7 +57,7 @@ Both run in `npm run verify`. The helper validates its created temporary root
 before recursive cleanup and uses the repository target cache; source copies
 contain no user vaults. Upstream ignored tests do not count as executed coverage.
 
-`npm run test:vault-credentials` executes ten synthetic command-control-flow
+`npm run test:vault-credentials` executes fourteen synthetic credential-control-flow
 tests in a disposable Cargo fixture, with a private copy of the repository lock
 and offline dependencies. It extracts the four current open/create handler
 bodies plus change_master_key; only the password parameter is replaced by an
@@ -70,6 +70,13 @@ owned-command cleanup paths,
 not native IPC, provider/KDBX behavior or complete process-memory erasure.
 The ordinary full gate runs current sources. `--source-ref <commit>` is an
 explicit read-only audit comparison, never the ordinary gate's source.
+
+The stored-keyfile fixture also extracts five session methods and the actual
+wipe helpers. It binds Vec to a live-owned observed buffer without changing
+the method bodies; database/storage/UUID/snapshot/outcome boundaries remain
+stubs. Four checks cover25 replacement/close paths and25 old/new buffers. This
+proves omitted stored-value clearing and adoption controls, not raw-memory
+disclosure or native IPC/provider behavior.
 
 ## Browser vs desktop truth
 

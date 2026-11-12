@@ -445,7 +445,7 @@ impl VaultSession {
         });
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         wipe_replaced_password(&mut self.password, password);
-        self.keyfile = keyfile;
+        wipe_replaced_keyfile(&mut self.keyfile, keyfile);
         self.db = Some(db);
         self.history_lifetime = uuid::Uuid::new_v4();
         self.dirty = false;
@@ -463,7 +463,7 @@ impl VaultSession {
     fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
         self.path = Some(path.to_string_lossy().into_owned());
         wipe_replaced_password(&mut self.password, password);
-        self.keyfile = keyfile;
+        wipe_replaced_keyfile(&mut self.keyfile, keyfile);
         self.db = Some(db);
         self.history_lifetime = uuid::Uuid::new_v4();
         self.dirty = false;
@@ -851,7 +851,7 @@ impl VaultSession {
             wipe_secret_string(&mut old);
         }
         self.password = Some(password.to_owned());
-        self.keyfile = keyfile.map(Vec::from);
+        wipe_replaced_keyfile(&mut self.keyfile, keyfile.map(Vec::from));
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -869,4 +869,12 @@ fn wipe_replaced_password(slot: &mut Option<String>, password: &str) {
         wipe_secret_string(&mut old);
     }
     *slot = Some(password.to_owned());
+}
+
+/// Wipe a stored keyfile before replacing it with another keyfile or None.
+fn wipe_replaced_keyfile(slot: &mut Option<Vec<u8>>, keyfile: Option<Vec<u8>>) {
+    if let Some(mut old) = slot.take() {
+        wipe_secret_bytes(&mut old);
+    }
+    *slot = keyfile;
 }

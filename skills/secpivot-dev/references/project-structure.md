@@ -19,7 +19,15 @@ new password/keyfile values. Completion is a stub matching the current session
 API; adopted credentials remain valid until simulated close. The production
 command and synchronous session method guard successfully read new keyfiles;
 `complete_change` borrows and copies only inside session adoption. Previous
-keyfile replacement and helper/framework/renderer buffers remain separate.
+keyfile replacement is covered below; helper/framework/renderer buffers remain separate.
+
+`session.rs::wipe_replaced_keyfile` owns stored-keyfile cleanup at local replace,
+remote adoption and master completion, including removal to None.
+`tests/fixtures/keyfile-replacement.rs` extracts five actual session methods
+and wipe helpers with Vec bound to a live-owned buffer observer. Four checks
+cover25 paths/25 old-and-new buffers while state/storage/snapshot/UUID/outcome
+boundaries are stubs. The shared credential runner now executes14 checks;
+native temporary KDBX controls separately exercise three replacement boundaries.
 
 Native KDBX `format/xml_db/timestamp.rs` now validates exactly eight Base64
 bytes and checked signed-second/year-one date arithmetic before publishing

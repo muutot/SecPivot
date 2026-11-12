@@ -18,8 +18,17 @@ temporary values move through the worker and remain owned until completion.
 `VaultSession::complete_change` borrows `&str`/`Option<&[u8]>` and copies only
 inside the resolved session callback. The synchronous session method guards
 its new keyfile too. PersistOutcome adoption, revision handling and persistent
-save-error counting are unchanged. Prior keyfile replacement and buffers inside
-read/preparation/framework/renderer code remain separate audit surfaces.
+save-error counting are unchanged. Buffers inside read/preparation/framework/
+renderer code remain separate audit surfaces; stored replacement is covered below.
+
+`session::wipe_replaced_keyfile` takes/wipes the previous stored Vec before
+adopting a new Option<Vec<u8>>. Local replace, remote adoption and complete_change
+all use it, including removal to None. Owned local/remote inputs still move
+without copying; master completion keeps its existing borrowed-copy contract.
+The keyfile-replacement fixture extracts actual adoption/replace/completion/close
+methods and wipe helpers, binding Vec to a live-owned observer. Database,
+transport, UUID, snapshot and outcome adoption remain stubs; tests cover25 paths,
+13 old values and12 adopted new values, not whole-process or native IPC erasure.
 
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid

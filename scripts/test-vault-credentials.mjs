@@ -94,6 +94,51 @@ const masterModule = masterFixture
   )
   .replace("// MASTER_TYPES", masterTypes)
   .replace("// MASTER_COMPLETION", masterCompletion);
+const sessionSource = readSource("src-tauri/src/vault/session.rs");
+function sessionMethod(name) {
+  const matches = [
+    ...sessionSource.matchAll(
+      new RegExp(`^    (?:pub(?:\\([^)]*\\))? )?fn ${name}\\([^]*?^    }`, "gm"),
+    ),
+  ];
+  assert.equal(matches.length, 1, `Missing complete production session ${name}`);
+  return matches[0][0];
+}
+function sessionHelper(name, required = true) {
+  const matches = [...sessionSource.matchAll(new RegExp(`^fn ${name}\\([^]*?^}`, "gm"))];
+  assert.equal(matches.length, required ? 1 : Number(matches.length > 0));
+  return matches[0]?.[0] ?? "";
+}
+const secretHelpers = readSource("src-tauri/src/vault/helpers.rs");
+const wipeHelpers = ["wipe_secret_string", "wipe_secret_bytes"].map((name) => {
+  const matches = [
+    ...secretHelpers.matchAll(new RegExp(`^pub\\(crate\\) fn ${name}\\([^]*?^}`, "gm")),
+  ];
+  assert.equal(matches.length, 1);
+  return matches[0][0];
+});
+const replacementFixture = readFileSync(
+  join(root, "tests/fixtures/keyfile-replacement.rs"),
+  "utf8",
+);
+for (const marker of ["// SESSION_METHODS", "// SESSION_HELPERS"]) {
+  assert.equal(replacementFixture.split(marker).length, 2);
+}
+const replacementModule = replacementFixture
+  .replace(
+    "// SESSION_METHODS",
+    ["adopt_local", "adopt_remote", "replace", "complete_change", "close_impl"]
+      .map(sessionMethod)
+      .join("\n\n"),
+  )
+  .replace(
+    "// SESSION_HELPERS",
+    [
+      ...wipeHelpers,
+      sessionHelper("wipe_replaced_password"),
+      sessionHelper("wipe_replaced_keyfile", false),
+    ].join("\n\n"),
+  );
 const fixture = readFileSync(join(root, "tests/fixtures/vault-command-credentials.rs"), "utf8");
 for (const marker of ["// PRODUCTION_HANDLERS", "// PASSWORD_IMPLEMENTATION", "// PASSWORD_TYPE"]) {
   assert.equal(fixture.split(marker).length, 2);
@@ -107,7 +152,8 @@ try {
     fixture
       .replace("// PRODUCTION_HANDLERS", handlers.join("\n\n"))
       .replace("// PASSWORD_IMPLEMENTATION", implementation)
-      .replace("// PASSWORD_TYPE", passwordType) + `\nmod master_change {\n${masterModule}\n}\n`,
+      .replace("// PASSWORD_TYPE", passwordType) +
+      `\nmod master_change {\n${masterModule}\n}\nmod keyfile_replacement {\n${replacementModule}\n}\n`,
   );
   writeFileSync(
     join(workspace, "Cargo.toml"),

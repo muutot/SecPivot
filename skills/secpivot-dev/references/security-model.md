@@ -21,6 +21,17 @@ session replacement guards the new read buffer too. Four synthetic tests cover
 simulated close. Native temporary KDBX controls cover adoption and refusal state,
 not whole-process erasure, actual IPC buffers or the old keyfile being replaced.
 
+Stored keyfile replacement now shares wipe_replaced_keyfile across local
+replace, remote adoption and master completion. It wipes a taken old Vec before
+adopting the new Option, including None. Four separate fixture tests execute25
+paths/25 live-owned observed buffers:12 replacement old values, one explicit-close
+old value and12 adopted new values. Actual replacement/close and wipe helper
+bodies are extracted unchanged, with Vec bound to the observer; database,
+transport, UUID, snapshot and outcome adoption are stubs. New values remain valid
+until close; native temporary KDBX controls validate later save/reopen. Neither
+these tests nor the new-input guards prove framework/renderer/read/job buffers
+or complete process-memory erasure.
+
 Native KDBX Timestamp deserialization requires exactly eight Base64-decoded
 bytes and checked duration/date arithmetic relative to 0001-01-01. Invalid
 lengths or unrepresentable dates return fixed errors with no source content.

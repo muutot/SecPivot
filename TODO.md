@@ -317,3 +317,7 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 ## 审计补充 — 更换主密钥临时凭据
 
 - [x] 更换主密钥的新临时密码/keyfile清理（SP-S108）：VaultPassword/Zeroizing跨越未poll/read/许可/prepare/worker/完成路径，completion借用并仅在session采用时复制；14条command路径/26个自有值从8条遗漏到全部清理，10组fixture与3项原生KDBX更换/重开及拒绝后旧凭据保持控制通过，完整452前端/831 Rust/ACL2/凭据10/KeePass29/QuickXML1363门禁通过。旧keyfile替换、read内部缓冲、框架/renderer、手机新APK/真机/provider不属于本项完成证据。
+
+## 审计补充 — 会话旧密钥文件替换
+
+- [x] 替换或移除旧keyfile时擦除（SP-S109）：三入口共用wipe_replaced_keyfile；25条合成路径/25个自有buffer观察从12条遗漏到全部清理，14组fixture及三项/六种原生KDBX采用/保存/重开控制通过，完整452前端/834 Rust/ACL2/凭据14/KeePass29/QuickXML1363门禁通过。此项不关闭read/prepare/job/framework/renderer与真机/provider验证。
