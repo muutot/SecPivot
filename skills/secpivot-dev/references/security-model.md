@@ -1,5 +1,13 @@
 # Security Model
 
+OTP copy feedback captures the subscription generation and session/entry key.
+Cleanup invalidates the generation; a late successful copy can only flash while
+both still match. Eight real-Svelte-effect controls pass with synthetic OTP and
+clipboard/timer APIs, including A-to-B-to-A, session revisit and disposal. This
+changes feedback ownership only; clipboard queue, clear/lock policy, native OTP
+generation and secret handling retain their existing contracts. Configured full
+verification passes; no OS clipboard or new DOM evidence.
+
 SP-S116 uses a separate nonsecret statusRevision for save/recovery publication.
 It never changes edit-conflict or history-selection identities. Native deltas
 carry the session's current persistence flags; the renderer rejects older status

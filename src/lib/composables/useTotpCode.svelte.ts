@@ -153,6 +153,7 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   let error = $state("");
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  let copyGeneration = 0;
 
   $effect(() =>
     vault.activeId.subscribe((value) => {
@@ -184,6 +185,8 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
     sync();
     ensureTicker();
     return () => {
+      // Invalidate pending copy feedback even when the same entry is revisited.
+      copyGeneration += 1;
       if (copiedTimer) clearTimeout(copiedTimer);
       copiedTimer = undefined;
       // Reset the copied badge: when the composable instance is reused for
@@ -203,11 +206,13 @@ export function useTotpCode(getUuid: () => string): TotpCodeState {
   const fraction = $derived(period > 0 ? Math.max(0, remaining) / period : 0);
 
   async function copy(): Promise<void> {
+    const generation = copyGeneration;
     const key = cacheKey(sessionId, getUuid());
     const entry = cache.get(key);
     if (!entry || !entry.code) return;
     try {
       await copyText(entry.code);
+      if (generation !== copyGeneration || key !== cacheKey(sessionId, getUuid())) return;
       copied = true;
       if (copiedTimer) clearTimeout(copiedTimer);
       copiedTimer = setTimeout(() => {

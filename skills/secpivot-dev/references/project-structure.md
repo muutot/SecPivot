@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`tests/totp-copy.test.mjs` compiles the complete production `useTotpCode` rune
+module and runs the actual Svelte client effects. Eight controls cover entry and
+session changes (including revisits/shared cache), disposal, copy refusal and the
+1200ms feedback timer. Vault/OTP, clipboard and timer/document APIs are synthetic.
+Copy feedback belongs to one subscription generation; cleanup invalidates pending
+success callbacks before another entry/session or a disposed instance can flash.
+The configured full verification passes with474 frontend tests and855 root Rust tests.
+
 `vault/save_status_snapshot_tests.rs` covers the new statusRevision publication,
 actual temporary KDBX save/change/reopen, deliberate concurrent edits, failures,
 history selection and delta/status serialization. Eight native tests pass under
