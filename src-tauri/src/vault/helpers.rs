@@ -328,11 +328,15 @@ pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String>
     urls
 }
 
+/// Resolve the KDBX tri-state without treating explicit true as inheritance.
+pub(crate) fn group_searching_enabled(setting: Option<bool>, inherited: bool) -> bool {
+    setting.unwrap_or(inherited)
+}
+
 /// Depth-first scan of `group`'s subtree for a `{REF:...}` match. First
 /// matching entry wins (KeePass semantics); the recycle bin is skipped.
 /// `inherited_searchable` carries the parent chain's `EnableSearching`
-/// resolution: KeePass treats an absent flag as *inherited*, so a group only
-/// contributes entries when every ancestor (and itself) is searchable.
+/// resolution: only an absent flag inherits; explicit true/false overrides it.
 pub(crate) fn walk_ref_match(
     group: GroupRef<'_>,
     bin_id: Option<GroupId>,
@@ -343,7 +347,7 @@ pub(crate) fn walk_ref_match(
     if bin_id == Some(group.id()) {
         return;
     }
-    let searchable = inherited_searchable && group.enable_searching != Some(false);
+    let searchable = group_searching_enabled(group.enable_searching, inherited_searchable);
     let needle = spec.text.to_lowercase();
     for entry in group.entries() {
         if !searchable {
@@ -432,7 +436,7 @@ pub(crate) fn walk_match(
     if bin_id == Some(group.id()) {
         return;
     }
-    let searchable = inherited_searchable && group.enable_searching != Some(false);
+    let searchable = group_searching_enabled(group.enable_searching, inherited_searchable);
     for entry in group.entries() {
         if !searchable {
             break;
@@ -494,7 +498,7 @@ pub(crate) fn walk_match_candidates(
     if bin_id == Some(group.id()) {
         return;
     }
-    let searchable = inherited_searchable && group.enable_searching != Some(false);
+    let searchable = group_searching_enabled(group.enable_searching, inherited_searchable);
     for entry in group.entries() {
         if !searchable {
             break;

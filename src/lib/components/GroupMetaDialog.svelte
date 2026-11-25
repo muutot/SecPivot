@@ -34,14 +34,20 @@
   // svelte-ignore state_referenced_locally
   let tags = $state(group.tags ?? "");
   // svelte-ignore state_referenced_locally
-  let enableSearching = $state(group.enableSearching);
+  const initialSearching = group.enableSearching;
+  let enableSearching = $state(initialSearching);
   let saving = $state(false);
 
   async function submit(): Promise<void> {
     if (saving) return;
     saving = true;
     try {
-      const current = await onsaved({ notes, tags, enableSearching });
+      const current = await onsaved({
+        notes,
+        tags,
+        // Saving notes/tags must not turn inherited search into an override.
+        ...(enableSearching !== initialSearching ? { enableSearching } : {}),
+      });
       if (current) onclose();
     } finally {
       saving = false;

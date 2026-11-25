@@ -1,0 +1,137 @@
+[
+  {
+    "name": "disabled parent and inherited descendants",
+    "groups": [
+      {
+        "uuid": "Root",
+        "parentUuid": null,
+        "name": "Root",
+        "searchingSetting": null,
+        "enableSearching": true,
+        "titles": []
+      },
+      {
+        "uuid": "Synthetic parent",
+        "parentUuid": "Root",
+        "name": "Synthetic parent",
+        "searchingSetting": false,
+        "enableSearching": false,
+        "titles": ["Synthetic parent entry"]
+      },
+      {
+        "uuid": "Synthetic child",
+        "parentUuid": "Synthetic parent",
+        "name": "Synthetic child",
+        "searchingSetting": null,
+        "enableSearching": false,
+        "titles": ["Synthetic child entry"]
+      },
+      {
+        "uuid": "Synthetic grandchild",
+        "parentUuid": "Synthetic child",
+        "name": "Synthetic grandchild",
+        "searchingSetting": null,
+        "enableSearching": false,
+        "titles": ["Synthetic grandchild entry"]
+      },
+      {
+        "uuid": "Synthetic leaf",
+        "parentUuid": "Synthetic grandchild",
+        "name": "Synthetic leaf",
+        "searchingSetting": true,
+        "enableSearching": true,
+        "titles": ["Synthetic leaf entry"]
+      }
+    ]
+  },
+  {
+    "name": "explicit child enables its inheriting grandchild",
+    "groups": [
+      {
+        "uuid": "Root",
+        "parentUuid": null,
+        "name": "Root",
+        "searchingSetting": null,
+        "enableSearching": true,
+        "titles": []
+      },
+      {
+        "uuid": "Synthetic parent",
+        "parentUuid": "Root",
+        "name": "Synthetic parent",
+        "searchingSetting": false,
+        "enableSearching": false,
+        "titles": ["Synthetic parent entry"]
+      },
+      {
+        "uuid": "Synthetic child",
+        "parentUuid": "Synthetic parent",
+        "name": "Synthetic child",
+        "searchingSetting": true,
+        "enableSearching": true,
+        "titles": ["Synthetic child entry"]
+      },
+      {
+        "uuid": "Synthetic grandchild",
+        "parentUuid": "Synthetic child",
+        "name": "Synthetic grandchild",
+        "searchingSetting": null,
+        "enableSearching": true,
+        "titles": ["Synthetic grandchild entry"]
+      },
+      {
+        "uuid": "Synthetic leaf",
+        "parentUuid": "Synthetic grandchild",
+        "name": "Synthetic leaf",
+        "searchingSetting": false,
+        "enableSearching": false,
+        "titles": ["Synthetic leaf entry"]
+      }
+    ]
+  },
+  {
+    "name": "explicit parent overrides a disabled root",
+    "groups": [
+      {
+        "uuid": "Root",
+        "parentUuid": null,
+        "name": "Root",
+        "searchingSetting": false,
+        "enableSearching": false,
+        "titles": []
+      },
+      {
+        "uuid": "Synthetic parent",
+        "parentUuid": "Root",
+        "name": "Synthetic parent",
+        "searchingSetting": true,
+        "enableSearching": true,
+        "titles": ["Synthetic parent entry"]
+      },
+      {
+        "uuid": "Synthetic child",
+        "parentUuid": "Synthetic parent",
+        "name": "Synthetic child",
+        "searchingSetting": null,
+        "enableSearching": true,
+        "titles": ["Synthetic child entry"]
+      },
+      {
+        "uuid": "Synthetic grandchild",
+        "parentUuid": "Synthetic child",
+        "name": "Synthetic grandchild",
+        "searchingSetting": null,
+        "enableSearching": true,
+        "titles": ["Synthetic grandchild entry"]
+      },
+      {
+        "uuid": "Synthetic leaf",
+        "parentUuid": "Synthetic grandchild",
+        "name": "Synthetic leaf",
+        "searchingSetting": false,
+        "enableSearching": false,
+        "titles": ["Synthetic leaf entry"]
+      }
+    ]
+  }
+]

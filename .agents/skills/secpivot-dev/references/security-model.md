@@ -1,5 +1,15 @@
 # Security Model
 
+Group search settings control discoverability, not authorization. Native tree
+serialization and matching/REF resolve the nearest explicit setting; only None
+inherits, root default is true. Scope selection never reinterprets the effective
+snapshot value. Recycle-bin skipping stays independent of explicit search enable.
+Notes/tag saves omit an unchanged toggle to preserve inheritance. Nine synthetic
+native tests (including temporary encrypted KDBX save/reopen) and twelve frontend
+controls pass; shared wire projections bind search fields only, with random
+identities normalized. These checks do not access real vaults, execute auto-type,
+or prove actual IPC, DOM, device/provider behavior or any access-control boundary.
+
 OTP copy feedback captures the subscription generation and session/entry key.
 Cleanup invalidates the generation; a late successful copy can only flash while
 both still match. Eight real-Svelte-effect controls pass with synthetic OTP and

@@ -18,6 +18,7 @@ export function buildDemoVaultState(): VaultState {
       isRecycleBin: false,
       isExpanded: true,
       enableSearching: true,
+      searchingSetting: null,
       children: [
         {
           uuid: "grp-web",
@@ -26,6 +27,7 @@ export function buildDemoVaultState(): VaultState {
           isRecycleBin: false,
           isExpanded: true,
           enableSearching: true,
+          searchingSetting: null,
           entries: [],
           children: [
             {
@@ -35,6 +37,7 @@ export function buildDemoVaultState(): VaultState {
               isRecycleBin: false,
               isExpanded: true,
               enableSearching: true,
+              searchingSetting: null,
               children: [],
               entries: [
                 {
@@ -71,6 +74,7 @@ export function buildDemoVaultState(): VaultState {
               isRecycleBin: false,
               isExpanded: true,
               enableSearching: true,
+              searchingSetting: null,
               children: [],
               entries: [
                 {
@@ -96,6 +100,7 @@ export function buildDemoVaultState(): VaultState {
           isRecycleBin: false,
           isExpanded: true,
           enableSearching: true,
+          searchingSetting: null,
           children: [],
           entries: [
             {
@@ -131,6 +136,7 @@ export function buildDemoVaultState(): VaultState {
           isRecycleBin: false,
           isExpanded: true,
           enableSearching: true,
+          searchingSetting: null,
           entries: [],
           children: [
             {
@@ -140,6 +146,7 @@ export function buildDemoVaultState(): VaultState {
               isRecycleBin: false,
               isExpanded: true,
               enableSearching: true,
+              searchingSetting: null,
               children: [],
               entries: [
                 {
@@ -177,6 +184,7 @@ export function buildDemoVaultState(): VaultState {
           isRecycleBin: false,
           isExpanded: true,
           enableSearching: true,
+          searchingSetting: null,
           children: [],
           entries: [
             {

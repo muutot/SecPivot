@@ -1,5 +1,21 @@
 # Project Structure and Runtime Surfaces
 
+`vault/group_search_tests.rs` covers the group-search raw/effective contract,
+default/root inheritance, explicit overrides, save/reopen, notes preservation,
+native matching/candidates/REF and recycle-bin exclusion. Nine tests pass.
+`tests/fixtures/group-search-snapshots.json` is checked against the actual native
+serialized search fields after temporary KDBX reopen (random IDs normalized).
+`tests/group-search.test.mjs` compiles the complete production filter through the
+Svelte client compiler/runtime and uses this shared projection plus the real
+advanced matcher/tree collector. `group-search-demo.test.mjs` executes the actual
+demo service graph with synthetic storage; `group-search-dialog.test.mjs` extracts
+complete production initialization/submit with a plain state seam. Together they
+add twelve controls, without actual native IPC or rendered component evidence.
+`src/lib/utils/group-search.ts` resolves only browser demo search metadata before/
+after edits and on loading; native snapshots are resolved in vault/serialize.rs
+using vault/helpers.rs. GroupMetaDialog preserves raw inheritance when the toggle
+is unchanged. No markup, CSS, theme-token or component layout change is involved.
+
 `tests/totp-copy.test.mjs` compiles the complete production `useTotpCode` rune
 module and runs the actual Svelte client effects. Eight controls cover entry and
 session changes (including revisits/shared cache), disposal, copy refusal and the

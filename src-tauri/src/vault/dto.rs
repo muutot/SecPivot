@@ -177,11 +177,11 @@ pub struct VaultGroup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_icon: Option<String>,
     pub is_recycle_bin: bool,
-    /// KeePass group option: whether entries **of this group** participate in
-    /// search. Per-group (KeePass semantics) — it excludes this group's own
-    /// entries but not its descendants, which each carry their own flag.
-    /// `None` in the KDBX means enabled (default).
+    /// Effective search participation, resolved from the nearest explicit
+    /// KDBX setting. Only an unset setting inherits; the root defaults to true.
     pub enable_searching: bool,
+    /// Original KDBX setting; null means inherit rather than explicit true.
+    pub searching_setting: Option<bool>,
     /// KeePass group notes (`Group.notes`). Read-only for now — SecPivot
     /// surfaces them but does not edit them.
     #[serde(skip_serializing_if = "Option::is_none")]

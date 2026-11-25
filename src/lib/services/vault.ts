@@ -46,6 +46,7 @@ import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
 import { computeSecurityReport } from "$lib/utils/security-report";
+import { resolveDemoGroupSearching } from "$lib/utils/group-search";
 import {
   collectGroups as collectAllGroups,
   findBinGroup,
@@ -398,11 +399,13 @@ function deepClone<T>(value: T): T {
 function applyEdit(mutator: (draft: VaultState) => void, markDirty = true): VaultState {
   const current = browserState ?? buildDemoVaultState();
   const next = deepClone(current);
+  resolveDemoGroupSearching(next.root);
   if (markDirty) {
     next.dirty = true;
     next.modifiedAt = new Date().toISOString();
   }
   mutator(next);
+  resolveDemoGroupSearching(next.root);
   browserState = next;
   return deepClone(next);
 }
@@ -416,6 +419,7 @@ function ensureBinGroup(root: VaultGroup): VaultGroup {
     name: "Recycle Bin",
     isRecycleBin: true,
     enableSearching: true,
+    searchingSetting: null,
     isExpanded: true,
     children: [],
     entries: [],
@@ -452,6 +456,7 @@ async function browserLoad(): Promise<VaultState | null> {
       const parsed = JSON.parse(raw) as VaultState;
       parsed.revision ??= 0;
       parsed.statusRevision ??= 0;
+      resolveDemoGroupSearching(parsed.root);
       return parsed;
     }
   } catch {
@@ -1683,6 +1688,7 @@ export const vault: VaultStore = {
         name: input.name,
         isRecycleBin: false,
         enableSearching: true,
+        searchingSetting: null,
         isExpanded: true,
         children: [],
         entries: [],
@@ -1733,7 +1739,7 @@ export const vault: VaultStore = {
       if (!group) throw new Error("group not found");
       if (meta.notes !== undefined) group.notes = meta.notes.trim() || undefined;
       if (meta.tags !== undefined) group.tags = meta.tags.trim() || undefined;
-      if (meta.enableSearching !== undefined) group.enableSearching = meta.enableSearching;
+      if (meta.enableSearching !== undefined) group.searchingSetting = meta.enableSearching;
     });
     state.set(applyBackendState(result));
     return result;

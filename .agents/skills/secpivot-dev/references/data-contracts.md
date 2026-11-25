@@ -1,13 +1,23 @@
 # Data Contracts
 
-SP-S118 is open: group snapshots turn native None into true, and list filtering
-resolves flags only inside the selected subtree. A disabled ancestor disappears
-from that index when its child is selected; explicit true under false is also
-incorrectly suppressed by ancestor AND. Six actual-rune controls reproduce both
-frontend cases (4 pass, 2 fail). Native matching/REF AND propagation is static
-evidence only. Official KeePassXC resolves the nearest explicit flag; only None
-inherits. Correctness requires original tri-state and effective values to remain
-distinct and independent of list scope. Remediation/native execution are pending.
+Group snapshots retain `searchingSetting: boolean | null` as the original KDBX
+tri-state and expose `enableSearching: boolean` as the effective value resolved
+over the complete tree. Only null inherits; an explicit true/false overrides the
+parent, and the root inherits true. `useEntryFilter` uses the effective value;
+selected scope only chooses candidate groups. Native matching and REF use the
+same resolver, while recycle-bin exclusion remains independent. This follows
+the inspected official KeePassXC nearest-explicit-setting behavior (SP-S118).
+GroupMetaDialog omits enableSearching when its effective toggle is unchanged,
+so notes/tags edits preserve native None. The update command still treats an
+omitted/null argument as keep, and a boolean as an explicit setting; a reset-to-
+inherit UI/API is outside this fix. Demo creation uses null, and the demo service
+resolves the whole tree on load and before/after mutations. Legacy demo groups
+without searchingSetting retain their old boolean as an explicit setting;
+already-lost inheritance cannot be reconstructed. Nine native temporary-KDBX
+tests pass, including three saved/reopened serialized wire projections shared
+with real-rune filter tests. Twelve frontend controls cover filtering, actual
+demo services and extracted dialog submission. Wire projection normalizes random
+identities and tests search fields; it is not full native IPC/page DOM proof.
 
 SP-S116 adds `statusRevision` to native VaultState and both MutationDelta variants.
 The renderer compares edit `revision` first, then this persistence-status counter;
@@ -859,7 +869,7 @@ KeePass per-entry `QualityCheck` is exposed as `qualityCheck` (KDBX default `tru
 KDBX `CustomData` maps at all three levels (entry, group, database-meta) are projected read-only into `CustomDataEntry[]` (`{ key, value?, binary?, modified? }`, sorted by key; string values are plaintext, binary values base64) on `VaultEntry.customData`, `VaultGroup.customData`, and `VaultState.metaCustomData`. SecPivot never writes these — they are plugin metadata authored by other KeePass clients and must survive edits and saves untouched; `write_fields`/`apply_patch_fields`/`sync_custom_fields` and group mutations never touch `custom_data`. Fidelity is verified by the `custom_data_round_trips_through_edit_and_save` test and the cross-client `foreign_attributes_survive_edits_and_flags_round_trip` test, which seeds entry/group CustomData plus foreign OverrideURL/colors/quality/group meta, runs SecPivot field + flag + group-meta edits, and asserts everything survives save + reopen (no real second KeePass client runs in CI).
 
 The database meta name and description (`DatabaseName`/`DatabaseDescription`) are exposed on `VaultState.databaseName?`/`databaseDescription?` (KDBX `None` reads as absent) and are editable via `update_db_meta` — each arg is a tri-state: present string (including empty) sets the KDBX meta field, omitted leaves it untouched; an empty string clears the field. Both setters also refresh the corresponding `..._changed` KDBX meta timestamp. Like entry edits, this marks the vault dirty and bumps the revision, so the frontend must refresh `VaultState` afterwards (the command returns it).
-| `VaultGroup` | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `enableSearching: bool` (KeePass group option; `false` excludes the group's entries from the entry-list search, auto-type matching, and `{REF:...}` resolution — SP-S118 remains open: KDBX keeps the raw optional flag, snapshots currently replace None with true, scoped renderer ancestry and native ancestor AND do not resolve inheritance/explicit overrides correctly; browsing still shows entries — only active searches use the gate; writable via `update_group_meta`), `notes?`, `tags?` (comma-separated; writable via `update_group_meta`), `isExpanded: bool`, `customData: CustomDataEntry[]`, `children: VaultGroup[]`, `entries: VaultEntry[]` |
+| `VaultGroup` | `uuid`, `parentUuid` (null for root), `name`, `icon?`, `enableSearching: bool` (effective nearest-explicit search setting; only raw null inherits, root default true; active list searches, auto-type matching and `{REF:...}` use it; browsing still shows entries), `searchingSetting: bool | null` (original KDBX flag; always present in native JSON, optional only for legacy demo compatibility; `update_group_meta` accepts an explicit boolean or preserves the setting on omission; unchanged dialog toggle is omitted), `notes?`, `tags?` (comma-separated; writable via `update_group_meta`), `isExpanded: bool`, `customData: CustomDataEntry[]`, `children: VaultGroup[]`, `entries: VaultEntry[]` |
 | `VaultState` | `path`, `fileName`, `root: VaultGroup`, `dirty: bool`, `readOnly: bool` (true after 3 consecutive save failures; the write path refuses until a successful save/save-as resets it), `modifiedAt`, `revision: u64` (monotonic session edit revision), `customIcons?` (authoritative `Record<uuid, dataUrl>` on open/create/full refresh; omitted on mutation results), `databaseName?`, `databaseDescription?`, `entryTemplatesGroup?` (KDBX `Meta.EntryTemplatesGroup` uuid; the group whose direct entries prefill new entries via the editor's template selector), `metaCustomData: CustomDataEntry[]` |
 | `VaultOpenResult` | `sessionId: String`, `state: VaultState` — returned by the four open/create commands; the renderer keeps `sessionId` so later commands can address that session (tabs) |
 | `SessionInfo` | `sessionId: String`, `fileName: String`, `path: String`, `dirty: bool` — one open session for the tab bar (active first, then parked in park order) |

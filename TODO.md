@@ -352,4 +352,20 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 
 - [x] OTP复制反馈必须属于当前条目/会话订阅（SP-S117）：订阅cleanup使旧代次失效，成功回调同时比较代次和session/entry key；实际Svelte client effects八条回归通过，含A→B→A（共享cache）、会话切换/返回、销毁、失败及1200ms提示清除。修复前同套测试2pass/6fail，当前8pass；指定配置完整verify前端474/根Rust855/ACL2等通过。合成剪贴板/OTP和手动timer，不是OS剪贴板/DOM/设备时序证明。
 
-- [ ] 分组搜索必须按原始三态设置解析继承与显式覆盖，与搜索选择范围无关（SP-S118）：实际完整rune六项4pass/2fail，子范围遗漏祖先导致继承禁止失效，全范围AND导致显式开启失效；原生快照丢失None、matcher/REF传播AND已静态复核。待完整原生有效值/原始设置契约、保存重开和真实快照跨范围/原生查找回归，不只补子范围父索引。
+- [x] 分组搜索必须按原始三态设置解析继承与显式覆盖，与搜索选择范围无关（SP-S118）：实际完整rune六项4pass/2fail，子范围遗漏祖先导致继承禁止失效，全范围AND导致显式开启失效；原生快照丢失None、matcher/REF传播AND已静态复核。已实现raw/effective全树解析、未改开关省略与demo兼容，原生临时KDBX9条（含3组实际wire投影共享）及新增前端12条通过。本轮提交后完整门禁实测通过：check 0错误0警告、check:contract（154 TS键⊆Rust）、前端495/495、Rust lib 868/868、clippy 0警告、build/format通过，group-search专项12/12。实现与验证均已完成；本项保留为已交付，不只补子范围父索引。
+
+- [ ] 搜索字段与分组自动输入单选组提供radio/aria-checked、单Tab停留点及方向键导航（SP-S119）：完整实际组件12组server HTML确认7/3普通按钮、一个视觉active但无选中语义，源码无组内方向键；已有RadioGroup可复用。按用户只读审计要求未改源码，待主题门禁/28px紧凑接入及实际浏览器键盘、暗亮中英窄屏验证，不用SSR代替实际交互。
+
+- [ ] 同名已保存搜索在发布当前store前保持唯一名称/列表键，按名称删除只移除对应查询（SP-S120）：完整save/delete生产handler与实际settings服务、合成localStorage确认即时/120ms保存后当前两项同名，保存副本已name/name 2，删除同名两项都移除；实际Svelte键validator独立拒绝，未测挂载UI/Tauri回复。只读审计未改源码，待复用规范化与即时subscriber/删除/持久化及实际组件回归。
+
+- [ ] 后台同UUID快照刷新保持用户已关闭的详情面板（SP-S121）：完整usePanelLayout/useVaultSelection经实际Svelte client compiler/runtime执行，13个行为检查11pass/2fail；选择版本不变的两次对象重绑定均重新展开。待稳定UUID派生或显式选择身份门禁，保留主动同条目重选、showDetailOnSelect与一次右键抑制控制；只读未改源码，页面DOM/真实后台事件仍待验证。
+
+- [ ] 行内收藏/复制按钮Enter/Space只执行自身动作，不额外触发行选择（SP-S122）：完整生产EntryTable隔离Edge真实Enter确认select后copy-username，Space收藏对照正常；子ArrowDown进入行导航另记录观察。只读未改源码，待来源门禁及三按钮/行自身/密码单元格真实键盘回归。
+
+- [ ] 详情表格键盘定位正确包含固定表头高度，End目标行完整可见（SP-S123）：实际DOM三模式9次测量7pass/2fail，desktop/mobileColumns末行均裁切28px、手机摘要与PageUp/Home对照正常；截图已复核。只读未改源码，待内容原点/可见区域统一与密度/分隔/resize浏览器回归。
+
+- [ ] 可见列拖放的原位/邻位判定使用可见索引，隐藏列不阻止合法移动（SP-S124）：完整生产rune六项4pass/2fail，隐藏前缀title到末尾和隐藏中间url到末尾均提前返回；完整页面真实pointer出现末尾插入标记但current/persisted未动，0pageerror/clipboard calls。只读未改源码，待统一fromVisible与toIndex并覆盖隐藏位置/custom/保存/重载。
+
+## 审计补充 — Android TLS信任依赖
+
+- [ ] 更新Android显式根与WebPKI的失信链修复（SP-S125）：当前锁root-certs1.0.9仍含emSign ECC Root CA G3，webpki0.103.15缺拒绝SPKI，net.rs异步/阻塞builder接入已静态确认；官方0382/0383同CVE合为1项，需分别升级到1.0.10+/0.103.16+。只读未改依赖，待兼容锁差异、正常TLS/远程回归、完整verify及Android目标/真机验证；未复现攻击、凭据泄露或用户安装包版本。其余OSV命中按维护提示/可选feature/平台/待验证路径记录，不以19版本命中当作19产品漏洞。

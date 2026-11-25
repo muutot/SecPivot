@@ -10591,7 +10591,7 @@ fn autotype_match_skips_groups_with_searching_disabled() {
 
     // The flag is inherited (KeePass semantics: an absent flag means "take
     // the parent's"): a descendant under a disabled group stays excluded even
-    // when its own flag is unset/enabled.
+    // when its own flag is unset. An explicit enable is covered separately.
     let state = session
         .add_group(&GroupInput {
             parent_uuid: Some(group_a.clone()),
@@ -10642,7 +10642,8 @@ fn autotype_match_skips_groups_with_searching_disabled() {
         "group A must expose the disabled flag"
     );
     let a1 = group.children[0].clone();
-    assert!(a1.enable_searching);
+    assert!(!a1.enable_searching);
+    assert_eq!(a1.searching_setting, None);
 
     // Re-enabling the ancestor restores the whole subtree's matchability.
     {

@@ -79,6 +79,7 @@ pub(crate) fn icon_to_data_url(bytes: &[u8]) -> String {
 
 pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
     let root_ref = db.root();
+    let searchable = super::helpers::group_searching_enabled(root_ref.enable_searching, true);
     VaultGroup {
         uuid: ROOT_GROUP_UUID.to_owned(),
         parent_uuid: None,
@@ -86,7 +87,8 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         icon: None,
         custom_icon: None,
         is_recycle_bin: false,
-        enable_searching: root_ref.enable_searching.unwrap_or(true),
+        enable_searching: searchable,
+        searching_setting: root_ref.enable_searching,
         notes: root_ref.notes.clone(),
         tags: (!root_ref.tags.is_empty()).then(|| root_ref.tags.join(", ")),
         is_expanded: root_ref.is_expanded,
@@ -94,7 +96,7 @@ pub(crate) fn build_group_tree(db: &Database) -> VaultGroup {
         autotype: group_autotype_config(&root_ref),
         children: root_ref
             .groups()
-            .filter_map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid))
+            .filter_map(|g| build_group(&g, ROOT_GROUP_UUID, db.meta.recyclebin_uuid, searchable))
             .collect(),
         entries: root_ref
             .entries()
@@ -110,12 +112,15 @@ fn build_group(
     group: &GroupRef<'_>,
     parent_uuid: &str,
     recyclebin_uuid: Option<Uuid>,
+    inherited_searchable: bool,
 ) -> Option<VaultGroup> {
     let uuid = group.id().uuid().to_string();
     let is_bin = Some(group.id().uuid()) == recyclebin_uuid;
+    let searchable =
+        super::helpers::group_searching_enabled(group.enable_searching, inherited_searchable);
     let children = group
         .groups()
-        .filter_map(|g| build_group(&g, &uuid, recyclebin_uuid))
+        .filter_map(|g| build_group(&g, &uuid, recyclebin_uuid, searchable))
         .collect::<Vec<_>>();
     let entries = group
         .entries()
@@ -137,7 +142,8 @@ fn build_group(
             _ => None,
         },
         is_recycle_bin: is_bin,
-        enable_searching: group.enable_searching.unwrap_or(true),
+        enable_searching: searchable,
+        searching_setting: group.enable_searching,
         notes: group.notes.clone(),
         tags: (!group.tags.is_empty()).then(|| group.tags.join(", ")),
         is_expanded: group.is_expanded,

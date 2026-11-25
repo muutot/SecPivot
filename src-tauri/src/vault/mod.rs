@@ -12,6 +12,8 @@ mod entry_save;
 mod entry_save_tests;
 pub mod exchange;
 pub(crate) mod file_io;
+#[cfg(test)]
+mod group_search_tests;
 pub(crate) mod helpers;
 #[cfg(test)]
 mod history_selection_tests;

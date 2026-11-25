@@ -155,8 +155,10 @@ export interface VaultGroup {
   /** UUID of the database custom icon used by this group, if any. */
   customIcon?: string;
   isRecycleBin: boolean;
-  /** KeePass group option: whether this group's own entries are searchable. */
+  /** Effective search participation, resolved over the complete native tree. */
   enableSearching: boolean;
+  /** Original KDBX setting: null inherits; absent only on legacy demo snapshots. */
+  searchingSetting?: boolean | null;
   /** KeePass group notes. Read-only — SecPivot surfaces but does not edit. */
   notes?: string;
   /** KeePass group tags, comma-separated. Read-only for now. */
