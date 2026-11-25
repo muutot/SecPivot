@@ -106,6 +106,20 @@ pub(crate) fn set_window_opacity(app: tauri::AppHandle, opacity: f64) -> Result<
     }
 }
 
+/// Keep the main window above other windows (KeePass "Interface" option).
+/// Uses Tauri's cross-platform window API rather than a Win32-specific style,
+/// so it works on every desktop target; a missing main window is a no-op.
+#[tauri::command]
+pub(crate) fn set_always_on_top(app: tauri::AppHandle, on_top: bool) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .set_always_on_top(on_top)
+            .map_err(|e| format!("设置窗口置顶失败: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Trim a stored backup template, falling back to the default when empty.
 pub(crate) fn normalize_backup_template(template: &str) -> String {
     let trimmed = template.trim();

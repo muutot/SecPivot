@@ -698,6 +698,23 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn always_on_top_defaults_off_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(!store.get().unwrap().general.always_on_top);
+
+    let mut config = AppConfig::default();
+    config.general.always_on_top = true;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"alwaysOnTop\": true"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(reloaded.get().unwrap().general.always_on_top);
+}
+
+#[test]
 fn default_expire_days_defaults_zero_survives_round_trip_and_clamps() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

@@ -408,6 +408,7 @@ pub fn run() {
             commands::app_info,
             commands::set_config,
             commands::set_window_opacity,
+            commands::set_always_on_top,
             commands::open_vault,
             commands::create_vault,
             commands::close_vault,

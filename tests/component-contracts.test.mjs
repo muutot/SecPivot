@@ -517,3 +517,26 @@ test("new-entry default expiry is normalized and prefilled in the editor", async
   assert.match(editor, /toDateTimeInput\(new Date\(/);
   assert.ok(typeof toDateTimeInput === "function");
 });
+
+test("always-on-top setting is normalized and applied to the native window", async () => {
+  const { normalizeSettings, DEFAULT_GENERAL_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const bootstrap = await readFile(
+    new URL("../src/lib/services/settings-bootstrap.ts", import.meta.url),
+    "utf8",
+  );
+  const appearance = await readFile(
+    new URL("../src/lib/components/settings/AppearanceSettingsPanel.svelte", import.meta.url),
+    "utf8",
+  );
+  const lib = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+
+  assert.equal(DEFAULT_GENERAL_SETTINGS.alwaysOnTop, false, "KeePass default is off");
+  assert.equal(normalizeSettings({ general: { alwaysOnTop: true } }).general.alwaysOnTop, true);
+  assert.equal(normalizeSettings({ general: { alwaysOnTop: "yes" } }).general.alwaysOnTop, false);
+
+  // The setting must reach a real window operation, not just persist.
+  assert.match(bootstrap, /invoke\("set_always_on_top"/);
+  assert.match(lib, /commands::set_always_on_top/);
+  assert.match(appearance, /change\("alwaysOnTop", checked\)/);
+});

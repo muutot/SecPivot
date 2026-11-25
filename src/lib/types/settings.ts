@@ -214,6 +214,9 @@ export interface GeneralSettings {
   };
   windowEffect: WindowEffect;
   windowOpacity: number;
+  /** Keep the main window above other windows (KeePass Interface option).
+   *  Applied live through the Tauri `set_always_on_top` command. */
+  alwaysOnTop: boolean;
   rememberLastDatabase: boolean;
   recentFiles: string[];
   /** Readable display names for recent-file paths without a usable file name (Android content URIs). */

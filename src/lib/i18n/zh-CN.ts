@@ -414,6 +414,8 @@ export const zhCN = {
   "settings.showSeparatorsDesc": "在条目列表中为每个子分组添加分隔标题，排序仅在组内进行",
   "settings.windowOpacity": "窗口不透明度",
   "settings.windowOpacityDesc": "调整主窗口的整体透明度",
+  "settings.alwaysOnTop": "窗口始终置顶",
+  "settings.alwaysOnTopDesc": "KeePass 对齐：主窗口始终显示在其他窗口之上",
   "settings.windowEffect": "窗口效果",
   "settings.windowEffectDesc": "Windows 平台背景材质",
   "settings.effectOff": "关闭",

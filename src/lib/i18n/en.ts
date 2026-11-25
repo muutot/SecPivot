@@ -425,6 +425,8 @@ export const en: Record<I18nKey, string> = {
     "Add a separator heading per subgroup; sorting stays within groups",
   "settings.windowOpacity": "Window opacity",
   "settings.windowOpacityDesc": "Adjust overall main-window opacity",
+  "settings.alwaysOnTop": "Always on top",
+  "settings.alwaysOnTopDesc": "KeePass-compatible: keep the main window above other windows",
   "settings.windowEffect": "Window effect",
   "settings.windowEffectDesc": "Windows backdrop material",
   "settings.effectOff": "Off",

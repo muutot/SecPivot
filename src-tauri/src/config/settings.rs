@@ -390,6 +390,9 @@ pub struct GeneralSettings {
     pub font_sizes: FontSizes,
     pub window_effect: String,
     pub window_opacity: i32,
+    /// Keep the main window above other windows (KeePass Interface option).
+    #[serde(default)]
+    pub always_on_top: bool,
     #[serde(default = "default_true")]
     pub remember_last_database: bool,
     pub recent_files: Vec<String>,
@@ -487,6 +490,7 @@ impl Default for GeneralSettings {
             font_sizes: FontSizes::default(),
             window_effect: "off".into(),
             window_opacity: 100,
+            always_on_top: false,
             remember_last_database: true,
             recent_files: Vec::new(),
             recent_file_names: std::collections::HashMap::new(),

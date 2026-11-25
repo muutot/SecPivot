@@ -788,6 +788,14 @@
   {/if}
 
   {#if section === "window"}
+    <SettingToggleCard
+      icon="eye"
+      label={t(lang, "settings.alwaysOnTop")}
+      description={t(lang, "settings.alwaysOnTopDesc")}
+      checked={general.alwaysOnTop}
+      onchange={(checked) => change("alwaysOnTop", checked)}
+    />
+
     <SettingRangeCard
       icon="sliders"
       label={t(lang, "settings.windowOpacity")}

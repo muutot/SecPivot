@@ -9,7 +9,12 @@ export function applySettingsToDocument(): void {
   // Tauri only) so the slider takes effect.
   if (isTauriRuntime()) {
     void import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke("set_window_opacity", { opacity: s.general.windowOpacity }))
+      .then(async ({ invoke }) => {
+        await invoke("set_window_opacity", { opacity: s.general.windowOpacity });
+        // KeePass "Interface → Always on top": applied on every settings change
+        // so the toggle takes effect immediately, just like opacity.
+        await invoke("set_always_on_top", { onTop: s.general.alwaysOnTop });
+      })
       .catch(() => {});
   }
   const colors = selectThemeColors(s);
