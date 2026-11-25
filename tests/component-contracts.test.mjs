@@ -669,3 +669,24 @@ test("show-window global hotkey registers through the unified hotkey set", async
   assert.match(config, /&saved\.keyboard\.show_window_global/);
   assert.match(panel, /change\("showWindowGlobal", shortcut\)/);
 });
+
+test("expired-on-open reminder is gated and counts soon-expiring entries", async () => {
+  const { normalizeSettings, DEFAULT_SECURITY_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+
+  assert.equal(DEFAULT_SECURITY_SETTINGS.showExpiredOnOpen, true, "KeePass default is on");
+  assert.equal(DEFAULT_SECURITY_SETTINGS.expirySoonDays, 7, "KeePass default is 7");
+  assert.equal(normalizeSettings({ security: { expirySoonDays: 30 } }).security.expirySoonDays, 30);
+  assert.equal(
+    normalizeSettings({ security: { expirySoonDays: 999 } }).security.expirySoonDays,
+    365,
+  );
+
+  // The reminder honors the toggle, computes the soon window from real
+  // expiry timestamps, and reports both counts in one line.
+  assert.match(page, /security\.showExpiredOnOpen/);
+  assert.match(page, /security\.expirySoonDays/);
+  assert.match(page, /soonDays \* 86_400_000/);
+  assert.match(page, /page\.expiredFlashBoth/);
+});

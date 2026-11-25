@@ -698,6 +698,38 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn expired_on_open_defaults_on_and_soon_days_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    {
+        let cfg = store.get().unwrap();
+        // KeePass defaults: the reminder is on with a 7-day soon window.
+        assert!(cfg.security.show_expired_on_open);
+        assert_eq!(cfg.security.expiry_soon_days, 7);
+    }
+
+    let mut config = AppConfig::default();
+    config.security.show_expired_on_open = false;
+    config.security.expiry_soon_days = 30;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"showExpiredOnOpen\": false"));
+    assert!(text.contains("\"expirySoonDays\": 30"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let cfg = reloaded.get().unwrap();
+    assert!(!cfg.security.show_expired_on_open);
+    assert_eq!(cfg.security.expiry_soon_days, 30);
+
+    // Out-of-range soon-days clamp to 0..=365 (boundary semantics).
+    let mut huge = AppConfig::default();
+    huge.security.expiry_soon_days = 9_999;
+    let normalized = super::normalize_config(huge);
+    assert_eq!(normalized.security.expiry_soon_days, 365);
+}
+
+#[test]
 fn show_window_hotkey_defaults_empty_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
@@ -711,7 +743,10 @@ fn show_window_hotkey_defaults_empty_and_survives_round_trip() {
     assert!(text.contains("\"showWindowGlobal\": \"Ctrl+Alt+K\""));
 
     let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
-    assert_eq!(reloaded.get().unwrap().keyboard.show_window_global, "Ctrl+Alt+K");
+    assert_eq!(
+        reloaded.get().unwrap().keyboard.show_window_global,
+        "Ctrl+Alt+K"
+    );
 }
 
 #[test]

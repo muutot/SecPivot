@@ -179,6 +179,28 @@
   />
 
   <SettingToggleCard
+    icon="clock"
+    label={t(lang, "security.showExpiredOnOpen")}
+    description={t(lang, "security.showExpiredOnOpenDesc")}
+    checked={security.showExpiredOnOpen}
+    onchange={(checked) => change("showExpiredOnOpen", checked)}
+  />
+
+  <SettingRangeCard
+    icon="clock"
+    label={t(lang, "security.expirySoonDays")}
+    description={t(lang, "security.expirySoonDaysDesc")}
+    value={security.expirySoonDays}
+    valueLabel={security.expirySoonDays > 0
+      ? t(lang, "security.days", { count: security.expirySoonDays })
+      : t(lang, "settings.effectOff")}
+    min={0}
+    max={365}
+    step={1}
+    onchange={(value) => change("expirySoonDays", value)}
+  />
+
+  <SettingToggleCard
     icon="minimize"
     label={t(lang, "security.minimizeAfterLocking")}
     description={t(lang, "security.minimizeAfterLockingDesc")}

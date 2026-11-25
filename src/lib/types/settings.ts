@@ -108,6 +108,12 @@ export interface SecuritySettings {
   /** Minimize the main window after the workspace locks (KeePass
    * `MinimizeAfterLocking`, default on). */
   minimizeAfterLocking: boolean;
+  /** Flash the expired-entries reminder after opening a vault (KeePass
+   * `AceOpenDb.ShowExpiredEntries`, default on). */
+  showExpiredOnOpen: boolean;
+  /** Entries expiring within this many days count as "soon" in the
+   * open-reminder (KeePass `ExpirySoonDays`, default 7). */
+  expirySoonDays: number;
   /** Keep the master password in the OS credential store for Windows Hello unlock. */
   rememberPassword: boolean;
   /** Exclude the main window from screenshots/recordings while a vault is open (Windows WDA_EXCLUDEFROMCAPTURE). Default off — opt-in from the welcome page. */

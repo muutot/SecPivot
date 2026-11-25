@@ -590,6 +590,15 @@ pub struct SecuritySettings {
     /// `MinimizeAfterLocking`). Default on.
     #[serde(default = "default_true")]
     pub minimize_after_locking: bool,
+    /// Flash the expired-entries reminder after opening a vault (KeePass
+    /// `AceOpenDb.ShowExpiredEntries`). Default on.
+    #[serde(default = "default_true")]
+    pub show_expired_on_open: bool,
+    /// Entries expiring within this many days count as "soon" in the
+    /// open-reminder (KeePass `ExpirySoonDays`). Default 7; 0 disables the
+    /// soon-part.
+    #[serde(default)]
+    pub expiry_soon_days: i32,
     pub remember_password: bool,
     /// Exclude the main window from screenshots/recordings while a vault is
     /// open (Windows `WDA_EXCLUDEFROMCAPTURE`). Default off — opt-in from the
@@ -610,6 +619,8 @@ impl Default for SecuritySettings {
             default_expire_days: 0,
             auto_save_after_edit: false,
             minimize_after_locking: true,
+            show_expired_on_open: true,
+            expiry_soon_days: 7,
             remember_password: false,
             screen_capture_guard: false,
         }
@@ -1257,6 +1268,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     // clampInt in normalizeSettings: an out-of-range value takes the nearest
     // boundary rather than silently reverting to "never".
     config.security.default_expire_days = config.security.default_expire_days.clamp(0, 3650);
+    config.security.expiry_soon_days = config.security.expiry_soon_days.clamp(0, 365);
 
     config.favicon.concurrency = clamp_i32(config.favicon.concurrency, 1, 16, 8);
 

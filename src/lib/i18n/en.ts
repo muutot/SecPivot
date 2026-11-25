@@ -729,6 +729,12 @@ export const en: Record<I18nKey, string> = {
   "security.minimizeAfterLocking": "Minimize after locking",
   "security.minimizeAfterLockingDesc":
     "KeePass-compatible (on by default): minimize the main window after the workspace locks",
+  "security.showExpiredOnOpen": "Remind about expired entries on open",
+  "security.showExpiredOnOpenDesc":
+    "KeePass-compatible (on by default): flash the expired and soon-expiring counts after opening a vault",
+  "security.expirySoonDays": "Expiring-soon days",
+  "security.expirySoonDaysDesc":
+    "KeePass-compatible (default 7): entries expiring within this window count into the reminder; 0 disables",
   "security.clearOnLock": "Clear clipboard on lock",
   "security.clearOnLockDesc": "Clear passwords from the clipboard immediately on lock",
   "security.minimizeTray": "Minimize to tray on close",
@@ -1095,6 +1101,8 @@ export const en: Record<I18nKey, string> = {
   "totp.refresh": "Refresh in {s}s",
   "menu.contextMenu": "Context menu",
   "page.expiredFlash": "{n} entries expired, please update passwords promptly",
+  "page.expiredFlashBoth": "{expired} entries expired and {soon} more expire soon",
+  "page.expiredSoonFlash": "{n} entries expire soon",
   "page.favFailed": "Failed to favorite: {e}",
   "page.nothingToSave": "No changes to save",
   "page.readonlyMode":

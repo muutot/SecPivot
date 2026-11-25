@@ -31,30 +31,30 @@ Version · PreferUserConfiguration · OmitItemsWithDefaultValues · DpiFactorX �
 
 ## 2. AceApplication（23 + 子对象）
 
-| 字段                                  | 默认  | SecPivot                                                       |
-| ------------------------------------- | ----- | -------------------------------------------------------------- |
-| ConfigSave                            | true  | ➖ 配置是否落盘，内部                                          |
-| LanguageFile                          | ""    | ✅ `general.language`（语言内建双字典，非文件）                |
-| HelpUseLocal                          | false | ➖                                                             |
-| HelpUrl                               | ""    | ➖                                                             |
-| LastUpdateCheck                       | ""    | ➖                                                             |
-| LastUsedFile                          | —     | ✅ `general.recentFiles`                                       |
-| MostRecentlyUsed (AceMru)             | —     | ✅ `general.recentFiles`（上限 8，KeePass 默认 12）⚠️ 上限不同 |
-| RememberWorkingDirectories            | true  | ➖                                                             |
-| WorkingDirectoriesSerialized          | —     | ➖                                                             |
-| Start (AceStartUp)                    | —     | 见下                                                           |
-| FileOpening (AceOpenDb)               | —     | 见下                                                           |
-| VerifyWrittenFileAfterSaving          | true  | ➖ 写盘校验，内部                                              |
-| UseTransactedFileWrites               | true  | ➖ 原子写，SecPivot 已内建 atomic_write                        |
-| UseTransactedConfigWrites             | true  | ➖                                                             |
-| FileTxExtra                           | false | ➖                                                             |
-| UseFileLocks                          | false | ➖                                                             |
-| SaveForceSync                         | false | ➖                                                             |
-| **AutoSaveAfterEntryEdit**            | false | ✅ `security.autoSaveAfterEdit`（本会话批次3）                 |
-| FileClosing (AceCloseDb)              | —     | 见下                                                           |
-| TriggerSystem                         | —     | ➖ 触发器系统，不适用                                          |
-| PluginCachePath / PluginCompatibility | —     | ➖                                                             |
-| **ExpirySoonDays**                    | 7     | ❌ 无消费点（见旧 gap 文档取舍）                               |
+| 字段                                  | 默认  | SecPivot                                                                                                                               |
+| ------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| ConfigSave                            | true  | ➖ 配置是否落盘，内部                                                                                                                  |
+| LanguageFile                          | ""    | ✅ `general.language`（语言内建双字典，非文件）                                                                                        |
+| HelpUseLocal                          | false | ➖                                                                                                                                     |
+| HelpUrl                               | ""    | ➖                                                                                                                                     |
+| LastUpdateCheck                       | ""    | ➖                                                                                                                                     |
+| LastUsedFile                          | —     | ✅ `general.recentFiles`                                                                                                               |
+| MostRecentlyUsed (AceMru)             | —     | ✅ `general.recentFiles`（上限 8，KeePass 默认 12）⚠️ 上限不同                                                                         |
+| RememberWorkingDirectories            | true  | ➖                                                                                                                                     |
+| WorkingDirectoriesSerialized          | —     | ➖                                                                                                                                     |
+| Start (AceStartUp)                    | —     | 见下                                                                                                                                   |
+| FileOpening (AceOpenDb)               | —     | 见下                                                                                                                                   |
+| VerifyWrittenFileAfterSaving          | true  | ➖ 写盘校验，内部                                                                                                                      |
+| UseTransactedFileWrites               | true  | ➖ 原子写，SecPivot 已内建 atomic_write                                                                                                |
+| UseTransactedConfigWrites             | true  | ➖                                                                                                                                     |
+| FileTxExtra                           | false | ➖                                                                                                                                     |
+| UseFileLocks                          | false | ➖                                                                                                                                     |
+| SaveForceSync                         | false | ➖                                                                                                                                     |
+| **AutoSaveAfterEntryEdit**            | false | ✅ `security.autoSaveAfterEdit`（本会话批次3）                                                                                         |
+| FileClosing (AceCloseDb)              | —     | 见下                                                                                                                                   |
+| TriggerSystem                         | —     | ➖ 触发器系统，不适用                                                                                                                  |
+| PluginCachePath / PluginCompatibility | —     | ➖                                                                                                                                     |
+| **ExpirySoonDays**                    | 7     | ✅ `security.expirySoonDays`（B3 批次）：开库提醒把 7 天内到期计入——`showExpiredOnOpen` 开关给了它消费点，之前"无消费点"的取舍随之解除 |
 
 ### AceStartUp（6）
 
@@ -62,7 +62,7 @@ OpenLastFile ✅ `rememberLastDatabase` · CheckForUpdate ➖ · CheckForUpdateC
 
 ### AceOpenDb（2）
 
-ShowExpiredEntries ❌ · ShowSoonToExpireEntries ❌（打开库时筛选过期/即将过期）
+ShowExpiredEntries ✅ `security.showExpiredOnOpen`（B3 批次，默认 on，关掉则开库不提醒）· ShowSoonToExpireEntries ✅ 并入同一提醒（`expirySoonDays` 天内到期计数）
 
 ### AceCloseDb（1）
 

@@ -246,6 +246,8 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   defaultExpireDays: 0,
   autoSaveAfterEdit: false,
   minimizeAfterLocking: true,
+  showExpiredOnOpen: true,
+  expirySoonDays: 7,
   rememberPassword: false,
   screenCaptureGuard: false,
 };
@@ -1011,6 +1013,8 @@ export function normalizeSettings(
     ),
     autoSaveAfterEdit: asBool(s.autoSaveAfterEdit, fallback.security.autoSaveAfterEdit),
     minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
+    showExpiredOnOpen: asBool(s.showExpiredOnOpen, fallback.security.showExpiredOnOpen),
+    expirySoonDays: clampInt(s.expirySoonDays ?? fallback.security.expirySoonDays, 0, 365, 7),
     rememberPassword: asBool(s.rememberPassword, fallback.security.rememberPassword),
     screenCaptureGuard: asBool(s.screenCaptureGuard, fallback.security.screenCaptureGuard),
     autoLockMinutes: clampInt(s.autoLockMinutes ?? fallback.security.autoLockMinutes, 0, 240, 5),

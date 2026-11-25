@@ -279,8 +279,29 @@
     if (expiredNotifiedViews.has(notificationKey)) return;
     markExpiredNotified(notificationKey);
 
+    // KeePass `ShowExpiredEntries` (default on): the reminder is skippable.
+    if (!settings.security.showExpiredOnOpen) return;
+
     const expired = countExpiredEntries(currentVault.root);
-    if (expired > 0) flash(t(settings.general.language, "page.expiredFlash", { n: expired }));
+    // KeePass `ExpirySoonDays` (default 7): entries expiring within the
+    // window count as "soon" and share the same reminder line. 0 disables.
+    const soonDays = settings.security.expirySoonDays;
+    let soon = 0;
+    if (soonDays > 0) {
+      const horizon = Date.now() + soonDays * 86_400_000;
+      soon = collectEntries(currentVault.root).filter((e) => {
+        if (e.expired || !e.expires) return false;
+        const ts = new Date(e.expires).getTime();
+        return !Number.isNaN(ts) && ts <= horizon;
+      }).length;
+    }
+    if (expired > 0 && soon > 0) {
+      flash(t(settings.general.language, "page.expiredFlashBoth", { expired, soon }));
+    } else if (expired > 0) {
+      flash(t(settings.general.language, "page.expiredFlash", { n: expired }));
+    } else if (soon > 0) {
+      flash(t(settings.general.language, "page.expiredSoonFlash", { n: soon }));
+    }
   }
 
   function entryIconName(entry: VaultEntry): IconName {
