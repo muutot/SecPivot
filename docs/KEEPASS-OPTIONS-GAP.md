@@ -1,5 +1,7 @@
 # KeePass Options ↔ SecPivot Settings Gap Analysis
 
+> 本文只覆盖 Options 对话框可见项。KeePass `KeePass.config.xml` 的完整配置面（源码级穷举，字段过百）见 [KEEPASS-CONFIG-INVENTORY.md](KEEPASS-CONFIG-INVENTORY.md)。
+
 证据来源：KeePass 2.57 官方手册镜像 [keepass.cool 2.57](https://keepass.cool/2.x/2.57/Lapersonnalisation.html)、[keepass.info search 帮助](https://keepass.info/help/base/search.html#mode_se)、官方 changelog 转载（[2.39 Large Entries](https://www.neowin.net/news/keepass-password-safe-2391/#1)、[2.53 报告对话框筛选框](https://www.3dfxzone.it/files/?object=html&objid=21228)）、开源镜像 [dlech/KeePass2.x](https://github.com/dlech/KeePass2.x)。外部资料只作导航，最终以 SecPivot 本地源码为准。
 
 ## KeePass Options 六个 tab 与 SecPivot 现状
