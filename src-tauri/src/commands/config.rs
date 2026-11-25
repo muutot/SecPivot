@@ -4,7 +4,8 @@
 use crate::config;
 use crate::config::ConfigStore;
 #[cfg(desktop)]
-use crate::register_global_hotkey;
+use crate::register_global_hotkeys;
+use crate::HotkeyKind;
 use crate::vault;
 use tauri::Manager;
 // ---------------------------------------------------------------------------
@@ -138,10 +139,13 @@ pub(crate) fn set_config(
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
     #[cfg(desktop)]
-    register_global_hotkey(
+    register_global_hotkeys(
         &app,
-        &saved.keyboard.auto_type_global,
-        &saved.keyboard.tcato_summon_global,
+        &[
+            (&saved.keyboard.auto_type_global, HotkeyKind::AutoType),
+            (&saved.keyboard.tcato_summon_global, HotkeyKind::Tcato),
+            (&saved.keyboard.show_window_global, HotkeyKind::ShowWindow),
+        ],
     );
     sync_vault_matching(&app, &saved);
     sync_capture_guard(&app, &saved);

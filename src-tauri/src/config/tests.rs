@@ -698,6 +698,23 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn show_window_hotkey_defaults_empty_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(store.get().unwrap().keyboard.show_window_global, "");
+
+    let mut config = AppConfig::default();
+    config.keyboard.show_window_global = "Ctrl+Alt+K".into();
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"showWindowGlobal\": \"Ctrl+Alt+K\""));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(reloaded.get().unwrap().keyboard.show_window_global, "Ctrl+Alt+K");
+}
+
+#[test]
 fn url_copy_and_minimize_after_locking_defaults_survive_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

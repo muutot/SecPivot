@@ -681,6 +681,9 @@ export const en: Record<I18nKey, string> = {
   "keyboard.title": "Shortcuts",
   "keyboard.desc": "Global auto-type hotkey and in-window shortcuts for common actions.",
   "keyboard.autoType": "Global auto-type hotkey",
+  "keyboard.showWindow": "Global show-window hotkey",
+  "keyboard.showWindowDesc":
+    "KeePass-compatible (default Ctrl+Alt+K): bring the main window to front from anywhere",
   "keyboard.autoTypeDesc":
     "Press to type the entry matching the foreground window; matches by domain/title; recycle-bin entries excluded. Disabled when unbound.",
   "keyboard.recording": "Press shortcut…",

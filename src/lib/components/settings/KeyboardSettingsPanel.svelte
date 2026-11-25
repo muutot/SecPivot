@@ -94,6 +94,7 @@
     const shortcut = pressed.join("+");
     if (target === "autoType") change("autoTypeGlobal", shortcut);
     else if (target === "tcato") change("tcatoSummonGlobal", shortcut);
+    else if (target === "showWindow") change("showWindowGlobal", shortcut);
     else setBinding(target, shortcut);
   }
 
@@ -207,6 +208,55 @@
           type="button"
           class="binding-add"
           onclick={() => startRecording("tcato")}
+          aria-label={t(lang, "keyboard.record")}>+</button
+        >
+      {/if}
+    </div>
+  </section>
+
+  <section class="setting-card toggle-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
+      <div>
+        <strong>{t(lang, "keyboard.showWindow")}</strong>
+        <p>
+          {t(lang, "keyboard.showWindowDesc")}
+        </p>
+      </div>
+    </div>
+    <div class="shortcut-bindings">
+      {#if recordingTarget === "showWindow"}
+        <div class="binding-chip recording">
+          <kbd>{t(lang, "keyboard.recording")}</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={stopRecording}
+            aria-label={t(lang, "keyboard.cancelRecording")}>&times;</button
+          >
+        </div>
+      {:else if keyboard.showWindowGlobal}
+        <div class="binding-chip">
+          <kbd>{keyboard.showWindowGlobal}</kbd>
+          <button
+            type="button"
+            class="binding-chip-close"
+            onclick={() => change("showWindowGlobal", "")}
+            aria-label={t(lang, "keyboard.removeBinding")}>&minus;</button
+          >
+        </div>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("showWindow")}
+          aria-label={t(lang, "keyboard.rerecord")}>+</button
+        >
+      {:else}
+        <span class="binding-disabled">{t(lang, "keyboard.unbound")}</span>
+        <button
+          type="button"
+          class="binding-add"
+          onclick={() => startRecording("showWindow")}
           aria-label={t(lang, "keyboard.record")}>+</button
         >
       {/if}

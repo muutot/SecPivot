@@ -548,6 +548,10 @@ pub struct KeyboardSettings {
     /// Global TCATO summon hotkey: opens the overlay for the entry uniquely
     /// matching the foreground window. Empty means the hotkey is disabled.
     pub tcato_summon_global: String,
+    /// Global show-window hotkey: brings the main window to front (KeePass
+    /// `HotKeyShowWindow`). Empty means the hotkey is disabled.
+    #[serde(default)]
+    pub show_window_global: String,
     /// App-window shortcuts: action id → accelerator. An absent key or empty
     /// value means the action is unbound.
     pub shortcuts: HashMap<String, String>,

@@ -287,6 +287,9 @@ export interface KeyboardSettings {
   autoTypeGlobal: string;
   /** Global TCATO summon hotkey: opens the overlay for the entry uniquely matching the foreground window; empty disables it. */
   tcatoSummonGlobal: string;
+  /** Global show-window hotkey: brings the main window to front (KeePass
+   *  `HotKeyShowWindow`, default Ctrl+Alt+K); empty disables it. */
+  showWindowGlobal: string;
   /** App-window shortcuts: action id → accelerator. An absent key or empty value means unbound. */
   shortcuts: Record<string, string>;
 }

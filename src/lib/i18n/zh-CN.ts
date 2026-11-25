@@ -656,6 +656,8 @@ export const zhCN = {
   "keyboard.title": "快捷键",
   "keyboard.desc": "全局自动填充热键与常用操作的窗口内快捷键。",
   "keyboard.autoType": "全局自动填充热键",
+  "keyboard.showWindow": "全局显示窗口热键",
+  "keyboard.showWindowDesc": "KeePass 对齐（默认 Ctrl+Alt+K）：任意界面按热键把主窗口调到前台",
   "keyboard.autoTypeDesc":
     "按下快捷键时，把匹配前台窗口的条目自动键入；按窗口标题匹配条目的网址域名或标题，回收站内条目不参与。未绑定时禁用。",
   "keyboard.recording": "按下快捷键…",

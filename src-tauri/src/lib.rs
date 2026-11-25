@@ -48,33 +48,44 @@ const TRAY_MENU_QUIT: &str = "tray-quit";
 const TRAY_LOCK_EVENT: &str = "tray-lock";
 
 // ---------------------------------------------------------------------------
-// Global auto-type hotkey
+// Global hotkeys (auto-type / TCATO summon / show-window)
 // ---------------------------------------------------------------------------
 
-/// Register (or replace) the global hotkeys from `auto_type` (classic
-/// auto-type) and `tcato` (TCATO overlay summon); empty disables each.
-/// Failure to register is logged, never fatal: the app stays usable.
+/// Kind of a registered global hotkey; selects the press handler.
 #[cfg(desktop)]
-pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, auto_type: &str, tcato: &str) {
+#[derive(Clone, Copy)]
+pub(crate) enum HotkeyKind {
+    AutoType,
+    Tcato,
+    ShowWindow,
+}
+
+/// Register the configured global hotkeys (auto-type, TCATO summon,
+/// show-window); empty string disables an entry. `unregister_all` runs first
+/// so re-registration on every config write is idempotent. Failures are
+/// logged, never fatal: the app stays usable.
+#[cfg(desktop)]
+pub(crate) fn register_global_hotkeys(app: &tauri::AppHandle, hotkeys: &[(&str, HotkeyKind)]) {
     let global = app.global_shortcut();
     if let Err(e) = global.unregister_all() {
         eprintln!("failed to unregister global shortcuts: {e}");
         return;
     }
-    for (shortcut, is_tcato) in [(auto_type, false), (tcato, true)] {
+    for (shortcut, kind) in hotkeys {
         let shortcut = shortcut.trim();
         if shortcut.is_empty() {
             continue;
         }
-        let kind = if is_tcato {
-            "tcato-summon"
-        } else {
-            "auto-type"
+        let kind = *kind;
+        let label = match kind {
+            HotkeyKind::AutoType => "auto-type",
+            HotkeyKind::Tcato => "tcato-summon",
+            HotkeyKind::ShowWindow => "show-window",
         };
-        let handler: fn(&tauri::AppHandle) = if is_tcato {
-            handle_tcato_summon_hotkey
-        } else {
-            handle_global_hotkey
+        let handler: fn(&tauri::AppHandle) = match kind {
+            HotkeyKind::AutoType => handle_global_hotkey,
+            HotkeyKind::Tcato => handle_tcato_summon_hotkey,
+            HotkeyKind::ShowWindow => handle_show_window_hotkey,
         };
         let result = global.on_shortcut(shortcut, move |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
@@ -82,8 +93,19 @@ pub(crate) fn register_global_hotkey(app: &tauri::AppHandle, auto_type: &str, tc
             }
         });
         if let Err(e) = result {
-            eprintln!("failed to register global {kind} hotkey `{shortcut}`: {e}");
+            eprintln!("failed to register global {label} hotkey `{shortcut}`: {e}");
         }
+    }
+}
+
+/// Bring the main window to front (KeePass `HotKeyShowWindow`); logged only
+/// on failure so the hotkey thread never panics.
+#[cfg(desktop)]
+fn handle_show_window_hotkey(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 }
 
@@ -362,10 +384,13 @@ pub fn run() {
             let store = ConfigStore::load_with_mode(project_dir, portable)?;
             let config = store.get()?;
             #[cfg(desktop)]
-            register_global_hotkey(
+            register_global_hotkeys(
                 app.handle(),
-                &config.keyboard.auto_type_global,
-                &config.keyboard.tcato_summon_global,
+                &[
+                    (&config.keyboard.auto_type_global, HotkeyKind::AutoType),
+                    (&config.keyboard.tcato_summon_global, HotkeyKind::Tcato),
+                    (&config.keyboard.show_window_global, HotkeyKind::ShowWindow),
+                ],
             );
             #[cfg(desktop)]
             setup_tray(app.handle())?;

@@ -210,35 +210,35 @@ MinimumLength ❌ · MinimumQuality ❌（Policy 类）· RememberWhileOpen ✅ 
 
 ## 6. AceIntegration（33 + URL overrides）
 
-| 字段                                                        | 默认             | SecPivot                                       |
-| ----------------------------------------------------------- | ---------------- | ---------------------------------------------- |
-| HotKeyGlobalAutoType                                        | Ctrl+Alt+A       | ✅ `keyboard.autoTypeGlobal`                   |
-| HotKeyGlobalAutoTypePassword                                | Ctrl+Alt+Shift+A | ❌ 第二个全局热键（仅密码）                    |
-| HotKeySelectedAutoType                                      | None             | ❌ 选中条目自动填充热键                        |
-| HotKeyShowWindow                                            | Ctrl+Alt+K       | ❌ 显示窗口热键                                |
-| HotKeyEntryMenu                                             | None             | ❌ 条目菜单热键                                |
-| CheckHotKeys                                                | true             | ➖ 热键冲突检查                                |
-| UrlOverride / UrlOverrideEnabled                            | ""/true          | ❌ 全局 URL 覆盖字符串                         |
-| UrlSchemeOverrides（28 内置 + 自定义）                      | 全禁用           | ❌ 完整 URL scheme 覆盖表                      |
-| SearchKeyFiles                                              | true             | ❌ 自动搜索密钥文件                            |
-| SearchKeyFilesOnRemovableMedia                              | false            | ❌                                             |
-| LimitToSingleInstance                                       | true             | ❌ 单实例                                      |
-| AutoTypeMatchByTitle                                        | true             | ✅ 匹配逻辑内建                                |
-| AutoTypeMatchByUrlInTitle                                   | false            | ❌                                             |
-| AutoTypeMatchByUrlHostInTitle                               | false            | ❌                                             |
-| AutoTypeMatchByTagInTitle                                   | false            | ❌                                             |
-| AutoTypeMatchNormDashes                                     | true             | ❌ 相似破折号视为相同                          |
-| AutoTypeExpiredCanMatch                                     | false            | ❌ 过期条目可匹配                              |
-| AutoTypeAlwaysShowSelDialog                                 | false            | ❌ 总是显示候选对话框                          |
-| AutoTypePrependInitSequenceForIE                            | true             | ➖ IE 不适用                                   |
-| AutoTypeReleaseAltWithKeyPress                              | true             | ➖ 平台细节                                    |
-| AutoTypeAdjustKeyboardLayout                                | true             | ❌                                             |
-| AutoTypeAllowInterleaved                                    | false            | ❌                                             |
-| AutoTypeCancelOnWindowChange                                | false            | ❌                                             |
-| AutoTypeCancelOnTitleChange                                 | false            | ❌                                             |
-| AutoTypeInterKeyDelay                                       | -1               | ❌ enigo 0.6 仅 Linux X11 支持，Windows 假开关 |
-| AutoTypeAbortOnWindows                                      | []               | ❌ 禁用自动填充的窗口列表                      |
-| ProxyType / Address / Port / AuthType / UserName / Password | System/...       | ⚠️ SecPivot 远程走系统代理，无独立代理配置     |
+| 字段                                                        | 默认             | SecPivot                                                                         |
+| ----------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------- |
+| HotKeyGlobalAutoType                                        | Ctrl+Alt+A       | ✅ `keyboard.autoTypeGlobal`                                                     |
+| HotKeyGlobalAutoTypePassword                                | Ctrl+Alt+Shift+A | ❌ 第二个全局热键（仅密码）                                                      |
+| HotKeySelectedAutoType                                      | None             | ❌ 选中条目自动填充热键                                                          |
+| HotKeyShowWindow                                            | Ctrl+Alt+K       | ✅ `keyboard.showWindowGlobal`（A3 批次）：统一 `register_global_hotkeys` 注册集 |
+| HotKeyEntryMenu                                             | None             | ❌ 条目菜单热键                                                                  |
+| CheckHotKeys                                                | true             | ➖ 热键冲突检查                                                                  |
+| UrlOverride / UrlOverrideEnabled                            | ""/true          | ❌ 全局 URL 覆盖字符串                                                           |
+| UrlSchemeOverrides（28 内置 + 自定义）                      | 全禁用           | ❌ 完整 URL scheme 覆盖表                                                        |
+| SearchKeyFiles                                              | true             | ❌ 自动搜索密钥文件                                                              |
+| SearchKeyFilesOnRemovableMedia                              | false            | ❌                                                                               |
+| LimitToSingleInstance                                       | true             | ❌ 单实例                                                                        |
+| AutoTypeMatchByTitle                                        | true             | ✅ 匹配逻辑内建                                                                  |
+| AutoTypeMatchByUrlInTitle                                   | false            | ❌                                                                               |
+| AutoTypeMatchByUrlHostInTitle                               | false            | ❌                                                                               |
+| AutoTypeMatchByTagInTitle                                   | false            | ❌                                                                               |
+| AutoTypeMatchNormDashes                                     | true             | ❌ 相似破折号视为相同                                                            |
+| AutoTypeExpiredCanMatch                                     | false            | ❌ 过期条目可匹配                                                                |
+| AutoTypeAlwaysShowSelDialog                                 | false            | ❌ 总是显示候选对话框                                                            |
+| AutoTypePrependInitSequenceForIE                            | true             | ➖ IE 不适用                                                                     |
+| AutoTypeReleaseAltWithKeyPress                              | true             | ➖ 平台细节                                                                      |
+| AutoTypeAdjustKeyboardLayout                                | true             | ❌                                                                               |
+| AutoTypeAllowInterleaved                                    | false            | ❌                                                                               |
+| AutoTypeCancelOnWindowChange                                | false            | ❌                                                                               |
+| AutoTypeCancelOnTitleChange                                 | false            | ❌                                                                               |
+| AutoTypeInterKeyDelay                                       | -1               | ❌ enigo 0.6 仅 Linux X11 支持，Windows 假开关                                   |
+| AutoTypeAbortOnWindows                                      | []               | ❌ 禁用自动填充的窗口列表                                                        |
+| ProxyType / Address / Port / AuthType / UserName / Password | System/...       | ⚠️ SecPivot 远程走系统代理，无独立代理配置                                       |
 
 ---
 

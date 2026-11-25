@@ -305,6 +305,7 @@ export const DEFAULT_RPC_SETTINGS: RpcSettings = {
 export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
   autoTypeGlobal: "",
   tcatoSummonGlobal: "",
+  showWindowGlobal: "",
   shortcuts: {},
 };
 
@@ -1053,6 +1054,10 @@ export function normalizeSettings(
       typeof k?.tcatoSummonGlobal === "string" && k.tcatoSummonGlobal.trim()
         ? k.tcatoSummonGlobal.trim()
         : (fallback.keyboard?.tcatoSummonGlobal ?? ""),
+    showWindowGlobal:
+      typeof k?.showWindowGlobal === "string" && k.showWindowGlobal.trim()
+        ? k.showWindowGlobal.trim()
+        : (fallback.keyboard?.showWindowGlobal ?? ""),
     shortcuts: {},
   };
   if (k && typeof k.shortcuts === "object" && k.shortcuts !== null) {

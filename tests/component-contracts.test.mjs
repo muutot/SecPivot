@@ -641,3 +641,31 @@ test("URL copy toggle and minimize-after-lock reach real behavior", async () => 
   assert.match(security, /security\.minimizeAfterLocking/);
   assert.match(security, /getCurrentWindow\(\)\.minimize\(\)/);
 });
+
+test("show-window global hotkey registers through the unified hotkey set", async () => {
+  const { normalizeSettings, DEFAULT_KEYBOARD_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const lib = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  const config = await readFile(
+    new URL("../src-tauri/src/commands/config.rs", import.meta.url),
+    "utf8",
+  );
+  const panel = await readFile(
+    new URL("../src/lib/components/settings/KeyboardSettingsPanel.svelte", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(DEFAULT_KEYBOARD_SETTINGS.showWindowGlobal, "", "unbound by default");
+  assert.equal(
+    normalizeSettings({ keyboard: { showWindowGlobal: "Ctrl+Alt+K" } }).keyboard.showWindowGlobal,
+    "Ctrl+Alt+K",
+  );
+
+  // Startup and set_config must both pass the show-window entry through the
+  // same registration set; the panel records into the new key.
+  assert.match(lib, /pub\(crate\) enum HotkeyKind/);
+  assert.match(lib, /HotkeyKind::ShowWindow/);
+  assert.match(lib, /fn handle_show_window_hotkey/);
+  assert.match(config, /&saved\.keyboard\.show_window_global/);
+  assert.match(panel, /change\("showWindowGlobal", shortcut\)/);
+});
