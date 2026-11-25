@@ -224,6 +224,9 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   savedSearches: [],
   showGroupSeparators: true,
   groupSeparatorColor: "",
+  alternatingRowColors: false,
+  groupTreeLines: false,
+  showFullPathInTitle: false,
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -956,6 +959,18 @@ export function normalizeSettings(
       ),
       fallback.general.groupSeparatorColor ?? "",
     ),
+    alternatingRowColors:
+      typeof (g as unknown as Record<string, unknown>).alternatingRowColors === "boolean"
+        ? ((g as unknown as Record<string, unknown>).alternatingRowColors as boolean)
+        : (fallback.general.alternatingRowColors ?? false),
+    groupTreeLines:
+      typeof (g as unknown as Record<string, unknown>).groupTreeLines === "boolean"
+        ? ((g as unknown as Record<string, unknown>).groupTreeLines as boolean)
+        : (fallback.general.groupTreeLines ?? false),
+    showFullPathInTitle:
+      typeof (g as unknown as Record<string, unknown>).showFullPathInTitle === "boolean"
+        ? ((g as unknown as Record<string, unknown>).showFullPathInTitle as boolean)
+        : (fallback.general.showFullPathInTitle ?? false),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles,
     recentFileNames: normalizeRecentFileNames(g.recentFileNames, recentFiles),

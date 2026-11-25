@@ -264,6 +264,14 @@ export interface GeneralSettings {
   showGroupSeparators: boolean;
   /** Font color for the subgroup separator line (hex, empty = --text-muted). */
   groupSeparatorColor: string;
+  /** Alternating row background in the entry table (KeePass
+   * `EntryListAlternatingBgColors`). */
+  alternatingRowColors: boolean;
+  /** Draw connector lines in the group tree (KeePass `TreeViewShowLines`). */
+  groupTreeLines: boolean;
+  /** Show the full vault file path in the window title (KeePass
+   * `ShowFullPathInTitle`). */
+  showFullPathInTitle: boolean;
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

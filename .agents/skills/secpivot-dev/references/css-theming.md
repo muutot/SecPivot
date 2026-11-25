@@ -1,5 +1,7 @@
 # Project-wide UI Style and Theming
 
+The entry table supports an optional KeePass-style zebra striping (`alternatingRowColors`, default off): `EntryTable.svelte` shades odd rows with `color-mix(in srgb, var(--card-bg) 55%, transparent)` keyed off the stable virtual-row index (not `nth-child`, which shifts while scrolling); hover/selected states override it, no new color token. The group tree has optional connector lines (`groupTreeLines`, default off): `GroupTree` → `GroupNode` threads the `treeLines` prop and nested nodes use a single `inset 1px 0 0 var(--border-subtle)` box shadow. Both remain within the approved compact neutral language.
+
 DatabaseSettingsDialog composes `templates/form/RadioGroup.svelte` for its three
 storage-choice groups. The template owns the existing 30px choice chrome, 6px gap,
 selection tint and theme variables. Labels stay on one line; complete choices may

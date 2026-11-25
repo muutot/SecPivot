@@ -20,6 +20,8 @@
     reveal?: string | null;
     showIcon?: boolean;
     showChevron?: boolean;
+    /** Draw subtle connector lines for nested groups. */
+    treeLines?: boolean;
     /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
     customIcons?: Record<string, string>;
     onselect: (uuid: string | null) => void;
@@ -51,6 +53,7 @@
     reveal = null,
     showIcon = true,
     showChevron = true,
+    treeLines = false,
     customIcons = {},
     onselect,
     onaddsubgroup,
@@ -218,7 +221,7 @@
   }
 </script>
 
-<div class="group-tree">
+<div class="group-tree" class:tree-lines={treeLines}>
   <div class="tree-head">
     <span class="tree-label">{t(lang, "toolbar.groups")}</span>
     <div class="tree-tools">
@@ -276,6 +279,7 @@
         {expanded}
         {showIcon}
         {showChevron}
+        {treeLines}
         {customIcons}
         {counts}
         onselect={(uuid: string) => onselect(uuid)}

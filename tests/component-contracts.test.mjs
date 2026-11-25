@@ -580,3 +580,32 @@ test("always-on-top setting is normalized and applied to the native window", asy
   assert.match(lib, /commands::set_always_on_top/);
   assert.match(appearance, /change\("alwaysOnTop", checked\)/);
 });
+
+test("KeePass display preferences reach the table, tree and window title", async () => {
+  const { normalizeSettings, DEFAULT_GENERAL_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+  const table = await readFile(
+    new URL("../src/lib/components/EntryTable.svelte", import.meta.url),
+    "utf8",
+  );
+  const tree = await readFile(
+    new URL("../src/lib/components/GroupTree.svelte", import.meta.url),
+    "utf8",
+  );
+
+  for (const key of ["alternatingRowColors", "groupTreeLines", "showFullPathInTitle"]) {
+    assert.equal(DEFAULT_GENERAL_SETTINGS[key], false, `${key} default off`);
+    assert.equal(normalizeSettings({ general: { [key]: true } }).general[key], true);
+    assert.equal(normalizeSettings({ general: { [key]: "yes" } }).general[key], false);
+  }
+
+  // Zebra uses stable virtual-row parity and a semantic theme token; tree
+  // lines flow through the component chain; the title uses the Tauri API.
+  assert.match(table, /class:zebra-odd=\{rowIndex % 2 === 1\}/);
+  assert.match(table, /color-mix\(in srgb, var\(--card-bg\)/);
+  assert.match(page, /zebra=\{settings\.general\.alternatingRowColors\}/);
+  assert.match(page, /treeLines=\{settings\.general\.groupTreeLines\}/);
+  assert.match(page, /getCurrentWindow\(\)\.setTitle\(title\)/);
+  assert.match(tree, /class:tree-lines=\{treeLines\}/);
+});

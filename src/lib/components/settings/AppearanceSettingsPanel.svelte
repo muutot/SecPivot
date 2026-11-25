@@ -785,6 +785,30 @@
       ariaLabel={t(lang, "settings.showSeparators")}
       onchange={(checked) => change("showGroupSeparators", checked)}
     />
+
+    <SettingToggleCard
+      icon="grid"
+      label={t(lang, "settings.alternatingRows")}
+      description={t(lang, "settings.alternatingRowsDesc")}
+      checked={general.alternatingRowColors}
+      onchange={(checked) => change("alternatingRowColors", checked)}
+    />
+
+    <SettingToggleCard
+      icon="folder"
+      label={t(lang, "settings.groupTreeLines")}
+      description={t(lang, "settings.groupTreeLinesDesc")}
+      checked={general.groupTreeLines}
+      onchange={(checked) => change("groupTreeLines", checked)}
+    />
+
+    <SettingToggleCard
+      icon="file"
+      label={t(lang, "settings.fullPathTitle")}
+      description={t(lang, "settings.fullPathTitleDesc")}
+      checked={general.showFullPathInTitle}
+      onchange={(checked) => change("showFullPathInTitle", checked)}
+    />
   {/if}
 
   {#if section === "window"}

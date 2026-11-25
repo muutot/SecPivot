@@ -22,6 +22,8 @@
     expanded: Set<string>;
     showIcon?: boolean;
     showChevron?: boolean;
+    /** Draw subtle connector lines for nested groups. */
+    treeLines?: boolean;
     /** Database custom icons (favicon `data:` URLs) keyed by icon UUID. */
     customIcons?: Record<string, string>;
     /** Precomputed subtree entry counts keyed by group uuid (avoid the O(N²)
@@ -52,6 +54,7 @@
     expanded,
     showIcon = true,
     showChevron = true,
+    treeLines = false,
     customIcons = {},
     counts = null,
     inRecycleBin = false,
@@ -257,6 +260,7 @@
 <div
   class="group-node"
   class:selected={selected === group.uuid}
+  class:tree-line={treeLines && depth > 0}
   style:padding-left={`calc(var(--group-indent, 14px) * ${depth})`}
   bind:this={nodeEl}
 >
@@ -352,6 +356,7 @@
     <GroupNode
       group={child}
       depth={depth + 1}
+      {treeLines}
       {selected}
       {reveal}
       {expanded}
@@ -422,6 +427,11 @@
 
   .chevron.open {
     transform: rotate(90deg);
+  }
+
+  /* Optional KeePass-style tree connectors; single existing border token. */
+  .group-node.tree-line {
+    box-shadow: inset 1px 0 0 var(--border-subtle);
   }
 
   .leaf-dot {

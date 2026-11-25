@@ -492,6 +492,25 @@
     void getCurrentWindow().setSize(new LogicalSize(width, height));
   });
 
+  // KeePass "Show full path in title": reflect the vault path in the window
+  // and document title; falls back to the plain app name when off/no vault.
+  $effect(() => {
+    const name = currentVault?.databaseName ?? "";
+    const path = currentVault?.path ?? "";
+    const showPath = settings.general.showFullPathInTitle;
+    const title = !name
+      ? "SecPivot"
+      : showPath && path
+        ? `SecPivot — ${path}`
+        : `SecPivot — ${name}`;
+    document.title = title;
+    if (isTauriRuntime() && !isTcatoOverlay) {
+      void getCurrentWindow()
+        .setTitle(title)
+        .catch(() => {});
+    }
+  });
+
   const treeIndex = $derived(currentVault ? buildVaultTreeIndex(currentVault.root) : null);
   const allGroups = $derived(treeIndex?.groups ?? []);
   const allEntries = $derived(treeIndex?.entries ?? []);
@@ -1986,6 +2005,7 @@
               customIcons={currentVault.customIcons}
               showIcon={groupDensity.showGroupIcon}
               showChevron={groupDensity.showGroupChevron}
+              treeLines={settings.general.groupTreeLines}
               onselect={(uuid: string | null) => {
                 selectedGroup = uuid;
                 selection.selectedEntry = null;
@@ -2036,6 +2056,7 @@
             searchActive={Boolean(search)}
             mobileColumns={settings.general.mobileColumns}
             separatorColor={settings.general.groupSeparatorColor ?? ""}
+            zebra={settings.general.alternatingRowColors}
             {customIconUrl}
             {entryIconName}
             colText={columns.columnText}

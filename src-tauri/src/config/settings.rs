@@ -442,6 +442,17 @@ pub struct GeneralSettings {
     /// Font color for the subgroup separator line (hex, empty = --text-muted).
     #[serde(default)]
     pub group_separator_color: String,
+    /// Alternating row background in the entry table (KeePass
+    /// `EntryListAlternatingBgColors`). Default off.
+    #[serde(default)]
+    pub alternating_row_colors: bool,
+    /// Draw connector lines in the group tree (KeePass `TreeViewShowLines`).
+    #[serde(default)]
+    pub group_tree_lines: bool,
+    /// Show the full vault file path in the window title (KeePass
+    /// `ShowFullPathInTitle`). Default off.
+    #[serde(default)]
+    pub show_full_path_in_title: bool,
     /// Render the full entry-table column grid on narrow screens too.
     pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
@@ -510,6 +521,9 @@ impl Default for GeneralSettings {
             focus_search_on_type: true,
             show_group_separators: true,
             group_separator_color: String::new(),
+            alternating_row_colors: false,
+            group_tree_lines: false,
+            show_full_path_in_title: false,
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
             saved_searches: Vec::new(),

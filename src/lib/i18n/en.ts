@@ -423,6 +423,15 @@ export const en: Record<I18nKey, string> = {
   "settings.showSeparators": "Show subgroup separators",
   "settings.showSeparatorsDesc":
     "Add a separator heading per subgroup; sorting stays within groups",
+  "settings.alternatingRows": "Alternating row colors",
+  "settings.alternatingRowsDesc":
+    "KeePass-compatible: shade alternate rows for easier horizontal reading",
+  "settings.groupTreeLines": "Group tree connector lines",
+  "settings.groupTreeLinesDesc":
+    "KeePass-compatible: draw hierarchy connectors before nested groups",
+  "settings.fullPathTitle": "Show full path in title",
+  "settings.fullPathTitleDesc":
+    "KeePass-compatible: show the vault's full path in the window title instead of just its name",
   "settings.windowOpacity": "Window opacity",
   "settings.windowOpacityDesc": "Adjust overall main-window opacity",
   "settings.alwaysOnTop": "Always on top",

@@ -698,6 +698,35 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn keypass_display_prefs_default_off_and_survive_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    {
+        let cfg = store.get().unwrap();
+        assert!(!cfg.general.alternating_row_colors);
+        assert!(!cfg.general.group_tree_lines);
+        assert!(!cfg.general.show_full_path_in_title);
+    }
+
+    let mut config = AppConfig::default();
+    config.general.alternating_row_colors = true;
+    config.general.group_tree_lines = true;
+    config.general.show_full_path_in_title = true;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"alternatingRowColors\": true"));
+    assert!(text.contains("\"groupTreeLines\": true"));
+    assert!(text.contains("\"showFullPathInTitle\": true"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let cfg = reloaded.get().unwrap();
+    assert!(cfg.general.alternating_row_colors);
+    assert!(cfg.general.group_tree_lines);
+    assert!(cfg.general.show_full_path_in_title);
+}
+
+#[test]
 fn lock_on_minimize_to_tray_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

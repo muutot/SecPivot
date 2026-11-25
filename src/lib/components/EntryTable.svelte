@@ -55,6 +55,7 @@
     mobileColumns?: boolean;
     /** Custom font color for group separator lines (hex, empty = theme default). */
     separatorColor?: string;
+    zebra?: boolean;
     customIconUrl: (entry: VaultEntry) => string | undefined;
     entryIconName: (entry: VaultEntry) => IconName;
     colText: (entry: VaultEntry, colId: string) => string;
@@ -90,6 +91,7 @@
     searchActive,
     mobileColumns = false,
     separatorColor = "",
+    zebra = false,
     customIconUrl,
     entryIconName,
     colText,
@@ -546,6 +548,7 @@
 <div
   class="entry-table"
   class:show-cols={mobileColumns}
+  class:zebra
   style:--entry-cols={entryGridCols}
   style:--entry-row-height={`${rowHeight}px`}
   bind:this={entryTableEl}
@@ -649,6 +652,7 @@
             class="entry-row"
             class:selected={selectedUuids.has(row.entry.uuid)}
             class:expired-row={row.entry.expired}
+            class:zebra-odd={rowIndex % 2 === 1}
             style:--row-color={row.entry.color ?? "transparent"}
             style:--row-fg={row.entry.foregroundColor}
             data-entry-index={rowIndex}
@@ -1022,6 +1026,12 @@
     height: 1px;
     min-width: 24px;
     background: var(--border-subtle);
+  }
+
+  /* Zebra striping uses the stable virtual row index (not nth-child, which
+     shifts as the window scrolls). Existing card-bg token only — no new colors. */
+  .entry-table.zebra .entry-row.zebra-odd:not(.selected) {
+    background: color-mix(in srgb, var(--card-bg) 55%, transparent);
   }
 
   .entry-row:hover {
