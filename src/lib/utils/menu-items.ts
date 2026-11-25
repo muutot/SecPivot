@@ -227,6 +227,7 @@ export function buildToolbarMenuItems({
       children: exportItems(locale),
     },
     { id: "expired-entries", label: t(locale, "menu.expired"), icon: "clock" },
+    { id: "large-entries", label: t(locale, "menu.largeEntries"), icon: "database" },
     { id: "clear-history", label: t(locale, "menu.clearHistory"), icon: "trash" },
     { id: "lock", label: t(locale, "menu.lock"), icon: "lock" },
     { id: "db-settings", label: t(locale, "menu.dbSettings"), icon: "settings" },

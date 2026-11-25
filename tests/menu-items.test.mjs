@@ -181,4 +181,33 @@ describe("buildToolbarMenuItems", () => {
       "Import 1Password (1PIF)",
     );
   });
+
+  it("offers KeePass large-entries lookup next to expired entries", () => {
+    const items = buildToolbarMenuItems({ detailVisible: true, busy: false, ...zh });
+    const ids = items.map((item) => item.id);
+    assert.ok(ids.includes("large-entries"));
+    // KeePass places Find commands with the maintenance tools; keep it
+    // adjacent to the expired-entries item in the overflow menu.
+    assert.ok(ids.indexOf("large-entries") === ids.indexOf("expired-entries") + 1);
+    // Not pinned to the toolbar by default (no toolbarItems key).
+    const filtered = buildToolbarMenuItems({
+      detailVisible: true,
+      busy: false,
+      ...zh,
+      toolbarItems: {
+        saveAs: false,
+        toggleDetail: false,
+        securityReport: false,
+        similarPasswords: false,
+        hibpCheck: false,
+        importMenu: false,
+        exportMenu: false,
+        expiredEntries: false,
+        clearHistory: false,
+        dbSettings: false,
+        appSettings: false,
+      },
+    });
+    assert.ok(filtered.some((item) => item.id === "large-entries"));
+  });
 });

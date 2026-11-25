@@ -103,6 +103,7 @@
   import SecurityReportDialog from "$lib/components/SecurityReportDialog.svelte";
   import SimilarPasswordsDialog from "$lib/components/SimilarPasswordsDialog.svelte";
   import ExpiredEntriesDialog from "$lib/components/ExpiredEntriesDialog.svelte";
+  import LargeEntriesDialog from "$lib/components/LargeEntriesDialog.svelte";
   import ChangeTimelineDialog from "$lib/components/ChangeTimelineDialog.svelte";
   import HibpCheckDialog from "$lib/components/HibpCheckDialog.svelte";
   import DbMetaDialog from "$lib/components/DbMetaDialog.svelte";
@@ -187,6 +188,7 @@
   let remoteConflict = $state<string | null>(null);
   let similarOpen = $state(false);
   let expiredOpen = $state(false);
+  let largeOpen = $state(false);
   let timelineOpen = $state(false);
   let hibpOpen = $state(false);
   let emergencyExportOpen = $state(false);
@@ -374,6 +376,7 @@
       reportOpen = false;
       similarOpen = false;
       expiredOpen = false;
+      largeOpen = false;
       timelineOpen = false;
       hibpOpen = false;
       emergencyExportOpen = false;
@@ -1330,6 +1333,7 @@
       dbSettingsOpen ||
       similarOpen ||
       expiredOpen ||
+      largeOpen ||
       timelineOpen ||
       hibpOpen ||
       faviconDialog !== null
@@ -1843,6 +1847,7 @@
     else if (id === "save-as") void handleSaveAs();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "expired-entries") expiredOpen = true;
+    else if (id === "large-entries") largeOpen = true;
     else if (id === "change-timeline") timelineOpen = true;
     else if (id === "hibp-check") hibpOpen = true;
     else if (id === "clear-history") void handleClearHistory();
@@ -1869,6 +1874,7 @@
     else if (id === "export-xml") void handleExportXml();
     else if (id === "export-emergency") emergencyExportOpen = true;
     else if (id === "expired-entries") expiredOpen = true;
+    else if (id === "large-entries") largeOpen = true;
     else if (id === "clear-history") void handleClearHistory();
     else if (id === "lock") void handleLock();
     else if (id === "db-settings") dbSettingsOpen = true;
@@ -2194,6 +2200,21 @@
       if (target) {
         setSingleSelection(target);
         expiredOpen = false;
+      }
+    }}
+  />
+{/if}
+
+{#if largeOpen}
+  <LargeEntriesDialog
+    entries={allEntries.filter((e) => !entryInBin(e.uuid))}
+    {pathOf}
+    onclose={() => (largeOpen = false)}
+    onselect={(uuid: string) => {
+      const target = currentVault ? findEntryByUuid(currentVault, uuid) : null;
+      if (target) {
+        setSingleSelection(target);
+        largeOpen = false;
       }
     }}
   />

@@ -465,3 +465,18 @@ test("totp editor actions never create a fixed-position containing block", async
   assert.doesNotMatch(block[1], /transform|filter|perspective|contain|will-change/);
   assert.match(block[1], /top: calc\(50% - 12px\)/);
 });
+
+test("large entries dialog mirrors KeePass Find Large Entries semantics", async () => {
+  const source = await readFile(
+    new URL("../src/lib/components/LargeEntriesDialog.svelte", import.meta.url),
+    "utf8",
+  );
+
+  // Sort by raw bytes descending (the official command lists largest first);
+  // display formatting (formatKeePassSize) stays out of the comparison.
+  assert.match(source, /\.sort\(\(a, b\) => \(b\.size \?\? 0\) - \(a\.size \?\? 0\)\)/);
+  // Minimum-size filter is KB-based and optional (0/empty shows everything).
+  assert.match(source, /min \* 1024/);
+  // Renders sizes with the shared KeePass-compatible formatter, never raw bytes.
+  assert.match(source, /formatKeePassSize/);
+});
