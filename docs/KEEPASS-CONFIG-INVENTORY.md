@@ -70,7 +70,7 @@ AutoSave ❌（关闭库时自动保存；SecPivot 只有编辑后自动保存�
 
 ### AceMru（2）
 
-MaxItemCount ⚠️ KeePass 12 / SecPivot 8 · Items ✅
+MaxItemCount ✅ `recentFiles`（上限 12，本批对齐 KeePass 默认）· Items ✅
 
 ---
 
@@ -119,7 +119,7 @@ MaxItemCount ⚠️ KeePass 12 / SecPivot 8 · Items ✅
 
 Title · UserName · Password · Url · Notes · CreationTime · LastModificationTime · LastAccessTime · ExpiryTime · Uuid · Attachment · CustomString · PluginExt · OverrideUrl · Tags · ExpiryTimeDateOnly · Size · HistoryCount · AttachmentCount · LastPasswordModTime · AutoTypeEnabled · AutoTypeSequences
 
-SecPivot 内置列 11 种（title/username/password/url/totp/notes/tags/created/modified/expires/size + custom:*）。缺：LastAccessTime、Uuid、Attachment、OverrideUrl、HistoryCount、AttachmentCount、LastPasswordModTime、AutoTypeEnabled、AutoTypeSequences —— 约 9 种，多为展示型列，可按需补。
+SecPivot 内置列 16 种（title/username/password/url/totp/notes/tags/created/modified/expires/size + historyCount/attachmentCount/autoTypeEnabled/overrideUrl/uuid，B1 批次新增五种，默认隐藏 + custom:*）。仍缺：LastAccessTime、Attachment、LastPasswordModTime、AutoTypeSequences 等 4 种展示型列，可按需补。
 
 ---
 
