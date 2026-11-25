@@ -1266,6 +1266,23 @@
     setSingleSelection,
     setSelectedEntry: (entry) => (selection.selectedEntry = entry),
     getSelectedEntry: () => selection.selectedEntry,
+    persistAfterEdit: () => {
+      // Guard on the same session view/busy token as the manual save so an
+      // auto-save cannot persist a different tab's edits after a switch.
+      const view = sessionView.capture();
+      if (!view || currentVault?.readOnly || !currentVault?.dirty) return Promise.resolve();
+      const operation = busyOperations.begin();
+      busy = true;
+      return vault
+        .callInSession(view.sessionId, () => vault.save())
+        .then((saved) => {
+          if (!sessionView.isCurrent(view)) return;
+          selection.selectedEntry = findEntryByUuid(saved, selection.selectedEntry?.uuid ?? null);
+        })
+        .finally(() => {
+          if (sessionView.isCurrent(view) && busyOperations.isCurrent(operation)) busy = false;
+        });
+    },
   });
 
   /** New-entry templates: direct entries of the database's configured

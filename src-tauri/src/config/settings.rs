@@ -550,6 +550,10 @@ pub struct SecuritySettings {
     /// "By default, new entries expire in the following number of days".
     #[serde(default)]
     pub default_expire_days: i32,
+    /// Persist the database immediately after an entry edit/create is saved
+    /// (KeePass Options → Advanced → Start and Exit). Default off.
+    #[serde(default)]
+    pub auto_save_after_edit: bool,
     pub remember_password: bool,
     /// Exclude the main window from screenshots/recordings while a vault is
     /// open (Windows `WDA_EXCLUDEFROMCAPTURE`). Default off — opt-in from the
@@ -567,6 +571,7 @@ impl Default for SecuritySettings {
             lock_after_action: false,
             lock_on_focus_loss: false,
             default_expire_days: 0,
+            auto_save_after_edit: false,
             remember_password: false,
             screen_capture_guard: false,
         }

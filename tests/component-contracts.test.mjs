@@ -518,6 +518,23 @@ test("new-entry default expiry is normalized and prefilled in the editor", async
   assert.ok(typeof toDateTimeInput === "function");
 });
 
+test("auto-save-after-edit is wired from the guarded page save path", async () => {
+  const { normalizeSettings, DEFAULT_SECURITY_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+
+  assert.equal(DEFAULT_SECURITY_SETTINGS.autoSaveAfterEdit, false, "KeePass default is off");
+  assert.equal(
+    normalizeSettings({ security: { autoSaveAfterEdit: true } }).security.autoSaveAfterEdit,
+    true,
+  );
+  // The page reuses its guarded manual-save path for auto-save so a tab switch
+  // cannot persist another vault's edits.
+  assert.match(page, /persistAfterEdit:/);
+  assert.match(page, /callInSession\(view\.sessionId, \(\) => vault\.save\(\)\)/);
+  assert.match(page, /busyOperations\.begin\(\)/);
+});
+
 test("always-on-top setting is normalized and applied to the native window", async () => {
   const { normalizeSettings, DEFAULT_GENERAL_SETTINGS } =
     await import("../src/lib/services/settings.ts");

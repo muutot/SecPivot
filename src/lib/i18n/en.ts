@@ -701,6 +701,9 @@ export const en: Record<I18nKey, string> = {
     "KeePass-compatible: newly created entries expire after this many days; 0 = never",
   "security.days": "{count} days",
   "security.days_one": "{count} day",
+  "security.autoSaveAfterEdit": "Save database after editing an entry",
+  "security.autoSaveAfterEditDesc":
+    "KeePass-compatible: persist immediately after an entry is added or changed; on failure the vault stays dirty for a manual retry",
   "security.clearOnLock": "Clear clipboard on lock",
   "security.clearOnLockDesc": "Clear passwords from the clipboard immediately on lock",
   "security.minimizeTray": "Minimize to tray on close",

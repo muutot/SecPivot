@@ -234,6 +234,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   lockAfterAction: false,
   lockOnFocusLoss: false,
   defaultExpireDays: 0,
+  autoSaveAfterEdit: false,
   rememberPassword: false,
   screenCaptureGuard: false,
 };
@@ -979,6 +980,7 @@ export function normalizeSettings(
       3650,
       0,
     ),
+    autoSaveAfterEdit: asBool(s.autoSaveAfterEdit, fallback.security.autoSaveAfterEdit),
     rememberPassword: asBool(s.rememberPassword, fallback.security.rememberPassword),
     screenCaptureGuard: asBool(s.screenCaptureGuard, fallback.security.screenCaptureGuard),
     autoLockMinutes: clampInt(s.autoLockMinutes ?? fallback.security.autoLockMinutes, 0, 240, 5),

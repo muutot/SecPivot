@@ -97,6 +97,10 @@ export interface SecuritySettings {
    *  matching KeePass "By default, new entries expire in the following number
    *  of days". Applied by the editor when opening create mode. */
   defaultExpireDays: number;
+  /** Persist the database immediately after an entry edit/create is saved
+   *  (KeePass Options → Advanced → Start and Exit). Default off: edits stay
+   *  in the session as a manual save. */
+  autoSaveAfterEdit: boolean;
   /** Keep the master password in the OS credential store for Windows Hello unlock. */
   rememberPassword: boolean;
   /** Exclude the main window from screenshots/recordings while a vault is open (Windows WDA_EXCLUDEFROMCAPTURE). Default off — opt-in from the welcome page. */

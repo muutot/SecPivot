@@ -54,21 +54,22 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Advanced（高级）
 
-| KeePass 项                                                                                         | SecPivot 状态                                                             |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Auto-save after modifying an entry / on exit & lock（KeePass Options → Advanced → Start and Exit） | ⚠️ 仅在 favicon 下载有 `favicon.autoSave`；全局自动保存未实现             |
-| Backup on save / count / template                                                                  | ⚠️ 仅 remote profiles 有 `backupCount/backupTemplate`；本地保存备份未实现 |
-| Auto-reload changed files                                                                          | ❌ 未实现                                                                 |
-| History retention                                                                                  | ✅ 数据库级（Database Settings）                                          |
-| Recycle bin                                                                                        | ✅ 数据库级（Database Settings）                                          |
-| Plugin / trigger system                                                                            | ❌ 不适用                                                                 |
+| KeePass 项                                                                        | SecPivot 状态                                                                                           |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Auto-save after modifying an entry（KeePass Options → Advanced → Start and Exit） | ✅ `security.autoSaveAfterEdit`（本批实现）：编辑/新增成功后走页面守卫的 `vault.save()`；失败保留脏状态 |
+| Backup on save / count / template                                                 | ⚠️ 仅 remote profiles 有 `backupCount/backupTemplate`；本地保存备份未实现                               |
+| Auto-reload changed files                                                         | ❌ 未实现                                                                                               |
+| History retention                                                                 | ✅ 数据库级（Database Settings）                                                                        |
+| Recycle bin                                                                       | ✅ 数据库级（Database Settings）                                                                        |
+| Plugin / trigger system                                                           | ❌ 不适用                                                                                               |
 
 ## 推荐落地顺序（可验证、不造壳）
 
 1. ✅ **defaultExpireDays**（完成，510416c）
-2. **Expiry soon days**（`general.expirySoonDays`，默认 7）：为用户高亮"即将过期"条目提供真实数据基础，改动小、两端归一化 + UI 卡片 + 契约测试可覆盖。
-3. ✅ **Always on top**（本批完成）：`general.alwaysOnTop` 默认 false，Appearance → Window 开关，settings-bootstrap 经 `set_always_on_top` Tauri 命令即时应用。
-4. **Drop to background after copy**：前端复制后聚焦上一个窗口，需要平台支持（Win32 可在 Rust 侧实现），风险中等。
-5. **URL overrides / auto-type inter-key delay**：低优先级，需新增 IPC 与执行链改造。
+2. ~~Expiry soon days~~：放弃——查证后 SecPivot 无"即将过期"消费点，强加会变成纯 UI 壳，违反"不造壳"门禁。
+3. ✅ **Always on top**（完成，0b4a790）：`general.alwaysOnTop` 默认 false，Appearance → Window 开关，settings-bootstrap 经 `set_always_on_top` Tauri 命令即时应用。
+4. ✅ **Auto-save after edit**（本批完成）：`security.autoSaveAfterEdit` 默认 false，编辑/新增成功后调用页面守卫的 `vault.save()`，失败保留脏状态可手动重试。
+5. **Drop to background after copy**：前端复制后聚焦上一个窗口，需要平台支持（Win32 可在 Rust 侧实现），风险中等。
+6. **URL overrides / auto-type inter-key delay**：低优先级，需新增 IPC 与执行链改造。
 
 不建议实现：Policy 强制策略（会把个人用户锁死）、Secure desktop（高风险高成本）、纯 UI 无行为的占位开关。

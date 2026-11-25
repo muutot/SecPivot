@@ -679,6 +679,9 @@ export const zhCN = {
   "security.defaultExpireDesc": "KeePass 对齐：新建条目默认在多少天后过期，0 表示永不过期",
   "security.days": "{count} 天",
   "security.days_one": "{count} 天",
+  "security.autoSaveAfterEdit": "编辑后自动保存数据库",
+  "security.autoSaveAfterEditDesc":
+    "KeePass 对齐：新增或修改条目后立即写盘，失败时保留脏状态可手动重试",
   "security.clearOnLock": "锁定后清空剪贴板",
   "security.clearOnLockDesc": "锁定数据库时立即清除剪贴板中的密码",
   "security.minimizeTray": "关闭窗口时最小化到托盘",

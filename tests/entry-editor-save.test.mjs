@@ -11,7 +11,7 @@ const source = readFileSync("src/lib/composables/useEntryEditor.svelte.ts", "utf
 const javascript = ts.transpile(source, { target: ts.ScriptTarget.ESNext });
 const compiled = compileModule(javascript, { generate: "server" }).js.code;
 const commonjs = ts.transpile(compiled, { module: ts.ModuleKind.CommonJS });
-function fixture(failAt = "flags") {
+function fixture(failAt = "flags", { autoSave = false, persistFails = false } = {}) {
   let live = { root: { entries: [{ uuid: "synthetic-entry", title: "Before" }] } };
   const calls = [];
   const requests = [];
@@ -44,7 +44,13 @@ function fixture(failAt = "flags") {
     require: (name) => {
       if (name === "$lib/services/vault") return { vault };
       if (name === "$lib/services/settings") return { appSettings: {} };
-      if (name === "svelte/store") return { get: () => ({ general: { language: "en" } }) };
+      if (name === "svelte/store")
+        return {
+          get: () => ({
+            general: { language: "en" },
+            security: { autoSaveAfterEdit: autoSave },
+          }),
+        };
       if (name === "$lib/i18n") return { t: (_lang, key) => key };
       if (name === "svelte/internal/server") return {};
       throw new Error(`Unexpected compiler import: ${name}`);
@@ -57,6 +63,10 @@ function fixture(failAt = "flags") {
     setSingleSelection: () => calls.push("selection"),
     setSelectedEntry: () => calls.push("highlight"),
     getSelectedEntry: () => live.root.entries[0],
+    persistAfterEdit: async () => {
+      calls.push("persist");
+      if (persistFails) throw new Error("Synthetic persist refusal");
+    },
   });
   editor.openEdit(live.root.entries[0]);
   return {
@@ -149,4 +159,24 @@ test("multi-edit keeps one batch call and the highlighted-row rebind", async () 
   assert.deepEqual(f.calls, ["batch", "highlight"]);
   assert.equal(f.editor.editorOpen, false);
   assert.equal(f.notices[0].message, "editor.updatedEntries");
+});
+
+test("auto-save persists only when enabled and after a successful edit", async () => {
+  const off = fixture(null, { autoSave: false });
+  await off.editor.handleSave(input, null, autoType, {});
+  assert.deepEqual(off.calls, ["save", "selection"]);
+
+  const on = fixture(null, { autoSave: true });
+  await on.editor.handleSave(input, null, autoType, {});
+  assert.deepEqual(on.calls, ["save", "selection", "persist"]);
+  assert.equal(on.notices[0].message, "editor.savedChanges");
+});
+
+test("auto-save failure keeps the successful edit and its notice", async () => {
+  const f = fixture(null, { autoSave: true, persistFails: true });
+  await f.editor.handleSave(input, null, autoType, {});
+  assert.equal(f.getLive().root.entries[0].title, "After");
+  assert.equal(f.editor.editorOpen, false);
+  assert.equal(f.notices[0].message, "editor.savedChanges");
+  assert.deepEqual(f.calls, ["save", "selection", "persist"]);
 });

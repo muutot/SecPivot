@@ -39,6 +39,10 @@ export type EntryEditorOptions = {
   setSelectedEntry: (entry: VaultEntry | null) => void;
   /** Current single selection (edit-multi rebind source). */
   getSelectedEntry: () => VaultEntry | null;
+  /** KeePass "auto-save after modifying an entry". The page owns the guarded
+   *  `vault.save()` call (session view + busy token); the editor only decides
+   *  whether to trigger it when the setting is enabled. */
+  persistAfterEdit?: () => Promise<void>;
 };
 
 export type EntryEditor = {
@@ -67,6 +71,19 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
   let editorMode = $state<"create" | "edit" | "edit-multi">("create");
   let editEntry = $state<VaultEntry | null>(null);
   let editEntries = $state<VaultEntry[]>([]);
+
+  /** Persist the session when KeePass auto-save-after-edit is enabled.
+   *  Best-effort: a failed save must not roll back the in-memory edit or
+   *  discard the success notice — the vault stays dirty for a manual retry. */
+  async function autoPersist(view: ReturnType<SessionViewGuard["capture"]>): Promise<void> {
+    if (!get(appSettings).security.autoSaveAfterEdit || !options.persistAfterEdit) return;
+    if (!view || !options.sessionView.isCurrent(view)) return;
+    try {
+      await options.persistAfterEdit();
+    } catch {
+      // The edit already succeeded in-session; keep it dirty for manual save.
+    }
+  }
 
   function openCreate(): void {
     editorMode = "create";
@@ -127,6 +144,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         options.setSingleSelection(options.findEntry(state, uuid));
         editorOpen = false;
         options.notify(t(lang(), "editor.createdEntry"));
+        await autoPersist(view);
       } else if (mode === "edit-multi" && patch && targetEntries.length > 0) {
         const uuids = targetEntries.map((e) => e.uuid);
         const state = await vault.callInSession(sessionId, () => vault.updateEntries(uuids, patch));
@@ -138,6 +156,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         );
         editorOpen = false;
         options.notify(t(lang(), "editor.updatedEntries", { n: uuids.length }));
+        await autoPersist(view);
       } else if (mode === "edit" && input && targetEntry) {
         const uuid = targetEntry.uuid;
         const { state } = await vault.callInSession(sessionId, () =>
@@ -153,6 +172,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
         options.setSingleSelection(options.findEntry(state, uuid));
         editorOpen = false;
         options.notify(t(lang(), "editor.savedChanges"));
+        await autoPersist(view);
       }
     } catch (e) {
       if (options.sessionView.isCurrent(view))
