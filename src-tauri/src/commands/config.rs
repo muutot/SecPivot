@@ -5,8 +5,8 @@ use crate::config;
 use crate::config::ConfigStore;
 #[cfg(desktop)]
 use crate::register_global_hotkeys;
-use crate::HotkeyKind;
 use crate::vault;
+use crate::HotkeyKind;
 use tauri::Manager;
 // ---------------------------------------------------------------------------
 // Config commands
