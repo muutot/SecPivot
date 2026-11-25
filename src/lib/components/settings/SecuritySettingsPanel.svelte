@@ -131,6 +131,20 @@
     onchange={(value) => change("clipboardClearSeconds", value)}
   />
 
+  <SettingRangeCard
+    icon="clock"
+    label={t(lang, "security.defaultExpire")}
+    description={t(lang, "security.defaultExpireDesc")}
+    value={s.security.defaultExpireDays}
+    valueLabel={s.security.defaultExpireDays > 0
+      ? t(lang, "security.days", { count: s.security.defaultExpireDays })
+      : t(lang, "settings.effectOff")}
+    min={0}
+    max={3650}
+    step={1}
+    onchange={(value) => change("defaultExpireDays", value)}
+  />
+
   <SettingToggleCard
     icon="copy"
     label={t(lang, "security.clearOnLock")}

@@ -698,6 +698,34 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn default_expire_days_defaults_zero_survives_round_trip_and_clamps() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(store.get().unwrap().security.default_expire_days, 0);
+
+    let mut config = AppConfig::default();
+    config.security.default_expire_days = 30;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"defaultExpireDays\": 30"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(reloaded.get().unwrap().security.default_expire_days, 30);
+
+    // Out-of-range values clamp to the nearest boundary (mirrors the
+    // frontend's clampInt), not silently revert to the fallback.
+    let mut invalid = AppConfig::default();
+    invalid.security.default_expire_days = -5;
+    let normalized = super::normalize_config(invalid);
+    assert_eq!(normalized.security.default_expire_days, 0);
+    let mut huge = AppConfig::default();
+    huge.security.default_expire_days = 99_999;
+    let normalized = super::normalize_config(huge);
+    assert_eq!(normalized.security.default_expire_days, 3650);
+}
+
+#[test]
 fn remember_password_survives_deserialize_write_reload() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

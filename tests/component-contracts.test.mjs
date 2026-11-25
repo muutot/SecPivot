@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { register } from "node:module";
 import test from "node:test";
+
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
 
 function topLevelFunction(source, name) {
   const startPattern = new RegExp(`^  (?:async )?function ${name}\\(`, "m");
@@ -479,4 +482,38 @@ test("large entries dialog mirrors KeePass Find Large Entries semantics", async 
   assert.match(source, /min \* 1024/);
   // Renders sizes with the shared KeePass-compatible formatter, never raw bytes.
   assert.match(source, /formatKeePassSize/);
+});
+
+test("new-entry default expiry is normalized and prefilled in the editor", async () => {
+  const { normalizeSettings, DEFAULT_SECURITY_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const { toDateTimeInput } = await import("../src/lib/utils/date.ts");
+  const editor = await readFile(
+    new URL("../src/lib/components/EntryEditorDialog.svelte", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(DEFAULT_SECURITY_SETTINGS.defaultExpireDays, 0, "0 = never, KeePass default");
+  // Normalization clamps to 0..3650 and falls back to 0 for malformed values.
+  const settings = normalizeSettings({
+    security: { defaultExpireDays: 30 },
+  });
+  assert.equal(settings.security.defaultExpireDays, 30);
+  assert.equal(
+    normalizeSettings({ security: { defaultExpireDays: -1 } }).security.defaultExpireDays,
+    0,
+  );
+  assert.equal(
+    normalizeSettings({ security: { defaultExpireDays: 99999 } }).security.defaultExpireDays,
+    3650,
+  );
+
+  // The editor reads the setting in create mode and converts days to a
+  // datetime-local value; templates can still override it after apply.
+  assert.match(editor, /security\.defaultExpireDays/);
+  assert.match(editor, /days \* 86_400_000/);
+  assert.match(editor, /defaultExpireLocal/);
+  // Timestamp formatting stays on the shared helper.
+  assert.match(editor, /toDateTimeInput\(new Date\(/);
+  assert.ok(typeof toDateTimeInput === "function");
 });

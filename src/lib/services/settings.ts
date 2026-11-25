@@ -232,6 +232,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   clearOnLock: true,
   lockAfterAction: false,
   lockOnFocusLoss: false,
+  defaultExpireDays: 0,
   rememberPassword: false,
   screenCaptureGuard: false,
 };
@@ -967,6 +968,12 @@ export function normalizeSettings(
     clearOnLock: asBool(s.clearOnLock, fallback.security.clearOnLock),
     lockAfterAction: asBool(s.lockAfterAction, fallback.security.lockAfterAction),
     lockOnFocusLoss: asBool(s.lockOnFocusLoss, fallback.security.lockOnFocusLoss),
+    defaultExpireDays: clampInt(
+      s.defaultExpireDays ?? fallback.security.defaultExpireDays,
+      0,
+      3650,
+      0,
+    ),
     rememberPassword: asBool(s.rememberPassword, fallback.security.rememberPassword),
     screenCaptureGuard: asBool(s.screenCaptureGuard, fallback.security.screenCaptureGuard),
     autoLockMinutes: clampInt(s.autoLockMinutes ?? fallback.security.autoLockMinutes, 0, 240, 5),

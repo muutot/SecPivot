@@ -134,12 +134,21 @@
    * `passwordReady`: saving while the seed load is pending sends `totp:
    * undefined`, which the backend interprets as "remove the seed". */
   let totpReady = $state(multi);
+  // KeePass "By default, new entries expire in the following number of days":
+  // prefill the expiry on create mode (0 = leave empty, i.e. never expire).
+  // Templates override this below when one is applied.
+  const defaultExpireLocal = (() => {
+    if (initialEntry || multi) return "";
+    const days = get(appSettings).security.defaultExpireDays;
+    if (!days || days <= 0) return "";
+    return toDateTimeInput(new Date(Date.now() + days * 86_400_000).toISOString());
+  })();
   let expiresLocal = $state(
     multi
       ? (sharedValue((e) => e.expires ?? "") ?? "")
       : initialEntry?.expires
         ? toDateTimeInput(initialEntry.expires)
-        : "",
+        : defaultExpireLocal,
   );
   let iconIndex = $state<number | null>(multi ? null : (initialEntry?.icon ?? null));
   /** Whether the user clicked an icon in single mode; untouched means the

@@ -541,6 +541,11 @@ pub struct SecuritySettings {
     pub clear_on_lock: bool,
     pub lock_after_action: bool,
     pub lock_on_focus_loss: bool,
+    /// Default expiry for newly created entries, in days (0 = never expire).
+    /// Mirrors the frontend `SecuritySettings.defaultExpireDays` and KeePass's
+    /// "By default, new entries expire in the following number of days".
+    #[serde(default)]
+    pub default_expire_days: i32,
     pub remember_password: bool,
     /// Exclude the main window from screenshots/recordings while a vault is
     /// open (Windows `WDA_EXCLUDEFROMCAPTURE`). Default off — opt-in from the
@@ -557,6 +562,7 @@ impl Default for SecuritySettings {
             clear_on_lock: true,
             lock_after_action: false,
             lock_on_focus_loss: false,
+            default_expire_days: 0,
             remember_password: false,
             screen_capture_guard: false,
         }
@@ -1200,6 +1206,10 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.security.auto_lock_minutes = clamp_i32(config.security.auto_lock_minutes, 0, 240, 5);
     config.security.clipboard_clear_seconds =
         clamp_i32(config.security.clipboard_clear_seconds, 0, 600, 20);
+    // Boundary-clamp (not clamp_i32's fallback) to match the frontend's
+    // clampInt in normalizeSettings: an out-of-range value takes the nearest
+    // boundary rather than silently reverting to "never".
+    config.security.default_expire_days = config.security.default_expire_days.clamp(0, 3650);
 
     config.favicon.concurrency = clamp_i32(config.favicon.concurrency, 1, 16, 8);
 

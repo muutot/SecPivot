@@ -694,6 +694,11 @@ export const en: Record<I18nKey, string> = {
   "security.clipboardClearDesc": "Clear the clipboard some time after copying a password",
   "security.seconds": "{count} seconds",
   "security.seconds_one": "{count} second",
+  "security.defaultExpire": "Default expiry for new entries",
+  "security.defaultExpireDesc":
+    "KeePass-compatible: newly created entries expire after this many days; 0 = never",
+  "security.days": "{count} days",
+  "security.days_one": "{count} day",
   "security.clearOnLock": "Clear clipboard on lock",
   "security.clearOnLockDesc": "Clear passwords from the clipboard immediately on lock",
   "security.minimizeTray": "Minimize to tray on close",

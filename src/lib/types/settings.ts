@@ -93,6 +93,10 @@ export interface SecuritySettings {
   clearOnLock: boolean;
   lockAfterAction: boolean;
   lockOnFocusLoss: boolean;
+  /** Default expiry for newly created entries, in days. `0` = never expire,
+   *  matching KeePass "By default, new entries expire in the following number
+   *  of days". Applied by the editor when opening create mode. */
+  defaultExpireDays: number;
   /** Keep the master password in the OS credential store for Windows Hello unlock. */
   rememberPassword: boolean;
   /** Exclude the main window from screenshots/recordings while a vault is open (Windows WDA_EXCLUDEFROMCAPTURE). Default off — opt-in from the welcome page. */
