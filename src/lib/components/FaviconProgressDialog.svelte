@@ -5,7 +5,6 @@
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
-  import Button from "$lib/components/templates/action/Button.svelte";
   interface Props {
     dialog: {
       phase: "working" | "done";
@@ -47,6 +46,23 @@
   {#snippet icon()}
     <AppIcon name={dialog.error ? "x" : "globe"} size={16} />
   {/snippet}
+  {#snippet headerActions()}
+    <!-- High-density header action: the wait is cancelled from the title bar
+         (mirrors the entry editor's header buttons), so the body keeps only
+         the progress bar. Stop-waiting routes to oncancel, which lets the
+         backend finish into the done phase. -->
+    <button
+      class="icon-btn"
+      type="button"
+      onclick={dialog.phase === "working" ? () => oncancel?.() : onclose}
+      aria-label={dialog.phase === "working"
+        ? t(lang, "common.cancelWait")
+        : t(lang, "common.close")}
+      title={dialog.phase === "working" ? t(lang, "common.cancelWait") : t(lang, "common.close")}
+    >
+      <AppIcon name="x" size={15} />
+    </button>
+  {/snippet}
   {#snippet children()}
     {#if dialog.phase === "working"}
       <div class="progress-track">
@@ -58,16 +74,31 @@
       </div>
     {/if}
   {/snippet}
-  {#snippet actions()}
-    {#if dialog.phase === "working"}
-      <Button onclick={() => oncancel?.()}>{t(lang, "common.cancelWait")}</Button>
-    {:else}
-      <Button variant="primary" onclick={onclose}>{t(lang, "common.close")}</Button>
-    {/if}
-  {/snippet}
 </ModalShell>
 
 <style>
+  /* Mirrors the entry editor's header icon buttons (EntryEditorDialog
+     `.icon-btn`): 32px bordered square, token-driven colors. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--settings-control-radius, 6px);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
   .progress-track {
     height: 6px;
     border: 1px solid var(--border-subtle);
