@@ -213,6 +213,11 @@ pub fn default_entry_columns() -> Vec<EntryColumnState> {
         col("modified", false, 140),
         col("expires", false, 140),
         col("size", false, 80),
+        col("historyCount", false, 70),
+        col("attachmentCount", false, 90),
+        col("autoTypeEnabled", false, 90),
+        col("overrideUrl", false, 140),
+        col("uuid", false, 280),
     ]
 }
 

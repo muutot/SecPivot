@@ -113,6 +113,8 @@ pub struct VaultEntry {
     /// identical to `get_entry_storage.total`. Backs the KeePass-style
     /// "Size" list column.
     pub size: u64,
+    /// Number of historical snapshots (KeePass `HistoryCount` column).
+    pub history_count: u32,
     /// Entry-level Auto-Type config; absent when the entry has none stored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub autotype: Option<EntryAutoTypeConfig>,

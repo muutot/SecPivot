@@ -31,6 +31,11 @@ export const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[
   { id: "modified", label: "Modified" },
   { id: "expires", label: "Expires" },
   { id: "size", label: "Size" },
+  { id: "historyCount", label: "History", sortable: false },
+  { id: "attachmentCount", label: "Attachments", sortable: false },
+  { id: "autoTypeEnabled", label: "Auto-Type", sortable: false },
+  { id: "overrideUrl", label: "Override URL" },
+  { id: "uuid", label: "UUID" },
 ];
 
 /** i18n keys for built-in column headers by column id. Custom-field columns
@@ -47,6 +52,11 @@ const COLUMN_LABEL_KEYS: Record<string, I18nKey> = {
   modified: "columns.modified",
   expires: "columns.expires",
   size: "columns.size",
+  historyCount: "columns.historyCount",
+  attachmentCount: "columns.attachmentCount",
+  autoTypeEnabled: "columns.autoTypeEnabled",
+  overrideUrl: "columns.overrideUrl",
+  uuid: "columns.uuid",
 };
 
 /** Localized header label for a column id (`fallback` for custom columns). */
@@ -204,6 +214,10 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
     entryColumns = cols;
   }
 
+  /** Current UI locale for status-word cells (read lazily: the language can
+   *  change at runtime; the cell re-renders when the entry row does). */
+  const uiLocale = (): Language => get(appSettings).general.language;
+
   /** Display text of an entry cell for a column id. */
   function columnText(entry: VaultEntry, colId: string): string {
     if (colId.startsWith("custom:")) {
@@ -218,6 +232,14 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
     }
     if (colId === "password") return entry.hasPassword || entry.password ? "••••••" : "";
     if (colId === "size") return entry.size == null ? "" : formatKeePassSize(entry.size);
+    if (colId === "historyCount") return String(entry.historyCount ?? 0);
+    if (colId === "attachmentCount") return String(entry.attachments?.length ?? 0);
+    if (colId === "autoTypeEnabled")
+      return entry.autoType?.enabled === false
+        ? t(uiLocale(), "columns.autoTypeOff")
+        : t(uiLocale(), "columns.autoTypeOn");
+    if (colId === "overrideUrl") return entry.overrideUrl ?? "";
+    if (colId === "uuid") return entry.uuid;
     return String(entry[colId as keyof VaultEntry] ?? "");
   }
 
@@ -227,6 +249,9 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
     // Size sorts numerically: zero-pad the byte count so lexicographic
     // string comparison over the memoized sort keys matches numeric order.
     if (colId === "size") return String(entry.size ?? 0).padStart(15, "0");
+    if (colId === "historyCount") return String(entry.historyCount ?? 0).padStart(6, "0");
+    if (colId === "attachmentCount") return String(entry.attachments?.length ?? 0).padStart(6, "0");
+    if (colId === "autoTypeEnabled") return entry.autoType?.enabled === false ? "0" : "1";
     return columnText(entry, colId);
   }
 

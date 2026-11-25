@@ -70,6 +70,8 @@ export interface VaultEntry {
   customData?: CustomDataEntry[];
   customFields?: CustomField[];
   attachments?: AttachmentInfo[];
+  /** Number of historical snapshots (KeePass `HistoryCount` column). */
+  historyCount?: number;
   /** Total byte size of the entry per the KeePass official client's
    *  `PwEntry.GetSize()` accounting (fields + attachments + history);
    *  displayed via `formatKeePassSize` so both clients read identically.

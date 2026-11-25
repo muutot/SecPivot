@@ -27,7 +27,7 @@ import { t } from "$lib/i18n";
 
 export const PERSIST_DEBOUNCE_MS = 120;
 
-export const RECENT_FILES_MAX = 8;
+export const RECENT_FILES_MAX = 12;
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -63,6 +63,11 @@ export const DEFAULT_ENTRY_COLUMNS: EntryColumnState[] = [
   { id: "modified", visible: false, width: 140 },
   { id: "expires", visible: false, width: 140 },
   { id: "size", visible: false, width: 80 },
+  { id: "historyCount", visible: false, width: 70 },
+  { id: "attachmentCount", visible: false, width: 90 },
+  { id: "autoTypeEnabled", visible: false, width: 90 },
+  { id: "overrideUrl", visible: false, width: 140 },
+  { id: "uuid", visible: false, width: 280 },
 ];
 
 /** Merge a persisted column list over the defaults: unknown ids (custom-field

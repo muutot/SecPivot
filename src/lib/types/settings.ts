@@ -128,7 +128,8 @@ export interface DensitySettings {
 
 /** One entry-table column's persisted state (KeePass-style list). `id` is a
  *  built-in column id ("title", "username", "password", "url", "totp",
- *  "notes", "tags", "created", "modified", "expires", "size") or
+ *  "notes", "tags", "created", "modified", "expires", "size", "historyCount",
+ *  "attachmentCount", "autoTypeEnabled", "overrideUrl", "uuid") or
  *  `custom:<field name>` for entry custom fields. `width` is px; the "title"
  *  column uses `0` as an auto sentinel (frontend resolves it to the default
  *  column width). Mirrors `EntryColumnState` in `src-tauri/src/config.rs`. */

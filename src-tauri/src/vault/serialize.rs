@@ -235,6 +235,12 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
             })
             .collect(),
         size: entry_size(entry).total(),
+        // KeePass `HistoryCount` column: number of historical snapshots.
+        history_count: entry
+            .history
+            .as_ref()
+            .map(|h| h.get_entries().len() as u32)
+            .unwrap_or(0),
         autotype: entry.autotype.as_ref().map(|at| EntryAutoTypeConfig {
             enabled: at.enabled,
             default_sequence: at.default_sequence.clone(),

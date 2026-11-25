@@ -978,19 +978,12 @@ fn recent_files_normalize_trims_dedups_and_caps() {
     (0..RECENT_FILES_MAX).for_each(|i| config.general.recent_files.push(format!("f{i}.kdbx")));
 
     let normalized = normalize_config(config);
-    assert_eq!(
-        normalized.general.recent_files,
-        vec![
-            "dup.kdbx".to_owned(),
-            "keep.kdbx".to_owned(),
-            "f0.kdbx".to_owned(),
-            "f1.kdbx".to_owned(),
-            "f2.kdbx".to_owned(),
-            "f3.kdbx".to_owned(),
-            "f4.kdbx".to_owned(),
-            "f5.kdbx".to_owned(),
-        ]
-    );
+    // Dedup keeps the newest copy, blanks drop, and the list caps at
+    // RECENT_FILES_MAX with the oldest overflow entries pruned first.
+    let mut expected = vec!["dup.kdbx".to_owned(), "keep.kdbx".to_owned()];
+    expected.extend((0..RECENT_FILES_MAX - 2).map(|i| format!("f{i}.kdbx")));
+    assert_eq!(normalized.general.recent_files, expected);
+    assert!(normalized.general.recent_files.len() <= RECENT_FILES_MAX);
 }
 
 #[test]

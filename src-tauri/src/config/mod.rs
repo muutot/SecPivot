@@ -7,7 +7,8 @@ pub mod store;
 #[cfg(test)]
 mod tests;
 
-pub(crate) const RECENT_FILES_MAX: usize = 8;
+/// Recent-files cap; aligned with KeePass's `AceMru::DefaultMaxItemCount` (12).
+pub(crate) const RECENT_FILES_MAX: usize = 12;
 
 pub(crate) use self::settings::DEFAULT_BACKUP_TEMPLATE;
 pub use self::settings::*;
