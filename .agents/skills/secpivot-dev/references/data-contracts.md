@@ -544,6 +544,12 @@ This reference defines the frontend ↔ backend contract. Update it together wit
 `io.pickSaveFile({defaultPath, filters?})` owns native destination selection for
 CSV/XML/emergency HTML and both attachment-save entry points. Android uses
 `saf.createDocument(fileName, mimeTypes?)`; desktop keeps plugin-dialog save.
+
+Single-instance guard: `tauri-plugin-single-instance` is registered FIRST in
+`run()`'s builder chain (official requirement); a second process launch
+focuses the existing main window (unminimize/show/focus) and exits. Fixed-on
+native behavior mirroring KeePass `LimitToSingleInstance` (default on) — no
+config key, and the process-level behavior has no unit test.
 Vault create/save-as keep the KDBX MIME default. The helper returns only the
 selected path/URI and never remembers exports as recent vaults. Caller view
 guards still run before backend secret extraction/write, and emergency HTML
