@@ -6,6 +6,7 @@
   import Button from "$lib/components/templates/action/Button.svelte";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
   import { beginScreenCapture } from "$lib/services/security";
+  import { showTip } from "$lib/services/tips";
   import { t } from "$lib/i18n";
   import { acquireEscapeScope } from "$lib/utils/escape-stack";
 
@@ -27,7 +28,6 @@
   const lang = $derived(s.general.language);
 
   let busy = $state(false);
-  let error = $state("");
   let shotUrl = $state<string | null>(null);
   let selecting = $state(false);
   let results = $state<string[]>([]);
@@ -58,11 +58,12 @@
   async function run(task: () => Promise<void>): Promise<void> {
     if (busy) return;
     busy = true;
-    error = "";
     try {
       await task();
     } catch (e) {
-      error = typeof e === "string" ? e : String(e);
+      // Failures surface through the global bottom-center tip, like every
+      // other async action — not as an inline chip next to the buttons.
+      showTip(typeof e === "string" ? e : String(e), "error");
     } finally {
       busy = false;
     }
@@ -99,7 +100,7 @@
 
   function handleResults(found: string[]): void {
     if (found.length === 0) {
-      error = t(lang, "totpqr.noCode");
+      showTip(t(lang, "totpqr.noCode"), "error");
       closeOverlay();
       return;
     }
@@ -277,10 +278,6 @@
   </ModalShell>
 {/if}
 
-{#if error}
-  <span class="totp-qr-error">{error}</span>
-{/if}
-
 <svelte:window
   onkeydown={(e) =>
     (selecting || results.length > 0) &&
@@ -317,14 +314,6 @@
   .totp-qr-btn:disabled {
     opacity: 0.5;
     cursor: default;
-  }
-
-  .totp-qr-error {
-    position: absolute;
-    top: calc(100% + 3px);
-    left: 0;
-    color: var(--danger-color);
-    font-size: var(--font-size-tiny, 10px);
   }
 
   .qr-shot-overlay {
