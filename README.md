@@ -232,7 +232,8 @@ SecPivot/
 │   ├── browser-integration.md     # 浏览器集成协议提案与规格
 │   ├── i18n.md                    # 国际化约定
 │   └── PITFALLS.md                # 开发陷阱与约定
-├── skills/secpivot-dev/           # 开发规约与子系统参考
+├── .agents/skills/                # Agent Skills（规范化自动发现）
+│   └── secpivot-dev/              # 开发规约与子系统参考
 ├── scripts/                       # 版本、发布、打包、回归脚本
 ├── tests/                         # 前端行为测试
 └── TODO.md                        # 路线图与验收（证据口径）
@@ -242,14 +243,14 @@ SecPivot/
 
 ## 文档
 
-| 文档                                                         | 内容                             |
-| :----------------------------------------------------------- | :------------------------------- |
-| [skills/secpivot-dev/SKILL.md](skills/secpivot-dev/SKILL.md) | 开发规约、任务流程、提交格式     |
-| [TODO.md](TODO.md)                                           | 路线图与验收（直接证据口径）     |
-| [docs/browser-integration.md](docs/browser-integration.md)   | 浏览器集成协议提案与偏差记录     |
-| [docs/android.md](docs/android.md)                           | 安卓支持评估与落地清单           |
-| [docs/i18n.md](docs/i18n.md)                                 | 国际化约定与字典对等要求         |
-| [docs/PITFALLS.md](docs/PITFALLS.md)                         | Svelte 5 / Tauri / Rust 开发陷阱 |
+| 文档                                                                         | 内容                             |
+| :--------------------------------------------------------------------------- | :------------------------------- |
+| [.agents/skills/secpivot-dev/SKILL.md](.agents/skills/secpivot-dev/SKILL.md) | 开发规约、任务流程、提交格式     |
+| [TODO.md](TODO.md)                                                           | 路线图与验收（直接证据口径）     |
+| [docs/browser-integration.md](docs/browser-integration.md)                   | 浏览器集成协议提案与偏差记录     |
+| [docs/android.md](docs/android.md)                                           | 安卓支持评估与落地清单           |
+| [docs/i18n.md](docs/i18n.md)                                                 | 国际化约定与字典对等要求         |
+| [docs/PITFALLS.md](docs/PITFALLS.md)                                         | Svelte 5 / Tauri / Rust 开发陷阱 |
 
 ---
 

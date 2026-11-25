@@ -4,7 +4,7 @@ Read this profile when auditing SecPivot. Paths below are relative to the reposi
 
 ## Repository workflow
 
-Read `AGENTS.md`, `skills/secpivot-dev/SKILL.md` and its maintenance workflow before repository changes. Route focused inspection through the development skill's references; do not load all subsystem references for every audit.
+Read `AGENTS.md`, `.agents/skills/secpivot-dev/SKILL.md` and its maintenance workflow before repository changes. Route focused inspection through the development skill's references; do not load all subsystem references for every audit.
 
 - Inspect Git status and preserve unrelated work, including nested worktrees.
 - TODO completion requires direct implementation evidence plus proportionate verification. An audit report alone does not authorize checking roadmap items.
@@ -14,14 +14,14 @@ Read `AGENTS.md`, `skills/secpivot-dev/SKILL.md` and its maintenance workflow be
 
 ## Risk-driven source map
 
-| Concern                | Starting points and checks                                                                                                                                                               |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| UI and state           | `src/routes/`, `src/lib/`: initialization gates, out-of-order invoke results, subscription cleanup, focus management, compact-layout regressions                                         |
-| IPC and local API      | `src-tauri/src/lib.rs`, `commands/`: registered commands, invoke names, argument/result casing, validation before effects, error surfaces                                                |
-| Vault and persistence  | `src-tauri/src/`: KDBX open/create/save flows, lock/close boundaries, in-memory session lifetime, zeroization, migrations and recovery expectations                                      |
-| Security and privacy   | password generation, clipboard clearing (`clipboardClearSeconds`), auto-lock, config/logging paths: no password or master key outside the in-memory session                              |
-| Settings and contracts | `data-contracts.md`, `security-model.md` in the dev skill: TS type ↔ Rust serde lockstep, `#[serde(default)]` round-trips, normalization/ranges, cross-window application                |
-| Release                | `.github/workflows/`, lockfiles, and `skills/version-release/SKILL.md`: tag bound to the release commit only, six-file release commit rule, pinned actions, extreme profile Actions-only |
+| Concern                | Starting points and checks                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| UI and state           | `src/routes/`, `src/lib/`: initialization gates, out-of-order invoke results, subscription cleanup, focus management, compact-layout regressions                                                 |
+| IPC and local API      | `src-tauri/src/lib.rs`, `commands/`: registered commands, invoke names, argument/result casing, validation before effects, error surfaces                                                        |
+| Vault and persistence  | `src-tauri/src/`: KDBX open/create/save flows, lock/close boundaries, in-memory session lifetime, zeroization, migrations and recovery expectations                                              |
+| Security and privacy   | password generation, clipboard clearing (`clipboardClearSeconds`), auto-lock, config/logging paths: no password or master key outside the in-memory session                                      |
+| Settings and contracts | `data-contracts.md`, `security-model.md` in the dev skill: TS type ↔ Rust serde lockstep, `#[serde(default)]` round-trips, normalization/ranges, cross-window application                        |
+| Release                | `.github/workflows/`, lockfiles, and `.agents/skills/version-release/SKILL.md`: tag bound to the release commit only, six-file release commit rule, pinned actions, extreme profile Actions-only |
 
 Documentation is a navigation aid. Re-check a historical finding against current code before reporting it again.
 

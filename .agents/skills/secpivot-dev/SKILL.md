@@ -83,7 +83,7 @@ npm run verify
 
 Run the narrowest relevant checks during implementation. Run `npm run verify` at integration milestones or before a commit whose scope crosses frontend and backend. If an environment prevents a required runtime, visual, platform, packaging, or performance check, report the missing evidence and leave the corresponding TODO unverified.
 
-The release workflow's Windows `build` job is the extreme-release validation because it compiles and links the exact shipped configuration; the `verify` job runs `npm run verify` only, in parallel with the builders, and never repeats that build. The local build profile itself stays fast (see `skills/version-release/SKILL.md`).
+The release workflow's Windows `build` job is the extreme-release validation because it compiles and links the exact shipped configuration; the `verify` job runs `npm run verify` only, in parallel with the builders, and never repeats that build. The local build profile itself stays fast (see `.agents/skills/version-release/SKILL.md`).
 
 ## Local build and run model
 
@@ -92,7 +92,7 @@ Build profiles in `src-tauri/Cargo.toml` are split so local builds are fast and 
 - `npm run tauri dev` — local dev run. `[profile.dev]` keeps dependencies unoptimized (opt-level 0, no debug symbols) with `incremental` + `split-debuginfo = "unpacked"`, so the cached target is reused and rebuilds are as fast as possible.
 - `npm run tauri build` — local packaging. `[profile.release]` is likewise tuned for build speed and minimal cache (opt-level 0, `codegen-units = 256`, no debug info, `incremental = false`).
 - GitHub Actions release — the only place extreme runtime optimization is enabled. `.github/workflows/release.yml` sets `CARGO_PROFILE_RELEASE_LTO=true`, `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1`, `CARGO_PROFILE_RELEASE_OPT_LEVEL=3` plus `RUSTFLAGS` (`target-cpu=x86-64-v3`). Local builds are unaffected.
-- CI checks (`ci.yml`) build with `--profile ci` (deps at opt-level 0) and use `sccache` and `cargo-nextest` for tests. The release `verify` job runs `npm run verify` (dev-profile `cargo test`/`clippy`, no sccache) in parallel with the builders — see `skills/version-release/SKILL.md`.
+- CI checks (`ci.yml`) build with `--profile ci` (deps at opt-level 0) and use `sccache` and `cargo-nextest` for tests. The release `verify` job runs `npm run verify` (dev-profile `cargo test`/`clippy`, no sccache) in parallel with the builders — see `.agents/skills/version-release/SKILL.md`.
 
 ## Commit message format
 
@@ -149,5 +149,5 @@ Follow the gitmoji convention established by the Clipboard repository and shared
 5. Write the commit message in the gitmoji format described above.
 6. Recheck `git status` after committing and report verification plus any evidence gaps.
 
-Base directory for this skill: B:\Program\Project\Open\SecPivot\skills\secpivot-dev
+Base directory for this skill: B:\Program\Project\Open\SecPivot\.agents\skills\secpivot-dev
 Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.

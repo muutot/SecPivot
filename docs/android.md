@@ -116,7 +116,7 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ### 6. 文档与版本
 
-- 更新 `skills/secpivot-dev/SKILL.md` 路由表与 `references/project-structure.md` 增加 android/移动面
+- 更新 `.agents/skills/secpivot-dev/SKILL.md` 路由表与 `references/project-structure.md` 增加 android/移动面
 - 移动端首发版本走 `version-release` 技能
 
 ## 环境阻塞记录

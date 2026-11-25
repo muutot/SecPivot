@@ -65,7 +65,7 @@ Steps 1–2 run, then Step 3 detects stale `RELEASE.md` and exits.
 
 ### Between passes — LLM generates RELEASE.md
 
-Read `CHANGELOG.md` and use `skills/version-release/release_template.md` as a format reference:
+Read `CHANGELOG.md` and use `.agents/skills/version-release/release_template.md` as a format reference:
 
 1. Group related commits into feature areas
 2. Attach commit hash links (use the actual repository URL once a remote is configured):
@@ -147,7 +147,7 @@ node scripts/changelog.mjs --preview --version 0.2.0  # preview for a target ver
 
 ## Release body (`RELEASE.md`)
 
-`RELEASE.md` is the canonical release body for GitHub Releases. It is **manually curated** by the LLM during each release, following the format in `skills/version-release/release_template.md`.
+`RELEASE.md` is the canonical release body for GitHub Releases. It is **manually curated** by the LLM during each release, following the format in `.agents/skills/version-release/release_template.md`.
 
 Pushing the tag triggers CI/CD which reads `RELEASE.md` automatically as the GitHub Release body.
 
@@ -172,7 +172,7 @@ Pushing a semantic-version tag (`v<major>.<minor>.<patch>`, with an optional pre
 - Builds **64-bit split-per-ABI release Android APKs** (`aarch64`, `x86_64`) on `ubuntu-latest` (`android` job, `needs: validate`, parallel to `verify` and `build`) — the same `CARGO_PROFILE_RELEASE_*` extreme-optimization overrides as the Windows build apply (`target-cpu=x86-64-v3` is x86-64 only and is not set here), avoiding a needlessly large unoptimized native library. The whole network stack is rustls (no `openssl-sys`/`openssl-src` cross-compilation; the historical `TARGET_RANLIB` export is moot but kept for reference). **Build and signing are separate jobs**: the `android` job runs with no signing secret at all (the workflow removes the template's throwaway debug signingConfig before building unsigned output), and the dedicated `sign-android` job downloads the built APKs, decodes the release keystore into a private temp directory outside any checkout, re-signs each per-ABI APK (cargo-mobile2 writes `app/build/outputs/apk/<arch>/release/app-<arch>-release.apk`, so the ABI is the arch flavor two levels up, mapped `arm64`→`arm64-v8a`) with build-tools 35.0.0 `apksigner` using `env:` password references, verifies the final staged signatures and exact native ABI contents, and preserves the pre-signing asset name `SecPivot-<version>-android-<abi>.apk`; staging fails closed unless both the `arm64-v8a` and `x86_64` assets exist. The keystore is cleaned on exit or signal, and no build source runs in the signing job. Build dependencies cannot read the signing identity from their runner. The verified APKs cross jobs as one-day Actions artifacts, and `publish-android` needs `verify`, `build`, and `sign-android` before uploading them to the draft release, so a slow Windows LTO build cannot trip a fixed polling timeout; missing APKs/release or failed uploads still fail closed
 - Creates a draft GitHub Release with these artifacts using `RELEASE.md` as the release body
 
-Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
+Local `cargo build`/`tauri build` uses the fast build-speed `release` profile (see `.agents/skills/secpivot-dev/SKILL.md`); only this GitHub workflow applies the slow, runtime-maximizing release overrides.
 
 The workflow also supports `workflow_dispatch` with a `version` input (e.g. `0.2.0`): the `RELEASE_TAG` env (`github.ref_type == 'tag' ? github.ref_name : v<version>`) names the release. The input must equal the checked-out repository version **and** the checked-out commit must be the commit that tag points at; use the ref selector in GitHub Actions to dispatch the matching release commit (dispatching `main` after the tag moved on is rejected by the `validate` job).
 

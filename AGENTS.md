@@ -1,6 +1,6 @@
 # SecPivot repository instructions
 
-SecPivot is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `skills/secpivot-dev/SKILL.md` completely and follow its linked maintenance workflow.
+SecPivot is a professional, compact, high-information-density KeePass client built with Svelte 5 + Tauri 2 + Rust. Before changing this repository, read `.agents/skills/secpivot-dev/SKILL.md` completely and follow its linked maintenance workflow.
 
 In particular:
 
@@ -53,7 +53,7 @@ npm run format:check
 npm run verify
 ```
 
-Run the narrowest relevant checks during implementation and the full set at integration milestones. Local `dev`/`release`/`ci` Rust profiles are tuned for build speed; the extreme runtime optimization (fat LTO, opt3, cgu1) is applied only by the GitHub Actions release workflow via `CARGO_PROFILE_RELEASE_*` env overrides (see `skills/secpivot-dev/SKILL.md`).
+Run the narrowest relevant checks during implementation and the full set at integration milestones. Local `dev`/`release`/`ci` Rust profiles are tuned for build speed; the extreme runtime optimization (fat LTO, opt3, cgu1) is applied only by the GitHub Actions release workflow via `CARGO_PROFILE_RELEASE_*` env overrides (see `.agents/skills/secpivot-dev/SKILL.md`).
 
 ## Reference projects
 
