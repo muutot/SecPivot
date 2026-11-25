@@ -690,3 +690,24 @@ test("expired-on-open reminder is gated and counts soon-expiring entries", async
   assert.match(page, /soonDays \* 86_400_000/);
   assert.match(page, /page\.expiredFlashBoth/);
 });
+
+test("TOTP QR capture hides the app window and exempts the focus lock", async () => {
+  const capture = await readFile(
+    new URL("../src/lib/components/TotpQrButtons.svelte", import.meta.url),
+    "utf8",
+  );
+  const security = await readFile(
+    new URL("../src/lib/services/security.ts", import.meta.url),
+    "utf8",
+  );
+
+  // Order matters: hide → wait for the compositor → capture → restore.
+  assert.match(capture, /beginScreenCapture\(\)/);
+  assert.match(capture, /await window\.hide\(\)/);
+  assert.match(capture, /setTimeout\(resolve, 350\)/);
+  assert.match(capture, /capture_screen_png/);
+  assert.match(capture, /await window\.show\(\)/);
+  // The hide would blur the window; the focus-loss lock must honor the lease.
+  assert.match(security, /screenCaptureActivity\.isActive\(\)/);
+  assert.match(security, /export function beginScreenCapture/);
+});

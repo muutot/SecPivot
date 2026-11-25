@@ -221,6 +221,16 @@ export function setTcatoOverlayOpen(open: boolean): void {
   tcatoOverlayActivity.setConfirmed(open);
 }
 
+/** True while the app hides its own window for a screen capture (TOTP QR
+ *  pick): the hide blurs the window and would otherwise trip the focus-loss
+ *  lock in the middle of the capture. */
+const screenCaptureActivity = new ActivityLeaseGuard();
+
+/** Suppress focus-loss locking for one self-hide capture attempt. */
+export function beginScreenCapture(): { release: () => void } {
+  return screenCaptureActivity.acquire();
+}
+
 /**
  * Install the focus-loss lock: when `lockOnFocusLoss` is enabled and a vault
  * is open, losing window focus locks immediately. Returns a cleanup.
@@ -228,6 +238,7 @@ export function setTcatoOverlayOpen(open: boolean): void {
 export function installFocusLock(): () => void {
   const onBlur = () => {
     if (tcatoOverlayActivity.isActive()) return;
+    if (screenCaptureActivity.isActive()) return;
     if (!get(appSettings).security.lockOnFocusLoss) return;
     if (!vault.get()) return;
     void lockVault();

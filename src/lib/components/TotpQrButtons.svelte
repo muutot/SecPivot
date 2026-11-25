@@ -1,9 +1,11 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
-  import { appSettings } from "$lib/services/settings";
+  import { appSettings, isTauriRuntime } from "$lib/services/settings";
+  import { beginScreenCapture } from "$lib/services/security";
   import { t } from "$lib/i18n";
   import { acquireEscapeScope } from "$lib/utils/escape-stack";
 
@@ -66,9 +68,29 @@
     }
   }
 
+  /** Capture the screen with the app's own window hidden first (KeePass
+   *  does the same for its QR capture): otherwise the SecPivot window sits
+   *  in the screenshot between the user and the QR code they want to frame.
+   *  The hide blurs the window, so a focus-loss-lock lease guards the whole
+   *  attempt; the window is restored before this promise settles and the
+   *  capture overlay (or the failure toast) renders above the page. */
   async function captureScreen(): Promise<Uint8Array> {
-    const png = await invoke<number[]>("capture_screen_png");
-    return new Uint8Array(png);
+    if (!isTauriRuntime()) {
+      return new Uint8Array(await invoke<number[]>("capture_screen_png"));
+    }
+    const lease = beginScreenCapture();
+    const window = getCurrentWindow();
+    try {
+      await window.hide();
+      // Give the desktop compositor a beat to remove the window from the
+      // screen before the BitBlt runs.
+      await new Promise<void>((resolve) => setTimeout(resolve, 350));
+      return new Uint8Array(await invoke<number[]>("capture_screen_png"));
+    } finally {
+      await window.show().catch(() => {});
+      await window.setFocus().catch(() => {});
+      lease.release();
+    }
   }
 
   function decode(png: Uint8Array): Promise<string[]> {
