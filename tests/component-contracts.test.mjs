@@ -450,3 +450,18 @@ test("remote-conflict sentinel stays byte-identical across backend and frontend"
   assert.ok(strip, "frontend must strip the literal sentinel");
   assert.equal(strip[1], sentinel, "strip target must be byte-identical to the backend marker");
 });
+
+test("totp editor actions never create a fixed-position containing block", async () => {
+  const source = await readFile(
+    new URL("../src/lib/components/EntryEditorDialog.svelte", import.meta.url),
+    "utf8",
+  );
+  const block = source.match(/\.totp-input-actions \{([\s\S]*?)\n  \}/);
+
+  assert.ok(block, ".totp-input-actions rule must exist");
+  // transform/filter/perspective/contain make this span the containing block
+  // for TotpQrButtons' fullscreen capture overlay and picker modal, shrinking
+  // them to the ~50px wrapper (reported as QR region select being unusable).
+  assert.doesNotMatch(block[1], /transform|filter|perspective|contain|will-change/);
+  assert.match(block[1], /top: calc\(50% - 12px\)/);
+});

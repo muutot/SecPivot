@@ -1707,11 +1707,14 @@
     position: relative;
   }
 
+  /* Center the 24px buttons geometrically, not via transform: a transformed
+     ancestor becomes the containing block for position:fixed descendants,
+     which traps TotpQrButtons' fullscreen capture overlay and picker modal
+     inside this ~50px wrapper (they must cover the whole window). */
   .totp-input-actions {
     position: absolute;
-    top: 50%;
+    top: calc(50% - 12px);
     right: 3px;
-    transform: translateY(-50%);
     display: inline-flex;
   }
 

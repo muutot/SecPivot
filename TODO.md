@@ -351,3 +351,5 @@ Status legend: `[ ]` pending · `[x]` delivered (with direct evidence) · `[~]` 
 - [x] 同一编辑版本的较早读取不得回退保存/改密/只读/镜像状态（SP-S116）：独立statusRevision与原生delta状态、比较前拒绝旧图标/树回复已实现；真实服务8条/前端466、原生KDBX8条及指定配置完整verify根Rust855/ACL2等通过。并发dirty/修改时间、普通save有效history选择和失败文件保持控制覆盖；编辑版本仍用于SaveJob/history，前期测试clone警告和资源中断保留证据。真实IPC时序、手机APK/选择器/provider和其他平台不属于本项完成证明。
 
 - [x] OTP复制反馈必须属于当前条目/会话订阅（SP-S117）：订阅cleanup使旧代次失效，成功回调同时比较代次和session/entry key；实际Svelte client effects八条回归通过，含A→B→A（共享cache）、会话切换/返回、销毁、失败及1200ms提示清除。修复前同套测试2pass/6fail，当前8pass；指定配置完整verify前端474/根Rust855/ACL2等通过。合成剪贴板/OTP和手动timer，不是OS剪贴板/DOM/设备时序证明。
+
+- [ ] 分组搜索必须按原始三态设置解析继承与显式覆盖，与搜索选择范围无关（SP-S118）：实际完整rune六项4pass/2fail，子范围遗漏祖先导致继承禁止失效，全范围AND导致显式开启失效；原生快照丢失None、matcher/REF传播AND已静态复核。待完整原生有效值/原始设置契约、保存重开和真实快照跨范围/原生查找回归，不只补子范围父索引。
