@@ -90,6 +90,10 @@ export interface SecuritySettings {
   autoLockMinutes: number;
   clipboardClearSeconds: number;
   minimizeToTray: boolean;
+  /** Lock the vault when the main window is hidden to the system tray
+   *  (KeePass Security → "Lock workspace when minimizing to tray"). Only
+   *  meaningful while `minimizeToTray` is enabled. */
+  lockOnMinimizeToTray: boolean;
   clearOnLock: boolean;
   lockAfterAction: boolean;
   lockOnFocusLoss: boolean;

@@ -230,6 +230,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   autoLockMinutes: 5,
   clipboardClearSeconds: 20,
   minimizeToTray: true,
+  lockOnMinimizeToTray: false,
   clearOnLock: true,
   lockAfterAction: false,
   lockOnFocusLoss: false,
@@ -971,6 +972,7 @@ export function normalizeSettings(
     typeof v === "boolean" ? v : fallback;
   const security: SecuritySettings = {
     minimizeToTray: asBool(s.minimizeToTray, fallback.security.minimizeToTray),
+    lockOnMinimizeToTray: asBool(s.lockOnMinimizeToTray, fallback.security.lockOnMinimizeToTray),
     clearOnLock: asBool(s.clearOnLock, fallback.security.clearOnLock),
     lockAfterAction: asBool(s.lockAfterAction, fallback.security.lockAfterAction),
     lockOnFocusLoss: asBool(s.lockOnFocusLoss, fallback.security.lockOnFocusLoss),

@@ -518,6 +518,29 @@ test("new-entry default expiry is normalized and prefilled in the editor", async
   assert.ok(typeof toDateTimeInput === "function");
 });
 
+test("lock-on-minimize-to-tray reuses the guarded tray lock event", async () => {
+  const { normalizeSettings, DEFAULT_SECURITY_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const lib = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../src/routes/+layout.svelte", import.meta.url), "utf8");
+  const panel = await readFile(
+    new URL("../src/lib/components/settings/SecuritySettingsPanel.svelte", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(DEFAULT_SECURITY_SETTINGS.lockOnMinimizeToTray, false, "KeePass default is off");
+  assert.equal(
+    normalizeSettings({ security: { lockOnMinimizeToTray: true } }).security.lockOnMinimizeToTray,
+    true,
+  );
+  // The native hide path emits the same event the tray Lock item uses, and
+  // the layout already closes every vault on it.
+  assert.match(lib, /cfg\.security\.lock_on_minimize_to_tray/);
+  assert.match(lib, /app\.emit\(TRAY_LOCK_EVENT, \(\)\)/);
+  assert.match(layout, /listen\("tray-lock", \(\) => void lockVault\(\)\)/);
+  assert.match(panel, /disabled=\{!security\.minimizeToTray\}/);
+});
+
 test("auto-save-after-edit is wired from the guarded page save path", async () => {
   const { normalizeSettings, DEFAULT_SECURITY_SETTINGS } =
     await import("../src/lib/services/settings.ts");

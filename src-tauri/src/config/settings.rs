@@ -541,6 +541,10 @@ pub struct SecuritySettings {
     pub clipboard_clear_seconds: i32,
     #[serde(default = "default_true")]
     pub minimize_to_tray: bool,
+    /// Lock the vault when the main window is hidden to the tray (KeePass
+    /// Security option). Only meaningful while `minimize_to_tray` is on.
+    #[serde(default)]
+    pub lock_on_minimize_to_tray: bool,
     #[serde(default = "default_true")]
     pub clear_on_lock: bool,
     pub lock_after_action: bool,
@@ -567,6 +571,7 @@ impl Default for SecuritySettings {
             auto_lock_minutes: 5,
             clipboard_clear_seconds: 20,
             minimize_to_tray: true,
+            lock_on_minimize_to_tray: false,
             clear_on_lock: true,
             lock_after_action: false,
             lock_on_focus_loss: false,

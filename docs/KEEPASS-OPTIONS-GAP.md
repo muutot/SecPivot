@@ -6,18 +6,19 @@
 
 ### Security（安全）
 
-| KeePass 项                                | SecPivot 状态                                            | 证据                                   |
-| ----------------------------------------- | -------------------------------------------------------- | -------------------------------------- |
-| Lock workspace after inactivity (seconds) | ✅ `security.autoLockMinutes`                            | SecuritySettingsPanel SettingRangeCard |
-| Lock after **global user inactivity**     | ❌ 未实现（需要系统级空闲检测，WebView 内不可靠）        | —                                      |
-| Clipboard auto-clear time                 | ✅ `security.clipboardClearSeconds`                      | security.ts copyText                   |
-| By default, new entries expire in N days  | ✅ **`security.defaultExpireDays`**（本轮 510416c 新增） | EntryEditorDialog create mode 预填     |
-| Lock when minimizing to taskbar / tray    | ⚠️ 部分：`lockOnFocusLoss` 靠 window blur 覆盖           | security.ts installFocusLock           |
-| Lock on workstation lock / user switch    | ⚠️ blur 通常伴随，非显式事件                             | —                                      |
-| Lock on suspend / remote-control change   | ❌ 需原生系统事件                                        | —                                      |
-| Exit instead of lock / Always exit        | ❌ 未实现                                                | handle_close_requested 恒为退出/托盘   |
-| Secure desktop for master key             | ❌ 未实现（Windows 安全桌面，成本高）                    | —                                      |
-| Warn on weak key transformation           | ❌ 未实现（创建/改密钥时告警）                           | —                                      |
+| KeePass 项                                | SecPivot 状态                                                                                                  | 证据                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Lock workspace after inactivity (seconds) | ✅ `security.autoLockMinutes`                                                                                  | SecuritySettingsPanel SettingRangeCard      |
+| Lock after **global user inactivity**     | ❌ 未实现（需要系统级空闲检测，WebView 内不可靠）                                                              | —                                           |
+| Clipboard auto-clear time                 | ✅ `security.clipboardClearSeconds`                                                                            | security.ts copyText                        |
+| By default, new entries expire in N days  | ✅ **`security.defaultExpireDays`**（本轮 510416c 新增）                                                       | EntryEditorDialog create mode 预填          |
+| Lock when minimizing to tray              | ✅ `security.lockOnMinimizeToTray`（本批实现）：隐藏到托盘时复用 `tray-lock` 事件锁定；需先启用 minimizeToTray | src-tauri/src/lib.rs handle_close_requested |
+| Lock when minimizing to taskbar           | ⚠️ `lockOnFocusLoss` 靠 window blur 覆盖                                                                       | security.ts installFocusLock                |
+| Lock on workstation lock / user switch    | ⚠️ blur 通常伴随，非显式事件                                                                                   | —                                           |
+| Lock on suspend / remote-control change   | ❌ 需原生系统事件                                                                                              | —                                           |
+| Exit instead of lock / Always exit        | ❌ 未实现                                                                                                      | handle_close_requested 恒为退出/托盘        |
+| Secure desktop for master key             | ❌ 未实现（Windows 安全桌面，成本高）                                                                          | —                                           |
+| Warn on weak key transformation           | ❌ 未实现（创建/改密钥时告警）                                                                                 | —                                           |
 
 ### Policy（策略）
 
@@ -69,7 +70,8 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 2. ~~Expiry soon days~~：放弃——查证后 SecPivot 无"即将过期"消费点，强加会变成纯 UI 壳，违反"不造壳"门禁。
 3. ✅ **Always on top**（完成，0b4a790）：`general.alwaysOnTop` 默认 false，Appearance → Window 开关，settings-bootstrap 经 `set_always_on_top` Tauri 命令即时应用。
 4. ✅ **Auto-save after edit**（本批完成）：`security.autoSaveAfterEdit` 默认 false，编辑/新增成功后调用页面守卫的 `vault.save()`，失败保留脏状态可手动重试。
-5. **Drop to background after copy**：前端复制后聚焦上一个窗口，需要平台支持（Win32 可在 Rust 侧实现），风险中等。
-6. **URL overrides / auto-type inter-key delay**：低优先级，需新增 IPC 与执行链改造。
+5. ✅ **Lock on minimize to tray**（本批完成）：`security.lockOnMinimizeToTray` 默认 false，隐藏到托盘时复用 `tray-lock` 事件锁定，UI 依赖 minimizeToTray 开关。
+6. **Drop to background after copy**：前端复制后聚焦上一个窗口，需要平台支持（Win32 可在 Rust 侧实现），风险中等。
+7. **URL overrides / auto-type inter-key delay**：低优先级，需新增 IPC 与执行链改造。
 
 不建议实现：Policy 强制策略（会把个人用户锁死）、Secure desktop（高风险高成本）、纯 UI 无行为的占位开关。

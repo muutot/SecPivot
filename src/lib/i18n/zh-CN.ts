@@ -686,6 +686,8 @@ export const zhCN = {
   "security.clearOnLockDesc": "锁定数据库时立即清除剪贴板中的密码",
   "security.minimizeTray": "关闭窗口时最小化到托盘",
   "security.minimizeTrayDesc": "点击关闭按钮转入系统托盘而非退出",
+  "security.lockOnMinimizeTray": "最小化到托盘时锁定",
+  "security.lockOnMinimizeTrayDesc": "窗口转入托盘时立即锁定数据库（需先启用最小化到托盘）",
   "security.lockAfterAction": "复制后自动锁定",
   "security.lockAfterActionDesc": "复制密码后立即锁定数据库",
   "security.lockOnFocusLoss": "失去焦点时锁定",

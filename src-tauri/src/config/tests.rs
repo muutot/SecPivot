@@ -698,6 +698,23 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn lock_on_minimize_to_tray_defaults_off_and_survives_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(!store.get().unwrap().security.lock_on_minimize_to_tray);
+
+    let mut config = AppConfig::default();
+    config.security.lock_on_minimize_to_tray = true;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"lockOnMinimizeToTray\": true"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(reloaded.get().unwrap().security.lock_on_minimize_to_tray);
+}
+
+#[test]
 fn auto_save_after_edit_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

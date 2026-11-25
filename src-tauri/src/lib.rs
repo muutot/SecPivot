@@ -326,6 +326,18 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
     if minimize_to_tray {
         api.prevent_close();
         let _ = window.hide();
+        // KeePass "Lock workspace when minimizing to tray": reuse the same
+        // event the tray's explicit Lock item emits; the renderer's layout
+        // listener closes every vault session. Read the flag at hide time so
+        // a settings change takes effect without a restart.
+        let lock_on_hide = app
+            .state::<ConfigStore>()
+            .get()
+            .map(|cfg| cfg.security.lock_on_minimize_to_tray)
+            .unwrap_or(false);
+        if lock_on_hide {
+            let _ = app.emit(TRAY_LOCK_EVENT, ());
+        }
     }
 }
 // ---------------------------------------------------------------------------

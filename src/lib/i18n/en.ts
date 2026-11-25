@@ -708,6 +708,9 @@ export const en: Record<I18nKey, string> = {
   "security.clearOnLockDesc": "Clear passwords from the clipboard immediately on lock",
   "security.minimizeTray": "Minimize to tray on close",
   "security.minimizeTrayDesc": "Closing goes to the tray instead of quitting",
+  "security.lockOnMinimizeTray": "Lock when minimized to tray",
+  "security.lockOnMinimizeTrayDesc":
+    "Lock the vault as soon as the window hides to the tray (requires minimize-to-tray)",
   "security.lockAfterAction": "Lock after copy",
   "security.lockAfterActionDesc": "Lock immediately after copying a password",
   "security.lockOnFocusLoss": "Lock on focus loss",

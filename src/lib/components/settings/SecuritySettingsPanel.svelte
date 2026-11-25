@@ -170,6 +170,15 @@
   />
 
   <SettingToggleCard
+    icon="lock"
+    label={t(lang, "security.lockOnMinimizeTray")}
+    description={t(lang, "security.lockOnMinimizeTrayDesc")}
+    checked={security.lockOnMinimizeToTray}
+    disabled={!security.minimizeToTray}
+    onchange={(checked) => change("lockOnMinimizeToTray", checked)}
+  />
+
+  <SettingToggleCard
     icon="eye-off"
     label={t(lang, "security.lockAfterAction")}
     description={t(lang, "security.lockAfterActionDesc")}
