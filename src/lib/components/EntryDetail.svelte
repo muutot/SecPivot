@@ -439,7 +439,14 @@
   }
 
   function openUrlExternal(): void {
-    if (entry.url) openExternalUrl(entry.url);
+    if (!entry.url) return;
+    // KeePass "Copy URLs instead of opening": clicking copies the URL and
+    // keeps the sensitive-copy path (lock-after-copy / timed clear).
+    if (s.general.copyUrlsInsteadOfOpening) {
+      void copyValue(entry.url, true);
+      return;
+    }
+    openExternalUrl(entry.url);
   }
 
   function openExternalUrl(url: string): void {

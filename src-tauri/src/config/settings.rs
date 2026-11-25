@@ -453,6 +453,10 @@ pub struct GeneralSettings {
     /// `ShowFullPathInTitle`). Default off.
     #[serde(default)]
     pub show_full_path_in_title: bool,
+    /// Clicking an entry URL copies it instead of opening the browser (KeePass
+    /// `CopyUrlsInsteadOfOpening`). Default off.
+    #[serde(default)]
+    pub copy_urls_instead_of_opening: bool,
     /// Render the full entry-table column grid on narrow screens too.
     pub mobile_columns: bool,
     /// Legacy global auto-type hotkey from configs written before the
@@ -524,6 +528,7 @@ impl Default for GeneralSettings {
             alternating_row_colors: false,
             group_tree_lines: false,
             show_full_path_in_title: false,
+            copy_urls_instead_of_opening: false,
             global_auto_type_shortcut: String::new(),
             entry_columns: default_entry_columns(),
             saved_searches: Vec::new(),
@@ -572,6 +577,10 @@ pub struct SecuritySettings {
     /// (KeePass Options → Advanced → Start and Exit). Default off.
     #[serde(default)]
     pub auto_save_after_edit: bool,
+    /// Minimize the main window after the workspace locks (KeePass
+    /// `MinimizeAfterLocking`). Default on.
+    #[serde(default = "default_true")]
+    pub minimize_after_locking: bool,
     pub remember_password: bool,
     /// Exclude the main window from screenshots/recordings while a vault is
     /// open (Windows `WDA_EXCLUDEFROMCAPTURE`). Default off — opt-in from the
@@ -591,6 +600,7 @@ impl Default for SecuritySettings {
             lock_on_focus_loss: false,
             default_expire_days: 0,
             auto_save_after_edit: false,
+            minimize_after_locking: true,
             remember_password: false,
             screen_capture_guard: false,
         }

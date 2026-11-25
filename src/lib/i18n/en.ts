@@ -432,6 +432,9 @@ export const en: Record<I18nKey, string> = {
   "settings.fullPathTitle": "Show full path in title",
   "settings.fullPathTitleDesc":
     "KeePass-compatible: show the vault's full path in the window title instead of just its name",
+  "settings.copyUrls": "Copy URLs instead of opening",
+  "settings.copyUrlsDesc":
+    "KeePass-compatible: clicking an entry URL copies it to the clipboard instead of opening the browser",
   "settings.windowOpacity": "Window opacity",
   "settings.windowOpacityDesc": "Adjust overall main-window opacity",
   "settings.alwaysOnTop": "Always on top",
@@ -713,6 +716,9 @@ export const en: Record<I18nKey, string> = {
   "security.autoSaveAfterEdit": "Save database after editing an entry",
   "security.autoSaveAfterEditDesc":
     "KeePass-compatible: persist immediately after an entry is added or changed; on failure the vault stays dirty for a manual retry",
+  "security.minimizeAfterLocking": "Minimize after locking",
+  "security.minimizeAfterLockingDesc":
+    "KeePass-compatible (on by default): minimize the main window after the workspace locks",
   "security.clearOnLock": "Clear clipboard on lock",
   "security.clearOnLockDesc": "Clear passwords from the clipboard immediately on lock",
   "security.minimizeTray": "Minimize to tray on close",

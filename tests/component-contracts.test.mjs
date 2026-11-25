@@ -606,6 +606,38 @@ test("KeePass display preferences reach the table, tree and window title", async
   assert.match(table, /color-mix\(in srgb, var\(--card-bg\)/);
   assert.match(page, /zebra=\{settings\.general\.alternatingRowColors\}/);
   assert.match(page, /treeLines=\{settings\.general\.groupTreeLines\}/);
-  assert.match(page, /getCurrentWindow\(\)\.setTitle\(title\)/);
+  assert.match(page, /getCurrentWindow\(\)\s*[\s\S]*?\.setTitle\(title\)/);
   assert.match(tree, /class:tree-lines=\{treeLines\}/);
+});
+
+test("URL copy toggle and minimize-after-lock reach real behavior", async () => {
+  const { normalizeSettings, DEFAULT_GENERAL_SETTINGS, DEFAULT_SECURITY_SETTINGS } =
+    await import("../src/lib/services/settings.ts");
+  const detail = await readFile(
+    new URL("../src/lib/components/EntryDetail.svelte", import.meta.url),
+    "utf8",
+  );
+  const security = await readFile(
+    new URL("../src/lib/services/security.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(DEFAULT_GENERAL_SETTINGS.copyUrlsInsteadOfOpening, false);
+  assert.equal(
+    normalizeSettings({ general: { copyUrlsInsteadOfOpening: true } }).general
+      .copyUrlsInsteadOfOpening,
+    true,
+  );
+  assert.equal(DEFAULT_SECURITY_SETTINGS.minimizeAfterLocking, true, "KeePass default is on");
+  assert.equal(
+    normalizeSettings({ security: { minimizeAfterLocking: false } }).security.minimizeAfterLocking,
+    false,
+  );
+
+  // The click path routes through the sensitive copy (lock-after-copy and
+  // timed clear apply), and locking minimizes via the Tauri window API.
+  assert.match(detail, /copyUrlsInsteadOfOpening/);
+  assert.match(detail, /void copyValue\(entry\.url, true\)/);
+  assert.match(security, /security\.minimizeAfterLocking/);
+  assert.match(security, /getCurrentWindow\(\)\.minimize\(\)/);
 });

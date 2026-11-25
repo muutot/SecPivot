@@ -10,7 +10,9 @@ import { ActivityLeaseGuard, KeyedViewGuard } from "$lib/utils/session-state";
  * Single lock path shared by the manual lock button, idle auto-lock, and
  * `lockAfterAction`. Clears the clipboard when `clearOnLock` is enabled and
  * closes every open session without waiting for clipboard I/O; `remembered`
- * stays so the lock screen can offer a quick reopen.
+ * stays so the lock screen can offer a quick reopen. When
+ * `minimizeAfterLocking` is on (KeePass default), the main window minimizes
+ * after the sessions closed — best-effort, never blocks or fails the lock.
  */
 export async function lockVault(options?: {
   preserveClipboard?: boolean;
@@ -24,6 +26,14 @@ export async function lockVault(options?: {
       ? clearClipboard()
       : Promise.resolve();
   await Promise.all([clearing, vault.closeAll(options?.whenCurrent)]);
+  if (isTauriRuntime() && get(appSettings).security.minimizeAfterLocking) {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      void getCurrentWindow().minimize();
+    } catch {
+      // Minimizing is cosmetic; a failure must not affect the lock outcome.
+    }
+  }
 }
 
 /**

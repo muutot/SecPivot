@@ -105,6 +105,9 @@ export interface SecuritySettings {
    *  (KeePass Options → Advanced → Start and Exit). Default off: edits stay
    *  in the session as a manual save. */
   autoSaveAfterEdit: boolean;
+  /** Minimize the main window after the workspace locks (KeePass
+   * `MinimizeAfterLocking`, default on). */
+  minimizeAfterLocking: boolean;
   /** Keep the master password in the OS credential store for Windows Hello unlock. */
   rememberPassword: boolean;
   /** Exclude the main window from screenshots/recordings while a vault is open (Windows WDA_EXCLUDEFROMCAPTURE). Default off — opt-in from the welcome page. */
@@ -272,6 +275,9 @@ export interface GeneralSettings {
   /** Show the full vault file path in the window title (KeePass
    * `ShowFullPathInTitle`). */
   showFullPathInTitle: boolean;
+  /** Clicking an entry URL copies it instead of opening the browser (KeePass
+   * `CopyUrlsInsteadOfOpening`). */
+  copyUrlsInsteadOfOpening: boolean;
 }
 
 /** 快捷键 section: the global auto-type hotkey plus app-window shortcuts

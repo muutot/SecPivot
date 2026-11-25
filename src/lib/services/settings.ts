@@ -227,6 +227,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   alternatingRowColors: false,
   groupTreeLines: false,
   showFullPathInTitle: false,
+  copyUrlsInsteadOfOpening: false,
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -239,6 +240,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   lockOnFocusLoss: false,
   defaultExpireDays: 0,
   autoSaveAfterEdit: false,
+  minimizeAfterLocking: true,
   rememberPassword: false,
   screenCaptureGuard: false,
 };
@@ -971,6 +973,10 @@ export function normalizeSettings(
       typeof (g as unknown as Record<string, unknown>).showFullPathInTitle === "boolean"
         ? ((g as unknown as Record<string, unknown>).showFullPathInTitle as boolean)
         : (fallback.general.showFullPathInTitle ?? false),
+    copyUrlsInsteadOfOpening:
+      typeof (g as unknown as Record<string, unknown>).copyUrlsInsteadOfOpening === "boolean"
+        ? ((g as unknown as Record<string, unknown>).copyUrlsInsteadOfOpening as boolean)
+        : (fallback.general.copyUrlsInsteadOfOpening ?? false),
     entryColumns: normalizeEntryColumns(g.entryColumns, fallback.general.entryColumns),
     recentFiles,
     recentFileNames: normalizeRecentFileNames(g.recentFileNames, recentFiles),
@@ -998,6 +1004,7 @@ export function normalizeSettings(
       0,
     ),
     autoSaveAfterEdit: asBool(s.autoSaveAfterEdit, fallback.security.autoSaveAfterEdit),
+    minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
     rememberPassword: asBool(s.rememberPassword, fallback.security.rememberPassword),
     screenCaptureGuard: asBool(s.screenCaptureGuard, fallback.security.screenCaptureGuard),
     autoLockMinutes: clampInt(s.autoLockMinutes ?? fallback.security.autoLockMinutes, 0, 240, 5),

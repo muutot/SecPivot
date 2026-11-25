@@ -809,6 +809,14 @@
       checked={general.showFullPathInTitle}
       onchange={(checked) => change("showFullPathInTitle", checked)}
     />
+
+    <SettingToggleCard
+      icon="link"
+      label={t(lang, "settings.copyUrls")}
+      description={t(lang, "settings.copyUrlsDesc")}
+      checked={general.copyUrlsInsteadOfOpening}
+      onchange={(checked) => change("copyUrlsInsteadOfOpening", checked)}
+    />
   {/if}
 
   {#if section === "window"}

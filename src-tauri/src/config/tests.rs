@@ -698,6 +698,32 @@ fn empty_config_object_loads_with_defaults() {
 }
 
 #[test]
+fn url_copy_and_minimize_after_locking_defaults_survive_round_trip() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    {
+        let cfg = store.get().unwrap();
+        assert!(!cfg.general.copy_urls_instead_of_opening);
+        // KeePass default: minimize after locking is on.
+        assert!(cfg.security.minimize_after_locking);
+    }
+
+    let mut config = AppConfig::default();
+    config.general.copy_urls_instead_of_opening = true;
+    config.security.minimize_after_locking = false;
+    store.set(config.clone()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("conf").join("config.json")).unwrap();
+    assert!(text.contains("\"copyUrlsInsteadOfOpening\": true"));
+    assert!(text.contains("\"minimizeAfterLocking\": false"));
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let cfg = reloaded.get().unwrap();
+    assert!(cfg.general.copy_urls_instead_of_opening);
+    assert!(!cfg.security.minimize_after_locking);
+}
+
+#[test]
 fn keypass_display_prefs_default_off_and_survive_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

@@ -78,42 +78,42 @@ MaxItemCount ⚠️ KeePass 12 / SecPivot 8 · Items ✅
 
 ### 窗口/行为（本类主体）
 
-| 字段                                     | 默认    | SecPivot                                  |
-| ---------------------------------------- | ------- | ----------------------------------------- |
-| X / Y / Width / Height / Maximized       | —       | ✅ `windowWidth/Height` + 位置由 Tauri 管 |
-| SplitterHorizontalFrac / VerticalFrac    | —       | ✅ `panelWidths`                          |
-| Layout (Default/SideBySide)              | Default | ➖ 两种布局，SecPivot 单一布局            |
-| AlwaysOnTop                              | false   | ✅ `general.alwaysOnTop`（批次2）         |
-| CloseButtonMinimizesWindow               | false   | ✅ `security.minimizeToTray`              |
-| EscMinimizesToTray（旧兼容）             | false   | ➖                                        |
-| EscAction (None/Lock/Min/MinTray/Exit)   | Lock    | ❌ Esc 行为可配（SecPivot 固定关弹窗）    |
-| MinimizeToTray                           | false   | ✅ `security.minimizeToTray`              |
-| ShowFullPathInTitle                      | false   | ❌                                        |
-| DropToBackAfterClipboardCopy             | false   | ❌（旧 gap 列为候选）                     |
-| MinimizeAfterClipboardCopy               | false   | ❌                                        |
-| MinimizeAfterAutoType                    | false   | ❌（当前无条件最小化）                    |
-| MinimizeAfterLocking                     | true    | ❌                                        |
-| MinimizeAfterOpeningDatabase             | false   | ❌                                        |
-| QuickFindSearchInPasswords               | false   | ❌（搜索不含密码）                        |
-| QuickFindExcludeExpired                  | false   | ❌                                        |
-| QuickFindDerefData                       | false   | ❌                                        |
-| FocusResultsAfterQuickFind               | false   | ❌                                        |
-| FocusQuickFindOnRestore / OnUntray       | false   | ❌                                        |
-| CopyUrlsInsteadOfOpening                 | false   | ❌（点击 URL 复制而非打开）               |
-| EntrySelGroupSel                         | true    | ✅ 选中关联分组行为                       |
-| DisableSaveIfNotModified                 | false   | ➖ 语义细节                               |
-| HideCloseDatabaseButton                  | true    | ➖                                        |
-| ToolBar (AceToolBar: Show)               | true    | ✅ `toolbarItems`                         |
-| EntryView (AceEntryView: Show)           | true    | ✅ 详情面板开关                           |
-| TanView (UseSimpleView/ShowIndices)      | true    | ➖ TAN 视图不适用                         |
-| EntryListColumns                         | —       | ✅ `entryColumns`                         |
-| EntryListColumnDisplayOrder              | —       | ✅ `entryColumns` 顺序                    |
-| EntryListAutoResizeColumns               | false   | ❌                                        |
-| EntryListAlternatingBgColors / Color     | true/0  | ❌ 斑马纹                                 |
-| EntryListShowDerefData / Async / AndRefs | false   | ❌ 字段引用显示                           |
-| ListSorting (ListSorter)                 | —       | ✅ `sortCol/sortDir`                      |
-| ListGrouping (Auto/On/Off)               | Auto    | ✅ `showGroupSeparators` 近似             |
-| ShowEntriesOfSubGroups                   | false   | ❌ 显示子分组条目                         |
+| 字段                                     | 默认    | SecPivot                                                                  |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| X / Y / Width / Height / Maximized       | —       | ✅ `windowWidth/Height` + 位置由 Tauri 管                                 |
+| SplitterHorizontalFrac / VerticalFrac    | —       | ✅ `panelWidths`                                                          |
+| Layout (Default/SideBySide)              | Default | ➖ 两种布局，SecPivot 单一布局                                            |
+| AlwaysOnTop                              | false   | ✅ `general.alwaysOnTop`（批次2）                                         |
+| CloseButtonMinimizesWindow               | false   | ✅ `security.minimizeToTray`                                              |
+| EscMinimizesToTray（旧兼容）             | false   | ➖                                                                        |
+| EscAction (None/Lock/Min/MinTray/Exit)   | Lock    | ❌ Esc 行为可配（SecPivot 固定关弹窗）                                    |
+| MinimizeToTray                           | false   | ✅ `security.minimizeToTray`                                              |
+| ShowFullPathInTitle                      | false   | ❌                                                                        |
+| DropToBackAfterClipboardCopy             | false   | ❌（旧 gap 列为候选）                                                     |
+| MinimizeAfterClipboardCopy               | false   | ❌                                                                        |
+| MinimizeAfterAutoType                    | false   | ❌（当前无条件最小化）                                                    |
+| MinimizeAfterLocking                     | true    | ✅ `security.minimizeAfterLocking`（A2 批次，默认 on 与 KeePass 一致）    |
+| MinimizeAfterOpeningDatabase             | false   | ❌                                                                        |
+| QuickFindSearchInPasswords               | false   | ❌（搜索不含密码）                                                        |
+| QuickFindExcludeExpired                  | false   | ❌                                                                        |
+| QuickFindDerefData                       | false   | ❌                                                                        |
+| FocusResultsAfterQuickFind               | false   | ❌                                                                        |
+| FocusQuickFindOnRestore / OnUntray       | false   | ❌                                                                        |
+| CopyUrlsInsteadOfOpening                 | false   | ✅ `general.copyUrlsInsteadOfOpening`（A2 批次）：点击 URL 走敏感复制路径 |
+| EntrySelGroupSel                         | true    | ✅ 选中关联分组行为                                                       |
+| DisableSaveIfNotModified                 | false   | ➖ 语义细节                                                               |
+| HideCloseDatabaseButton                  | true    | ➖                                                                        |
+| ToolBar (AceToolBar: Show)               | true    | ✅ `toolbarItems`                                                         |
+| EntryView (AceEntryView: Show)           | true    | ✅ 详情面板开关                                                           |
+| TanView (UseSimpleView/ShowIndices)      | true    | ➖ TAN 视图不适用                                                         |
+| EntryListColumns                         | —       | ✅ `entryColumns`                                                         |
+| EntryListColumnDisplayOrder              | —       | ✅ `entryColumns` 顺序                                                    |
+| EntryListAutoResizeColumns               | false   | ❌                                                                        |
+| EntryListAlternatingBgColors / Color     | true/0  | ❌ 斑马纹                                                                 |
+| EntryListShowDerefData / Async / AndRefs | false   | ❌ 字段引用显示                                                           |
+| ListSorting (ListSorter)                 | —       | ✅ `sortCol/sortDir`                                                      |
+| ListGrouping (Auto/On/Off)               | Auto    | ✅ `showGroupSeparators` 近似                                             |
+| ShowEntriesOfSubGroups                   | false   | ❌ 显示子分组条目                                                         |
 
 ### AceColumnType 枚举（22 种列类型）
 

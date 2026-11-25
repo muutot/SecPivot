@@ -179,6 +179,14 @@
   />
 
   <SettingToggleCard
+    icon="minimize"
+    label={t(lang, "security.minimizeAfterLocking")}
+    description={t(lang, "security.minimizeAfterLockingDesc")}
+    checked={security.minimizeAfterLocking}
+    onchange={(checked) => change("minimizeAfterLocking", checked)}
+  />
+
+  <SettingToggleCard
     icon="eye-off"
     label={t(lang, "security.lockAfterAction")}
     description={t(lang, "security.lockAfterActionDesc")}

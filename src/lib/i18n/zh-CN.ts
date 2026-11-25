@@ -418,6 +418,8 @@ export const zhCN = {
   "settings.groupTreeLinesDesc": "KeePass 对齐：在嵌套分组前显示层级连接线",
   "settings.fullPathTitle": "标题栏显示完整路径",
   "settings.fullPathTitleDesc": "KeePass 对齐：窗口标题显示数据库的完整路径而非仅名称",
+  "settings.copyUrls": "点击网址改为复制",
+  "settings.copyUrlsDesc": "KeePass 对齐：点击条目网址复制到剪贴板而不打开浏览器",
   "settings.windowOpacity": "窗口不透明度",
   "settings.windowOpacityDesc": "调整主窗口的整体透明度",
   "settings.alwaysOnTop": "窗口始终置顶",
@@ -688,6 +690,8 @@ export const zhCN = {
   "security.autoSaveAfterEdit": "编辑后自动保存数据库",
   "security.autoSaveAfterEditDesc":
     "KeePass 对齐：新增或修改条目后立即写盘，失败时保留脏状态可手动重试",
+  "security.minimizeAfterLocking": "锁定后最小化窗口",
+  "security.minimizeAfterLockingDesc": "KeePass 默认开：工作区锁定后主窗口最小化到任务栏",
   "security.clearOnLock": "锁定后清空剪贴板",
   "security.clearOnLockDesc": "锁定数据库时立即清除剪贴板中的密码",
   "security.minimizeTray": "关闭窗口时最小化到托盘",
