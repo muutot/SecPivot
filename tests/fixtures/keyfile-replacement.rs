@@ -155,6 +155,8 @@ fn now_iso() -> String {
 }
 #[derive(Default)]
 pub(crate) struct VaultSession {
+    local_base_hash: Option<[u8; 32]>,
+    pending_file_reload: Option<()>,
     db: Option<Database>,
     path: Option<String>,
     password: Option<String>,

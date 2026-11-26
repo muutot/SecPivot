@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { registerFileReloadBlocker } from "$lib/services/file-reload";
   import type { VaultGroup } from "$lib/types/vault";
   import { countEntries, orderedChildren } from "$lib/utils/tree";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -86,6 +88,7 @@
   }: Props = $props();
 
   let renaming = $state(false);
+  onMount(() => registerFileReloadBlocker(() => renaming));
   let nameInput = $state<string>("");
   let inputEl: HTMLInputElement | undefined = $state();
   let nodeEl: HTMLDivElement | undefined = $state();

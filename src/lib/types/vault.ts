@@ -7,6 +7,12 @@ export interface OnePuxCounts {
   unreferencedFiles: number;
 }
 
+export interface FileReloadResult {
+  status: "disabled" | "busy" | "unchanged" | "ready" | "reloaded" | "merged";
+  token: string | null;
+  state: VaultState | null;
+}
+
 export interface OnePuxImportResult {
   state: VaultState;
   counts: OnePuxCounts;

@@ -6,7 +6,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { vault } from "$lib/services/vault";
+  import { vault, fileReloadApplying } from "$lib/services/vault";
   import { appSettings, isAndroid, isMobile, isTauriRuntime } from "$lib/services/settings";
   import { createDocument } from "$lib/services/saf";
   import type { EntryColumnState, Language } from "$lib/types/settings";
@@ -86,6 +86,7 @@
   } from "$lib/stores/activeContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import KdfOpenPrompt from "$lib/components/KdfOpenPrompt.svelte";
+  import FileReloadMonitor from "$lib/components/FileReloadMonitor.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
   import VaultTabs from "$lib/components/VaultTabs.svelte";
@@ -158,6 +159,10 @@
     lastMirrorWarning = warning;
   });
   let currentVaultSessionId = $state<string | null>(null);
+  const currentVaultEpoch = $derived.by(() => {
+    void currentVault;
+    return currentVaultSessionId ? vault.getSessionEpoch(currentVaultSessionId) : undefined;
+  });
   let activeSessionId = $state<string | null>(null);
   /** Database-level recycle-bin flag of the visible session; drives the
    *  delete-confirmation wording (permanent vs recoverable). */
@@ -1363,6 +1368,10 @@
 
   /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
   function handleShortcutKeydown(event: KeyboardEvent): void {
+    if ($fileReloadApplying) {
+      event.preventDefault();
+      return;
+    }
     if (event.defaultPrevented || isTcatoOverlay || !currentVault || $activeContextMenu !== null)
       return;
     // Close the group icon picker with Escape (mirrors the group modal input).
@@ -1983,13 +1992,14 @@
 
 <svelte:window onkeydowncapture={handleShortcutKeydown} />
 
-{#if !isTcatoOverlay}<KdfOpenPrompt />{/if}
+{#if !isTcatoOverlay}<KdfOpenPrompt /><FileReloadMonitor />{/if}
 
 {#if isTcatoOverlay}
   <TcatoOverlay />
 {:else}
   <main
     class="app-shell compact"
+    inert={$fileReloadApplying}
     class:standalone={!currentVault}
     class:mobile={isMobile()}
     class:mobile-nav-open={layout.mobileNavOpen}
@@ -2058,7 +2068,7 @@
           ></button>
         {/if}
         <section class="group-panel">
-          {#key currentVaultSessionId}
+          {#key currentVaultEpoch}
             <GroupTree
               root={currentVault.root}
               sessionId={currentVaultSessionId}
@@ -2158,16 +2168,18 @@
 
           <section class="detail-panel">
             {#if selection.selectedEntry}
-              <EntryDetail
-                entry={selection.selectedEntry}
-                groupPath={pathOf(selection.selectedEntry.groupUuid)}
-                inRecycleBin={groupInBin(selection.selectedEntry.groupUuid)}
-                onfavorite={toggleFavorite}
-                onedit={openEditEntry}
-                ondelete={askDeleteEntry}
-                onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
-                oncollapse={() => (layout.detailVisible = false)}
-              />
+              {#key currentVaultEpoch}
+                <EntryDetail
+                  entry={selection.selectedEntry}
+                  groupPath={pathOf(selection.selectedEntry.groupUuid)}
+                  inRecycleBin={groupInBin(selection.selectedEntry.groupUuid)}
+                  onfavorite={toggleFavorite}
+                  onedit={openEditEntry}
+                  ondelete={askDeleteEntry}
+                  onrestore={(entry: VaultEntry) => void restoreEntry(entry)}
+                  oncollapse={() => (layout.detailVisible = false)}
+                />
+              {/key}
             {:else}
               <div class="detail-empty">
                 <AppIcon name="eye" size={22} />

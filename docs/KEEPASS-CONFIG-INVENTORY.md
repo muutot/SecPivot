@@ -10,6 +10,15 @@ SecPivot 的独立本地保存备份扩展使用 `localBackup.enabled/count/temp
 
 ## 顶层结构（AppConfigEx）
 
+自动加载外部数据库变化使用 SecPivot 独立的 `general.autoReloadChangedFiles`
+（默认关闭）。本次对官方 `VS2022/KeePass/App/Configuration/` 全目录源码
+检索未找到 `AutoReloadChangedFiles` 字段，因此按增强功能记录。获得焦点、
+切换当前库和可见时每30秒检查加密字节；未变跳过解密，变更先准备，再以
+会话/修订/哈希及一次性10秒 token 应用。干净会话重载，脏会话在内存合并；
+冲突、损坏或新密钥保留当前数据。弹窗、内联编辑/备注草稿和拖动期间暂缓，
+不写外部文件/远程镜像。原生合成 KDBX/离线 remote、实际 controller/service/
+活动守卫与双主题320px预览已有证据；真实 WebView/provider/跨客户端仍待验。
+
 | 节点                              | 类                   | SecPivot 对应                                            |
 | --------------------------------- | -------------------- | -------------------------------------------------------- |
 | `Configuration/Meta`              | AceMeta              | ➖ 内部元数据（版本/DPI/配置位置），非用户设置           |

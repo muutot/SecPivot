@@ -226,6 +226,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowOpacity: 100,
   alwaysOnTop: false,
   rememberLastDatabase: true,
+  autoReloadChangedFiles: false,
   recentFiles: [],
   recentFileNames: {},
   windowWidth: 1100,
@@ -965,6 +966,10 @@ export function normalizeSettings(
       typeof (g as unknown as Record<string, unknown>).alwaysOnTop === "boolean"
         ? ((g as unknown as Record<string, unknown>).alwaysOnTop as boolean)
         : (fallback.general.alwaysOnTop ?? false),
+    autoReloadChangedFiles:
+      typeof g.autoReloadChangedFiles === "boolean"
+        ? g.autoReloadChangedFiles
+        : (fallback.general.autoReloadChangedFiles ?? false),
     windowWidth: clampInt(g.windowWidth ?? fallback.general.windowWidth, 560, 2560, 1100),
     windowHeight: clampInt(g.windowHeight ?? fallback.general.windowHeight, 420, 1600, 720),
     panelWidths: {

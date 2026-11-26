@@ -994,6 +994,17 @@ export const en: Record<I18nKey, string> = {
   "security.searchKeyFiles": "Suggest keyfiles when opening",
   "settings.logging": "Local diagnostic logging",
   "database.localBackup": "Back up local saves",
+  "settings.autoReload": "Reload external database changes",
+  "settings.autoReloadDesc":
+    "Off by default. Check the active database on focus and every 30 seconds while visible. Unsaved edits are merged in memory; conflicts keep the current database. Checks wait during dialogs, inline editing and dragging. Remote databases require a download.",
+  "reload.reloaded": "External database changes loaded",
+  "reload.merged": "External changes merged; unsaved changes still need saving",
+  "reload.conflict":
+    "External changes conflict with unsaved edits. The current database is preserved.",
+  "reload.invalid":
+    "The external file cannot be opened with the current key. The current database is preserved.",
+  "reload.unavailable":
+    "The external file could not be checked. The current database is preserved.",
   "database.localBackupDesc":
     "Off by default. Preserve the previous encrypted file before an overwrite. Backup failure cancels saving.",
   "database.backupLocationDesc":

@@ -206,6 +206,7 @@ test("page capture shortcuts respect menus owned by recursive group components",
     isTcatoOverlay: false,
     currentVault: {},
     $activeContextMenu: "group-fixture",
+    $fileReloadApplying: false,
     busy: false,
     groupIconDialogUuid: null,
     isAnyModalOpen: () => false,
@@ -259,6 +260,9 @@ test("page capture shortcuts respect menus owned by recursive group components",
   context.$activeContextMenu = null;
   context.handleShortcutKeydown(event);
   assert.equal(context.saves, 1, "Save must work again after menu dismissal");
+  context.$fileReloadApplying = true;
+  context.handleShortcutKeydown(event);
+  assert.equal(context.saves, 1, "native reload commit must block overlapping shortcut actions");
 });
 
 test("consumed menu keys refresh the actual idle deadline and cleanup removes the activity listener", () => {

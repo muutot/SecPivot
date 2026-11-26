@@ -1,5 +1,26 @@
 # Security Model
 
+Automatic external-file reload is opt-in and read-only with respect to storage.
+Unchanged encrypted hashes avoid credential clones and KDF. ReloadJob guards its
+owned password/keyfile clones with Zeroizing; a started worker may retain them
+until it finishes, but a single owned worker permit prevents unbounded abandoned
+jobs. A staged candidate holds decrypted Database only, no password/keyfile clone,
+and is bounded to one per open session. Its token expires for admission after10s;
+next preparation/mutation/replacement/close drops the candidate. Expiry alone is
+not an eager timer-based memory wipe. Lifetime/revision/hash checks reject stale
+results; conflict, invalid/new-key file or snapshot failure preserve current data.
+No plaintext, credentials or hashes enter logs/config through this feature.
+
+Renderer modal/inline draft/drag guards prevent automatic candidate application
+from destroying edits. Inline predicates expose only activity flags. The short
+apply lease makes the main page inert; successful replacement renews the service
+epoch and remounts detail caches so old revealed passwords/custom fields and
+history/storage cannot remain visible after external replacement. JS/allocator
+and third-party Database cleanup are not claimed as complete process-memory
+erasure. Remote reload does not upload or rewrite the mirror; ordinary save
+continues its existing persistence policy. Synthetic tests do not establish
+native WebView, provider, multi-window or real-client authorization behavior.
+
 Local pre-overwrite backups copy only the prior encrypted filesystem bytes.
 Master-key changes keep old-key encryption in backups; changing the key does not
 re-encrypt or erase prior copies. Save As and creation protect an existing

@@ -13,6 +13,7 @@ mod entry_save;
 mod entry_save_tests;
 pub mod exchange;
 pub(crate) mod file_io;
+pub(crate) mod file_reload;
 #[cfg(test)]
 mod group_move_tests;
 #[cfg(test)]
@@ -267,6 +268,8 @@ pub struct RemoteTarget {
 /// flag, and unchanged snapshots can reuse the cached tree.
 #[derive(Default)]
 pub struct VaultSession {
+    pub(crate) local_base_hash: Option<[u8; 32]>,
+    pub(crate) pending_file_reload: Option<file_reload::PendingReload>,
     pub(crate) local_backup: crate::config::LocalBackupSettings,
     pub(crate) path: Option<String>,
     password: Option<String>,

@@ -1,5 +1,24 @@
 # Project Structure and Runtime Surfaces
 
+`vault/file_reload.rs` owns read/check/decrypt/merge jobs, the single worker lease,
+one-use candidate admission and rollback-safe in-memory publication; its child
+tests use temporary KDBX and MemoryStorage. commands/vault.rs exposes both
+reload_changed_vault and apply_changed_vault, registered by lib.rs. Session owns
+local_base_hash/pending_file_reload and clears pending work at edits/replacement/
+close. prepare_local_open returns its exact parsed-read hash; Save As completion
+now takes PersistOutcome. Credential fixture stubs follow those nonsecret shapes.
+VaultSessions exposes nonwaiting persistence admission for background checks.
+
+`services/file-reload.ts` owns the view/generation controller and mounted activity
+predicates; GroupNode registers renaming, EntryDetail registers inline field/
+notes/attachment-drag activity. `FileReloadMonitor.svelte` owns focus/visibility/
+30s/native visibility/modal/drag checks and cleanup. GeneralSettingsPanel uses
+the shared toggle. Vault service prepares without publication and applies under
+fileReloadApplying, renewing its epoch. The main page composes the monitor outside
+TCATO, makes its main inert during apply, and keys tree/detail on the session
+epoch. tests/file-reload*.test.mjs exercise real controller/settings/service and
+extracted activity callbacks; synthetic rendering is not native provider proof.
+
 `vault/local_backup.rs` owns encrypted pre-overwrite backups, timestamp-template
 validation, per-destination writer locks and bounded owned-name retention;
 `local_backup/tests.rs` exercises filesystem/KDBX/config/session/close paths.

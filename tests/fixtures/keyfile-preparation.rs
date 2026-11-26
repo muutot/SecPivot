@@ -255,7 +255,7 @@ fn run(preparation: Preparation, has_keyfile: bool) -> Result<PreparedKeyfile, S
     let keyfile = has_keyfile.then_some(Path::new("synthetic.key"));
     match preparation {
         Preparation::LocalOpen => {
-            persist::prepare_local_open(path, "synthetic-only", keyfile).map(|(_, keyfile)| keyfile)
+            persist::prepare_local_open(path, "synthetic-only", keyfile).map(|(_, keyfile, _)| keyfile)
         }
         Preparation::LocalCreate => {
             persist::prepare_local_create(

@@ -8,6 +8,15 @@
 
 ## KeePass Options 六个 tab 与 SecPivot 现状
 
+常规页的自动加载外部数据库变化是 SecPivot 增强功能；官方配置目录源码
+没有 `AutoReloadChangedFiles` 字段，不声称其为官方 Options 选项。独立开关
+默认关闭，获得焦点/切换当前库及可见时每30秒读取加密字节；变更以两阶段
+候选/一次性 token 应用，未保存编辑只在内存中合并，冲突时保留当前库。
+弹窗、内联编辑/备注草稿和拖动暂缓检查；短暂应用禁用主界面，更新 epoch
+后重建详情缓存。自动重载不写文件、上传或更新镜像。真实临时 KDBX、离线
+MemoryStorage、配置重载、实际 controller/service/活动回归和浅色/深色/320px
+预览通过；真实 WebView/provider/其他 OS/Android 和客户端互操作仍待验证。
+
 `AceLogging.Enabled` 默认 false。官方 AppLogEx.Open 的常规构建文件写入被注释，
 SecPivot 实现实际日志作为增强：常规页开关与原生启动/set_config 同步，在应用
 数据目录 Logs 创建独占新文件。现有原生 eprintln 受统一门禁，动态格式参数

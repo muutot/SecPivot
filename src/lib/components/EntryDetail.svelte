@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy, tick, untrack } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
+  import { registerFileReloadBlocker } from "$lib/services/file-reload";
   import type { VaultEntry } from "$lib/types/vault";
   import type { HistoryVersion } from "$lib/types/vault";
   import type { EntryPatch } from "$lib/types/vault";
@@ -121,6 +122,18 @@
    *  dropzone's own children does not flicker the highlight. */
   let attachmentDragDepth = 0;
   const detailView = new KeyedViewGuard();
+
+  onMount(() =>
+    registerFileReloadBlocker(
+      () =>
+        editing !== null ||
+        editSaving ||
+        notesEditing ||
+        notesDirty ||
+        notesSaving ||
+        attachmentDragActive,
+    ),
+  );
 
   function detailSessionId(): string | null {
     return vault.getActiveSessionId();

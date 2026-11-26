@@ -138,6 +138,21 @@ pub struct VaultSessions {
 }
 
 impl VaultSessions {
+    /// Background checks skip busy writers instead of delaying an explicit save.
+    pub(crate) fn try_acquire_persistence(&self) -> Option<PersistencePermit> {
+        let mut busy = self
+            .persistence
+            .busy
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if *busy {
+            return None;
+        }
+        *busy = true;
+        Some(PersistencePermit {
+            gate: self.persistence.clone(),
+        })
+    }
     /// Runtime preference snapshot for active, parked and future local saves.
     pub(crate) fn set_local_backup(
         &self,

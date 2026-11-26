@@ -58,15 +58,17 @@ pub(crate) async fn open_vault(
     .await
     .map_err(|e| format!("数据库打开任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, mut keyfile_bytes)) => {
+        Ok((db, mut keyfile_bytes, hash)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
-                fresh.adopt_local(
+                let state = fresh.adopt_local(
                     db,
                     &path_for_work,
                     &password,
                     std::mem::take(&mut *keyfile_bytes),
-                )
+                )?;
+                fresh.local_base_hash = Some(hash);
+                Ok(state)
             })
         }
         Err(e) => Err(e),
@@ -495,6 +497,85 @@ pub(crate) async fn save_vault(
     }
 }
 
+/// Prepare an external-change candidate without changing the live database.
+#[tauri::command]
+pub(crate) async fn reload_changed_vault(
+    config: tauri::State<'_, ConfigStore>,
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+) -> Result<vault::file_reload::FileReloadResult, String> {
+    use vault::file_reload::{self, FileReloadResult, ReloadStatus};
+    if !config.get()?.general.auto_reload_changed_files {
+        return Ok(FileReloadResult::status(ReloadStatus::Disabled));
+    }
+    let Some(_persistence) = vaults.try_acquire_persistence() else {
+        return Ok(FileReloadResult::status(ReloadStatus::Busy));
+    };
+    let Some(worker) = file_reload::try_worker() else {
+        return Ok(FileReloadResult::status(ReloadStatus::Busy));
+    };
+    let ticket = {
+        let mut active = session.lock().map_err(|_| file_reload::STALE.to_owned())?;
+        vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+            target.pending_file_reload = None;
+            target.prepare_file_check()
+        })?
+    };
+    let (ticket, changed, worker) = tauri::async_runtime::spawn_blocking(move || {
+        let changed = file_reload::check_file(&ticket);
+        (ticket, changed, worker)
+    })
+    .await
+    .map_err(|_| "FILE_RELOAD_UNAVAILABLE: 外部文件检查任务失败".to_owned())?;
+    let Some(changed) = changed? else {
+        return Ok(FileReloadResult::status(ReloadStatus::Unchanged));
+    };
+    let job = {
+        let mut active = session.lock().map_err(|_| file_reload::STALE.to_owned())?;
+        vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+            target.prepare_file_reload(&ticket, changed)
+        })?
+    };
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _worker = worker;
+        file_reload::reload_file(job)
+    })
+    .await
+    .map_err(|_| "FILE_RELOAD_UNAVAILABLE: 外部文件重载任务失败".to_owned())??;
+    if !config.get()?.general.auto_reload_changed_files {
+        return Ok(FileReloadResult::status(ReloadStatus::Disabled));
+    }
+    let mut active = session.lock().map_err(|_| file_reload::STALE.to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        target.stage_file_reload(ticket, result)
+    })
+}
+
+/// Commit only a current, unexpired candidate after the renderer excludes drafts.
+#[tauri::command]
+pub(crate) fn apply_changed_vault(
+    config: tauri::State<'_, ConfigStore>,
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+    token: String,
+) -> Result<vault::file_reload::FileReloadResult, String> {
+    use vault::file_reload::{self, FileReloadResult, ReloadStatus};
+    let enabled = config.get()?.general.auto_reload_changed_files;
+    let Some(_persistence) = vaults.try_acquire_persistence() else {
+        return Ok(FileReloadResult::status(ReloadStatus::Busy));
+    };
+    let mut active = session.lock().map_err(|_| file_reload::STALE.to_owned())?;
+    vaults.with_session_mut(&mut active, Some(&session_id), |target| {
+        if !enabled {
+            target.pending_file_reload = None;
+            return Ok(FileReloadResult::status(ReloadStatus::Disabled));
+        }
+        target.apply_file_reload(&token)
+    })
+}
+
 /// Download the remote vault's latest bytes and replace the in-memory
 /// session (discards local unsaved edits). Only for remote sessions.
 #[tauri::command]
@@ -586,7 +667,7 @@ pub(crate) async fn save_vault_as(
         Ok(outcome) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                target.complete_save_as(path_for_complete, revision, outcome.mirror_warning)
+                target.complete_save_as(path_for_complete, revision, outcome)
             })
         }
         // A failed save-as targets a *different* path: it must not feed the

@@ -504,6 +504,8 @@ pub fn run() {
             commands::search_key_files,
             commands::diagnostic_log_status,
             commands::validate_local_backup_template,
+            commands::reload_changed_vault,
+            commands::apply_changed_vault,
             commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,

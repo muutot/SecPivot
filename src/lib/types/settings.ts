@@ -254,6 +254,8 @@ export interface GeneralSettings {
    *  Applied live through the Tauri `set_always_on_top` command. */
   alwaysOnTop: boolean;
   rememberLastDatabase: boolean;
+  /** Automatically reload external changes, merging unsaved edits in memory. */
+  autoReloadChangedFiles: boolean;
   recentFiles: string[];
   /** Readable display names for recent-file paths without a usable file name (Android content URIs). */
   recentFileNames: Record<string, string>;

@@ -100,8 +100,10 @@ impl VaultSession {
         password: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let (db, mut keyfile_bytes) = prepare_local_open(path, password, keyfile)?;
-        self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))
+        let (db, mut keyfile_bytes, hash) = prepare_local_open(path, password, keyfile)?;
+        let state = self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))?;
+        self.local_base_hash = Some(hash);
+        Ok(state)
     }
 
     /// Create an empty vault with the given KDF / cipher / compression and
@@ -250,7 +252,9 @@ impl VaultSession {
     }
 
     fn close_impl(&mut self, wipe_rpc_keys: bool) {
+        self.pending_file_reload = None;
         self.path = None;
+        self.local_base_hash = None;
         // Wipe secret material before dropping the buffers: setting `None`
         // alone leaves the master password and keyfile contents on the heap.
         if let Some(mut password) = self.password.take() {
@@ -413,7 +417,7 @@ impl VaultSession {
         let job = self.prepare_save_as(path)?;
         let revision = job.revision;
         let outcome = persist_save(job)?;
-        self.complete_save_as(path.to_path_buf(), revision, outcome.mirror_warning)
+        self.complete_save_as(path.to_path_buf(), revision, outcome)
     }
 }
 
@@ -449,6 +453,7 @@ impl VaultSession {
         backup_template: &str,
         base_hash: impl Into<PersistOutcome>,
     ) -> Result<VaultState, String> {
+        self.pending_file_reload = None;
         let outcome = base_hash.into();
         self.mirror_warning = outcome.mirror_warning;
         self.remote = Some(RemoteTarget {
@@ -460,6 +465,7 @@ impl VaultSession {
             backup_template: backup_template.to_owned(),
             base_hash: outcome.hash,
         });
+        self.local_base_hash = None;
         self.path = Some(format!("{REMOTE_URI_PREFIX}{key}"));
         wipe_replaced_password(&mut self.password, password);
         wipe_replaced_keyfile(&mut self.keyfile, keyfile);
@@ -478,6 +484,8 @@ impl VaultSession {
     /// remote target from a previous session is dropped: saving a local vault
     /// must never upload to a stale S3 target.
     fn replace(&mut self, db: Database, path: &Path, password: &str, keyfile: Option<Vec<u8>>) {
+        self.pending_file_reload = None;
+        self.local_base_hash = None;
         self.path = Some(path.to_string_lossy().into_owned());
         wipe_replaced_password(&mut self.password, password);
         wipe_replaced_keyfile(&mut self.keyfile, keyfile);
@@ -494,6 +502,7 @@ impl VaultSession {
     }
 
     pub(crate) fn mark_dirty(&mut self) {
+        self.pending_file_reload = None;
         self.dirty = true;
         self.revision += 1;
         self.modified_at = now_iso();
@@ -502,6 +511,7 @@ impl VaultSession {
     /// Advance the revision for a session-visible change (group expansion or
     /// save-target replacement) without adding unsaved database changes.
     pub(crate) fn bump_revision(&mut self) {
+        self.pending_file_reload = None;
         self.revision += 1;
         self.cached_snapshot = None;
     }
@@ -529,6 +539,8 @@ impl VaultSession {
         self.note_save_success();
         if let Some(remote) = self.remote.as_mut() {
             remote.base_hash = outcome.hash;
+        } else {
+            self.local_base_hash = Some(outcome.hash);
         }
         self.mirror_warning = outcome.mirror_warning;
         self.bump_status_revision();
@@ -824,12 +836,13 @@ impl VaultSession {
         &mut self,
         path: PathBuf,
         revision: u64,
-        warning: Option<String>,
+        outcome: PersistOutcome,
     ) -> Result<VaultState, String> {
         self.note_save_success();
         self.path = Some(path.to_string_lossy().into_owned());
         self.remote = None;
-        self.mirror_warning = warning;
+        self.mirror_warning = outcome.mirror_warning;
+        self.local_base_hash = Some(outcome.hash);
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();

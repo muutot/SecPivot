@@ -45,6 +45,7 @@ import type {
   RemoteObject,
   RemoteMode,
   WebsiteRuleSet,
+  FileReloadResult,
 } from "$lib/types/vault";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
@@ -94,6 +95,8 @@ export interface VaultLabel {
 }
 
 interface VaultStore {
+  prepareChangedFile: () => Promise<FileReloadResult>;
+  applyChangedFile: (token: string) => Promise<FileReloadResult>;
   subscribe: typeof state.subscribe;
   tabs: typeof tabs;
   activeId: typeof activeId;
@@ -286,6 +289,8 @@ let topologyRevision = 0;
  * service call separately; a global async context would be unsafe when two
  * sessions run concurrently. */
 let invocationSessionId: string | null = null;
+/** Brief native commit lease; background reads leave the page interactive. */
+export const fileReloadApplying = writable(false);
 
 function applyBackendState(result: VaultState, sessionId?: string | null): VaultState {
   if (!sessionId) return result;
@@ -773,6 +778,36 @@ async function ensureBrowserLoaded(): Promise<VaultState> {
 }
 
 export const vault: VaultStore = {
+  async prepareChangedFile(): Promise<FileReloadResult> {
+    if (!isTauriRuntime()) return { status: "disabled", token: null, state: null };
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await backendInvoke<FileReloadResult>("reload_changed_vault", { sessionId });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    return result;
+  },
+  async applyChangedFile(token): Promise<FileReloadResult> {
+    if (!isTauriRuntime()) return { status: "disabled", token: null, state: null };
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    if (get(fileReloadApplying)) return { status: "busy", token: null, state: null };
+    fileReloadApplying.set(true);
+    try {
+      const result = await backendInvoke<FileReloadResult>("apply_changed_vault", {
+        sessionId,
+        token,
+      });
+      if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+      if (result.state) {
+        const committed = commitSessionStateAtEpoch(sessionId, epoch, result.state);
+        result.state = replaceSessionState(sessionId, committed);
+        await refreshTabs();
+      }
+      return result;
+    } finally {
+      fileReloadApplying.set(false);
+    }
+  },
   subscribe: state.subscribe,
   tabs,
   activeId,

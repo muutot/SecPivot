@@ -1,5 +1,12 @@
 # Project-wide UI Style and Theming
 
+The auto-reload setting composes the existing SettingToggleCard and refresh icon.
+It introduces no CSS, color, surface or font token. FileReloadMonitor has no visible
+markup. Main-page inert/key boundaries preserve layout and existing controls;
+mounted inline-activity predicates add no styling. Isolated Chinese light/English
+dark desktop/320px checks retain neutral white-gray surfaces, identical Cascadia
+font stacks and contained descriptions. Native WebView/provider remains separate.
+
 LocalBackupSettingsCard reuses shared settings cards, controls and feedback.
 Its scoped CSS owns only count/action flex spacing, a96px numeric wrapper,
 eight-pixel full-width note spacing and anywhere note wrapping. Chinese light/

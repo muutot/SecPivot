@@ -1,5 +1,12 @@
 # Settings Shell and Panel Patterns
 
+GeneralSettingsPanel adds autoReloadChangedFiles with the existing refresh-icon
+SettingToggleCard and updateGeneral. Its default-off text identifies visible/focus
+30s checks, in-memory dirty merge, preserved conflicts, dialog/inline/drag pauses
+and remote-download cost. It adds no scoped CSS or control primitive. Both themes
+and320px checks retain shared typography and contained wrapped descriptions.
+FileReloadMonitor adds no visible shell; transient statuses use existing tips.
+
 DatabaseSettingsPanel starts with LocalBackupSettingsCard, composing shared
 SettingToggleCard/TextField/Button/Feedback. The default-off toggle applies
 immediately; count1–50 and filename-template drafts require native validation,

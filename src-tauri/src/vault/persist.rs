@@ -185,7 +185,7 @@ pub(crate) fn prepare_local_open(
     path: &Path,
     password: &str,
     keyfile: Option<&Path>,
-) -> Result<(Database, PreparedKeyfile), String> {
+) -> Result<(Database, PreparedKeyfile, [u8; 32]), String> {
     let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let data = super::file_io::read(path, "数据库文件")?;
@@ -196,7 +196,7 @@ pub(crate) fn prepare_local_open(
         return Err(probe.note);
     }
     let db = Database::parse(&data, key).map_err(classify_open_error)?;
-    Ok((db, keyfile_bytes))
+    Ok((db, keyfile_bytes, crate::crypto::sha256_bytes(&data)))
 }
 
 /// Lock-free half of `create`: build the database, run the KDF and write the

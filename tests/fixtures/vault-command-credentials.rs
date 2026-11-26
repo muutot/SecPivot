@@ -223,6 +223,7 @@ struct VaultOpenResult {
 }
 #[derive(Default)]
 struct VaultSession {
+    local_base_hash: Option<[u8; 32]>,
     local_backup: LocalBackupSettings,
     keyfile: Option<ObservedBytes>,
     opened: bool,
@@ -357,9 +358,9 @@ mod vault {
         _: &Path,
         password: &str,
         keyfile: Option<&Path>,
-    ) -> Result<((), PreparedKeyfile), String> {
+    ) -> Result<((), PreparedKeyfile, [u8; 32]), String> {
         prepare(password)?;
-        Ok(((), prepared_keyfile(keyfile)))
+        Ok(((), prepared_keyfile(keyfile), [0; 32]))
     }
     pub fn prepare_local_create(
         _: &Path,

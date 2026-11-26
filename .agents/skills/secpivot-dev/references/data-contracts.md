@@ -1,5 +1,40 @@
 # Data Contracts
 
+`general.autoReloadChangedFiles` is a default-off SecPivot enhancement in TS/Rust;
+the inspected official Configuration directory defines no matching property.
+GeneralSettingsPanel persists it through updateGeneral. FileReloadMonitor flushes
+settings before `reload_changed_vault(sessionId:String) -> FileReloadResult`.
+Unchanged encrypted SHA-256 bytes return unchanged without credentials/KDF/clones.
+Changed bytes decrypt off the session lock and optionally merge dirty native data;
+the result stages one candidate per session without publishing or writing files.
+`apply_changed_vault(sessionId:String,token:String) -> FileReloadResult` consumes
+a current one-use ten-second token. Status is disabled/busy/unchanged/ready/reloaded/
+merged; nullable state is published only by successful apply, token only by ready.
+Both IPCs require explicit session IDs. Candidates bind history lifetime, revision
+and baseline hash; mutation/replace/close clears them. Invalid/new-key/conflicting
+files preserve live data and save-failure counters. Snapshot refusal rolls back
+the previous DB/publication metadata exactly. Local/remote reads reuse file_io/
+RemoteStorage; automatic reload performs no save, upload or mirror update.
+
+`prepare_local_open` returns `(Database, PreparedKeyfile, [u8;32])`, hashing the
+exact successfully parsed read. Open adoption records local_base_hash; successful
+create/save/master-change/Save As record PersistOutcome.hash. Replacement and
+close reset it; remote sessions use RemoteTarget.base_hash. Save As completion
+accepts the complete PersistOutcome, retaining concurrent dirty edits. Background
+checks try the shared persistence gate without queueing. A global owned semaphore
+permit stays in started blocking work until exit, including abandoned awaits.
+
+The monitor checks active visible native sessions on owner changes, focus,
+visibility events and every30s. Modal, inline-edit/draft and drag guards exclude
+preparation and late candidate admission. Activity predicates carry no draft data.
+Apply briefly holds fileReloadApplying through IPC/tab refresh; the main page is
+inert and shortcuts suppressed. Successful apply renews the service epoch to
+reject old reads and remounts the group tree/detail by that epoch, clearing old
+revealed fields/history/storage without remounting for ordinary edits or saves.
+Synthetic KDBX/MemoryStorage/ConfigStore and actual controller/service/activity
+checks plus isolated dual-theme/320px rendering are evidence; native WebView,
+provider/platform and real client interoperability remain separate.
+
 `localBackup: {enabled,count,template}` is an independent TS/Rust setting:
 default off, count3 (clamped1–50), template `{name}.{timestamp}.{ext}.bak`.
 Legacy/partial config reload and both enabled values retain defaults/preferences.
@@ -9,7 +44,7 @@ native creation reads ConfigStore before preparation. `prepare_local_create`
 returns `(Database, PreparedKeyfile, PersistOutcome)`; adoption publishes its hash
 and cleanup warning. `SaveTarget::local` selects backup-aware filesystem writes,
 leaving document URI writes unchanged. Save, Save As, master changes and close
-auto-save share it. `complete_save_as(path,revision,warning)` adopts successful
+auto-save share it. `complete_save_as(path,revision,outcome:PersistOutcome)` adopts successful
 cleanup warnings while retaining concurrent dirty edits.
 `validate_local_backup_template(template:String)->String` requires exactly one
 timestamp and supports name/ext; the settings card validates drafts before Apply

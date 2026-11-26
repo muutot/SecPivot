@@ -986,6 +986,14 @@ export const zhCN = {
   "security.searchKeyFiles": "打开时搜索密钥文件",
   "settings.logging": "本地诊断日志",
   "database.localBackup": "本地保存备份",
+  "settings.autoReload": "自动加载外部数据库变化",
+  "settings.autoReloadDesc":
+    "默认关闭。窗口获得焦点及可见时每 30 秒检查当前数据库；未保存修改在内存中合并，冲突时保留当前数据库。弹窗、内联编辑和拖动期间暂缓检查，远程数据库需要下载。",
+  "reload.reloaded": "已加载外部数据库变化",
+  "reload.merged": "已合并外部变化，未保存修改仍待保存",
+  "reload.conflict": "外部变化与未保存修改存在冲突，已保留当前数据库。",
+  "reload.invalid": "外部文件无法使用当前密钥打开，已保留当前数据库。",
+  "reload.unavailable": "无法检查外部文件，已保留当前数据库。",
   "database.localBackupDesc": "默认关闭。覆盖前保留原有的加密文件，备份失败会中止保存。",
   "database.backupLocationDesc":
     "备份位于数据库旁的 .文件名.secpivot-backups 目录；更换主密钥前的备份使用旧密钥。对文件系统路径生效，Android 文档库沿用现有保存方式。",

@@ -400,6 +400,7 @@ pub struct GeneralSettings {
     pub always_on_top: bool,
     #[serde(default = "default_true")]
     pub remember_last_database: bool,
+    pub auto_reload_changed_files: bool,
     pub recent_files: Vec<String>,
     /// Display names for recent entries whose path has no readable file name
     /// (Android `content://` document URIs). Keyed by the recent-file path.
@@ -512,6 +513,7 @@ impl Default for GeneralSettings {
             window_opacity: 100,
             always_on_top: false,
             remember_last_database: true,
+            auto_reload_changed_files: false,
             recent_files: Vec::new(),
             recent_file_names: std::collections::HashMap::new(),
             window_width: 1100,

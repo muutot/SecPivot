@@ -1,5 +1,14 @@
 # Maintenance Workflow
 
+Credential fixtures follow the local-open triple `(Database, PreparedKeyfile,
+[u8;32])` and complete_save_as's PersistOutcome argument. Their observed owned
+credential payloads and production bodies stay intact; baseline hashes/pending
+reload fields are nonsecret stubs. Reload controller/service and mounted activity
+tests use synthetic IPC/flags only. Native reload tests use disposable KDBX,
+MemoryStorage and a real abandoned Tokio worker permit, without user files,
+provider or shared clipboard access. Browser draft checks are isolated previews,
+not desktop IPC evidence; do not close platform/interop TODOs from these checks.
+
 Read this before any repository change. It is the operating contract for every edit, audit, and commit.
 
 ## Workspace discipline

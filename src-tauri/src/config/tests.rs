@@ -5,6 +5,31 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn auto_reload_defaults_off_and_both_values_survive_native_restart() {
+    let dir = TempDir::new().unwrap();
+    for old in [r#"{}"#, r#"{"general":{}}"#] {
+        std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+        std::fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        assert!(!store.get().unwrap().general.auto_reload_changed_files);
+        for enabled in [true, false] {
+            let mut config = store.get().unwrap();
+            config.general.auto_reload_changed_files = enabled;
+            store.set(config).unwrap();
+            assert_eq!(
+                ConfigStore::load(dir.path().to_owned())
+                    .unwrap()
+                    .get()
+                    .unwrap()
+                    .general
+                    .auto_reload_changed_files,
+                enabled
+            );
+        }
+    }
+}
+
+#[test]
 fn local_backup_defaults_and_explicit_preferences_survive_native_reload() {
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("conf")).unwrap();

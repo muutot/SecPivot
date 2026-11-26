@@ -82,6 +82,13 @@
       onchange={(checked) => change("rememberLastDatabase", checked)}
     />
     <LoggingSettingsCard />
+    <SettingToggleCard
+      icon="refresh"
+      label={t(lang, "settings.autoReload")}
+      description={t(lang, "settings.autoReloadDesc")}
+      checked={general.autoReloadChangedFiles}
+      onchange={(checked) => change("autoReloadChangedFiles", checked)}
+    />
   {/if}
 
   {#if section === "network"}
