@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`EntryTable.handleRowKeydown` keeps the existing Ctrl/Cmd+A entry shortcut but
+otherwise handles only keys targeted at the row itself. Inline favorite/copy
+buttons retain native activation without an additional row selection or arrow
+navigation. Their click handlers retain propagation isolation. The production
+row/list handler regressions in `tests/entry-table-keyboard.test.mjs` exercise
+descendant Enter/Space/arrows and row activation/navigation/select-all with a
+synthetic event seam; they do not emulate native browser button click dispatch.
+No markup, CSS, theme tokens or clipboard behavior is changed.
+
 `usePanelLayout` derives selected UUID separately from its auto-open effect.
 Equal-UUID snapshot replacement therefore preserves manually closed detail and
 does not consume pending right-click suppression. Explicit selectionVersion

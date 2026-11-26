@@ -515,6 +515,9 @@
       onselectall();
       return;
     }
+    // Inline controls keep their own activation/navigation. In particular,
+    // native button Enter must not also select the surrounding entry row.
+    if (event.target !== event.currentTarget) return;
     if (event.key === "Enter") {
       onselectentry(entry);
       return;
