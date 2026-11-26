@@ -1,5 +1,24 @@
 # Data Contracts
 
+`security.keyTransformWeakWarning` mirrors KeePass AceSecurity, defaults true,
+and is normalized/persisted by both TS and native ConfigStore (legacy and both
+explicit values are tested). `isWeakKdfParameters` uses exact BigInt costs:
+AES rounds < 600000, or Argon2 iterations × memory bytes < 2 × 64 MiB,
+following official AesKdf/Argon2Kdf.AreParametersWeak. This threshold is a
+warning, not a password-strength guarantee; current new-vault defaults meet it.
+DatabaseSettingsDialog requires explicit approval for a changed weak KDF patch,
+bound to the exact reviewed parameters and consumed before the write. Unrelated
+metadata edits on an imported weak database do not prompt. SecuritySettingsPanel
+preflights the originating session's native costs before changing a master key,
+re-reads costs after approval, and rejects changed costs or detached/A-B-A views.
+Its warning is dismissed on view change and cannot authorize a different tab.
+`getDatabaseSettings()` now checks the originating session epoch after IPC.
+No password enters the warning, signature or configuration. The existing native
+change/persistence contract is unchanged; this is renderer confirmation, not
+native enforcement against callers bypassing the UI. ConfigStore and actual
+handler/service controls plus an isolated warning-component render cover this
+unit; real WebView/provider behavior and official open-time upgrade remain open.
+
 `security.autoSaveOnClose` mirrors KeePass `AceCloseDb.AutoSave`, defaults off,
 and persists on both TS and Rust sides. Async `close_vault` retains its optional
 sessionId and void success; async `close_all_vaults` retains its argument-free

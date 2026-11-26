@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`components/KdfWarningDialog.svelte` owns the shared localized weak-cost
+confirmation over ModalShell/Buttons. DatabaseSettingsDialog uses it before a
+changed weak KDF patch; SecuritySettingsPanel uses it after native-cost preflight
+for master-key changes. `utils/kdf-parameters.ts` owns exact official thresholds,
+and ConfigStore/TS settings persist the default-on keyTransformWeakWarning.
+Master-key confirmations are bound to SessionViewGuard and dismissed on tab/view
+changes. Existing IPC commands are unchanged; getDatabaseSettings adds an epoch
+check to reject disposed-session replies.
+
 `vault/close.rs` owns the shared save/discard/cancel transaction and close-attempt
 permit; its tests run disposable local and offline remote KDBX persistence plus
 ownership races. `commands/vault_close.rs` owns localized native prompts, their

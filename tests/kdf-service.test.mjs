@@ -36,6 +36,7 @@ globalThis.__TAURI_INTERNALS__ = {
         active = args.sessionId;
         return sessions.get(active);
       case "benchmark_database_kdf":
+      case "get_database_settings":
         return new Promise((resolve) => pending.push({ args, resolve }));
       case "close_vault":
         sessions.delete(args.sessionId);
@@ -75,6 +76,19 @@ test("benchmark IPC carries only exact parameters, target and originating sessio
   assert.equal(vault.getActiveSessionId(), b);
   assert.equal(vault.get().dirty, false);
   await vault.closeAll();
+});
+
+test("database-settings reads remain bound to the original session lifetime", async () => {
+  await vault.open("C:/synthetic/a.kdbx", "synthetic-only");
+  const a = vault.getActiveSessionId();
+  const run = vault.getDatabaseSettings();
+  const request = pending.shift();
+  assert.deepEqual(request.args, { sessionId: a });
+  await vault.closeAll();
+  const rejection = assert.rejects(run);
+  request.resolve({ kdfParameters: parameters });
+  await rejection;
+  assert.equal(vault.get(), null);
 });
 
 test("closed-origin benchmark replies are rejected instead of republishing a disposed result", async () => {

@@ -1,5 +1,12 @@
 # Project-wide UI Style and Theming
 
+KdfWarningDialog reuses ModalShell's confirm size/prompt layer and Button's
+existing warning variant (pale lemon yellow in light mode). Its threshold note
+owns only zero margin and secondary font/color tokens. The security preference
+uses SettingToggleCard; no new token, font, surface or control chrome is added.
+An isolated component preview covers Chinese light/English dark and 320px
+rendering without operating a vault or submitting a credential change.
+
 The autoSaveOnClose setting reuses SettingToggleCard with the save icon and
 existing compact card spacing. It adds no CSS, colors or fonts. Chinese light
 and English dark desktop/320px rendering retain white-gray light surfaces,

@@ -593,6 +593,10 @@ pub struct SecuritySettings {
     /// only this nonsecret preference is persisted. Default on.
     #[serde(default = "default_true")]
     pub repeat_password_only_when_hidden: bool,
+    /// KeePass AceSecurity.KeyTransformWeakWarning. Default on; the renderer
+    /// warns before explicitly changing KDF costs or the master key.
+    #[serde(default = "default_true")]
+    pub key_transform_weak_warning: bool,
     /// Minimize the main window after the workspace locks (KeePass
     /// `MinimizeAfterLocking`). Default on.
     #[serde(default = "default_true")]
@@ -627,6 +631,7 @@ impl Default for SecuritySettings {
             auto_save_after_edit: false,
             auto_save_on_close: false,
             repeat_password_only_when_hidden: true,
+            key_transform_weak_warning: true,
             minimize_after_locking: true,
             show_expired_on_open: true,
             expiry_soon_days: 7,

@@ -249,6 +249,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   autoSaveAfterEdit: false,
   autoSaveOnClose: false,
   repeatPasswordOnlyWhenHidden: true,
+  keyTransformWeakWarning: true,
   minimizeAfterLocking: true,
   showExpiredOnOpen: true,
   expirySoonDays: 7,
@@ -1061,6 +1062,10 @@ export function normalizeSettings(
     repeatPasswordOnlyWhenHidden: asBool(
       s.repeatPasswordOnlyWhenHidden,
       fallback.security.repeatPasswordOnlyWhenHidden,
+    ),
+    keyTransformWeakWarning: asBool(
+      s.keyTransformWeakWarning,
+      fallback.security.keyTransformWeakWarning,
     ),
     minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
     showExpiredOnOpen: asBool(s.showExpiredOnOpen, fallback.security.showExpiredOnOpen),

@@ -109,6 +109,8 @@ export interface SecuritySettings {
   autoSaveOnClose: boolean;
   /** KeePass: skip manual repetition while the master password is visible. */
   repeatPasswordOnlyWhenHidden: boolean;
+  /** KeePass AceSecurity.KeyTransformWeakWarning, default on. */
+  keyTransformWeakWarning: boolean;
   /** Minimize the main window after the workspace locks (KeePass
    * `MinimizeAfterLocking`, default on). */
   minimizeAfterLocking: boolean;

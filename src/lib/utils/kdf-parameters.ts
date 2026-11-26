@@ -3,6 +3,13 @@ import type { DatabaseKdf, KdfParameters } from "$lib/types/vault";
 const U64_MAX = (1n << 64n) - 1n;
 const MIB = 1048576n;
 
+/** KeePass AesKdf / Argon2Kdf.AreParametersWeak, using exact integer costs.
+ * This is a warning threshold, not a guarantee of password strength. */
+export function isWeakKdfParameters(parameters: KdfParameters): boolean {
+  if (parameters.algorithm === "Aes") return BigInt(parameters.rounds) < 600000n;
+  return BigInt(parameters.iterations) * BigInt(parameters.memoryBytes) < 2n * 64n * MIB;
+}
+
 function unsigned(value: string, max = U64_MAX, allowZero = false): bigint | null {
   if (!/^\d{1,20}$/.test(value)) return null;
   const parsed = BigInt(value);

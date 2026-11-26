@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { open } from "@tauri-apps/plugin-dialog";
   import { appSettings, isTauriRuntime } from "$lib/services/settings";
@@ -8,6 +9,9 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
   import MasterPasswordFields from "$lib/components/MasterPasswordFields.svelte";
+  import KdfWarningDialog from "$lib/components/KdfWarningDialog.svelte";
+  import { isWeakKdfParameters } from "$lib/utils/kdf-parameters";
+  import { SessionViewGuard, type SessionViewToken } from "$lib/utils/session-state";
   import { passwordRepeatMatches } from "$lib/utils/password-repeat";
   import Button from "$lib/components/templates/action/Button.svelte";
   import Feedback from "$lib/components/templates/form/Feedback.svelte";
@@ -42,6 +46,23 @@
   let newKeyfile = $state<string | null>(null);
   let busy = $state(false);
   let feedback = $state<{ ok: boolean; message: string } | null>(null);
+  let showWeakWarning = $state(false);
+  let weakWarningSignature = $state("");
+  let weakMasterApproval = $state<string | null>(null);
+  let weakWarningView = $state<SessionViewToken | null>(null);
+  const masterView = new SessionViewGuard();
+  const unsubscribeVault = vault.subscribe(() => {
+    masterView.activate(vault.getActiveSessionId());
+    if (weakWarningView && !masterView.isCurrent(weakWarningView)) {
+      showWeakWarning = false;
+      weakMasterApproval = null;
+      weakWarningView = null;
+    }
+  });
+  onDestroy(() => {
+    unsubscribeVault();
+    masterView.activate(null);
+  });
 
   async function pickKeyfile(): Promise<void> {
     if (!isTauriRuntime()) return;
@@ -55,7 +76,7 @@
   }
 
   async function submitMasterKeyChange(): Promise<void> {
-    if (busy) return;
+    if (busy || showWeakWarning) return;
     feedback = null;
     if (
       !passwordRepeatMatches(
@@ -79,15 +100,35 @@
       feedback = { ok: false, message: t(lang, "security.noVault") };
       return;
     }
+    const view = masterView.capture();
+    if (!view) {
+      busy = false;
+      return;
+    }
     try {
+      if (get(appSettings).security.keyTransformWeakWarning) {
+        const database = await vault.callInSession(sessionId, () => vault.getDatabaseSettings());
+        if (!masterView.isCurrent(view)) return;
+        if (database && isWeakKdfParameters(database.kdfParameters)) {
+          const signature = JSON.stringify({ sessionId, parameters: database.kdfParameters });
+          if (weakMasterApproval !== signature) {
+            weakWarningSignature = signature;
+            weakWarningView = view;
+            showWeakWarning = true;
+            return;
+          }
+        }
+      }
+      weakMasterApproval = null;
       const state = await vault.callInSession(sessionId, () =>
         vault.changeMasterKey(newPassword, newKeyfile),
       );
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!masterView.isCurrent(view)) return;
       if (state.path && newPassword.length > 0 && !newKeyfile) {
         // A stored password alone can never open a keyfile-protected vault;
         // don't remember one when the change introduced (or kept) a keyfile.
         await rememberCredential(state.path, newPassword);
+        if (!masterView.isCurrent(view)) return;
       }
       newPassword = "";
       confirmPassword = "";
@@ -95,11 +136,21 @@
       newKeyfile = null;
       feedback = { ok: true, message: t(lang, "security.changed") };
     } catch (err) {
-      if (vault.getActiveSessionId() !== sessionId) return;
+      if (!masterView.isCurrent(view)) return;
       feedback = { ok: false, message: String(err) };
     } finally {
       busy = false;
     }
+  }
+
+  function continueWeakMasterKey(): void {
+    if (!weakWarningView || !masterView.isCurrent(weakWarningView)) {
+      showWeakWarning = false;
+      return;
+    }
+    weakMasterApproval = weakWarningSignature;
+    showWeakWarning = false;
+    void submitMasterKeyChange();
   }
 </script>
 
@@ -186,6 +237,14 @@
     description={t(lang, "security.repeatPasswordOnlyWhenHiddenDesc")}
     checked={security.repeatPasswordOnlyWhenHidden}
     onchange={(checked) => change("repeatPasswordOnlyWhenHidden", checked)}
+  />
+
+  <SettingToggleCard
+    icon="key"
+    label={t(lang, "security.keyTransformWeakWarning")}
+    description={t(lang, "security.keyTransformWeakWarningDesc")}
+    checked={security.keyTransformWeakWarning}
+    onchange={(checked) => change("keyTransformWeakWarning", checked)}
   />
 
   <SettingToggleCard
@@ -312,6 +371,10 @@
 
   <p class="auto-save-note">{t(lang, "settings.autoSaveNote")}</p>
 </div>
+
+{#if showWeakWarning}
+  <KdfWarningDialog oncancel={() => (showWeakWarning = false)} oncontinue={continueWeakMasterKey} />
+{/if}
 
 <style>
   .mk-keyfile-row {

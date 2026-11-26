@@ -970,6 +970,15 @@ export const zhCN = {
   "dbsettings.browserUnsupported": "浏览器预览不支持数据库设置",
   "dbsettings.desc": "存储算法与历史策略修改会重写数据库文件",
   "dbsettings.loading": "正在读取数据库设置…",
+  "kdf.weakTitle": "密钥派生参数偏弱",
+  "security.keyTransformWeakWarning": "提醒弱密钥派生参数",
+  "security.keyTransformWeakWarningDesc":
+    "保存偏弱的 KDF 参数或更换弱参数数据库的主密钥前先提醒。新建数据库使用更强的默认参数。",
+  "kdf.weakDescription":
+    "这些参数会降低离线猜解密码的成本。取消后可提高参数或运行基准测试；若确实需要保留当前参数，可选择继续。",
+  "kdf.weakThreshold":
+    "KeePass 在 AES 少于 600,000 轮，或 Argon2 的迭代次数 × 内存低于 2 × 64 MiB 时提醒。达到此门槛也不能保证主密码足够强。",
+  "kdf.keepWeak": "继续使用弱参数",
   "dbsettings.kdf": "密钥派生 (KDF)",
   "dbsettings.kdfAria": "密钥派生算法",
   "dbsettings.cipher": "加密算法",

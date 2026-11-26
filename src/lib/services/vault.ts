@@ -797,7 +797,12 @@ export const vault: VaultStore = {
   async getDatabaseSettings(): Promise<DatabaseSettings | null> {
     if (!isTauriRuntime()) return null;
     const sessionId = captureSessionId();
-    return backendInvoke<DatabaseSettings | null>("get_database_settings", { sessionId });
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await backendInvoke<DatabaseSettings | null>("get_database_settings", {
+      sessionId,
+    });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    return result;
   },
 
   /** Credential-free calibration, bound to the original session lifetime. */

@@ -11,13 +11,19 @@
   import { vault } from "$lib/services/vault";
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
   import ModalShell from "$lib/components/ModalShell.svelte";
+  import KdfWarningDialog from "$lib/components/KdfWarningDialog.svelte";
   import Toggle from "$lib/components/templates/form/Toggle.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
   import RadioGroup from "$lib/components/templates/form/RadioGroup.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
-  import { defaultKdfParameters, memoryMiB, readKdfParameters } from "$lib/utils/kdf-parameters";
+  import {
+    defaultKdfParameters,
+    memoryMiB,
+    readKdfParameters,
+    isWeakKdfParameters,
+  } from "$lib/utils/kdf-parameters";
 
   interface Props {
     onclose: () => void;
@@ -39,6 +45,9 @@
   let loading = $state(true);
   let error = $state("");
   let saving = $state(false);
+  let weakApproval = $state<string | null>(null);
+  let weakWarningSignature = $state("");
+  let showWeakWarning = $state(false);
 
   let kdf = $state<"Aes" | "Argon2" | "Argon2id">("Aes");
   let roundsInput = $state("600000");
@@ -160,7 +169,7 @@
   );
 
   async function save(): Promise<void> {
-    if (saving || benchmarking || !settings || !kdfParameters) return;
+    if (saving || benchmarking || showWeakWarning || !settings || !kdfParameters) return;
     const view = dialogView.capture();
     if (!view) return;
     saving = true;
@@ -170,6 +179,16 @@
       if (kdf !== settings.kdf) patch.kdf = kdf;
       if (JSON.stringify(kdfParameters) !== JSON.stringify(settings.kdfParameters))
         patch.kdfParameters = kdfParameters;
+      if (
+        patch.kdfParameters &&
+        s.security.keyTransformWeakWarning &&
+        isWeakKdfParameters(patch.kdfParameters) &&
+        weakApproval !== JSON.stringify(patch.kdfParameters)
+      ) {
+        weakWarningSignature = JSON.stringify(patch.kdfParameters);
+        showWeakWarning = true;
+        return;
+      }
       if (cipher !== null && cipher !== settings.cipher) patch.cipher = cipher;
       if (compression !== settings.compression) patch.compression = compression;
       if ((historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems) {
@@ -185,6 +204,7 @@
         patch.recycleBinEnabled = recycleEnabled;
       }
       if (!sessionId) return;
+      weakApproval = null;
       await vault.callInSession(sessionId, () => vault.updateDatabaseSettings(patch));
       if (!dialogView.isCurrent(view)) return;
       onclose();
@@ -193,6 +213,12 @@
     } finally {
       if (dialogView.isCurrent(view)) saving = false;
     }
+  }
+
+  function continueWeak(): void {
+    weakApproval = weakWarningSignature;
+    showWeakWarning = false;
+    void save();
   }
 </script>
 
@@ -380,6 +406,10 @@
     </Button>
   {/snippet}
 </ModalShell>
+
+{#if showWeakWarning}
+  <KdfWarningDialog oncancel={() => (showWeakWarning = false)} oncontinue={continueWeak} />
+{/if}
 
 <style>
   .kdf-costs {

@@ -23,6 +23,8 @@ globalThis.__TAURI_INTERNALS__ = {
 };
 const { appSettings, normalizeSettings, DEFAULT_APP_SETTINGS } =
   await import("../src/lib/services/settings.ts");
+const { isWeakKdfParameters } = await import("../src/lib/utils/kdf-parameters.ts");
+const { SessionViewGuard } = await import("../src/lib/utils/session-state.ts");
 
 test("repetition preserves exact password bytes and hidden validation", () => {
   for (const onlyWhenHidden of [false, true]) {
@@ -65,10 +67,14 @@ test("repetition preference publishes and survives settings persistence/reload",
 
 const source = readFileSync("src/lib/components/settings/SecuritySettingsPanel.svelte", "utf8");
 const handler = source.match(/^  async function submitMasterKeyChange\([^]*?^  \}/m)?.[0];
+const continueHandler = source.match(/^  function continueWeakMasterKey\([^]*?^  \}/m)?.[0];
 assert.ok(handler, "extract complete production master-key submission");
+assert.ok(continueHandler, "extract complete production weak-cost confirmation");
 
 function masterFixture(onlyWhenHidden, showPassword) {
   const calls = [];
+  const masterView = new SessionViewGuard();
+  masterView.activate("synthetic-origin");
   const context = vm.createContext({
     newPassword: " synthetic-new ",
     confirmPassword: "different",
@@ -76,11 +82,24 @@ function masterFixture(onlyWhenHidden, showPassword) {
     onlyWhenHidden,
     showPassword,
     busy: false,
+    showWeakWarning: false,
+    weakWarningSignature: "",
+    weakMasterApproval: null,
+    weakWarningView: null,
+    masterView,
+    isWeakKdfParameters,
+    keyTransformWeakWarning: true,
+    database: { kdfParameters: { algorithm: "Aes", rounds: "600000" } },
     feedback: null,
     lang: "en",
     passwordRepeatMatches,
     appSettings: {},
-    get: () => ({ security: { repeatPasswordOnlyWhenHidden: context.onlyWhenHidden } }),
+    get: () => ({
+      security: {
+        repeatPasswordOnlyWhenHidden: context.onlyWhenHidden,
+        keyTransformWeakWarning: context.keyTransformWeakWarning,
+      },
+    }),
     t: (_lang, key) => key,
     rememberCredential: async () => {},
     vault: {
@@ -89,6 +108,7 @@ function masterFixture(onlyWhenHidden, showPassword) {
         assert.equal(id, "synthetic-origin");
         return run();
       },
+      getDatabaseSettings: async () => context.database,
       changeMasterKey: async (...args) => {
         calls.push(args);
         if (context.fail) throw new Error("synthetic rejection");
@@ -97,13 +117,97 @@ function masterFixture(onlyWhenHidden, showPassword) {
     },
   });
   vm.runInContext(
-    ts.transpileModule(`${handler}\nglobalThis.run = submitMasterKeyChange;`, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
-    }).outputText,
+    ts.transpileModule(
+      `${handler}\n${continueHandler}\nglobalThis.run = submitMasterKeyChange; globalThis.continueWeak = continueWeakMasterKey;`,
+      {
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+      },
+    ).outputText,
     context,
   );
   return { context, calls };
 }
+
+test("master-key warning preserves credentials on cancel and binds approval to current costs", async () => {
+  const f = masterFixture(true, true);
+  f.context.database = { kdfParameters: { algorithm: "Aes", rounds: "1" } };
+  await f.context.run();
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.context.showWeakWarning, true);
+  assert.equal(f.context.busy, false);
+  assert.equal(f.context.newPassword, " synthetic-new ");
+  f.context.showWeakWarning = false;
+  await f.context.run();
+  assert.equal(f.calls.length, 0);
+  f.context.weakMasterApproval = f.context.weakWarningSignature;
+  f.context.showWeakWarning = false;
+  f.context.database = { kdfParameters: { algorithm: "Aes", rounds: "2" } };
+  await f.context.run();
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.context.showWeakWarning, true);
+  f.context.weakMasterApproval = f.context.weakWarningSignature;
+  f.context.showWeakWarning = false;
+  await f.context.run();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.context.newPassword, "");
+  assert.equal(f.context.weakMasterApproval, null);
+});
+
+test("accepting a warning after a tab switch cannot change another database's key", async () => {
+  const f = masterFixture(true, true);
+  f.context.database = { kdfParameters: { algorithm: "Aes", rounds: "1" } };
+  await f.context.run();
+  f.context.masterView.activate("synthetic-other");
+  f.context.database = { kdfParameters: { algorithm: "Aes", rounds: "600000" } };
+  f.context.vault.getActiveSessionId = () => "synthetic-other";
+  f.context.continueWeak();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.context.showWeakWarning, false);
+  assert.equal(f.context.newPassword, " synthetic-new ");
+});
+
+test("weak-warning preference defaults on and persists both explicit choices", async () => {
+  assert.equal(DEFAULT_APP_SETTINGS.security.keyTransformWeakWarning, true);
+  for (const value of [undefined, null, 0, "false", {}])
+    assert.equal(
+      normalizeSettings({ security: { keyTransformWeakWarning: value } }).security
+        .keyTransformWeakWarning,
+      true,
+    );
+  for (const enabled of [false, true]) {
+    appSettings.updateSecurity("keyTransformWeakWarning", enabled);
+    assert.equal(get(appSettings).security.keyTransformWeakWarning, enabled);
+    await appSettings.flush();
+    assert.equal(persisted.security.keyTransformWeakWarning, enabled);
+    await appSettings.initialize();
+    assert.equal(get(appSettings).security.keyTransformWeakWarning, enabled);
+  }
+  appSettings.destroy();
+});
+
+test("disabling weak warnings preserves the existing master-key flow", async () => {
+  const f = masterFixture(true, true);
+  f.context.keyTransformWeakWarning = false;
+  f.context.vault.getDatabaseSettings = () => assert.fail("disabled preference must not preflight");
+  await f.context.run();
+  assert.equal(f.calls.length, 1);
+});
+
+test("detached and A-B-A master-key preflights never change credentials", async () => {
+  for (const detach of [true, false]) {
+    const f = masterFixture(true, true);
+    let finish;
+    f.context.vault.getDatabaseSettings = () => new Promise((resolve) => (finish = resolve));
+    const run = f.context.run();
+    f.context.masterView.activate(detach ? null : "synthetic-other");
+    if (!detach) f.context.masterView.activate("synthetic-origin");
+    finish(f.context.database);
+    await run;
+    assert.equal(f.calls.length, 0);
+    assert.equal(f.context.newPassword, " synthetic-new ");
+  }
+});
 
 test("master-key change enforces current visibility and preference before IPC", async () => {
   for (const onlyWhenHidden of [false, true]) {

@@ -1,5 +1,15 @@
 # Settings Shell and Panel Patterns
 
+SecuritySettingsPanel adds the default-on keyTransformWeakWarning SettingToggleCard
+and shares KdfWarningDialog with DatabaseSettingsDialog. The prompt composes
+ModalShell at the existing prompt layer and compact Button actions: Cancel
+preserves the draft, and the warning variant explicitly keeps weak parameters.
+Escape cancels only the prompt. Parameter approval is exact and one-use; a
+changed draft/cost requires fresh review. Master-key view changes dismiss the
+prompt and invalidate its approval. Chinese/English strings describe the
+official cost threshold and stronger new-vault defaults. Only the preference
+is persisted; no password or key is rendered in the warning.
+
 SecuritySettingsPanel exposes `autoSaveOnClose` after autoSaveAfterEdit using
 the canonical SettingToggleCard and save icon. Its default-off description
 explains close/lock/exit saving, keeping sessions on failure and the disabled

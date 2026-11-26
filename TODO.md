@@ -8,7 +8,6 @@
 
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
 - [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
-- [ ] 弱 KDF 警告（创建/改密钥时对弱参数告警）
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）
@@ -16,6 +15,8 @@
 - [ ] 打印系统（KeePass 应急表打印约 20 项：Layout/Include*/Color*/Fonts/Sort）——当前只有离线 HTML 应急表导出
 
 ## 二、部分完成（剩余边界明确）
+
+- [~] 弱 KDF 警告（`AceSecurity.KeyTransformWeakWarning`）：默认开启的配置已持久化；保存偏弱 KDF 参数、更换弱参数库主密钥前使用同一取消/继续提示，按官方 AES/Argon2 成本门槛判断；当前建库默认参数达标。配置与实际提交函数/会话归属回归通过。真实 WebView/provider 路径、打开旧库时官方式主动提醒/升级仍待验证或实现
 
 - [~] 关闭库时自动保存（`AceCloseDb.AutoSave`）：默认关闭的原生保存/放弃/取消流程已接入关闭标签页、锁定、关窗/托盘退出；临时 KDBX、离线 remote、并发会话及配置/前端回归通过。真实 WebView 关窗/托盘原生三按钮及 Android provider/后台运行仍待验证
 

@@ -170,23 +170,23 @@ Family · Size · GraphicsUnit · Style · OverrideUIDefault —— SecPivot 仅
 
 ## 5. AceSecurity（16 + 子对象）
 
-| 字段                                   | 默认  | SecPivot                                           |
-| -------------------------------------- | ----- | -------------------------------------------------- |
-| WorkspaceLocking (AceWorkspaceLocking) | —     | 见下                                               |
-| Policy (AppPolicyFlags)                | —     | ❌ 管理强制策略（见旧 gap 取舍）                   |
-| MasterPassword (AceMasterPassword)     | —     | 见下                                               |
-| MasterKeyTries                         | 3     | ❌ 主密码重试次数                                  |
-| MasterKeyOnSecureDesktop               | false | ➖ 安全桌面不适用                                  |
-| MasterKeyExpiryRec / Force             | ""    | ❌ 主密码过期提醒/强制                             |
-| KeyTransformWeakWarning                | true  | ❌ 弱 KDF 警告（旧 gap 列为候选）                  |
-| ClipboardClearOnExit                   | true  | ✅ `clearOnLock` 近似（退出/锁定）                 |
-| ClipboardClearAfterSeconds             | 12    | ✅ `clipboardClearSeconds`（默认 20）⚠️ 默认值不同 |
-| ClipboardNoPersist                     | true  | ➖ 剪贴板持久化，平台细节                          |
-| UseClipboardViewerIgnoreFormat         | true  | ➖                                                 |
-| ClearKeyCommandLineParams              | true  | ➖                                                 |
-| SslCertsAcceptInvalid                  | false | ➖ 证书校验                                        |
-| PreventScreenCapture                   | false | ✅ `screenCaptureGuard`                            |
-| ProtectProcessWithDacl                 | false | ➖ 官方明确不推荐，高危                            |
+| 字段                                   | 默认  | SecPivot                                                                                          |
+| -------------------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
+| WorkspaceLocking (AceWorkspaceLocking) | —     | 见下                                                                                              |
+| Policy (AppPolicyFlags)                | —     | ❌ 管理强制策略（见旧 gap 取舍）                                                                  |
+| MasterPassword (AceMasterPassword)     | —     | 见下                                                                                              |
+| MasterKeyTries                         | 3     | ❌ 主密码重试次数                                                                                 |
+| MasterKeyOnSecureDesktop               | false | ➖ 安全桌面不适用                                                                                 |
+| MasterKeyExpiryRec / Force             | ""    | ❌ 主密码过期提醒/强制                                                                            |
+| KeyTransformWeakWarning                | true  | ⚠️ `security.keyTransformWeakWarning`：改 KDF/主密钥提醒已接入；原生 WebView 与打开库主动升级待补 |
+| ClipboardClearOnExit                   | true  | ✅ `clearOnLock` 近似（退出/锁定）                                                                |
+| ClipboardClearAfterSeconds             | 12    | ✅ `clipboardClearSeconds`（默认 20）⚠️ 默认值不同                                                |
+| ClipboardNoPersist                     | true  | ➖ 剪贴板持久化，平台细节                                                                         |
+| UseClipboardViewerIgnoreFormat         | true  | ➖                                                                                                |
+| ClearKeyCommandLineParams              | true  | ➖                                                                                                |
+| SslCertsAcceptInvalid                  | false | ➖ 证书校验                                                                                       |
+| PreventScreenCapture                   | false | ✅ `screenCaptureGuard`                                                                           |
+| ProtectProcessWithDacl                 | false | ➖ 官方明确不推荐，高危                                                                           |
 
 ### AceWorkspaceLocking（9）
 

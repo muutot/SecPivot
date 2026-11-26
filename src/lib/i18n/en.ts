@@ -976,6 +976,15 @@ export const en: Record<I18nKey, string> = {
     "Enter valid integer costs and memory. Argon2 requires at least 8 KiB per lane; memory must resolve to whole bytes.",
   "dbsettings.desc": "Storage and history changes rewrite the database file",
   "dbsettings.loading": "Loading database settings…",
+  "kdf.weakTitle": "Weak key derivation parameters",
+  "security.keyTransformWeakWarning": "Warn about weak key derivation",
+  "security.keyTransformWeakWarningDesc":
+    "Ask before saving weak KDF costs or changing the master key of a database with weak costs. New databases use stronger defaults.",
+  "kdf.weakDescription":
+    "These parameters make offline password guessing easier. Cancel to increase the cost or run the benchmark; continue only if you intend to keep these parameters.",
+  "kdf.weakThreshold":
+    "KeePass warns below 600,000 AES rounds, or when Argon2 iterations × memory is below 2 × 64 MiB. Meeting this threshold does not guarantee a strong master password.",
+  "kdf.keepWeak": "Keep weak costs",
   "dbsettings.kdf": "Key derivation (KDF)",
   "dbsettings.kdfAria": "Key derivation algorithm",
   "dbsettings.cipherAria": "Cipher",

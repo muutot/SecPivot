@@ -8,6 +8,17 @@
 
 ## KeePass Options 六个 tab 与 SecPivot 现状
 
+`AceSecurity.KeyTransformWeakWarning` 默认 true，Security 页开关在 TS/Rust
+持久化。数据库设置保存偏弱 KDF 成本、更换弱参数库主密钥前，使用共享取消/
+继续提示；当前建库默认值已达标。按官方
+[AesKdf.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePassLib/Cryptography/KeyDerivation/AesKdf.cs)
+的 600000 轮与
+[Argon2Kdf.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePassLib/Cryptography/KeyDerivation/Argon2Kdf.cs)
+的 iterations × memory < 2 × 64 MiB 判断，不以算法名称或浮点截断代替。
+确认绑定具体成本并在写入前消费，取消不丢草稿；改主密钥预检和提示绑定原会话/
+视图代次。ConfigStore 旧配置/双值重载、实际提交函数与服务回归、独立提示组件
+渲染覆盖该单元；真实 WebView/provider 和官方 KeyUtil 打开库主动升级仍待补。
+
 `AceCloseDb.AutoSave` 已实现原生保存流程与 Security 页开关（默认 false）。
 官方 [AceApplication.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceApplication.cs)
 定义该默认值；[MainForm_Functions.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/MainForm_Functions.cs)

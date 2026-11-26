@@ -6,7 +6,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 register("./helpers/lib-alias-loader.mjs", import.meta.url);
 const { KeyedViewGuard, sessionResourceKey } = await import("../src/lib/utils/session-state.ts");
-const { memoryMiB, readKdfParameters, defaultKdfParameters } =
+const { memoryMiB, readKdfParameters, defaultKdfParameters, isWeakKdfParameters } =
   await import("../src/lib/utils/kdf-parameters.ts");
 const source = readFileSync(
   new URL("../src/lib/components/DatabaseSettingsDialog.svelte", import.meta.url),
@@ -16,12 +16,12 @@ const ast = ts.createSourceFile("dialog.ts", source, ts.ScriptTarget.Latest, tru
 const handlers = ast.statements.filter(
   (node) =>
     ts.isFunctionDeclaration(node) &&
-    ["adoptParameters", "changeKdf", "benchmark", "save"].includes(node.name?.text),
+    ["adoptParameters", "changeKdf", "benchmark", "save", "continueWeak"].includes(node.name?.text),
 );
-assert.equal(handlers.length, 4);
+assert.equal(handlers.length, 5);
 const js = ts.transpileModule(
   handlers.map((node) => node.getText(ast)).join("\n") +
-    "\nexports.benchmark=benchmark; exports.save=save; exports.adopt=adoptParameters;",
+    "\nexports.benchmark=benchmark; exports.save=save; exports.adopt=adoptParameters; exports.continueWeak=continueWeak;",
   { compilerOptions: { target: ts.ScriptTarget.ESNext } },
 ).outputText;
 const original = { algorithm: "Aes", rounds: "9007199254740993" };
@@ -42,6 +42,7 @@ function fixture() {
     exports: {},
     memoryMiB,
     defaultKdfParameters,
+    isWeakKdfParameters,
     JSON,
     Number,
     String,
@@ -59,6 +60,7 @@ function fixture() {
       entryTemplatesGroup: null,
       recycleBinEnabled: true,
     },
+    s: { security: { keyTransformWeakWarning: true } },
     kdf: "Aes",
     kdfParameters: original,
     roundsInput: original.rounds,
@@ -72,6 +74,9 @@ function fixture() {
     benchmarkSignature: "",
     benchmarking: false,
     saving: false,
+    showWeakWarning: false,
+    weakWarningSignature: "",
+    weakApproval: null,
     benchmarkResult: null,
     error: "",
     cipher: null,
@@ -122,6 +127,74 @@ test("benchmark never saves; explicit apply updates exact fields, then Save subm
   await context.exports.save();
   assert.deepEqual(writes, [{ kdfParameters: suggestion.parameters }]);
   assert.equal(context.closed, 1);
+});
+
+test("weak KDF changes require explicit confirmation; cancelling keeps the unsaved draft", async () => {
+  const { context, writes } = fixture();
+  const weak = { algorithm: "Aes", rounds: "0" };
+  context.kdfParameters = weak;
+  await context.exports.save();
+  assert.equal(context.showWeakWarning, true);
+  assert.equal(context.saving, false);
+  assert.equal(context.closed, 0);
+  assert.deepEqual(writes, []);
+  await context.exports.save();
+  assert.deepEqual(writes, []);
+  context.showWeakWarning = false; // Same cancellation as the component callback / Escape.
+  assert.deepEqual(context.kdfParameters, weak);
+  await context.exports.save();
+  assert.equal(context.showWeakWarning, true);
+  context.exports.continueWeak();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, [{ kdfParameters: weak }]);
+  assert.equal(context.closed, 1);
+  assert.equal(context.weakApproval, null);
+});
+
+test("approval is bound to the exact reviewed cost, never a changed draft", async () => {
+  const { context, writes } = fixture();
+  context.kdfParameters = { algorithm: "Aes", rounds: "1" };
+  await context.exports.save();
+  context.kdfParameters = { algorithm: "Aes", rounds: "2" };
+  context.exports.continueWeak();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(context.showWeakWarning, true);
+  assert.equal(context.weakWarningSignature, JSON.stringify(context.kdfParameters));
+  assert.deepEqual(writes, []);
+  context.exports.continueWeak();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, [{ kdfParameters: context.kdfParameters }]);
+});
+
+test("unrelated metadata edits of an imported weak database do not repeatedly warn", async () => {
+  const { context, writes } = fixture();
+  const weak = { algorithm: "Aes", rounds: "1" };
+  context.settings.kdfParameters = weak;
+  context.kdfParameters = weak;
+  context.historyInput = "5";
+  await context.exports.save();
+  assert.equal(context.showWeakWarning, false);
+  assert.deepEqual(writes, [{ historyMaxItems: 5 }]);
+});
+
+test("disabled weak-cost preference allows an explicit low-cost patch without a prompt", async () => {
+  const { context, writes } = fixture();
+  context.s.security.keyTransformWeakWarning = false;
+  context.kdfParameters = { algorithm: "Aes", rounds: "1" };
+  await context.exports.save();
+  assert.equal(context.showWeakWarning, false);
+  assert.deepEqual(writes, [{ kdfParameters: context.kdfParameters }]);
+});
+
+test("a detached warning cannot save into a disposed view", async () => {
+  const { context, writes } = fixture();
+  context.kdfParameters = { algorithm: "Aes", rounds: "1" };
+  await context.exports.save();
+  context.dialogView.activate(null);
+  context.exports.continueWeak();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, []);
+  assert.equal(context.closed, 0);
 });
 
 test("detached and changed-input benchmark completions never publish a suggestion", async () => {
