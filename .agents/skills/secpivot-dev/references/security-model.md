@@ -1,5 +1,16 @@
 # Security Model
 
+Complete native XML export includes current/history protected fields, attachments
+and the original header binary pool, all as plaintext; the localized confirmation
+now explicitly names these contents. No master key is needed by the serializer,
+and no secret export payload crosses IPC. Owned intermediate XML/output and decoded
+protected strings use Zeroizing, but serializer temporaries and full-process heap
+erasure are not claimed. Missing binaries, invalid XML text or out-of-range dates
+fail before file replacement and do not change the database. Independent official
+KeePassLib2.59 import/resave/reopen uses synthetic files only, with standard-field
+protection reset/unprotected newline/binary-protection limits recorded in fixture
+provenance. Complete UI/native provider/client-extension proof remains open.
+
 Automatic external-file reload is opt-in and read-only with respect to storage.
 Unchanged encrypted hashes avoid credential clones and KDF. ReloadJob guards its
 owned password/keyfile clones with Zeroizing; a started worker may retain them

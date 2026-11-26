@@ -170,6 +170,14 @@ impl Clone for Database {
 }
 
 impl Database {
+    /// Export the complete database as plaintext KeePass XML, including history
+    /// and binary data. The caller must obtain explicit consent and protect the
+    /// returned bytes; this operation never writes a file or uses a master key.
+    #[cfg(feature = "save_kdbx4")]
+    pub fn export_plain_xml(&self) -> Result<Vec<u8>, crate::db::DatabaseSaveError> {
+        crate::format::xml_db::to_plain_xml(self)
+    }
+
     /// Create a new database with a single root group and no entries, groups, or attachments.
     ///
     /// The root group will be assigned a new random UUID.

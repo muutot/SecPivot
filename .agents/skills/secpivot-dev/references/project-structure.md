@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+Native security.rs delegates complete XML export to the local KeePass patch's
+Database::export_plain_xml in db/types/mod.rs and to_plain_xml in format/xml_db/mod.rs.
+The existing full model/dense binary map is reused; a controlled event rewrite
+emits PlainXml string protection, UTC dates and Meta binary pool. No new IPC,
+frontend data shape or UI layout is added. tests.rs exercises native destination
+preservation and an independent official-library synthetic KDBX fixture; the
+fixture JSON records provenance/client normalization limits. The browser flat
+export/import parser and legacy clipboard exchange retain their separate gaps.
+
 useEntryFilter.svelte.ts receives an optional quickFindExcludeExpired getter,
 passed by the main page from GeneralSettings. It excludes currently expired
 entries only during nonempty quick search without an advanced query; ordinary
@@ -615,7 +624,7 @@ the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
 Cargo wiring and the nine patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and thirty-two
+in the audit scope. Native vault tests cover the application boundary and thirty-six
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after

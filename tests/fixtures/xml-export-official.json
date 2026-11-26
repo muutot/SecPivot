@@ -1,0 +1,24 @@
+{
+  "description": "Synthetic native PlainXml imported and resaved by independently compiled KeePassLib; no user vaults, real credentials or OS clipboard.",
+  "source_url": "https://codeload.github.com/dlech/KeePass2.x/zip/refs/heads/VS2022",
+  "library_version": "2.59.0.0",
+  "source_archive_sha256": "9f4ce39e81f424a99dec91a25674ee8b4f66054c950dc3f48564af6fec9ede14",
+  "fixture": "xml-export-official.kdbx",
+  "fixture_sha256": "e728f2abc0c59c58593646bb3a5bd4529502b14ca8b85879691869503986cb02",
+  "synthetic_master_password": "synthetic-interop",
+  "verified": [
+    "UUIDs and group hierarchy",
+    "empty groups and slash-containing names",
+    "current/history field values and ProtectInMemory flags on XML load",
+    "current/history/empty attachment bytes",
+    "dates, colors, tags, quality flags, auto-type and custom metadata",
+    "official KDBX save and native reopen"
+  ],
+  "limits": [
+    "Official load resets standard-field memory protection to defaults; subsequent save follows those defaults.",
+    "Official resave normalizes unprotected CRLF to LF; protected password bytes stay exact.",
+    "PlainXml attachment protection flags do not round-trip.",
+    "KeePass GUI, real native IPC, mobile providers and complete SecPivot XML import are not verified."
+  ],
+  "source_git_commit": "d1eec63f1bd73dc2d5273eaf94528f616b553ce5"
+}

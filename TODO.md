@@ -34,7 +34,7 @@
 - [~] 导入 Bitwarden JSON：动态链接、完整逐 URI 匹配、组织 collections、原生历史/附件、真实客户端导出待实现/验证
 - [~] 导入 1Password/LastPass：真实 1Password 导出运行验证缺失，完整兼容不标完成
 - [~] 导入 1PUX：额外网址逐网址范围、复杂类型与源历史仍是 protected JSON；真实导出、原生选择器、Android provider / 新 APK 未验证
-- [~] 导出 KeePass XML：分组/附件/历史与完整原生互操作继续验证，明文确认对话框不变
+- [~] 导出 KeePass XML：原生已复用完整 KDBX 模型，保留空/同名/含分隔符的分组树、当前/历史字段和网站规则、附件引用/字节、元数据、图标及删除标记；日期转官方 UTC XML，空受保护值、CR 和非法内容/缺失附件/越界日期拒绝已覆盖，失败不覆盖目标或修改会话。明文确认明确包含附件与历史。独立编译官方 KeePassLib 2.59 已通过合成 XML 读取/对照/保存与原生 KDBX 重开，fixture/hash 已归档。官方重开会重置标准字段保护，重保存规范化未保护 CRLF，XML 不保留附件内存保护标志；完整外来元数据、浏览器导出、真实 GUI/WebView/Android provider 仍待验
 - [~] 原生 XML 导入完整保真/原生互操作（SP-S30 之后）
 - [~] CI：工作流已覆盖 `npm run verify`；当前 HEAD 尚无远端运行证据
 - [~] Release workflow：工作流已修正 NDK 工具、四 ABI universal APK、签名与产物硬门禁；当前 HEAD 远端运行及 APK 资产证据待补
@@ -53,7 +53,7 @@
 - [~] 空闲锁（SP-S68）：Android 原生 onPause/onStop 后台锁定、系统挂起、renderer 无法运行期间的后端定时约束未完成
 - [~] 配置诊断（SP-S69）：移动端明文凭据存储、原生日志、Keystore/后台锁定验证未覆盖
 - [~] 欢迎页仅密钥文件（SP-S67）：Android 选择器/持久授权、新 APK/真机 provider、真实云端流程未标记完成
-- [~] 原生 KeePass 互操作：真实 KeePass 客户端打开/保存本库、真实扩展与原生 WebView 尚未验证
+- [~] 原生 KeePass 互操作：独立官方 KeePassLib 2.59 合成 XML 读取、KDBX 保存与本端重开已通过（见 XML fixture）；真实 KeePass GUI 客户端、完整对象/扩展语义与原生 WebView 尚未验证
 
 ## 三、待 Muu 决策
 

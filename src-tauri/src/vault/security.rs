@@ -1125,120 +1125,15 @@ impl VaultSession {
         write_csv_file(path, &content)
     }
 
-    /// Build the KeePass 2.x XML payload under the lock; the caller writes it
-    /// outside the lock (same pattern as `export_csv_content`). The layout
-    /// mirrors the official `File ▸ Export ▸ KeePass XML` output closely
-    /// enough for re-import by SecPivot and KeePass: nested `<Group>`s carry
-    /// UUID + name, entries carry their standard string fields, the TOTP seed
-    /// (`otp`) and custom fields. Passwords and protected custom fields use
-    /// the official PlainXml convention: escaped plaintext with
-    /// `ProtectInMemory="True"` (not stream-encrypted `Protected` Base64).
+    /// Complete PlainXml export stays native; the existing command writes only
+    /// after this succeeds, outside the session lock and after UI consent.
     pub(crate) fn export_xml_content(&self) -> Result<String, String> {
-        let db = self.require_db()?;
-        let mut xml = zeroize::Zeroizing::new(String::from(
-            "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n\
-             <KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>",
-        ));
-        fn write_string_field(xml: &mut String, key: &str, value: &str, protected: bool) {
-            xml.push_str("<String><Key>");
-            xml.push_str(&escape_xml(key));
-            xml.push_str("</Key><Value");
-            if protected {
-                xml.push_str(" ProtectInMemory=\"True\"");
-            }
-            xml.push('>');
-            xml.push_str(&escape_xml(value));
-            xml.push_str("</Value></String>");
-        }
-        fn write_entry(xml: &mut String, entry: &keepass::db::EntryRef<'_>) {
-            xml.push_str("<Entry><UUID>");
-            xml.push_str(&BASE64.encode(entry.id().uuid().as_bytes()));
-            xml.push_str("</UUID>");
-            write_string_field(xml, "Title", entry.get_title().unwrap_or_default(), false);
-            write_string_field(
-                xml,
-                "UserName",
-                entry.get(FIELD_USERNAME).unwrap_or_default(),
-                false,
-            );
-            write_string_field(
-                xml,
-                "Password",
-                entry.get(FIELD_PASSWORD).unwrap_or_default(),
-                true,
-            );
-            write_string_field(xml, "URL", entry.get(FIELD_URL).unwrap_or_default(), false);
-            write_string_field(
-                xml,
-                "Notes",
-                entry.get(FIELD_NOTES).unwrap_or_default(),
-                false,
-            );
-            if let Some(value) = entry.fields.get(FIELD_OTP) {
-                if !value.get().is_empty() {
-                    write_string_field(xml, FIELD_OTP, value.get(), value.is_protected());
-                }
-            }
-            if let Some(value) = entry.fields.get(FIELD_WEBSITE_RULES) {
-                write_string_field(xml, FIELD_WEBSITE_RULES, value.get(), value.is_protected());
-            }
-            let mut names: Vec<&String> = entry
-                .fields
-                .keys()
-                .filter(|name| !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str()))
-                .collect();
-            names.sort();
-            for name in names {
-                let value = &entry.fields[name];
-                write_string_field(xml, name, value.get(), value.is_protected());
-            }
-            xml.push_str("<Times><Expires>");
-            xml.push_str(if entry.times.expires == Some(true) {
-                "True"
-            } else {
-                "False"
-            });
-            xml.push_str("</Expires>");
-            if let Some(expiry) = entry.times.expiry {
-                xml.push_str("<ExpiryTime>");
-                xml.push_str(&format_iso(expiry));
-                xml.push_str("</ExpiryTime>");
-            }
-            xml.push_str("</Times>");
-            xml.push_str("</Entry>");
-        }
-        fn walk(xml: &mut String, group: &keepass::db::GroupRef<'_>) {
-            xml.push_str("<Group><UUID>");
-            xml.push_str(&BASE64.encode(group.id().uuid().as_bytes()));
-            xml.push_str("</UUID><Name>");
-            xml.push_str(&escape_xml(&group.name));
-            xml.push_str("</Name>");
-            for entry in group.entries() {
-                write_entry(xml, &entry);
-            }
-            for child in group.groups() {
-                walk(xml, &child);
-            }
-            xml.push_str("</Group>");
-        }
-        walk(&mut xml, &db.root());
-        xml.push_str("</Root></KeePassFile>\n");
-        // XML 1.0 cannot represent these scalar values, even as references.
-        // Reject before destination I/O rather than changing stored credentials.
-        if xml.chars().any(|ch| {
-            !matches!(ch,
-            '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}' |
-            '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
-        }) {
-            return Err("无法导出 XML：内容含 XML 无法表示的字符，原值已保留。".to_owned());
-        }
-        Ok(std::mem::take(&mut *xml))
+        let bytes = self
+            .require_db()?
+            .export_plain_xml()
+            .map_err(|_| "无法导出 XML：内容、日期或附件无法完整表示，原值已保留。".to_owned())?;
+        String::from_utf8(bytes).map_err(|_| "无法导出 XML：编码无效。".to_owned())
     }
-}
-
-/// XML readers normalize literal CR/CRLF, but preserve referenced CR.
-fn escape_xml(value: &str) -> String {
-    escape_html(value).replace('\r', "&#13;")
 }
 
 /// HTML-escape text for the emergency sheet (never inject markup).

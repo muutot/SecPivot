@@ -58,6 +58,9 @@ Only these upstream files are changed:
   group metadata or previous-parent provenance. Its direct test covers valid
   order and atomic rejection of incomplete/duplicate/foreign IDs, with full
   database equality before/after a round trip.
+  Database::export_plain_xml exposes an explicitly plaintext, credential-free
+  in-memory export; caller consent, destination writes and zeroizing ownership
+  stay with the native application.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication. Serialize raw CR
@@ -69,6 +72,17 @@ Only these upstream files are changed:
   forbidden ordinary text/keys/group/meta/history returns a content-free error.
   Protected values are already Base64 and may retain arbitrary source scalars.
   No silent filtering, reader change or all-Unicode-noncharacter rejection.
+  Complete PlainXml export reuses this model and dense map with PlainCipher,
+  then converts only controlled protected-string/date events and embeds the
+  original binary pool in Meta. Generator identifies SecPivot; protected empty
+  values stay marked. Dates are ISO UTC within the official1–9999 range;
+  every modeled meta/group/entry/history/custom-data/icon/deletion date is covered.
+  Output validates plaintext XML scalars and preserves CR references. No input
+  mutation, file I/O or key is involved. Four direct tests cover empty/literal
+  fields, illegal historical secrets, missing current/history binaries and dates.
+  Independent official-library import/resave/native reopen proves selected
+  synthetic object fidelity; binary protection, standard-field client resets,
+  unprotected newline normalization and foreign metadata semantics remain limits.
 - `src/format/xml_db/entry.rs`: deserialize entry values through dedicated
   `$text` and a direct String converter, preserving ASCII/Unicode whitespace.
   This works with the scoped QuickXML patch described in `QUICK_XML_PATCH.md`;
@@ -109,7 +123,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The thirty-two dependency-specific tests can be run separately:
+The thirty-six dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch

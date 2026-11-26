@@ -142,6 +142,167 @@ struct KeePassFile {
     root: Root,
 }
 
+/// PlainXml reuses the complete KDBX model and its single dense attachment map.
+/// Only the controlled serializer's field protection and date encodings change;
+/// arbitrary user field contents are never interpreted as XML or timestamps.
+#[cfg(feature = "save_kdbx4")]
+pub fn to_plain_xml(db: &crate::db::Database) -> Result<Vec<u8>, DatabaseSaveError> {
+    use chrono::Datelike;
+    use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+    use std::convert::TryInto;
+    use zeroize::Zeroizing;
+
+    let invalid = || {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Cannot represent database as plaintext XML",
+        )
+    };
+    let (xml, binaries) = to_xml(db, &mut crate::crypt::ciphers::PlainCipher::new(&[])?)?;
+    let xml = Zeroizing::new(xml);
+    let mut reader = quick_xml::Reader::from_reader(xml.as_slice());
+    let mut output = Zeroizing::new(Vec::new());
+    let mut writer = quick_xml::Writer::new(&mut *output);
+    writer.write_event(Event::Decl(BytesDecl::new(
+        "1.0",
+        Some("utf-8"),
+        Some("yes"),
+    )))?;
+    writer.write_event(Event::Text(BytesText::new("\n")))?;
+    let mut path: Vec<Vec<u8>> = Vec::new();
+    loop {
+        match reader.read_event().map_err(|_| invalid())? {
+            Event::Start(start) => {
+                let name = start.name();
+                let parent = path.last().map(Vec::as_slice);
+                if name.as_ref() == b"Generator" && parent == Some(b"Meta") {
+                    reader.read_text(name).map_err(|_| invalid())?;
+                } else if name.as_ref() == b"Value"
+                    && parent == Some(b"String")
+                    && start
+                        .try_get_attribute("Protected")
+                        .map_err(|_| invalid())?
+                        .is_some_and(|a| a.value.as_ref() == b"True")
+                {
+                    let raw = reader.read_text(name).map_err(|_| invalid())?;
+                    let bytes = Zeroizing::new(
+                        base64_engine::STANDARD
+                            .decode(raw.as_ref())
+                            .map_err(|_| invalid())?,
+                    );
+                    let text = std::str::from_utf8(&bytes).map_err(|_| invalid())?;
+                    let mut value = BytesStart::new("Value");
+                    value.push_attribute(("ProtectInMemory", "True"));
+                    writer.write_event(Event::Start(value))?;
+                    writer.write_event(Event::Text(BytesText::new(text)))?;
+                    writer.write_event(Event::End(BytesEnd::new("Value")))?;
+                } else if plain_timestamp_path(&path, name.as_ref()) {
+                    let raw = reader.read_text(name).map_err(|_| invalid())?;
+                    let bytes: [u8; 8] = base64_engine::STANDARD
+                        .decode(raw.as_ref())
+                        .map_err(|_| invalid())?
+                        .try_into()
+                        .map_err(|_| invalid())?;
+                    let time = chrono::Duration::try_seconds(i64::from_le_bytes(bytes))
+                        .and_then(|duration| {
+                            timestamp::get_epoch_baseline().checked_add_signed(duration)
+                        })
+                        .filter(|t| (1..=9999).contains(&t.date().year()))
+                        .ok_or_else(invalid)?;
+                    writer.write_event(Event::Start(start.clone()))?;
+                    writer.write_event(Event::Text(BytesText::new(
+                        &time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                    )))?;
+                    writer.write_event(Event::End(start.to_end()))?;
+                } else {
+                    let meta = name.as_ref() == b"Meta";
+                    path.push(name.as_ref().to_vec());
+                    writer.write_event(Event::Start(start))?;
+                    if meta {
+                        writer.write_event(Event::Start(BytesStart::new("Generator")))?;
+                        writer.write_event(Event::Text(BytesText::new("SecPivot")))?;
+                        writer.write_event(Event::End(BytesEnd::new("Generator")))?;
+                    }
+                }
+            }
+            Event::End(end) => {
+                if path.len() == 2 && end.name().as_ref() == b"Meta" {
+                    writer.write_event(Event::Start(BytesStart::new("Binaries")))?;
+                    for (id, binary) in binaries.iter().enumerate() {
+                        let mut start = BytesStart::new("Binary");
+                        let id = id.to_string();
+                        start.push_attribute(("ID", id.as_str()));
+                        start.push_attribute(("Compressed", "False"));
+                        writer.write_event(Event::Start(start))?;
+                        let encoded = Zeroizing::new(base64_engine::STANDARD.encode(binary.get()));
+                        writer.write_event(Event::Text(BytesText::new(&encoded)))?;
+                        writer.write_event(Event::End(BytesEnd::new("Binary")))?;
+                    }
+                    writer.write_event(Event::End(BytesEnd::new("Binaries")))?;
+                }
+                path.pop();
+                writer.write_event(Event::End(end))?;
+            }
+            Event::Empty(start)
+                if start.name().as_ref() == b"Generator"
+                    && path.last().map(Vec::as_slice) == Some(b"Meta") => {}
+            Event::Empty(start)
+                if start.name().as_ref() == b"Value"
+                    && path.last().map(Vec::as_slice) == Some(b"String")
+                    && start
+                        .try_get_attribute("Protected")
+                        .map_err(|_| invalid())?
+                        .is_some_and(|a| a.value.as_ref() == b"True") =>
+            {
+                let mut value = BytesStart::new("Value");
+                value.push_attribute(("ProtectInMemory", "True"));
+                writer.write_event(Event::Empty(value))?;
+            }
+            Event::Eof => break,
+            event => writer.write_event(event)?,
+        }
+    }
+    writer.write_event(Event::Text(BytesText::new("\n")))?;
+    drop(writer);
+    let text =
+        Zeroizing::new(String::from_utf8(std::mem::take(&mut *output)).map_err(|_| invalid())?);
+    if text.chars().any(|c| {
+        !matches!(c, '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}'
+        | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
+    }) {
+        return Err(invalid().into());
+    }
+    Ok(text.replace('\r', "&#13;").into_bytes())
+}
+
+#[cfg(feature = "save_kdbx4")]
+fn plain_timestamp_path(path: &[Vec<u8>], name: &[u8]) -> bool {
+    match path.last().map(Vec::as_slice) {
+        Some(b"Times") => matches!(
+            name,
+            b"CreationTime"
+                | b"LastModificationTime"
+                | b"LastAccessTime"
+                | b"ExpiryTime"
+                | b"LocationChanged"
+        ),
+        Some(b"Meta") => matches!(
+            name,
+            b"DatabaseNameChanged"
+                | b"DatabaseDescriptionChanged"
+                | b"DefaultUserNameChanged"
+                | b"MasterKeyChanged"
+                | b"RecycleBinChanged"
+                | b"EntryTemplatesGroupChanged"
+                | b"SettingsChanged"
+        ),
+        Some(b"Icon") => name == b"LastModificationTime",
+        Some(b"Item") => name == b"LastModificationTime",
+        Some(b"DeletedObject") => name == b"DeletionTime",
+        _ => false,
+    }
+}
+
 impl KeePassFile {
     /// Convert from XML representation to database representation.
     fn xml_to_db(
@@ -374,6 +535,79 @@ pub struct DeletedObject {
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_plain_xml_keeps_empty_protected_and_literal_date_named_fields() {
+        let mut db = crate::db::Database::new();
+        let mut root = db.root_mut();
+        let mut entry = root.add_entry();
+        entry.set_protected("Password", "");
+        entry.set_protected("CreationTime", " \r\n&<😀\t ");
+        entry.set_unprotected("MasterKeyChanged", "not a timestamp");
+        drop(entry);
+        drop(root);
+        let before = db.clone();
+        let xml = String::from_utf8(db.export_plain_xml().unwrap()).unwrap();
+        assert!(xml.contains("<Value ProtectInMemory=\"True\"/>"));
+        assert!(xml.contains(" &#13;\n&amp;&lt;😀\t "));
+        assert!(xml.contains("not a timestamp"));
+        assert!(!xml.contains(" Protected="));
+        assert_eq!(db, before);
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_plain_xml_rejects_invalid_historical_secret_without_mutation() {
+        let mut db = crate::db::Database::new();
+        let id = db.root_mut().add_entry().id();
+        db.entry_mut(id)
+            .unwrap()
+            .set_protected("Password", "synthetic\u{0000}");
+        db.entry_mut(id).unwrap().edit_tracking(|e| {
+            e.set_protected("Password", "valid");
+        });
+        let before = db.clone();
+        assert!(db.export_plain_xml().is_err());
+        assert_eq!(db, before);
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_plain_xml_rejects_missing_current_or_historical_binary() {
+        for historical in [false, true] {
+            let mut db = crate::db::Database::new();
+            let id = db.root_mut().add_entry().id();
+            let binary = db
+                .entry_mut(id)
+                .unwrap()
+                .add_attachment("synthetic.bin", crate::db::Value::protected(vec![0, 255]))
+                .id();
+            if historical {
+                db.entry_mut(id).unwrap().edit_tracking(|e| {
+                    e.as_mut().remove_attachment_by_name("synthetic.bin");
+                });
+            }
+            db.attachments.remove(&binary);
+            let before = db.clone();
+            assert!(db.export_plain_xml().is_err());
+            assert_eq!(db, before);
+        }
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn secpivot_plain_xml_rejects_dates_outside_official_range() {
+        let mut db = crate::db::Database::new();
+        db.meta.master_key_changed = Some(
+            chrono::NaiveDate::from_ymd_opt(10000, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        );
+        let before = db.clone();
+        assert!(db.export_plain_xml().is_err());
+        assert_eq!(db, before);
+    }
 
     use super::*;
 

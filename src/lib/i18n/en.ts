@@ -1252,7 +1252,7 @@ export const en: Record<I18nKey, string> = {
   "page.exportedCsv": "CSV exported",
   "page.exportFailed": "Export failed: {e}",
   "page.exportXmlConfirm":
-    "The exported XML contains plaintext passwords. Store it safely and delete after use. Continue?",
+    "The exported XML includes passwords, protected fields, attachments and entry history in plaintext. Store it safely and delete after use. Continue?",
   "page.exportedXml": "XML exported",
   "page.emergencyExported": "Emergency sheet exported",
   "page.emergencyExportFailed": "Failed to export emergency sheet: {e}",

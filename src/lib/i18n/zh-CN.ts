@@ -1188,7 +1188,8 @@ export const zhCN = {
   "page.exportCsvConfirm": "导出的 CSV 包含明文密码，请妥善保管并在使用后删除。继续导出？",
   "page.exportedCsv": "已导出 CSV",
   "page.exportFailed": "导出失败：{e}",
-  "page.exportXmlConfirm": "导出的 XML 包含明文密码，请妥善保管并在使用后删除。继续导出？",
+  "page.exportXmlConfirm":
+    "导出的 XML 包含密码、受保护字段、附件及条目历史，均为明文。请妥善保管并在使用后删除。继续导出？",
   "page.exportedXml": "已导出 XML",
   "page.emergencyExported": "应急表已导出",
   "page.emergencyExportFailed": "导出应急表失败：{e}",

@@ -1,5 +1,30 @@
 # Data Contracts
 
+Native `export_xml` retains its existing explicit-consent, session/path and void
+IPC contract. `VaultSession::export_xml_content` now delegates to the patched
+`Database::export_plain_xml() -> Result<Vec<u8>, DatabaseSaveError>`; no secret
+payload enters the renderer. The complete KDBX model supplies UUIDs, exact tree
+including empty/slash-named groups, current/history fields, native website policies,
+metadata/custom icons/deletion markers and one dense current/history binary map.
+The controlled writer changes only Generator to SecPivot, protected string values
+to escaped literal ProtectInMemory (including empty values), every modeled date
+to UTC ISO text, and embeds the binary pool under Meta/Binaries as uncompressed
+Base64. It rejects missing refs, illegal XML scalars (including historical secrets)
+and dates outside1–9999 before destination writes, without mutating the session.
+Unreferenced source header binaries are retained too, as in the native KDBX model.
+The confirmation names protected fields, attachments and history explicitly.
+
+Independent KeePassLib2.59 source compilation/import checks and official KDBX
+resave/native reopen cover synthetic tree/fields/history/binaries/date/auto-type
+values. Fixture/hash/source provenance is tests/fixtures/xml-export-official.json.
+Official load resets standard-field memory protection to defaults; resave follows
+those defaults and normalizes unprotected CRLF to LF. PlainXml does not preserve
+binary memory-protection flags. Native export itself preserves string CR via
+references and current/history per-field flags. CustomData retains the existing
+KDBX model encoding; this is not proof of all foreign extension/type semantics.
+Complete SecPivot XML import/browser-demo export, KeePass GUI/native IPC and
+mobile-provider behavior remain separate open work.
+
 `general.quickFindExcludeExpired` mirrors KeePass MainWindow.QuickFindExcludeExpired,
 default false, with strict boolean TS normalization and container-defaulted Rust
 serde/ConfigStore reload. AppearanceSettingsPanel's display section composes the

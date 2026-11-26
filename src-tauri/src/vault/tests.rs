@@ -9153,7 +9153,8 @@ fn export_xml_writes_kepass_structure_and_escapes() {
     let text = std::fs::read_to_string(&dest).unwrap();
 
     assert!(text.starts_with("<?xml version=\"1.0\" encoding=\"utf-8\""));
-    assert!(text.contains("<KeePassFile><Meta><Generator>SecPivot</Generator></Meta><Root>"));
+    assert!(text.contains("<KeePassFile><Meta><Generator>SecPivot</Generator>"));
+    assert!(text.contains("</Meta><Root>"));
     // Group names are escaped; nested group carries its own element.
     assert!(text.contains("<Name>Web &lt;prod&gt;</Name>"));
     // Standard fields present; text values escaped.
@@ -9205,9 +9206,8 @@ fn xml_preserves_native_otp_custom_protection_and_expiry() {
         !xml.contains("<Key>otp</Key>"),
         "native OTP must not be shadowed by a new TOTP field"
     );
-    assert!(xml.contains(
-        "<Times><Expires>True</Expires><ExpiryTime>2030-01-02T03:04:05Z</ExpiryTime></Times>"
-    ));
+    assert!(xml.contains("<Expires>True</Expires>"));
+    assert!(xml.contains("<ExpiryTime>2030-01-02T03:04:05Z</ExpiryTime>"));
     session.save().unwrap();
     let mut reopened = VaultSession::default();
     reopened.open(&path, "master-password", None).unwrap();
@@ -9343,6 +9343,240 @@ fn export_xml_rejects_invalid_saved_secrets_before_destination_write() {
             );
         }
     }
+}
+
+#[test]
+fn export_xml_keeps_official_imported_tree_history_and_binary_payloads() {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct File {
+        meta: Meta,
+        root: Root,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Meta {
+        database_name: String,
+        master_key_changed: String,
+        binaries: Binaries,
+    }
+    #[derive(serde::Deserialize)]
+    struct Binaries {
+        #[serde(rename = "Binary")]
+        values: Vec<Binary>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Binary {
+        #[serde(rename = "@ID")]
+        id: usize,
+        #[serde(rename = "$text", default)]
+        data: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Root {
+        #[serde(rename = "Group")]
+        group: Group,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Group {
+        name: String,
+        #[serde(default)]
+        notes: String,
+        #[serde(default)]
+        enable_searching: Option<String>,
+        #[serde(rename = "Group", default)]
+        groups: Vec<Group>,
+        #[serde(rename = "Entry", default)]
+        entries: Vec<Entry>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Entry {
+        #[serde(rename = "UUID")]
+        uuid: String,
+        #[serde(rename = "String", default)]
+        fields: Vec<Field>,
+        #[serde(rename = "Binary", default)]
+        binaries: Vec<Reference>,
+        #[serde(default)]
+        history: Option<History>,
+        quality_check: String,
+        foreground_color: String,
+        background_color: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct History {
+        #[serde(rename = "Entry", default)]
+        entries: Vec<Entry>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Field {
+        key: String,
+        value: Text,
+    }
+    #[derive(serde::Deserialize)]
+    struct Text {
+        #[serde(rename = "$text", default)]
+        text: String,
+        #[serde(rename = "@ProtectInMemory", default)]
+        protect: String,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Reference {
+        key: String,
+        value: Ref,
+    }
+    #[derive(serde::Deserialize)]
+    struct Ref {
+        #[serde(rename = "@Ref")]
+        id: usize,
+    }
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("synthetic.kdbx");
+    let bytes = include_bytes!("../../../tests/fixtures/xml-export-official.kdbx");
+    std::fs::write(&path, bytes).unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-interop", None).unwrap();
+    // KeePass resets standard-field protection on load/save to its defaults.
+    // Exercise the export's per-field flags independently of that client policy.
+    let id = session
+        .require_db()
+        .unwrap()
+        .root()
+        .groups()
+        .find(|g| g.name == "A / B")
+        .unwrap()
+        .entry_ids()
+        .next()
+        .unwrap();
+    for key in ["Title", "UserName"] {
+        let value = session
+            .require_db()
+            .unwrap()
+            .entry(id)
+            .unwrap()
+            .get(key)
+            .unwrap()
+            .to_owned();
+        session
+            .require_db_mut()
+            .unwrap()
+            .entry_mut(id)
+            .unwrap()
+            .set_protected(key, value);
+    }
+    let before = session.require_db().unwrap().clone();
+    let state = session.state().unwrap().unwrap();
+    let output = dir.path().join("export.xml");
+    session.export_xml(output.to_str().unwrap()).unwrap();
+    let text = zeroize::Zeroizing::new(std::fs::read_to_string(output).unwrap());
+    let xml: File = quick_xml::de::from_str(&text).unwrap();
+    assert_eq!(xml.meta.database_name, "Synthetic interoperability");
+    assert_eq!(xml.meta.master_key_changed, "2026-11-26T01:02:03Z");
+    assert_eq!(xml.root.group.groups.len(), 2);
+    let empty = xml
+        .root
+        .group
+        .groups
+        .iter()
+        .find(|g| g.name == "Empty")
+        .unwrap();
+    assert!(empty.entries.is_empty() && empty.groups.is_empty());
+    let group = xml
+        .root
+        .group
+        .groups
+        .iter()
+        .find(|g| g.name == "A / B")
+        .unwrap();
+    assert_eq!(group.notes, "group\nnotes"); // Official resave normalizes unprotected CRLF.
+    assert_eq!(group.enable_searching.as_deref(), Some("False"));
+    let entry = &group.entries[0];
+    assert_eq!(entry.quality_check, "False");
+    assert_eq!(entry.foreground_color, "#123456");
+    assert_eq!(entry.background_color, "#ABCDEF");
+    for key in ["Title", "UserName"] {
+        assert_eq!(
+            entry
+                .fields
+                .iter()
+                .find(|f| f.key == key)
+                .unwrap()
+                .value
+                .protect,
+            "True"
+        );
+    }
+    let historical = &entry.history.as_ref().unwrap().entries[0];
+    assert_eq!(entry.uuid, historical.uuid);
+    for (version, expected) in [
+        (entry, "synthetic-current\r\n😀"),
+        (historical, "synthetic-previous"),
+    ] {
+        let field = version.fields.iter().find(|f| f.key == "Password").unwrap();
+        assert_eq!(field.value.text, expected);
+        assert_eq!(field.value.protect, "True");
+        for key in ["Empty secret", FIELD_WEBSITE_RULES] {
+            assert_eq!(
+                version
+                    .fields
+                    .iter()
+                    .find(|f| f.key == key)
+                    .unwrap()
+                    .value
+                    .protect,
+                "True"
+            );
+        }
+        let empty = version
+            .fields
+            .iter()
+            .find(|f| f.key == "Empty secret")
+            .unwrap();
+        assert!(empty.value.text.is_empty());
+    }
+    for (version, name, expected) in [
+        (entry, "new.bin", vec![0, 255, 13, 10]),
+        (historical, "old.bin", vec![1, 2, 3, 255]),
+        (entry, "empty.bin", vec![]),
+    ] {
+        let reference = version.binaries.iter().find(|b| b.key == name).unwrap();
+        let binary = xml
+            .meta
+            .binaries
+            .values
+            .iter()
+            .find(|b| b.id == reference.value.id)
+            .unwrap();
+        assert_eq!(BASE64.decode(&binary.data).unwrap(), expected);
+    }
+    assert!(!text.contains(" Protected="));
+    assert_eq!(session.require_db().unwrap(), &before);
+    let after = session.state().unwrap().unwrap();
+    assert_eq!((after.revision, after.dirty), (state.revision, state.dirty));
+    assert_eq!(std::fs::read(path).unwrap(), bytes);
+}
+
+#[test]
+fn export_xml_rejects_unrepresentable_dates_without_replacing_destination() {
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    session.require_db_mut().unwrap().meta.master_key_changed = Some(
+        chrono::NaiveDate::from_ymd_opt(10000, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(),
+    );
+    let dest = dir.path().join("export.xml");
+    std::fs::write(&dest, b"previous synthetic export").unwrap();
+    let before = session.require_db().unwrap().clone();
+    let error = session.export_xml(dest.to_str().unwrap()).unwrap_err();
+    assert!(!error.contains("synthetic"));
+    assert_eq!(std::fs::read(dest).unwrap(), b"previous synthetic export");
+    assert_eq!(session.require_db().unwrap(), &before);
 }
 
 /// Create a local vault and seed it into an in-memory remote storage.

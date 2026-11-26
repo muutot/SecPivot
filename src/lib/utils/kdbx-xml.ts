@@ -201,9 +201,10 @@ interface XmlGroupNode {
   children: Map<string, XmlGroupNode>;
 }
 
-/** Build a KeePass 2.x XML document from flat rows (`A / B` group paths),
- *  mirroring the desktop `export_xml` payload so both runtimes produce the
- *  same PlainXml format. Passwords are escaped plaintext with
+/** Browser-demo export from flat rows (`A / B` group paths). The native
+ *  `export_xml` additionally retains full object metadata/history/binaries;
+ *  this row-only preview format does not claim that fidelity.
+ *  Passwords are escaped plaintext with
  *  `ProtectInMemory="True"`, following the official KeePass XML writer. */
 export function buildKeePassXml(rows: XmlExportRow[], lang: Language = "en"): string {
   const root: XmlGroupNode = { name: "", entries: [], children: new Map() };

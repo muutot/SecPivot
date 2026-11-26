@@ -636,13 +636,34 @@ fn native_entry_exchange_keeps_policy_protection_and_matching_without_clipboard(
 
 #[test]
 fn native_xml_export_and_batch_import_preserve_policy_and_reject_invalid_batches() {
+    // PlainXml has ISO dates, unlike the legacy clipboard exchange DTO.
+    #[derive(serde::Deserialize)]
+    struct File {
+        #[serde(rename = "Root")]
+        root: Root,
+    }
+    #[derive(serde::Deserialize)]
+    struct Root {
+        #[serde(rename = "Group")]
+        group: Group,
+    }
+    #[derive(serde::Deserialize)]
+    struct Group {
+        #[serde(rename = "Entry")]
+        entries: Vec<Entry>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        #[serde(rename = "String")]
+        string_fields: Vec<super::super::exchange::XmlStringField>,
+    }
     let (_dir, mut session, id) = session();
     let rules = config(&[("https://safe.example/测试?Case=YES#A", WebsiteMode::Exact)]);
     session
         .set_entry_website_rules(&id, Some(rules.clone()))
         .unwrap();
     let xml = Zeroizing::new(session.export_xml_content().unwrap());
-    let file: super::super::exchange::KeePassFile = quick_xml::de::from_str(&xml).unwrap();
+    let file: File = quick_xml::de::from_str(&xml).unwrap();
     let field = file.root.group.entries[0]
         .string_fields
         .iter()
