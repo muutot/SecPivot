@@ -62,6 +62,7 @@ globalThis.__TAURI_INTERNALS__ = {
         break;
       case "add_entry":
       case "import_keepass_xml_file":
+      case "import_bitwarden_file":
       case "save_vault":
         break;
       case "merge_remote_vault": {
@@ -137,6 +138,29 @@ async function fixture() {
   await vault.open("C:/synthetic/open.kdbx", "synthetic-master");
   return vault.getActiveSessionId();
 }
+
+test("native Bitwarden import respects close and replacement epochs without overwriting newer state", async () => {
+  for (const replace of ["close", "reload"]) {
+    const origin = await fixture();
+    const importing = vault.importBitwarden("C:/synthetic/source.json", null, "root");
+    const outcome = Promise.allSettled([importing]);
+    const worker = pending.find((p) => p.command === "import_bitwarden_file");
+    assert.equal(worker.sessionId, origin);
+    if (replace === "close") {
+      await vault.closeAll();
+      await vault.open("C:/synthetic/open.kdbx", "synthetic-master");
+    } else {
+      await vault.refreshRemote();
+    }
+    const current = vault.get();
+    worker.resolve({
+      state: snapshot(origin, 99),
+      counts: { folders: 1, collections: 1, items: 1, unresolvedMemberships: 0 },
+    });
+    assert.equal((await outcome)[0].status, replace === "close" ? "rejected" : "fulfilled");
+    assert.deepEqual(vault.get(), current);
+  }
+});
 
 function edit() {
   return vault.addEntry({

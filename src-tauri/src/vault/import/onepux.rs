@@ -143,8 +143,8 @@ fn timestamp(value: &Json, key: &str) -> Result<Option<chrono::NaiveDateTime>, S
 }
 
 fn custom(item: &mut PreparedItem, names: &mut FieldNames, label: &str, value: Value<String>) {
-    item.fields
-        .insert(names.field(label, String::new(), true).name, value);
+    let mut field = names.field(label, String::new(), true);
+    item.fields.insert(std::mem::take(&mut field.name), value);
 }
 
 fn section_value(value: &Json, budget: &mut Budget) -> Result<Value<String>, String> {

@@ -1,10 +1,28 @@
 # Project Structure and Runtime Surfaces
 
+commands/import_bitwarden.rs registers import_bitwarden_file and owns bounded
+native path/display-name admission, worker and originating-session completion.
+vault/import/bitwarden_native.rs prepares exact native folders, collection tags,
+protected source archives and masked counts, reusing import.rs's strict typed
+mapping. import/onepux_archive.rs exposes its owned SecretJson guard internally;
+ImportRow/ImportCustomField now zeroize owned strings on drop. The 1PUX field-name
+allocator consumer takes its generated label before dropping the temporary DTO.
+vault/import/tree.rs owns the shared XML/Bitwarden candidate transaction, lifetime
+gate and exact rollback. It retains XML internal UUID-reference remapping and
+preserves Bitwarden fields as literal data through identity copying. No vendor
+patch changes are needed. The main page routes Bitwarden to io.ts::importBitwarden
+and epoch-guarded vault.ts::importBitwarden; legacy row commands remain separately
+available. bitwarden_native_tests/import_bitwarden_tests, io-bitwarden and
+vault-session-publication tests exercise synthetic storage, IPC/entry routing,
+masked results, lifetime replacement and pending reload recovery. The strict JSON
+fixture is tests/fixtures/bitwarden-native.json; real client export/picker/provider,
+full URI modes/dynamic linkage and native history/attachment migration remain open.
+
 commands/import_xml.rs owns native XML path/display-name admission, bounded
 single-worker preparation and origin-lifetime completion; lib.rs registers
 import_keepass_xml_file. vault/import/keepass_xml.rs owns bounded PlainXml parsing,
-resource/identity/reference/policy validation and rollback-safe complete-tree
-publication. The local KeePass patch exposes prepared inner-XML parsing, scoped
+resource/identity/reference/policy validation; import/tree.rs now owns rollback-safe
+complete-tree publication. The local KeePass patch exposes prepared inner-XML parsing, scoped
 plain CustomData conversion and fresh-identity group-tree copying.
 The main page's XML handler routes Tauri to io.ts::importKeePassXml and the
 epoch-guarded vault service; browser demo keeps its partial flat conversion.

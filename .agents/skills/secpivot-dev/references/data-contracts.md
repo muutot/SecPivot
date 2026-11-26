@@ -1,5 +1,46 @@
 # Data Contracts
 
+`import_bitwarden_file({sessionId,path,fileName?,targetGroupUuid?})` returns
+`{state:VaultState,counts:{folders,collections,items,unresolvedMemberships}}`.
+The menu routes to native selection/reading/preparation; plaintext rows never
+cross IPC. The legacy parse_bitwarden_json command remains for compatibility.
+Browser demo rejects this native route before picking. The Rust command checks
+writable target/nonnil lifetime before I/O and again at publication; one owned
+blocking-worker permit remains held until return. Frontend picker/operation/view
+and vault publication epochs independently reject obsolete responses.
+
+vault/import/bitwarden_native.rs accepts bounded UTF-8 JSON (optional BOM),
+unencrypted/legacy exports and strict duplicate-key rejection via SecretJson.
+It preserves empty, same-name, slash-named and blank folders as distinct native
+groups under a new Bitwarden root. Collection IDs map to native tags using the
+official KeePass slash display convention; KDBX delimiter/trim normalization
+is applied before publication. Exact names, IDs, organization/external metadata,
+unused collections and unknown fields stay in the protected original source
+export and uniquely named protected per-item JSON. Known cross-organization
+membership mismatches and missing folders reject the whole file. Managed exports
+can retain memberships outside their exported collection scope; these stay in
+source JSON and their count is explicitly reported, without duplicating entries.
+Creation/revision RFC3339 dates become UTC native dates at second precision;
+their original subsecond/offset text remains archived. Types1–8/quality/favorites,
+OTP and existing protected custom/typed values share the strict mapping parser.
+Linked fields are still snapshots; multiple/explicit-match URIs remain rejected.
+Password-only history and attachment metadata are protected archives, never
+fabricated full native versions or attachment bytes. Full URI/dynamic-link and
+real client/WebView/Android provider compatibility remain pending.
+
+Limits:64MiB input,depth<64,262144 conservative structural tokens before serde,
+8192 each folders/collections/items,4096 source fields or memberships per item,
+65536 source/produced fields,128MiB produced field values including archives,
+64MiB normalized tags. These are separate ceilings, not aggregate heap estimates.
+Unprotected native text and all field labels must be legal XML text.
+vault/import/tree.rs owns the XML/Bitwarden candidate transaction and exact
+DB/dirty/revision/time/cache/pending-reload rollback. XML retains UUID-reference
+remapping. Bitwarden detaches literal field maps during identity copying and
+restores them by preserved tree order before publication, avoiding reinterpretation
+of source strings. Both append protected source archives and publish one full
+dirty snapshot without saving. Synthetic fixtures/tests cover native save/reopen,
+all eight types, masking, selected targets, stale lifetimes and pending reload.
+
 `import_keepass_xml_file({sessionId,path,fileName?,targetGroupUuid?})` returns
 `{state:VaultState,counts:{groups,items,history,binaries}}`. Native XML selection
 uses only paths/provider display names; plaintext, attachments and import rows
@@ -1113,8 +1154,9 @@ import-time snapshots through `import/bitwarden_links.rs`; Identity FullName
 follows source name-part composition. Optional absent/null targets become empty
 protected fields. Unknown/cross-type/non-integer IDs or malformed target values
 reject the whole parse. Stale field.value never overrides the linked target.
-Dynamic linkage after edits, URI matching modes, collections, native history and
-attachments remain separate migration work.
+Dynamic linkage after edits, URI matching modes, native history and attachments
+remain separate migration work; the native route now preserves collections as
+described above, while this legacy row parser remains unchanged in scope.
 
 Bitwarden URI import accepts at most one nonempty URI with absent/null `match`.
 Explicit modes 0–5 and multiple nonempty URIs reject the entire parse with a

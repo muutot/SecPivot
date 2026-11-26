@@ -1365,6 +1365,8 @@ export const zhCN = {
   "io.readFailed": "读取文件失败：{e}",
   "io.imported": "已导入 {n} 个条目",
   "io.onepuxImported": "已导入 {n} 个条目；{files} 个未关联文件已保存在导入元数据中",
+  "io.bitwardenImported":
+    "已导入 {n} 个条目；{memberships} 个集合归属未包含在来源集合列表中，已保存在受保护来源字段中",
   "io.importFailed": "导入失败：{e}",
   "favicon.dlConnecting": "正在连接站点…",
   "favicon.dlProgress": "正在下载，已完成 {done}/{total}",

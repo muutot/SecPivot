@@ -1,7 +1,6 @@
 //! Bounded native PlainXml preparation. Plaintext never becomes renderer rows.
-use crate::vault::{
-    helpers::parse_group_id, ValidatedWebsiteRules, VaultSession, VaultState, ROOT_GROUP_UUID,
-};
+use super::tree::SourceArchive;
+use crate::vault::{ValidatedWebsiteRules, VaultSession, VaultState};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use keepass::db::{Database, Value};
@@ -708,11 +707,7 @@ pub fn prepare_keepass_xml_import(bytes: &[u8]) -> Result<KeePassXmlImport, Stri
 
 impl VaultSession {
     pub(crate) fn xml_import_lifetime(&self, target: &str) -> Result<Uuid, String> {
-        self.validate_1pux_target(target)?;
-        if self.history_lifetime.is_nil() {
-            return Err("数据库会话已结束；未导入任何内容".into());
-        }
-        Ok(self.history_lifetime)
+        self.native_import_lifetime(target)
     }
     pub(crate) fn import_keepass_xml(
         &mut self,
@@ -720,53 +715,17 @@ impl VaultSession {
         target: &str,
         lifetime: Uuid,
     ) -> Result<VaultState, String> {
-        if self.xml_import_lifetime(target)? != lifetime {
-            return Err("数据库会话已更换；未导入任何内容".into());
-        }
-        let db = self.require_db()?;
-        let target_id = if target == ROOT_GROUP_UUID {
-            db.root().id()
-        } else {
-            parse_group_id(target)?
-        };
-        let mut candidate = db.clone();
-        let root = candidate
-            .import_group_tree(plan.database, target_id)
-            .map_err(|_| INVALID)?;
-        {
-            let mut group = candidate.group_mut(root).ok_or(INVALID)?;
-            let mut entry = group.add_entry();
-            entry
-                .fields
-                .insert("Title".into(), Value::unprotected("KeePass XML 导入来源"));
-            entry
-                .fields
-                .insert("KeePass Source XML".into(), plan.archive);
-            entry.quality_check = false;
-        }
-        let previous = self.db.replace(candidate);
-        let previous_meta = (
-            self.dirty,
-            self.revision,
-            self.modified_at.clone(),
-            self.cached_snapshot.take(),
-            self.pending_file_reload.take(),
-        );
-        self.mark_dirty();
-        match self.snapshot() {
-            Ok(state) => Ok(state),
-            Err(error) => {
-                self.db = previous;
-                (
-                    self.dirty,
-                    self.revision,
-                    self.modified_at,
-                    self.cached_snapshot,
-                    self.pending_file_reload,
-                ) = previous_meta;
-                Err(error)
-            }
-        }
+        self.import_prepared_tree(
+            plan.database,
+            SourceArchive {
+                title: "KeePass XML 导入来源",
+                key: "KeePass Source XML",
+                value: plan.archive,
+                literal_fields: false,
+            },
+            target,
+            lifetime,
+        )
     }
 }
 

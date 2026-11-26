@@ -1,3 +1,15 @@
+export interface BitwardenCounts {
+  folders: number;
+  collections: number;
+  items: number;
+  unresolvedMemberships: number;
+}
+
+export interface BitwardenImportResult {
+  state: VaultState;
+  counts: BitwardenCounts;
+}
+
 export interface KeePassXmlCounts {
   groups: number;
   items: number;

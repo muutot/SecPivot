@@ -1,0 +1,64 @@
+{
+  "encrypted": false,
+  "folders": [
+    { "id": "empty", "name": "Empty" },
+    { "id": "a", "name": " Same / Name " },
+    { "id": "b", "name": " Same / Name " },
+    { "id": "blank", "name": "" }
+  ],
+  "collections": [
+    {
+      "id": "c1",
+      "organizationId": "synthetic-org",
+      "name": "Team/Shared",
+      "externalId": "external-1"
+    },
+    { "id": "c2", "organizationId": "synthetic-org", "name": "Team/Other", "externalId": null },
+    {
+      "id": "unused",
+      "organizationId": "synthetic-org",
+      "name": "Empty collection",
+      "externalId": "unused-metadata"
+    }
+  ],
+  "items": [
+    {
+      "id": "login-1",
+      "type": 1,
+      "name": "Synthetic Login",
+      "folderId": "a",
+      "organizationId": "synthetic-org",
+      "collectionIds": ["c1", "c2", "outside-managed-scope"],
+      "favorite": true,
+      "creationDate": "2024-01-02T03:04:05.123+02:00",
+      "revisionDate": "2024-03-04T05:06:07Z",
+      "login": {
+        "username": "synthetic-user",
+        "password": " synthetic-sensitive-password ",
+        "totp": "JBSWY3DPEHPK3PXP",
+        "uris": [{ "uri": "https://synthetic.example", "match": null }]
+      },
+      "notes": "Safe example notes",
+      "fields": [
+        { "name": "Source Item", "value": "synthetic-source-label", "type": 1 },
+        { "name": "Source Item", "value": "synthetic-second-label", "type": 0 },
+        { "name": "Empty Secret", "value": "", "type": 1 },
+        { "name": "Linked Password", "value": null, "type": 3, "linkedId": 101 }
+      ],
+      "passwordHistory": [
+        { "password": "synthetic-sensitive-history", "lastUsedDate": "2023-01-01T00:00:00Z" }
+      ],
+      "attachments": [{ "id": "metadata-only", "fileName": "synthetic.bin", "size": "4" }],
+      "unknownExtension": { "secret": "synthetic-sensitive-extension" }
+    },
+    {
+      "id": "note-1",
+      "type": 2,
+      "name": "Synthetic Note",
+      "folderId": "b",
+      "collectionIds": [],
+      "notes": "Note contents",
+      "secureNote": { "type": 0 }
+    }
+  ]
+}

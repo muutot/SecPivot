@@ -1438,6 +1438,8 @@ export const en: Record<I18nKey, string> = {
   "groupflow.expandFailed": "Failed to expand group: {e}",
   "io.readFailed": "Failed to read file: {e}",
   "io.imported": "Imported {n} entries",
+  "io.bitwardenImported":
+    "Imported {n} entries; {memberships} memberships outside the source collection list were preserved in protected source fields",
   "io.onepuxImported":
     "Imported {n} entries; {files} unassociated files retained in import metadata",
   "io.importFailed": "Import failed: {e}",

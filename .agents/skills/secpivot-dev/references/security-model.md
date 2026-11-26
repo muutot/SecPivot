@@ -1,5 +1,25 @@
 # Security Model
 
+The Bitwarden menu now sends only native selection identity/target/session and
+receives masked state/counts. commands/import_bitwarden.rs performs bounded
+Zeroizing reads and lifetime/writable-target checks before and after one owned
+blocking worker. Source JSON uses the shared duplicate-rejecting SecretJson guard;
+owned row/local/custom strings are zeroized on drop/error, and passwords/OTP,
+hidden/typed values and complete source archives become protected KeePass Values.
+No plaintext import payload, automatic save, log, or source-key adoption is added.
+Linked fields remain protected snapshots; unsupported multiple/explicit-match
+URIs reject the document. Missing folders, duplicate identities, malformed metadata,
+known cross-organization memberships and illegal unprotected XML text fail before
+publication. Managed out-of-scope memberships remain protected and are reported.
+
+The shared tree transaction moves literal Bitwarden field maps around UUID copy
+so source JSON/strings are never interpreted as KeePass internal references;
+XML retains its genuine internal-reference remapping. Exact rollback includes
+the pending external-reload offer/token and cached snapshot. Synthetic command,
+native KDBX and actual frontend service tests establish these ownership/publication
+controls, not third-party parser scratch, JavaScript/framework heap erasure,
+real Bitwarden export/native picker/provider behavior or full history/URI fidelity.
+
 Complete native XML import reads selected files into Zeroizing buffers and keeps
 prepared fields/binaries/source XML native-only. Literal protected strings and
 the complete original XML archive become protected KeePass Values; no plaintext

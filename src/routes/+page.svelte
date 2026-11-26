@@ -49,6 +49,7 @@
     importEntries as runImportEntries,
     importOnePux as runImportOnePux,
     importKeePassXml as runImportKeePassXml,
+    importBitwarden as runImportBitwarden,
     importRowsToEntries,
     pickImportFile,
     toCsvExportRows,
@@ -1228,34 +1229,7 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
-    const text = await pickImportFile(ioHost, view, [
-      { name: t(settings.general.language, "page.filterJson"), extensions: ["json"] },
-    ]);
-    if (text === null) return;
-    let rows: ImportRow[];
-    try {
-      if (!isTauriRuntime())
-        throw new Error(
-          t(settings.general.language, "browser.unsupported", {
-            feature: t(settings.general.language, "browser.featBitwardenImport"),
-          }),
-        );
-      const parsed = await awaitCurrentView(sessionView, view, () =>
-        invoke<ImportRow[]>("parse_bitwarden_json", { text }),
-      );
-      if (!parsed.current) return;
-      rows = parsed.value;
-    } catch (e) {
-      if (sessionView.isCurrent(view))
-        flash(t(settings.general.language, "page.bitwardenFailed", { e: String(e) }), "error");
-      return;
-    }
-    const entries: ImportEntry[] = importRowsToEntries(rows);
-    if (entries.length === 0) {
-      flash(t(settings.general.language, "page.noBitwardenEntries"));
-      return;
-    }
-    await runImportEntries(ioHost, entries, view, baseGroupUuid);
+    await runImportBitwarden(ioHost, view, baseGroupUuid);
   }
 
   async function handleImportOnePassword(): Promise<void> {

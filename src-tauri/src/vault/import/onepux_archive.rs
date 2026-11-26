@@ -29,7 +29,7 @@ const LIMITS: Limits = Limits {
     expanded: 256 * 1024 * 1024,
 };
 
-struct SecretJson(Value);
+pub(super) struct SecretJson(pub(super) Value);
 
 // Reject repeated JSON keys instead of silently discarding earlier source data.
 // Partial owned trees are also wrapped so errors release their strings via Drop.

@@ -1,16 +1,20 @@
-//! Structured import parsers and native-only 1Password 1PUX archive decoding.
+//! Structured parsers and native Bitwarden/PlainXml/1Password 1PUX preparation.
 //! a malformed or unexpected document fails with a readable error instead of
 //! silently importing garbage.
 
 use serde::Serialize;
 use std::collections::HashMap;
+use zeroize::{Zeroize, Zeroizing};
 
 mod bitwarden_links;
+mod bitwarden_native;
 mod fields;
 mod keepass_xml;
 mod onepassword;
 mod onepux;
 mod onepux_archive;
+mod tree;
+pub use bitwarden_native::{prepare_bitwarden_import, BitwardenCounts, BitwardenImport};
 pub use keepass_xml::{prepare_keepass_xml_import, KeePassXmlCounts, KeePassXmlImport};
 pub use onepassword::parse_1pif;
 pub use onepux::{prepare_1pux_import, OnePuxCounts, OnePuxImport};
@@ -27,6 +31,13 @@ pub struct ImportCustomField {
     pub name: String,
     pub value: String,
     pub protected: bool,
+}
+
+impl Drop for ImportCustomField {
+    fn drop(&mut self) {
+        self.name.zeroize();
+        self.value.zeroize();
+    }
 }
 
 /// One normalized import row shared by the CSV/KeePass-XML/Bitwarden paths.
@@ -48,6 +59,18 @@ pub struct ImportRow {
     pub favorite: Option<bool>,
 }
 
+impl Drop for ImportRow {
+    fn drop(&mut self) {
+        self.group.zeroize();
+        self.title.zeroize();
+        self.username.zeroize();
+        self.password.zeroize();
+        self.url.zeroize();
+        self.notes.zeroize();
+        self.totp.zeroize();
+    }
+}
+
 /// Parse an unencrypted Bitwarden `.json` export. Official item types 1–8 are
 /// retained; specialized values become protected custom fields. Folders become the
 /// group path, one default-mode URI becomes the URL, `login.totp` seeds TOTP, and
@@ -55,6 +78,10 @@ pub struct ImportRow {
 pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
     let root: serde_json::Value =
         serde_json::from_str(text).map_err(|e| format!("不是有效的 Bitwarden JSON: {e}"))?;
+    parse_bitwarden_rows(&root)
+}
+
+fn parse_bitwarden_rows(root: &serde_json::Value) -> Result<Vec<ImportRow>, String> {
     for name in ["encrypted", "passwordProtected"] {
         match root.get(name) {
             Some(serde_json::Value::Bool(true)) => {
@@ -100,31 +127,35 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
             Some(serde_json::Value::Bool(value)) => Some(*value),
             Some(_) => return Err(invalid()),
         };
-        let title = optional_string(item.get("name"))
-            .map_err(|()| invalid())?
-            .to_owned();
-        let notes = optional_string(item.get("notes"))
-            .map_err(|()| invalid())?
-            .to_owned();
+        let mut title = Zeroizing::new(
+            optional_string(item.get("name"))
+                .map_err(|()| invalid())?
+                .to_owned(),
+        );
+        let mut notes = Zeroizing::new(
+            optional_string(item.get("notes"))
+                .map_err(|()| invalid())?
+                .to_owned(),
+        );
         let folder_id = optional_string(item.get("folderId")).map_err(|()| invalid())?;
-        let group = folders.get(folder_id).cloned().unwrap_or_default();
+        let mut group = Zeroizing::new(folders.get(folder_id).cloned().unwrap_or_default());
 
-        let mut username = String::new();
-        let mut password = String::new();
-        let mut url = String::new();
-        let mut totp = String::new();
+        let mut username = Zeroizing::new(String::new());
+        let mut password = Zeroizing::new(String::new());
+        let mut url = Zeroizing::new(String::new());
+        let mut totp = Zeroizing::new(String::new());
         if let Some(login) = item.get("login").filter(|value| !value.is_null()) {
             if !login.is_object() {
                 return Err(invalid());
             }
-            url = default_login_uri(login, index)?;
-            username = optional_string(login.get("username"))
+            *url = default_login_uri(login, index)?;
+            *username = optional_string(login.get("username"))
                 .map_err(|()| invalid())?
                 .to_owned();
-            password = optional_string(login.get("password"))
+            *password = optional_string(login.get("password"))
                 .map_err(|()| invalid())?
                 .to_owned();
-            totp = optional_string(login.get("totp"))
+            *totp = optional_string(login.get("totp"))
                 .map_err(|()| invalid())?
                 .to_owned();
         }
@@ -206,13 +237,17 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
         }
 
         rows.push(ImportRow {
-            group,
-            title,
-            username,
-            password,
-            url,
-            notes,
-            totp: if totp.is_empty() { None } else { Some(totp) },
+            group: std::mem::take(&mut *group),
+            title: std::mem::take(&mut *title),
+            username: std::mem::take(&mut *username),
+            password: std::mem::take(&mut *password),
+            url: std::mem::take(&mut *url),
+            notes: std::mem::take(&mut *notes),
+            totp: if totp.is_empty() {
+                None
+            } else {
+                Some(std::mem::take(&mut *totp))
+            },
             custom_fields,
             quality_check: Some(kind == 1),
             favorite,

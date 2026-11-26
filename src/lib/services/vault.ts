@@ -13,6 +13,8 @@ import type {
   OnePuxCounts,
   KeePassXmlCounts,
   KeePassXmlImportResult,
+  BitwardenCounts,
+  BitwardenImportResult,
   EntryPatch,
   AttachmentInput,
   EntryFlags,
@@ -161,6 +163,11 @@ interface VaultStore {
     fileName: string | null,
     targetGroupUuid: string | null,
   ) => Promise<KeePassXmlCounts>;
+  importBitwarden: (
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ) => Promise<BitwardenCounts>;
   importOnePux: (
     path: string,
     fileName: string | null,
@@ -1374,6 +1381,26 @@ export const vault: VaultStore = {
     });
     state.set(applyBackendState(result));
     return result;
+  },
+
+  async importBitwarden(
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ): Promise<BitwardenCounts> {
+    if (!isTauriRuntime())
+      throw new Error(
+        t(lang(), "browser.unsupported", { feature: t(lang(), "browser.featBitwardenImport") }),
+      );
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<BitwardenImportResult>(
+      "import_bitwarden_file",
+      { path, fileName, targetGroupUuid },
+      sessionId,
+    );
+    commitSessionStateAtEpoch(sessionId, epoch, result.state);
+    return result.counts;
   },
 
   async importKeePassXml(

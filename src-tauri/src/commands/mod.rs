@@ -17,6 +17,7 @@ pub(crate) mod entry_save;
 pub(crate) mod favicon;
 pub(crate) mod groups;
 pub(crate) mod import;
+pub(crate) mod import_bitwarden;
 pub(crate) mod import_xml;
 #[cfg(desktop)]
 pub(crate) mod qrcode;
@@ -42,6 +43,7 @@ pub(crate) use self::entry_save::*;
 pub(crate) use self::favicon::*;
 pub(crate) use self::groups::*;
 pub(crate) use self::import::*;
+pub(crate) use self::import_bitwarden::*;
 pub(crate) use self::import_xml::*;
 #[cfg(desktop)]
 pub(crate) use self::qrcode::*;
