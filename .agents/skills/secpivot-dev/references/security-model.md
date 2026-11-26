@@ -1,5 +1,17 @@
 # Security Model
 
+Master-key retry budgets contain only a symbol, ordinal and limit. They live
+for one credential prompt and never persist passwords, keys or a failed-try
+counter. The default3 follows KeePass's OpenDatabase prompt loop; exhaustion
+ends that run and clears form strings without permanently locking the database.
+Local/recent, remote and manual/Hello unlock handlers use the same admission
+class. Preflight and Hello lookup failures do not consume submitted opens;
+native open failures do, including I/O errors as in the official loop. Busy
+prompts cannot switch target/cancel; closed/replaced runs drop late UI results
+and late retrieved Hello credentials. The preference is not native enforcement
+or an offline brute-force defense; IPC remains unchanged. Synthetic host/config
+controls do not prove WebView/provider behavior or JavaScript heap erasure.
+
 Android TLS dependency floors are webpki-root-certs1.0.10 and
 rustls-webpki0.103.16. The former removes emSign ECC G3; the latter rejects
 distrusted SPKIs anywhere in a validation path, including cross-signed keys.

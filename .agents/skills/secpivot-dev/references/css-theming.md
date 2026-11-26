@@ -1,5 +1,11 @@
 # Project-wide UI Style and Theming
 
+The Master key attempts card composes existing settings primitives and a shared
+control-size numeric TextField; its only local layout rule reserves96px for the
+number. TextField's optional min/max/step attributes add no CSS. Retry exhaustion
+uses existing Feedback/Button layouts in VaultWelcome/LockScreen. Both themes
+retain the shared Cascadia font and neutral translucent light surfaces.
+
 KdfUpgradeDialog uses the existing confirm-size ModalShell at the prompt layer,
 plain Later and warning Use recommended Buttons. Filename/cost paragraphs own
 only compact margins, secondary text size, semantic text colors and anywhere

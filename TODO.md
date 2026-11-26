@@ -6,7 +6,7 @@
 
 ## 一、明确待实现
 
-- [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
+- [ ] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）
@@ -14,6 +14,8 @@
 - [ ] 打印系统（KeePass 应急表打印约 20 项：Layout/Include*/Color*/Fonts/Sort）——当前只有离线 HTML 应急表导出
 
 ## 二、部分完成（剩余边界明确）
+
+- [~] 主密码重试次数（`AceSecurity.MasterKeyTries`）：默认 3 次、正 int32 配置及旧配置重载已接入；本地/最近/远程打开与锁屏手动/Hello 共用每次提示预算，耗尽后清空字段并结束本次提示，新打开意图重置。提交失败（含 I/O）计次，Hello 查询失败不计次；重复/过期提交有守卫。实际提交函数与 ConfigStore 回归已覆盖，真实 WebView/provider 仍待验；这是提示流程限制，不是永久锁库或离线防破解
 
 - [~] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.10（移除 emSign ECC G3）与 `rustls-webpki` 0.103.16（拒绝不信任 SPKI）及最低安全版本约束已接入，其他锁依赖边保留。实际 Android builder 源码在 host 上的 async/blocking TLS、未知 CA 拒绝、八项不信任 SPKI 与根包回归通过；Android 目标编译仍缺 NDK clang，APK/真机/provider 待验
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
   import { vault } from "$lib/services/vault";
@@ -9,6 +11,8 @@
   import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import Feedback from "$lib/components/templates/form/Feedback.svelte";
+  import { MasterKeyAttempts, type MasterKeyAttempt } from "$lib/utils/master-key-attempts";
 
   interface Props {
     remembered: { path: string; fileName: string } | null;
@@ -34,6 +38,36 @@
   let busy = $state(false);
   let error = $state("");
   let helloAvailable = $state(false);
+  let attemptsExhausted = $state(false);
+  const openAttempts = new MasterKeyAttempts();
+  onDestroy(() => openAttempts.close());
+
+  function restartUnlock(): void {
+    openAttempts.start(get(appSettings).security.masterKeyTries);
+    attemptsExhausted = false;
+    password = "";
+    keyfilePath = "";
+    showPassword = false;
+    error = "";
+  }
+  $effect(() => {
+    const path = remembered?.path;
+    if (path) restartUnlock();
+    else openAttempts.close();
+  });
+
+  function failedUnlock(attempt: MasterKeyAttempt, failure: unknown, submitted = true): void {
+    const result = openAttempts.finish(attempt, submitted);
+    if (!result) return;
+    error = String(failure);
+    if (result.exhausted) {
+      attemptsExhausted = true;
+      password = "";
+      keyfilePath = "";
+      showPassword = false;
+      error += `\n${t(lang, "security.masterKeyAttemptsExceeded", { count: result.limit })}`;
+    }
+  }
 
   $effect(() => {
     const path = remembered?.path;
@@ -56,46 +90,65 @@
   }
 
   async function unlock(): Promise<void> {
-    if (!remembered) return;
+    if (busy || !remembered) return;
     if (!password && !keyfilePath) {
       error = t(lang, "lock.needPassword");
       return;
     }
+    const attempt = openAttempts.reserve();
+    if (!attempt) return;
+    const openingPath = remembered.path;
+    const openingName = remembered.fileName;
+    const openingPassword = password;
+    const openingKeyfile = keyfilePath;
     busy = true;
     error = "";
     try {
-      await vault.open(remembered.path, password, keyfilePath || undefined, {
-        name: remembered.fileName,
+      await vault.open(openingPath, openingPassword, openingKeyfile || undefined, {
+        name: openingName,
       });
       // A stored password alone can never open a keyfile-protected vault, so
       // don't remember one — it would present a Windows Hello button that can
       // only ever fail.
-      if (!keyfilePath) void rememberCredential(remembered.path, password);
-      onopened();
+      if (!openingKeyfile) void rememberCredential(openingPath, openingPassword);
+      if (openAttempts.finish(attempt)) onopened();
     } catch (e) {
-      error = String(e);
+      failedUnlock(attempt, e);
     } finally {
       busy = false;
     }
   }
 
   async function unlockWithHello(): Promise<void> {
-    if (!remembered) return;
+    if (busy || !remembered) return;
+    const attempt = openAttempts.reserve();
+    if (!attempt) return;
+    const openingPath = remembered.path;
+    const openingName = remembered.fileName;
+    let submitted = false;
     busy = true;
     error = "";
     try {
       const saved = await invoke<{ password?: string } | null>("get_saved_credential", {
-        path: remembered.path,
+        path: openingPath,
       });
       if (!saved?.password) {
-        error = t(lang, "lock.noSavedCredential");
-        helloAvailable = false;
+        if (openAttempts.finish(attempt, false)) {
+          error = t(lang, "lock.noSavedCredential");
+          helloAvailable = false;
+        }
         return;
       }
-      await vault.open(remembered.path, saved.password, undefined, { name: remembered.fileName });
-      onopened();
+      // A replacement/unmounted prompt must not submit a late saved credential.
+      if (!openAttempts.isPending(attempt) || remembered?.path !== openingPath) {
+        openAttempts.finish(attempt, false);
+        return;
+      }
+      submitted = true;
+      await vault.open(openingPath, saved.password, undefined, { name: openingName });
+      if (openAttempts.finish(attempt)) onopened();
     } catch (e) {
-      error = String(e);
+      failedUnlock(attempt, e, submitted);
     } finally {
       busy = false;
     }
@@ -108,32 +161,42 @@
   subtitle={remembered?.fileName ?? ""}
 >
   <div class="lock-fields">
-    <VaultCredentialFields
-      bind:password
-      bind:keyfilePath
-      bind:showPassword
-      {busy}
-      {error}
-      isCreate={false}
-      onPickKeyfile={pickKeyfile}
-    />
+    {#if attemptsExhausted}
+      <Feedback inline message={error} />
+    {:else}
+      <VaultCredentialFields
+        bind:password
+        bind:keyfilePath
+        bind:showPassword
+        {busy}
+        {error}
+        isCreate={false}
+        onPickKeyfile={pickKeyfile}
+      />
+    {/if}
   </div>
 
   <div class="unlock-actions">
     <Button onclick={onswitch} disabled={busy}>{t(lang, "lock.switchDatabase")}</Button>
-    {#if helloAvailable}
-      <Button onclick={() => void unlockWithHello()} disabled={busy}>
-        <AppIcon name="unlock" size={15} />Windows Hello
+    {#if attemptsExhausted}
+      <Button variant="primary" onclick={restartUnlock} disabled={busy}>
+        <span>{t(lang, "security.restartUnlock")}</span>
+      </Button>
+    {:else}
+      {#if helloAvailable}
+        <Button onclick={() => void unlockWithHello()} disabled={busy}>
+          <AppIcon name="unlock" size={15} />Windows Hello
+        </Button>
+      {/if}
+      <Button
+        variant="primary"
+        onclick={() => void unlock()}
+        disabled={busy || (!password && !keyfilePath)}
+        {busy}
+      >
+        {busy ? t(lang, "lock.unlocking") : t(lang, "lock.unlock")}
       </Button>
     {/if}
-    <Button
-      variant="primary"
-      onclick={() => void unlock()}
-      disabled={busy || (!password && !keyfilePath)}
-      {busy}
-    >
-      {busy ? t(lang, "lock.unlocking") : t(lang, "lock.unlock")}
-    </Button>
   </div>
 
   {#if remembered}

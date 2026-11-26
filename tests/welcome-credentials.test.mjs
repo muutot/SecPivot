@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import { passwordRepeatMatches } from "../src/lib/utils/password-repeat.ts";
+import { MasterKeyAttempts } from "../src/lib/utils/master-key-attempts.ts";
 
 // Execute actual form handlers at the service boundary without native dialogs,
 // real vaults, clipboard or remote systems. KDBX authentication has separate Rust tests.
@@ -24,6 +25,13 @@ function fixture(name, command, password = "", keyfilePath = "synthetic.key") {
   const calls = [];
   const remembered = [];
   let opened = 0;
+  const openAttempts = new MasterKeyAttempts();
+  openAttempts.start(3);
+  const helpers = ["clearCredentialPrompt", "failedOpen"].map((helper) => {
+    const body = source.match(new RegExp(`^  function ${helper}\\([^]*?^  \\}`, "m"));
+    assert.ok(body, `production ${helper} must be extracted`);
+    return body[0];
+  });
   const context = vm.createContext({
     path: "synthetic.kdbx",
     remoteKey: "synthetic.kdbx",
@@ -37,6 +45,8 @@ function fixture(name, command, password = "", keyfilePath = "synthetic.key") {
     pendingName: null,
     pendingPersistable: undefined,
     error: "",
+    attemptNotice: "",
+    openAttempts,
     busy: false,
     modal: "open",
     lang: "en",
@@ -57,7 +67,7 @@ function fixture(name, command, password = "", keyfilePath = "synthetic.key") {
     },
   });
   vm.runInContext(
-    ts.transpileModule(`${match[0]}\nglobalThis.run = ${name};`, {
+    ts.transpileModule(`${helpers.join("\n")}\n${match[0]}\nglobalThis.run = ${name};`, {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
     }).outputText,
     context,

@@ -24,6 +24,7 @@ import type {
 import { DARK_THEME_COLORS, LIGHT_THEME_COLORS, type ThemeColors } from "$lib/types/theme";
 import { KEYBOARD_ACTIONS } from "$lib/services/keyboard";
 import { LatestPersistQueue } from "$lib/utils/latest-persist-queue";
+import { normalizeMasterKeyTries } from "$lib/utils/master-key-attempts";
 import { showTip } from "$lib/services/tips";
 import { t } from "$lib/i18n";
 
@@ -250,6 +251,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   autoSaveOnClose: false,
   repeatPasswordOnlyWhenHidden: true,
   keyTransformWeakWarning: true,
+  masterKeyTries: 3,
   minimizeAfterLocking: true,
   showExpiredOnOpen: true,
   expirySoonDays: 7,
@@ -1067,6 +1069,7 @@ export function normalizeSettings(
       s.keyTransformWeakWarning,
       fallback.security.keyTransformWeakWarning,
     ),
+    masterKeyTries: normalizeMasterKeyTries(s.masterKeyTries),
     minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
     showExpiredOnOpen: asBool(s.showExpiredOnOpen, fallback.security.showExpiredOnOpen),
     expirySoonDays: clampInt(s.expirySoonDays ?? fallback.security.expirySoonDays, 0, 365, 7),

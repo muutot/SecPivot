@@ -111,6 +111,8 @@ export interface SecuritySettings {
   repeatPasswordOnlyWhenHidden: boolean;
   /** KeePass AceSecurity.KeyTransformWeakWarning, default on. */
   keyTransformWeakWarning: boolean;
+  /** KeePass AceSecurity.MasterKeyTries: attempts per credential prompt, default 3. */
+  masterKeyTries: number;
   /** Minimize the main window after the workspace locks (KeePass
    * `MinimizeAfterLocking`, default on). */
   minimizeAfterLocking: boolean;

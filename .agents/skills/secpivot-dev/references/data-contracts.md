@@ -1,5 +1,20 @@
 # Data Contracts
 
+`security.masterKeyTries` mirrors KeePass AceSecurity.MasterKeyTries, defaults3,
+and retains positive signed-int32 values in TS and native ConfigStore. Invalid
+non-numbers/non-finite renderer values fall back to3; values below1 clamp to1
+to prevent an accidentally unusable prompt. Only this number is persisted.
+`utils/master-key-attempts.ts` owns nonsecret per-prompt tickets, submitted-count
+limits, duplicate admission and invalidation. Each new opening intent captures
+the current preference; later settings changes apply to the next prompt.
+VaultWelcome wires local/recent and remote handlers; selecting another remote
+database clears credentials and starts a fresh budget. LockScreen shares manual
+and Hello open counts, refunding pre-open credential lookup failures. Exhaustion
+clears form strings and ends the prompt, with an explicit restart path. Disposal
+and new runs reject old tickets/late Hello submissions. Existing vault IPC and
+native credential/session adoption remain unchanged: like KeePass's opening
+loop this is a renderer prompt policy, not persistent or native access control.
+
 `security.keyTransformWeakWarning` mirrors KeePass AceSecurity, defaults true,
 and is normalized/persisted by both TS and native ConfigStore (legacy and both
 explicit values are tested). `isWeakKdfParameters` uses exact BigInt costs:

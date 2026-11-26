@@ -1044,6 +1044,40 @@ fn key_transform_weak_warning_loads_legacy_default_and_persists_both_values() {
 }
 
 #[test]
+fn master_key_tries_loads_legacy_default_and_persists_positive_int32_values() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    std::fs::write(dir.path().join("conf/config.json"), r#"{"security":{}}"#).unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert_eq!(store.get().unwrap().security.master_key_tries, 3);
+    for (value, expected) in [
+        (-10, 1),
+        (0, 1),
+        (1, 1),
+        (3, 3),
+        (7, 7),
+        (i32::MAX, i32::MAX),
+    ] {
+        let mut config = store.get().unwrap();
+        config.security.master_key_tries = value;
+        store.set(config).unwrap();
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(reloaded.get().unwrap().security.master_key_tries, expected);
+        let wire: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("conf/config.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(wire["security"]["masterKeyTries"], expected);
+    }
+    for invalid in [
+        r#"{"security":{"masterKeyTries":"3"}}"#,
+        r#"{"security":{"masterKeyTries":2.5}}"#,
+    ] {
+        assert!(serde_json::from_str::<AppConfig>(invalid).is_err());
+    }
+}
+
+#[test]
 fn always_on_top_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

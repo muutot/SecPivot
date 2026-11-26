@@ -597,6 +597,9 @@ pub struct SecuritySettings {
     /// warns before explicitly changing KDF costs or the master key.
     #[serde(default = "default_true")]
     pub key_transform_weak_warning: bool,
+    /// KeePass AceSecurity.MasterKeyTries: submitted opens per credential prompt.
+    /// No persistent lockout or counter is stored; the renderer owns the prompt.
+    pub master_key_tries: i32,
     /// Minimize the main window after the workspace locks (KeePass
     /// `MinimizeAfterLocking`). Default on.
     #[serde(default = "default_true")]
@@ -632,6 +635,7 @@ impl Default for SecuritySettings {
             auto_save_on_close: false,
             repeat_password_only_when_hidden: true,
             key_transform_weak_warning: true,
+            master_key_tries: 3,
             minimize_after_locking: true,
             show_expired_on_open: true,
             expiry_soon_days: 7,
@@ -1518,6 +1522,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     // boundary rather than silently reverting to "never".
     config.security.default_expire_days = config.security.default_expire_days.clamp(0, 3650);
     config.security.expiry_soon_days = config.security.expiry_soon_days.clamp(0, 365);
+    config.security.master_key_tries = config.security.master_key_tries.max(1);
 
     config.favicon.concurrency = clamp_i32(config.favicon.concurrency, 1, 16, 8);
 

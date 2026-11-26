@@ -14,6 +14,7 @@
   import { SessionViewGuard, type SessionViewToken } from "$lib/utils/session-state";
   import { passwordRepeatMatches } from "$lib/utils/password-repeat";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import TextField from "$lib/components/templates/form/TextField.svelte";
   import Feedback from "$lib/components/templates/form/Feedback.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
   import { t } from "$lib/i18n";
@@ -166,6 +167,36 @@
 {/if}
 
 <div class="settings-scroll">
+  <section class="setting-card">
+    <div class="setting-heading">
+      <span class="setting-icon"><AppIcon name="key" size={17} /></span>
+      <div class="heading-inline">
+        <div>
+          <strong>{t(lang, "security.masterKeyTries")}</strong>
+          <p>{t(lang, "security.masterKeyTriesDesc")}</p>
+        </div>
+        <div class="master-key-tries-control">
+          <TextField
+            type="number"
+            numeric
+            size="control"
+            min={1}
+            max={2_147_483_647}
+            step={1}
+            value={String(security.masterKeyTries)}
+            ariaLabel={t(lang, "security.masterKeyTries")}
+            oninput={(event) => {
+              const value = Number(event.currentTarget.value);
+              if (Number.isInteger(value) && value >= 1 && value <= 2_147_483_647) {
+                change("masterKeyTries", value);
+              }
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
   <SettingRangeCard
     icon="lock"
     label={t(lang, "security.autoLock")}
@@ -377,6 +408,11 @@
 {/if}
 
 <style>
+  .master-key-tries-control {
+    width: 96px;
+    flex: 0 0 96px;
+  }
+
   .mk-keyfile-row {
     margin-top: 12px;
   }

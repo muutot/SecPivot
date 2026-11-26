@@ -1,5 +1,15 @@
 # Project Structure and Runtime Surfaces
 
+`utils/master-key-attempts.ts` owns per-credential-prompt retry admission and
+positive-int32 normalization. VaultWelcome and LockScreen own prompt reset,
+exhaustion/credential clearing and explicit restart UI. SecuritySettingsPanel
+exposes masterKeyTries through the shared compact numeric TextField, whose
+optional min/max/step attributes now pass through to its input. Config settings
+and normalization persist only the preference; no vault/IPC type changes.
+`tests/master-key-attempts.test.mjs` executes actual host handlers, cleanup and
+settings persistence with synthetic vault/credential APIs; ConfigStore tests
+exercise legacy defaults and real temporary config reloads.
+
 `scripts/test-android-tls.mjs` executes `tests/fixtures/android-tls.rs` over the
 actual net.rs Android branches in a disposable host Cargo package. Only cfg is
 substituted; all network/crypto APIs are real and versions follow Cargo.lock.

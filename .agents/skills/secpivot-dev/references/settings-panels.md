@@ -1,5 +1,14 @@
 # Settings Shell and Panel Patterns
 
+SecuritySettingsPanel's Master key attempts card uses the existing setting-card,
+setting-heading and heading-inline structure plus a 96px shared TextField at
+control size. Positive-int32 min/max/step are passed through; valid edits update
+masterKeyTries, default3. No new palette/font/control styling is introduced.
+The preference applies to new opening prompts. VaultWelcome shows exhaustion
+through shared inline Feedback after ending its credential modal; LockScreen
+replaces the fields with Feedback and a shared Try again Button. Retry resets
+the prompt and keeps the database available, matching KeePass's loop semantics.
+
 KdfOpenPrompt uses keyTransformWeakWarning for open/unlock/replacement lifetime
 inspection, with a separate KdfUpgradeDialog over the shared ModalShell/Button
 primitives. It displays the filename, exact current/recommended costs and

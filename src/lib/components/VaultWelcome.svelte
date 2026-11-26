@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import {
@@ -27,6 +28,8 @@
   import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import { formatBytes } from "$lib/utils/format";
   import { passwordRepeatMatches } from "$lib/utils/password-repeat";
+  import { MasterKeyAttempts, type MasterKeyAttempt } from "$lib/utils/master-key-attempts";
+  import Feedback from "$lib/components/templates/form/Feedback.svelte";
 
   interface Props {
     onopened: () => void;
@@ -65,6 +68,37 @@
   let modal: Modal = $state("none");
   let busy = $state(false);
   let error = $state("");
+  let attemptNotice = $state("");
+  const openAttempts = new MasterKeyAttempts();
+  onDestroy(() => openAttempts.close());
+
+  function startOpenPrompt(): void {
+    openAttempts.start(get(appSettings).security.masterKeyTries);
+    attemptNotice = "";
+  }
+
+  function clearCredentialPrompt(): void {
+    openAttempts.close();
+    modal = "none";
+    password = "";
+    confirm = "";
+    keyfilePath = "";
+    showPassword = false;
+  }
+
+  function cancelCredentialPrompt(): void {
+    if (!busy) clearCredentialPrompt();
+  }
+
+  function failedOpen(attempt: MasterKeyAttempt, failure: unknown): void {
+    const result = openAttempts.finish(attempt);
+    if (!result) return;
+    error = String(failure);
+    if (result.exhausted) {
+      attemptNotice = `${error}\n${t(lang, "security.masterKeyAttemptsExceeded", { count: result.limit })}`;
+      clearCredentialPrompt();
+    }
+  }
   let path = $state("");
   let password = $state("");
   let confirm = $state("");
@@ -120,16 +154,22 @@
   }
 
   async function changeRemoteKind(v: string): Promise<void> {
+    if (busy) return;
     const kind = v as RemoteKind;
     if (kind === remote.kind) return;
     const first = remoteProfilesForKind(get(appSettings).remoteProfiles, kind)[0];
     if (!first) return;
     appSettings.setActiveRemote(remoteProfilePath(first));
     remoteKey = "";
+    password = "";
+    confirm = "";
+    keyfilePath = "";
+    showPassword = false;
     error = "";
     remoteObjects = [];
     const configured = isRemoteConfigured(activeRemoteProfile(get(appSettings)).settings);
     if (remoteTab === "open") {
+      startOpenPrompt();
       if (configured) {
         await loadRemoteObjects();
       } else {
@@ -139,6 +179,7 @@
   }
 
   async function handleRemoteOpen(): Promise<void> {
+    if (busy) return;
     remoteTab = remoteConfigured ? "open" : "config";
     remoteKey = "";
     remoteMode = "memory";
@@ -148,6 +189,7 @@
     showPassword = false;
     error = "";
     modal = "remote";
+    startOpenPrompt();
     if (remoteConfigured) await loadRemoteObjects();
   }
 
@@ -168,16 +210,32 @@
   }
 
   function switchRemoteTab(tab: RemoteTab): void {
+    if (busy) return;
     remoteTab = tab;
     remoteKey = "";
     password = "";
     confirm = "";
+    keyfilePath = "";
     showPassword = false;
     error = "";
+    if (tab === "open") startOpenPrompt();
+    else openAttempts.close();
     if (tab === "open") void loadRemoteObjects();
   }
 
+  function selectRemoteKey(key: string): void {
+    if (busy || key === remoteKey) return;
+    remoteKey = key;
+    password = "";
+    confirm = "";
+    keyfilePath = "";
+    showPassword = false;
+    error = "";
+    startOpenPrompt();
+  }
+
   async function confirmRemoteOpen(): Promise<void> {
+    if (busy) return;
     if (!remoteKey) {
       error = t(lang, "welcome.pickRemoteFile");
       return;
@@ -186,14 +244,18 @@
       error = t(lang, "welcome.needPassword");
       return;
     }
+    const attempt = openAttempts.reserve();
+    if (!attempt) return;
     busy = true;
     error = "";
     try {
       await vault.openRemote(remoteKey, password, keyfilePath || undefined, remoteMode);
-      modal = "none";
-      onopened();
+      if (openAttempts.finish(attempt)) {
+        clearCredentialPrompt();
+        onopened();
+      }
     } catch (e) {
-      error = String(e);
+      failedOpen(attempt, e);
     } finally {
       busy = false;
     }
@@ -242,6 +304,7 @@
   }
 
   async function handleOpen(): Promise<void> {
+    if (busy) return;
     pendingName = null;
     pendingPersistable = undefined;
     if (isTauriRuntime()) {
@@ -276,6 +339,7 @@
     confirm = "";
     showPassword = false;
     modal = "open";
+    startOpenPrompt();
   }
 
   async function pickKeyfile(): Promise<void> {
@@ -284,6 +348,7 @@
   }
 
   async function confirmOpen(): Promise<void> {
+    if (busy) return;
     if (!isDemo && !path) {
       error = t(lang, "welcome.pickDbFile");
       return;
@@ -292,20 +357,27 @@
       error = t(lang, "welcome.needPassword");
       return;
     }
+    const attempt = openAttempts.reserve();
+    if (!attempt) return;
+    const openedPath = path;
+    const openedPassword = password;
+    const openedKeyfile = keyfilePath;
     busy = true;
     error = "";
     try {
-      await vault.open(path, password, keyfilePath || undefined, {
+      await vault.open(openedPath, openedPassword, openedKeyfile || undefined, {
         name: pendingName,
         persistable: pendingPersistable,
       });
       // A stored password alone can never open a keyfile-protected vault —
       // remembering one would present a Windows Hello button that only fails.
-      if (!keyfilePath) void rememberCredential(path, password);
-      modal = "none";
-      onopened();
+      if (!openedKeyfile) void rememberCredential(openedPath, openedPassword);
+      if (openAttempts.finish(attempt)) {
+        clearCredentialPrompt();
+        onopened();
+      }
     } catch (e) {
-      error = String(e);
+      failedOpen(attempt, e);
     } finally {
       busy = false;
     }
@@ -323,6 +395,7 @@
   }
 
   function openRecent(file: string): void {
+    if (busy) return;
     path = file;
     pendingName = settings.general.recentFileNames[file] ?? null;
     isDemo = false;
@@ -334,9 +407,13 @@
     keyfilePath = "";
     error = "";
     modal = "open";
+    startOpenPrompt();
   }
 
   function handleCreate(): void {
+    if (busy) return;
+    openAttempts.close();
+    attemptNotice = "";
     path = "";
     pendingName = null;
     pendingPersistable = undefined;
@@ -485,6 +562,7 @@
       />
     </div>
   {/if}
+  {#if attemptNotice}<Feedback inline message={attemptNotice} />{/if}
 </StandaloneVaultShell>
 
 {#if modal === "open"}
@@ -492,13 +570,8 @@
     title={isDemo ? t(lang, "welcome.unlockTitle") : t(lang, "welcome.openTitle")}
     description={pendingName ?? path}
     size="small"
-    closeOnEscape
-    onclose={() => {
-      // Secret hygiene: cancelling the dialog must not leave the master
-      // password in the masked input.
-      modal = "none";
-      password = "";
-    }}
+    closeOnEscape={!busy}
+    onclose={cancelCredentialPrompt}
   >
     {#snippet icon()}<AppIcon name="lock" size={18} />{/snippet}
     {#snippet children()}
@@ -514,7 +587,7 @@
       />
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (modal = "none")} disabled={busy}>{t(lang, "common.cancel")}</Button>
+      <Button onclick={cancelCredentialPrompt} disabled={busy}>{t(lang, "common.cancel")}</Button>
       <Button variant="primary" onclick={confirmOpen} disabled={busy} {busy}
         >{t(lang, "welcome.unlock")}</Button
       >
@@ -557,13 +630,14 @@
     description={t(lang, "welcome.remoteDesc", { kind: remoteKindLabel })}
     size="medium"
     scrollable
-    closeOnEscape
-    onclose={() => (modal = "none")}
+    closeOnEscape={!busy}
+    onclose={cancelCredentialPrompt}
   >
     {#snippet icon()}<AppIcon name="cloud" size={18} />{/snippet}
     {#snippet headerActions()}
       <Select
         className="remote-kind-picker"
+        disabled={busy}
         value={remote.kind}
         ariaLabel={t(lang, "welcome.transportType")}
         options={[
@@ -578,16 +652,19 @@
         <button
           class="remote-tab"
           class:active={remoteTab === "open"}
+          disabled={busy}
           onclick={() => switchRemoteTab("open")}>{t(lang, "welcome.tabOpen")}</button
         >
         <button
           class="remote-tab"
           class:active={remoteTab === "create"}
+          disabled={busy}
           onclick={() => switchRemoteTab("create")}>{t(lang, "welcome.tabCreate")}</button
         >
         <button
           class="remote-tab"
           class:active={remoteTab === "config"}
+          disabled={busy}
           onclick={() => switchRemoteTab("config")}>{t(lang, "welcome.tabConfig")}</button
         >
       </div>
@@ -716,7 +793,8 @@
                 <button
                   class="remote-item"
                   class:active={remoteKey === obj.key}
-                  onclick={() => (remoteKey = obj.key)}
+                  disabled={busy}
+                  onclick={() => selectRemoteKey(obj.key)}
                 >
                   <AppIcon name="file" size={13} />
                   <span class="remote-item-name" title={obj.key}>{obj.key}</span>
@@ -747,6 +825,7 @@
             <button
               class="remote-mode-option"
               class:active={remoteMode === "memory"}
+              disabled={busy}
               onclick={() => (remoteMode = "memory")}
             >
               <strong>{t(lang, "welcome.memoryOnly")}</strong><small
@@ -756,6 +835,7 @@
             <button
               class="remote-mode-option"
               class:active={remoteMode === "local"}
+              disabled={busy}
               onclick={() => (remoteMode = "local")}
             >
               <strong>{t(lang, "welcome.mirror")}</strong><small
@@ -780,7 +860,7 @@
       {/if}
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (modal = "none")} disabled={busy}>{t(lang, "common.cancel")}</Button>
+      <Button onclick={cancelCredentialPrompt} disabled={busy}>{t(lang, "common.cancel")}</Button>
       {#if remoteTab !== "config"}
         <Button
           variant="primary"

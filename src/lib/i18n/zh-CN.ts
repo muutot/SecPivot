@@ -972,6 +972,12 @@ export const zhCN = {
   "dbsettings.loading": "正在读取数据库设置…",
   "kdf.weakTitle": "密钥派生参数偏弱",
   "security.keyTransformWeakWarning": "提醒弱密钥派生参数",
+  "security.masterKeyTries": "主密钥尝试次数",
+  "security.masterKeyTriesDesc":
+    "每次打开数据库最多尝试的次数（默认 3 次）。达到上限后可重新打开再试。",
+  "security.masterKeyAttemptsExceeded":
+    "已连续尝试失败 {count} 次，本次打开已结束。可以重新打开数据库再试。",
+  "security.restartUnlock": "重新尝试",
   "security.keyTransformWeakWarningDesc":
     "保存偏弱的 KDF 参数或更换弱参数数据库的主密钥前先提醒。新建数据库使用更强的默认参数。",
   "kdf.weakDescription":

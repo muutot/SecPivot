@@ -40,19 +40,31 @@ SecPivot 在多库关闭中额外验证整个会话集合及并发修改，失�
 
 ### Security（安全）
 
-| KeePass 项                                | SecPivot 状态                                                                                                  | 证据                                        |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Lock workspace after inactivity (seconds) | ✅ `security.autoLockMinutes`                                                                                  | SecuritySettingsPanel SettingRangeCard      |
-| Lock after **global user inactivity**     | ❌ 未实现（需要系统级空闲检测，WebView 内不可靠）                                                              | —                                           |
-| Clipboard auto-clear time                 | ✅ `security.clipboardClearSeconds`                                                                            | security.ts copyText                        |
-| By default, new entries expire in N days  | ✅ **`security.defaultExpireDays`**（本轮 510416c 新增）                                                       | EntryEditorDialog create mode 预填          |
-| Lock when minimizing to tray              | ✅ `security.lockOnMinimizeToTray`（本批实现）：隐藏到托盘时复用 `tray-lock` 事件锁定；需先启用 minimizeToTray | src-tauri/src/lib.rs handle_close_requested |
-| Lock when minimizing to taskbar           | ⚠️ `lockOnFocusLoss` 靠 window blur 覆盖                                                                       | security.ts installFocusLock                |
-| Lock on workstation lock / user switch    | ⚠️ blur 通常伴随，非显式事件                                                                                   | —                                           |
-| Lock on suspend / remote-control change   | ❌ 需原生系统事件                                                                                              | —                                           |
-| Exit instead of lock / Always exit        | ❌ 未实现                                                                                                      | handle_close_requested 恒为退出/托盘        |
-| Secure desktop for master key             | ❌ 未实现（Windows 安全桌面，成本高）                                                                          | —                                           |
-| Warn on weak key transformation           | ❌ 未实现（创建/改密钥时告警）                                                                                 | —                                           |
+`AceSecurity.MasterKeyTries` 按官方
+[AceSecurity.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceSecurity.cs)
+与 [MainForm_Functions.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/MainForm_Functions.cs)
+的打开提示循环接入：默认 3，正 int32 范围，每个新打开意图重新计次。
+本地/最近/远程打开与锁屏手动/Hello 解锁均在提交前预留一次，提交失败
+（含 I/O）计次，Hello 取凭据失败不计次；耗尽后清空字段并结束本次提示。
+新提示与组件销毁使旧回调失效，重复提交不另占次数。配置与计次不保存凭据，
+不增加原生 IPC 限流或永久锁库，也不构成离线防破解。
+实际生产提交函数的合成边界回归与 ConfigStore 旧配置/范围/重载测试覆盖此项；
+共享设置卡浅色/深色/320px 渲染为外观证据，真实 WebView/provider 仍待验。
+
+| KeePass 项                                | SecPivot 状态                                                                                                  | 证据                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Lock workspace after inactivity (seconds) | ✅ `security.autoLockMinutes`                                                                                  | SecuritySettingsPanel SettingRangeCard        |
+| Lock after **global user inactivity**     | ❌ 未实现（需要系统级空闲检测，WebView 内不可靠）                                                              | —                                             |
+| Clipboard auto-clear time                 | ✅ `security.clipboardClearSeconds`                                                                            | security.ts copyText                          |
+| By default, new entries expire in N days  | ✅ **`security.defaultExpireDays`**（本轮 510416c 新增）                                                       | EntryEditorDialog create mode 预填            |
+| Lock when minimizing to tray              | ✅ `security.lockOnMinimizeToTray`（本批实现）：隐藏到托盘时复用 `tray-lock` 事件锁定；需先启用 minimizeToTray | src-tauri/src/lib.rs handle_close_requested   |
+| Lock when minimizing to taskbar           | ⚠️ `lockOnFocusLoss` 靠 window blur 覆盖                                                                       | security.ts installFocusLock                  |
+| Lock on workstation lock / user switch    | ⚠️ blur 通常伴随，非显式事件                                                                                   | —                                             |
+| Lock on suspend / remote-control change   | ❌ 需原生系统事件                                                                                              | —                                             |
+| Exit instead of lock / Always exit        | ❌ 未实现                                                                                                      | handle_close_requested 恒为退出/托盘          |
+| Secure desktop for master key             | ❌ 未实现（Windows 安全桌面，成本高）                                                                          | —                                             |
+| Master key tries                          | ⚠️ `security.masterKeyTries`（默认 3）：每次打开提示预算；真实 WebView/provider 待验                           | MasterKeyAttempts / VaultWelcome / LockScreen |
+| Warn on weak key transformation           | ⚠️ `security.keyTransformWeakWarning`：改成本/主密钥及打开弱库升级提示；真实 WebView/provider 待验             | SecuritySettingsPanel / KdfUpgradePrompt      |
 
 ### Policy（策略）
 

@@ -6,6 +6,9 @@
   interface Props {
     value?: string;
     type?: string;
+    min?: number;
+    max?: number;
+    step?: number;
     placeholder?: string;
     /** Monospace text (seeds, sequences, URLs, code). */
     mono?: boolean;
@@ -36,6 +39,9 @@
   let {
     value = $bindable(""),
     type = "text",
+    min,
+    max,
+    step,
     placeholder = undefined,
     mono = false,
     multiline = false,
@@ -90,6 +96,9 @@
     class:invalid
     class:control={size === "control"}
     {type}
+    {min}
+    {max}
+    {step}
     style:padding-right={paddingRightPx ? `${paddingRightPx}px` : undefined}
     bind:value
     {placeholder}

@@ -978,6 +978,12 @@ export const en: Record<I18nKey, string> = {
   "dbsettings.loading": "Loading database settings…",
   "kdf.weakTitle": "Weak key derivation parameters",
   "security.keyTransformWeakWarning": "Warn about weak key derivation",
+  "security.masterKeyTries": "Master key attempts",
+  "security.masterKeyTriesDesc":
+    "Attempts allowed when opening a database (default 3). After the limit, reopen the database to try again.",
+  "security.masterKeyAttemptsExceeded":
+    "Opening stopped after {count} failed attempts. Open the database again to retry.",
+  "security.restartUnlock": "Try again",
   "security.keyTransformWeakWarningDesc":
     "Ask before saving weak KDF costs or changing the master key of a database with weak costs. New databases use stronger defaults.",
   "kdf.weakDescription":
