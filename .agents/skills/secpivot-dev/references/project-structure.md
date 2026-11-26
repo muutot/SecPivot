@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+`EntryTable.focusRowAt` subtracts the measured sticky header from the available
+row viewport; filtering's scroll clamp includes the same header height. Narrow
+summary mode contributes zero, while desktop and narrow full-column mode retain
+the header. `tests/entry-table-focus.test.mjs` executes the complete focus/clamp
+bodies against independent DOM-flow bounds. Native browser End/Home checks cover
+all three modes and toggling full columns; no CSS or virtualization change is made.
+
 `EntryTable.handleRowKeydown` keeps the existing Ctrl/Cmd+A entry shortcut but
 otherwise handles only keys targeted at the row itself. Inline favorite/copy
 buttons retain native activation without an additional row selection or arrow

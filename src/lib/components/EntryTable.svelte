@@ -240,6 +240,7 @@
   const lang = $derived(s.general.language);
 
   const rowHeight = $derived(narrow ? Math.max(NARROW_ROW_HEIGHT, entryRowHeight) : entryRowHeight);
+  const headerHeight = $derived(narrow && !mobileColumns ? 0 : (entryHeadEl?.offsetHeight ?? 0));
   const virtualRange = $derived(
     computeVirtualRange({
       itemCount: rows.length,
@@ -282,7 +283,7 @@
 
   $effect(() => {
     const table = entryTableEl;
-    const maxScrollTop = Math.max(0, rows.length * rowHeight - viewportHeight);
+    const maxScrollTop = Math.max(0, rows.length * rowHeight + headerHeight - viewportHeight);
     if (!table) return;
     const nextScrollTop = Math.min(table.scrollTop, maxScrollTop);
     if (table.scrollTop !== nextScrollTop) table.scrollTop = nextScrollTop;
@@ -463,7 +464,7 @@
     targetIndex = resolved;
     const itemTop = targetIndex * rowHeight;
     const itemBottom = itemTop + rowHeight;
-    const visibleHeight = viewportHeight || entryTableEl.clientHeight;
+    const visibleHeight = Math.max(0, (viewportHeight || entryTableEl.clientHeight) - headerHeight);
     let nextScrollTop = entryTableEl.scrollTop;
     if (itemTop < nextScrollTop) {
       nextScrollTop = itemTop;
