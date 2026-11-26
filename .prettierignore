@@ -9,6 +9,7 @@ node_modules
 /src-tauri/plugins/*/permissions/schemas
 /src-tauri/icons
 package-lock.json
+pnpm-lock.yaml
 .workbuddy
 .opencode
 /.openidea
