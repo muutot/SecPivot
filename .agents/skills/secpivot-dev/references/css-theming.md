@@ -39,12 +39,15 @@ white gradients, 14px backdrop blur and quiet inset/drop shadows. Modal surfaces
 use 16px corners, 90%/82% white gradients, 18px surface blur and a lighter blurred
 backdrop. Shared RadioGroup/theme choices use neutral gray with pale text.
 Primary Button uses a pale blue derived from linkColor; danger uses pale red,
-and warning uses pale yellow for the emergency-export action. Light action text
+and warning uses pale lemon yellow for the emergency-export action. Its light
+preset warningColor is #807500 for readable semantic text; the button derives
+90% saturation / 88% lightness (84% on hover) and a 65% / 68% border from that
+yellow hue with relative HSL, avoiding tan fills or brown outlines. Light action text
 uses textPrimary, including hover. These tints reuse existing semantic tokens;
 the shell, cards, inputs and sidebar never gain blue or brown background fills.
 Layouts, card padding and 28/30px controls stay compact. Glass decoration is gated
 off under forced colors. This is renderer styling, not Windows desktop acrylic.
-Preset text/surface contrast is at least 4.97:1; selected choice text is 5.33:1.
+Preset neutral text/surface contrast is at least 4.97:1; selected choice text is 5.33:1.
 Rendered light primary/danger/warning button text contrast is at least 10.60:1
 at rest; hover keeps dark text and the corresponding semantic tint.
 Browser inspection also measures composed card/control colors and theme switching.

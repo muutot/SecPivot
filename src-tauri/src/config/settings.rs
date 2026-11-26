@@ -87,7 +87,7 @@ impl ThemeColors {
             link_color: "#376c9e".into(),
             success_color: "#238041".into(),
             danger_color: "#c83a42".into(),
-            warning_color: "#996900".into(),
+            warning_color: "#807500".into(),
             scrollbar_color: "#b0b0b0".into(),
         }
     }

@@ -6,8 +6,10 @@ built-in preset while saved custom theme colors remain untouched. Document
 bootstrap publishes general.theme as data-theme so light-only visual rules are
 removed when switching to dark/custom. Gray accents and white/gray surfaces replace warm fills;
 shell/sidebar/card translucency is renderer decoration. Primary/danger/warning
-buttons derive pale blue/red/yellow from existing link/danger/warning tokens;
-there are no new persisted keys. No native opacity/material contract changes.
+buttons derive pale blue/red/lemon-yellow from existing link/danger/warning tokens;
+light warningColor is #807500 in TypeScript and Rust, with relative-HSL button
+tints retaining its yellow hue and dark action text. There are no new persisted
+keys. No native opacity/material contract changes.
 
 `settings.ts::updateGeneral("savedSearches", value)` normalizes names and query
 defaults before publishing the store, using the same normalization as load and

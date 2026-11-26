@@ -66,6 +66,6 @@ export const LIGHT_THEME_COLORS: ThemeColors = {
   linkColor: "#376c9e",
   successColor: "#238041",
   dangerColor: "#c83a42",
-  warningColor: "#996900",
+  warningColor: "#807500",
   scrollbarColor: "#b0b0b0",
 };

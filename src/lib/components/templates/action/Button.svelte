@@ -123,6 +123,13 @@
 
     :global(:root[data-theme="light"]) .btn--warning {
       color: var(--text-primary);
+      border-color: hsl(from var(--warning-color) h 65% 68%);
+      background: hsl(from var(--warning-color) h 90% 88%);
+    }
+
+    :global(:root[data-theme="light"]) .btn--warning:hover:not(:disabled) {
+      color: var(--text-primary);
+      background: hsl(from var(--warning-color) h 90% 84%);
     }
   }
 

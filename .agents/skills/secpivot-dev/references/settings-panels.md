@@ -24,7 +24,10 @@ styles; this does not enable native Windows material or change opacity settings.
 ModalShell follows the same neutral-white treatment with 90%/82% translucent gradient
 stops and 18px surface blur in light mode only, outside forced colors.
 Shared primary actions use pale blue, destructive actions pale red, and the
-warning variant pale yellow; all retain compact sizes and legible dark text.
+warning variant pale lemon yellow with a yellow border, including hover; all
+retain compact sizes and legible dark text. Light warning decoration derives
+the warning token's yellow hue at fixed high saturation/lightness, rather than
+mixing a dark amber/brown token into white.
 
 ## Navigation and ownership
 
