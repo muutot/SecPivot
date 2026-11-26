@@ -11,7 +11,6 @@
 - [ ] 同 UUID 快照刷新保留已关闭的详情面板（SP-S121）：稳定 UUID 派生或显式选择身份门禁；保留主动同条目重选、`showDetailOnSelect` 与一次右键抑制
 - [ ] 行内收藏/复制按钮键盘隔离（SP-S122）：Enter/Space 只执行自身动作，不额外触发行选择
 - [ ] 详情表格键盘定位包含固定表头高度（SP-S123）：End 目标行完整可见；desktop/mobileColumns 末行当前裁切 28px
-- [ ] 可见列拖放用可见索引判定原位/邻位（SP-S124）：隐藏列不阻止合法移动，覆盖 custom/保存/重载
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
 - [ ] 全局 URL 覆盖字符串：KeePass `UrlOverride`（KeeUrlOverride 单一全局串）未做独立输入；当前由 `integration.customOverrides` 通用规则覆盖
 - [ ] 关闭库时自动保存（`AceCloseDb.AutoSave`）：SecPivot 只有编辑后自动保存，无退出/关闭库时保存

@@ -204,13 +204,14 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
   }
 
   /** Move a column so it renders at the given insertion index of the visible
-   *  order. Hidden columns keep their relative array positions. */
+   *  order. Hidden columns keep their relative order. */
   function applyColumnReorder(colId: string, toIndex: number): void {
     const cols = entryColumns.map((c) => ({ ...c }));
     const from = cols.findIndex((c) => c.id === colId);
-    if (from === -1) return;
+    const fromVisible = visibleCols.findIndex((c) => c.id === colId);
+    if (from === -1 || fromVisible === -1) return;
     // Dropping before itself or the column right after it is a no-op.
-    if (toIndex === from || toIndex === from + 1) return;
+    if (toIndex === fromVisible || toIndex === fromVisible + 1) return;
     const [moved] = cols.splice(from, 1);
     const anchorId = toIndex < visibleCols.length ? visibleCols[toIndex].id : null;
     if (anchorId === null) {

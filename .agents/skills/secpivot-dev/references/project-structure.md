@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`columns.svelte.ts::applyColumnReorder` receives an insertion index in the
+visible column order and uses that same order for self/next-neighbor no-ops.
+The full persisted array supplies removal and anchor placement; hidden columns
+retain relative order and custom columns retain widths. `tests/entry-columns.test.mjs`
+compiles the complete columns/layout rune modules and runs actual Svelte effects,
+settings subscriptions and saveLayout with synthetic config IPC. It covers
+forward/backward/end/self drops and normalized persistence/reload, not native
+pointer gestures or platform runtime behavior. No markup or theme rule changes.
+
 `vault/group_search_tests.rs` covers the group-search raw/effective contract,
 default/root inheritance, explicit overrides, save/reopen, notes preservation,
 native matching/candidates/REF and recycle-bin exclusion. Nine tests pass.
