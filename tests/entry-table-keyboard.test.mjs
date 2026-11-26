@@ -8,6 +8,7 @@ import {
   pageDownTargetIndex,
   pageUpTargetIndex,
 } from "../src/lib/utils/entry-nav.ts";
+import { buildEntryRowOffsets, entryRowAtOffset } from "../src/lib/utils/entry-row-layout.ts";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -36,10 +37,15 @@ function fixture() {
   const focused = [];
   const exports = {};
   let all = 0;
-  runInNewContext(js, {
+  const context = {
     exports,
     viewportHeight: 300,
     rowHeight: 30,
+    headerHeight: 28,
+    entryRowAtOffset,
+    get rowOffsets() {
+      return buildEntryRowOffsets(this.rows, this.rowHeight);
+    },
     lastFocusedIndex: 0,
     rows: ["A", "B"].map((uuid) => ({ kind: "entry", entry: { uuid } })),
     onselectentry: (entry) => selected.push(entry.uuid),
@@ -48,8 +54,9 @@ function fixture() {
     findNextEntryIndex,
     pageDownTargetIndex,
     pageUpTargetIndex,
-  });
-  return { ...exports, selected, focused, all: () => all };
+  };
+  runInNewContext(js, context);
+  return { ...exports, context, selected, focused, all: () => all };
 }
 function event(key, target, currentTarget = target, ctrlKey = false) {
   return {
@@ -85,6 +92,20 @@ test("inline action activation never selects a row or consumes native Enter/Spac
   }
   assert.deepEqual(f.selected, []);
   assert.deepEqual(f.focused, []);
+});
+
+test("PageDown/PageUp travel by rendered pixels through short directory separators", () => {
+  const f = fixture();
+  f.context.viewportHeight = 148;
+  f.context.rows = Array.from({ length: 10 }, (_, i) => [
+    { kind: "group" },
+    { kind: "entry", entry: { uuid: `entry-${i}` } },
+  ]).flat();
+  const row = {};
+  f.row(event("PageDown", row), 1, { uuid: "entry-0" });
+  assert.equal(f.focused.at(-1), 5);
+  f.row(event("PageUp", row), 5, { uuid: "entry-2" });
+  assert.equal(f.focused.at(-1), 1);
 });
 
 test("focused rows still select on Enter, navigate and select all", () => {

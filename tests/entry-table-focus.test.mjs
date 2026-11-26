@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { findNearestEntryIndex } from "../src/lib/utils/entry-nav.ts";
+import { buildEntryRowOffsets } from "../src/lib/utils/entry-row-layout.ts";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -50,6 +51,12 @@ function fixture(headerHeight, rowHeight, viewportHeight, count = 100) {
     findNearestEntryIndex,
     tick: async () => {},
     $effect: (run) => run(),
+    get rowOffsets() {
+      return buildEntryRowOffsets(this.rows, this.rowHeight);
+    },
+    get totalRowHeight() {
+      return this.rowOffsets.at(-1);
+    },
   };
   const table = {
     clientHeight: viewportHeight,
@@ -59,7 +66,7 @@ function fixture(headerHeight, rowHeight, viewportHeight, count = 100) {
     set scrollTop(value) {
       scroll = Math.max(
         0,
-        Math.min(value, headerHeight + context.rows.length * rowHeight + 16 - viewportHeight),
+        Math.min(value, headerHeight + context.totalRowHeight + 16 - viewportHeight),
       );
     },
     querySelector(selector) {
@@ -76,8 +83,8 @@ function fixture(headerHeight, rowHeight, viewportHeight, count = 100) {
     focused,
     bounds(index) {
       return {
-        top: headerHeight + index * rowHeight - scroll,
-        bottom: headerHeight + (index + 1) * rowHeight - scroll,
+        top: headerHeight + context.rowOffsets[index] - scroll,
+        bottom: headerHeight + context.rowOffsets[index + 1] - scroll,
       };
     },
   };
@@ -111,6 +118,20 @@ test("clamping after filtering preserves enough scrolling space for the final ro
   assert.equal(f.bounds(19).bottom, 150);
   await f.focus(19, -1);
   assert.equal(f.bounds(19).bottom, 150);
+});
+
+test("mixed separator heights keep End visible and restore focus below the sticky header", async () => {
+  const f = fixture(28, 30, 150, 20);
+  f.context.rows = Array.from({ length: 20 }, (_, i) => [
+    { kind: "group" },
+    { kind: "entry", entry: { uuid: `entry-${i}` } },
+  ]).flat();
+  await f.focus(39, -1);
+  assert.equal(f.bounds(39).bottom, 150);
+  assert.equal(f.focused.at(-1).index, 39);
+  await f.focus(0, 1);
+  assert.equal(f.focused.at(-1).index, 1);
+  assert.equal(f.bounds(1).top, 28);
 });
 
 test("focus uses clientHeight when the resize observer has not populated viewport height", async () => {

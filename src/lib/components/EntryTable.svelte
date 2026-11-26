@@ -4,7 +4,11 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import EntryTotpBadge from "$lib/components/EntryTotpBadge.svelte";
-  import { computeVirtualRange } from "$lib/utils/virtual-list";
+  import {
+    buildEntryRowOffsets,
+    entryRowAtOffset,
+    entryRowRange,
+  } from "$lib/utils/entry-row-layout";
   import { columnLabel } from "$lib/services/columns.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
@@ -240,24 +244,21 @@
   const lang = $derived(s.general.language);
 
   const rowHeight = $derived(narrow ? Math.max(NARROW_ROW_HEIGHT, entryRowHeight) : entryRowHeight);
+  const separatorHeight = $derived(Math.max(14, Math.round(rowHeight / 2)));
+  const rowOffsets = $derived(buildEntryRowOffsets(rows, rowHeight));
+  const totalRowHeight = $derived(rowOffsets[rows.length]);
   const headerHeight = $derived(narrow && !mobileColumns ? 0 : (entryHeadEl?.offsetHeight ?? 0));
   const virtualRange = $derived(
-    computeVirtualRange({
-      itemCount: rows.length,
-      itemHeight: rowHeight,
-      scrollTop,
-      viewportHeight,
-      overscan: VIRTUAL_OVERSCAN,
-    }),
+    entryRowRange(rowOffsets, scrollTop, viewportHeight - headerHeight, VIRTUAL_OVERSCAN),
   );
   const virtualRows = $derived(rows.slice(virtualRange.start, virtualRange.end));
-  const topSpacerHeight = $derived(virtualRange.start * rowHeight);
+  const topSpacerHeight = $derived(rowOffsets[virtualRange.start]);
   /** Entry-only ordinals for `aria-posinset`: separators are visual, so the
    *  announced position counts focusable options, not physical rows. */
   const entryOrdinals = $derived(
     entryPositions(rows, (row) => (row.kind === "entry" ? row.entry.uuid : null)),
   );
-  const bottomSpacerHeight = $derived((rows.length - virtualRange.end) * rowHeight);
+  const bottomSpacerHeight = $derived(totalRowHeight - rowOffsets[virtualRange.end]);
 
   onMount(() => {
     const media = window.matchMedia("(max-width: 720px)");
@@ -283,7 +284,7 @@
 
   $effect(() => {
     const table = entryTableEl;
-    const maxScrollTop = Math.max(0, rows.length * rowHeight + headerHeight - viewportHeight);
+    const maxScrollTop = Math.max(0, totalRowHeight + headerHeight - viewportHeight);
     if (!table) return;
     const nextScrollTop = Math.min(table.scrollTop, maxScrollTop);
     if (table.scrollTop !== nextScrollTop) table.scrollTop = nextScrollTop;
@@ -431,13 +432,12 @@
   function handleListScroll(event: Event): void {
     const container = event.currentTarget as HTMLDivElement;
     const nextScrollTop = container.scrollTop;
-    const nextRange = computeVirtualRange({
-      itemCount: rows.length,
-      itemHeight: rowHeight,
-      scrollTop: nextScrollTop,
-      viewportHeight: viewportHeight || container.clientHeight,
-      overscan: VIRTUAL_OVERSCAN,
-    });
+    const nextRange = entryRowRange(
+      rowOffsets,
+      nextScrollTop,
+      (viewportHeight || container.clientHeight) - headerHeight,
+      VIRTUAL_OVERSCAN,
+    );
     const active = document.activeElement as HTMLElement | null;
     const activeIndex = Number(active?.dataset.entryIndex);
     if (
@@ -445,11 +445,7 @@
       Number.isInteger(activeIndex) &&
       (activeIndex < nextRange.start || activeIndex >= nextRange.end)
     ) {
-      const fallback = findNearestEntryIndex(
-        rows,
-        Math.min(rows.length - 1, Math.max(0, Math.floor(nextScrollTop / rowHeight))),
-        1,
-      );
+      const fallback = findNearestEntryIndex(rows, entryRowAtOffset(rowOffsets, nextScrollTop), 1);
       lastFocusedIndex = fallback ?? activeIndex;
       entryListEl?.focus({ preventScroll: true });
     }
@@ -462,8 +458,8 @@
     const resolved = findNearestEntryIndex(rows, targetIndex, direction);
     if (resolved === null) return;
     targetIndex = resolved;
-    const itemTop = targetIndex * rowHeight;
-    const itemBottom = itemTop + rowHeight;
+    const itemTop = rowOffsets[targetIndex];
+    const itemBottom = rowOffsets[targetIndex + 1];
     const visibleHeight = Math.max(0, (viewportHeight || entryTableEl.clientHeight) - headerHeight);
     let nextScrollTop = entryTableEl.scrollTop;
     if (itemTop < nextScrollTop) {
@@ -524,7 +520,6 @@
       return;
     }
 
-    const pageStep = Math.max(1, Math.floor(viewportHeight / rowHeight) - 1);
     let targetIndex: number | null = null;
     if (event.key === "ArrowDown") {
       targetIndex = findNextEntryIndex(rows, index + 1, 1);
@@ -535,10 +530,17 @@
     } else if (event.key === "End") {
       targetIndex = findNextEntryIndex(rows, rows.length - 1, -1);
     } else if (event.key === "PageDown") {
-      // page step is in rows, but we need to land on an entry
-      targetIndex = pageDownTargetIndex(rows, index, pageStep);
+      const probe = entryRowAtOffset(
+        rowOffsets,
+        rowOffsets[index] + Math.max(rowHeight, viewportHeight - headerHeight - rowHeight),
+      );
+      targetIndex = pageDownTargetIndex(rows, index, Math.max(1, probe - index));
     } else if (event.key === "PageUp") {
-      targetIndex = pageUpTargetIndex(rows, index, pageStep);
+      const probe = entryRowAtOffset(
+        rowOffsets,
+        rowOffsets[index] - Math.max(rowHeight, viewportHeight - headerHeight - rowHeight),
+      );
+      targetIndex = pageUpTargetIndex(rows, index, Math.max(1, index - probe));
     }
 
     if (targetIndex !== null) {
@@ -555,6 +557,7 @@
   class:zebra
   style:--entry-cols={entryGridCols}
   style:--entry-row-height={`${rowHeight}px`}
+  style:--group-separator-height={`${separatorHeight}px`}
   bind:this={entryTableEl}
   onscroll={handleListScroll}
 >
@@ -1005,7 +1008,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    height: var(--entry-row-height, 30px);
+    height: var(--group-separator-height, 15px);
     width: max-content;
     min-width: 100%;
     padding: 0 10px 0 8px;
@@ -1016,6 +1019,7 @@
     font-size: var(--font-size-tiny, 10px);
     font-weight: 600;
     letter-spacing: 0.02em;
+    line-height: 1;
   }
 
   .group-separator-label {
