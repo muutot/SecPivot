@@ -181,6 +181,42 @@ fn master_key_expiry_duration_cutoff_failures_and_offline_read_only_assessment()
 use chrono::Duration;
 
 #[test]
+fn master_key_expiry_validation_and_native_lifetime_guard_refuse_reopened_origins() {
+    for rule in ["", " P30D ", "2027-01-01T00:00:00Z", "-PT.5S"] {
+        assert!(validate_expiry_rule(rule));
+    }
+    for rule in ["P", "p1d", "P1.5D", "9999-99-99", "invalid"] {
+        assert!(!validate_expiry_rule(rule));
+    }
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("synthetic-origin.kdbx");
+    let original = serialized(Some(now()), None, None, Some(true));
+    std::fs::write(&path, &original).unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, "synthetic-expiry-only", None).unwrap();
+    let old = session.master_key_expiry_offer("", "").unwrap().token;
+    session.ensure_master_key_expiry_token(&old).unwrap();
+    session.close();
+    assert!(session.ensure_master_key_expiry_token(&old).is_err());
+    session.open(&path, "synthetic-expiry-only", None).unwrap();
+    assert!(session
+        .ensure_master_key_expiry_token(&old)
+        .unwrap_err()
+        .starts_with("MASTER_KEY_EXPIRY_CHANGED:"));
+    assert!(session.ensure_master_key_expiry_token("invalid").is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(
+        session
+            .require_db()
+            .unwrap()
+            .meta
+            .master_key_change_force_once,
+        Some(true)
+    );
+    session.close();
+}
+
+#[test]
 fn master_key_expiry_xml_parser_matches_independent_dotnet_vectors() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/master-key-expiry-xml.json"

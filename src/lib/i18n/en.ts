@@ -979,6 +979,38 @@ export const en: Record<I18nKey, string> = {
   "kdf.weakTitle": "Weak key derivation parameters",
   "security.keyTransformWeakWarning": "Warn about weak key derivation",
   "security.masterKeyTries": "Master key attempts",
+  "security.keyExpiryRec": "Recommend changing the master key",
+  "security.keyExpiryRecDesc":
+    "Suggest a change when the key reaches this age or predates this cutoff. Applies on the next database opening.",
+  "security.keyExpiryForce": "Require changing the master key",
+  "security.keyExpiryForceDesc":
+    "Require a change before continuing with the database. Applies on the next opening; edit the rule, then Apply.",
+  "security.keyExpiryFormat":
+    "Empty disables the rule. P90D means 90 days; a UTC date requires a change for keys older than that date. Edit, then Apply.",
+  "security.keyExpiryInvalid":
+    "Enter an XML duration such as P90D or a valid UTC cutoff such as 2027-01-01T00:00:00Z. Empty disables the rule.",
+  "security.keyExpiryRequired": "Master key change required",
+  "security.keyExpiryRecommended": "Master key change recommended",
+  "security.keyExpiryRequiredDesc":
+    "This database requires a new master key before you continue. You may change it or close the database.",
+  "security.keyExpiryRecommendedDesc":
+    "The master key has reached its configured renewal threshold. Change it now or choose Later.",
+  "security.keyExpiryInvalidRules":
+    "One or more key-expiry rules are invalid. Correct them in Security settings; valid rules still apply.",
+  "security.keyExpiryUnknownDate":
+    "The database has no master key change date. Its age cannot be evaluated.",
+  "security.keyExpiryReadOnly":
+    "This database is read-only. Close it and reopen a writable copy to change the master key.",
+  "security.keyExpiryInspect": "Checking master key expiry",
+  "security.keyExpiryInspectDesc":
+    "Checking this database's renewal requirements before continuing.",
+  "security.keyExpiryChanged":
+    "The database was closed or reopened. Review the new database before changing its key.",
+  "security.keyExpiryClose": "Close database",
+  "security.keyExpiryLater": "Later",
+  "security.keyExpiryChange": "Change now",
+  "security.keyExpiryBack": "Back",
+  "security.keyExpiryRetry": "Retry",
   "security.masterKeyTriesDesc":
     "Attempts allowed when opening a database (default 3). After the limit, reopen the database to try again.",
   "security.masterKeyAttemptsExceeded":

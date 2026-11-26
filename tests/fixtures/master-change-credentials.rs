@@ -172,6 +172,7 @@ impl VaultSession {
             Ok(((), (), 1))
         }
     }
+    fn ensure_master_key_expiry_token(&self, _: &str) -> Result<(), String> { Ok(()) }
     fn note_save_failure(&mut self) {
         current().failure_noted.store(true, Ordering::SeqCst);
     }
@@ -323,6 +324,7 @@ async fn run(fixture: Arc<Fixture>) -> Result<VaultState, String> {
         Some("synthetic-session".into()),
         password(fixture),
         Some("synthetic.key".into()),
+        // EXPIRY_TOKEN_ARGUMENT
     )
     .await
 }
@@ -336,6 +338,7 @@ async fn unpolled_and_keyfile_read_refusal_clear_the_new_password() {
         None,
         password(fixture.clone()),
         Some("synthetic.key".into()),
+        // EXPIRY_TOKEN_ARGUMENT
     );
     drop(future);
     assert!(!fixture.read.load(Ordering::SeqCst));

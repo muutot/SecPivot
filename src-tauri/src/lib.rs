@@ -479,6 +479,7 @@ pub fn run() {
             commands::get_database_settings,
             commands::get_kdf_upgrade_offer,
             commands::get_master_key_expiry_offer,
+            commands::validate_master_key_expiry_rule,
             commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,

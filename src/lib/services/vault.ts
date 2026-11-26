@@ -143,7 +143,11 @@ interface VaultStore {
    *  UUID + last-modified (histories preserved, recycle bin excluded). */
   mergeRemote: () => Promise<VaultState>;
   saveAs: (path: string, label?: VaultLabel) => Promise<VaultState>;
-  changeMasterKey: (password: string, keyfile: string | null) => Promise<VaultState>;
+  changeMasterKey: (
+    password: string,
+    keyfile: string | null,
+    expiryToken?: string,
+  ) => Promise<VaultState>;
   addEntry: (input: EntryInput) => Promise<VaultState>;
   saveEntry: (request: EntrySaveRequest) => Promise<EntrySaveResult>;
   addEntries: (inputs: ImportEntryInput[]) => Promise<VaultState>;
@@ -1201,7 +1205,11 @@ export const vault: VaultStore = {
   },
 
   /** Re-encrypt the session with a new master password and/or keyfile. */
-  async changeMasterKey(password: string, keyfile: string | null): Promise<VaultState> {
+  async changeMasterKey(
+    password: string,
+    keyfile: string | null,
+    expiryToken?: string,
+  ): Promise<VaultState> {
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
       const epoch = captureSessionEpoch(sessionId);
@@ -1209,6 +1217,7 @@ export const vault: VaultStore = {
         sessionId,
         password,
         keyfile,
+        ...(expiryToken === undefined ? {} : { expiryToken }),
       });
       const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
       await refreshTabs();

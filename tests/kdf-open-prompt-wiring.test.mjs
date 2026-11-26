@@ -7,6 +7,8 @@ import test from "node:test";
 import ts from "typescript";
 register("./helpers/lib-alias-loader.mjs", import.meta.url);
 const { KdfOpenPromptController } = await import("../src/lib/services/kdf-open-prompt.ts");
+const { MasterKeyOpenPromptController } =
+  await import("../src/lib/services/master-key-open-prompt.ts");
 const source = readFileSync("src/lib/components/KdfOpenPrompt.svelte", "utf8").match(
   /<script lang="ts">([^]*?)<\/script>/,
 )[1];
@@ -16,7 +18,8 @@ const executable = ast.statements
   .map((node) => node.getText(ast))
   .join("\n");
 const js = ts.transpileModule(
-  executable + "\nexports.controller=controller; exports.prompt=()=>prompt;",
+  executable +
+    "\nexports.controller=controller; exports.prompt=()=>prompt; exports.masterController=masterController; exports.masterPrompt=()=>masterPrompt;",
   { compilerOptions: { target: ts.ScriptTarget.ESNext } },
 ).outputText;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -27,7 +30,7 @@ const offer = {
   recommended: { algorithm: "Aes", rounds: "600000" },
   readOnly: false,
 };
-function fixture(runtime = true) {
+function fixture(runtime = true, masterRequired = false) {
   const state = writable(null),
     tabs = writable([]);
   const appSettings = writable({
@@ -36,7 +39,8 @@ function fixture(runtime = true) {
   });
   const cleanups = [],
     calls = [],
-    inspections = [];
+    inspections = [],
+    masterInspections = [];
   let active = null;
   const epochs = new Map();
   let operationOwner = null;
@@ -56,6 +60,13 @@ function fixture(runtime = true) {
     },
     getKdfUpgradeOffer: () =>
       new Promise((resolve) => inspections.push({ id: operationOwner, resolve })),
+    getMasterKeyExpiryOffer: () =>
+      masterRequired
+        ? new Promise((resolve) => masterInspections.push({ id: operationOwner, resolve }))
+        : Promise.resolve({ required: false, recommended: false, invalidRules: [] }),
+    closeTab: async (id) => {
+      calls.push({ closed: id });
+    },
     upgradeWeakKdf: async (offer) => {
       calls.push({ id: operationOwner, offer });
     },
@@ -67,6 +78,7 @@ function fixture(runtime = true) {
     appSettings,
     vault,
     KdfOpenPromptController,
+    MasterKeyOpenPromptController,
     isTauriRuntime: () => runtime,
     onDestroy: (callback) => cleanups.push(callback),
     t: (_, key) => key,
@@ -77,6 +89,7 @@ function fixture(runtime = true) {
     context,
     calls,
     inspections,
+    masterInspections,
     open: (id) => {
       active = id;
       epochs.set(id, Symbol(id));
@@ -96,6 +109,7 @@ function fixture(runtime = true) {
 test("actual prompt host subscribes to native lifetimes and scopes approval to the original session", async () => {
   const f = fixture();
   f.open("origin");
+  await flush();
   assert.equal(f.inspections[0].id, "origin");
   f.inspections[0].resolve(offer);
   await flush();
@@ -111,6 +125,7 @@ test("actual host ignores late offers after close/unmount and browser preview ne
   for (const unmount of [false, true]) {
     const f = fixture();
     f.open("origin");
+    await flush();
     if (unmount) f.cleanup();
     else f.close();
     f.inspections[0].resolve(offer);
@@ -128,13 +143,42 @@ test("actual host ignores late offers after close/unmount and browser preview ne
 test("actual host renews same-id recommendations after a decrypted lifetime replacement", async () => {
   const f = fixture();
   f.open("origin");
+  await flush();
   f.inspections[0].resolve(offer);
   await flush();
   f.context.exports.controller.dismiss();
   f.open("origin");
+  await flush();
   assert.equal(f.inspections.length, 2);
   f.inspections[1].resolve({ ...offer, token: "replacement" });
   await flush();
   assert.equal(f.context.exports.prompt().offer.token, "replacement");
+  f.cleanup();
+});
+
+test("actual host requires the master-key decision before inspecting KDF costs", async () => {
+  const f = fixture(true, true);
+  f.open("origin");
+  assert.equal(f.masterInspections[0].id, "origin");
+  assert.deepEqual(f.inspections, []);
+  const required = {
+    token: "native-expiry",
+    required: true,
+    recommended: false,
+    readOnly: false,
+    invalidRules: [],
+  };
+  f.masterInspections[0].resolve(required);
+  await flush();
+  f.context.exports.masterController.decline();
+  assert.deepEqual(f.inspections, []);
+  f.context.exports.masterController.change();
+  const owner = f.context.exports.masterPrompt().owner;
+  f.context.exports.masterController.changed(owner);
+  await flush();
+  assert.equal(f.inspections[0].id, "origin");
+  f.inspections[0].resolve(offer);
+  await flush();
+  assert.equal(f.context.exports.prompt().offer, offer);
   f.cleanup();
 });

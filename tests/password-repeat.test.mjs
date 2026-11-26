@@ -65,7 +65,7 @@ test("repetition preference publishes and survives settings persistence/reload",
   }
 });
 
-const source = readFileSync("src/lib/components/settings/SecuritySettingsPanel.svelte", "utf8");
+const source = readFileSync("src/lib/components/MasterKeyChangeForm.svelte", "utf8");
 const handler = source.match(/^  async function submitMasterKeyChange\([^]*?^  \}/m)?.[0];
 const continueHandler = source.match(/^  function continueWeakMasterKey\([^]*?^  \}/m)?.[0];
 assert.ok(handler, "extract complete production master-key submission");
@@ -91,6 +91,8 @@ function masterFixture(onlyWhenHidden, showPassword) {
     keyTransformWeakWarning: true,
     database: { kdfParameters: { algorithm: "Aes", rounds: "600000" } },
     feedback: null,
+    expiryToken: undefined,
+    onchanged: undefined,
     lang: "en",
     passwordRepeatMatches,
     appSettings: {},
@@ -192,6 +194,91 @@ test("disabling weak warnings preserves the existing master-key flow", async () 
   f.context.vault.getDatabaseSettings = () => assert.fail("disabled preference must not preflight");
   await f.context.run();
   assert.equal(f.calls.length, 1);
+});
+
+test("renewal form passes its native lifetime token and releases the prompt only after successful persistence", async () => {
+  const f = masterFixture(true, true);
+  f.context.expiryToken = "synthetic-native-token";
+  let changed = 0;
+  f.context.onchanged = () => changed++;
+  f.context.fail = true;
+  await f.context.run();
+  assert.equal(changed, 0);
+  assert.equal(f.context.newPassword, " synthetic-new ");
+  f.context.fail = false;
+  await f.context.run();
+  assert.equal(f.calls[1][2], "synthetic-native-token");
+  assert.equal(changed, 1);
+  assert.equal(f.context.newPassword, "");
+});
+
+test("shared form clears drafts on replacement/disposal and rejects a late keyfile picker", async () => {
+  const script = source.match(/<script lang="ts">([^]*?)<\/script>/)[1];
+  const ast = ts.createSourceFile("form.ts", script, ts.ScriptTarget.Latest, true);
+  const body = ast.statements
+    .filter((node) => !ts.isImportDeclaration(node))
+    .map((node) => node.getText(ast))
+    .join("\n");
+  let id = null,
+    epoch,
+    notify,
+    destroy,
+    finishPicker,
+    unsubscribed = false;
+  const context = vm.createContext({
+    exports: {},
+    $props: () => ({}),
+    $state: (value) => value,
+    $derived: (value) => value,
+    $effect: () => {},
+    $appSettings: { general: { language: "en" } },
+    onDestroy: (callback) => (destroy = callback),
+    SessionViewGuard,
+    vault: {
+      getActiveSessionId: () => id,
+      getSessionEpoch: () => epoch,
+      subscribe: (callback) => {
+        notify = callback;
+        callback();
+        return () => (unsubscribed = true);
+      },
+    },
+    isTauriRuntime: () => true,
+    open: () => new Promise((resolve) => (finishPicker = resolve)),
+  });
+  const expose = `
+    exports.pick=pickKeyfile;
+    exports.seed=()=>{newPassword="synthetic draft";confirmPassword="synthetic repeat";newKeyfile="synthetic.keyx";showPassword=true;feedback={ok:true,message:"synthetic"};weakWarningView=masterView.capture();showWeakWarning=true;};
+    exports.values=()=>({newPassword,confirmPassword,newKeyfile,showPassword,feedback,showWeakWarning});`;
+  vm.runInContext(
+    ts.transpileModule(body + expose, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+    }).outputText,
+    context,
+  );
+  id = "synthetic-origin";
+  epoch = Symbol();
+  notify();
+  context.exports.seed();
+  const pendingPicker = context.exports.pick();
+  epoch = Symbol("replacement with same id");
+  notify();
+  finishPicker("synthetic-late.keyx");
+  await pendingPicker;
+  assert.deepEqual(JSON.parse(JSON.stringify(context.exports.values())), {
+    newPassword: "",
+    confirmPassword: "",
+    newKeyfile: null,
+    showPassword: false,
+    feedback: null,
+    showWeakWarning: false,
+  });
+  context.exports.seed();
+  destroy();
+  assert.equal(unsubscribed, true);
+  assert.equal(context.exports.values().newPassword, "");
+  assert.equal(context.exports.values().confirmPassword, "");
+  assert.equal(context.exports.values().newKeyfile, null);
 });
 
 test("detached and A-B-A master-key preflights never change credentials", async () => {

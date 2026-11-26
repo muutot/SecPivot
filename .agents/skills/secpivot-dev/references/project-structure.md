@@ -9,7 +9,14 @@ offset keep partial-date/timezone reference values deterministic across hosts.
 The `get_master_key_expiry_offer` command reads native ConfigStore rules and
 resolves its explicit session. Vault service reads guard their renderer epochs.
 Config strings default empty on both sides; tests cover old configs, restart
-and invalid values. No configuration/prompt UI or opening-time enforcement yet.
+and invalid values. validate_master_key_expiry_rule shares the actual parser for
+explicit Apply in settings/MasterKeyExpiryRuleCard. MasterKeyChangeForm owns the
+shared settings/renewal credential form and current-view success/busy callbacks.
+MasterKeyExpiryDialog owns compact required/recommended/error review and Back.
+services/master-key-open-prompt.ts owns nonsecret inspection/acknowledgement;
+KdfOpenPrompt serializes master renewal before KDF and is excluded from TCATO.
+Optional expiryToken binds native change preparation to the history lifetime.
+Real WebView/provider/official-client behavior remains unverified.
 
 The ninth reviewed KeePass patch preserves Meta.master_key_change_force_once
 in the core model and XML conversion. Native master_key_force_once_tests.rs
@@ -18,7 +25,7 @@ changes and read-only refusal. A dependency regression starts from literal XML
 and executes both model conversions. First-party persist_change/complete_change
 consume true only after an authoritative new-key commit. Additional native tests
 cover three-state local reopen, failed writes/read-only refusal, concurrent edits
-and offline remote keyfile-only change. Opening-time enforcement remains pending;
+and offline remote keyfile-only change. Opening renewal uses the same change path;
 the dependency patch itself is metadata fidelity only.
 
 vault/master_key_time_tests.rs exercises real temporary KDBX dates for local/
@@ -62,7 +69,7 @@ service bodies without changing a user vault or live clipboard.
 
 `components/KdfWarningDialog.svelte` owns the shared localized weak-cost
 confirmation over ModalShell/Buttons. DatabaseSettingsDialog uses it before a
-changed weak KDF patch; SecuritySettingsPanel uses it after native-cost preflight
+changed weak KDF patch; MasterKeyChangeForm uses it after native-cost preflight
 for master-key changes. `utils/kdf-parameters.ts` owns exact official thresholds,
 and ConfigStore/TS settings persist the default-on keyTransformWeakWarning.
 Master-key confirmations are bound to SessionViewGuard and dismissed on tab/view

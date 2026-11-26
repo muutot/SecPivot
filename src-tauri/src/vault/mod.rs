@@ -34,6 +34,7 @@ pub use self::kdf::{KdfBenchmarkResult, KdfParameters};
 mod master_key_expiry;
 #[cfg(test)]
 mod master_key_force_once_tests;
+pub(crate) use self::master_key_expiry::validate_expiry_rule;
 pub use self::master_key_expiry::MasterKeyExpiryOffer;
 #[cfg(test)]
 mod master_key_time_tests;

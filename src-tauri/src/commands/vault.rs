@@ -305,6 +305,12 @@ pub(crate) fn get_kdf_upgrade_offer(
     )
 }
 
+/// Validate a draft with the same XML parser used for native expiry assessment.
+#[tauri::command]
+pub(crate) fn validate_master_key_expiry_rule(rule: String) -> bool {
+    vault::validate_expiry_rule(&rule)
+}
+
 /// Read native expiry metadata and global rules without copying credentials.
 #[tauri::command]
 pub(crate) fn get_master_key_expiry_offer(
@@ -593,6 +599,7 @@ pub(crate) async fn change_master_key(
     session_id: Option<String>,
     password: VaultPassword,
     keyfile: Option<String>,
+    expiry_token: Option<String>,
 ) -> Result<VaultState, String> {
     // Keyfile read, KDF and persistence all happen without the session lock,
     // and the KDF + serialization + transport run off the async worker thread.
@@ -601,6 +608,9 @@ pub(crate) async fn change_master_key(
     let (session_id, (db, target, revision)) = {
         let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         vaults.with_resolved_session_mut(&mut active, session_id.as_deref(), |target| {
+            if let Some(token) = expiry_token.as_deref() {
+                target.ensure_master_key_expiry_token(token)?;
+            }
             target.prepare_change()
         })?
     };

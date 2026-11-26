@@ -1,5 +1,15 @@
 # Project-wide UI Style and Theming
 
+MasterKeyExpiryRuleCard uses existing settings cards, TextField, Button and
+Feedback, with a scoped note/action flex row and anywhere text wrapping.
+MasterKeyChangeForm retains existing field/keyfile spacing and uses a stretched
+shared submit Button: primary in settings, warning for opening renewal.
+MasterKeyExpiryDialog uses confirm/small ModalShell at prompt layer with only
+compact semantic filename/note spacing and wrapping. No new palette, font or
+theme token is introduced. Light rendering retains translucent white-gray
+surfaces, shared Cascadia font and pale lemon-yellow warning buttons; dark
+desktop and320px Chinese/English checks show contained text and reachable actions.
+
 The Master key attempts card composes existing settings primitives and a shared
 control-size numeric TextField; its only local layout rule reserves96px for the
 number. TextField's optional min/max/step attributes add no CSS. Retry exhaustion

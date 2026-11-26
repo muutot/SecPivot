@@ -1,5 +1,19 @@
 # Settings Shell and Panel Patterns
 
+SecuritySettingsPanel composes recommended/required MasterKeyExpiryRuleCard
+instances. Each reuses card/heading, control TextField, action Button and inline
+Feedback; local drafts require native validation and explicit Apply. Empty rules
+disable; XML duration/date cutoffs apply next opening. Drafts never persist on
+invalid or disposed replies. Compact note/action flex rows wrap text at320px.
+MasterKeyChangeForm extracts the existing repetition/keyfile/weak-KDF flow and
+scoped layout, shared by the panel and MasterKeyExpiryDialog. Its submit uses
+shared primary Button for manual changes and pale-yellow warning for renewal.
+The dialog uses confirm/small ModalShell at prompt layer; required review offers
+Change/Close, recommended also Later, and readonly disables Change. Back never
+acknowledges a requirement. Main KdfOpenPrompt resolves renewal before KDF.
+Chinese light/English dark and320px previews cover wrapping/controls/shared font;
+no real credential change or native vault runs in that browser preview.
+
 SecuritySettingsPanel's Master key attempts card uses the existing setting-card,
 setting-heading and heading-inline structure plus a 96px shared TextField at
 control size. Positive-int32 min/max/step are passed through; valid edits update

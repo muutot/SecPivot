@@ -10,13 +10,25 @@ Temporary KDBX/MemoryStorage tests cover boundaries, absent/negative thresholds,
 ForceOnce, read-only state and no-write behavior. Independent .NET Framework
 XmlConvert vectors cover syntax, tick precision, overflow and cutoff parsing;
 these are synthetic rules, not native WebView/provider/official-client evidence.
-Opening-time reminder/forced-change integration remains pending.
+Opening-time renewal now precedes KDF upgrade in the main-route host. Required
+review cannot Escape/decline; Back returns to review, and only successful current
+form completion acknowledges renewal. Read-only required sessions can close.
+Inspection/close errors keep the prompt; native close cancellation preserves the
+session. Owner epochs guard replies and callbacks; the optional expiryToken is
+validated under the native persistence permit before preparation. It is a
+lifetime binding, not a one-use token or native enforcement on every secret API.
+Rule-card drafts require the actual native parser before explicit publication.
+MasterKeyChangeForm retains repetition/weak-KDF review and clears temporary
+fields on origin change/destruction. The controller holds no credentials.
+Synthetic controller/host/form/service and native lifetime tests plus isolated
+light/dark/320px component rendering cover this unit. Actual WebView/provider/
+official-client verification remains separate.
 
 The one-time MasterKeyChangeForceOnce flag now survives KDBX parsing and saves,
 including absent versus explicit false/true. A successful master-key change
 consumes true in the same write as the new key, then adopts false in the live
 session. Failures/read-only refusal preserve the request and credentials.
-Expiry evaluation and opening-time enforcement remain pending. Dependency tests
+Native expiry evaluation and opening renewal use this preserved flag. Dependency tests
 begin with literal XML; native tests use disposable KDBX/MemoryStorage and do
 not establish official-client/provider/WebView behavior.
 
@@ -26,7 +38,7 @@ whole-second precision; completion adopts the exact written date, including
 when concurrent edits remain dirty. Missing keyfiles, read-only or storage
 failures leave the old date/credentials intact. Ordinary save/Save As/KDF
 changes never renew the master-key age. These dates are prerequisites for
-expiry evaluation, not proof that expiry reminders/enforcement are implemented.
+expiry evaluation; opening renewal uses them without altering ordinary saves.
 Native tests use disposable KDBX/MemoryStorage; WebView/provider/official-client
 verification remains separate.
 

@@ -52,8 +52,13 @@ MemoryStorage 回归覆盖保存重开、仅密钥文件和失败路径。
 原生配置中保留。原生只读评估已接入数据库天数与全局 XML 时长/日期截止规则，
 强制优先；无效规则单独反馈，有效规则继续判断。真实临时 KDBX/离线 remote、
 .NET Framework `XmlConvert` 独立参考值及实际前端配置/会话守卫回归通过。
-设置界面、打开时提醒/强制更换与原生 WebView/provider/官方客户端运行仍待，
-不能据此标记整个条目完成。
+安全页现有两个规则卡，草稿经实际原生解析器校验后显式应用，下次打开生效。
+打开时先处理主密钥到期，再处理弱 KDF；建议允许稍后，强制仅允许更换或
+关闭，返回/取消/失败均不放行。只读禁用更换，关闭失败保留提醒；表单共用
+重复密码/弱参数确认，原生可选寿命 token 在准备改密钥前拒绝旧会话。
+实际 controller/host/form/service、原生寿命与浅色/深色/320px 渲染已验证。
+这是官方式打开提示策略，并非所有原生密钥 API 的全局访问禁令。
+原生 WebView/provider/官方客户端运行仍待，不能标记整个条目完成。
 
 `AceSecurity.MasterKeyTries` 按官方
 [AceSecurity.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceSecurity.cs)

@@ -973,6 +973,31 @@ export const zhCN = {
   "kdf.weakTitle": "密钥派生参数偏弱",
   "security.keyTransformWeakWarning": "提醒弱密钥派生参数",
   "security.masterKeyTries": "主密钥尝试次数",
+  "security.keyExpiryRec": "建议更换主密钥的期限",
+  "security.keyExpiryRecDesc": "达到此密钥年龄或早于指定日期时建议更换，下次打开数据库时生效。",
+  "security.keyExpiryForce": "强制更换主密钥的期限",
+  "security.keyExpiryForceDesc": "到期后须更换主密钥才能继续使用，下次打开时生效。编辑后点击应用。",
+  "security.keyExpiryFormat":
+    "留空禁用。P90D 表示 90 天；UTC 日期要求更换早于该日期的密钥。编辑后点击应用。",
+  "security.keyExpiryInvalid":
+    "请输入 P90D 等 XML 时长或 2027-01-01T00:00:00Z 等有效 UTC 截止日期，留空可禁用。",
+  "security.keyExpiryRequired": "需要更换主密钥",
+  "security.keyExpiryRecommended": "建议更换主密钥",
+  "security.keyExpiryRequiredDesc":
+    "此数据库要求更换主密钥后才能继续使用。可以更换密钥或关闭数据库。",
+  "security.keyExpiryRecommendedDesc": "主密钥已达到设定的更换期限，可以立即更换或稍后处理。",
+  "security.keyExpiryInvalidRules":
+    "部分密钥到期规则无效，请到安全设置中修正；其他有效规则仍会执行。",
+  "security.keyExpiryUnknownDate": "数据库未记录主密钥更换日期，无法判断密钥年龄。",
+  "security.keyExpiryReadOnly": "当前数据库只读，请关闭后重新打开可写副本，再更换主密钥。",
+  "security.keyExpiryInspect": "检查主密钥期限",
+  "security.keyExpiryInspectDesc": "正在检查此数据库的密钥更换要求。",
+  "security.keyExpiryChanged": "数据库已关闭或重新打开，请重新确认当前数据库后更换密钥。",
+  "security.keyExpiryClose": "关闭数据库",
+  "security.keyExpiryLater": "稍后处理",
+  "security.keyExpiryChange": "立即更换",
+  "security.keyExpiryBack": "返回",
+  "security.keyExpiryRetry": "重试",
   "security.masterKeyTriesDesc":
     "每次打开数据库最多尝试的次数（默认 3 次）。达到上限后可重新打开再试。",
   "security.masterKeyAttemptsExceeded":

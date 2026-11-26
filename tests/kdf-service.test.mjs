@@ -40,6 +40,7 @@ globalThis.__TAURI_INTERNALS__ = {
       case "get_kdf_upgrade_offer":
       case "get_master_key_expiry_offer":
       case "upgrade_weak_kdf":
+      case "change_master_key":
         return new Promise((resolve) => pending.push({ args, resolve }));
       case "close_vault":
         sessions.delete(args.sessionId);
@@ -58,6 +59,18 @@ globalThis.__TAURI_INTERNALS__ = {
 };
 const { vault } = await import("../src/lib/services/vault.ts");
 const parameters = { algorithm: "Aes", rounds: "9007199254740993" };
+
+test("renewal change IPC includes the originating session and native lifetime token", async () => {
+  await vault.open("C:/synthetic/a.kdbx", "synthetic-only");
+  const a = vault.getActiveSessionId();
+  const run = vault.changeMasterKey("synthetic-new-only", null, "native-expiry-token");
+  const request = pending.shift();
+  assert.equal(request.args.sessionId, a);
+  assert.equal(request.args.expiryToken, "native-expiry-token");
+  request.resolve(snapshot(a));
+  await run;
+  await vault.closeAll();
+});
 
 test("expiry assessment IPC stays read-only and bound to the captured origin", async () => {
   await vault.open("C:/synthetic/a.kdbx", "synthetic-only");

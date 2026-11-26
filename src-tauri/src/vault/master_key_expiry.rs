@@ -5,6 +5,16 @@ use serde::Serialize;
 
 mod rules;
 
+pub(crate) fn validate_expiry_rule(rule: &str) -> bool {
+    rules::expired(
+        None,
+        rule,
+        Utc::now().naive_utc(),
+        Local::now().date_naive(),
+    )
+    .is_ok()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InvalidExpiryRule {
@@ -27,6 +37,15 @@ pub struct MasterKeyExpiryOffer {
 }
 
 impl VaultSession {
+    pub(crate) fn ensure_master_key_expiry_token(&self, token: &str) -> Result<(), String> {
+        self.require_db()?;
+        if uuid::Uuid::parse_str(token).ok() != Some(self.history_lifetime)
+            || self.history_lifetime.is_nil()
+        {
+            return Err("MASTER_KEY_EXPIRY_CHANGED:".into());
+        }
+        Ok(())
+    }
     pub fn master_key_expiry_offer(
         &self,
         recommended_rule: &str,

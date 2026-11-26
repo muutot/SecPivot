@@ -99,6 +99,10 @@ for (const marker of ["// MASTER_HANDLER", "// MASTER_TYPES", "// MASTER_COMPLET
   assert.equal(masterFixture.split(marker).length, 2);
 }
 const masterModule = masterFixture
+  .replaceAll(
+    "// EXPIRY_TOKEN_ARGUMENT",
+    /expiry_token: Option<String>/.test(masterHandler) ? "None," : "",
+  )
   .replace("MasterChangeDatabase", stampedMasterChange ? "()" : "&()")
   .replace("MasterPersistResult", stampedMasterChange ? "((), chrono::NaiveDateTime)" : "()")
   .replace(
