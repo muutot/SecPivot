@@ -211,7 +211,7 @@ export const zhCN = {
   "editor.createTitle": "新建条目",
   "editor.template": "模板",
   "editor.templateNone": "空白条目",
-  "page.mirrorWarning": "远程已保存 · 副本更新失败",
+  "page.mirrorWarning": "已保存 · 副本/备份需检查",
   "editor.templateLoadFailed": "无法完整读取模板，已保留当前草稿，请重试。",
   "editor.batchEdit": "批量编辑 {count} 个条目",
   "editor.batchEdit_one": "批量编辑 1 个条目",
@@ -985,6 +985,15 @@ export const zhCN = {
   "security.keyExpiryRecommended": "建议更换主密钥",
   "security.searchKeyFiles": "打开时搜索密钥文件",
   "settings.logging": "本地诊断日志",
+  "database.localBackup": "本地保存备份",
+  "database.localBackupDesc": "默认关闭。覆盖前保留原有的加密文件，备份失败会中止保存。",
+  "database.backupLocationDesc":
+    "备份位于数据库旁的 .文件名.secpivot-backups 目录；更换主密钥前的备份使用旧密钥。对文件系统路径生效，Android 文档库沿用现有保存方式。",
+  "database.backupCount": "保留备份数量",
+  "database.backupCountInvalid": "保留数量应为 1 至 50 的整数。",
+  "database.backupTemplate": "备份文件名模板",
+  "database.backupTemplateDesc":
+    "需要一个 {timestamp}，支持 {name} 和 {ext}。保存成功后才清理本功能创建的旧备份，其他文件保留。",
   "settings.loggingDesc":
     "默认关闭。在应用数据目录 Logs 中保存 UTC 时间、脱敏操作模板与配置错误类别/位置，不记录输入值；每次启用上限 1 MiB，已有日志保留。",
   "settings.loggingLimit": "当前日志已达到 1 MiB 上限，关闭后重新开启可创建新文件，已有日志保留。",

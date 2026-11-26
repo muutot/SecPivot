@@ -94,6 +94,7 @@ struct SessionsInner {
     /// `rpc.sessionTimeoutSecs`; same registry-level reasoning as the match
     /// mode above.
     rpc_session_timeout_secs: u64,
+    local_backup: crate::config::LocalBackupSettings,
     next_id: u64,
 }
 
@@ -137,6 +138,20 @@ pub struct VaultSessions {
 }
 
 impl VaultSessions {
+    /// Runtime preference snapshot for active, parked and future local saves.
+    pub(crate) fn set_local_backup(
+        &self,
+        active: &mut VaultSession,
+        settings: &crate::config::LocalBackupSettings,
+    ) -> Result<(), String> {
+        let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        active.local_backup = settings.clone();
+        for session in inner.parked.values_mut() {
+            session.local_backup = settings.clone();
+        }
+        inner.local_backup = settings.clone();
+        Ok(())
+    }
     /// Caller holds the active mutex. Unlike display summaries, failure is
     /// explicit so a poisoned registry cannot look like an empty workspace.
     pub(crate) fn close_session_ids(&self) -> Result<Vec<String>, String> {
@@ -341,6 +356,7 @@ impl VaultSessions {
         let mut inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
         fresh.match_registrable_domain = inner.match_registrable_domain;
         fresh.rpc_session_timeout_secs = inner.rpc_session_timeout_secs;
+        fresh.local_backup = inner.local_backup.clone();
         // `close_all(..., keep_rpc = true)` leaves the active slot as a
         // locked RPC-key carrier. Move those keys only after the next vault
         // has opened successfully; a failed unlock must keep them available

@@ -82,8 +82,11 @@ disclosure or native IPC/provider behavior.
 
 The new-keyfile fixture extracts four complete preparation bodies; only the
 local return payload type is replaced by an observed live-owned buffer. Its
-read/KDF/parser/transport/mirror boundaries remain stubs. The command fixture
-also supplies observed preparation outputs and extracts actual registry open.
+read/KDF/parser/transport/mirror boundaries remain stubs. Local creation's new
+settings argument and triple outcome use nonsecret config/backup/outcome stubs;
+save failure and credential/adoption cleanup remain observed. The command fixture
+also supplies observed preparation outputs and extracts actual registry open,
+including its current backup-preference propagation.
 The stub session has explicit close and no implicit Drop; registry poison is injected
 after adoption. Registered values remain valid until simulated close, while fresh
 values are closed by the production Unregistered guard on refusal. Six added checks

@@ -1,5 +1,11 @@
 # Project-wide UI Style and Theming
 
+LocalBackupSettingsCard reuses shared settings cards, controls and feedback.
+Its scoped CSS owns only count/action flex spacing, a96px numeric wrapper,
+eight-pixel full-width note spacing and anywhere note wrapping. Chinese light/
+English dark desktop and320px previews retain the Cascadia stack, neutral glass
+surfaces and contained actions/errors. No theme token or control chrome is added.
+
 LoggingSettingsCard reuses SettingToggleCard and Feedback. Its optional metadata
 path owns compact spacing, text-secondary, secondary font size and anywhere
 wrapping; no new font, control chrome, surface or theme token is introduced.

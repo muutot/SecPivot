@@ -1,5 +1,26 @@
 # Data Contracts
 
+`localBackup: {enabled,count,template}` is an independent TS/Rust setting:
+default off, count3 (clamped1–50), template `{name}.{timestamp}.{ext}.bak`.
+Legacy/partial config reload and both enabled values retain defaults/preferences.
+`updateLocalBackup` uses the normal persistence queue; native startup/set_config
+sync active, parked and future sessions. Each save job captures its settings;
+native creation reads ConfigStore before preparation. `prepare_local_create`
+returns `(Database, PreparedKeyfile, PersistOutcome)`; adoption publishes its hash
+and cleanup warning. `SaveTarget::local` selects backup-aware filesystem writes,
+leaving document URI writes unchanged. Save, Save As, master changes and close
+auto-save share it. `complete_save_as(path,revision,warning)` adopts successful
+cleanup warnings while retaining concurrent dirty edits.
+`validate_local_backup_template(template:String)->String` requires exactly one
+timestamp and supports name/ext; the settings card validates drafts before Apply
+and flush, discarding disposed replies. Backups preserve prior encrypted bytes
+in `.<filename>.secpivot-backups` beside the destination. Backup/index failure
+aborts overwrite; retention runs only after successful primary write. Only names
+tracked by this feature may be deleted. Successful cleanup failures use the
+existing mirrorWarning field and generic saved/mirror-or-backup feedback.
+Synthetic native KDBX/ConfigStore, actual Apply/store and isolated light/dark/320px
+rendering cover this feature; real WebView, other OSes and Android remain separate.
+
 Remote mirror backup templates are validated before directory creation/writes
 when backupCount is positive. Expanded names must be one portable filename,
 not the current mirror; Windows separators, drive/device forms and trailing

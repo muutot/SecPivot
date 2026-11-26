@@ -1,5 +1,15 @@
 # Project Structure and Runtime Surfaces
 
+`vault/local_backup.rs` owns encrypted pre-overwrite backups, timestamp-template
+validation, per-destination writer locks and bounded owned-name retention;
+`local_backup/tests.rs` exercises filesystem/KDBX/config/session/close paths.
+`persist.rs::SaveTarget::local` routes ordinary filesystem overwrites through it,
+while document URIs retain existing I/O. Creation returns/adopts PersistOutcome;
+`helpers::save_database` is now test-only. Config startup/set_config propagate
+LocalBackupSettings through VaultSessions; validate_local_backup_template is
+registered in lib.rs. DatabaseSettingsPanel composes LocalBackupSettingsCard,
+and `tests/local-backup-settings.test.mjs` covers actual store/Apply behavior.
+
 remote/backup.rs owns portable mirror/backup filename admission and validated
 UTC/millisecond/numeric-suffix retention. backup_path_tests.rs is its test-only
 child for traversal/current-file/first-write/retention controls in disposable

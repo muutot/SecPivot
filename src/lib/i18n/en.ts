@@ -217,7 +217,7 @@ export const en: Record<I18nKey, string> = {
   "editor.createTitle": "New entry",
   "editor.template": "Template",
   "editor.templateNone": "Blank entry",
-  "page.mirrorWarning": "Remote saved · mirror failed",
+  "page.mirrorWarning": "Saved · check mirror/backup",
   "editor.templateLoadFailed":
     "Unable to load the complete template. Your draft was kept; try again.",
   "editor.batchEdit": "Batch edit {count} entries",
@@ -993,6 +993,16 @@ export const en: Record<I18nKey, string> = {
   "security.keyExpiryRecommended": "Master key change recommended",
   "security.searchKeyFiles": "Suggest keyfiles when opening",
   "settings.logging": "Local diagnostic logging",
+  "database.localBackup": "Back up local saves",
+  "database.localBackupDesc":
+    "Off by default. Preserve the previous encrypted file before an overwrite. Backup failure cancels saving.",
+  "database.backupLocationDesc":
+    "Stored beside the database in .filename.secpivot-backups. Backups made before a master-key change use the old key. Applies to filesystem paths; Android document saves retain their current behavior.",
+  "database.backupCount": "Backups to retain",
+  "database.backupCountInvalid": "Enter a whole number from 1 to 50.",
+  "database.backupTemplate": "Backup filename template",
+  "database.backupTemplateDesc":
+    "Requires one {timestamp}; supports {name} and {ext}. Older backups created by this feature are removed only after a successful save. Other files are retained.",
   "settings.loggingDesc":
     "Off by default. Save UTC timestamps, redacted operation templates and typed config-error locations in Logs under the app data folder. Input values are omitted; each enabled run is limited to 1 MiB. Existing logs are retained.",
   "settings.loggingLimit":

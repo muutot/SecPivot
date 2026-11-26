@@ -112,6 +112,7 @@ pub(crate) async fn create_vault(
     let path_for_work = PathBuf::from(&path);
     let keyfile_path = keyfile.map(PathBuf::from);
     let path_for_closure = path_for_work.clone();
+    let local_backup = config.get()?.local_backup;
     let (prepared, password) = tauri::async_runtime::spawn_blocking(move || {
         let result = vault::prepare_local_create(
             &path_for_closure,
@@ -120,13 +121,14 @@ pub(crate) async fn create_vault(
             &cipher,
             &compression,
             keyfile_path.as_deref(),
+            &local_backup,
         );
         (result, password)
     })
     .await
     .map_err(|e| format!("数据库创建任务异常: {e}"))?;
     let result = match prepared {
-        Ok((db, mut keyfile_bytes)) => {
+        Ok((db, mut keyfile_bytes, outcome)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.open(&mut active, |fresh| {
                 fresh.adopt_local(
@@ -134,7 +136,9 @@ pub(crate) async fn create_vault(
                     &path_for_work,
                     &password,
                     std::mem::take(&mut *keyfile_bytes),
-                )
+                )?;
+                fresh.adopt_persisted(outcome);
+                fresh.snapshot()
             })
         }
         Err(e) => Err(e),
@@ -579,10 +583,10 @@ pub(crate) async fn save_vault_as(
         .await
         .map_err(|e| format!("另存为任务异常: {e}"))?;
     match persisted {
-        Ok(_new_hash) => {
+        Ok(outcome) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                target.complete_save_as(path_for_complete, revision)
+                target.complete_save_as(path_for_complete, revision, outcome.mirror_warning)
             })
         }
         // A failed save-as targets a *different* path: it must not feed the

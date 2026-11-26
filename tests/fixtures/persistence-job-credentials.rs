@@ -351,6 +351,9 @@ impl VaultSession {
             self.revision,
         ))
     }
+    // Local-backup selection is nonsecret and stubbed like the other target
+    // boundaries; actual save-as credential ownership remains extracted.
+    fn local_save_target(&self, path: &Path) -> SaveTarget { SaveTarget::Local(path.to_path_buf()) }
     // JOB_FACTORIES
 }
 #[derive(Clone, Copy, Debug)]

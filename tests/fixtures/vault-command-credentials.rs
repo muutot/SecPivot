@@ -152,12 +152,26 @@ mod tauri {
     }
 }
 struct ConfigStore;
+mod config {
+    #[derive(Clone, Default)]
+    pub(crate) struct LocalBackupSettings;
+}
+use config::LocalBackupSettings;
+struct Config {
+    local_backup: LocalBackupSettings,
+}
+struct PersistOutcome;
 #[derive(Clone)]
 struct RemoteConfig {
     backup_count: i32,
     backup_template: String,
 }
 impl ConfigStore {
+    fn get(&self) -> Result<Config, String> {
+        Ok(Config {
+            local_backup: LocalBackupSettings,
+        })
+    }
     fn remote_profile(&self, _: &str) -> Result<(String, RemoteConfig), String> {
         if current().fault == Fault::Profile {
             return Err("synthetic profile error".into());
@@ -209,6 +223,7 @@ struct VaultOpenResult {
 }
 #[derive(Default)]
 struct VaultSession {
+    local_backup: LocalBackupSettings,
     keyfile: Option<ObservedBytes>,
     opened: bool,
     match_registrable_domain: bool,
@@ -216,6 +231,10 @@ struct VaultSession {
     rpc_keys: std::collections::HashMap<String, Vec<u8>>,
 }
 impl VaultSession {
+    fn adopt_persisted(&mut self, _: PersistOutcome) {}
+    fn snapshot(&mut self) -> Result<VaultState, String> {
+        Ok(VaultState)
+    }
     fn close(&mut self) {
         self.keyfile.zeroize();
         self.opened = false;
@@ -227,6 +246,7 @@ impl VaultSession {
 }
 #[derive(Default)]
 struct SessionsInner {
+    local_backup: LocalBackupSettings,
     active_id: Option<String>,
     parked: std::collections::HashMap<String, VaultSession>,
     order: Vec<String>,
@@ -348,9 +368,10 @@ mod vault {
         _: &str,
         _: &str,
         keyfile: Option<&Path>,
-    ) -> Result<((), PreparedKeyfile), String> {
+        _: &LocalBackupSettings,
+    ) -> Result<((), PreparedKeyfile, PersistOutcome), String> {
         prepare(password)?;
-        Ok(((), prepared_keyfile(keyfile)))
+        Ok(((), prepared_keyfile(keyfile), PersistOutcome))
     }
     pub fn prepare_remote_open(
         _: Arc<()>,

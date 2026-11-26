@@ -15,6 +15,7 @@ use crate::util::{url_authority, url_host};
 use keepass::config::{CompressionConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{Entry, EntryId, GroupId, GroupRef};
 use keepass::{Database, DatabaseKey};
+#[cfg(test)]
 use std::io::Cursor;
 use std::path::Path;
 use uuid::Uuid;
@@ -698,6 +699,7 @@ pub(crate) fn probe_vault_bytes(data: &[u8]) -> VaultProbe {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn save_database(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), String> {
     let mut buffer = Vec::new();
     db.save(&mut Cursor::new(&mut buffer), key)

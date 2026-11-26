@@ -4,7 +4,7 @@
 
 use super::helpers::{
     apply_cipher, apply_compression, apply_kdf, build_database_key, classify_open_error,
-    probe_vault_bytes, save_database, write_database_bytes,
+    probe_vault_bytes, write_database_bytes,
 };
 use super::RemoteMode;
 use crate::remote::backup::{remote_key_basename, validate_remote_key, write_local_copy};
@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
-/// A successful authoritative commit can carry a failed optional mirror.
+/// A successful authoritative commit can carry a failed optional mirror or
+/// local backup-retention cleanup.
 /// Callers must adopt its hash/key and surface the warning, never retry as if
 /// the upload had failed.
 #[derive(Debug)]
@@ -36,6 +37,10 @@ impl From<[u8; 32]> for PersistOutcome {
 
 pub(crate) enum SaveTarget {
     Local(PathBuf),
+    LocalBackup {
+        path: PathBuf,
+        settings: crate::config::LocalBackupSettings,
+    },
     Remote {
         storage: Arc<dyn RemoteStorage>,
         key: String,
@@ -45,6 +50,28 @@ pub(crate) enum SaveTarget {
         backup_template: String,
         base_hash: [u8; 32],
     },
+}
+
+impl SaveTarget {
+    pub(crate) fn local(path: &Path, settings: &crate::config::LocalBackupSettings) -> Self {
+        if settings.enabled && !super::file_io::is_document_uri(path) {
+            Self::LocalBackup {
+                path: path.to_path_buf(),
+                settings: settings.clone(),
+            }
+        } else {
+            Self::Local(path.to_path_buf())
+        }
+    }
+}
+
+fn save_local_database(
+    db: &Database,
+    path: &Path,
+    key: DatabaseKey,
+    settings: &crate::config::LocalBackupSettings,
+) -> Result<PersistOutcome, String> {
+    persist_snapshot(db, &key, &SaveTarget::local(path, settings), false)
 }
 
 /// Error prefix for a save that detected the remote file changed elsewhere.
@@ -182,7 +209,8 @@ pub(crate) fn prepare_local_create(
     cipher: &str,
     compression: &str,
     keyfile: Option<&Path>,
-) -> Result<(Database, PreparedKeyfile), String> {
+    settings: &crate::config::LocalBackupSettings,
+) -> Result<(Database, PreparedKeyfile, PersistOutcome), String> {
     let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let mut db = Database::new();
@@ -190,8 +218,8 @@ pub(crate) fn prepare_local_create(
     apply_kdf(&mut db, kdf)?;
     apply_cipher(&mut db, cipher)?;
     apply_compression(&mut db, compression)?;
-    save_database(&db, path, key)?;
-    Ok((db, keyfile_bytes))
+    let outcome = save_local_database(&db, path, key, settings)?;
+    Ok((db, keyfile_bytes, outcome))
 }
 
 /// Lock-free half of `open_remote`: validate the key, download from S3
@@ -370,6 +398,13 @@ pub(crate) fn persist_snapshot(
         SaveTarget::Local(path) => {
             write_database_bytes(path, &buffer)?;
             Ok(crate::crypto::sha256_bytes(&buffer).into())
+        }
+        SaveTarget::LocalBackup { path, settings } => {
+            let warning = super::local_backup::write(path, &buffer, settings)?;
+            Ok(PersistOutcome {
+                hash: crate::crypto::sha256_bytes(&buffer),
+                mirror_warning: warning,
+            })
         }
     }
 }

@@ -6,6 +6,8 @@
 >
 > 状态图例：✅ 已有 · ⚠️ 部分/不同形态 · ❌ 未实现 · ➖ 不适用（平台/架构不同或纯状态缓存）。
 
+SecPivot 的独立本地保存备份扩展使用 `localBackup.enabled/count/template`：默认关闭，保留 1–50 份原有加密文件，普通保存、另存为、改主密钥、关闭自动保存及新建覆盖共用覆盖前备份路径。备份失败中止写入，保存成功后才清理本功能创建的旧备份；真实 WebView、其他 OS 与 Android provider 仍待验证。这是对保存流程的增强，不新增虚构的官方 `Ace*` 配置节点；与 remote profiles 的镜像备份独立。
+
 ## 顶层结构（AppConfigEx）
 
 | 节点                              | 类                   | SecPivot 对应                                            |

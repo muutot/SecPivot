@@ -1111,9 +1111,30 @@ pub struct LoggingSettings {
     pub enabled: bool,
 }
 
+/// Optional encrypted backups of the previous local file before an overwrite.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocalBackupSettings {
+    pub enabled: bool,
+    pub count: i32,
+    pub template: String,
+}
+
+impl Default for LocalBackupSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            count: 3,
+            template: DEFAULT_BACKUP_TEMPLATE.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default)]
+    pub local_backup: LocalBackupSettings,
     #[serde(default)]
     pub logging: LoggingSettings,
     #[serde(default)]
@@ -1143,6 +1164,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             logging: LoggingSettings::default(),
+            local_backup: LocalBackupSettings::default(),
             general: GeneralSettings::default(),
             security: SecuritySettings::default(),
             database: DatabaseDefaults::default(),
@@ -1465,6 +1487,11 @@ fn normalize_generator_profiles(
 
 /// Apply the same range/default rules as the frontend normalizer.
 pub fn normalize_config(mut config: AppConfig) -> AppConfig {
+    config.local_backup.count = config.local_backup.count.clamp(1, 50);
+    config.local_backup.template = config.local_backup.template.trim().to_owned();
+    if config.local_backup.template.is_empty() {
+        config.local_backup.template = DEFAULT_BACKUP_TEMPLATE.into();
+    }
     config.general.language =
         if config.general.language == "en" || config.general.language == "zh-CN" {
             config.general.language

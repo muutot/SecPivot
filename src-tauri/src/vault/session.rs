@@ -115,9 +115,18 @@ impl VaultSession {
         compression: &str,
         keyfile: Option<&Path>,
     ) -> Result<VaultState, String> {
-        let (db, mut keyfile_bytes) =
-            prepare_local_create(path, password, kdf, cipher, compression, keyfile)?;
-        self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))
+        let (db, mut keyfile_bytes, outcome) = prepare_local_create(
+            path,
+            password,
+            kdf,
+            cipher,
+            compression,
+            keyfile,
+            &self.local_backup,
+        )?;
+        self.adopt_local(db, path, password, std::mem::take(&mut *keyfile_bytes))?;
+        self.adopt_persisted(outcome);
+        self.snapshot()
     }
 
     /// Open an existing vault stored on S3. `key` is the object key (e.g.
@@ -403,8 +412,8 @@ impl VaultSession {
     pub fn save_as(&mut self, path: &Path) -> Result<VaultState, String> {
         let job = self.prepare_save_as(path)?;
         let revision = job.revision;
-        let _ = persist_save(job)?;
-        self.complete_save_as(path.to_path_buf(), revision)
+        let outcome = persist_save(job)?;
+        self.complete_save_as(path.to_path_buf(), revision, outcome.mirror_warning)
     }
 }
 
@@ -645,7 +654,7 @@ impl VaultSession {
             db,
             password: Zeroizing::new(self.require_password()?.to_owned()),
             keyfile: Zeroizing::new(self.keyfile.clone()),
-            target: SaveTarget::Local(path.to_path_buf()),
+            target: self.local_save_target(path),
             revision: self.revision,
             force: false,
         })
@@ -815,11 +824,12 @@ impl VaultSession {
         &mut self,
         path: PathBuf,
         revision: u64,
+        warning: Option<String>,
     ) -> Result<VaultState, String> {
         self.note_save_success();
         self.path = Some(path.to_string_lossy().into_owned());
         self.remote = None;
-        self.mirror_warning = None;
+        self.mirror_warning = warning;
         if self.revision == revision {
             self.dirty = false;
             self.modified_at = now_iso();
@@ -846,9 +856,13 @@ impl VaultSession {
                 backup_template: remote.backup_template.clone(),
                 base_hash: remote.base_hash,
             },
-            None => SaveTarget::Local(PathBuf::from(self.require_path()?.to_owned())),
+            None => self.local_save_target(Path::new(self.require_path()?)),
         };
         Ok((db, target, self.revision))
+    }
+
+    fn local_save_target(&self, path: &Path) -> SaveTarget {
+        SaveTarget::local(path, &self.local_backup)
     }
 
     /// Locked completion of `save`: mark the session clean (unless edits

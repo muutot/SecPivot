@@ -25,6 +25,7 @@ mod hosts;
 mod import;
 mod kdf;
 mod kdf_upgrade;
+pub(crate) mod local_backup;
 pub(crate) use self::kdf_upgrade::stage_weak_kdf;
 pub use self::kdf_upgrade::KdfUpgradeOffer;
 #[cfg(test)]
@@ -109,6 +110,9 @@ pub(crate) enum SaveErrorClass {
 }
 
 pub(crate) fn classify_save_error(err: &str) -> SaveErrorClass {
+    if err == local_backup::BUSY {
+        return SaveErrorClass::Transient;
+    }
     if err.starts_with(persist::REMOTE_CHANGED_MARKER) {
         return SaveErrorClass::Conflict;
     }
@@ -263,6 +267,7 @@ pub struct RemoteTarget {
 /// flag, and unchanged snapshots can reuse the cached tree.
 #[derive(Default)]
 pub struct VaultSession {
+    pub(crate) local_backup: crate::config::LocalBackupSettings,
     pub(crate) path: Option<String>,
     password: Option<String>,
     keyfile: Option<Vec<u8>>,

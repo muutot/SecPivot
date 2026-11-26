@@ -5,6 +5,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import Select from "$lib/components/Select.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
+  import LocalBackupSettingsCard from "$lib/components/settings/LocalBackupSettingsCard.svelte";
 
   interface Props {
     onclose: () => void;
@@ -109,6 +110,7 @@
 {/if}
 
 <div class="settings-scroll">
+  <LocalBackupSettingsCard />
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="shield" size={17} /></span>

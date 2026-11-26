@@ -455,6 +455,7 @@ pub fn run() {
             #[cfg(desktop)]
             app.manage(crate::rpc::server::RpcState::default());
             commands::sync_vault_matching(app.handle(), &config);
+            commands::sync_local_backup(app.handle(), &config);
             #[cfg(desktop)]
             commands::sync_bridge(app.handle(), &config);
             #[cfg(desktop)]
@@ -502,6 +503,7 @@ pub fn run() {
             commands::validate_master_key_expiry_rule,
             commands::search_key_files,
             commands::diagnostic_log_status,
+            commands::validate_local_backup_template,
             commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,

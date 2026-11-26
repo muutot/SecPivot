@@ -189,8 +189,15 @@ fn apply_cipher(_: &mut Database, _: &str) -> Result<(), String> {
 fn apply_compression(_: &mut Database, _: &str) -> Result<(), String> {
     fail(Fault::Compression)
 }
-fn save_database(_: &Database, _: &Path, _: ()) -> Result<(), String> {
-    fail(Fault::Save)
+use crate::config;
+fn save_local_database(
+    _: &Database,
+    _: &Path,
+    _: (),
+    _: &config::LocalBackupSettings,
+) -> Result<PersistOutcome, String> {
+    fail(Fault::Save)?;
+    Ok([0; 32].into())
 }
 fn validate_remote_key(key: &str) -> Result<String, String> {
     fail(Fault::Validation)?;
@@ -251,8 +258,16 @@ fn run(preparation: Preparation, has_keyfile: bool) -> Result<PreparedKeyfile, S
             persist::prepare_local_open(path, "synthetic-only", keyfile).map(|(_, keyfile)| keyfile)
         }
         Preparation::LocalCreate => {
-            persist::prepare_local_create(path, "synthetic-only", "Aes", "Aes256", "None", keyfile)
-                .map(|(_, keyfile)| keyfile)
+            persist::prepare_local_create(
+                path,
+                "synthetic-only",
+                "Aes",
+                "Aes256",
+                "None",
+                keyfile,
+                &config::LocalBackupSettings,
+            )
+            .map(|(_, keyfile, _)| keyfile)
         }
         Preparation::RemoteOpen => persist::prepare_remote_open(
             Arc::new(Storage),

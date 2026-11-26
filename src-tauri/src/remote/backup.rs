@@ -109,7 +109,7 @@ fn backup_identity(candidate: &str, filled: &str) -> Option<(chrono::NaiveDateTi
 }
 
 /// Windows path/device semantics must be rejected even on a POSIX host.
-fn valid_file_name(name: &str) -> bool {
+pub(crate) fn valid_file_name(name: &str) -> bool {
     if name.is_empty()
         || name == "."
         || name == ".."
@@ -131,7 +131,7 @@ fn valid_file_name(name: &str) -> bool {
             && matches!(base.as_bytes()[3], b'1'..=b'9'))
 }
 
-fn validate_backup_template(
+pub(crate) fn validate_backup_template(
     template: &str,
     name: &str,
     stem: &str,

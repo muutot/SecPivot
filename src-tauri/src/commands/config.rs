@@ -28,6 +28,11 @@ pub(crate) fn diagnostic_log_status() -> crate::diagnostics::DiagnosticStatus {
     crate::diagnostics::global().status()
 }
 
+#[tauri::command]
+pub(crate) fn validate_local_backup_template(template: String) -> Result<String, String> {
+    crate::vault::local_backup::validate_template(&template)
+}
+
 /// Nonsecret suggestions only; no database or keyfile content is read.
 #[tauri::command]
 pub(crate) async fn search_key_files(
@@ -168,6 +173,7 @@ pub(crate) fn set_config(
         ],
     );
     sync_vault_matching(&app, &saved);
+    sync_local_backup(&app, &saved);
     sync_capture_guard(&app, &saved);
     #[cfg(desktop)]
     sync_bridge(&app, &saved);
@@ -190,6 +196,21 @@ pub(crate) fn sync_capture_guard(app: &tauri::AppHandle, config: &config::AppCon
         return;
     }
     crate::platform::shield::set_capture_guard(app, config.security.screen_capture_guard);
+}
+
+pub(crate) fn sync_local_backup(app: &tauri::AppHandle, config: &config::AppConfig) {
+    let Some(session) = app.try_state::<std::sync::Mutex<crate::vault::VaultSession>>() else {
+        return;
+    };
+    let Some(vaults) = app.try_state::<crate::vault::VaultSessions>() else {
+        return;
+    };
+    let Ok(mut active) = session.lock() else {
+        return;
+    };
+    if let Err(error) = vaults.set_local_backup(&mut active, &config.local_backup) {
+        eprintln!("local backup settings could not be applied: {error}");
+    }
 }
 
 /// Keep URL matching consistent across the active slot, parked tabs and

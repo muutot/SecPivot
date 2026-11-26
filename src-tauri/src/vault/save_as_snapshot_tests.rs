@@ -35,7 +35,7 @@ fn complete_cached_edit(session: &mut VaultSession, target: PathBuf) -> (VaultSt
     let before = session.state().unwrap().unwrap();
     assert_eq!(session.cached_snapshot.as_ref().unwrap().0, before.revision);
     persist_save(job).unwrap();
-    let completed = session.complete_save_as(target, revision).unwrap();
+    let completed = session.complete_save_as(target, revision, None).unwrap();
     (before, completed)
 }
 

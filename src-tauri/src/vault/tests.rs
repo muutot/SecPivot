@@ -6260,7 +6260,7 @@ fn persistence_job_native_local_keyfile_contracts() {
                 }
                 1 => {
                     session
-                        .complete_save_as(destination.clone(), revision)
+                        .complete_save_as(destination.clone(), revision, None)
                         .unwrap();
                 }
                 _ => {

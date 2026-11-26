@@ -5,6 +5,56 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn local_backup_defaults_and_explicit_preferences_survive_native_reload() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("conf")).unwrap();
+    for old in [r#"{}"#, r#"{"localBackup":{}}"#] {
+        fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        let config = store.get().unwrap();
+        assert!(!config.local_backup.enabled);
+        assert_eq!(config.local_backup.count, 3);
+        let mut config = config;
+        config.local_backup.enabled = true;
+        config.local_backup.count = 2;
+        config.local_backup.template = " {name}-copy-{timestamp}.{ext} ".into();
+        store.set(config).unwrap();
+        let loaded = ConfigStore::load(dir.path().to_owned())
+            .unwrap()
+            .get()
+            .unwrap();
+        assert!(loaded.local_backup.enabled);
+        assert_eq!(loaded.local_backup.count, 2);
+        assert_eq!(
+            loaded.local_backup.template,
+            "{name}-copy-{timestamp}.{ext}"
+        );
+        let mut disabled = loaded;
+        disabled.local_backup.enabled = false;
+        store.set(disabled).unwrap();
+        let loaded = ConfigStore::load(dir.path().to_owned())
+            .unwrap()
+            .get()
+            .unwrap();
+        assert!(!loaded.local_backup.enabled);
+        assert_eq!(loaded.local_backup.count, 2);
+        assert_eq!(
+            loaded.local_backup.template,
+            "{name}-copy-{timestamp}.{ext}"
+        );
+        assert!(!dir.path().join(".seed.kdbx.secpivot-backups").exists());
+    }
+    for (count, expected) in [(-1, 1), (0, 1), (51, 50), (i32::MAX, 50)] {
+        let mut config = AppConfig::default();
+        config.local_backup.count = count;
+        config.local_backup.template.clear();
+        let config = normalize_config(config);
+        assert_eq!(config.local_backup.count, expected);
+        assert_eq!(config.local_backup.template, DEFAULT_BACKUP_TEMPLATE);
+    }
+}
+
+#[test]
 fn logging_defaults_off_and_survives_legacy_config_and_restart() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("conf")).unwrap();

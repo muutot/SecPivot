@@ -1,5 +1,15 @@
 # Settings Shell and Panel Patterns
 
+DatabaseSettingsPanel starts with LocalBackupSettingsCard, composing shared
+SettingToggleCard/TextField/Button/Feedback. The default-off toggle applies
+immediately; count1–50 and filename-template drafts require native validation,
+explicit Apply and flush. Busy/mobile/browser controls cannot apply drafts;
+disposed generations discard replies. Folder/old-key/platform notes occupy the
+full card width, keeping the toggle description compact in both locales. Count
+uses a96px shared numeric control; the template/action note wraps at320px.
+Neutral-white light/dark previews retain the shared Cascadia font and contained
+controls; no new palette, surface, font or primitive is introduced.
+
 GeneralSettingsPanel composes LoggingSettingsCard over shared SettingToggleCard
 and inline Feedback. It identifies the app-data Logs location, typed/redacted
 contents,1MiB cap and retained older files; native metadata shows the current path

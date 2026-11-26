@@ -1,5 +1,19 @@
 # Security Model
 
+Local pre-overwrite backups copy only the prior encrypted filesystem bytes.
+Master-key changes keep old-key encryption in backups; changing the key does not
+re-encrypt or erase prior copies. Save As and creation protect an existing
+destination using the same path, including close auto-save. Exclusive new backup
+files are flushed, with Unix0600 files/0700 directories. An OS writer.lock lease
+serializes each backup transaction; contention is transient and never counts
+toward read-only degradation. Portable single-filename validation and a bounded
+versioned index prevent path escape and unrelated same-shape retention. Symlinks
+and nonfiles reject. Untracked crash leftovers remain; a failed backup/index
+publication never overwrites the primary or prunes existing copies. Retention
+failure after commit is a warning and still adopts the successful save/key.
+These checks are synthetic temporary-file/KDBX evidence, not adversarial parent
+directory replacement, secure filesystem erasure or device/provider proof.
+
 Remote backup filename admission precedes filesystem effects: positive-count
 templates cannot escape the mirror directory through separators/drive aliases,
 target device names or overwrite the current mirror. Retention only admits

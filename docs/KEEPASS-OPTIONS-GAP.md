@@ -139,14 +139,14 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Advanced（高级）
 
-| KeePass 项                                                                        | SecPivot 状态                                                                                           |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Auto-save after modifying an entry（KeePass Options → Advanced → Start and Exit） | ✅ `security.autoSaveAfterEdit`（本批实现）：编辑/新增成功后走页面守卫的 `vault.save()`；失败保留脏状态 |
-| Backup on save / count / template                                                 | ⚠️ 仅 remote profiles 有 `backupCount/backupTemplate`；本地保存备份未实现                               |
-| Auto-reload changed files                                                         | ❌ 未实现                                                                                               |
-| History retention                                                                 | ✅ 数据库级（Database Settings）                                                                        |
-| Recycle bin                                                                       | ✅ 数据库级（Database Settings）                                                                        |
-| Plugin / trigger system                                                           | ❌ 不适用                                                                                               |
+| KeePass 项                                                                        | SecPivot 状态                                                                                                                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-save after modifying an entry（KeePass Options → Advanced → Start and Exit） | ✅ `security.autoSaveAfterEdit`（本批实现）：编辑/新增成功后走页面守卫的 `vault.save()`；失败保留脏状态                                     |
+| Backup on save / count / template                                                 | ⚠️ 已实现独立本地开关、数量/模板及全部文件覆盖路径；加密旧文件/仅自有备份保留策略与设置回归通过，真实 WebView/其他 OS/Android provider 待验 |
+| Auto-reload changed files                                                         | ❌ 未实现                                                                                                                                   |
+| History retention                                                                 | ✅ 数据库级（Database Settings）                                                                                                            |
+| Recycle bin                                                                       | ✅ 数据库级（Database Settings）                                                                                                            |
+| Plugin / trigger system                                                           | ❌ 不适用                                                                                                                                   |
 
 ## 推荐落地顺序（可验证、不造壳）
 

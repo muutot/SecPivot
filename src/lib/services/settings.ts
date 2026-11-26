@@ -2,6 +2,7 @@ import { writable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  LocalBackupSettings,
   GeneralSettings,
   SecuritySettings,
   DatabaseDefaults,
@@ -31,6 +32,19 @@ import { t } from "$lib/i18n";
 export const PERSIST_DEBOUNCE_MS = 120;
 
 export const RECENT_FILES_MAX = 12;
+
+export function normalizeLocalBackup(
+  source: Partial<LocalBackupSettings> | undefined,
+  fallback?: LocalBackupSettings,
+): LocalBackupSettings {
+  const base = fallback ?? { enabled: false, count: 3, template: "{name}.{timestamp}.{ext}.bak" };
+  const template = typeof source?.template === "string" ? source.template.trim() : base.template;
+  return {
+    enabled: typeof source?.enabled === "boolean" ? source.enabled : base.enabled,
+    count: clampInt(typeof source?.count === "number" ? source.count : base.count, 1, 50, 3),
+    template: template || "{name}.{timestamp}.{ext}.bak",
+  };
+}
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -340,6 +354,7 @@ export const DEFAULT_INTEGRATION_SETTINGS: IntegrationSettings = {
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  localBackup: { enabled: false, count: 3, template: "{name}.{timestamp}.{ext}.bak" },
   logging: { enabled: false },
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
@@ -1186,6 +1201,7 @@ export function normalizeSettings(
           ? source.logging.enabled
           : (fallback.logging?.enabled ?? false),
     },
+    localBackup: normalizeLocalBackup(source.localBackup, fallback.localBackup),
     remoteProfiles,
     activeRemote,
     bridge: {
@@ -1226,6 +1242,7 @@ export function normalizeSettings(
 }
 
 interface AppSettingsStore {
+  updateLocalBackup: (patch: Partial<LocalBackupSettings>) => void;
   subscribe: typeof settings.subscribe;
   initialize: () => Promise<void>;
   updateLogging: (enabled: boolean) => void;
@@ -1456,6 +1473,14 @@ export const appSettings: AppSettingsStore = {
 
   updateLogging(enabled): void {
     settings.update((s) => ({ ...s, logging: { enabled } }));
+    schedulePersist();
+  },
+
+  updateLocalBackup(patch): void {
+    settings.update((s) => ({
+      ...s,
+      localBackup: normalizeLocalBackup({ ...s.localBackup, ...patch }, s.localBackup),
+    }));
     schedulePersist();
   },
 

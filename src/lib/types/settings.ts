@@ -46,6 +46,13 @@ export interface DatabaseDefaults {
   fileExtension: string;
 }
 
+export interface LocalBackupSettings {
+  enabled: boolean;
+  count: number;
+  /** One portable filename; requires {timestamp}, supports {name}/{ext}. */
+  template: string;
+}
+
 interface RemoteCommonSettings {
   /** Optional key prefix (folder) used by the remote file browser. */
   prefix: string;
@@ -374,6 +381,7 @@ export interface IntegrationSettings {
 }
 
 export interface AppSettings {
+  localBackup: LocalBackupSettings;
   /** KeePass AceLogging.Enabled; only redacted native event templates are logged. */
   logging: { enabled: boolean };
   general: GeneralSettings;
