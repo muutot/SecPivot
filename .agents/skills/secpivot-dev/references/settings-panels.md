@@ -1,5 +1,12 @@
 # Settings Shell and Panel Patterns
 
+AppearanceSettingsPanel's display section adds quickFindExcludeExpired after
+focusSearchOnType. It reuses search-icon SettingToggleCard and updateGeneral,
+default off. Its text distinguishes toolbar quick search from ordinary browsing
+and advanced filters. A composed real-panel/real-filter preview confirms live
+result changes, blank browsing and advanced expired-only results in both themes;
+320px wrapping retains reachable controls and the shared font without overflow.
+
 GeneralSettingsPanel adds autoReloadChangedFiles with the existing refresh-icon
 SettingToggleCard and updateGeneral. Its default-off text identifies visible/focus
 30s checks, in-memory dirty merge, preserved conflicts, dialog/inline/drag pauses

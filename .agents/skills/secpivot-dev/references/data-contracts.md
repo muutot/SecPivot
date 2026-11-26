@@ -1,5 +1,20 @@
 # Data Contracts
 
+`general.quickFindExcludeExpired` mirrors KeePass MainWindow.QuickFindExcludeExpired,
+default false, with strict boolean TS normalization and container-defaulted Rust
+serde/ConfigStore reload. AppearanceSettingsPanel's display section composes the
+shared toggle and persists updateGeneral; the main page passes its live getter
+to useEntryFilter. The optional getter retains existing callers' default behavior.
+Only nonempty toolbar text search with no advancedQuery applies this preference;
+blank browsing and structured queries retain their existing independent filters.
+Each qualifying derivation captures Date.now once and compares parsed `expires`
+with <=, matching PwGroup.Search.cs. Absent/invalid legacy timestamps fall back
+to the expired snapshot flag; valid dates override stale flags. There is no eager
+timer for an already displayed query. Group search inheritance, subtree scope,
+text caching and advanced predicates are preserved. Tests execute the compiled
+Svelte derivation/store with a fixed synthetic clock, plus native config reload;
+isolated actual-panel dark/light/320px rendering is not native WebView evidence.
+
 `general.autoReloadChangedFiles` is a default-off SecPivot enhancement in TS/Rust;
 the inspected official Configuration directory defines no matching property.
 GeneralSettingsPanel persists it through updateGeneral. FileReloadMonitor flushes

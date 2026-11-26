@@ -995,6 +995,9 @@ export const en: Record<I18nKey, string> = {
   "settings.logging": "Local diagnostic logging",
   "database.localBackup": "Back up local saves",
   "settings.autoReload": "Reload external database changes",
+  "settings.quickFindExcludeExpired": "Exclude expired entries from quick search",
+  "settings.quickFindExcludeExpiredDesc":
+    "Off by default. Hide expired entries in toolbar text searches; ordinary browsing and advanced-search filters remain independent.",
   "settings.autoReloadDesc":
     "Off by default. Check the active database on focus and every 30 seconds while visible. Unsaved edits are merged in memory; conflicts keep the current database. Checks wait during dialogs, inline editing and dragging. Remote databases require a download.",
   "reload.reloaded": "External database changes loaded",

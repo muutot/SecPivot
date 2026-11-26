@@ -5,6 +5,31 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn quick_find_exclude_expired_legacy_and_explicit_values_survive_config_reload() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    for old in [r#"{}"#, r#"{"general":{}}"#] {
+        std::fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        assert!(!store.get().unwrap().general.quick_find_exclude_expired);
+        for enabled in [true, false] {
+            let mut config = store.get().unwrap();
+            config.general.quick_find_exclude_expired = enabled;
+            store.set(config).unwrap();
+            assert_eq!(
+                ConfigStore::load(dir.path().to_owned())
+                    .unwrap()
+                    .get()
+                    .unwrap()
+                    .general
+                    .quick_find_exclude_expired,
+                enabled
+            );
+        }
+    }
+}
+
+#[test]
 fn auto_reload_defaults_off_and_both_values_survive_native_restart() {
     let dir = TempDir::new().unwrap();
     for old in [r#"{}"#, r#"{"general":{}}"#] {

@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+useEntryFilter.svelte.ts receives an optional quickFindExcludeExpired getter,
+passed by the main page from GeneralSettings. It excludes currently expired
+entries only during nonempty quick search without an advanced query; ordinary
+group browsing/advanced searches keep their own behavior. The display section of
+AppearanceSettingsPanel owns the shared toggle. tests/quick-find-expired.test.mjs
+executes the actual compiled derivation and settings store with synthetic
+config/clock/snapshots; config/tests.rs verifies legacy/default/both-value reload.
+
 `vault/file_reload.rs` owns read/check/decrypt/merge jobs, the single worker lease,
 one-use candidate admission and rollback-safe in-memory publication; its child
 tests use temporary KDBX and MemoryStorage. commands/vault.rs exposes both

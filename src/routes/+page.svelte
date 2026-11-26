@@ -585,6 +585,7 @@
     selectedSubtree: () => selectedSubtree,
     search: () => search,
     advancedQuery: () => advancedQuery,
+    quickFindExcludeExpired: () => settings.general.quickFindExcludeExpired,
   });
   const filteredEntries = $derived(entryFilter.filteredEntries);
 

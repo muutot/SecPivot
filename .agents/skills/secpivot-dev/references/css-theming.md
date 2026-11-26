@@ -1,5 +1,10 @@
 # Project-wide UI Style and Theming
 
+quickFindExcludeExpired uses the existing SettingToggleCard/search icon in the
+display panel. It adds no CSS, palette, font or primitive; Chinese light/English
+dark desktop/320px previews retain neutral glass surfaces, the identical Cascadia
+root stack and contained descriptions/controls. The filter has no visual chrome.
+
 The auto-reload setting composes the existing SettingToggleCard and refresh icon.
 It introduces no CSS, color, surface or font token. FileReloadMonitor has no visible
 markup. Main-page inert/key boundaries preserve layout and existing controls;

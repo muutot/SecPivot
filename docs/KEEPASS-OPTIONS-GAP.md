@@ -123,6 +123,16 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Interface (1) / (2)（界面）
 
+`MainWindow.QuickFindExcludeExpired` 默认 false，已映射为
+`general.quickFindExcludeExpired` 并接入外观→显示页和实际工具栏搜索。
+非空快速搜索按当前到期时间排除，等于当前时间也排除；普通浏览及高级
+搜索保留各自筛选。依据官方
+[AceMainWindow.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceMainWindow.cs)、
+[MainForm_Functions.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/MainForm_Functions.cs)
+及 [PwGroup.Search.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePassLib/PwGroup.Search.cs)。
+旧配置/双值原生重载、实际编译 Svelte 筛选与 store、时间边界/偏移/继承/
+替换/关闭及浅色/深色/320px预览已验证；真实 WebView/跨平台运行仍待。
+
 | KeePass 项                                      | SecPivot 状态                                                                                             |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | UI language / theme                             | ✅ `general.language` / `theme`                                                                           |
@@ -131,7 +141,7 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 | Always on top                                   | ✅ `general.alwaysOnTop`（本批实现）：Appearance → Window 开关，经 `set_always_on_top` Tauri 命令即时生效 |
 | Drop to background after copy                   | ❌ 未实现（复制后切回上次窗口）                                                                           |
 | Confirm before cmd:// / {CMD:...} / {REF:P@...} | ❌ 未实现（TCATO/URL 执行确认）                                                                           |
-| Expiry soon days                                | ❌ 未实现（KeePass 默认 7 天；影响"即将过期"高亮）                                                        |
+| Expiry soon days                                | ✅ `security.expirySoonDays`（默认7天，开库提醒消费）                                                     |
 | Toolbar / columns config                        | ✅ `toolbarItems` / `entryColumns`                                                                        |
 | Font sizes / density                            | ✅ `fontSizes` / `density`                                                                                |
 | Window effect / opacity                         | ✅ `windowEffect` / `windowOpacity`                                                                       |
@@ -152,7 +162,7 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auto-save after modifying an entry（KeePass Options → Advanced → Start and Exit） | ✅ `security.autoSaveAfterEdit`（本批实现）：编辑/新增成功后走页面守卫的 `vault.save()`；失败保留脏状态                                     |
 | Backup on save / count / template                                                 | ⚠️ 已实现独立本地开关、数量/模板及全部文件覆盖路径；加密旧文件/仅自有备份保留策略与设置回归通过，真实 WebView/其他 OS/Android provider 待验 |
-| Auto-reload changed files                                                         | ❌ 未实现                                                                                                                                   |
+| Auto-reload changed files                                                         | ⚠️ SecPivot 默认关闭增强，已接入两阶段重载；原生平台运行待验                                                                                |
 | History retention                                                                 | ✅ 数据库级（Database Settings）                                                                                                            |
 | Recycle bin                                                                       | ✅ 数据库级（Database Settings）                                                                                                            |
 | Plugin / trigger system                                                           | ❌ 不适用                                                                                                                                   |
@@ -160,7 +170,7 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 ## 推荐落地顺序（可验证、不造壳）
 
 1. ✅ **defaultExpireDays**（完成，510416c）
-2. ~~Expiry soon days~~：放弃——查证后 SecPivot 无"即将过期"消费点，强加会变成纯 UI 壳，违反"不造壳"门禁。
+2. ✅ **Expiry soon days**：已有 `security.expirySoonDays`，`showExpiredOnOpen` 与 `notifyExpiredEntries` 提供真实消费点；旧的“无消费点”结论已撤销。
 3. ✅ **Always on top**（完成，0b4a790）：`general.alwaysOnTop` 默认 false，Appearance → Window 开关，settings-bootstrap 经 `set_always_on_top` Tauri 命令即时应用。
 4. ✅ **Auto-save after edit**（本批完成）：`security.autoSaveAfterEdit` 默认 false，编辑/新增成功后调用页面守卫的 `vault.save()`，失败保留脏状态可手动重试。
 5. ✅ **Lock on minimize to tray**（本批完成）：`security.lockOnMinimizeToTray` 默认 false，隐藏到托盘时复用 `tray-lock` 事件锁定，UI 依赖 minimizeToTray 开关。

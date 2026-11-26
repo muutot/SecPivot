@@ -735,6 +735,13 @@
       checked={general.focusSearchOnType}
       onchange={(checked) => change("focusSearchOnType", checked)}
     />
+    <SettingToggleCard
+      icon="search"
+      label={t(lang, "settings.quickFindExcludeExpired")}
+      description={t(lang, "settings.quickFindExcludeExpiredDesc")}
+      checked={general.quickFindExcludeExpired}
+      onchange={(checked) => change("quickFindExcludeExpired", checked)}
+    />
 
     <SettingToggleCard
       icon="eye"

@@ -284,6 +284,8 @@ export interface GeneralSettings {
   /** Type-to-search: typing a printable character that matches no shortcut
    *  focuses the search box and seeds the character. Default on. */
   focusSearchOnType: boolean;
+  /** KeePass QuickFindExcludeExpired; advanced searches keep their own filters. */
+  quickFindExcludeExpired: boolean;
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

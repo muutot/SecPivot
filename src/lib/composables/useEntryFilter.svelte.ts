@@ -20,6 +20,8 @@ export type EntryFilterOptions = {
   search: () => string;
   /** Structured advanced-search filter, or `null`. */
   advancedQuery: () => AdvancedSearchQuery | null;
+  /** Applies only to nonempty quick search, never ordinary/advanced browsing. */
+  quickFindExcludeExpired?: () => boolean;
 };
 
 export type EntryFilter = {
@@ -45,6 +47,8 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     if (!options.currentVault()) return [];
     const query = options.search().trim().toLowerCase();
     const advancedQuery = options.advancedQuery();
+    const excludeExpired = Boolean(query && !advancedQuery && options.quickFindExcludeExpired?.());
+    const now = excludeExpired ? Date.now() : 0;
     const searching = Boolean(query || advancedQuery);
     const subtree = options.selectedSubtree();
     const result: { entry: VaultEntry }[] = [];
@@ -55,6 +59,10 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
       // selects candidate groups and must not reinterpret explicit settings.
       if (searching && !group.enableSearching) continue;
       for (const entry of group.entries) {
+        if (excludeExpired) {
+          const expires = entry.expires ? Date.parse(entry.expires) : NaN;
+          if (Number.isFinite(expires) ? expires <= now : entry.expired === true) continue;
+        }
         if (query && !searchTextFor(entry).includes(query)) continue;
         if (preparedAdvanced && !preparedAdvanced.test(entry)) continue;
         result.push({ entry });

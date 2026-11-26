@@ -987,6 +987,9 @@ export const zhCN = {
   "settings.logging": "本地诊断日志",
   "database.localBackup": "本地保存备份",
   "settings.autoReload": "自动加载外部数据库变化",
+  "settings.quickFindExcludeExpired": "快速搜索排除过期条目",
+  "settings.quickFindExcludeExpiredDesc":
+    "默认关闭。工具栏文字搜索隐藏已过期条目；普通浏览与高级搜索仍使用各自的筛选条件。",
   "settings.autoReloadDesc":
     "默认关闭。窗口获得焦点及可见时每 30 秒检查当前数据库；未保存修改在内存中合并，冲突时保留当前数据库。弹窗、内联编辑和拖动期间暂缓检查，远程数据库需要下载。",
   "reload.reloaded": "已加载外部数据库变化",

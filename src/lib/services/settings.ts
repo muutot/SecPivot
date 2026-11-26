@@ -243,6 +243,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   toolbarFullSeparators: [...DEFAULT_TOOLBAR_FULL_SEPARATORS],
   showDetailOnSelect: true,
   focusSearchOnType: true,
+  quickFindExcludeExpired: false,
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
   showGroupSeparators: true,
@@ -970,6 +971,10 @@ export function normalizeSettings(
       typeof g.autoReloadChangedFiles === "boolean"
         ? g.autoReloadChangedFiles
         : (fallback.general.autoReloadChangedFiles ?? false),
+    quickFindExcludeExpired:
+      typeof g.quickFindExcludeExpired === "boolean"
+        ? g.quickFindExcludeExpired
+        : (fallback.general.quickFindExcludeExpired ?? false),
     windowWidth: clampInt(g.windowWidth ?? fallback.general.windowWidth, 560, 2560, 1100),
     windowHeight: clampInt(g.windowHeight ?? fallback.general.windowHeight, 420, 1600, 720),
     panelWidths: {
