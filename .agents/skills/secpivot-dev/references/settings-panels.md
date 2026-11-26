@@ -1,5 +1,13 @@
 # Settings Shell and Panel Patterns
 
+KdfOpenPrompt uses keyTransformWeakWarning for open/unlock/replacement lifetime
+inspection, with a separate KdfUpgradeDialog over the shared ModalShell/Button
+primitives. It displays the filename, exact current/recommended costs and
+read-only note; Later keeps the opened vault, while Use recommended stages an
+unsaved native change. In-flight upgrades disable actions/Escape. Exact MiB
+conversion and algorithm/version/lanes are visible; long names/costs wrap inside
+the dialog. A declined recommendation does not repeat on an ordinary tab revisit.
+
 SecuritySettingsPanel adds the default-on keyTransformWeakWarning SettingToggleCard
 and shares KdfWarningDialog with DatabaseSettingsDialog. The prompt composes
 ModalShell at the existing prompt layer and compact Button actions: Cancel

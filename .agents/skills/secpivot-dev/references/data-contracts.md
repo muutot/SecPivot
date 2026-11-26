@@ -17,7 +17,33 @@ No password enters the warning, signature or configuration. The existing native
 change/persistence contract is unchanged; this is renderer confirmation, not
 native enforcement against callers bypassing the UI. ConfigStore and actual
 handler/service controls plus an isolated warning-component render cover this
-unit; real WebView/provider behavior and official open-time upgrade remain open.
+unit; real WebView/provider behavior remains open.
+
+`get_kdf_upgrade_offer(sessionId: String) -> KdfUpgradeOffer` returns nonsecret
+`token` (native history lifetime), `fileName`, exact `parameters`, optional
+`recommended` and `readOnly`. Strong costs have no recommendation. Defaults
+come from helpers::default_kdf_config, the same source used by create/apply_kdf:
+AES600000, or Argon2/Argon2id3 ×64 MiB/4 lanes/v1.3. The algorithm is preserved.
+`upgrade_weak_kdf(sessionId: String, token: String, expected: KdfParameters)`
+uses stage_weak_kdf's existing persistence permit before locking/resolving the
+origin. Native lifetime/parameter/read-only validation rejects stale approval;
+only KDF config changes in memory, with one dirty revision and rollback on
+snapshot error. No file/provider/remote write happens until ordinary Save,
+and the permit prevents an older save completion from reverting the upgrade.
+Offer/staging copies no master password/keyfile and no decrypted database.
+
+KdfOpenPrompt is mounted only on the main route, outside TCATO. Its controller
+inspects each renderer session epoch once, suppresses strong/disabled costs,
+keeps declined prompts acknowledged across tab visits, and ignores late
+inspections/completions on view changes/unmount. Closed-tab acknowledgement
+records are pruned. Renderer getSessionEpoch reads existing ownership without
+recreating it; both IPC service methods guard late replies before publication.
+KdfUpgradeDialog shows current/recommended exact costs and leaves read-only
+upgrade disabled. Temporary local KDBX and offline MemoryStorage controls cover
+deferred persistence, algorithm/content preservation, stale cost/lifetime
+refusal, read-only and older-save/parked-origin ordering. Actual host/controller/
+service controls and an isolated dialog render cover renderer behavior; native
+WebView/provider/official-client runtime remains unverified.
 
 `security.autoSaveOnClose` mirrors KeePass `AceCloseDb.AutoSave`, defaults off,
 and persists on both TS and Rust sides. Async `close_vault` retains its optional

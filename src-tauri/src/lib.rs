@@ -477,6 +477,8 @@ pub fn run() {
             commands::set_active_session,
             commands::list_sessions,
             commands::get_database_settings,
+            commands::get_kdf_upgrade_offer,
+            commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,
             commands::save_vault,

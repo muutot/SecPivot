@@ -85,6 +85,7 @@
     openContextMenu,
   } from "$lib/stores/activeContextMenu.svelte";
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
+  import KdfOpenPrompt from "$lib/components/KdfOpenPrompt.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
   import VaultTabs from "$lib/components/VaultTabs.svelte";
@@ -1981,6 +1982,8 @@
 </svelte:head>
 
 <svelte:window onkeydowncapture={handleShortcutKeydown} />
+
+{#if !isTcatoOverlay}<KdfOpenPrompt />{/if}
 
 {#if isTcatoOverlay}
   <TcatoOverlay />

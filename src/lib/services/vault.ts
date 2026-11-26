@@ -38,6 +38,7 @@ import type {
   DatabaseSettingsPatch,
   KdfParameters,
   KdfBenchmarkResult,
+  KdfUpgradeOffer,
   VaultOpenResult,
   SessionInfo,
   RemoteObject,
@@ -97,8 +98,11 @@ interface VaultStore {
   activeId: typeof activeId;
   get: () => VaultState | null;
   getActiveSessionId: () => string | null;
+  getSessionEpoch: (sessionId: string) => symbol | undefined;
   callInSession: <T>(sessionId: string, operation: () => Promise<T>) => Promise<T>;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
+  getKdfUpgradeOffer: () => Promise<KdfUpgradeOffer>;
+  upgradeWeakKdf: (offer: KdfUpgradeOffer) => Promise<VaultState>;
   benchmarkDatabaseKdf: (
     parameters: KdfParameters,
     targetMs: number,
@@ -803,6 +807,32 @@ export const vault: VaultStore = {
     });
     if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
     return result;
+  },
+
+  getSessionEpoch: currentSessionEpoch,
+
+  async getKdfUpgradeOffer(): Promise<KdfUpgradeOffer> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featDbSettings");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const offer = await backendInvoke<KdfUpgradeOffer>("get_kdf_upgrade_offer", { sessionId });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    return offer;
+  },
+
+  async upgradeWeakKdf(offer: KdfUpgradeOffer): Promise<VaultState> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featDbSettings");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await backendInvoke<VaultState>("upgrade_weak_kdf", {
+      sessionId,
+      token: offer.token,
+      expected: offer.parameters,
+    });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    const committed = commitSessionStateAtEpoch(sessionId, epoch, result);
+    await refreshTabs();
+    return committed;
   },
 
   /** Credential-free calibration, bound to the original session lifetime. */

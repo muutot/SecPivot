@@ -282,6 +282,15 @@ export interface KdfBenchmarkResult {
   targetReached: boolean;
 }
 
+/** Nonsecret, native lifetime-bound proposal; approval stages an unsaved edit. */
+export interface KdfUpgradeOffer {
+  token: string;
+  fileName: string;
+  parameters: KdfParameters;
+  recommended: KdfParameters | null;
+  readOnly: boolean;
+}
+
 /** Read-only storage settings of the open database. */
 export interface DatabaseSettings {
   kdf: "Aes" | "Argon2" | "Argon2id";

@@ -17,7 +17,18 @@
 的 iterations × memory < 2 × 64 MiB 判断，不以算法名称或浮点截断代替。
 确认绑定具体成本并在写入前消费，取消不丢草稿；改主密钥预检和提示绑定原会话/
 视图代次。ConfigStore 旧配置/双值重载、实际提交函数与服务回归、独立提示组件
-渲染覆盖该单元；真实 WebView/provider 和官方 KeyUtil 打开库主动升级仍待补。
+渲染覆盖该单元；真实 WebView/provider 仍待验证。
+
+打开库的升级流程按官方
+[KeyUtil.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Util/KeyUtil.cs)
+与 [MainForm_Functions.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/MainForm_Functions.cs)
+接入：展示当前/推荐成本，同意后保留算法并应用 SecPivot 建库默认成本
+（AES600000；Argon2/Argon2id3 ×64 MiB、4 lanes、v1.3，比官方告警门槛更高）。
+与官方 UpdateUIState(true) 一样只产生未保存状态，普通保存才写入文件/远程；
+原生寿命与参数校验、只读及保存串行化防止旧提示/旧保存覆盖新会话或成本。
+提示按解密寿命只展示一次，返回标签页不会重复。临时 KDBX 保存/重开、离线
+MemoryStorage、旧保存/停放会话及实际前端 controller/host/service 回归已覆盖；
+真实 WebView/provider 与官方客户端互操作继续保留为待验。
 
 `AceCloseDb.AutoSave` 已实现原生保存流程与 Security 页开关（默认 false）。
 官方 [AceApplication.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceApplication.cs)

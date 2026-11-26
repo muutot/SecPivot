@@ -290,6 +290,40 @@ pub(crate) fn get_database_settings(
     )
 }
 
+/// Read a nonsecret proposal for this decrypted database lifetime.
+#[tauri::command]
+pub(crate) fn get_kdf_upgrade_offer(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+) -> Result<vault::KdfUpgradeOffer, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| target.kdf_upgrade_offer(),
+    )
+}
+
+/// Stage the reviewed upgrade; no KDF transform, key copy or storage write.
+#[tauri::command]
+pub(crate) async fn upgrade_weak_kdf(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+    token: String,
+    expected: vault::KdfParameters,
+) -> Result<VaultState, String> {
+    vault::stage_weak_kdf(
+        vaults.inner(),
+        session.inner(),
+        &session_id,
+        &token,
+        &expected,
+    )
+    .await
+}
+
 /// Measure synthetic KDF work without holding a vault lock or copying a key.
 #[tauri::command]
 pub(crate) async fn benchmark_database_kdf(

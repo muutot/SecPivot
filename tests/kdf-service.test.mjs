@@ -37,6 +37,8 @@ globalThis.__TAURI_INTERNALS__ = {
         return sessions.get(active);
       case "benchmark_database_kdf":
       case "get_database_settings":
+      case "get_kdf_upgrade_offer":
+      case "upgrade_weak_kdf":
         return new Promise((resolve) => pending.push({ args, resolve }));
       case "close_vault":
         sessions.delete(args.sessionId);
@@ -100,4 +102,54 @@ test("closed-origin benchmark replies are rejected instead of republishing a dis
   request.resolve(result);
   await rejection;
   assert.equal(vault.get(), null);
+});
+
+test("offer and upgrade IPC contain only the explicit origin, native token and exact reviewed costs", async () => {
+  await vault.open("C:/synthetic/a.kdbx", "synthetic-only");
+  const a = vault.getActiveSessionId();
+  const epoch = vault.getSessionEpoch(a);
+  assert.equal(typeof epoch, "symbol");
+  const read = vault.getKdfUpgradeOffer();
+  const request = pending.shift();
+  assert.deepEqual(request.args, { sessionId: a });
+  const offer = {
+    token: "synthetic-lifetime",
+    fileName: "synthetic.kdbx",
+    parameters: { algorithm: "Aes", rounds: "1" },
+    recommended: { algorithm: "Aes", rounds: "600000" },
+    readOnly: false,
+  };
+  request.resolve(offer);
+  assert.deepEqual(await read, offer);
+  const run = vault.upgradeWeakKdf(offer);
+  const upgrade = pending.shift();
+  assert.deepEqual(upgrade.args, { sessionId: a, token: offer.token, expected: offer.parameters });
+  await vault.open("C:/synthetic/b.kdbx", "synthetic-only");
+  const b = vault.getActiveSessionId();
+  upgrade.resolve({ ...snapshot(a), dirty: true, revision: 2 });
+  assert.equal((await run).dirty, true);
+  assert.equal(vault.getActiveSessionId(), b);
+  assert.equal(vault.get().dirty, false);
+  await vault.closeAll();
+  assert.equal(vault.getSessionEpoch(a), undefined);
+});
+
+test("closed-origin offer and mutation replies cannot resurrect a vault", async () => {
+  for (const mutation of [false, true]) {
+    await vault.open("C:/synthetic/a.kdbx", "synthetic-only");
+    const a = vault.getActiveSessionId();
+    const run = mutation
+      ? vault.upgradeWeakKdf({ token: "synthetic", parameters: { algorithm: "Aes", rounds: "1" } })
+      : vault.getKdfUpgradeOffer();
+    const rejection = assert.rejects(run);
+    const request = pending.shift();
+    await vault.closeAll();
+    request.resolve(
+      mutation
+        ? { ...snapshot(a), dirty: true, revision: 2 }
+        : { token: "synthetic", recommended: null },
+    );
+    await rejection;
+    assert.equal(vault.get(), null);
+  }
 });

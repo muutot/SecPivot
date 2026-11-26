@@ -1,5 +1,17 @@
 # Security Model
 
+Open-time weak-KDF approval carries only native lifetime, algorithm and public
+cost parameters. Native stage_weak_kdf takes the existing persistence permit,
+then validates the originating session/lifetime/exact costs and writable state
+under its lock. It replaces only the KDF config and marks an unsaved revision;
+ordinary Save derives/writes the new KDBX later. Inspection/staging never copies
+master keys, passwords, keyfiles or decrypted entries. Stale or read-only
+approval does not mutate the session. Controller/session epochs discard late
+renderer offers and results; native lifetime validation remains independent.
+The default-on warning preference controls renderer prompts, with the approved
+compact shared modal. Synthetic KDBX/MemoryStorage and handler/service controls
+do not establish actual WebView, Android provider or whole-process erasure.
+
 Close/lock requests now honor KeePass save decisions before clearing sessions.
 `vault/close.rs` keeps nonsecret ID/lifetime/revision tickets while prompting;
 guarded SaveJobs are prepared only after decisions and validation. The shared

@@ -1,5 +1,12 @@
 # Project-wide UI Style and Theming
 
+KdfUpgradeDialog uses the existing confirm-size ModalShell at the prompt layer,
+plain Later and warning Use recommended Buttons. Filename/cost paragraphs own
+only compact margins, secondary text size, semantic text colors and anywhere
+wrapping; no new font, palette, shell or footer rule is introduced. Light mode
+retains neutral white-gray translucency and pale lemon-yellow warning actions.
+The main-route KdfOpenPrompt host adds no CSS and is excluded from TCATO.
+
 KdfWarningDialog reuses ModalShell's confirm size/prompt layer and Button's
 existing warning variant (pale lemon yellow in light mode). Its threshold note
 owns only zero margin and secondary font/color tokens. The security preference

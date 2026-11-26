@@ -985,6 +985,18 @@ export const en: Record<I18nKey, string> = {
   "kdf.weakThreshold":
     "KeePass warns below 600,000 AES rounds, or when Argon2 iterations × memory is below 2 × 64 MiB. Meeting this threshold does not guarantee a strong master password.",
   "kdf.keepWeak": "Keep weak costs",
+  "kdf.openUpgradeDesc":
+    "This database uses weak key derivation costs. Apply the recommended costs for the same algorithm? The change stays unsaved until you save the database.",
+  "kdf.currentCost": "Current:",
+  "kdf.recommendedCost": "Recommended:",
+  "kdf.aesCost": "AES · {rounds} rounds",
+  "kdf.argonCost": "{algorithm} v{version} · {iterations} × {memory} MiB · {lanes} lanes",
+  "kdf.upgradeLater": "Later",
+  "kdf.applyRecommended": "Use recommended",
+  "kdf.upgradeReadOnly":
+    "This database is read-only. Save it to a writable location before upgrading.",
+  "kdf.upgradeChanged":
+    "The database or its costs changed. Reopen the database to review a fresh recommendation.",
   "dbsettings.kdf": "Key derivation (KDF)",
   "dbsettings.kdfAria": "Key derivation algorithm",
   "dbsettings.cipherAria": "Cipher",

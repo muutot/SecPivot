@@ -24,6 +24,9 @@ mod history_selection_tests;
 mod hosts;
 mod import;
 mod kdf;
+mod kdf_upgrade;
+pub(crate) use self::kdf_upgrade::stage_weak_kdf;
+pub use self::kdf_upgrade::KdfUpgradeOffer;
 #[cfg(test)]
 mod kdf_storage_tests;
 pub(crate) use self::kdf::benchmark_kdf;

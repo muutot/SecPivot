@@ -979,6 +979,16 @@ export const zhCN = {
   "kdf.weakThreshold":
     "KeePass 在 AES 少于 600,000 轮，或 Argon2 的迭代次数 × 内存低于 2 × 64 MiB 时提醒。达到此门槛也不能保证主密码足够强。",
   "kdf.keepWeak": "继续使用弱参数",
+  "kdf.openUpgradeDesc":
+    "这个数据库的密钥派生成本偏低。是否应用同一算法的推荐参数？修改会保持未保存状态，保存数据库后才写入文件。",
+  "kdf.currentCost": "当前：",
+  "kdf.recommendedCost": "推荐：",
+  "kdf.aesCost": "AES · {rounds} 轮",
+  "kdf.argonCost": "{algorithm} v{version} · {iterations} × {memory} MiB · {lanes} 路并行",
+  "kdf.upgradeLater": "稍后",
+  "kdf.applyRecommended": "应用推荐参数",
+  "kdf.upgradeReadOnly": "数据库处于只读状态，请先另存到可写位置后再升级参数。",
+  "kdf.upgradeChanged": "数据库或参数已变化，请重新打开数据库后确认新的推荐参数。",
   "dbsettings.kdf": "密钥派生 (KDF)",
   "dbsettings.kdfAria": "密钥派生算法",
   "dbsettings.cipher": "加密算法",

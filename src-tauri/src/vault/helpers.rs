@@ -712,7 +712,12 @@ pub(crate) fn write_database_bytes(path: &Path, buffer: &[u8]) -> Result<(), Str
 }
 
 pub(crate) fn apply_kdf(db: &mut Database, kdf: &str) -> Result<(), String> {
-    db.config.kdf_config = match kdf {
+    db.config.kdf_config = default_kdf_config(kdf)?;
+    Ok(())
+}
+
+pub(crate) fn default_kdf_config(kdf: &str) -> Result<KdfConfig, String> {
+    Ok(match kdf {
         "Argon2id" => KdfConfig::Argon2id {
             iterations: ARGON2_ITERATIONS,
             memory: u64::from(ARGON2_MEMORY_KIB) * 1024,
@@ -733,8 +738,7 @@ pub(crate) fn apply_kdf(db: &mut Database, kdf: &str) -> Result<(), String> {
                 "kdf 取值 {other:?} 不受支持 (可用: Argon2id / Argon2 / Aes)"
             ))
         }
-    };
-    Ok(())
+    })
 }
 
 pub(crate) fn apply_cipher(db: &mut Database, cipher: &str) -> Result<(), String> {

@@ -16,7 +16,7 @@
 
 ## 二、部分完成（剩余边界明确）
 
-- [~] 弱 KDF 警告（`AceSecurity.KeyTransformWeakWarning`）：默认开启的配置已持久化；保存偏弱 KDF 参数、更换弱参数库主密钥前使用同一取消/继续提示，按官方 AES/Argon2 成本门槛判断；当前建库默认参数达标。配置与实际提交函数/会话归属回归通过。真实 WebView/provider 路径、打开旧库时官方式主动提醒/升级仍待验证或实现
+- [~] 弱 KDF 警告（`AceSecurity.KeyTransformWeakWarning`）：默认开启的配置、改 KDF/主密钥提醒已接入；打开旧库时展示当前/推荐成本，同意后按同一算法升级并保留未保存状态，普通保存才写入文件/远程。原生寿命/参数校验、只读、旧保存排队、多标签及临时 KDBX/离线 remote 与实际前端接线回归通过。真实 WebView/provider 与官方客户端互操作仍待验证
 
 - [~] 关闭库时自动保存（`AceCloseDb.AutoSave`）：默认关闭的原生保存/放弃/取消流程已接入关闭标签页、锁定、关窗/托盘退出；临时 KDBX、离线 remote、并发会话及配置/前端回归通过。真实 WebView 关窗/托盘原生三按钮及 Android provider/后台运行仍待验证
 

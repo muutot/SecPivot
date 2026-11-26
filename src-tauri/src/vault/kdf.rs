@@ -38,6 +38,21 @@ fn cost(value: &str) -> Result<u64, String> {
 }
 
 impl KdfParameters {
+    /// KeePass AreParametersWeak threshold, with a widening product instead of
+    /// overflowing or rounding the KDBX integer costs.
+    pub(crate) fn is_weak(&self) -> Result<bool, String> {
+        Ok(match self.to_config()? {
+            KdfConfig::Aes { rounds } => rounds < 600_000,
+            KdfConfig::Argon2 {
+                iterations, memory, ..
+            }
+            | KdfConfig::Argon2id {
+                iterations, memory, ..
+            } => u128::from(iterations) * u128::from(memory) < 2 * 64 * 1024 * 1024,
+            _ => return Err("Unsupported KDF algorithm".into()),
+        })
+    }
+
     pub(crate) fn algorithm(&self) -> &'static str {
         match self {
             Self::Aes { .. } => "Aes",

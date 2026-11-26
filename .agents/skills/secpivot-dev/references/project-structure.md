@@ -1,5 +1,18 @@
 # Project Structure and Runtime Surfaces
 
+`vault/kdf_upgrade.rs` owns nonsecret lifetime-bound offers and an in-memory
+upgrade transaction serialized by the existing persistence permit; its nested
+tests cover real temporary KDBX/MemoryStorage and parked-session/older-save
+ordering. `helpers::default_kdf_config` supplies the same costs to upgrades and
+apply_kdf/create. `commands/vault.rs` exposes get_kdf_upgrade_offer and
+upgrade_weak_kdf, registered in lib.rs. `services/vault.ts` keeps offer/mutation
+replies in the original epoch and exposes a read-only getSessionEpoch lookup.
+`services/kdf-open-prompt.ts` owns once-per-lifetime acknowledgement, UI ownership
+and invalidation; `components/KdfOpenPrompt.svelte` wires it only to the main
+route, outside TCATO. `KdfUpgradeDialog.svelte` owns compact current/recommended
+costs and Later/Use recommended actions. Tests execute actual host/controller/
+service bodies without changing a user vault or live clipboard.
+
 `components/KdfWarningDialog.svelte` owns the shared localized weak-cost
 confirmation over ModalShell/Buttons. DatabaseSettingsDialog uses it before a
 changed weak KDF patch; SecuritySettingsPanel uses it after native-cost preflight
