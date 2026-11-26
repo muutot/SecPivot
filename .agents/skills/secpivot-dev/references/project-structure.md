@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`usePanelLayout` derives selected UUID separately from its auto-open effect.
+Equal-UUID snapshot replacement therefore preserves manually closed detail and
+does not consume pending right-click suppression. Explicit selectionVersion
+changes still re-open the same entry; showDetailOnSelect and selection clearing
+retain their existing behavior. `tests/panel-layout.test.mjs` compiles the full
+layout and selection modules and exercises actual Svelte effects/settings
+subscriptions with synthetic entries; it does not inspect native window layout.
+
 `columns.svelte.ts::applyColumnReorder` receives an insertion index in the
 visible column order and uses that same order for self/next-neighbor no-ops.
 The full persisted array supplies removal and anchor placement; hidden columns

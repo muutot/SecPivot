@@ -48,6 +48,9 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
   let suppressDetailAutoOpen = false;
   /** Whether the group tree drawer is open on narrow/mobile layouts. */
   let mobileNavOpen = $state(false);
+  // Derive identity separately so equal-UUID snapshots do not invalidate the
+  // auto-open effect through the selected entry object's reactive getter.
+  const selectedUuid = $derived(options.selectedEntry()?.uuid ?? null);
 
   $effect(() => {
     // Subscribing (instead of one untracked get()) keeps external settings
@@ -67,7 +70,6 @@ export function usePanelLayout(options: PanelLayoutOptions): PanelLayout {
     // made each of those background updates count as a new selection — which
     // re-opened a detail panel the user had deliberately closed. Genuine
     // re-selection of the same entry is covered by `selectionVersion`.
-    const selectedUuid = options.selectedEntry()?.uuid ?? null;
     // also track showDetailOnSelect so toggling the setting re-evaluates
     const autoShow = showDetailOnSelect;
     // track version to re-open same entry after detail was closed

@@ -8,7 +8,6 @@
 
 - [ ] 当前数据库设置 · KDF benchmark：目标耗时基准测试、参数建议与应用流程；不得以固定 Argon2/AES-KDF 参数代替 benchmark 证据
 - [ ] 搜索字段与分组自动输入单选组（SP-S119）：radio/aria-checked、单 Tab 停留点、方向键导航；复用现有 `RadioGroup`，需主题门禁 + 28px 紧凑接入 + 浏览器键盘/暗亮中英窄屏验证
-- [ ] 同 UUID 快照刷新保留已关闭的详情面板（SP-S121）：稳定 UUID 派生或显式选择身份门禁；保留主动同条目重选、`showDetailOnSelect` 与一次右键抑制
 - [ ] 行内收藏/复制按钮键盘隔离（SP-S122）：Enter/Space 只执行自身动作，不额外触发行选择
 - [ ] 详情表格键盘定位包含固定表头高度（SP-S123）：End 目标行完整可见；desktop/mobileColumns 末行当前裁切 28px
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
