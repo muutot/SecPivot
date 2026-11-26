@@ -22,6 +22,11 @@ natural chip widths; group and database choices retain the default stretching.
 Both keep localized labels, theme selection tint and six-pixel wrapping gaps.
 Browser keyboard/ARIA and dark/light Chinese/English checks include 320px radios.
 
+AdvancedSearchDialog places its keyword regex/exclusion options 8px below the
+TextField, leaving room for both controls' external focus outlines. The scoped
+keyword-options wrapper owns this gap; the other toggle rows and shared
+TextField chrome retain their existing spacing and compact sizes.
+
 History's explicit View rules action stays in the existing wrapped Metadata
 summary. Loaded content spans that row's width; rule rows reuse read-value borders,
 compact Button/inline Feedback and existing muted/secondary text metrics. Full URL

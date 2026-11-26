@@ -126,7 +126,7 @@
     <div class="block">
       <span class="label">{t(lang, "search.keyword")}</span>
       <TextField mono bind:value={text} placeholder={t(lang, "search.keywordPh")} />
-      <div class="toggles">
+      <div class="toggles keyword-options">
         <button type="button" class="toggle" class:active={regex} onclick={() => (regex = !regex)}>
           {t(lang, "search.regex")}
         </button>
@@ -238,6 +238,10 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+  }
+
+  .keyword-options {
+    margin-top: 8px;
   }
 
   .toggle {
