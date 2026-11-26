@@ -586,6 +586,9 @@ pub struct SecuritySettings {
     /// (KeePass Options → Advanced → Start and Exit). Default off.
     #[serde(default)]
     pub auto_save_after_edit: bool,
+    /// KeePass AceCloseDb.AutoSave: save dirty databases before close, lock or
+    /// exit. Default off; otherwise offer Save / Discard / Cancel.
+    pub auto_save_on_close: bool,
     /// KeePass AceUI.RepeatPasswordOnlyWhenHidden. The renderer owns repetition;
     /// only this nonsecret preference is persisted. Default on.
     #[serde(default = "default_true")]
@@ -622,6 +625,7 @@ impl Default for SecuritySettings {
             lock_on_focus_loss: false,
             default_expire_days: 0,
             auto_save_after_edit: false,
+            auto_save_on_close: false,
             repeat_password_only_when_hidden: true,
             minimize_after_locking: true,
             show_expired_on_open: true,

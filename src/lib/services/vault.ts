@@ -707,6 +707,29 @@ async function refreshTabs(): Promise<void> {
   );
 }
 
+/** A cancelled/failed native close retains all epochs and decrypted views.
+ * Earlier saves in a multi-vault attempt may have succeeded; publish their
+ * status and any read-only transition without treating the failure as close. */
+let closePending = false;
+
+/** Native dialogs can blur before their focus-lease event arrives. */
+export function isVaultClosePending(): boolean {
+  return closePending;
+}
+
+async function invokeClose(command: string, args?: Record<string, unknown>): Promise<void> {
+  closePending = true;
+  try {
+    await backendInvoke(command, args);
+  } catch (error) {
+    await refreshTabs().catch(() => undefined);
+    if (activeSessionId) await refreshInternal(activeSessionId).catch(() => undefined);
+    throw error;
+  } finally {
+    closePending = false;
+  }
+}
+
 /** Best-effort cleanup of every extracted temp attachment (lock/close path). */
 async function discardTempAttachments(): Promise<void> {
   await discardTempAttachmentsForSession();
@@ -899,7 +922,8 @@ export const vault: VaultStore = {
         const closingId = activeSessionId;
         if (!closingId) return;
         const path = get(tabs).find((t) => t.sessionId === closingId)?.path ?? get(state)?.path;
-        await backendInvoke("close_vault", { sessionId: closingId });
+        await appSettings.flush();
+        await invokeClose("close_vault", { sessionId: closingId });
         topologyRevision++;
         sessionStates.delete(closingId);
         iconCaches.delete(closingId);
@@ -955,7 +979,9 @@ export const vault: VaultStore = {
         const activePath = get(state)?.path;
         if (activePath) openPaths.add(activePath);
         const dropSaved = !get(appSettings).security.rememberPassword;
-        await backendInvoke("close_all_vaults");
+        await appSettings.flush();
+        if (whenCurrent && !whenCurrent()) return;
+        await invokeClose("close_all_vaults");
         topologyRevision++;
         activeSessionId = null;
         browserState = null;
@@ -2165,7 +2191,8 @@ export const vault: VaultStore = {
       // Capture the target inside the queue: a concurrent switch/close may have
       // replaced the tab list between the click and this operation running.
       const tab = get(tabs).find((t) => t.sessionId === sessionId);
-      await backendInvoke("close_vault", { sessionId });
+      await appSettings.flush();
+      await invokeClose("close_vault", { sessionId });
       topologyRevision++;
       sessionStates.delete(sessionId);
       iconCaches.delete(sessionId);

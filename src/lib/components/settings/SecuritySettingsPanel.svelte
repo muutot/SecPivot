@@ -165,6 +165,14 @@
   />
 
   <SettingToggleCard
+    icon="save"
+    label={t(lang, "security.autoSaveOnClose")}
+    description={t(lang, "security.autoSaveOnCloseDesc")}
+    checked={security.autoSaveOnClose}
+    onchange={(checked) => change("autoSaveOnClose", checked)}
+  />
+
+  <SettingToggleCard
     icon="copy"
     label={t(lang, "security.clearOnLock")}
     description={t(lang, "security.clearOnLockDesc")}

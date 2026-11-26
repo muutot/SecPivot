@@ -4,6 +4,8 @@ pub mod commands;
 pub mod config;
 pub mod crypto;
 #[cfg(desktop)]
+mod exit;
+#[cfg(desktop)]
 mod loopback;
 mod net;
 pub mod platform;
@@ -339,6 +341,9 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 /// instead of exiting the app; the tray "退出" menu item is the way out.
 #[cfg(desktop)]
 fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    if window.label() != "main" {
+        return;
+    }
     let app = window.app_handle();
     let minimize_to_tray = app
         .state::<ConfigStore>()
@@ -360,6 +365,11 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
         if lock_on_hide {
             let _ = app.emit(TRAY_LOCK_EVENT, ());
         }
+    } else {
+        // Keep the renderer/window alive while native save or cancellation is
+        // pending. ExitRequested handles both this path and tray quit.
+        api.prevent_close();
+        app.exit(0);
     }
 }
 // ---------------------------------------------------------------------------
@@ -411,6 +421,8 @@ pub fn run() {
             vault::sweep_stale_temp_attachments(std::time::Duration::from_secs(24 * 3600));
             app.manage(Mutex::new(VaultSession::default()));
             app.manage(VaultSessions::default());
+            #[cfg(desktop)]
+            app.manage(exit::ExitGate::default());
             app.manage(vault::AttachmentTempStore::default());
             app.manage(commands::FaviconCancel::default());
             app.manage(commands::HibpCancel::default());
@@ -586,6 +598,10 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|_app_handle, event| {
+        #[cfg(desktop)]
+        if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
+            exit::handle_request(_app_handle, api, *code);
+        }
         // The scheduled clipboard wipe runs as a renderer timer plus a backend
         // safety-net thread (`clipboard_schedule_wipe`); both die with the
         // process, so quitting via the tray must clear any copied password

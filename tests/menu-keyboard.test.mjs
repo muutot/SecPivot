@@ -313,7 +313,7 @@ test("consumed menu keys refresh the actual idle deadline and cleanup removes th
     get: (value) => value,
     vault: { get: () => ({}) },
     locks: 0,
-    lockVault: async () => context.locks++,
+    lockVaultAutomatically: async () => context.locks++,
   };
   context.document = context.window;
   const f = fixture();

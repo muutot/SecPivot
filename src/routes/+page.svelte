@@ -15,6 +15,7 @@
   } from "$lib/components/ColumnConfigMenu.svelte";
   import { dispatchShortcut, effectiveShortcuts } from "$lib/services/keyboard";
   import { armIdleLock, beginTcatoOverlayOpen, lockVault, copyValue } from "$lib/services/security";
+  import { reportCloseError } from "$lib/services/vault-close";
   import { usePanelLayout } from "$lib/composables/usePanelLayout.svelte";
   import { useVaultSelection } from "$lib/composables/useVaultSelection.svelte";
   import { useEntryFilter } from "$lib/composables/useEntryFilter.svelte";
@@ -1291,10 +1292,18 @@
   }
 
   async function handleLock(): Promise<void> {
-    if (currentVault?.dirty && !window.confirm(t(settings.general.language, "page.lockConfirm")))
+    if (
+      !isTauriRuntime() &&
+      currentVault?.dirty &&
+      !window.confirm(t(settings.general.language, "page.lockConfirm"))
+    )
       return;
-    await lockVault();
-    flash(t(settings.general.language, "page.locked"));
+    try {
+      await lockVault();
+      flash(t(settings.general.language, "page.locked"));
+    } catch (error) {
+      reportCloseError(error);
+    }
   }
 
   /** Editor dialog flow (open modes + guarded save pipeline); see

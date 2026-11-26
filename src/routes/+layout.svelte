@@ -4,7 +4,11 @@
   import { appSettings } from "$lib/services/settings";
   import { vault } from "$lib/services/vault";
   import { applySettingsToDocument } from "$lib/services/settings-bootstrap";
-  import { installAutoLock, installFocusLock, lockVault } from "$lib/services/security";
+  import {
+    installAutoLock,
+    installFocusLock,
+    lockVaultAutomatically,
+  } from "$lib/services/security";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import BridgeApprovalPrompt from "$lib/components/BridgeApprovalPrompt.svelte";
   import RpcSideChannelPrompt from "$lib/components/RpcSideChannelPrompt.svelte";
@@ -41,7 +45,7 @@
     // before listen() resolves, the then-callback still unregisters.
     let stopTrayLock: Promise<UnlistenFn> | undefined;
     if (!isTcatoOverlay && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      stopTrayLock = listen("tray-lock", () => void lockVault());
+      stopTrayLock = listen("tray-lock", () => void lockVaultAutomatically());
     }
     // Window-size persistence must survive navigation to /settings — the main
     // page unmounts there and its resize listener would otherwise miss drags

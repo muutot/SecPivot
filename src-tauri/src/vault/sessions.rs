@@ -131,11 +131,25 @@ fn run_guarded<T, E>(operation: impl FnOnce() -> Result<T, E>, on_panic: E) -> R
 pub struct VaultSessions {
     inner: Mutex<SessionsInner>,
     persistence: Arc<PersistenceGate>,
+    pub(super) closing: std::sync::atomic::AtomicBool,
     #[cfg(desktop)]
     active_end: super::session_end::SessionEndSignals,
 }
 
 impl VaultSessions {
+    /// Caller holds the active mutex. Unlike display summaries, failure is
+    /// explicit so a poisoned registry cannot look like an empty workspace.
+    pub(crate) fn close_session_ids(&self) -> Result<Vec<String>, String> {
+        let inner = self.inner.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
+        let mut ids: Vec<_> = inner
+            .active_id
+            .iter()
+            .chain(inner.parked.keys())
+            .cloned()
+            .collect();
+        ids.sort();
+        Ok(ids)
+    }
     /// Observe this active lifetime, with no key/password in observer state.
     /// Caller must hold the active mutex. Callbacks never acquire vault/lifetime
     /// locks and run after the registry and observer mutexes are released.

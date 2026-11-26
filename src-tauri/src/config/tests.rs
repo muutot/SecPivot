@@ -954,6 +954,30 @@ fn auto_save_after_edit_defaults_off_and_survives_round_trip() {
 }
 
 #[test]
+fn auto_save_on_close_loads_legacy_default_and_persists_both_values() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    std::fs::write(dir.path().join("conf/config.json"), r#"{"security":{}}"#).unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(!store.get().unwrap().security.auto_save_on_close);
+    for enabled in [true, false] {
+        let mut config = store.get().unwrap();
+        config.security.auto_save_on_close = enabled;
+        store.set(config).unwrap();
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(reloaded.get().unwrap().security.auto_save_on_close, enabled);
+        let wire: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("conf/config.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(wire["security"]["autoSaveOnClose"], enabled);
+    }
+    assert!(
+        serde_json::from_str::<AppConfig>(r#"{"security":{"autoSaveOnClose":"false"}}"#).is_err()
+    );
+}
+
+#[test]
 fn repeat_password_only_when_hidden_loads_legacy_defaults_and_persists_both_values() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("conf")).unwrap();

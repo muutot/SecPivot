@@ -1,5 +1,13 @@
 # Settings Shell and Panel Patterns
 
+SecuritySettingsPanel exposes `autoSaveOnClose` after autoSaveAfterEdit using
+the canonical SettingToggleCard and save icon. Its default-off description
+explains close/lock/exit saving, keeping sessions on failure and the disabled
+setting's Save/Discard/Cancel choice. Both locales use shared card typography,
+overflow and neutral light surfaces; rendered light/dark desktop and 320px
+checks retain the approved root font without horizontal overflow. Native save
+questions use the platform dialog plugin, not a second renderer modal shell.
+
 SecuritySettingsPanel exposes the default-on repeatPasswordOnlyWhenHidden toggle
 and composes MasterPasswordFields with 30px shared controls for master-key change.
 The same component owns welcome local/remote create and open password fields

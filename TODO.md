@@ -7,7 +7,6 @@
 ## 一、明确待实现
 
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
-- [ ] 关闭库时自动保存（`AceCloseDb.AutoSave`）：SecPivot 只有编辑后自动保存，无退出/关闭库时保存
 - [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
 - [ ] 弱 KDF 警告（创建/改密钥时对弱参数告警）
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
@@ -17,6 +16,8 @@
 - [ ] 打印系统（KeePass 应急表打印约 20 项：Layout/Include*/Color*/Fonts/Sort）——当前只有离线 HTML 应急表导出
 
 ## 二、部分完成（剩余边界明确）
+
+- [~] 关闭库时自动保存（`AceCloseDb.AutoSave`）：默认关闭的原生保存/放弃/取消流程已接入关闭标签页、锁定、关窗/托盘退出；临时 KDBX、离线 remote、并发会话及配置/前端回归通过。真实 WebView 关窗/托盘原生三按钮及 Android provider/后台运行仍待验证
 
 - [~] 复制后锁定归属（SP-S11）：renderer 侧拓扑与视图代次有回归；原生多窗口 / OS ownership 尚未验证
 - [~] 剪贴板并发生命周期（SP-11）：同 renderer 写入/条件清理/锁定清空已串行；跨窗口、原生二进制复制顺序、外部相同内容复制的 OS ownership 待验证

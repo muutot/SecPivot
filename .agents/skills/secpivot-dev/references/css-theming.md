@@ -1,5 +1,10 @@
 # Project-wide UI Style and Theming
 
+The autoSaveOnClose setting reuses SettingToggleCard with the save icon and
+existing compact card spacing. It adds no CSS, colors or fonts. Chinese light
+and English dark desktop/320px rendering retain white-gray light surfaces,
+the shared Cascadia Code root stack and contained wrapped descriptions.
+
 MasterPasswordFields reuses TextField (32px welcome / 30px settings) and field
 Button, retaining the six-pixel input/action gap and ten-pixel field spacing.
 Its flex input wrapper has min-width:0; labels use existing secondary/muted/faint

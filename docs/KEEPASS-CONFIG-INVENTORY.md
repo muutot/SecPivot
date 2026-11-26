@@ -66,7 +66,7 @@ ShowExpiredEntries ✅ `security.showExpiredOnOpen`（B3 批次，默认 on，�
 
 ### AceCloseDb（1）
 
-AutoSave ❌（关闭库时自动保存；SecPivot 只有编辑后自动保存，无退出时自动保存）
+AutoSave ⚠️ `security.autoSaveOnClose`（默认 false，与官方一致）：原生关闭标签页、锁定和退出共用先保存流程；关闭选项则提供保存/放弃/取消。取消或保存失败保留会话，并检查保存期间的新修改/新标签页。临时 KDBX/离线 remote 与前端生命周期测试通过；真实 WebView 关窗/托盘退出及 Android provider/后台运行仍待验证。
 
 ### AceMru（2）
 

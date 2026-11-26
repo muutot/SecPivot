@@ -687,6 +687,12 @@ export const zhCN = {
     "点击 ＋ 录制新快捷键；录制后通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。",
   "security.mismatch": "两次输入的新主密码不一致",
   "security.repeatPasswordOnlyWhenHidden": "仅在密码隐藏时要求重复输入",
+  "security.autoSaveOnClose": "关闭数据库时自动保存",
+  "security.autoSaveOnCloseDesc":
+    "关闭标签页、锁定或退出前先保存修改；保存失败时保持打开。关闭此项时询问保存、放弃或取消。",
+  "error.closeChanged": "关闭期间数据库发生变化，已保留会话，请检查修改后重试。",
+  "error.closeBusy": "另一次关闭或锁定正在进行，请稍候。",
+  "error.closeFailed": "无法关闭数据库：{error}",
   "security.repeatPasswordOnlyWhenHiddenDesc":
     "适用于创建数据库和修改主密钥；关闭后，即使显示密码也必须重复输入。",
   "security.needKey": "请输入新主密码或选择新的密钥文件",

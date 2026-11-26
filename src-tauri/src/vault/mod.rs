@@ -3,6 +3,7 @@
 //! `src/lib/types/vault.ts`.
 
 mod breach;
+pub(crate) mod close;
 pub mod dto;
 mod entries;
 #[cfg(test)]

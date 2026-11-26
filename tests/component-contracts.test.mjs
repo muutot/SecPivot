@@ -537,7 +537,7 @@ test("lock-on-minimize-to-tray reuses the guarded tray lock event", async () => 
   // the layout already closes every vault on it.
   assert.match(lib, /cfg\.security\.lock_on_minimize_to_tray/);
   assert.match(lib, /app\.emit\(TRAY_LOCK_EVENT, \(\)\)/);
-  assert.match(layout, /listen\("tray-lock", \(\) => void lockVault\(\)\)/);
+  assert.match(layout, /listen\("tray-lock", \(\) => void lockVaultAutomatically\(\)\)/);
   assert.match(panel, /disabled=\{!security\.minimizeToTray\}/);
 });
 

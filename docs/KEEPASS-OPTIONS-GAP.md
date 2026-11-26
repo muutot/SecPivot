@@ -8,6 +8,14 @@
 
 ## KeePass Options 六个 tab 与 SecPivot 现状
 
+`AceCloseDb.AutoSave` 已实现原生保存流程与 Security 页开关（默认 false）。
+官方 [AceApplication.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceApplication.cs)
+定义该默认值；[MainForm_Functions.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/MainForm_Functions.cs)
+的 CloseDocument 在关闭/锁定/退出前保存或询问，取消/保存失败则中止。
+SecPivot 在多库关闭中额外验证整个会话集合及并发修改，失败时保持所有会话打开；
+先前成功的保存仍然有效。原生临时 KDBX、离线 remote、配置重载、实际前端服务和
+设置浅色/深色/320px 渲染已有证据；真实 WebView 关窗/托盘及 Android 运行验证未关闭。
+
 ### Security（安全）
 
 | KeePass 项                                | SecPivot 状态                                                                                                  | 证据                                        |

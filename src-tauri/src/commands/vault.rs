@@ -147,24 +147,34 @@ pub(crate) async fn create_vault(
 }
 
 #[tauri::command]
-pub(crate) fn close_vault(
+pub(crate) async fn close_vault(
     app: tauri::AppHandle,
     vaults: tauri::State<'_, VaultSessions>,
     session: tauri::State<'_, Mutex<VaultSession>>,
     store: tauri::State<'_, vault::AttachmentTempStore>,
     session_id: Option<String>,
 ) -> Result<(), String> {
-    let (closed_session_id, any_open) = {
-        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        let closed_session_id = vaults.close(&mut active, session_id.as_deref())?;
-        (closed_session_id, vaults.any_open(&active))
-    };
+    let auto_save = app
+        .state::<ConfigStore>()
+        .get()?
+        .security
+        .auto_save_on_close;
+    let closed = vault::close::close_with_save(
+        &vaults,
+        &session,
+        vault::close::CloseTarget::One(session_id),
+        auto_save,
+        |prompt| super::vault_close::prompt(app.clone(), prompt),
+    )
+    .await?;
+    let closed_session_id = &closed.ids[0];
+    let any_open = closed.any_open;
     // The capture guard stays on while any other session is still open.
     if !any_open {
         shield::set_capture_guard(&app, false);
     }
     // Filesystem cleanup must not run while the vault-session mutex is held.
-    store.discard_session(&closed_session_id);
+    store.discard_session(closed_session_id);
     #[cfg(desktop)]
     {
         let should_clear = if !any_open {
@@ -172,7 +182,7 @@ pub(crate) fn close_vault(
         } else if let Some(target) = app.try_state::<crate::commands::tcato::TcatoTarget>() {
             target
                 .target_session()
-                .is_some_and(|sid| sid == closed_session_id)
+                .is_some_and(|sid| sid == *closed_session_id)
         } else {
             false
         };
@@ -191,34 +201,25 @@ pub(crate) fn close_vault(
 /// path (toolbar lock, idle auto-lock, lock-after-action) uses this so locking
 /// never leaves other tabs decrypted in memory.
 #[tauri::command]
-pub(crate) fn close_all_vaults(
-    app: tauri::AppHandle,
-    vaults: tauri::State<'_, VaultSessions>,
-    session: tauri::State<'_, Mutex<VaultSession>>,
-    store: tauri::State<'_, vault::AttachmentTempStore>,
-) -> Result<(), String> {
+pub(crate) async fn close_all_vaults(app: tauri::AppHandle) -> Result<(), String> {
     let keep_rpc = keep_rpc_session(&app);
-    // Cancel any in-flight auto-type replay before secrets are zeroized:
-    // locking mid-replay must not keep typing them into another window.
-    #[cfg(desktop)]
-    autotype::cancel_replay();
-    {
-        let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
-        vaults.close_all(&mut active, keep_rpc)?;
-    }
-    shield::set_capture_guard(&app, false);
+    super::vault_close::close_workspace(&app, keep_rpc).await
+}
+
+/// Cleanup runs only after the shared save transaction has closed every vault.
+pub(crate) fn cleanup_closed_workspace(app: &tauri::AppHandle) {
+    shield::set_capture_guard(app, false);
     // Locking wipes extracted temp attachments (external viewers may still
     // hold the files open; failed removals stay registered for later retry).
-    store.discard_all();
+    app.state::<vault::AttachmentTempStore>().discard_all();
     #[cfg(desktop)]
     {
-        crate::commands::tcato::clear_tcato_target(&app);
+        crate::commands::tcato::clear_tcato_target(app);
         if let Some(window) = app.get_webview_window(crate::commands::tcato::TCATO_WINDOW_LABEL) {
             let _ = window.close();
         }
         let _ = app.emit(crate::commands::tcato::TCATO_CLOSE_EVENT, ());
     }
-    Ok(())
 }
 
 #[tauri::command]

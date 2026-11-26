@@ -1,5 +1,30 @@
 # Security Model
 
+Close/lock requests now honor KeePass save decisions before clearing sessions.
+`vault/close.rs` keeps nonsecret ID/lifetime/revision tickets while prompting;
+guarded SaveJobs are prepared only after decisions and validation. The shared
+persistence gate serializes ordinary writers and close-owned saves, while late
+edits, replacements or changed all-close membership prevent any session wipe.
+Cancel/save failure keeps every session open; earlier successful saves in the
+same attempt remain durable. Read-only degradation and remote conflict/mirror
+classification follow ordinary save semantics. Successful lock still wipes
+vault passwords/keyfiles/bridge keys and retains only explicitly configured
+active RPC keys; tab close and process exit retain none.
+
+Renderer lock continues to start configured clipboard clearing independently,
+including when a native save prompt is later cancelled. It removes vault views
+and extracted-attachment/credential ownership only after successful native close.
+Automatic handlers report failures and suppress cancellation/duplicate requests;
+cancelled idle locks get a fresh idle period without resurrecting an unmounted
+timer. `vault-close-dialog` boolean events lease focus for native save/error
+dialogs, preventing recursive focus-loss lock. The renderer's native-close
+pending guard also covers blur before the lease event arrives, so a cancelled
+manual close cannot leave a second focus-lock attempt queued. TCATO/capture guards remain.
+Desktop ExitRequested and main-window close keep the renderer alive until the
+same native close transaction succeeds; tray hide semantics remain separate.
+Hard kill, OS shutdown, real native event ordering and Android background/runtime
+constraints are outside the synthetic/KDBX test evidence for this change.
+
 Master-password repetition is renderer input validation, not an authentication
 factor. The default-on KeePass preference permits visible reviewed passwords;
 hidden values and the disabled-preference mode must match exactly without trimming.
@@ -579,11 +604,11 @@ Lock happens on:
 - `lockAfterAction` immediately after a password copy;
 - focus loss when `lockOnFocusLoss` is enabled (installed from `+layout.svelte` via `installFocusLock`; locks only while a vault is open). TCATO suppresses this path while an open attempt is pending and while the backend-confirmed overlay exists; pending attempts hold independent leases, so one late failure cannot clear another attempt's confirmed overlay state and accidentally re-enable focus-loss locking.
 
-The frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes every session by calling `vault.closeAll()` (which closes all open tabs and discards extracted temp attachments), and starts clipboard clearing when `clearOnLock` is enabled. Ownership invalidation is synchronous; vault closure and clipboard clearing run in parallel, so a pending Clipboard API write cannot delay session closure. The explicit clear waits behind already-started writes and cancels queued old copies, preventing a delayed write from restoring content after clearing. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes. The entry right-click menu's "Copy entry" action copies the whole entry (title, username, password, URL, notes, unprotected custom fields) as one labeled text block, so it resolves the password server-side through `get_entry_password`, consumes it under the same visible-view epoch guard as a plain password copy, and passes `sensitive = true` to `copyValue` — the clipboard wipe and `lockAfterAction` apply exactly as they do for the password alone. Protected custom-field values are never part of the text (the snapshot carries an empty value), matching the rest of the renderer surface.
+After successful save/discard admission, the frontend lock path (`lockVault` in `src/lib/services/security.ts`) zeroizes every session by calling `vault.closeAll()` (which closes all open tabs and discards extracted temp attachments), and starts clipboard clearing when `clearOnLock` is enabled. Ownership invalidation is synchronous; vault closure and clipboard clearing run in parallel, so a pending Clipboard API write cannot delay session closure. The explicit clear waits behind already-started writes and cancels queued old copies, preventing a delayed write from restoring content after clearing. Password copies go through `copySensitive` so `lockAfterAction` applies only to the password, not usernames/URLs/notes. The entry right-click menu's "Copy entry" action copies the whole entry (title, username, password, URL, notes, unprotected custom fields) as one labeled text block, so it resolves the password server-side through `get_entry_password`, consumes it under the same visible-view epoch guard as a plain password copy, and passes `sensitive = true` to `copyValue` — the clipboard wipe and `lockAfterAction` apply exactly as they do for the password alone. Protected custom-field values are never part of the text (the snapshot carries an empty value), matching the rest of the renderer surface.
 
 After lock, the frontend `vault` store is cleared and the UI shows the lock screen (`LockScreen.svelte`) when a last-database path is remembered (`rememberLastDatabase`); otherwise it returns to the welcome screen. The remembered path (`vault.remembered`) is set on open/create and cleared only via "use another database"; the password is never persisted or remembered.
 
-With `minimizeToTray` on (default), closing the main window does **not** lock 鈥?it merely hides to the system tray, keeping the in-memory session alive. Use the tray "閿佸畾鏁版嵁搴? menu (or any lock path above) to drop the session; "閫€鍑? quits and fully ends the process.
+With `minimizeToTray` on (default), main-window close hides it. `lockOnMinimizeToTray` additionally requests the shared lock flow; cancelled or failed saving can keep sessions open. Tray Quit and main-window close with this setting off request guarded process exit. Other windows retain their own close behavior.
 
 ## KeePass strengths
 

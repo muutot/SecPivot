@@ -2,9 +2,10 @@ import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appSettings, isTauriRuntime } from "$lib/services/settings";
-import { vault } from "$lib/services/vault";
+import { vault, isVaultClosePending } from "$lib/services/vault";
 import { clearClipboard, copyText } from "$lib/utils/clipboard";
 import { ActivityLeaseGuard, KeyedViewGuard } from "$lib/utils/session-state";
+import { closeErrorKind, reportCloseError } from "$lib/services/vault-close";
 
 /**
  * Single lock path shared by the manual lock button, idle auto-lock, and
@@ -33,6 +34,16 @@ export async function lockVault(options?: {
     } catch {
       // Minimizing is cosmetic; a failure must not affect the lock outcome.
     }
+  }
+}
+
+/** Event handlers own their failures; cancelling a native prompt keeps the
+ * workspace open, and a concurrent close never opens a second prompt. */
+export async function lockVaultAutomatically(): Promise<void> {
+  try {
+    await lockVault();
+  } catch (error) {
+    reportCloseError(error, true);
   }
 }
 
@@ -75,7 +86,11 @@ export async function copySensitive(value: string): Promise<void> {
     get(appSettings).security.lockAfterAction;
   try {
     await copyText(value, () => {
-      if (whenCurrent()) return lockVault({ preserveClipboard: true, whenCurrent });
+      if (whenCurrent())
+        return lockVault({ preserveClipboard: true, whenCurrent }).catch((error) => {
+          if (closeErrorKind(error) !== "cancelled" && closeErrorKind(error) !== "busy")
+            throw error;
+        });
     });
   } finally {
     stopActive();
@@ -108,10 +123,18 @@ function lockIdleVault(): void {
   if (idleLockAttempt) return;
   const attempt = {};
   idleLockAttempt = attempt;
-  void lockVault().finally(() => {
+  void lockVaultAutomatically().finally(() => {
     // A completed close can publish null and start a new idle lifetime before
     // this promise settles (clipboard clearing runs independently).
-    if (idleLockAttempt === attempt) idleLockAttempt = null;
+    if (idleLockAttempt === attempt) {
+      idleLockAttempt = null;
+      // Cancellation/failure gets a fresh idle period instead of prompting on
+      // every movement. Cleanup sets deadline=0 and must not re-arm on return.
+      if (vault.get() && idleDeadline > 0) {
+        idleDeadline = 0;
+        armIdleLock();
+      }
+    }
   });
 }
 
@@ -225,6 +248,7 @@ export function setTcatoOverlayOpen(open: boolean): void {
  *  pick): the hide blurs the window and would otherwise trip the focus-loss
  *  lock in the middle of the capture. */
 const screenCaptureActivity = new ActivityLeaseGuard();
+const nativeCloseDialogActivity = new ActivityLeaseGuard();
 
 /** Suppress focus-loss locking for one self-hide capture attempt. */
 export function beginScreenCapture(): { release: () => void } {
@@ -237,17 +261,20 @@ export function beginScreenCapture(): { release: () => void } {
  */
 export function installFocusLock(): () => void {
   const onBlur = () => {
+    if (isVaultClosePending()) return;
     if (tcatoOverlayActivity.isActive()) return;
     if (screenCaptureActivity.isActive()) return;
+    if (nativeCloseDialogActivity.isActive()) return;
     if (!get(appSettings).security.lockOnFocusLoss) return;
     if (!vault.get()) return;
-    void lockVault();
+    void lockVaultAutomatically();
   };
   window.addEventListener("blur", onBlur);
   // Keep the promises: if the cleanup runs before listen() resolves, the
   // then-callback still unregisters, closing the unmount race.
   let stopOpen: Promise<UnlistenFn> | undefined;
   let stopClose: Promise<UnlistenFn> | undefined;
+  let stopCloseDialog: Promise<UnlistenFn> | undefined;
   if (isTauriRuntime()) {
     stopOpen = listen("tcato-overlay-open", () => {
       setTcatoOverlayOpen(true);
@@ -255,10 +282,15 @@ export function installFocusLock(): () => void {
     stopClose = listen("tcato-overlay-close", () => {
       setTcatoOverlayOpen(false);
     });
+    stopCloseDialog = listen<boolean>("vault-close-dialog", (event) => {
+      nativeCloseDialogActivity.setConfirmed(event.payload);
+    });
   }
   return () => {
     window.removeEventListener("blur", onBlur);
     void stopOpen?.then((fn) => fn());
     void stopClose?.then((fn) => fn());
+    void stopCloseDialog?.then((fn) => fn());
+    nativeCloseDialogActivity.setConfirmed(false);
   };
 }

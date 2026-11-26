@@ -4,6 +4,7 @@
   import { appSettings } from "$lib/services/settings";
   import { showTip } from "$lib/services/tips";
   import { t } from "$lib/i18n";
+  import { reportCloseError } from "$lib/services/vault-close";
 
   let sessions = $state<SessionInfo[]>([]);
   let activeIdValue = $state<string | null>(null);
@@ -45,6 +46,14 @@
       showTip(t(lang, "tabs.switchFailed"), "error");
     }
   }
+
+  async function closeTab(sessionId: string): Promise<void> {
+    try {
+      await vault.closeTab(sessionId);
+    } catch (error) {
+      reportCloseError(error);
+    }
+  }
 </script>
 
 {#if sessions.length > 1}
@@ -69,7 +78,7 @@
         <button
           type="button"
           class="tab-close"
-          onclick={() => void vault.closeTab(session.sessionId)}
+          onclick={() => void closeTab(session.sessionId)}
           aria-label={t(lang, "tabs.closeTab", { name: session.fileName })}
         >
           ×

@@ -23,6 +23,7 @@ Object.defineProperty(globalThis, "navigator", {
 let active;
 let closes = 0;
 let closeGate;
+let closeError;
 let clipboardGate;
 globalThis.__TAURI_INTERNALS__ = {
   invoke: async (command, args) => {
@@ -43,10 +44,13 @@ globalThis.__TAURI_INTERNALS__ = {
       case "close_all_vaults":
         closes++;
         if (closeGate) await closeGate;
+        if (closeError) throw closeError;
         active = undefined;
         return;
       case "set_config":
         return args.config;
+      case "get_vault_state":
+        return active?.state ?? null;
       case "clear_saved_credential":
       case "clipboard_cancel_scheduled_wipe":
         return;
@@ -68,6 +72,7 @@ function emit(type) {
 }
 
 async function fixture() {
+  closeError = undefined;
   mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
   appSettings.updateSecurity("autoLockMinutes", 1);
   appSettings.updateSecurity("clearOnLock", false);
@@ -82,6 +87,7 @@ async function fixture() {
   const dispose = async () => {
     stop();
     closeGate = undefined;
+    closeError = undefined;
     await vault.closeAll();
     // Do not leave settings debounce handles alive across fake-clock resets.
     await appSettings.flush();
@@ -91,6 +97,54 @@ async function fixture() {
   dispose.stop = stop;
   return dispose;
 }
+
+test("cancelled idle prompt starts a fresh period without repeated activity prompts", async () => {
+  const dispose = await fixture();
+  try {
+    closeError = "VAULT_CLOSE_CANCELLED:";
+    mock.timers.tick(60_001);
+    await settle();
+    await settle();
+    assert.equal(closes, 1);
+    assert.ok(vault.get());
+    emit("mousemove");
+    emit("focus");
+    emit("visibilitychange");
+    await settle();
+    assert.equal(closes, 1);
+    mock.timers.tick(59_999);
+    await settle();
+    assert.equal(closes, 1);
+    mock.timers.tick(2);
+    await settle();
+    assert.equal(closes, 2);
+  } finally {
+    await dispose();
+  }
+});
+
+test("cleanup during a pending cancelled idle prompt does not re-arm after return", async () => {
+  const dispose = await fixture();
+  try {
+    let release;
+    closeGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    closeError = "VAULT_CLOSE_CANCELLED:";
+    mock.timers.tick(60_001);
+    await settle();
+    assert.equal(closes, 1);
+    dispose.stop();
+    release();
+    await settle();
+    await settle();
+    mock.timers.tick(120_000);
+    await settle();
+    assert.equal(closes, 1);
+  } finally {
+    await dispose();
+  }
+});
 
 for (const event of [
   "pointerdown",

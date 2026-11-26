@@ -712,6 +712,13 @@ export const en: Record<I18nKey, string> = {
     "Click + to record; remove with × to restore defaults. Shortcuts don't fire in inputs or open dialogs.",
   "security.mismatch": "New master passwords do not match",
   "security.repeatPasswordOnlyWhenHidden": "Require password repetition only when hidden",
+  "security.autoSaveOnClose": "Automatically save when closing databases",
+  "security.autoSaveOnCloseDesc":
+    "Save changes before closing tabs, locking or exiting; keep databases open if saving fails. When off, ask to save, discard or cancel.",
+  "error.closeChanged":
+    "Databases changed while closing. Sessions remain open; review your changes and try again.",
+  "error.closeBusy": "Another close or lock is in progress. Please wait.",
+  "error.closeFailed": "Could not close the database: {error}",
   "security.repeatPasswordOnlyWhenHiddenDesc":
     "Applies to database creation and master-key changes. Turn off to require repetition even when the password is visible.",
   "security.needKey": "Enter a new master password or pick a new key file",

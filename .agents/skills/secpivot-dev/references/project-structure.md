@@ -1,5 +1,17 @@
 # Project Structure and Runtime Surfaces
 
+`vault/close.rs` owns the shared save/discard/cancel transaction and close-attempt
+permit; its tests run disposable local and offline remote KDBX persistence plus
+ownership races. `commands/vault_close.rs` owns localized native prompts, their
+focus lease event and workspace cleanup adapter. `exit.rs` owns desktop exit
+admission/retry, retaining the main window during save or cancellation. lib.rs
+registers ExitGate and routes tray quit/main-window close through ExitRequested.
+Async close_vault and close_all_vaults use the same engine; successful closure
+precedes capture/TCATO/temp cleanup. `services/vault-close.ts` classifies native
+markers and owns error feedback; vault service failure refresh retains epochs.
+Security automatic locks, VaultTabs and page manual lock handle cancelled/failed
+close explicitly. Config and SecuritySettingsPanel expose autoSaveOnClose.
+
 `utils/entry-row-layout.ts` builds prefix offsets for full-height entries and
 half-height directory separators, plus binary-search row/range lookup.
 EntryTable uses that index for virtualization, spacer totals, scroll clamps,

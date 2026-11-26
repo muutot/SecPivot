@@ -27,6 +27,7 @@ mod tests;
 #[cfg(desktop)]
 pub(crate) mod url_open;
 pub(crate) mod vault;
+pub(crate) mod vault_close;
 pub(crate) mod website_rules;
 
 #[cfg(desktop)]
