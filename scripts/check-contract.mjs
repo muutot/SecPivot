@@ -10,9 +10,12 @@ const TS_FILES = [
   "src/lib/types/theme.ts",
   "src/lib/utils/entry-search.ts",
 ];
-// Rust-only legacy alias: pre-`keyboard`-section configs migrate it on load
-// (`settings.rs`) and it is never re-serialized. Not a drift.
-const RUST_LEGACY_ALLOWLIST = new Set(["globalAutoTypeShortcut"]);
+// Rust-only fields that never cross the wire:
+// - `globalAutoTypeShortcut`: pre-`keyboard`-section legacy alias, migrated on
+//   load and never re-serialized.
+// - `flag`: the built-in URL override table's bit flag (source-of-truth code
+//   constant); only the resulting `builtInOverridesEnabled` mask is persisted.
+const RUST_LEGACY_ALLOWLIST = new Set(["globalAutoTypeShortcut", "flag"]);
 
 function snakeToCamel(s) {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());

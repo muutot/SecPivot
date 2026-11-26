@@ -10,6 +10,8 @@
 //! - [`dpapi`] — Windows DPAPI secret protection for config persistence.
 //! - [`remote_secret`] — remote-profile credential protection: DPAPI on
 //!   Windows, OS keyring references on desktop non-Windows.
+//! - [`url_override`] — KeePass global URL scheme overrides and `{BASE}` /
+//!   `{URL}` placeholder expansion.
 
 pub mod autotype;
 pub mod clipboard;
@@ -20,3 +22,4 @@ pub mod dpapi;
 pub mod focus;
 pub mod remote_secret;
 pub mod shield;
+pub mod url_override;

@@ -335,10 +335,32 @@ export interface FaviconSettings {
   autoSave: boolean;
 }
 
+/** One KeePass `AceUrlSchemeOverride`: a scheme → command/URL mapping. */
+export interface UrlSchemeOverride {
+  enabled: boolean;
+  /** URI scheme without the trailing `:` (e.g. `http`, `ssh`, `kdbx`). */
+  scheme: string;
+  /** Target URL or `cmd://` command line; supports KeePass placeholders. */
+  urlOverride: string;
+}
+
+/** KeePass `Tools → Options → Integration → URL Overrides`. The built-in
+ *  table is code-defined (27 entries, each with a bit flag); only the enabled
+ *  bitmask and the user's overrides are persisted. */
+export interface IntegrationSettings {
+  /** Master switch (KeePass `UrlOverrideEnabled`, default on). */
+  urlOverrideEnabled: boolean;
+  /** Bitmask of enabled built-in overrides (KeePass `BuiltInOverridesEnabled`). */
+  builtInOverridesEnabled: number;
+  /** User overrides; evaluated after enabled built-ins, first match wins. */
+  customOverrides: UrlSchemeOverride[];
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;
+  integration: IntegrationSettings;
   /** S3 and WebDAV configurations share one ordered collection but remain
    * separated by their discriminated `settings.kind`. */
   remoteProfiles: RemoteProfile[];

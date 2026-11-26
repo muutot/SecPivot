@@ -873,6 +873,204 @@ fn default_toolbar_base() -> bool {
     !cfg!(any(target_os = "android", target_os = "ios"))
 }
 
+/// One KeePass `AceUrlSchemeOverride`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UrlSchemeOverride {
+    pub enabled: bool,
+    /// URI scheme without the trailing `:` (e.g. `http`, `ssh`, `kdbx`).
+    pub scheme: String,
+    /// Target URL or `cmd://` command line; supports KeePass placeholders.
+    pub url_override: String,
+}
+
+impl Default for UrlSchemeOverride {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            scheme: String::new(),
+            url_override: String::new(),
+        }
+    }
+}
+
+/// One built-in override: a unique bit flag, scheme, and command template.
+/// Mirrors KeePass `AceUrlSchemeOverrides` (27 entries; all disabled by
+/// default since KeePass 2.54, with `ssh`→PuTTY being the historical default
+/// that is now opt-in).
+#[derive(Debug, Clone, Copy)]
+pub struct BuiltInOverride {
+    pub flag: u64,
+    pub scheme: &'static str,
+    pub url_override: &'static str,
+}
+
+/// The official KeePass built-in override table, in source order. Bit flags
+/// are stable (persisted in `builtInOverridesEnabled`), so entries are never
+/// reordered or renumbered. Source: KeePass 2.x `AceIntegration.cs`.
+pub const BUILT_IN_URL_OVERRIDES: &[BuiltInOverride] = &[
+    BuiltInOverride {
+        flag: 0x4000,
+        scheme: "http",
+        url_override: "cmd://{EDGE} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x8000,
+        scheme: "https",
+        url_override: "cmd://{EDGE} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x2000000,
+        scheme: "http",
+        url_override: "cmd://{EDGE} --inprivate \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x4000000,
+        scheme: "https",
+        url_override: "cmd://{EDGE} --inprivate \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x8,
+        scheme: "http",
+        url_override: "cmd://{FIREFOX} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x10,
+        scheme: "https",
+        url_override: "cmd://{FIREFOX} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x100000,
+        scheme: "http",
+        url_override: "cmd://{FIREFOX} -private-window \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x200000,
+        scheme: "https",
+        url_override: "cmd://{FIREFOX} -private-window \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x20,
+        scheme: "chrome",
+        url_override: "cmd://{FIREFOX} -chrome \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x100,
+        scheme: "http",
+        url_override: "cmd://{GOOGLECHROME} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x200,
+        scheme: "https",
+        url_override: "cmd://{GOOGLECHROME} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x40000,
+        scheme: "http",
+        url_override: "cmd://{GOOGLECHROME} --incognito \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x80000,
+        scheme: "https",
+        url_override: "cmd://{GOOGLECHROME} --incognito \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x2,
+        scheme: "http",
+        url_override: "cmd://{INTERNETEXPLORER} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x4,
+        scheme: "https",
+        url_override: "cmd://{INTERNETEXPLORER} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x10000,
+        scheme: "http",
+        url_override: "cmd://{INTERNETEXPLORER} -private \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x20000,
+        scheme: "https",
+        url_override: "cmd://{INTERNETEXPLORER} -private \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x40,
+        scheme: "http",
+        url_override: "cmd://{OPERA} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x80,
+        scheme: "https",
+        url_override: "cmd://{OPERA} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x400000,
+        scheme: "http",
+        url_override: "cmd://{OPERA} --private \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x800000,
+        scheme: "https",
+        url_override: "cmd://{OPERA} --private \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x400,
+        scheme: "http",
+        url_override: "cmd://{SAFARI} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x800,
+        scheme: "https",
+        url_override: "cmd://{SAFARI} \"{BASE}\"",
+    },
+    BuiltInOverride {
+        flag: 0x1000,
+        scheme: "kdbx",
+        url_override:
+            "cmd://\"{APPDIR}\\SecPivot.exe\" \"{BASE:RMVSCM}\" -pw-enc:\"{PASSWORD_ENC}\"",
+    },
+    BuiltInOverride {
+        flag: 0x2000,
+        scheme: "kdbx",
+        url_override:
+            "cmd://mono \"{APPDIR}/SecPivot.exe\" \"{BASE:RMVSCM}\" -pw-enc:\"{PASSWORD_ENC}\"",
+    },
+    BuiltInOverride {
+        flag: 0x1000000,
+        scheme: "ssh",
+        url_override: "cmd://SSH.exe -l \"{USERNAME}\" {BASE:RMVSCM}",
+    },
+    BuiltInOverride {
+        flag: 0x1,
+        scheme: "ssh",
+        url_override: "cmd://PuTTY.exe -ssh {USERNAME}@{BASE:RMVSCM}",
+    },
+];
+
+/// KeePass `AceIntegration.UrlSchemeOverrides` persisted shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct IntegrationSettings {
+    /// KeePass `UrlOverrideEnabled` (default on): master switch.
+    #[serde(default = "default_true")]
+    pub url_override_enabled: bool,
+    /// Bitmask over [`BUILT_IN_URL_OVERRIDES`] flags; `0` = none enabled.
+    pub built_in_overrides_enabled: u64,
+    /// User overrides, evaluated after enabled built-ins; first match wins.
+    pub custom_overrides: Vec<UrlSchemeOverride>,
+}
+
+impl Default for IntegrationSettings {
+    fn default() -> Self {
+        Self {
+            url_override_enabled: true,
+            built_in_overrides_enabled: 0,
+            custom_overrides: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -882,6 +1080,8 @@ pub struct AppConfig {
     pub security: SecuritySettings,
     #[serde(default)]
     pub database: DatabaseDefaults,
+    #[serde(default)]
+    pub integration: IntegrationSettings,
     /// S3 and WebDAV profiles. Each profile path is `<kind>/<name>`.
     #[serde(default)]
     pub remote_profiles: Vec<RemoteProfile>,
@@ -903,6 +1103,7 @@ impl Default for AppConfig {
             general: GeneralSettings::default(),
             security: SecuritySettings::default(),
             database: DatabaseDefaults::default(),
+            integration: IntegrationSettings::default(),
             remote_profiles: vec![RemoteProfile::default(), RemoteProfile::webdav_default()],
             active_remote: "s3/config_1".into(),
             bridge: BridgeSettings::default(),
@@ -938,6 +1139,32 @@ fn normalize_entry_columns(columns: Vec<EntryColumnState>) -> Vec<EntryColumnSta
             c.width = c.width.clamp(30, 400);
             c
         })
+        .collect()
+}
+
+/// Normalize user URL overrides: drop entries with no scheme or empty target,
+/// trim/collapse the scheme, dedup by (scheme, target), and cap the list so a
+/// hand-edited config cannot grow the table unbounded.
+fn normalize_url_overrides(overrides: Vec<UrlSchemeOverride>) -> Vec<UrlSchemeOverride> {
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    overrides
+        .into_iter()
+        .filter_map(|mut o| {
+            o.scheme = o.scheme.trim().trim_end_matches(':').to_ascii_lowercase();
+            o.url_override = o.url_override.trim().to_owned();
+            if o.scheme.is_empty()
+                || o.url_override.is_empty()
+                || !o
+                    .scheme
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.')
+            {
+                return None;
+            }
+            let key = (o.scheme.clone(), o.url_override.clone());
+            seen.insert(key).then_some(o)
+        })
+        .take(256)
         .collect()
 }
 
@@ -1238,6 +1465,11 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.entry_columns = normalize_entry_columns(config.general.entry_columns);
     config.general.saved_searches = normalize_saved_searches(config.general.saved_searches);
     config.general.group_separator_color = valid_hex(&config.general.group_separator_color, "");
+
+    let all_builtin_flags: u64 = BUILT_IN_URL_OVERRIDES.iter().map(|o| o.flag).sum();
+    config.integration.built_in_overrides_enabled &= all_builtin_flags;
+    config.integration.custom_overrides =
+        normalize_url_overrides(std::mem::take(&mut config.integration.custom_overrides));
 
     let recent = std::mem::take(&mut config.general.recent_files);
     let mut seen = std::collections::HashSet::new();

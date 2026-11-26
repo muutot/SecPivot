@@ -15,6 +15,8 @@ import type {
   RpcSettings,
   KeyboardSettings,
   FaviconSettings,
+  IntegrationSettings,
+  UrlSchemeOverride,
   EntryColumnState,
   PasswordGeneratorSettings,
   SavedSearch,
@@ -321,10 +323,17 @@ export const DEFAULT_FAVICON_SETTINGS: FaviconSettings = {
   autoSave: false,
 };
 
+export const DEFAULT_INTEGRATION_SETTINGS: IntegrationSettings = {
+  urlOverrideEnabled: true,
+  builtInOverridesEnabled: 0,
+  customOverrides: [],
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
+  integration: DEFAULT_INTEGRATION_SETTINGS,
   remoteProfiles: DEFAULT_REMOTE_PROFILES,
   activeRemote: "s3/config_1",
   bridge: DEFAULT_BRIDGE_SETTINGS,
@@ -805,6 +814,39 @@ function normalizeCustomThemes(
   return fallback.map((t) => ({ ...t, colors: { ...t.colors } }));
 }
 
+const URL_SCHEME_RE = /^[a-z0-9+.-]+$/;
+
+/** Normalize user URL overrides: trim the scheme (dropping a trailing `:`),
+ *  lowercase it, drop invalid/empty entries, and dedup by scheme + target. */
+export function normalizeUrlOverrides(value: unknown): UrlSchemeOverride[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: UrlSchemeOverride[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Partial<UrlSchemeOverride>;
+    const scheme = String(item.scheme ?? "")
+      .trim()
+      .replace(/:$/, "")
+      .toLowerCase();
+    const urlOverride = String(item.urlOverride ?? "").trim();
+    if (!scheme || !urlOverride || !URL_SCHEME_RE.test(scheme)) continue;
+    const key = `${scheme}\u0000${urlOverride}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+      scheme,
+      urlOverride,
+    });
+    if (out.length >= 256) break;
+  }
+  return out;
+}
+
+/** Mask of all 27 official built-in override bit flags (0x07FFFFFF). */
+export const ALL_BUILTIN_OVERRIDE_FLAGS = 0x07ffffff;
+
 export function normalizeSettings(
   source: Partial<AppSettings>,
   fallback: AppSettings = DEFAULT_APP_SETTINGS,
@@ -1078,10 +1120,25 @@ export function normalizeSettings(
     }
   }
 
+  const integration: IntegrationSettings = {
+    urlOverrideEnabled:
+      typeof source.integration?.urlOverrideEnabled === "boolean"
+        ? source.integration.urlOverrideEnabled
+        : (fallback.integration?.urlOverrideEnabled ?? true),
+    builtInOverridesEnabled: clampInt(
+      source.integration?.builtInOverridesEnabled ?? fallback.integration?.builtInOverridesEnabled,
+      0,
+      ALL_BUILTIN_OVERRIDE_FLAGS,
+      0,
+    ),
+    customOverrides: normalizeUrlOverrides(source.integration?.customOverrides),
+  };
+
   return {
     general,
     security,
     database,
+    integration,
     remoteProfiles,
     activeRemote,
     bridge: {
@@ -1127,6 +1184,10 @@ interface AppSettingsStore {
   updateGeneral: <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => void;
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
+  updateIntegration: <K extends keyof IntegrationSettings>(
+    key: K,
+    value: IntegrationSettings[K],
+  ) => void;
   updateRemote: <K extends RemoteUpdateKey>(
     path: RemoteProfilePath,
     key: K,
@@ -1346,6 +1407,11 @@ export const appSettings: AppSettingsStore = {
 
   updateDatabase(key, value): void {
     settings.update((s) => ({ ...s, database: { ...s.database, [key]: value } }));
+    schedulePersist();
+  },
+
+  updateIntegration(key, value): void {
+    settings.update((s) => ({ ...s, integration: { ...s.integration, [key]: value } }));
     schedulePersist();
   },
 

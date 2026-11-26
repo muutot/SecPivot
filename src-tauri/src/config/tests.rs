@@ -97,6 +97,84 @@ fn partial_objects_keep_true_defaults_instead_of_silently_clearing() {
 }
 
 #[test]
+fn builtin_url_override_flags_cover_27_unique_bits() {
+    use super::settings::BUILT_IN_URL_OVERRIDES;
+    assert_eq!(BUILT_IN_URL_OVERRIDES.len(), 27);
+    let mut seen = std::collections::HashSet::new();
+    let mut all = 0u64;
+    for o in BUILT_IN_URL_OVERRIDES {
+        assert!(o.flag.is_power_of_two(), "{}", o.flag);
+        assert!(seen.insert(o.flag), "duplicate flag {}", o.flag);
+        assert!(!o.scheme.is_empty() && !o.url_override.is_empty());
+        all |= o.flag;
+    }
+    assert_eq!(all, 0x07ff_ffff);
+}
+
+#[test]
+fn integration_url_overrides_survive_round_trip_and_normalize() {
+    use super::settings::UrlSchemeOverride;
+
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    // KeePass 2.54+ defaults: master on, all built-ins off, no custom rules.
+    assert!(config.integration.url_override_enabled);
+    assert_eq!(config.integration.built_in_overrides_enabled, 0);
+    assert!(config.integration.custom_overrides.is_empty());
+
+    config.integration.built_in_overrides_enabled = 0x1 | 0x100;
+    config.integration.custom_overrides = vec![
+        UrlSchemeOverride {
+            enabled: true,
+            scheme: " SSH: ".into(),
+            url_override: "cmd://my-ssh {BASE:RMVSCM}".into(),
+        },
+        UrlSchemeOverride {
+            enabled: false,
+            scheme: "rdp".into(),
+            url_override: "cmd://mstsc.exe /v:{BASE:HOST}".into(),
+        },
+    ];
+    let saved = store.set(config).unwrap();
+    assert_eq!(saved.integration.built_in_overrides_enabled, 0x1 | 0x100);
+    // Normalization trims and lowercases the scheme.
+    assert_eq!(saved.integration.custom_overrides[0].scheme, "ssh");
+
+    let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let config = reloaded.get().unwrap();
+    assert_eq!(config.integration.built_in_overrides_enabled, 0x1 | 0x100);
+    assert_eq!(config.integration.custom_overrides.len(), 2);
+    assert_eq!(config.integration.custom_overrides[0].scheme, "ssh");
+    assert!(!config.integration.custom_overrides[1].enabled);
+    assert_eq!(
+        config.integration.custom_overrides[1].url_override,
+        "cmd://mstsc.exe /v:{BASE:HOST}"
+    );
+}
+
+#[test]
+fn unknown_builtin_flag_bits_are_dropped_on_normalize() {
+    let config: crate::config::AppConfig = serde_json::from_value(serde_json::json!({
+        "integration": {
+            "builtInOverridesEnabled": 0xffff_ffff_u64,
+            "customOverrides": [
+                { "enabled": true, "scheme": "", "urlOverride": "cmd://x" },
+                { "enabled": true, "scheme": "http", "urlOverride": "" },
+                { "enabled": true, "scheme": "bad scheme", "urlOverride": "cmd://x" }
+            ]
+        }
+    }))
+    .unwrap();
+    let normalized = super::settings::normalize_config(config);
+    assert_eq!(
+        normalized.integration.built_in_overrides_enabled,
+        0x07ff_ffff
+    );
+    assert!(normalized.integration.custom_overrides.is_empty());
+}
+
+#[test]
 fn icon_only_buttons_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
