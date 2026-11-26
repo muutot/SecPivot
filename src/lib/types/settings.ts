@@ -359,6 +359,10 @@ export interface UrlSchemeOverride {
  *  table is code-defined (27 entries, each with a bit flag); only the enabled
  *  bitmask and the user's overrides are persisted. */
 export interface IntegrationSettings {
+  /** KeePass drive-root keyfile suggestions; never selects or opens a file. */
+  searchKeyFiles: boolean;
+  /** Include removable drive roots; effective only while search is enabled. */
+  searchKeyFilesOnRemovableMedia: boolean;
   /** Enables only the global template (KeePass `UrlOverrideEnabled`, default on). */
   urlOverrideEnabled: boolean;
   /** Single global template (KeePass `UrlOverride`); empty means use the entry URL. */

@@ -20,6 +20,31 @@ globalThis.__TAURI_INTERNALS__ = {
 const { appSettings, normalizeSettings, DEFAULT_APP_SETTINGS } =
   await import("../src/lib/services/settings.ts");
 
+test("keyfile search preferences default to drive-root suggestions and preserve explicit choices", async () => {
+  assert.equal(DEFAULT_APP_SETTINGS.integration.searchKeyFiles, true);
+  assert.equal(DEFAULT_APP_SETTINGS.integration.searchKeyFilesOnRemovableMedia, false);
+  for (const value of [null, 0, "true", {}]) {
+    const normalized = normalizeSettings({
+      integration: { searchKeyFiles: value, searchKeyFilesOnRemovableMedia: value },
+    }).integration;
+    assert.equal(normalized.searchKeyFiles, true);
+    assert.equal(normalized.searchKeyFilesOnRemovableMedia, false);
+  }
+  for (const [enabled, removable] of [
+    [true, true],
+    [false, true],
+    [false, false],
+    [true, false],
+  ]) {
+    appSettings.updateIntegration("searchKeyFiles", enabled);
+    appSettings.updateIntegration("searchKeyFilesOnRemovableMedia", removable);
+    await appSettings.flush();
+    await appSettings.initialize();
+    assert.equal(get(appSettings).integration.searchKeyFiles, enabled);
+    assert.equal(get(appSettings).integration.searchKeyFilesOnRemovableMedia, removable);
+  }
+});
+
 test("legacy integration config loads an empty global template without changing rules", () => {
   const integration = {
     urlOverrideEnabled: false,
@@ -28,6 +53,8 @@ test("legacy integration config loads an empty global template without changing 
   };
   assert.deepEqual(normalizeSettings({ integration }, DEFAULT_APP_SETTINGS).integration, {
     ...integration,
+    searchKeyFiles: true,
+    searchKeyFilesOnRemovableMedia: false,
     urlOverride: "",
   });
   assert.equal(

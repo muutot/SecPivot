@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appSettings } from "$lib/services/settings";
+  import { appSettings, isMobile } from "$lib/services/settings";
   import type { SecuritySettings } from "$lib/types/settings";
   import MasterKeyChangeForm from "$lib/components/MasterKeyChangeForm.svelte";
   import MasterKeyExpiryRuleCard from "$lib/components/settings/MasterKeyExpiryRuleCard.svelte";
@@ -46,6 +46,24 @@
 <div class="settings-scroll">
   <MasterKeyExpiryRuleCard setting="masterKeyExpiryRec" />
   <MasterKeyExpiryRuleCard setting="masterKeyExpiryForce" />
+  {#if !isMobile()}
+    <SettingToggleCard
+      icon="key"
+      label={t(lang, "security.searchKeyFiles")}
+      description={t(lang, "security.searchKeyFilesDesc")}
+      checked={s.integration.searchKeyFiles}
+      onchange={(checked) => appSettings.updateIntegration("searchKeyFiles", checked)}
+    />
+    <SettingToggleCard
+      icon="folder"
+      label={t(lang, "security.searchKeyFilesRemovable")}
+      description={t(lang, "security.searchKeyFilesRemovableDesc")}
+      checked={s.integration.searchKeyFilesOnRemovableMedia}
+      disabled={!s.integration.searchKeyFiles}
+      onchange={(checked) =>
+        appSettings.updateIntegration("searchKeyFilesOnRemovableMedia", checked)}
+    />
+  {/if}
   <section class="setting-card">
     <div class="setting-heading">
       <span class="setting-icon"><AppIcon name="key" size={17} /></span>

@@ -1,5 +1,17 @@
 # Settings Shell and Panel Patterns
 
+The two keyfile-search preferences use existing SettingToggleCard on the desktop
+Security page. Both map to IntegrationSettings; removable is disabled while main
+search is off. Descriptions identify Windows drive-root scope and explicit choice.
+VaultCredentialFields composes KeyfileSuggestionList only for opening scopes;
+the list reuses Select and semantic secondary notes in a six-pixel compact column.
+Search results never auto-select or submit. Mobile keeps manual browsing and no
+search controls. No new surface/font/control primitive is introduced.
+Shared Select owns its body listbox portal and no-scroll initial focus; its
+existing aria-controls/keyboard/outside-click behavior remains the menu boundary.
+Light/dark/320px candidates and settings render without horizontal overflow;
+explicit selection fills the readonly keyfile field and Escape closes only the list.
+
 SecuritySettingsPanel composes recommended/required MasterKeyExpiryRuleCard
 instances. Each reuses card/heading, control TextField, action Button and inline
 Feedback; local drafts require native validation and explicit Apply. Empty rules

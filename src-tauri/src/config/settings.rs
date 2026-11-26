@@ -1075,6 +1075,11 @@ pub const BUILT_IN_URL_OVERRIDES: &[BuiltInOverride] = &[
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct IntegrationSettings {
+    /// KeePass drive-root keyfile suggestions, without reading key contents.
+    #[serde(default = "default_true")]
+    pub search_key_files: bool,
+    /// Removable roots are opt-in; ignored when search_key_files is false.
+    pub search_key_files_on_removable_media: bool,
     /// KeePass `UrlOverrideEnabled` (default on): enables only the global template.
     #[serde(default = "default_true")]
     pub url_override_enabled: bool,
@@ -1089,6 +1094,8 @@ pub struct IntegrationSettings {
 impl Default for IntegrationSettings {
     fn default() -> Self {
         Self {
+            search_key_files: true,
+            search_key_files_on_removable_media: false,
             url_override_enabled: true,
             url_override: String::new(),
             built_in_overrides_enabled: 0,

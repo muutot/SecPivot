@@ -5,6 +5,37 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn keyfile_search_flags_load_legacy_defaults_and_survive_native_reload() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    std::fs::write(dir.path().join("conf/config.json"), r#"{"integration":{}}"#).unwrap();
+    let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+    let mut config = store.get().unwrap();
+    assert!(config.integration.search_key_files);
+    assert!(!config.integration.search_key_files_on_removable_media);
+    for (enabled, removable) in [(true, false), (true, true), (false, true), (false, false)] {
+        config.integration.search_key_files = enabled;
+        config.integration.search_key_files_on_removable_media = removable;
+        store.set(config.clone()).unwrap();
+        let reloaded = ConfigStore::load(dir.path().to_owned())
+            .unwrap()
+            .get()
+            .unwrap();
+        assert_eq!(reloaded.integration.search_key_files, enabled);
+        assert_eq!(
+            reloaded.integration.search_key_files_on_removable_media,
+            removable
+        );
+        let wire = serde_json::to_value(&reloaded).unwrap();
+        assert_eq!(wire["integration"]["searchKeyFiles"], enabled);
+        assert_eq!(
+            wire["integration"]["searchKeyFilesOnRemovableMedia"],
+            removable
+        );
+    }
+}
+
+#[test]
 fn master_key_expiry_rules_load_legacy_defaults_and_survive_native_reload() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("conf")).unwrap();

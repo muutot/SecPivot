@@ -331,6 +331,8 @@ export const DEFAULT_FAVICON_SETTINGS: FaviconSettings = {
 };
 
 export const DEFAULT_INTEGRATION_SETTINGS: IntegrationSettings = {
+  searchKeyFiles: true,
+  searchKeyFilesOnRemovableMedia: false,
   urlOverrideEnabled: true,
   urlOverride: "",
   builtInOverridesEnabled: 0,
@@ -1147,6 +1149,14 @@ export function normalizeSettings(
   }
 
   const integration: IntegrationSettings = {
+    searchKeyFiles:
+      typeof source.integration?.searchKeyFiles === "boolean"
+        ? source.integration.searchKeyFiles
+        : (fallback.integration?.searchKeyFiles ?? true),
+    searchKeyFilesOnRemovableMedia:
+      typeof source.integration?.searchKeyFilesOnRemovableMedia === "boolean"
+        ? source.integration.searchKeyFilesOnRemovableMedia
+        : (fallback.integration?.searchKeyFilesOnRemovableMedia ?? false),
     urlOverrideEnabled:
       typeof source.integration?.urlOverrideEnabled === "boolean"
         ? source.integration.urlOverrideEnabled

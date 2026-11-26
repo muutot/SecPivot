@@ -1,5 +1,22 @@
 # Project Structure and Runtime Surfaces
 
+`keyfile_search.rs` owns Windows drive enumeration, top-level candidate filtering
+and the bounded blocking worker; nested tests use synthetic temporary roots and
+injected slow work. `commands/config.rs::search_key_files` resolves native flags;
+lib.rs registers it. IntegrationSettings mirrors both defaulted flags in TS/Rust.
+`services/keyfile-search.ts` owns nonsecret scope/generation state and candidate
+admission; `KeyfileSuggestionList.svelte` flushes settings and owns Select/notes.
+VaultCredentialFields composes it only for open scopes passed by VaultWelcome
+(local/recent/remote) and LockScreen. SecuritySettingsPanel exposes both controls
+on desktop, with removable disabled while main search is off. Other native
+platforms report unsupported; mobile keeps manual SAF. Actual OS-root/WebView
+and Android provider behavior remain outside the synthetic tests.
+Shared Select owns a cleanup action that moves its fixed listbox to document.body,
+retaining viewport coordinates outside blurred/scrollable modal containing blocks.
+Initial list focus prevents scroll; the existing keyboard/ARIA/outside listeners
+remain owned by Select. Isolated rendering verifies candidate menu selection and
+Escape in Chinese light/English dark at320px.
+
 `vault/master_key_expiry.rs` owns nonsecret read-only key-age offers, with
 `master_key_expiry/rules.rs` implementing KeePass database/global comparisons
 and XML duration/cutoff parsing. Its tests execute temporary KDBX/MemoryStorage

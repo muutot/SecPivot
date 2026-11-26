@@ -5,6 +5,7 @@ pub mod config;
 pub mod crypto;
 #[cfg(desktop)]
 mod exit;
+mod keyfile_search;
 #[cfg(desktop)]
 mod loopback;
 mod net;
@@ -480,6 +481,7 @@ pub fn run() {
             commands::get_kdf_upgrade_offer,
             commands::get_master_key_expiry_offer,
             commands::validate_master_key_expiry_rule,
+            commands::search_key_files,
             commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,

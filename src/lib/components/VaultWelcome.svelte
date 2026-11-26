@@ -583,6 +583,7 @@
         {error}
         isCreate={false}
         {isDemo}
+        keyfileSearchScope={path}
         onPickKeyfile={pickKeyfile}
       />
     {/snippet}
@@ -852,6 +853,7 @@
           {busy}
           {error}
           isCreate={remoteTab === "create"}
+          keyfileSearchScope={`${remoteMirrorDir}/${remoteKey}`}
           onPickKeyfile={pickKeyfile}
         />
       {/if}

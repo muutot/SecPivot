@@ -1,5 +1,15 @@
 # Project-wide UI Style and Theming
 
+Keyfile search uses shared SettingToggleCard and Select. Its local list wrapper
+is a min-width:0 flex column with6px top spacing; status notes use muted/secondary
+tokens and anywhere wrapping. Candidate paths retain the existing Select menu
+chrome/overflow behavior. No theme token, background or font is added.
+Select portals the listbox to document.body so blurred/scrollable modals cannot
+clip its fixed viewport position. The action removes the list on unmount; initial
+list focus uses preventScroll to avoid an outside-scroll dismissal. Chinese light/
+English dark and320px renders cover mouse/keyboard selection, Escape, full path
+display and contained width with the shared Cascadia font.
+
 MasterKeyExpiryRuleCard uses existing settings cards, TextField, Button and
 Feedback, with a scoped note/action flex row and anywhere text wrapping.
 MasterKeyChangeForm retains existing field/keyfile spacing and uses a stretched

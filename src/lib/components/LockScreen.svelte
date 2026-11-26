@@ -171,6 +171,7 @@
         {busy}
         {error}
         isCreate={false}
+        keyfileSearchScope={remembered?.path ?? ""}
         onPickKeyfile={pickKeyfile}
       />
     {/if}

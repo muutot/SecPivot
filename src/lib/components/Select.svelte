@@ -31,6 +31,13 @@
 
   const selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? "");
 
+  function portalList(node: HTMLDivElement): { destroy: () => void } {
+    // A blurred/scrollable modal creates a containing block and can clip fixed
+    // descendants. Keep viewport coordinates in the actual viewport instead.
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   function positionMenu(): void {
     if (!triggerEl) return;
     const r = triggerEl.getBoundingClientRect();
@@ -52,7 +59,7 @@
       options.findIndex((o) => o.value === value),
     );
     positionMenu();
-    requestAnimationFrame(() => listEl?.focus());
+    requestAnimationFrame(() => listEl?.focus({ preventScroll: true }));
   }
 
   function closeMenu(): void {
@@ -165,6 +172,7 @@
       aria-activedescendant={highlight >= 0 ? `${listId}-${highlight}` : undefined}
       tabindex="-1"
       bind:this={listEl}
+      use:portalList
       style="top:{pos.top}px; left:{pos.left}px; width:{pos.width}px;"
       onkeydown={onListKeydown}
     >

@@ -2,6 +2,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import MasterPasswordFields from "$lib/components/MasterPasswordFields.svelte";
+  import KeyfileSuggestionList from "$lib/components/KeyfileSuggestionList.svelte";
   import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
@@ -16,6 +17,7 @@
     isDemo?: boolean;
     path?: string;
     showPathField?: boolean;
+    keyfileSearchScope?: string;
     onPickKeyfile?: () => void;
     onPickCreatePath?: () => void;
   }
@@ -31,6 +33,7 @@
     isDemo = false,
     path = $bindable(""),
     showPathField = false,
+    keyfileSearchScope,
     onPickKeyfile,
     onPickCreatePath,
   }: Props = $props();
@@ -100,6 +103,13 @@
       </button>
     </div>
   </label>
+  {#if !isCreate && keyfileSearchScope !== undefined}
+    <KeyfileSuggestionList
+      scope={keyfileSearchScope}
+      {busy}
+      onselect={(path) => (keyfilePath = path)}
+    />
+  {/if}
 {/if}
 
 {#if error}

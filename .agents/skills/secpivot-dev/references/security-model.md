@@ -1,5 +1,18 @@
 # Security Model
 
+Keyfile discovery reads directory entries/types only, never key bytes or vault
+contents. Windows roots come from the OS, not caller-supplied arbitrary paths;
+regular .key/.keyx files are listed without following symlinks or recursing.
+Mobile discovery is unsupported and keeps manual SAF selection. Explicit user
+selection alone fills the existing keyfile field; neither discovery nor selection
+submits an opening attempt. A single process semaphore,5s response timeout and
+directory/result caps bound repeated or slow scans. Timed-out blocking work holds
+its permit until it actually returns. Failures/caps report incomplete and retain
+manual browsing. Renderer scope/settings generations discard stale results and
+busy inputs cannot select. Native config is flushed before inspection; flags
+persist without file paths/content. Synthetic directory/host/config tests prove
+these boundaries; no user drives or actual WebView/provider were accessed.
+
 Master-key expiry assessment is read-only. Native metadata and ConfigStore rules
 are evaluated in `vault/master_key_expiry.rs` and its rules child; a lifetime token
 and metadata-only DTO reach the originating renderer. No password/keyfile copy,

@@ -983,6 +983,15 @@ export const zhCN = {
     "请输入 P90D 等 XML 时长或 2027-01-01T00:00:00Z 等有效 UTC 截止日期，留空可禁用。",
   "security.keyExpiryRequired": "需要更换主密钥",
   "security.keyExpiryRecommended": "建议更换主密钥",
+  "security.searchKeyFiles": "打开时搜索密钥文件",
+  "security.searchKeyFilesDesc":
+    "Windows：列出驱动器根目录中的 .key、.keyx 候选文件，需手动选择；搜索不读取密钥内容。",
+  "security.searchKeyFilesRemovable": "同时搜索移动盘",
+  "security.searchKeyFilesRemovableDesc":
+    "候选范围包含移动盘根目录，默认关闭；始终可以手动浏览选择。",
+  "vault.keyfileSuggestions": "选择搜索到的密钥文件",
+  "vault.keyfileSearching": "正在搜索密钥文件候选…",
+  "vault.keyfileSearchIncomplete": "搜索不完整或暂不可用，可以手动浏览选择密钥文件。",
   "security.keyExpiryRequiredDesc":
     "此数据库要求更换主密钥后才能继续使用。可以更换密钥或关闭数据库。",
   "security.keyExpiryRecommendedDesc": "主密钥已达到设定的更换期限，可以立即更换或稍后处理。",

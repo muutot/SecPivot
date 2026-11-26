@@ -22,6 +22,19 @@ pub(crate) fn get_config(
     store.get_masked()
 }
 
+/// Nonsecret suggestions only; no database or keyfile content is read.
+#[tauri::command]
+pub(crate) async fn search_key_files(
+    store: tauri::State<'_, ConfigStore>,
+) -> Result<crate::keyfile_search::KeyfileSuggestions, String> {
+    let integration = store.get()?.integration;
+    Ok(crate::keyfile_search::search(
+        integration.search_key_files,
+        integration.search_key_files_on_removable_media,
+    )
+    .await)
+}
+
 /// Whether a remote profile holds stored credentials, without revealing
 /// them. Drives the settings/welcome placeholder UI ("saved — leave blank
 /// to keep"): an empty field means keep, a filled one replaces.

@@ -991,6 +991,16 @@ export const en: Record<I18nKey, string> = {
     "Enter an XML duration such as P90D or a valid UTC cutoff such as 2027-01-01T00:00:00Z. Empty disables the rule.",
   "security.keyExpiryRequired": "Master key change required",
   "security.keyExpiryRecommended": "Master key change recommended",
+  "security.searchKeyFiles": "Suggest keyfiles when opening",
+  "security.searchKeyFilesDesc":
+    "Windows: list .key and .keyx files from drive roots. Choose a suggestion explicitly; no key content is read during search.",
+  "security.searchKeyFilesRemovable": "Also search removable drives",
+  "security.searchKeyFilesRemovableDesc":
+    "Include removable drive roots in suggestions. Disabled by default; manual browsing remains available.",
+  "vault.keyfileSuggestions": "Choose a discovered keyfile",
+  "vault.keyfileSearching": "Searching for keyfile suggestions…",
+  "vault.keyfileSearchIncomplete":
+    "Search is incomplete or unavailable. You can browse for a keyfile manually.",
   "security.keyExpiryRequiredDesc":
     "This database requires a new master key before you continue. You may change it or close the database.",
   "security.keyExpiryRecommendedDesc":

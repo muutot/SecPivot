@@ -7,7 +7,7 @@
 ## 一、明确待实现
 
 - [~] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）：日期/一次性标志保真及成功改密钥同次消费已交付；全局字符串默认禁用、配置重载、数据库天数/全局 XML 时长与日期截止规则、强制优先及无效规则反馈已接入原生评估/草稿校验 IPC。安全页显式应用规则，打开时先处理主密钥再处理 KDF；建议可稍后，强制只能更换或关闭，只读禁用更换，取消/失败不放行，旧会话回调与原生寿命校验已覆盖。真实临时 KDBX/离线 remote、.NET Framework 独立对照、实际 controller/host/form/service 回归及浅色/深色/320px 渲染通过；这是打开提示策略，非所有原生密钥 API 禁令。真实 WebView/provider 与官方客户端互操作仍待验证
-- [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
+- [~] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）：默认开/移动盘默认关与旧配置重载已接入；Windows 原生根目录搜索 .key/.keyx，只列候选不读内容、不递归、不自动选择/提交。安全页开关、本地/最近/远程打开与锁屏已接入；5 秒响应、单 worker、4096 项/根目录与 128 候选限额，错误/超时可继续浏览。合成目录/慢 worker、配置与实际 host/controller 回归、浅色/深色/320px 鼠标/键盘选择与菜单退出已覆盖；共享 Select 弹出层修复模糊滚动容器裁剪。真实驱动器/WebView、其他平台发现与 Android provider 待验证
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）
 - [ ] 配置日志开关（`AceLogging.Enabled`）

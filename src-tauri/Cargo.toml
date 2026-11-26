@@ -72,7 +72,7 @@ rxing = "0.9.2"
 zip = { version = "=9.5.0", default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_DataExchange", "Win32_System_Registry", "Win32_Storage_FileSystem"] }
 
 # Android's rustls-platform-verifier is unusable without Tauri-side JNI setup
 # (see src/net.rs), so reqwest is pinned to this bundled Mozilla root store.

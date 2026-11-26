@@ -1,5 +1,23 @@
 # Data Contracts
 
+`integration.searchKeyFiles` defaults true and
+`searchKeyFilesOnRemovableMedia` false in TS/native configs, including old partial
+integration sections. Explicit choices persist unchanged; the removable flag is
+ignored while the main flag is false. `search_key_files() -> KeyfileSuggestions`
+reads native config and returns only `{paths,incomplete,supported}`. On Windows,
+OS drive roots supply top-level .key/.keyx regular-file candidates without file
+contents, recursion or automatic selection. Removable roots are opt-in; optical/
+missing roots are excluded. Errors, >4096 entries/root, >128 suggestions, busy
+worker or5s timeout produce incomplete status. A timed-out blocking worker keeps
+its single global permit until exit; repeated calls cannot spawn unlimited reads.
+Other platforms return supported=false; Android retains manual SAF browsing.
+KeyfileSuggestionList flushes current settings before native inspection and uses
+KeyfileSearchController generations to discard detached/disabled/changed replies.
+VaultCredentialFields supplies explicit candidate selection only for opening
+scopes in VaultWelcome/LockScreen; creating vaults and master changes do not scan.
+Discovery never submits credentials, reads key bytes or changes attempt counts.
+Tests use synthetic directories/IPC, not actual user drives or native WebView.
+
 `security.masterKeyExpiryRec` / `masterKeyExpiryForce` mirror KeePass's global
 XML duration/date cutoff strings, default empty and persist unchanged on both
 TS and native sides. Invalid strings remain available for correction; only
