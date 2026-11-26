@@ -374,19 +374,26 @@ impl VaultSession {
     ) -> Result<VaultState, String> {
         let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
         let (db, target, revision) = self.prepare_change()?;
-        let new_hash = match persist_change(&db, password, keyfile_bytes.as_deref(), &target) {
-            Ok(hash) => hash,
-            Err(e) => {
-                if matches!(
-                    super::classify_save_error(&e),
-                    super::SaveErrorClass::Persistent
-                ) {
-                    self.note_save_failure();
+        let (new_hash, changed_at) =
+            match persist_change(db, password, keyfile_bytes.as_deref(), &target) {
+                Ok(outcome) => outcome,
+                Err(e) => {
+                    if matches!(
+                        super::classify_save_error(&e),
+                        super::SaveErrorClass::Persistent
+                    ) {
+                        self.note_save_failure();
+                    }
+                    return Err(e);
                 }
-                return Err(e);
-            }
-        };
-        self.complete_change(password, keyfile_bytes.as_deref(), revision, new_hash)
+            };
+        self.complete_change(
+            password,
+            keyfile_bytes.as_deref(),
+            revision,
+            new_hash,
+            changed_at,
+        )
     }
 
     /// Save As: persist the current database (same master key) to a new local
@@ -868,7 +875,12 @@ impl VaultSession {
         keyfile: Option<&[u8]>,
         revision: u64,
         new_hash: impl Into<PersistOutcome>,
+        changed_at: chrono::NaiveDateTime,
     ) -> Result<VaultState, String> {
+        // Update only the committed master-key metadata; edits made while the
+        // worker saved must remain in the current database and stay dirty.
+        self.require_db_mut()?.meta.master_key_changed = Some(changed_at);
+        self.cached_snapshot = None;
         self.adopt_persisted(new_hash.into());
         // Swapping to the new master password must wipe the old one from
         // memory instead of letting it drop unzeroed.

@@ -9,6 +9,7 @@ use super::helpers::{
 use super::RemoteMode;
 use crate::remote::backup::{remote_key_basename, validate_remote_key, write_local_copy};
 use crate::remote::RemoteStorage;
+use chrono::{NaiveDateTime, SubsecRound, Utc};
 use keepass::{Database, DatabaseKey};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -185,6 +186,7 @@ pub(crate) fn prepare_local_create(
     let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let key = build_database_key(password, keyfile_bytes.as_deref())?;
     let mut db = Database::new();
+    db.meta.master_key_changed = Some(Utc::now().naive_utc().trunc_subsecs(0));
     apply_kdf(&mut db, kdf)?;
     apply_cipher(&mut db, cipher)?;
     apply_compression(&mut db, compression)?;
@@ -252,6 +254,7 @@ pub(crate) fn prepare_remote_create(
     let keyfile_bytes = Zeroizing::new(read_keyfile(keyfile)?);
     let db_key = build_database_key(password, keyfile_bytes.as_deref())?;
     let mut db = Database::new();
+    db.meta.master_key_changed = Some(Utc::now().naive_utc().trunc_subsecs(0));
     apply_kdf(&mut db, kdf)?;
     apply_cipher(&mut db, cipher)?;
     apply_compression(&mut db, compression)?;
@@ -388,13 +391,18 @@ pub(crate) fn persist_save_with_db(job: SaveJob) -> Result<(Database, PersistOut
 /// Lock-free persist with an externally supplied master key (used by
 /// `change_master_key`). The caller owns the new password/keyfile.
 pub(crate) fn persist_change(
-    db: &Database,
+    mut db: Database,
     password: &str,
     keyfile: Option<&[u8]>,
     target: &SaveTarget,
-) -> Result<PersistOutcome, String> {
+) -> Result<(PersistOutcome, NaiveDateTime), String> {
     let key = build_database_key(password, keyfile)?;
-    persist_snapshot(db, &key, target, false)
+    // KDBX timestamps have whole-second precision. Return the exact value
+    // that was committed so concurrent edits and later saves retain it.
+    let changed_at = Utc::now().naive_utc().trunc_subsecs(0);
+    db.meta.master_key_changed = Some(changed_at);
+    let outcome = persist_snapshot(&db, &key, target, false)?;
+    Ok((outcome, changed_at))
 }
 
 /// Download, decrypt and optionally mirror the latest remote database. Runs

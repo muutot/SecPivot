@@ -583,16 +583,22 @@ pub(crate) async fn change_master_key(
         })?
     };
     let (persisted, password, keyfile_bytes) = tauri::async_runtime::spawn_blocking(move || {
-        let result = vault::persist_change(&db, &password, keyfile_bytes.as_deref(), &target);
+        let result = vault::persist_change(db, &password, keyfile_bytes.as_deref(), &target);
         (result, password, keyfile_bytes)
     })
     .await
     .map_err(|e| format!("更换主密钥任务异常: {e}"))?;
     match persisted {
-        Ok(new_hash) => {
+        Ok((new_hash, changed_at)) => {
             let mut active = session.lock().map_err(|_| "数据库锁已损坏".to_owned())?;
             vaults.with_session_mut(&mut active, Some(&session_id), |target| {
-                target.complete_change(&password, keyfile_bytes.as_deref(), revision, new_hash)
+                target.complete_change(
+                    &password,
+                    keyfile_bytes.as_deref(),
+                    revision,
+                    new_hash,
+                    changed_at,
+                )
             })
         }
         // Both temporary credentials stay guarded through completion, including

@@ -88,7 +88,14 @@ impl Drop for ObservedBytes {
     }
 }
 // PREPARED_KEYFILE_TYPE
-pub(crate) struct Database;
+#[derive(Default)]
+pub(crate) struct Meta {
+    master_key_changed: Option<chrono::NaiveDateTime>,
+}
+#[derive(Default)]
+pub(crate) struct Database {
+    meta: Meta,
+}
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RemoteMode {
     InMemory,
@@ -129,11 +136,11 @@ fn fail(fault: Fault) -> Result<(), String> {
 }
 impl Database {
     fn new() -> Self {
-        Self
+        Self::default()
     }
     fn parse(_: &[u8], _: ()) -> Result<Self, String> {
         fail(Fault::Parse)?;
-        Ok(Self)
+        Ok(Self::default())
     }
     fn save(&self, writer: &mut impl Write, _: ()) -> Result<(), String> {
         fail(Fault::Serialize)?;

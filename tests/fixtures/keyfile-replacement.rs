@@ -102,7 +102,22 @@ mod uuid {
         }
     }
 }
-pub(crate) struct Database(u8);
+#[derive(Default)]
+pub(crate) struct Meta {
+    master_key_changed: Option<chrono::NaiveDateTime>,
+}
+pub(crate) struct Database {
+    id: u8,
+    meta: Meta,
+}
+impl Database {
+    fn new(id: u8) -> Self {
+        Self {
+            id,
+            meta: Meta::default(),
+        }
+    }
+}
 pub(crate) struct VaultState;
 pub(crate) trait RemoteStorage {}
 struct Storage;
@@ -158,6 +173,11 @@ pub(crate) struct VaultSession {
     tcato_last_window: HashMap<String, String>,
 }
 impl VaultSession {
+    fn require_db_mut(&mut self) -> Result<&mut Database, String> {
+        self.db
+            .as_mut()
+            .ok_or_else(|| "synthetic closed database".into())
+    }
     fn snapshot(&mut self) -> Result<VaultState, String> {
         if current().fail_snapshot {
             Err("synthetic snapshot refusal".into())
@@ -189,7 +209,7 @@ enum Boundary {
 fn exercise(boundary: Boundary, old: bool, new: bool, fail_snapshot: bool) -> bool {
     let observation = observation(fail_snapshot);
     let mut session = VaultSession::default();
-    session.db = Some(Database(1));
+    session.db = Some(Database::new(1));
     session.path = Some("old.kdbx".into());
     session.password = Some("synthetic-old".into());
     session.keyfile = old.then(Vec::old);
@@ -198,13 +218,13 @@ fn exercise(boundary: Boundary, old: bool, new: bool, fail_snapshot: bool) -> bo
     let next = new.then_some(&[2, 5, 7][..]);
     let result = match boundary {
         Boundary::Local => session.adopt_local(
-            Database(2),
+            Database::new(2),
             Path::new("new.kdbx"),
             "synthetic-new",
             next.map(Vec::from),
         ),
         Boundary::Remote => session.adopt_remote(
-            Database(2),
+            Database::new(2),
             Arc::new(Storage),
             "new.kdbx",
             "synthetic-new",
@@ -215,13 +235,18 @@ fn exercise(boundary: Boundary, old: bool, new: bool, fail_snapshot: bool) -> bo
             "template",
             [8; 32],
         ),
-        Boundary::Master => session.complete_change("synthetic-new", next, 7, [8; 32]),
+        Boundary::Master => session.complete_change(
+            "synthetic-new",
+            next,
+            7,
+            [8; 32], // MASTER_TIMESTAMP_ARGUMENT
+        ),
     };
     assert_eq!(result.is_err(), fail_snapshot);
     assert!(session.password.as_deref() == Some("synthetic-new"));
     assert!(session.keyfile.as_deref() == next);
     assert_eq!(
-        session.db.as_ref().unwrap().0,
+        session.db.as_ref().unwrap().id,
         if matches!(boundary, Boundary::Master) {
             1
         } else {

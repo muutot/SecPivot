@@ -272,11 +272,11 @@ mod vault {
         }))
     }
     pub fn persist_change(
-        _: &(),
+        _: MasterChangeDatabase,
         password: &str,
         keyfile: Option<&[u8]>,
         _: &(),
-    ) -> Result<(), String> {
+    ) -> Result<MasterPersistResult, String> {
         assert!(password == "synthetic-new");
         assert!(keyfile == Some(&[2, 5, 7][..]));
         let fixture = current();
@@ -297,7 +297,7 @@ mod vault {
             _ => (),
         }
         fixture.persisted.store(true, Ordering::SeqCst);
-        Ok(())
+        Ok(master_persist_success())
     }
 }
 // MASTER_HANDLER

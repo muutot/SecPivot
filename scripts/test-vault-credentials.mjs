@@ -78,12 +78,14 @@ const completion = readSource("src-tauri/src/vault/session.rs").match(
 );
 assert(completion, "Missing actual master-change completion contract");
 const completionBorrowed = /password: &str,/.test(completion[0]);
+const stampedMasterChange = /changed_at: chrono::NaiveDateTime,/.test(completion[0]);
+const timestampArgument = stampedMasterChange ? ", _: chrono::NaiveDateTime" : "";
 assert.equal(completionBorrowed, masterGuarded);
 const masterTypes = masterGuarded
   ? "use zeroize::Zeroizing;\ntype Password = super::credentials::VaultPassword<Secret>;\nfn observed(value: Secret) -> Password { super::credentials::VaultPassword::new(value) }"
   : "type Password = Secret;\nfn observed(value: Secret) -> Password { value }";
 const masterCompletion = completionBorrowed
-  ? `fn complete_change(&mut self, password: &str, keyfile: Option<&[u8]>, _: u64, _: ()) -> Result<VaultState, String> {
+  ? `fn complete_change(&mut self, password: &str, keyfile: Option<&[u8]>, _: u64, _: ()${timestampArgument}) -> Result<VaultState, String> {
       check_adoption(password, keyfile); self.copied_password = password.to_owned(); self.copied_keyfile = keyfile.map(Vec::from); finish_adoption()
     }`
   : `fn complete_change(&mut self, password: Password, keyfile: Option<SecretBytes>, _: u64, _: ()) -> Result<VaultState, String> {
@@ -97,6 +99,14 @@ for (const marker of ["// MASTER_HANDLER", "// MASTER_TYPES", "// MASTER_COMPLET
   assert.equal(masterFixture.split(marker).length, 2);
 }
 const masterModule = masterFixture
+  .replace("MasterChangeDatabase", stampedMasterChange ? "()" : "&()")
+  .replace("MasterPersistResult", stampedMasterChange ? "((), chrono::NaiveDateTime)" : "()")
+  .replace(
+    "master_persist_success()",
+    stampedMasterChange
+      ? "((), chrono::DateTime::from_timestamp(1, 0).unwrap().naive_utc())"
+      : "()",
+  )
   .replace(
     "// MASTER_HANDLER",
     masterHandler.replace(/\bpassword: (String|VaultPassword),/, "password: Password,"),
@@ -135,6 +145,10 @@ for (const marker of ["// SESSION_METHODS", "// SESSION_HELPERS"]) {
 }
 const replacementModule = replacementFixture
   .replace(
+    "// MASTER_TIMESTAMP_ARGUMENT",
+    stampedMasterChange ? "chrono::DateTime::from_timestamp(1, 0).unwrap().naive_utc()," : "",
+  )
+  .replace(
     "// SESSION_METHODS",
     ["adopt_local", "adopt_remote", "replace", "complete_change", "close_impl"]
       .map(sessionMethod)
@@ -168,7 +182,10 @@ const preparationFunctions = [
   return matches[0][0].replaceAll("Option<Vec<u8>>", "Option<ObservedBytes>");
 });
 const preparationModule = preparationFixture
-  .replace("// PREPARATION_IMPORTS", preparedGuarded ? "use zeroize::Zeroizing;" : "")
+  .replace(
+    "// PREPARATION_IMPORTS",
+    "use chrono::{SubsecRound, Utc};\n" + (preparedGuarded ? "use zeroize::Zeroizing;" : ""),
+  )
   .replace("// PREPARED_KEYFILE_TYPE", keyfileType)
   .replace("// PREPARATION_FUNCTIONS", preparationFunctions.join("\n\n"));
 const jobFixture = readFileSync(
@@ -266,6 +283,7 @@ try {
     `[package]\nname = "secpivot-credential-fixture"\nversion = "0.0.0"\nedition = "2021"\n` +
       `[lib]\npath = "lib.rs"\n[dependencies]\nzeroize = "=${version("zeroize")}"\n` +
       `serde = "=${version("serde")}"\nserde_json = "=${version("serde_json")}"\n` +
+      `chrono = "=${version("chrono")}"\n` +
       `tokio = { version = "=${version("tokio")}", features = ["rt-multi-thread", "sync", "time", "macros"] }\n`,
   );
   // Cargo may prune the private copy, but shared packages start at the exact

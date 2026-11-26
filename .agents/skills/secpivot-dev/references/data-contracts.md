@@ -1,5 +1,13 @@
 # Data Contracts
 
+Local/remote creation initializes KDBX Meta.master_key_changed to a UTC value
+at whole-second precision. Master-key persistence consumes the prepared Database
+snapshot, updates this date and returns (PersistOutcome, NaiveDateTime).
+complete_change receives that exact committed date before adopting credentials;
+only this metadata is applied to the live database, preserving concurrent edits
+and their dirty state. A closed session refuses adoption. Ordinary save, Save As
+and storage/KDF changes preserve the existing date. No public IPC/DTO changes.
+
 `security.masterKeyTries` mirrors KeePass AceSecurity.MasterKeyTries, defaults3,
 and retains positive signed-int32 values in TS and native ConfigStore. Invalid
 non-numbers/non-finite renderer values fall back to3; values below1 clamp to1

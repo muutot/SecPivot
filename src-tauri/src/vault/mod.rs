@@ -31,6 +31,8 @@ pub use self::kdf_upgrade::KdfUpgradeOffer;
 mod kdf_storage_tests;
 pub(crate) use self::kdf::benchmark_kdf;
 pub use self::kdf::{KdfBenchmarkResult, KdfParameters};
+#[cfg(test)]
+mod master_key_time_tests;
 mod merge;
 mod persist;
 #[cfg(test)]

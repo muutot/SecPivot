@@ -1,5 +1,15 @@
 # Security Model
 
+MasterKeyChanged is initialized on local/remote creation and updated only by
+successful master-key persistence. UTC timestamps are truncated to KDBX's
+whole-second precision; completion adopts the exact written date, including
+when concurrent edits remain dirty. Missing keyfiles, read-only or storage
+failures leave the old date/credentials intact. Ordinary save/Save As/KDF
+changes never renew the master-key age. These dates are prerequisites for
+expiry evaluation, not proof that expiry reminders/enforcement are implemented.
+Native tests use disposable KDBX/MemoryStorage; WebView/provider/official-client
+verification remains separate.
+
 Master-key retry budgets contain only a symbol, ordinal and limit. They live
 for one credential prompt and never persist passwords, keys or a failed-try
 counter. The default3 follows KeePass's OpenDatabase prompt loop; exhaustion

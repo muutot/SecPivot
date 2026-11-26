@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+vault/master_key_time_tests.rs exercises real temporary KDBX dates for local/
+remote creation, password/keyfile-only changes, concurrent completion, failed
+writes and ordinary save/Save As/KDF preservation. persist_change owns its
+snapshot and returns the committed timestamp with PersistOutcome; both native
+command and synchronous session completion pass this date without extra cloning.
+The credential fixture follows this internal signature, using pinned chrono for
+its synthetic metadata boundaries; its ownership observations remain unchanged.
+
 `utils/master-key-attempts.ts` owns per-credential-prompt retry admission and
 positive-int32 normalization. VaultWelcome and LockScreen own prompt reset,
 exhaustion/credential clearing and explicit restart UI. SecuritySettingsPanel
