@@ -247,6 +247,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   lockOnFocusLoss: false,
   defaultExpireDays: 0,
   autoSaveAfterEdit: false,
+  repeatPasswordOnlyWhenHidden: true,
   minimizeAfterLocking: true,
   showExpiredOnOpen: true,
   expirySoonDays: 7,
@@ -1055,6 +1056,10 @@ export function normalizeSettings(
       0,
     ),
     autoSaveAfterEdit: asBool(s.autoSaveAfterEdit, fallback.security.autoSaveAfterEdit),
+    repeatPasswordOnlyWhenHidden: asBool(
+      s.repeatPasswordOnlyWhenHidden,
+      fallback.security.repeatPasswordOnlyWhenHidden,
+    ),
     minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
     showExpiredOnOpen: asBool(s.showExpiredOnOpen, fallback.security.showExpiredOnOpen),
     expirySoonDays: clampInt(s.expirySoonDays ?? fallback.security.expirySoonDays, 0, 365, 7),

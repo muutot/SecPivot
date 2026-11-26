@@ -4,6 +4,8 @@
 
 证据来源：KeePass 2.57 官方手册镜像 [keepass.cool 2.57](https://keepass.cool/2.x/2.57/Lapersonnalisation.html)、[keepass.info search 帮助](https://keepass.info/help/base/search.html#mode_se)、官方 changelog 转载（[2.39 Large Entries](https://www.neowin.net/news/keepass-password-safe-2391/#1)、[2.53 报告对话框筛选框](https://www.3dfxzone.it/files/?object=html&objid=21228)）、开源镜像 [dlech/KeePass2.x](https://github.com/dlech/KeePass2.x)。外部资料只作导航，最终以 SecPivot 本地源码为准。
 
+已对齐 `UI.RepeatPasswordOnlyWhenHidden`（Interface → Advanced，默认开）：Security 页设置同时控制本地/远程建库和修改主密钥。显示密码时清空并禁用重复栏，切回隐藏时同步一次；关闭选项后无论显隐都需要重复校验。依据官方 [AceUI.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceUI.cs)、[PwInputControlGroup.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/UI/PwInputControlGroup.cs) 与 [KeyCreationForm.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/Forms/KeyCreationForm.cs)。前端真实提交函数/设置重载、原生 ConfigStore 旧配置/双值重载和实际浅色/深色/320px 渲染覆盖此项；密码不进入配置，原有凭据 IPC 不变。
+
 ## KeePass Options 六个 tab 与 SecPivot 现状
 
 ### Security（安全）

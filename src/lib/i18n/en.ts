@@ -50,6 +50,8 @@ export const en: Record<I18nKey, string> = {
   "vault.demoBlank": "May be left blank in demo mode",
   "vault.required": "Required",
   "vault.showPassword": "Show password",
+  "vault.hidePassword": "Hide password",
+  "vault.repeatNotNeeded": "No repetition needed while password is visible",
   "vault.confirmPassword": "Confirm master password",
   "vault.keyfile": "Key file (optional)",
   "vault.pickKeyfile": "Click on the right to pick a key file",
@@ -709,6 +711,9 @@ export const en: Record<I18nKey, string> = {
   "keyboard.footer":
     "Click + to record; remove with × to restore defaults. Shortcuts don't fire in inputs or open dialogs.",
   "security.mismatch": "New master passwords do not match",
+  "security.repeatPasswordOnlyWhenHidden": "Require password repetition only when hidden",
+  "security.repeatPasswordOnlyWhenHiddenDesc":
+    "Applies to database creation and master-key changes. Turn off to require repetition even when the password is visible.",
   "security.needKey": "Enter a new master password or pick a new key file",
   "security.noVault": "Database is not open",
   "security.changed": "Master key changed and saved; effective immediately",

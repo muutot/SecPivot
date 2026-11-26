@@ -105,6 +105,8 @@ export interface SecuritySettings {
    *  (KeePass Options → Advanced → Start and Exit). Default off: edits stay
    *  in the session as a manual save. */
   autoSaveAfterEdit: boolean;
+  /** KeePass: skip manual repetition while the master password is visible. */
+  repeatPasswordOnlyWhenHidden: boolean;
   /** Minimize the main window after the workspace locks (KeePass
    * `MinimizeAfterLocking`, default on). */
   minimizeAfterLocking: boolean;

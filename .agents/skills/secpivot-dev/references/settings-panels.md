@@ -1,5 +1,15 @@
 # Settings Shell and Panel Patterns
 
+SecuritySettingsPanel exposes the default-on repeatPasswordOnlyWhenHidden toggle
+and composes MasterPasswordFields with 30px shared controls for master-key change.
+The same component owns welcome local/remote create and open password fields
+(32px input variant). It labels both inputs with instance-scoped IDs, uses shared
+Button for the Show/Hide action, changes both input types together and disables
+inputs/actions while busy. Automatic repetition leaves the disabled field visible
+with a localized hint, avoiding a moving form. Only unique field/row layout belongs
+to this component. The current preference is checked by all create/change handlers.
+Rendered dark/light/narrow checks cover the inputs and settings shell.
+
 DatabaseSettingsDialog shows exact imported AES rounds or Argon2 iterations,
 memory MiB and parallelism, retaining Argon2 v1.0/v1.3. `kdf-parameters.ts` uses
 BigInt for lossless u64/byte conversions. Costs use shared TextField controls in
@@ -28,7 +38,7 @@ Read this file and `css-theming.md` before changing settings markup or CSS.
 
 Light mode uses the approved white/gray glass-inspired appearance through the
 existing semantic tokens: translucent neutral-white cards, gray selected navigation/segments
-and sans-serif UI text. SettingsDialog owns its light-only shell/sidebar gradients;
+and the shared root Cascadia Code / SFMono-Regular UI font stack. SettingsDialog owns its light-only shell/sidebar gradients;
 settings-shared.css owns card highlights, 14px backdrop blur and theme segment decoration. Compact
 spacing/control sizes stay unchanged. Dark/custom modes retain their existing
 styles; this does not enable native Windows material or change opacity settings.

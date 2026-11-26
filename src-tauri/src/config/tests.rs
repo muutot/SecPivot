@@ -954,6 +954,44 @@ fn auto_save_after_edit_defaults_off_and_survives_round_trip() {
 }
 
 #[test]
+fn repeat_password_only_when_hidden_loads_legacy_defaults_and_persists_both_values() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    std::fs::write(dir.path().join("conf/config.json"), r#"{"security":{}}"#).unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    assert!(
+        store
+            .get()
+            .unwrap()
+            .security
+            .repeat_password_only_when_hidden
+    );
+    for enabled in [false, true] {
+        let mut config = store.get().unwrap();
+        config.security.repeat_password_only_when_hidden = enabled;
+        store.set(config).unwrap();
+        let reloaded = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            reloaded
+                .get()
+                .unwrap()
+                .security
+                .repeat_password_only_when_hidden,
+            enabled
+        );
+        let wire: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("conf/config.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(wire["security"]["repeatPasswordOnlyWhenHidden"], enabled);
+    }
+    assert!(serde_json::from_str::<AppConfig>(
+        r#"{"security":{"repeatPasswordOnlyWhenHidden":"false"}}"#,
+    )
+    .is_err());
+}
+
+#[test]
 fn always_on_top_defaults_off_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

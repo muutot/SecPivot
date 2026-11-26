@@ -125,34 +125,34 @@ SecPivot 内置列 20 种：title/username/password/url/totp/notes/tags/created/
 
 ## 4. AceUI（31 + 子对象 + 枚举）
 
-| 字段                                                               | 默认    | SecPivot                                   |
-| ------------------------------------------------------------------ | ------- | ------------------------------------------ |
-| TrayIcon (AceTrayIcon)                                             | —       | 见下                                       |
-| Hiding (AceHiding)                                                 | —       | 见下                                       |
-| RepeatPasswordOnlyWhenHidden                                       | true    | ❌                                         |
-| StandardFont / PasswordFont (AceFont)                              | —       | ⚠️ `fontSizes` 仅字号，无字体族/样式/单位  |
-| ForceSystemFontUnix                                                | true    | ➖                                         |
-| BannerStyle                                                        | Dark    | ➖                                         |
-| ShowImportStatusDialog                                             | false   | ❌                                         |
-| ShowRecycleConfirmDialog                                           | true    | ✅ 回收站确认                              |
-| ShowCmdUriConfirmDialog                                            | true    | ❌（cmd:// 确认，SecPivot 无 cmd:// 协议） |
-| ShowCmdPlhConfirmDialog                                            | true    | ❌（{CMD:...} 占位符确认）                 |
-| ShowRefPPlhConfirmDialog                                           | true    | ❌（{REF:P@...} 确认）                     |
-| ShowDbMntncResultsDialog                                           | true    | ❌                                         |
-| ShowEmSheetDialog                                                  | true    | ❌                                         |
-| ShowDbOpenUnkVerDialog                                             | true    | ❌                                         |
-| ToolStripRenderer                                                  | ""      | ➖                                         |
-| TreeViewShowLines                                                  | false   | ❌                                         |
-| OptimizeForScreenReader                                            | false   | ❌                                         |
-| DataViewerRect / DataEditorRect / CharPickerRect / AutoTypeCtxRect | —       | ➖ 窗口位置缓存                            |
-| DataEditorFont (AceFont)                                           | —       | ❌ 字体族                                  |
-| DataEditorWordWrap                                                 | true    | ❌                                         |
-| AutoTypeCtxFlags                                                   | Default | ❌                                         |
-| AutoTypeCtxColumnWidths                                            | ""      | ➖                                         |
-| UIFlags（13 位标志）                                               | None    | ❌ 管理强制 UI 状态（个人版不适用）        |
-| KeyCreationFlags / KeyPromptFlags（16 位标志）                     | None    | ❌ 密钥 UI 强制状态                        |
-| ShowAdvAutoTypeCommands                                            | false   | ❌                                         |
-| SecureDesktopPlaySound                                             | true    | ➖ 安全桌面不适用                          |
+| 字段                                                               | 默认    | SecPivot                                                          |
+| ------------------------------------------------------------------ | ------- | ----------------------------------------------------------------- |
+| TrayIcon (AceTrayIcon)                                             | —       | 见下                                                              |
+| Hiding (AceHiding)                                                 | —       | 见下                                                              |
+| RepeatPasswordOnlyWhenHidden                                       | true    | ✅ `security.repeatPasswordOnlyWhenHidden`：本地/远程建库与改密钥 |
+| StandardFont / PasswordFont (AceFont)                              | —       | ⚠️ `fontSizes` 仅字号，无字体族/样式/单位                         |
+| ForceSystemFontUnix                                                | true    | ➖                                                                |
+| BannerStyle                                                        | Dark    | ➖                                                                |
+| ShowImportStatusDialog                                             | false   | ❌                                                                |
+| ShowRecycleConfirmDialog                                           | true    | ✅ 回收站确认                                                     |
+| ShowCmdUriConfirmDialog                                            | true    | ❌（cmd:// 确认，SecPivot 无 cmd:// 协议）                        |
+| ShowCmdPlhConfirmDialog                                            | true    | ❌（{CMD:...} 占位符确认）                                        |
+| ShowRefPPlhConfirmDialog                                           | true    | ❌（{REF:P@...} 确认）                                            |
+| ShowDbMntncResultsDialog                                           | true    | ❌                                                                |
+| ShowEmSheetDialog                                                  | true    | ❌                                                                |
+| ShowDbOpenUnkVerDialog                                             | true    | ❌                                                                |
+| ToolStripRenderer                                                  | ""      | ➖                                                                |
+| TreeViewShowLines                                                  | false   | ❌                                                                |
+| OptimizeForScreenReader                                            | false   | ❌                                                                |
+| DataViewerRect / DataEditorRect / CharPickerRect / AutoTypeCtxRect | —       | ➖ 窗口位置缓存                                                   |
+| DataEditorFont (AceFont)                                           | —       | ❌ 字体族                                                         |
+| DataEditorWordWrap                                                 | true    | ❌                                                                |
+| AutoTypeCtxFlags                                                   | Default | ❌                                                                |
+| AutoTypeCtxColumnWidths                                            | ""      | ➖                                                                |
+| UIFlags（13 位标志）                                               | None    | ❌ 管理强制 UI 状态（个人版不适用）                               |
+| KeyCreationFlags / KeyPromptFlags（16 位标志）                     | None    | ❌ 密钥 UI 强制状态                                               |
+| ShowAdvAutoTypeCommands                                            | false   | ❌                                                                |
+| SecureDesktopPlaySound                                             | true    | ➖ 安全桌面不适用                                                 |
 
 ### AceTrayIcon（3）
 

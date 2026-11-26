@@ -26,6 +26,7 @@
   import StandaloneVaultShell from "$lib/components/StandaloneVaultShell.svelte";
   import VaultCredentialFields from "$lib/components/VaultCredentialFields.svelte";
   import { formatBytes } from "$lib/utils/format";
+  import { passwordRepeatMatches } from "$lib/utils/password-repeat";
 
   interface Props {
     onopened: () => void;
@@ -143,6 +144,8 @@
     remoteMode = "memory";
     keyfilePath = "";
     password = "";
+    confirm = "";
+    showPassword = false;
     error = "";
     modal = "remote";
     if (remoteConfigured) await loadRemoteObjects();
@@ -169,6 +172,7 @@
     remoteKey = "";
     password = "";
     confirm = "";
+    showPassword = false;
     error = "";
     if (tab === "open") void loadRemoteObjects();
   }
@@ -202,6 +206,17 @@
     }
     if (!password && !keyfilePath) {
       error = t(lang, "welcome.needPassword");
+      return;
+    }
+    if (
+      !passwordRepeatMatches(
+        password,
+        confirm,
+        showPassword,
+        get(appSettings).security.repeatPasswordOnlyWhenHidden,
+      )
+    ) {
+      error = t(lang, "welcome.passwordMismatch");
       return;
     }
     busy = true;
@@ -259,6 +274,7 @@
     // into this vault's unlock dialog.
     password = "";
     confirm = "";
+    showPassword = false;
     modal = "open";
   }
 
@@ -314,6 +330,7 @@
     // different vault's unlock dialog.
     password = "";
     confirm = "";
+    showPassword = false;
     keyfilePath = "";
     error = "";
     modal = "open";
@@ -325,6 +342,7 @@
     pendingPersistable = undefined;
     password = "";
     confirm = "";
+    showPassword = false;
     keyfilePath = "";
     error = "";
     modal = "create";
@@ -355,7 +373,14 @@
       error = t(lang, "welcome.needPassword");
       return;
     }
-    if (password !== confirm) {
+    if (
+      !passwordRepeatMatches(
+        password,
+        confirm,
+        showPassword,
+        get(appSettings).security.repeatPasswordOnlyWhenHidden,
+      )
+    ) {
       error = t(lang, "welcome.passwordMismatch");
       return;
     }
@@ -741,11 +766,12 @@
         </div>
         <VaultCredentialFields
           bind:password
+          bind:confirm
           bind:keyfilePath
           bind:showPassword
           {busy}
           {error}
-          isCreate={false}
+          isCreate={remoteTab === "create"}
           onPickKeyfile={pickKeyfile}
         />
       {/if}

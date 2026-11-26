@@ -9,7 +9,6 @@
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
 - [ ] 关闭库时自动保存（`AceCloseDb.AutoSave`）：SecPivot 只有编辑后自动保存，无退出/关闭库时保存
 - [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
-- [ ] 主密码重复输入校验增强（`RepeatPasswordOnlyWhenHidden`）
 - [ ] 弱 KDF 警告（创建/改密钥时对弱参数告警）
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现

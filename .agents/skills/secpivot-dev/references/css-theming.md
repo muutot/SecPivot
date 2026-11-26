@@ -1,5 +1,13 @@
 # Project-wide UI Style and Theming
 
+MasterPasswordFields reuses TextField (32px welcome / 30px settings) and field
+Button, retaining the six-pixel input/action gap and ten-pixel field spacing.
+Its flex input wrapper has min-width:0; labels use existing secondary/muted/faint
+tokens. The repeat row stays present when disabled, with a localized hint.
+It introduces no surface/font/color token or child-control override. Rendered
+light 320px and dark desktop settings and welcome checks show no horizontal
+overflow and the same approved root font family.
+
 EntryTable directory separators use half the effective entry height, with a
 14px readability floor and line-height 1: desktop defaults are 15px/30px,
 narrow defaults 18px/36px. Entry-row density stays unchanged. Prefix row offsets

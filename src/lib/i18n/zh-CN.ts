@@ -46,6 +46,8 @@ export const zhCN = {
   "vault.demoBlank": "演示模式可留空",
   "vault.required": "必填",
   "vault.showPassword": "显示密码",
+  "vault.hidePassword": "隐藏密码",
+  "vault.repeatNotNeeded": "密码已显示，无需重复输入",
   "vault.confirmPassword": "确认主密码",
   "vault.keyfile": "密钥文件(可选)",
   "vault.pickKeyfile": "点击右侧选择密钥文件",
@@ -684,6 +686,9 @@ export const zhCN = {
   "keyboard.footer":
     "点击 ＋ 录制新快捷键；录制后通过 × 移除绑定并恢复默认。快捷键在输入框或弹窗打开时不生效。",
   "security.mismatch": "两次输入的新主密码不一致",
+  "security.repeatPasswordOnlyWhenHidden": "仅在密码隐藏时要求重复输入",
+  "security.repeatPasswordOnlyWhenHiddenDesc":
+    "适用于创建数据库和修改主密钥；关闭后，即使显示密码也必须重复输入。",
   "security.needKey": "请输入新主密码或选择新的密钥文件",
   "security.noVault": "数据库未打开",
   "security.changed": "主密钥已更改并保存,新密钥立即生效",

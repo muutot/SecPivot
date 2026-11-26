@@ -1,5 +1,15 @@
 # Security Model
 
+Master-password repetition is renderer input validation, not an authentication
+factor. The default-on KeePass preference permits visible reviewed passwords;
+hidden values and the disabled-preference mode must match exactly without trimming.
+The shared component clears the redundant repeat string while automatic, copies
+it once on manual re-hide and masks every fresh form. Busy inputs/reveal actions
+are disabled; successful master change clears the draft/visibility. The primary
+and repeat values remain transient form state; only the boolean preference enters
+config. No additional password/credential IPC or log path is introduced. Tests use
+synthetic values; no JavaScript heap-erasure or actual provider claim is added.
+
 Group drag data contains UUID/session identity only. GroupTree keeps a local
 drag owner and originating root identity; foreign, stale, replaced-root or
 cross-session drops are ignored. move_group requires an explicit String session

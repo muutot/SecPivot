@@ -586,6 +586,10 @@ pub struct SecuritySettings {
     /// (KeePass Options → Advanced → Start and Exit). Default off.
     #[serde(default)]
     pub auto_save_after_edit: bool,
+    /// KeePass AceUI.RepeatPasswordOnlyWhenHidden. The renderer owns repetition;
+    /// only this nonsecret preference is persisted. Default on.
+    #[serde(default = "default_true")]
+    pub repeat_password_only_when_hidden: bool,
     /// Minimize the main window after the workspace locks (KeePass
     /// `MinimizeAfterLocking`). Default on.
     #[serde(default = "default_true")]
@@ -618,6 +622,7 @@ impl Default for SecuritySettings {
             lock_on_focus_loss: false,
             default_expire_days: 0,
             auto_save_after_edit: false,
+            repeat_password_only_when_hidden: true,
             minimize_after_locking: true,
             show_expired_on_open: true,
             expiry_soon_days: 7,

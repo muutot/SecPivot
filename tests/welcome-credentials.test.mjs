@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { passwordRepeatMatches } from "../src/lib/utils/password-repeat.ts";
 
 // Execute actual form handlers at the service boundary without native dialogs,
 // real vaults, clipboard or remote systems. KDBX authentication has separate Rust tests.
@@ -29,6 +30,8 @@ function fixture(name, command, password = "", keyfilePath = "synthetic.key") {
     remoteMode: "memory",
     password,
     confirm: password,
+    showPassword: false,
+    onlyWhenHidden: true,
     keyfilePath,
     isDemo: false,
     pendingName: null,
@@ -39,7 +42,11 @@ function fixture(name, command, password = "", keyfilePath = "synthetic.key") {
     lang: "en",
     t: (_lang, key) => key,
     appSettings: {},
-    get: () => ({ database: { kdf: "Aes", cipher: "Aes256", compression: "None" } }),
+    get: () => ({
+      database: { kdf: "Aes", cipher: "Aes256", compression: "None" },
+      security: { repeatPasswordOnlyWhenHidden: context.onlyWhenHidden },
+    }),
+    passwordRepeatMatches,
     rememberCredential: async () => remembered.push(true),
     onopened: () => opened++,
     vault: {
@@ -116,6 +123,27 @@ test("local creation still rejects mismatched confirmation with a keyfile", asyn
   assert.equal(f.context.error, "welcome.passwordMismatch");
   assert.equal(f.opened(), 0);
 });
+
+for (const [name, command] of cases.filter(([, command]) => command.startsWith("create"))) {
+  test(`${name} enforces the current repetition preference before creating`, async () => {
+    for (const onlyWhenHidden of [false, true]) {
+      for (const showPassword of [false, true]) {
+        const f = fixture(name, command, " synthetic-control ");
+        f.context.confirm = "different";
+        f.context.onlyWhenHidden = onlyWhenHidden;
+        f.context.showPassword = showPassword;
+        await f.context.run();
+        const allowed = onlyWhenHidden && showPassword;
+        assert.equal(f.calls.length, allowed ? 1 : 0);
+        assert.equal(f.context.error, allowed ? "" : "welcome.passwordMismatch");
+        if (allowed) {
+          const args = f.calls[0];
+          assert.equal(command === "create" ? args[0].password : args[1], " synthetic-control ");
+        }
+      }
+    }
+  });
+}
 
 test("local opening still requires a selected database", async () => {
   const f = fixture("confirmOpen", "open");

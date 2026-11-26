@@ -7,7 +7,8 @@
   import type { SecuritySettings } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
-  import TextField from "$lib/components/templates/form/TextField.svelte";
+  import MasterPasswordFields from "$lib/components/MasterPasswordFields.svelte";
+  import { passwordRepeatMatches } from "$lib/utils/password-repeat";
   import Button from "$lib/components/templates/action/Button.svelte";
   import Feedback from "$lib/components/templates/form/Feedback.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
@@ -37,6 +38,7 @@
 
   let newPassword = $state("");
   let confirmPassword = $state("");
+  let showPassword = $state(false);
   let newKeyfile = $state<string | null>(null);
   let busy = $state(false);
   let feedback = $state<{ ok: boolean; message: string } | null>(null);
@@ -53,8 +55,16 @@
   }
 
   async function submitMasterKeyChange(): Promise<void> {
+    if (busy) return;
     feedback = null;
-    if (newPassword.length > 0 && newPassword !== confirmPassword) {
+    if (
+      !passwordRepeatMatches(
+        newPassword,
+        confirmPassword,
+        showPassword,
+        get(appSettings).security.repeatPasswordOnlyWhenHidden,
+      )
+    ) {
       feedback = { ok: false, message: t(lang, "security.mismatch") };
       return;
     }
@@ -81,6 +91,7 @@
       }
       newPassword = "";
       confirmPassword = "";
+      showPassword = false;
       newKeyfile = null;
       feedback = { ok: true, message: t(lang, "security.changed") };
     } catch (err) {
@@ -159,6 +170,14 @@
     description={t(lang, "security.clearOnLockDesc")}
     checked={security.clearOnLock}
     onchange={(checked) => change("clearOnLock", checked)}
+  />
+
+  <SettingToggleCard
+    icon="eye-off"
+    label={t(lang, "security.repeatPasswordOnlyWhenHidden")}
+    description={t(lang, "security.repeatPasswordOnlyWhenHiddenDesc")}
+    checked={security.repeatPasswordOnlyWhenHidden}
+    onchange={(checked) => change("repeatPasswordOnlyWhenHidden", checked)}
   />
 
   <SettingToggleCard
@@ -243,37 +262,27 @@
         </div>
       </div>
     </div>
-    <label class="settings-label" for="mk-new-password"
-      >{t(lang, "security.newPasswordLabel")}</label
-    >
-    <TextField
-      id="mk-new-password"
+    <MasterPasswordFields
       size="control"
-      type="password"
-      placeholder={t(lang, "security.newPasswordPh")}
-      bind:value={newPassword}
-      autocomplete="new-password"
-    />
-    <label class="settings-label" for="mk-confirm-password"
-      >{t(lang, "security.confirmPasswordLabel")}</label
-    >
-    <TextField
-      id="mk-confirm-password"
-      size="control"
-      type="password"
-      placeholder={t(lang, "security.confirmPasswordPh")}
-      bind:value={confirmPassword}
-      autocomplete="new-password"
+      repeat
+      {busy}
+      bind:password={newPassword}
+      bind:confirm={confirmPassword}
+      bind:showPassword
+      passwordLabel={t(lang, "security.newPasswordLabel")}
+      passwordPlaceholder={t(lang, "security.newPasswordPh")}
+      confirmLabel={t(lang, "security.confirmPasswordLabel")}
+      confirmPlaceholder={t(lang, "security.confirmPasswordPh")}
     />
     <div class="setting-row mk-keyfile-row">
       <span class="mk-keyfile-name" class:mk-empty={!newKeyfile}>
         {newKeyfile ?? t(lang, "security.noKeyfile")}
       </span>
-      <Button variant="field" onclick={pickKeyfile} disabled={!isTauriRuntime()}>
+      <Button variant="field" onclick={pickKeyfile} disabled={busy || !isTauriRuntime()}>
         {t(lang, "vault.pickKeyfileTitle")}
       </Button>
       {#if newKeyfile}
-        <Button variant="field" onclick={() => (newKeyfile = null)}
+        <Button variant="field" onclick={() => (newKeyfile = null)} disabled={busy}
           >{t(lang, "common.clear")}</Button
         >
       {/if}

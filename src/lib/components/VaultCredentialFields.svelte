@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppIcon from "$lib/components/AppIcon.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
+  import MasterPasswordFields from "$lib/components/MasterPasswordFields.svelte";
   import { appSettings, isMobile, isTauriRuntime } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
@@ -69,34 +70,15 @@
   </label>
 {/if}
 
-<label class="field">
-  <span>{t(lang, "vault.masterPassword")}</span>
-  <div class="path-row">
-    <TextField
-      type={showPassword ? "text" : "password"}
-      bind:value={password}
-      placeholder={isDemo ? t(lang, "vault.demoBlank") : t(lang, "vault.required")}
-      disabled={busy}
-    />
-    <button
-      class="browse-button"
-      onclick={() => (showPassword = !showPassword)}
-      title={t(lang, "vault.showPassword")}
-      disabled={busy}
-    >
-      <AppIcon name={showPassword ? "eye-off" : "eye"} size={15} />
-    </button>
-  </div>
-</label>
-
-{#if isCreate}
-  <label class="field">
-    <span>{t(lang, "vault.confirmPassword")}</span>
-    <div class="path-row">
-      <TextField type="password" bind:value={confirm} disabled={busy} />
-    </div>
-  </label>
-{/if}
+<MasterPasswordFields
+  bind:password
+  bind:confirm
+  bind:showPassword
+  {busy}
+  repeat={isCreate}
+  passwordLabel={t(lang, "vault.masterPassword")}
+  passwordPlaceholder={isDemo ? t(lang, "vault.demoBlank") : t(lang, "vault.required")}
+/>
 
 {#if isTauriRuntime()}
   <label class="field">
