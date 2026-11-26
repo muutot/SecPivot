@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`utils/group-drag.ts` owns validate-first group relocation plans and local
+session/root drag ownership. GroupTree owns the controller/target indicator;
+recursive GroupNode renders drag sources and before/inside/after targets.
+The page binds drop to vault.moveGroup and guarded selection/reveal;
+commands/groups.rs requires the explicit origin and vault/entries.rs owns
+candidate mutation/rollback. Native sibling permutation is in the existing
+patched keepass db/types/mod.rs, without changing sibling provenance.
+
 `vault/kdf.rs` owns exact tagged KDF parameter DTOs, cryptographic validation and
 credential-free timed calibration. The existing vendored KeePass `KdfConfig::benchmark`
 exposes the same transform used by KDBX, avoiding duplicate crypto implementation.

@@ -710,6 +710,56 @@ impl Database {
             .contains_key(&id)
             .then(move || GroupMut::new(self, id))
     }
+
+    /// Replace sibling order with an exact permutation, preserving all group metadata.
+    pub fn reorder_groups(
+        &mut self,
+        parent_id: GroupId,
+        order: &[GroupId],
+    ) -> Result<(), &'static str> {
+        let parent = self
+            .groups
+            .get_mut(&parent_id)
+            .ok_or("Parent group not found")?;
+        let next: indexmap::IndexSet<GroupId> = order.iter().copied().collect();
+        if next.len() != order.len()
+            || next.len() != parent.groups.len()
+            || !next.iter().all(|id| parent.groups.contains(id))
+        {
+            return Err("Invalid sibling order");
+        }
+        parent.groups = next;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod secpivot_group_order_tests {
+    use super::*;
+    #[test]
+    fn secpivot_group_order_validates_permutation_and_preserves_metadata() {
+        let mut db = Database::new();
+        let root = db.root().id();
+        let a = db.root_mut().add_group().id();
+        let b = db.root_mut().add_group().id();
+        let c = db.group_mut(a).unwrap().add_group().id();
+        let original = db.clone();
+        for order in [vec![a], vec![a, a], vec![a, c], vec![a, b, c]] {
+            assert!(db.reorder_groups(root, &order).is_err());
+            assert_eq!(db, original);
+        }
+        assert!(db.reorder_groups(c, &[a, b]).is_err());
+        assert_eq!(db, original);
+        db.reorder_groups(root, &[b, a]).unwrap();
+        assert_eq!(
+            db.root().groups().map(|g| g.id()).collect::<Vec<_>>(),
+            vec![b, a]
+        );
+        assert_eq!(db.groups.get(&a), original.groups.get(&a));
+        assert_eq!(db.groups.get(&b), original.groups.get(&b));
+        db.reorder_groups(root, &[a, b]).unwrap();
+        assert_eq!(db, original);
+    }
 }
 
 #[cfg(all(test, feature = "_merge"))]

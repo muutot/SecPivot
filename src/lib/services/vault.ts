@@ -49,6 +49,7 @@ import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
 import { computeSecurityReport } from "$lib/utils/security-report";
 import { resolveDemoGroupSearching } from "$lib/utils/group-search";
+import { validateGroupMove } from "$lib/utils/group-drag";
 import {
   collectGroups as collectAllGroups,
   findBinGroup,
@@ -206,6 +207,7 @@ interface VaultStore {
    *  its fields; used by the detail-pane drag-and-drop add flow. */
   addAttachments: (uuid: string, attachments: AttachmentInput[]) => Promise<VaultState>;
   addGroup: (input: GroupInput) => Promise<VaultState>;
+  moveGroup: (uuid: string, parentUuid: string, beforeUuid?: string | null) => Promise<VaultState>;
   renameGroup: (uuid: string, name: string) => Promise<VaultState>;
   setGroupIcon: (uuid: string, icon: number | null) => Promise<VaultState>;
   updateGroupMeta: (uuid: string, meta: GroupMeta) => Promise<VaultState>;
@@ -1728,6 +1730,51 @@ export const vault: VaultStore = {
         children: [],
         entries: [],
       });
+    });
+    state.set(applyBackendState(result));
+    return result;
+  },
+
+  async moveGroup(
+    uuid: string,
+    parentUuid: string,
+    beforeUuid: string | null = null,
+  ): Promise<VaultState> {
+    if (isTauriRuntime()) {
+      return invokeSessionState("move_group", { uuid, parentUuid, beforeUuid });
+    }
+    captureSessionId();
+    const current = browserState;
+    if (!current) throw new Error(t(lang(), "error.noOpenDb"));
+    if (current.readOnly) throw new Error("Database is read-only");
+    const move = { uuid, parentUuid, beforeUuid };
+    if (!validateGroupMove(current.root, move)) throw new Error("Invalid group move");
+    const parent = findGroup(current.root, parentUuid)!;
+    const nextOrder = parent.children.filter((g) => g.uuid !== uuid).map((g) => g.uuid);
+    nextOrder.splice(
+      beforeUuid === null ? nextOrder.length : nextOrder.indexOf(beforeUuid),
+      0,
+      uuid,
+    );
+    if (
+      parent.children.map((g) => g.uuid).every((id, i) => id === nextOrder[i]) &&
+      parent.children.length === nextOrder.length
+    )
+      return deepClone(current);
+    const result = applyEdit((draft) => {
+      const source = findGroup(draft.root, uuid)!;
+      const oldParent = findGroup(draft.root, source.parentUuid!)!;
+      const destination = findGroup(draft.root, parentUuid)!;
+      oldParent.children.splice(
+        oldParent.children.findIndex((g) => g.uuid === uuid),
+        1,
+      );
+      const at =
+        beforeUuid === null
+          ? destination.children.length
+          : destination.children.findIndex((g) => g.uuid === beforeUuid);
+      destination.children.splice(at, 0, source);
+      source.parentUuid = parentUuid;
     });
     state.set(applyBackendState(result));
     return result;

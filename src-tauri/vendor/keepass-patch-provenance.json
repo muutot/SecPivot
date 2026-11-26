@@ -153,7 +153,7 @@
     {
       "path": "src/db/types/mod.rs",
       "upstream_sha256": "53f5fd72029a3de985b1fff7b9f5872f38f5d0385e07e5100d451514740424f9",
-      "patched_sha256": "d06da3700d6746a3d30ba404e0f184d76697dd047d6533d3fff450106db9c8fd"
+      "patched_sha256": "0148e382b11fcf1d5cf7af2645260dc2021e3b428b87e3ed39c95e77c754aa3f"
     },
     {
       "path": "src/db/types/times.rs",

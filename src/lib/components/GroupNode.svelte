@@ -12,6 +12,12 @@
   } from "$lib/stores/activeContextMenu.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
+  import {
+    GROUP_DRAG_MIME,
+    groupDropPlacement,
+    type GroupDrag,
+    type GroupPlacement,
+  } from "$lib/utils/group-drag";
 
   interface Props {
     group: VaultGroup;
@@ -44,6 +50,9 @@
     onrestore?: (uuid: string) => void;
     onemptybin?: () => void;
     ondropentry?: (groupUuid: string, uuids: string[]) => void;
+    groupDrag?: GroupDrag;
+    dragTarget?: { uuid: string; placement: GroupPlacement } | null;
+    readOnly?: boolean;
   }
 
   let {
@@ -71,6 +80,9 @@
     onrestore,
     onemptybin,
     ondropentry,
+    groupDrag,
+    dragTarget = null,
+    readOnly = false,
   }: Props = $props();
 
   let renaming = $state(false);
@@ -292,21 +304,39 @@
         class="group-select"
         class:no-icon={!showIcon}
         class:drop-target={dragActive}
+        class:drop-inside={dragTarget?.uuid === group.uuid && dragTarget.placement === "inside"}
+        class:drop-before={dragTarget?.uuid === group.uuid && dragTarget.placement === "before"}
+        class:drop-after={dragTarget?.uuid === group.uuid && dragTarget.placement === "after"}
+        draggable={!!groupDrag && !readOnly && !isBin && !inRecycleBin}
+        ondragstart={(e) => groupDrag?.start(group.uuid, e)}
+        ondragend={() => groupDrag?.end()}
         onclick={handleRowClick}
         onauxclick={handleMiddleClick}
         oncontextmenu={openMenu}
         title={group.name}
         ondragover={(e) => {
           const transfer = e.dataTransfer;
+          if (transfer?.types.includes(GROUP_DRAG_MIME)) {
+            groupDrag?.over(group.uuid, groupDropPlacement(e), e);
+            return;
+          }
           if (!isBin && transfer?.types.includes(DRAG_MIME)) {
             e.preventDefault();
             transfer.dropEffect = "move";
             dragActive = true;
           }
         }}
-        ondragleave={() => (dragActive = false)}
+        ondragleave={(e) => {
+          if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) return;
+          dragActive = false;
+          groupDrag?.leave();
+        }}
         ondrop={(e) => {
           dragActive = false;
+          if (e.dataTransfer?.types.includes(GROUP_DRAG_MIME)) {
+            groupDrag?.drop(group.uuid, groupDropPlacement(e), e);
+            return;
+          }
           if (isBin || !e.dataTransfer) return;
           e.preventDefault();
           const raw = e.dataTransfer.getData(DRAG_MIME);
@@ -378,6 +408,9 @@
       {onrestore}
       {onemptybin}
       {ondropentry}
+      {groupDrag}
+      {dragTarget}
+      {readOnly}
     />
   {/each}
 {/if}
@@ -453,6 +486,7 @@
   }
 
   .group-select {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -479,9 +513,28 @@
     background: var(--hover-bg);
   }
 
-  .group-select.drop-target {
+  .group-select.drop-target,
+  .group-select.drop-inside {
     border-color: color-mix(in srgb, var(--selection-color) 60%, transparent);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));
+  }
+
+  .group-select.drop-before::before,
+  .group-select.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--selection-color);
+    pointer-events: none;
+  }
+
+  .group-select.drop-before::before {
+    top: -1px;
+  }
+  .group-select.drop-after::after {
+    bottom: -1px;
   }
 
   .group-select.no-icon {

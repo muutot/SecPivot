@@ -1146,6 +1146,91 @@ impl VaultSession {
         self.snapshot_without_icons()
     }
 
+    /// Move a complete subtree, optionally inserting before a destination sibling.
+    pub fn move_group(
+        &mut self,
+        uuid: &str,
+        parent_uuid: &str,
+        before_uuid: Option<&str>,
+    ) -> Result<VaultState, String> {
+        self.ensure_writable()?;
+        let db = self.require_db()?;
+        let id = resolve_group_id(db, uuid)?;
+        let target = resolve_group_id(db, parent_uuid)?;
+        if id == db.root().id() || group_contains(db, id, target) {
+            return Err("不能将分组移入自身或后代".into());
+        }
+        if let Some(bin) = recycle_bin_id(db) {
+            if group_contains(db, bin, id) || group_contains(db, bin, target) {
+                return Err("请使用删除或恢复操作处理回收站分组".into());
+            }
+        }
+        let old_parent = db
+            .group(id)
+            .ok_or("分组不存在")?
+            .parent()
+            .ok_or("不能移动根分组")?
+            .id();
+        let original_order = db
+            .group(target)
+            .ok_or("目标分组不存在")?
+            .groups()
+            .map(|g| g.id())
+            .collect::<Vec<_>>();
+        let mut order = original_order
+            .iter()
+            .copied()
+            .filter(|g| *g != id)
+            .collect::<Vec<_>>();
+        let at = match before_uuid {
+            Some(before) => {
+                let before = resolve_group_id(db, before)?;
+                order
+                    .iter()
+                    .position(|g| *g == before)
+                    .ok_or("插入位置不属于目标分组")?
+            }
+            None => order.len(),
+        };
+        order.insert(at, id);
+        if old_parent == target && order == original_order {
+            return self.snapshot_without_icons();
+        }
+        let mut candidate = db.clone();
+        if old_parent != target {
+            candidate
+                .group_mut(id)
+                .ok_or("分组不存在")?
+                .move_to(target)
+                .map_err(|_| "移动分组失败")?;
+        }
+        candidate
+            .reorder_groups(target, &order)
+            .map_err(str::to_owned)?;
+        candidate
+            .group_mut(id)
+            .ok_or("分组不存在")?
+            .times
+            .location_changed = Some(Times::now());
+        let original = self.db.replace(candidate);
+        let dirty = self.dirty;
+        let revision = self.revision;
+        let modified = self.modified_at.clone();
+        let cache = self.cached_snapshot.take();
+        self.mark_dirty();
+        match self.snapshot_without_icons() {
+            Ok(state) => Ok(state),
+            Err(error) => {
+                self.db = original;
+                self.dirty = dirty;
+                self.revision = revision;
+                self.modified_at = modified;
+                self.cached_snapshot = cache;
+                Err(error)
+            }
+        }
+    }
+
     pub fn rename_group(&mut self, uuid: &str, name: &str) -> Result<VaultState, String> {
         if uuid == ROOT_GROUP_UUID {
             return Err("不能重命名根分组".to_owned());

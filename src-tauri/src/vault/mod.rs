@@ -13,6 +13,8 @@ mod entry_save_tests;
 pub mod exchange;
 pub(crate) mod file_io;
 #[cfg(test)]
+mod group_move_tests;
+#[cfg(test)]
 mod group_search_tests;
 pub(crate) mod helpers;
 #[cfg(test)]

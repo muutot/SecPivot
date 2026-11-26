@@ -36,6 +36,24 @@ pub(crate) fn rename_group(
     )
 }
 
+/// Move/reorder within the explicitly originating open database.
+#[tauri::command]
+pub(crate) fn move_group(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+    uuid: String,
+    parent_uuid: String,
+    before_uuid: Option<String>,
+) -> Result<VaultState, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| target.move_group(&uuid, &parent_uuid, before_uuid.as_deref()),
+    )
+}
+
 #[tauri::command]
 pub(crate) fn set_group_icon(
     vaults: tauri::State<'_, VaultSessions>,

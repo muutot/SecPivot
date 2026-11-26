@@ -1,5 +1,19 @@
 # Data Contracts
 
+`move_group({sessionId: String, uuid, parentUuid, beforeUuid?})` moves a whole
+group subtree into the explicit originating open session. `parentUuid: "root"`
+means the virtual root; null/omitted beforeUuid appends, otherwise it identifies
+one existing destination sibling. Native validation rejects roots, cycles,
+recycle-bin sources/destinations, wrong anchors and read-only sessions before
+mutation. A candidate database publishes one dirty revision; snapshot failure
+restores the original database/publication state. Equivalent order is clean.
+Same-parent sorting changes only the moved group's location time, preserving
+previous-parent provenance; reparenting uses native move_to. The vendored exact
+permutation API preserves every sibling's metadata. Save/reopen tests exercise
+order, descendants, entry history and attachments with synthetic KDBX data.
+Renderer invokeSessionState retains epoch/revision guards; browser demo uses
+validate-first tree edits and remains separate from native persistence proof.
+
 `DatabaseSettings.kdfParameters` exposes the imported KDBX costs exactly.
 `KdfParameters` is tagged by algorithm: Aes has decimal-string `rounds`;
 Argon2 (Argon2d) and Argon2id have decimal-string `iterations`/`memoryBytes`,

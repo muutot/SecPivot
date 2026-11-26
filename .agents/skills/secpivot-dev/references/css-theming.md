@@ -1,5 +1,11 @@
 # Project-wide UI Style and Theming
 
+Group rows use their existing compact dimensions for drag/drop. The top/bottom
+quarters show a 2px insertion line using selection-color; the middle uses the
+existing selection tint for nesting. The All entries row accepts top-level
+group drops. Sources/targets are disabled for root, recycle-bin or read-only
+operations. No new theme token, control size or background palette is added.
+
 DatabaseSettingsDialog's KDF costs use shared numeric TextField controls in an
 auto-fit grid with 100px minimum tracks (bounded by container width); benchmark
 and explicit Apply suggestion use field Buttons in a six-pixel wrapped row.

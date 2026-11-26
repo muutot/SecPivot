@@ -1,5 +1,13 @@
 # Security Model
 
+Group drag data contains UUID/session identity only. GroupTree keeps a local
+drag owner and originating root identity; foreign, stale, replaced-root or
+cross-session drops are ignored. move_group requires an explicit String session
+and resolves it independently of the active tab; native checks cycles, root,
+recycle-bin and read-only boundaries before candidate mutation. The page guards
+selection/reveal/error feedback against changed views. No group/entry contents
+or credentials are added to drag payloads, logs or configuration.
+
 KDF benchmark runs the existing KeePass transform with fixed synthetic key/salt;
 it never copies a database, vault password or master key into its worker.
 The originating session must be open before and after work, and renderer view/

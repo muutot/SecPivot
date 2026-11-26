@@ -512,6 +512,7 @@ pub fn run() {
             #[cfg(desktop)]
             commands::close_tcato_overlay,
             commands::add_group,
+            commands::move_group,
             commands::rename_group,
             commands::set_group_icon,
             commands::update_group_meta,

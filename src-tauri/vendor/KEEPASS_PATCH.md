@@ -54,6 +54,10 @@ Only these upstream files are changed:
   History::from_entries
   constructs an ordered snapshot list once and strips nested histories, avoiding
   repeated front insertion in the first-party history union.
+  Database::reorder_groups validates exact sibling permutations without altering
+  group metadata or previous-parent provenance. Its direct test covers valid
+  order and atomic rejection of incomplete/duplicate/foreign IDs, with full
+  database equality before/after a round trip.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication. Serialize raw CR
@@ -97,7 +101,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The thirty dependency-specific tests can be run separately:
+The thirty-one dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch

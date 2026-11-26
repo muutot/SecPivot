@@ -12,9 +12,13 @@
   import { t } from "$lib/i18n";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import GroupNode from "$lib/components/GroupNode.svelte";
+  import { createGroupDrag, type GroupMove, type GroupPlacement } from "$lib/utils/group-drag";
 
   interface Props {
     root: VaultGroup;
+    sessionId?: string | null;
+    readOnly?: boolean;
+    ondropgroup?: (move: GroupMove) => void;
     selected: string | null;
     /** When set, reveal (expand ancestors + scroll into view) this group. */
     reveal?: string | null;
@@ -49,6 +53,9 @@
 
   let {
     root,
+    sessionId = null,
+    readOnly = false,
+    ondropgroup,
     selected,
     reveal = null,
     showIcon = true,
@@ -90,6 +97,16 @@
   })();
 
   let expanded = $state<Set<string>>(initialExpanded);
+  let dragTarget = $state<{ uuid: string; placement: GroupPlacement } | null>(null);
+  const groupDrag = createGroupDrag({
+    root: () => root,
+    sessionId: () => sessionId,
+    readOnly: () => readOnly || !ondropgroup,
+    target: (value) => {
+      dragTarget = value;
+    },
+    move: (move) => ondropgroup?.(move),
+  });
 
   let s = $state($appSettings);
   $effect(() => {
@@ -265,7 +282,17 @@
   </div>
 
   <div class="tree-list">
-    <button class="all-row" class:selected={selected === null} onclick={() => onselect(null)}>
+    <button
+      class="all-row"
+      class:selected={selected === null}
+      class:drop-target={dragTarget?.uuid === root.uuid}
+      onclick={() => onselect(null)}
+      ondragover={(e) => groupDrag.over(root.uuid, "inside", e)}
+      ondragleave={() => {
+        dragTarget = null;
+      }}
+      ondrop={(e) => groupDrag.drop(root.uuid, "inside", e)}
+    >
       <AppIcon name="grid" size={13} />
       <span class="all-name">{t(lang, "group.allEntries")}</span>
       <span class="all-count">{total}</span>
@@ -282,6 +309,9 @@
         {treeLines}
         {customIcons}
         {counts}
+        {groupDrag}
+        {dragTarget}
+        {readOnly}
         onselect={(uuid: string) => onselect(uuid)}
         ontoggle={toggleGroup}
         onaddsubgroup={(parentUuid: string) => onaddsubgroup(parentUuid)}
@@ -388,7 +418,8 @@
     background: var(--hover-bg);
   }
 
-  .all-row.selected {
+  .all-row.selected,
+  .all-row.drop-target {
     border-color: color-mix(in srgb, var(--selection-color) 40%, transparent);
     color: var(--text-primary);
     background: color-mix(in srgb, var(--selection-color) 15%, var(--hover-bg));

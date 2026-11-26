@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
@@ -1694,6 +1694,34 @@
     if (sessionView.isCurrent(view)) pruneSelectionToVisible();
   }
 
+  async function moveGroupTo(move: {
+    uuid: string;
+    parentUuid: string;
+    beforeUuid: string | null;
+  }): Promise<void> {
+    const view = sessionView.capture();
+    if (!view || currentVault?.readOnly) return;
+    try {
+      await vault.callInSession(view.sessionId, () =>
+        vault.moveGroup(move.uuid, move.parentUuid, move.beforeUuid),
+      );
+      if (!sessionView.isCurrent(view)) return;
+      if (selectedGroup !== move.uuid) {
+        selection.selectedEntry = null;
+        selection.selectedUuids = new Set();
+        selection.selectionAnchor = null;
+      }
+      selectedGroup = move.uuid;
+      // Force a fresh reveal even when the selected group was already revealed.
+      revealGroupUuid = null;
+      await tick();
+      if (sessionView.isCurrent(view)) revealGroupUuid = move.uuid;
+    } catch (e) {
+      if (sessionView.isCurrent(view))
+        flash(t(settings.general.language, "groupflow.moveFailed", { e: String(e) }), "error");
+    }
+  }
+
   /** Remove selected uuids that are no longer present in the visible rows. */
   function pruneSelectionToVisible(): void {
     const visible = new Set(sortedEntries.map((r) => r.entry.uuid));
@@ -2021,6 +2049,9 @@
           {#key currentVaultSessionId}
             <GroupTree
               root={currentVault.root}
+              sessionId={currentVaultSessionId}
+              readOnly={currentVault.readOnly}
+              ondropgroup={(move) => void moveGroupTo(move)}
               selected={selectedGroup}
               reveal={revealGroupUuid}
               customIcons={currentVault.customIcons}
@@ -2137,17 +2168,17 @@
 
       <footer class="status-bar" role="status" aria-live="polite" data-tauri-drag-region>
         <span class="status-left">
-          <span class="result-count"
-            >{t(settings.general.language, "page.entryCount", {
+          <span class="result-count">
+            {t(settings.general.language, "page.entryCount", {
               n: filteredEntries.length,
-            })}</span
-          >
+            })}
+          </span>
           {#if selection.selectedUuids.size > 1}
-            <span class="status-group-filter"
-              >{t(settings.general.language, "page.selectedCount", {
+            <span class="status-group-filter">
+              {t(settings.general.language, "page.selectedCount", {
                 n: selection.selectedUuids.size,
-              })}</span
-            >
+              })}
+            </span>
           {/if}
           {#if selectedGroup !== null}
             <span class="status-group-filter" title={pathOf(selectedGroup)}>
@@ -2157,9 +2188,9 @@
             </span>
           {/if}
           {#if currentVault.dirty}
-            <span class="status-dirty"
-              ><i></i>{t(settings.general.language, "page.unsavedChanges")}</span
-            >
+            <span class="status-dirty">
+              <i></i>{t(settings.general.language, "page.unsavedChanges")}
+            </span>
           {/if}
           {#if currentVault.mirrorWarning}
             <span
@@ -2379,16 +2410,16 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (groupModalOpen = false)}
-        >{t(settings.general.language, "common.cancel")}</Button
-      >
+      <Button onclick={() => (groupModalOpen = false)}>
+        {t(settings.general.language, "common.cancel")}
+      </Button>
       <Button
         variant="primary"
         onclick={() => void confirmCreateGroup()}
         disabled={!newGroupName.trim() || groupCreating}
       >
-        {t(settings.general.language, "page.create")}</Button
-      >
+        {t(settings.general.language, "page.create")}
+      </Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -2420,16 +2451,16 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (groupIconDialogUuid = null)}
-        >{t(settings.general.language, "common.cancel")}</Button
-      >
+      <Button onclick={() => (groupIconDialogUuid = null)}>
+        {t(settings.general.language, "common.cancel")}
+      </Button>
       <Button
         variant="primary"
         onclick={() => void confirmChangeGroupIcon()}
         disabled={groupIconSaving}
       >
-        {t(settings.general.language, "common.save")}</Button
-      >
+        {t(settings.general.language, "common.save")}
+      </Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -2468,12 +2499,12 @@
       </div>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (emergencyExportOpen = false)}
-        >{t(settings.general.language, "common.cancel")}</Button
-      >
-      <Button variant="warning" onclick={() => void confirmExportEmergency()}
-        >{t(settings.general.language, "page.export")}</Button
-      >
+      <Button onclick={() => (emergencyExportOpen = false)}>
+        {t(settings.general.language, "common.cancel")}
+      </Button>
+      <Button variant="warning" onclick={() => void confirmExportEmergency()}>
+        {t(settings.general.language, "page.export")}
+      </Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -2490,18 +2521,18 @@
       <p class="conflict-note">{remoteConflict}</p>
     {/snippet}
     {#snippet actions()}
-      <Button onclick={() => (remoteConflict = null)}
-        >{t(settings.general.language, "page.keepLocal")}</Button
-      >
-      <Button onclick={() => void resolveRemoteConflict("merge")}
-        >{t(settings.general.language, "page.mergeBoth")}</Button
-      >
-      <Button onclick={() => void resolveRemoteConflict("download")}
-        >{t(settings.general.language, "page.downloadRemote")}</Button
-      >
+      <Button onclick={() => (remoteConflict = null)}>
+        {t(settings.general.language, "page.keepLocal")}
+      </Button>
+      <Button onclick={() => void resolveRemoteConflict("merge")}>
+        {t(settings.general.language, "page.mergeBoth")}
+      </Button>
+      <Button onclick={() => void resolveRemoteConflict("download")}>
+        {t(settings.general.language, "page.downloadRemote")}
+      </Button>
       <Button variant="danger" onclick={() => void resolveRemoteConflict("overwrite")}>
-        {t(settings.general.language, "page.overwriteRemote")}</Button
-      >
+        {t(settings.general.language, "page.overwriteRemote")}
+      </Button>
     {/snippet}
   </ModalShell>
 {/if}
@@ -2518,9 +2549,9 @@
   >
     {#snippet icon()}<AppIcon name="trash" size={18} />{/snippet}
     {#snippet actions()}
-      <Button onclick={() => (confirmState = null)}
-        >{t(settings.general.language, "common.cancel")}</Button
-      >
+      <Button onclick={() => (confirmState = null)}>
+        {t(settings.general.language, "common.cancel")}
+      </Button>
       <Button
         variant="danger"
         onclick={() => {
@@ -2531,8 +2562,8 @@
           action();
         }}
       >
-        {t(settings.general.language, "common.delete")}</Button
-      >
+        {t(settings.general.language, "common.delete")}
+      </Button>
     {/snippet}
   </ModalShell>
 {/if}
