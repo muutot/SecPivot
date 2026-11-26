@@ -18,19 +18,39 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Meta {
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     generator: Option<String>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     database_name: Option<String>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     database_name_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     database_description: Option<String>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     database_description_changed: Option<Timestamp>,
 
     #[serde(
@@ -49,20 +69,43 @@ pub struct Meta {
     )]
     default_username_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_fromstr",
+        skip_serializing_if = "Option::is_none"
+    )]
     maintenance_history_days: Option<usize>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     color: Option<Color>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     master_key_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_fromstr",
+        skip_serializing_if = "Option::is_none"
+    )]
     master_key_change_rec: Option<isize>,
 
-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_fromstr",
+        skip_serializing_if = "Option::is_none"
+    )]
     master_key_change_force: Option<isize>,
+
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
+    master_key_change_force_once: Option<bool>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     memory_protection: Option<MemoryProtection>,
@@ -81,28 +124,60 @@ pub struct Meta {
     )]
     recycle_bin_uuid: Option<UUID>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     recycle_bin_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     entry_templates_group: Option<UUID>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     entry_templates_group_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     last_selected_group: Option<UUID>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     last_top_visible_group: Option<UUID>,
 
-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_fromstr",
+        skip_serializing_if = "Option::is_none"
+    )]
     history_max_items: Option<isize>,
 
-    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_fromstr",
+        skip_serializing_if = "Option::is_none"
+    )]
     history_max_size: Option<isize>,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     settings_changed: Option<Timestamp>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -129,6 +204,7 @@ impl From<Meta> for crate::db::Meta {
             master_key_changed: val.master_key_changed.map(|t| t.time),
             master_key_change_rec: val.master_key_change_rec,
             master_key_change_force: val.master_key_change_force,
+            master_key_change_force_once: val.master_key_change_force_once,
             memory_protection: val.memory_protection.map(|mp| mp.into()),
             recyclebin_enabled: val.recycle_bin_enabled,
             recyclebin_uuid: val.recycle_bin_uuid.map(|u| u.0),
@@ -156,7 +232,10 @@ impl From<crate::db::Meta> for Meta {
             database_name: db.database_name.clone(),
             database_name_changed: db.database_name_changed.as_ref().map(|t| (*t).into()),
             database_description: db.database_description.clone(),
-            database_description_changed: db.database_description_changed.as_ref().map(|t| (*t).into()),
+            database_description_changed: db
+                .database_description_changed
+                .as_ref()
+                .map(|t| (*t).into()),
             default_username: db.default_username.clone(),
             default_username_changed: db.default_username_changed.as_ref().map(|t| (*t).into()),
             maintenance_history_days: db.maintenance_history_days,
@@ -164,13 +243,17 @@ impl From<crate::db::Meta> for Meta {
             master_key_changed: db.master_key_changed.as_ref().map(|t| (*t).into()),
             master_key_change_rec: db.master_key_change_rec,
             master_key_change_force: db.master_key_change_force,
+            master_key_change_force_once: db.master_key_change_force_once,
             memory_protection: db.memory_protection.as_ref().map(|mp| mp.clone().into()),
             custom_icons: None, // Handled separately
             recycle_bin_enabled: db.recyclebin_enabled,
             recycle_bin_uuid: db.recyclebin_uuid.map(UUID),
             recycle_bin_changed: db.recyclebin_changed.as_ref().map(|t| (*t).into()),
             entry_templates_group: db.entry_templates_group.map(UUID),
-            entry_templates_group_changed: db.entry_templates_group_changed.as_ref().map(|t| (*t).into()),
+            entry_templates_group_changed: db
+                .entry_templates_group_changed
+                .as_ref()
+                .map(|t| (*t).into()),
             last_selected_group: db.last_selected_group.map(UUID),
             last_top_visible_group: db.last_top_visible_group.map(UUID),
             history_max_items: db.history_max_items,
@@ -276,7 +359,8 @@ impl CustomData {
                     .map(|v| v.clone().into())
                     .unwrap_or(CustomDataValue::String(String::new()));
 
-                let last_modification_time = item.last_modification_time.as_ref().map(|t| (*t).into());
+                let last_modification_time =
+                    item.last_modification_time.as_ref().map(|t| (*t).into());
 
                 CustomDataItem {
                     key: key.clone(),
@@ -301,7 +385,8 @@ impl From<HashMap<String, crate::db::CustomDataItem>> for CustomData {
                     .map(|v| v.clone().into())
                     .unwrap_or(CustomDataValue::String(String::new()));
 
-                let last_modification_time = item.last_modification_time.as_ref().map(|t| (*t).into());
+                let last_modification_time =
+                    item.last_modification_time.as_ref().map(|t| (*t).into());
 
                 CustomDataItem {
                     key,
@@ -342,7 +427,11 @@ struct CustomDataItem {
     key: String,
     value: CustomDataValue,
 
-    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "cs_opt_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     last_modification_time: Option<Timestamp>,
 }
 
@@ -588,7 +677,8 @@ mod tests {
     fn test_serialize_icon() {
         let icon = Icon {
             uuid: UUID(Uuid::from_bytes([
-                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                0x0e, 0x0f,
             ])),
             name: Some("my-icon".to_string()),
             last_modification_time: None,
@@ -611,7 +701,10 @@ mod tests {
         let icon: Icon = quick_xml::de::from_str(xml).unwrap();
         assert_eq!(
             icon.uuid.0.as_bytes(),
-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
+            &[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                0x0e, 0x0f
+            ]
         );
         assert_eq!(icon.data, vec![1, 2, 3, 4, 5]);
     }
@@ -639,6 +732,7 @@ mod tests {
             )),
             master_key_change_rec: Some(-1),
             master_key_change_force: Some(42),
+            master_key_change_force_once: Some(true),
             memory_protection: Some(MemoryProtection {
                 protect_title: Some(true),
                 protect_username: Some(false),
@@ -649,8 +743,8 @@ mod tests {
             custom_icons: Some(CustomIcons {
                 icons: vec![Icon {
                     uuid: UUID(Uuid::from_bytes([
-                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-                        0x0e, 0x0f,
+                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+                        0x0c, 0x0d, 0x0e, 0x0f,
                     ])),
                     name: None,
                     last_modification_time: None,
@@ -659,22 +753,26 @@ mod tests {
             }),
             recycle_bin_enabled: Some(true),
             recycle_bin_uuid: Some(UUID(Uuid::from_bytes([
-                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
+                0x1e, 0x1f,
             ]))),
             recycle_bin_changed: Some(Timestamp::new_iso8601(
                 NaiveDateTime::from_str("2023-10-05T12:34:56").unwrap(),
             )),
             entry_templates_group: Some(UUID(Uuid::from_bytes([
-                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
+                0x2e, 0x2f,
             ]))),
             entry_templates_group_changed: Some(Timestamp::new_base64(
                 NaiveDateTime::from_str("2023-10-05T12:34:56").unwrap(),
             )),
             last_selected_group: Some(UUID(Uuid::from_bytes([
-                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
+                0x3e, 0x3f,
             ]))),
             last_top_visible_group: Some(UUID(Uuid::from_bytes([
-                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
+                0x4e, 0x4f,
             ]))),
             history_max_items: Some(10),
             history_max_size: Some(1048576),
@@ -720,32 +818,67 @@ mod tests {
         println!("{}", serialized);
         assert!(serialized.contains("<Generator>TestGenerator</Generator>"));
         assert!(serialized.contains("<DatabaseName>TestDB</DatabaseName>"));
-        assert!(serialized.contains("<DatabaseNameChanged>2023-10-05T12:34:56Z</DatabaseNameChanged>"));
+        assert!(
+            serialized.contains("<DatabaseNameChanged>2023-10-05T12:34:56Z</DatabaseNameChanged>")
+        );
         assert!(serialized.contains("<DatabaseDescription>A test database</DatabaseDescription>"));
-        assert!(serialized.contains("<DatabaseDescriptionChanged>cKSw3A4AAAA=</DatabaseDescriptionChanged>"));
+        assert!(serialized
+            .contains("<DatabaseDescriptionChanged>cKSw3A4AAAA=</DatabaseDescriptionChanged>"));
         assert!(serialized.contains("<DefaultUserName>admin</DefaultUserName>"));
-        assert!(serialized.contains("<DefaultUserNameChanged>2023-10-05T12:34:56Z</DefaultUserNameChanged>"));
+        assert!(serialized
+            .contains("<DefaultUserNameChanged>2023-10-05T12:34:56Z</DefaultUserNameChanged>"));
         assert!(serialized.contains("<MaintenanceHistoryDays>30</MaintenanceHistoryDays>"));
         assert!(serialized.contains("<Color>#FF0000</Color>"));
         assert!(serialized.contains("<MasterKeyChanged>cKSw3A4AAAA=</MasterKeyChanged>"));
         assert!(serialized.contains("<MasterKeyChangeRec>-1</MasterKeyChangeRec>"));
         assert!(serialized.contains("<MasterKeyChangeForce>42</MasterKeyChangeForce>"));
+        assert!(serialized.contains("<MasterKeyChangeForceOnce>True</MasterKeyChangeForceOnce>"));
         assert!(serialized.contains("<MemoryProtection>"));
         assert!(serialized.contains("<CustomIcons>"));
         assert!(serialized.contains("<RecycleBinEnabled>True</RecycleBinEnabled>"));
         assert!(serialized.contains("<RecycleBinUUID>EBESExQVFhcYGRobHB0eHw==</RecycleBinUUID>"));
         assert!(serialized.contains("<RecycleBinChanged>2023-10-05T12:34:56Z</RecycleBinChanged>"));
-        assert!(serialized.contains("<EntryTemplatesGroup>ICEiIyQlJicoKSorLC0uLw==</EntryTemplatesGroup>"));
-        assert!(serialized.contains("<EntryTemplatesGroupChanged>cKSw3A4AAAA=</EntryTemplatesGroupChanged>"));
-        assert!(serialized.contains("<LastSelectedGroup>MDEyMzQ1Njc4OTo7PD0+Pw==</LastSelectedGroup>"));
-        assert!(serialized.contains("<LastTopVisibleGroup>QEFCQ0RFRkdISUpLTE1OTw==</LastTopVisibleGroup>"));
+        assert!(serialized
+            .contains("<EntryTemplatesGroup>ICEiIyQlJicoKSorLC0uLw==</EntryTemplatesGroup>"));
+        assert!(serialized
+            .contains("<EntryTemplatesGroupChanged>cKSw3A4AAAA=</EntryTemplatesGroupChanged>"));
+        assert!(
+            serialized.contains("<LastSelectedGroup>MDEyMzQ1Njc4OTo7PD0+Pw==</LastSelectedGroup>")
+        );
+        assert!(serialized
+            .contains("<LastTopVisibleGroup>QEFCQ0RFRkdISUpLTE1OTw==</LastTopVisibleGroup>"));
         assert!(serialized.contains("<HistoryMaxItems>10</HistoryMaxItems>"));
         assert!(serialized.contains("<HistoryMaxSize>1048576</HistoryMaxSize>"));
         assert!(serialized.contains("<SettingsChanged>2023-10-05T12:34:56Z</SettingsChanged>"));
         assert!(serialized.contains("<Binaries>"));
-        assert!(serialized.contains(r#"<Binary ID="0" Compressed="False" Protected="False">AQIDBAU=</Binary>"#));
-        assert!(serialized.contains(r#"<Binary ID="1" Compressed="True" Protected="True">ChQeKDI=</Binary>"#));
+        assert!(serialized
+            .contains(r#"<Binary ID="0" Compressed="False" Protected="False">AQIDBAU=</Binary>"#));
+        assert!(serialized
+            .contains(r#"<Binary ID="1" Compressed="True" Protected="True">ChQeKDI=</Binary>"#));
         assert!(serialized.contains("<CustomData>"));
+    }
+
+    #[test]
+    #[cfg(feature = "save_kdbx4")]
+    fn secpivot_master_key_change_force_once_round_trips_values() {
+        for value in [None, Some("True"), Some("False")] {
+            let flag =
+                value.map(|v| format!("<MasterKeyChangeForceOnce>{v}</MasterKeyChangeForceOnce>"));
+            let xml = format!("<Meta><MasterKeyChangeRec>-1</MasterKeyChangeRec><MasterKeyChangeForce>42</MasterKeyChangeForce>{}</Meta>", flag.as_deref().unwrap_or(""));
+            let parsed: Meta = quick_xml::de::from_str(&xml).unwrap();
+            let database_meta: crate::db::Meta = parsed.into();
+            assert_eq!(database_meta.master_key_change_rec, Some(-1));
+            assert_eq!(database_meta.master_key_change_force, Some(42));
+            let serialized = quick_xml::se::to_string(&Meta::from(database_meta)).unwrap();
+            if let Some(flag) = flag {
+                assert!(
+                    serialized.contains(&flag),
+                    "one-time master-key flag was lost"
+                );
+            } else {
+                assert!(!serialized.contains("MasterKeyChangeForceOnce"));
+            }
+        }
     }
 
     #[test]
@@ -839,13 +972,19 @@ mod tests {
         assert_eq!(icons.icons.len(), 1);
         assert_eq!(
             icons.icons[0].uuid.0.as_bytes(),
-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
+            &[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                0x0e, 0x0f
+            ]
         );
         assert_eq!(icons.icons[0].data, vec![1, 2, 3, 4, 5]);
         assert!(meta.recycle_bin_enabled.unwrap());
         assert_eq!(
             meta.recycle_bin_uuid.unwrap().0.as_bytes(),
-            &[0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f]
+            &[
+                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
+                0x1e, 0x1f
+            ]
         );
         assert_eq!(
             meta.recycle_bin_changed.unwrap().time,
@@ -853,7 +992,10 @@ mod tests {
         );
         assert_eq!(
             meta.entry_templates_group.unwrap().0.as_bytes(),
-            &[0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f]
+            &[
+                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
+                0x2e, 0x2f
+            ]
         );
         assert_eq!(
             meta.entry_templates_group_changed.unwrap().time,
@@ -861,11 +1003,17 @@ mod tests {
         );
         assert_eq!(
             meta.last_selected_group.unwrap().0.as_bytes(),
-            &[0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f]
+            &[
+                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
+                0x3e, 0x3f
+            ]
         );
         assert_eq!(
             meta.last_top_visible_group.unwrap().0.as_bytes(),
-            &[0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f]
+            &[
+                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
+                0x4e, 0x4f
+            ]
         );
         assert_eq!(meta.history_max_items.unwrap(), 10);
         assert_eq!(meta.history_max_size.unwrap(), 1048576);

@@ -85,10 +85,18 @@ Only these upstream files are changed:
   tests cover small invalid inputs, valid chrono bounds/negative seconds/ISO,
   the complete inner XML reader and a normal AES KDBX save/reopen control.
 
-The other 53 upstream files are byte-for-byte unchanged. The provenance JSON
-records each original hash and the seven reviewed patched hashes. Run
+- `src/db/types/meta.rs` and `src/format/xml_db/meta.rs`: retain optional
+  MasterKeyChangeForceOnce in the model and both XML conversions. The existing
+  boolean converter preserves explicit True/False; absent remains absent.
+  A literal-XML regression exercises all three states through both conversions;
+  native temporary KDBX and offline remote tests cover ordinary save, Save As,
+  KDF/storage updates and read-only refusal. Expiry enforcement and consumption
+  of this flag remain first-party work, not a claim of this preservation patch.
+
+The other 51 upstream files are byte-for-byte unchanged. The provenance JSON
+records each original hash and the nine reviewed patched hashes. Run
 `npm run verify:keepass-patch` after any patch edit; it verifies source hashes,
-Cargo wiring and formatting of the patched Rust files. Update the seven patched
+Cargo wiring and formatting of the patched Rust files. Update the nine patched
 hashes only after reviewing the changes against the original archive. The
 ordinary `npm run verify` includes this gate.
 
@@ -101,7 +109,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The thirty-one dependency-specific tests can be run separately:
+The thirty-two dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch

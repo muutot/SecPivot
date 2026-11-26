@@ -45,6 +45,10 @@ pub struct Meta {
     /// Number of days until a change of the master key is forced. -1 means never.
     pub master_key_change_force: Option<isize>,
 
+    /// Whether the next database opening requires a one-time master-key change.
+    /// Missing means the KeePass default (false); preserve explicit false too.
+    pub master_key_change_force_once: Option<bool>,
+
     /// memory protection settings
     pub memory_protection: Option<MemoryProtection>,
 

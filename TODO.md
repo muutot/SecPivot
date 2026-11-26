@@ -6,7 +6,7 @@
 
 ## 一、明确待实现
 
-- [ ] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）：前置 `MasterKeyChanged` 建库/改密钥写入已修复，真实临时 KDBX/离线 remote、失败与并发回归通过；提醒/强制执行与一次性更换标志仍待实现
+- [ ] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）：前置 `MasterKeyChanged` 建库/改密钥写入与 `MasterKeyChangeForceOnce` 未设置/False/True 保真已修复，真实临时 KDBX/离线 remote、失败与并发回归通过；到期规则、提醒/强制执行及一次性标志消费仍待实现
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）

@@ -1,5 +1,11 @@
 # Data Contracts
 
+KDBX Meta.master_key_change_force_once is Option<bool> in the patched dependency
+and XML conversion. Missing preserves the implicit false default; explicit
+false/true use the existing True/False converter and remain present on save.
+Ordinary local/remote saves, Save As and storage/KDF updates preserve this field.
+No public DTO/IPC, expiry execution or consumption behavior is added here.
+
 Local/remote creation initializes KDBX Meta.master_key_changed to a UTC value
 at whole-second precision. Master-key persistence consumes the prepared Database
 snapshot, updates this date and returns (PersistOutcome, NaiveDateTime).

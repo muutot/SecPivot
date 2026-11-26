@@ -1,5 +1,12 @@
 # Project Structure and Runtime Surfaces
 
+The ninth reviewed KeePass patch preserves Meta.master_key_change_force_once
+in the core model and XML conversion. Native master_key_force_once_tests.rs
+covers absent/false/true across local/remote save/reopen, Save As, KDF/storage
+changes and read-only refusal. A dependency regression starts from literal XML
+and executes both model conversions. Enforcement and flag consumption are
+separate pending work; this patch is metadata fidelity only.
+
 vault/master_key_time_tests.rs exercises real temporary KDBX dates for local/
 remote creation, password/keyfile-only changes, concurrent completion, failed
 writes and ordinary save/Save As/KDF preservation. persist_change owns its
@@ -228,7 +235,7 @@ Native KDBX `format/xml_db/timestamp.rs` now validates exactly eight Base64
 bytes and checked signed-second/year-one date arithmetic before publishing
 a Timestamp. Four dependency regressions cover invalid lengths/date bounds,
 valid signed/ISO controls, inner XML refusal and normal AES KDBX reopen.
-The timestamp file is the seventh reviewed patch; 53 upstream files remain
+The timestamp file is among nine reviewed patches; 51 upstream files remain
 unchanged. Other native metadata/container/client semantics are separate.
 
 `exchange_icon_metadata_tests.rs` is a test-only child of `vault/exchange.rs`.
@@ -508,13 +515,13 @@ collision-safe JSON custom field. Actual command/wire/bulk/KDBX tests cover
 fidelity, masking and batch rejection; no new DTO or fabricated native history
 snapshot is introduced.
 
-`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus seven
-reviewed attachment/history/location/deletion/serialization/KDF/timestamp patches. Cargo's local patch keeps
+`src-tauri/vendor/keepass-0.13.22/` is the complete upstream package plus nine
+reviewed attachment/history/location/deletion/serialization/KDF/timestamp/metadata patches. Cargo's local patch keeps
 the version pinned; `vendor/KEEPASS_PATCH.md` and its provenance JSON describe
 the changes. `scripts/verify-keepass-patch.mjs` verifies all 60 file hashes,
-Cargo wiring and the seven patched files' formatting as part of `npm run verify`.
+Cargo wiring and the nine patched files' formatting as part of `npm run verify`.
 The untouched upstream tree stays outside Prettier; owned patch files remain
-in the audit scope. Native vault tests cover the application boundary and twenty-nine
+in the audit scope. Native vault tests cover the application boundary and thirty-two
 dependency-specific tests cover shared references, guard unwind, missing-payload
 rejection, exact-byte/protection deduplication and prepared-owner lifetime.
 EntryTrack drop explicitly collects its released unowned snapshot IDs after
@@ -545,7 +552,7 @@ removes only empty candidates in child-first order after entry/group moves;
 retained ancestors lose obsolete markers, Deleted events reflect actual removal.
 Native tests cover deep entry/group edits and moved-out descendants; dependency
 tests cover independent ancestor/child markers, unmarked descendants and existing
-equal/missing timestamp policy. The seven-file provenance gate applies.
+equal/missing timestamp policy. The nine-file provenance gate applies.
 
 Patched crypt/kdf.rs validates the Argon2 u64 iteration count and byte-to-KiB
 memory value with checked u32 conversions before derivation. Unrepresentable

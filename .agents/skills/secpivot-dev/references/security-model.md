@@ -1,5 +1,11 @@
 # Security Model
 
+The one-time MasterKeyChangeForceOnce flag now survives KDBX parsing and saves,
+including absent versus explicit false/true. Preservation does not enforce an
+expired key or consume the request; those remain pending. Dependency tests
+begin with literal XML; native tests use disposable KDBX/MemoryStorage and do
+not establish official-client/provider/WebView behavior.
+
 MasterKeyChanged is initialized on local/remote creation and updated only by
 successful master-key persistence. UTC timestamps are truncated to KDBX's
 whole-second precision; completion adopts the exact written date, including

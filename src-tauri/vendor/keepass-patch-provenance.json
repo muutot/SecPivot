@@ -148,7 +148,8 @@
     },
     {
       "path": "src/db/types/meta.rs",
-      "upstream_sha256": "734624b29cae3f4c216c19be28557c5971cf7739210760994f97b94edc825095"
+      "upstream_sha256": "734624b29cae3f4c216c19be28557c5971cf7739210760994f97b94edc825095",
+      "patched_sha256": "85741a19b3de482bbd43d63ba9e7b56028f4e2686b171fef6aa210b0aec0e960"
     },
     {
       "path": "src/db/types/mod.rs",
@@ -218,7 +219,8 @@
     },
     {
       "path": "src/format/xml_db/meta.rs",
-      "upstream_sha256": "9f10711e8e079af74df7b2da288398118ab9d54955f1ef8d38a3c51df738bbbd"
+      "upstream_sha256": "9f10711e8e079af74df7b2da288398118ab9d54955f1ef8d38a3c51df738bbbd",
+      "patched_sha256": "31a600419d9fe63a364334dad4553506e29f43db02848d59a29e2b4544273b5a"
     },
     {
       "path": "src/format/xml_db/mod.rs",
