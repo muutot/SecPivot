@@ -4,10 +4,20 @@
     options: readonly { value: T; label: string }[];
     ariaLabel: string;
     disabled?: boolean;
+    size?: "control" | "compact";
+    stretch?: boolean;
     onchange?: (value: T) => void;
   }
 
-  let { value = $bindable(), options, ariaLabel, disabled = false, onchange }: Props = $props();
+  let {
+    value = $bindable(),
+    options,
+    ariaLabel,
+    disabled = false,
+    size = "control",
+    stretch = true,
+    onchange,
+  }: Props = $props();
   const selectedIndex = $derived(options.findIndex((option) => option.value === value));
 
   function select(next: T): void {
@@ -53,7 +63,14 @@
   }
 </script>
 
-<div class="radio-group" role="radiogroup" aria-label={ariaLabel} aria-orientation="horizontal">
+<div
+  class="radio-group"
+  class:compact={size === "compact"}
+  class:content={!stretch}
+  role="radiogroup"
+  aria-label={ariaLabel}
+  aria-orientation="horizontal"
+>
   {#each options as option, index (option.value)}
     <button
       type="button"
@@ -94,6 +111,14 @@
   .radio-choice:hover:not(:disabled) {
     color: var(--text-primary);
     background: var(--hover-bg);
+  }
+
+  .compact .radio-choice {
+    height: 28px;
+  }
+
+  .content .radio-choice {
+    flex: 0 0 auto;
   }
 
   .radio-choice.active {

@@ -7,6 +7,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import RadioGroup from "$lib/components/templates/form/RadioGroup.svelte";
 
   interface Props {
     initialQuery?: AdvancedSearchQuery | null;
@@ -111,18 +112,16 @@
   {#snippet children()}
     <div class="block">
       <span class="label">{t(lang, "search.scope")}</span>
-      <div class="chips" role="radiogroup" aria-label={t(lang, "search.scope")}>
-        {#each FIELD_OPTIONS as option (option.value)}
-          <button
-            type="button"
-            class="chip"
-            class:active={field === option.value}
-            onclick={() => (field = option.value)}
-          >
-            {t(lang, option.labelKey)}
-          </button>
-        {/each}
-      </div>
+      <RadioGroup
+        size="compact"
+        stretch={false}
+        bind:value={field}
+        options={FIELD_OPTIONS.map((option) => ({
+          value: option.value,
+          label: t(lang, option.labelKey),
+        }))}
+        ariaLabel={t(lang, "search.scope")}
+      />
     </div>
     <div class="block">
       <span class="label">{t(lang, "search.keyword")}</span>
@@ -235,18 +234,12 @@
     font-size: var(--font-size-secondary, 11px);
   }
 
-  .chips,
   .toggles {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
   }
 
-  .chips {
-    margin-bottom: 12px;
-  }
-
-  .chip,
   .toggle {
     height: 28px;
     padding: 0 10px;
@@ -258,13 +251,11 @@
     cursor: pointer;
   }
 
-  .chip:hover,
   .toggle:hover {
     color: var(--text-primary);
     background: var(--hover-bg);
   }
 
-  .chip.active,
   .toggle.active {
     color: var(--selection-color);
     border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);

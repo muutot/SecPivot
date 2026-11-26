@@ -6,6 +6,7 @@
   import ModalShell from "$lib/components/ModalShell.svelte";
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import Button from "$lib/components/templates/action/Button.svelte";
+  import RadioGroup from "$lib/components/templates/form/RadioGroup.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
 
@@ -83,31 +84,17 @@
   {onclose}
 >
   {#snippet children()}
-    <div class="choice-row" role="radiogroup" aria-label={t(lang, "groupautotype.status")}>
-      <button
-        type="button"
-        class="choice-option"
-        class:active={enableChoice === "inherit"}
-        onclick={() => (enableChoice = "inherit")}
-      >
-        {t(lang, "groupautotype.inherit")}
-      </button>
-      <button
-        type="button"
-        class="choice-option"
-        class:active={enableChoice === "on"}
-        onclick={() => (enableChoice = "on")}
-      >
-        {t(lang, "groupautotype.enable")}
-      </button>
-      <button
-        type="button"
-        class="choice-option"
-        class:active={enableChoice === "off"}
-        onclick={() => (enableChoice = "off")}
-      >
-        {t(lang, "groupautotype.disable")}
-      </button>
+    <div class="choice-row">
+      <RadioGroup
+        size="compact"
+        bind:value={enableChoice}
+        options={[
+          { value: "inherit", label: t(lang, "groupautotype.inherit") },
+          { value: "on", label: t(lang, "groupautotype.enable") },
+          { value: "off", label: t(lang, "groupautotype.disable") },
+        ]}
+        ariaLabel={t(lang, "groupautotype.status")}
+      />
     </div>
     <label class="field">
       <span>{t(lang, "editor.defaultSequence")}</span>
@@ -125,32 +112,7 @@
 
 <style>
   .choice-row {
-    display: flex;
-    gap: 6px;
     margin-bottom: 14px;
-  }
-
-  .choice-option {
-    flex: 1;
-    height: 28px;
-    padding: 0 8px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--settings-control-radius, 6px);
-    color: var(--text-muted);
-    background: var(--input-bg);
-    font-size: var(--font-size-secondary, 11px);
-    cursor: pointer;
-  }
-
-  .choice-option:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .choice-option.active {
-    color: var(--selection-color);
-    border-color: color-mix(in srgb, var(--selection-color) 55%, transparent);
-    background: color-mix(in srgb, var(--selection-color) 12%, transparent);
   }
 
   .field > span {

@@ -10,6 +10,12 @@ Each group has one Tab stop; arrows/Home/End select and focus, while native
 Enter/Space and outer Tab/Escape retain ownership. Global focus-visible remains.
 No new color token, modal surface or scrollbar rule is introduced.
 
+AdvancedSearchDialog and GroupAutoTypeDialog use the same RadioGroup with
+`size="compact"` for 28px choices. Search supplies `stretch={false}` to keep
+natural chip widths; group and database choices retain the default stretching.
+Both keep localized labels, theme selection tint and six-pixel wrapping gaps.
+Browser keyboard/ARIA and dark/light Chinese/English checks include 320px radios.
+
 History's explicit View rules action stays in the existing wrapped Metadata
 summary. Loaded content spans that row's width; rule rows reuse read-value borders,
 compact Button/inline Feedback and existing muted/secondary text metrics. Full URL

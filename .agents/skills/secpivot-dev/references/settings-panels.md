@@ -6,6 +6,12 @@ arrows/Home/End synchronize selection/focus. Keep Twofish is a renderer-only
 choice mapped to the existing null cipher, so it never requests re-encryption.
 The original session/view guards and save patch logic remain unchanged.
 
+Advanced search field scope and group Auto-Type enable/inherit choices compose
+the same RadioGroup in its 28px compact size. Search uses content-width choices;
+group choices fill the row. Each exposes checked radio state and one Tab entry,
+with arrows/Home/End updating bound values and focus. Existing search save/apply,
+group inherit omission, boolean mapping and guarded save logic remain unchanged.
+
 Read this file and `css-theming.md` before changing settings markup or CSS.
 
 ## Navigation and ownership
