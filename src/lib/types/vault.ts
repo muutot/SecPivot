@@ -42,7 +42,7 @@ export interface OnePuxImportResult {
   counts: OnePuxCounts;
 }
 
-export type WebsiteMode = "site" | "host" | "exact" | "never";
+export type WebsiteMode = "site" | "host" | "exact" | "prefix" | "regex" | "never";
 
 export interface WebsiteRule {
   url: string;
@@ -50,7 +50,7 @@ export interface WebsiteRule {
 }
 
 export interface WebsiteRuleSet {
-  version: 1;
+  version: 1 | 2;
   rules: WebsiteRule[];
 }
 

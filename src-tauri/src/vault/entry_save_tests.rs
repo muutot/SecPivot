@@ -150,8 +150,9 @@ fn editor_policy_invalid_values_do_not_publish_content_or_creation() {
     let revision = session.revision;
     for target in [None, Some(uuid.as_str())] {
         for rules in [
-            json!({"version":2,"rules":[]}),
+            json!({"version":3,"rules":[]}),
             json!({"version":1,"rules":[{"url":"not a URL","mode":"host"}]}),
+            json!({"version":2,"rules":[{"url":"https://synthetic.example","mode":"host"},{"url":"(","mode":"regex"}]}),
         ] {
             assert!(session
                 .save_entry(&with_rules(

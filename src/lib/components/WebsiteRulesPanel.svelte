@@ -41,6 +41,8 @@
     { value: "host" as WebsiteMode, label: t(lang, "editor.websiteHost") },
     { value: "site" as WebsiteMode, label: t(lang, "editor.websiteSite") },
     { value: "exact" as WebsiteMode, label: t(lang, "editor.websiteExact") },
+    { value: "prefix" as WebsiteMode, label: t(lang, "editor.websitePrefix") },
+    { value: "regex" as WebsiteMode, label: t(lang, "editor.websiteRegex") },
     { value: "never" as WebsiteMode, label: t(lang, "editor.websiteNever") },
   ]);
   const unavailable = $derived(disabled || draftState.loading || !draftState.ready);
@@ -98,7 +100,9 @@
               id={`${id}-url-${index}`}
               value={rule.url}
               ariaLabel={t(lang, "editor.websiteUrl", { count: index + 1 })}
-              placeholder="https://example.com"
+              placeholder={rule.mode === "regex"
+                ? "^https://example\\.com/"
+                : "https://example.com"}
               maxlength={4096}
               mono
               size="control"

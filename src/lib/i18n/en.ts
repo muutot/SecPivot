@@ -1382,9 +1382,11 @@ export const en: Record<I18nKey, string> = {
   "editor.websiteHost": "Host and port",
   "editor.websiteSite": "Same site",
   "editor.websiteExact": "Exact URL",
+  "editor.websitePrefix": "URL prefix",
+  "editor.websiteRegex": "JavaScript regex",
   "editor.websiteNever": "Ignore this URL",
   "editor.websiteModesHint":
-    "Host includes explicit ports. Site matches subdomains of the same site. Exact compares the full URL, including path and query. Ignore skips this row; other rules still apply. Existing block lists remain effective.",
+    "Host includes explicit ports. Site includes subdomains. Exact compares the full URL. Prefix compares case-sensitive literal text, including all suffixes. Regex uses JavaScript syntax, ignoring case; enter an expression instead of a URL. Ignore skips this row. Existing block lists still apply.",
   "editor.websiteUrl": "URL {count}",
   "editor.websiteMode": "Matching scope for URL {count}",
   "editor.websiteRemove": "Remove URL {count}",

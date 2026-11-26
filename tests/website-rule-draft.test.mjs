@@ -128,3 +128,25 @@ test("disabled/loading drafts reject mutations and the rule limit is enforced", 
   await load;
   assert.equal(f.draft.change(), null);
 });
+
+test("pattern edits upgrade the schema and version-two templates never silently downgrade", async () => {
+  const f = fixture();
+  f.draft.enable(true, "https://synthetic.example");
+  f.draft.edit(0, { mode: "prefix" });
+  assert.equal(f.draft.change().rules.version, 2);
+  f.draft.edit(0, { mode: "regex", url: "^https://synthetic\\.example/" });
+  assert.deepEqual(f.draft.change().rules.rules[0], {
+    mode: "regex",
+    url: "^https://synthetic\\.example/",
+  });
+  const old = fixture(true);
+  await old.draft.load(async () => ({
+    version: 2,
+    rules: [{ mode: "regex", url: "(?<=synthetic)login" }],
+  }));
+  assert.equal(old.draft.change(), null);
+  old.draft.edit(0, { mode: "never", url: "https://synthetic.example" });
+  assert.equal(old.draft.change().rules.version, 2);
+  old.draft.replace({ version: 2, rules: [] });
+  assert.deepEqual(old.draft.change(), { mode: "set", rules: { version: 2, rules: [] } });
+});

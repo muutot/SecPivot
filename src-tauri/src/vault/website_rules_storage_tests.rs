@@ -72,6 +72,79 @@ fn stored(session: &VaultSession, id: &str) -> String {
 }
 
 #[test]
+fn native_pattern_rules_survive_kdbx_xml_and_both_real_browser_host_adapters() {
+    let (dir, mut session, id) = session();
+    let rules = WebsiteRuleSet {
+        version: 2,
+        rules: vec![
+            WebsiteRule {
+                url: "https://prefix.example/Account".into(),
+                mode: WebsiteMode::Prefix,
+            },
+            WebsiteRule {
+                url: r"^https://regex\.example/(?<=example/)(login)/\1(?:\?|$)".into(),
+                mode: WebsiteMode::Regex,
+            },
+        ],
+    };
+    session
+        .set_entry_website_rules(&id, Some(rules.clone()))
+        .unwrap();
+    for reopen in [false, true] {
+        if reopen {
+            session.save().unwrap();
+            session.close();
+            session
+                .open(&dir.path().join("synthetic.kdbx"), "synthetic-master", None)
+                .unwrap();
+        }
+        assert!(session.get_entry_website_rules(&id).unwrap() == Some(rules.clone()));
+        for (url, expected) in [
+            ("https://prefix.example/Account/sub", true),
+            ("https://prefix.example/account", false),
+            ("https://regex.example/LOGIN/login?key=1", true),
+            ("https://regex.example/login/other", false),
+            ("https://regex.example.evil/login/login", false),
+        ] {
+            matches(&session, &id, url, expected);
+        }
+        let db = session.require_db().unwrap();
+        let entry = db.entry(parse_entry_id(&id).unwrap()).unwrap();
+        assert_eq!(
+            crate::vault::helpers::entry_match_urls(&entry),
+            ["https://prefix.example/Account"]
+        );
+        assert!(stored(&session, &id).contains("regex"));
+    }
+    let xml = session.export_xml_content().unwrap();
+    let lifetime = session.native_import_lifetime("root").unwrap();
+    session
+        .import_keepass_xml(
+            crate::vault::prepare_keepass_xml_import(xml.as_bytes()).unwrap(),
+            "root",
+            lifetime,
+        )
+        .unwrap();
+    let db = session.require_db().unwrap();
+    assert_eq!(
+        db.iter_all_entries()
+            .filter(|entry| entry.fields.contains_key(FIELD_WEBSITE_RULES))
+            .count(),
+        2
+    );
+    for entry in db
+        .iter_all_entries()
+        .filter(|entry| entry.fields.contains_key(FIELD_WEBSITE_RULES))
+    {
+        assert!(crate::vault::helpers::kprpc_matches_url(
+            &entry,
+            "https://regex.example/login/login",
+            true
+        ));
+    }
+}
+
+#[test]
 fn website_policy_history_diff_marks_policy_only_changes_without_leaking_values() {
     let (dir, mut session, id) = session();
     session
@@ -302,7 +375,7 @@ fn setter_rejects_invalid_missing_read_only_and_snapshot_failure_atomically() {
         (
             id.clone(),
             WebsiteRuleSet {
-                version: 2,
+                version: 3,
                 rules: vec![],
             },
         ),

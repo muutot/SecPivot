@@ -113,13 +113,43 @@ fn malformed_unknown_duplicate_and_partial_policies_reject_without_content_echo(
         r#"{"version":1,"version":1,"rules":[]}"#,
         r#"{"version":1,"rules":[{"url":"https://synthetic.example","url":"https://other.example","mode":"host"}]}"#,
         r#"{"version":1,"rules":[{"url":"https://synthetic.example","mode":"host","mode":"never"}]}"#,
-        r#"{"version":2,"rules":[]}"#,
+        r#"{"version":3,"rules":[]}"#,
         r#"{"version":1,"rules":[{"url":"https://synthetic.example","mode":"future"}]}"#,
         r#"{"version":1,"rules":[{"url":"https://synthetic.example","mode":"host"},{"url":"invalid","mode":"never"}]}"#,
     ] {
         let error = ValidatedWebsiteRules::from_json(source).err().unwrap();
         assert_eq!(error, INVALID);
         assert!(!error.contains("synthetic"));
+    }
+}
+
+#[test]
+fn version_two_prefix_and_javascript_regex_have_literal_independent_semantics() {
+    let rules = ValidatedWebsiteRules::from_json(r#"{"version":2,"rules":[{"url":"https://prefix.example/Account","mode":"prefix"},{"url":"^https://regex\\.example/(?<part>login)/\\k<part>(?:\\?|$)","mode":"regex"},{"url":"https://prefix.example/Account","mode":"never"}]}"#).unwrap();
+    for request in [
+        "https://prefix.example/Account/sub",
+        "https://prefix.example/AccountMore",
+        "https://regex.example/LOGIN/login?key=1",
+    ] {
+        assert!(rules.matches(request));
+    }
+    for request in [
+        "https://prefix.example/account",
+        "https://regex.example/login/other",
+        "https://regex.example.evil/login/login",
+        "http://regex.example/login/login",
+        "javascript:synthetic",
+        "https://synthetic:password@prefix.example/Account",
+    ] {
+        assert!(!rules.matches(request));
+    }
+    for source in [
+        r#"{"version":1,"rules":[{"url":"https://prefix.example","mode":"prefix"}]}"#,
+        r#"{"version":1,"rules":[{"url":".*","mode":"regex"}]}"#,
+        r#"{"version":2,"rules":[{"url":"(","mode":"regex"}]}"#,
+        r#"{"version":2,"rules":[{"url":"","mode":"regex"}]}"#,
+    ] {
+        assert!(ValidatedWebsiteRules::from_json(source).is_err());
     }
 }
 

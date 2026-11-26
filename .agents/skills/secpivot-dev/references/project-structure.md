@@ -1,5 +1,17 @@
 # Project Structure and Runtime Surfaces
 
+vault/ecma_regex.rs owns bounded, fresh QuickJS-NG constructor/test calls for
+version2 Regex website policies; Prefix stays in website_rules.rs. ecma_regex_tests.rs consumes the
+independent32-case Node corpus in tests/fixtures/ecma-uri-regex.json. The pinned
+rquickjs dependency disables defaults and enables only std. website_rules.rs
+retains v1 validation and rejects pattern modes there, validates v2 regex syntax
+before mutation and shares a regex matching deadline. helpers.rs omits expressions
+from RPC launch URLs. WebsiteRulesDraft upgrades new pattern edits and retains
+loaded/template v2; WebsiteRulesPanel and HistoryVersionDialog label both modes.
+Production service wire, native Bridge/RPC/KDBX/complete XML and isolated dual-theme
+desktop/320px rendering exercise this unit. Bitwarden import mapping remains
+separate pending work; no vendor patch, new IPC/config or theme token is added.
+
 commands/import_bitwarden.rs registers import_bitwarden_file and owns bounded
 native path/display-name admission, worker and originating-session completion.
 vault/import/bitwarden_native.rs prepares exact native folders, collection tags,

@@ -122,6 +122,29 @@ test("omitted or undefined policy never becomes a clear or reaches IPC", async (
   assert.equal(calls.length, 0);
 });
 
+test("version-two pattern policy preserves literal bytes through production read and write IPC", async () => {
+  const id = await fixture();
+  const patterns = {
+    version: 2,
+    rules: [
+      { mode: "prefix", url: "https://synthetic.example/Case?" },
+      { mode: "regex", url: "(?<=https://)synthetic\\.example/(?<name>login)\\k<name>" },
+    ],
+  };
+  const reading = vault.getEntryWebsiteRules("synthetic-entry");
+  pending[0].resolve(patterns);
+  const loaded = await reading;
+  assert.deepEqual(loaded, patterns);
+  const writing = vault.setEntryWebsiteRules("synthetic-entry", loaded);
+  assert.deepEqual(pending[1].args, {
+    sessionId: id,
+    request: { uuid: "synthetic-entry", rules: patterns },
+  });
+  pending[1].resolve(snapshot(id, 2));
+  await writing;
+  assert.equal(vault.get().revision, 2);
+});
+
 test("explicit null and an empty rule set retain distinct write payloads", async () => {
   const id = await fixture();
   const empty = { version: 1, rules: [] };

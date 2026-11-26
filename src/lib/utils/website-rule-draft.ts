@@ -19,6 +19,7 @@ export class WebsiteRulesDraft {
   private operation = 0;
   private alive = true;
   private baselineEnabled: boolean;
+  private version: 1 | 2 = 1;
   private publish: (state: WebsiteDraftState) => void;
   private current: () => boolean;
 
@@ -47,6 +48,7 @@ export class WebsiteRulesDraft {
       const value = await read();
       if (!owns()) return;
       this.baselineEnabled = value !== null;
+      this.version = value?.version ?? 1;
       this.update({
         enabled: value !== null,
         rules: value?.rules.map((rule) => ({ ...rule })) ?? [],
@@ -63,6 +65,7 @@ export class WebsiteRulesDraft {
   replace(value: WebsiteRuleSet | null): void {
     if (!this.alive || !this.current()) return;
     this.operation++;
+    this.version = value?.version ?? 1;
     this.update({
       enabled: value !== null,
       rules: value?.rules.map((rule) => ({ ...rule })) ?? [],
@@ -110,8 +113,11 @@ export class WebsiteRulesDraft {
     if (!this.alive || !this.current() || !this.state.ready || this.state.loading)
       throw new Error("Website draft unavailable");
     if (!this.state.touched || (!this.state.enabled && !this.baselineEnabled)) return null;
+    const version = this.state.rules.some((r) => r.mode === "prefix" || r.mode === "regex")
+      ? 2
+      : this.version;
     return this.state.enabled
-      ? { mode: "set", rules: { version: 1, rules: this.state.rules.map((rule) => ({ ...rule })) } }
+      ? { mode: "set", rules: { version, rules: this.state.rules.map((rule) => ({ ...rule })) } }
       : { mode: "clear" };
   }
 

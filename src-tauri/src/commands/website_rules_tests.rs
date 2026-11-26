@@ -241,7 +241,7 @@ fn invalid_rules_or_closed_unknown_and_empty_origins_never_redirect_a_write() {
     let active = Mutex::new(VaultSession::default());
     let (a, uuid) = open(&vaults, &active, &dir.path().join("a.kdbx"));
     for rules in [
-        json!({"version":2,"rules":[]}),
+        json!({"version":3,"rules":[]}),
         json!({"version":1,"rules":[{"url":"synthetic-private-marker","mode":"host"}]}),
     ] {
         let before = serde_json::to_value(active.lock().unwrap().state().unwrap()).unwrap();

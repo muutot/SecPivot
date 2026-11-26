@@ -1,5 +1,14 @@
 # Project-wide UI Style and Theming
 
+WebsiteRulesPanel's v2 Prefix/JavaScript Regex choices reuse shared Select and
+TextField controls. Regex shows an expression placeholder; the existing hint
+explains case-sensitive literal prefixes and case-insensitive JS expressions.
+History uses its existing read-only rule rows and new localized mode labels.
+No CSS, font, surface, metric or theme token is added. Chinese light/English dark
+desktop/320px isolated renders retain white-gray glass and the identical Cascadia
+root stack without horizontal overflow; mouse/keyboard Select and history View
+activation work. These synthetic previews do not establish native WebView behavior.
+
 quickFindExcludeExpired uses the existing SettingToggleCard/search icon in the
 display panel. It adds no CSS, palette, font or primitive; Chinese light/English
 dark desktop/320px previews retain neutral glass surfaces, the identical Cascadia

@@ -62,6 +62,10 @@ flate2 = "1"
 # KeePassRPC entry match accuracy: Perl-compatible regex matching for
 # per-entry URL/pattern rules (altURLs/blockedURLs/regExURLs/regExBlockedURLs).
 regex = "1"
+# Native URI rules require ECMAScript RegExp semantics, including UTF-16 and
+# lookaround/backreferences. QuickJS-NG polls its interrupt hook during regexp
+# backtracking; the owned wrapper exposes only bounded constructor/test calls.
+rquickjs = { version = "=0.14.0", default-features = false, features = ["std"] }
 # Static Mozilla PSL, including private tenants, wildcards and exceptions.
 # Pin the snapshot so credential-matching boundaries change only on review.
 psl = "=2.1.249"

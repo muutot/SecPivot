@@ -1181,6 +1181,18 @@ one malformed/unknown member rejects the whole set with a fixed, content-free
 error, without partial or legacy fallback. Requests share the strict HTTP(S)
 destination gate. Site uses private-tenant-aware PSL identity, Host preserves
 explicit ports, Exact preserves URL bytes and Never only ignores one rule.
+Version2 adds literal case-sensitive URL Prefix and ECMAScript Regex; v1 behavior
+is retained and v1 pattern modes reject. Regex syntax is validated before mutation;
+requests retain strict HTTP(S) admission even for broad expressions. ecma_regex.rs
+passes pattern/text as typed arguments into static constructor/test wrappers in
+fresh rquickjs0.14.0/QuickJS-NG runtimes. No host callbacks, module loaders,
+filesystem, process or networking APIs are exposed, and rule text is never code.
+Each call bounds memory to8MiB, stack256KiB, input/pattern4096 bytes and25ms;
+regex matching also shares a100ms policy deadline. Engine errors, resource
+exhaustion and regexp-backtracking interruption fail closed; fresh subsequent
+calls remain usable. RPC omits expressions from launch-URL lists. Synthetic
+independent Node semantics, injection, deadline, KDBX/XML and host-adapter checks
+do not prove mobile native linking, real extension behavior or total heap erasure.
 Rule count, URL bytes and encoded JSON have finite ceilings; these are not a
 total-heap or constant-time guarantee. The owned encoded JSON uses Zeroizing,
 but config strings/URL-parser temporary allocations are not claimed erased.

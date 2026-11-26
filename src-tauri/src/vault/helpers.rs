@@ -299,7 +299,8 @@ pub(crate) fn entry_primary_url<'a>(entry: &'a keepass::db::EntryRef<'_>) -> &'a
 /// (`OverrideURL` when set, else the `URL` field, space-separated) plus any
 /// KeePassRPC `altURLs`. Entries edited in Kee match their alternative URLs
 /// too; empty entries (no URL, no altURLs) never match.
-/// Native policies expose only non-Never URLs; invalid/conflicting policies expose none.
+/// Native policies expose launchable URL rules; Regex/Never and invalid/conflicting
+/// policies expose none. A regular expression must never become a launch URL.
 pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String> {
     if let Some(raw) = entry.get(FIELD_WEBSITE_RULES) {
         if entry
@@ -315,7 +316,12 @@ pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String>
                     .config()
                     .rules
                     .iter()
-                    .filter(|rule| rule.mode != super::WebsiteMode::Never)
+                    .filter(|rule| {
+                        !matches!(
+                            rule.mode,
+                            super::WebsiteMode::Never | super::WebsiteMode::Regex
+                        )
+                    })
                     .map(|rule| rule.url.clone())
                     .collect()
             })

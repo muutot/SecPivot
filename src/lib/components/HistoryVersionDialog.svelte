@@ -85,6 +85,8 @@
     if (mode === "host") return t(lang, "editor.websiteHost");
     if (mode === "site") return t(lang, "editor.websiteSite");
     if (mode === "exact") return t(lang, "editor.websiteExact");
+    if (mode === "prefix") return t(lang, "editor.websitePrefix");
+    if (mode === "regex") return t(lang, "editor.websiteRegex");
     return t(lang, "editor.websiteNever");
   }
 

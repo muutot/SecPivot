@@ -4,6 +4,7 @@ use super::{VaultSession, VaultState, FIELD_WEBSITE_RULES};
 use crate::util::{url_authority, UrlAuthority};
 use keepass::db::Value;
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
 /// Both sides are read under the selected history revision, never from a newer
@@ -57,6 +58,10 @@ pub enum WebsiteMode {
     Host,
     /// Identical complete URL bytes after both destinations validate.
     Exact,
+    /// Literal, case-sensitive whole-URL prefix (no implicit host boundary).
+    Prefix,
+    /// ECMAScript RegExp with the same implicit `i` flag as Bitwarden.
+    Regex,
     /// Ignore this rule; it does not veto another rule for the same destination.
     Never,
 }
@@ -79,7 +84,7 @@ pub struct WebsiteRuleSet {
 /// No mutable configuration access or fallback to partially valid rules.
 pub struct ValidatedWebsiteRules {
     config: WebsiteRuleSet,
-    authorities: Vec<UrlAuthority>,
+    authorities: Vec<Option<UrlAuthority>>,
     json: Zeroizing<String>,
 }
 
@@ -112,7 +117,7 @@ impl ValidatedWebsiteRules {
     }
 
     pub fn new(config: WebsiteRuleSet) -> Result<Self, String> {
-        if config.version != 1 {
+        if !matches!(config.version, 1 | 2) {
             return Err(INVALID.into());
         }
         if config.rules.len() > MAX_RULES {
@@ -121,6 +126,10 @@ impl ValidatedWebsiteRules {
         let mut total = 0usize;
         let mut authorities = Vec::with_capacity(config.rules.len());
         for rule in &config.rules {
+            if config.version == 1 && matches!(rule.mode, WebsiteMode::Prefix | WebsiteMode::Regex)
+            {
+                return Err(INVALID.into());
+            }
             if rule.url.len() > MAX_URL_BYTES {
                 return Err(LIMIT.into());
             }
@@ -128,7 +137,14 @@ impl ValidatedWebsiteRules {
                 .checked_add(rule.url.len())
                 .filter(|bytes| *bytes <= MAX_JSON_BYTES)
                 .ok_or(LIMIT)?;
-            authorities.push(destination(&rule.url).ok_or(INVALID)?);
+            if rule.mode == WebsiteMode::Regex {
+                if !super::ecma_regex::valid(&rule.url) {
+                    return Err(INVALID.into());
+                }
+                authorities.push(None);
+            } else {
+                authorities.push(Some(destination(&rule.url).ok_or(INVALID)?));
+            }
         }
         let json = Zeroizing::new(serde_json::to_string(&config).map_err(|_| INVALID)?);
         if json.len() > MAX_JSON_BYTES {
@@ -154,16 +170,19 @@ impl ValidatedWebsiteRules {
             return false;
         };
         let request_site = super::helpers::registrable_domain(&request.host);
+        let deadline = Instant::now() + Duration::from_millis(100);
         self.config
             .rules
             .iter()
             .zip(&self.authorities)
             .any(|(rule, authority)| match rule.mode {
-                WebsiteMode::Site => {
-                    super::helpers::registrable_domain(&authority.host) == request_site
-                }
-                WebsiteMode::Host => authority == &request,
+                WebsiteMode::Site => authority
+                    .as_ref()
+                    .is_some_and(|a| super::helpers::registrable_domain(&a.host) == request_site),
+                WebsiteMode::Host => authority.as_ref() == Some(&request),
                 WebsiteMode::Exact => rule.url == request_url,
+                WebsiteMode::Prefix => request_url.starts_with(&rule.url),
+                WebsiteMode::Regex => super::ecma_regex::matches(&rule.url, request_url, deadline),
                 WebsiteMode::Never => false,
             })
     }

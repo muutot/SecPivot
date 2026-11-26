@@ -1592,8 +1592,9 @@ not export encoding of these behavior settings; no mapping is claimed yet.
 
 `ValidatedWebsiteRules` is a native API re-exported by `vault` from
 `website_rules.rs`.
-Its independent version-1 schema is `{version:1,rules:[{url,mode}]}`, with exact
-mode strings `site`, `host`, `exact`, `never`. Construction/from_json rejects
+Its independent schema is `{version:1|2,rules:[{url,mode}]}`. Version1 retains
+`site`, `host`, `exact`, `never`; version2 additionally accepts `prefix`, `regex`.
+Unknown versions and version1 pattern modes reject. Construction/from_json rejects
 unknown/duplicate members, unsupported versions/modes and any invalid rule;
 it exposes immutable config/as_json/matches only. Limits are 128 rules, 4096
 bytes per URL and 64 KiB total encoded JSON (also checked before parsing).
@@ -1602,6 +1603,22 @@ Site uses the pinned PSL without vendor-related-site aliases or a global mode;
 Host uses canonical host plus explicitly written numeric port (omitted and
 explicit default ports stay distinct); Exact retains complete original bytes;
 Never ignores only that rule. Empty/all-Never sets match nothing.
+Prefix compares case-sensitive complete URL text with starts_with, without
+an implicit host boundary. Regex takes a nonempty ECMAScript expression instead
+of a URL and executes new RegExp(pattern,'i').test(request); input still must
+pass the strict HTTP(S) request gate. The pinned rquickjs0.14.0/QuickJS-NG wrapper
+preserves non-u UTF-16, lookaround, backreferences and JS case semantics rather
+than approximating them with the legacy Rust regex engine. Each fresh runtime
+has8MiB memory,256KiB stack,4096-byte pattern/input and25ms interrupt ceilings;
+matching shares a100ms deadline across regex rows. Invalid/interrupted/exhausted
+calls never authorize. These are limits, not exact timing or total-heap guarantees.
+The constructor validates regex syntax before mutation. The editor upgrades
+pattern drafts to version2 and retains loaded/template version2 on later edits;
+history displays the two new modes. RPC lists omit Regex/Never so expressions
+cannot become launch URLs. The read/write command envelope is unchanged.
+Node32-case oracle and native Bridge/RPC, KDBX and complete XML round trips are
+synthetic evidence. Bitwarden's native six-mode/default/equivalent-domain mapping
+remains separate: these two native modes alone do not complete URI migration.
 `VaultSession::get_entry_website_rules(uuid)` returns Option<WebsiteRuleSet>;
 `set_entry_website_rules(uuid, Option<WebsiteRuleSet>)` validates an open/writable
 target, tracks bounded history in a candidate database and publishes one light
@@ -1621,7 +1638,7 @@ regex rules do not widen it. Malformed native policy or nonempty OverrideURL
 conflict yields no URL match/list; setter and flag writes reject this coexistence.
 Native Bridge rules require the page URL and any nonempty submit URL to match;
 an allowed submit alone cannot authorize another page. Legacy submit OR remains.
-RPC DTO URL lists contain only allowed native rules; Never is omitted, not a veto.
+RPC DTO URL lists contain only allowed native URL rules; Regex/Never are omitted.
 RPC URL mutations that change the effective list reject before persistence;
 credential-only writes preserve the policy and original display URL. RPC custom
 fields cannot create/overwrite the managed field. UUID/text/username queries are

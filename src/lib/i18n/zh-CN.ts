@@ -1315,9 +1315,11 @@ export const zhCN = {
   "editor.websiteHost": "主机及端口",
   "editor.websiteSite": "同一站点",
   "editor.websiteExact": "完整网址",
+  "editor.websitePrefix": "网址前缀",
+  "editor.websiteRegex": "JavaScript 正则",
   "editor.websiteNever": "忽略此网址",
   "editor.websiteModesHint":
-    "主机包含显式端口；站点可匹配同站子域；完整网址逐字匹配路径与查询；忽略仅跳过这一行，其他规则仍有效。原有阻止列表继续生效。",
+    "主机包含显式端口；站点包含同站子域；完整网址逐字比较；前缀区分大小写，后续内容不限；正则使用 JavaScript 语法且忽略大小写，请输入表达式。忽略仅跳过这一行。原有阻止列表仍有效。",
   "editor.websiteUrl": "网址 {count}",
   "editor.websiteMode": "网址 {count} 的匹配范围",
   "editor.websiteRemove": "移除网址 {count}",

@@ -5,6 +5,7 @@
 mod breach;
 pub(crate) mod close;
 pub mod dto;
+mod ecma_regex;
 mod entries;
 #[cfg(test)]
 mod entry_autotype_retention_tests;
