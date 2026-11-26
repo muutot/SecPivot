@@ -984,6 +984,11 @@ export const zhCN = {
   "security.keyExpiryRequired": "需要更换主密钥",
   "security.keyExpiryRecommended": "建议更换主密钥",
   "security.searchKeyFiles": "打开时搜索密钥文件",
+  "settings.logging": "本地诊断日志",
+  "settings.loggingDesc":
+    "默认关闭。在应用数据目录 Logs 中保存 UTC 时间、脱敏操作模板与配置错误类别/位置，不记录输入值；每次启用上限 1 MiB，已有日志保留。",
+  "settings.loggingLimit": "当前日志已达到 1 MiB 上限，关闭后重新开启可创建新文件，已有日志保留。",
+  "settings.loggingUnavailable": "诊断日志无法打开或写入，请检查应用数据目录的访问权限。",
   "security.searchKeyFilesDesc":
     "Windows：列出驱动器根目录中的 .key、.keyx 候选文件，需手动选择；搜索不读取密钥内容。",
   "security.searchKeyFilesRemovable": "同时搜索移动盘",

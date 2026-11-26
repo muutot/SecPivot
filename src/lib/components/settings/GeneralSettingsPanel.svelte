@@ -5,6 +5,7 @@
   import AppIcon from "$lib/components/AppIcon.svelte";
   import SettingRangeCard from "$lib/components/settings/SettingRangeCard.svelte";
   import SettingToggleCard from "$lib/components/settings/SettingToggleCard.svelte";
+  import LoggingSettingsCard from "$lib/components/settings/LoggingSettingsCard.svelte";
 
   type Section = "general" | "network";
 
@@ -80,6 +81,7 @@
       checked={general.rememberLastDatabase}
       onchange={(checked) => change("rememberLastDatabase", checked)}
     />
+    <LoggingSettingsCard />
   {/if}
 
   {#if section === "network"}

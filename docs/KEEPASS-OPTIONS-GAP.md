@@ -8,6 +8,16 @@
 
 ## KeePass Options 六个 tab 与 SecPivot 现状
 
+`AceLogging.Enabled` 默认 false。官方 AppLogEx.Open 的常规构建文件写入被注释，
+SecPivot 实现实际日志作为增强：常规页开关与原生启动/set_config 同步，在应用
+数据目录 Logs 创建独占新文件。现有原生 eprintln 受统一门禁，动态格式参数
+不求值为文本，日志只含 UTC、脱敏操作模板和类型限定的配置错误类别/位置。
+关闭不建目录，不向 stderr 旁路输出；每文件1MiB上限，旧日志不覆盖/删除。
+实际路径/可写状态/限额通过只读 IPC 反馈，开启的设置卡每5秒更新状态。
+合成文件、真实宏、配置两模式子进程和实际设置/刷新函数已验证；隔离预览
+覆盖中文浅色/英文深色、桌面/320px、开关/路径与失败/限额反馈，无横向溢出。真实
+WebView/启动、Android 与第三方/框架日志不据此关闭。
+
 `AceSecurity.KeyTransformWeakWarning` 默认 true，Security 页开关在 TS/Rust
 持久化。数据库设置保存偏弱 KDF 成本、更换弱参数库主密钥前，使用共享取消/
 继续提示；当前建库默认值已达标。按官方

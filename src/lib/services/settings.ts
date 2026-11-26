@@ -340,6 +340,7 @@ export const DEFAULT_INTEGRATION_SETTINGS: IntegrationSettings = {
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  logging: { enabled: false },
   general: DEFAULT_GENERAL_SETTINGS,
   security: DEFAULT_SECURITY_SETTINGS,
   database: DEFAULT_DATABASE_SETTINGS,
@@ -1179,6 +1180,12 @@ export function normalizeSettings(
     security,
     database,
     integration,
+    logging: {
+      enabled:
+        typeof source.logging?.enabled === "boolean"
+          ? source.logging.enabled
+          : (fallback.logging?.enabled ?? false),
+    },
     remoteProfiles,
     activeRemote,
     bridge: {
@@ -1221,6 +1228,7 @@ export function normalizeSettings(
 interface AppSettingsStore {
   subscribe: typeof settings.subscribe;
   initialize: () => Promise<void>;
+  updateLogging: (enabled: boolean) => void;
   updateGeneral: <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => void;
   updateSecurity: <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => void;
   updateDatabase: <K extends keyof DatabaseDefaults>(key: K, value: DatabaseDefaults[K]) => void;
@@ -1443,6 +1451,11 @@ export const appSettings: AppSettingsStore = {
         [key]: key === "savedSearches" ? normalizeSavedSearches(value as SavedSearch[]) : value,
       },
     }));
+    schedulePersist();
+  },
+
+  updateLogging(enabled): void {
+    settings.update((s) => ({ ...s, logging: { enabled } }));
     schedulePersist();
   },
 

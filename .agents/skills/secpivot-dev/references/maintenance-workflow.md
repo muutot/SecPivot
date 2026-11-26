@@ -106,6 +106,13 @@ explicit audit comparison; ordinary verification always extracts current sources
 
 ## Browser vs desktop truth
 
+Native logging is scoped by lib.rs's lexical eprintln macro before all modules.
+Keep new diagnostics inside that gate; do not bypass it with std::eprintln,
+print/println/dbg or a separate first-party logger. Record static templates only;
+dynamic payloads are never formatted. Typed config parse categories/offsets have
+their dedicated safe API. OS/vendor/framework logs remain outside this gate.
+Tests that intentionally capture process output use synthetic data only.
+
 `npm run test:android-tls` builds a disposable host Cargo fixture using locked
 reqwest/rustls/webpki versions and actual net.rs bodies. Only Android cfg becomes
 a fixture feature; no networking API is stubbed. Public DER fixtures verify the

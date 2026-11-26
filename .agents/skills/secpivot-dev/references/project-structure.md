@@ -1,5 +1,18 @@
 # Project Structure and Runtime Surfaces
 
+`diagnostics.rs` owns optional process-wide local logging and metadata status,
+with nested synthetic filesystem/macro tests. Root lexical macros precede all
+modules, gating existing native eprintln sites and omitting format payloads.
+ConfigStore reports parse failures through its typed category/offset API.
+AppConfig/AppSettings add default-off logging.enabled; startup and successful
+set_config configure the logger. commands/config.rs exposes diagnostic_log_status,
+registered in lib.rs. LoggingSettingsCard under GeneralSettingsPanel owns the
+shared toggle, path/feedback and mounted5s status polling. updateLogging uses the
+existing settings persistence queue. tests/logging-settings.test.mjs executes
+actual preference/refresh handlers; native config child controls exercise both
+flag modes with exact corrupt backups and no input disclosure. The gate covers
+first-party native diagnostics; WebView/mobile/framework verification stays open.
+
 `keyfile_search.rs` owns Windows drive enumeration, top-level candidate filtering
 and the bounded blocking worker; nested tests use synthetic temporary roots and
 injected slow work. `commands/config.rs::search_key_files` resolves native flags;
@@ -923,6 +936,7 @@ main window, isolation from other windows/remote pages, and exclusion on desktop
 ├─ portable.flag           # optional marker forcing portable mode (shipped in the portable ZIP)
 ├─ conf/
 │  └─ config.json          # AppConfig
+├─ Logs/                   # optional bounded redacted diagnostics, default off
 └─ Storage/remote/         # remote-vault local mirrors (<kind>/<profile>)
 ```
 

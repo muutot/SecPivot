@@ -1,5 +1,20 @@
 # Security Model
 
+Native diagnostics default off. lib.rs defines a lexical eprintln macro before
+every module, routing existing sites through DiagnosticLog. format_args only
+type-checks/borrows payloads; their Display/Debug is never invoked and no raw data
+goes to stderr. Only the static template is recorded with placeholders redacted.
+Config parse failures separately allow a typed enum category and numeric offsets/
+recovery flag, never full serde errors or input strings. The logger holds only
+file handles, paths, counters and flags. Fresh create_new files never follow or
+overwrite existing file links/logs; disabled mode creates no directory. A1MiB cap
+closes the sink, and disable shares the writer mutex so no late append follows
+its return. Existing files remain; status IPC returns metadata, not contents.
+The gate covers first-party native eprintln sites, not OS/vendor/framework logs.
+Macro tests use a Display implementation that panics if invoked; child-process
+config controls verify silence plus safe file diagnostics in both flag modes.
+Native startup/WebView/Android framework behavior remains separately unverified.
+
 Keyfile discovery reads directory entries/types only, never key bytes or vault
 contents. Windows roots come from the OS, not caller-supplied arbitrary paths;
 regular .key/.keyx files are listed without following symlinks or recursing.
@@ -722,8 +737,9 @@ The `keepass` crate handles KDF (Argon2id/Argon2/AES-KDF), cipher (AES-256/Twofi
 
 Config-load diagnostics must never print the full serde_json error, whose
 type-mismatch text can contain credential-field input. Log only category and
-line/column with recovery status. Native child-process stderr controls verify
-absent input values while retaining exact corrupt backups and valid masked
+line/column with recovery status while logging is enabled. Native child-process
+controls verify silent stderr and safe enabled-file output in both modes,
+retaining exact corrupt backups and valid masked
 snapshots. This does not fix mobile plaintext credential storage.
 
 XML exports preserve CR/CRLF through numeric CR references and reject characters

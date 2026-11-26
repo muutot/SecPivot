@@ -10,7 +10,7 @@
 - [~] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）：默认开/移动盘默认关与旧配置重载已接入；Windows 原生根目录搜索 .key/.keyx，只列候选不读内容、不递归、不自动选择/提交。安全页开关、本地/最近/远程打开与锁屏已接入；5 秒响应、单 worker、4096 项/根目录与 128 候选限额，错误/超时可继续浏览。合成目录/慢 worker、配置与实际 host/controller 回归、浅色/深色/320px 鼠标/键盘选择与菜单退出已覆盖；共享 Select 弹出层修复模糊滚动容器裁剪。真实驱动器/WebView、其他平台发现与 Android provider 待验证
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）
-- [ ] 配置日志开关（`AceLogging.Enabled`）
+- [~] 配置日志开关（`AceLogging.Enabled`）：默认关、旧配置重载、常规设置开关与原生启动/保存配置同步已接入；已有原生 eprintln 统一门禁，开启只写 UTC/脱敏模板与类型限定的配置类别/位置，不输出输入值或 stderr。独占新日志、不覆盖/删除旧文件，每文件 1 MiB 上限，实际路径/失败/限额反馈与状态轮询已接入；合成文件/宏及两模式配置子进程、实际设置/刷新回归已覆盖。真实 WebView/启动、Android 与框架/第三方日志口径仍待验证
 - [ ] 打印系统（KeePass 应急表打印约 20 项：Layout/Include*/Color*/Fonts/Sort）——当前只有离线 HTML 应急表导出
 
 ## 二、部分完成（剩余边界明确）

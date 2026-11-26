@@ -992,6 +992,13 @@ export const en: Record<I18nKey, string> = {
   "security.keyExpiryRequired": "Master key change required",
   "security.keyExpiryRecommended": "Master key change recommended",
   "security.searchKeyFiles": "Suggest keyfiles when opening",
+  "settings.logging": "Local diagnostic logging",
+  "settings.loggingDesc":
+    "Off by default. Save UTC timestamps, redacted operation templates and typed config-error locations in Logs under the app data folder. Input values are omitted; each enabled run is limited to 1 MiB. Existing logs are retained.",
+  "settings.loggingLimit":
+    "This log reached its 1 MiB limit. Turn logging off and on to start a new file; existing logs remain available.",
+  "settings.loggingUnavailable":
+    "The diagnostic log could not be opened or written. Check access to the app data folder.",
   "security.searchKeyFilesDesc":
     "Windows: list .key and .keyx files from drive roots. Choose a suggestion explicitly; no key content is read during search.",
   "security.searchKeyFilesRemovable": "Also search removable drives",

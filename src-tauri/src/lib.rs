@@ -1,8 +1,26 @@
+// Native eprintln sites record only their static templates. Formatting payloads
+// are type-checked but never formatted or sent to stderr/log files. Keep this
+// lexical macro before every module so existing native diagnostics share the gate.
+macro_rules! diagnostic_event {
+    ($sink:expr, $template:literal $($arguments:tt)*) => {{
+        if ($sink).is_enabled() {
+            let _ = format_args!($template $($arguments)*);
+            ($sink).record_template($template);
+        }
+    }};
+}
+macro_rules! eprintln {
+    ($template:literal $($arguments:tt)*) => {
+        diagnostic_event!(crate::diagnostics::global(), $template $($arguments)*)
+    };
+}
+
 #[cfg(desktop)]
 pub mod bridge;
 pub mod commands;
 pub mod config;
 pub mod crypto;
+mod diagnostics;
 #[cfg(desktop)]
 mod exit;
 mod keyfile_search;
@@ -405,6 +423,7 @@ pub fn run() {
             let (project_dir, portable) = config::resolve_data_dir(exe_dir.as_deref(), app_data);
             let store = ConfigStore::load_with_mode(project_dir, portable)?;
             let config = store.get()?;
+            diagnostics::global().configure(store.data_dir(), config.logging.enabled);
             #[cfg(desktop)]
             register_global_hotkeys(
                 app.handle(),
@@ -482,6 +501,7 @@ pub fn run() {
             commands::get_master_key_expiry_offer,
             commands::validate_master_key_expiry_rule,
             commands::search_key_files,
+            commands::diagnostic_log_status,
             commands::upgrade_weak_kdf,
             commands::benchmark_database_kdf,
             commands::update_database_settings,

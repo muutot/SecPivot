@@ -22,6 +22,12 @@ pub(crate) fn get_config(
     store.get_masked()
 }
 
+/// Metadata only. Log contents never cross IPC.
+#[tauri::command]
+pub(crate) fn diagnostic_log_status() -> crate::diagnostics::DiagnosticStatus {
+    crate::diagnostics::global().status()
+}
+
 /// Nonsecret suggestions only; no database or keyfile content is read.
 #[tauri::command]
 pub(crate) async fn search_key_files(
@@ -151,6 +157,7 @@ pub(crate) fn set_config(
     config: config::AppConfig,
 ) -> Result<config::AppConfig, String> {
     let saved = store.set(config)?;
+    crate::diagnostics::global().configure(store.data_dir(), saved.logging.enabled);
     #[cfg(desktop)]
     register_global_hotkeys(
         &app,

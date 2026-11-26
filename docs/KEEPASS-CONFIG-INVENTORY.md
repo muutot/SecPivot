@@ -12,7 +12,7 @@
 | --------------------------------- | -------------------- | -------------------------------------------------------- |
 | `Configuration/Meta`              | AceMeta              | ➖ 内部元数据（版本/DPI/配置位置），非用户设置           |
 | `Configuration/Application`       | AceApplication       | `general` + `keyboard` 部分                              |
-| `Configuration/Logging`           | AceLogging           | ➖ 调试日志                                              |
+| `Configuration/Logging`           | AceLogging           | ⚠️ 可选本地脱敏诊断日志；运行时平台验证待补              |
 | `Configuration/MainWindow`        | AceMainWindow        | `general.window*` / `toolbarItems` / `entryColumns` 部分 |
 | `Configuration/UI`                | AceUI                | 主题/字体部分                                            |
 | `Configuration/Security`          | AceSecurity          | `security` 大部分                                        |
@@ -274,7 +274,10 @@ SearchParameters 字段（SearchString/Field/Regex/Exclude/OnlyExpired/OnlyFavor
 
 ## 10. AceLogging（1）
 
-Enabled ❌（调试日志）
+Enabled ⚠️ `logging.enabled` 默认关：设置/原生启动/运行时同步与实际脱敏日志已接入；真实 WebView/Android/框架口径待验。
+官方 AppLogEx.Open 在常规构建中被注释；SecPivot 增强为实际本地 Logs 文件，
+只记录静态脱敏模板及类型限定的配置错误类别/位置。关闭无文件，开启独占新
+文件，1 MiB 上限且保留旧日志；原生状态反馈不返回日志内容。
 
 ## 11. AceNative（1）
 
@@ -295,7 +298,7 @@ NativeKeyTransformations ❌（原生 KDF 加速开关，SecPivot 固定用最�
 | AceDefaults + 子           | 45         | ~3      | 1       | ~10       | ~31       |
 | AcePasswordGenerator       | 3+         | 3       | 0       | 0         | 0         |
 | AceSearch                  | 2+         | 0       | 1       | 0         | 0         |
-| AceLogging / AceNative     | 2          | 0       | 0       | 2         | 0         |
+| AceLogging / AceNative     | 2          | 0       | 1       | 1         | 0         |
 | **合计**                   | **~320**   | **~32** | **~9**  | **~110**  | **~170**  |
 
 > 说明：把 28 个内置 URL override、22 种列类型、各类 Flags 枚举位都算进去，源码配置面约 320 项；仅算"用户可配的标量设置"也在 120+ 项，与你记忆的"近百个"一致。SecPivot 已覆盖其中约 32 项核心设置。

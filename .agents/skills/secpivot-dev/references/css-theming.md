@@ -1,5 +1,11 @@
 # Project-wide UI Style and Theming
 
+LoggingSettingsCard reuses SettingToggleCard and Feedback. Its optional metadata
+path owns compact spacing, text-secondary, secondary font size and anywhere
+wrapping; no new font, control chrome, surface or theme token is introduced.
+Chinese light and English dark desktop/320px previews cover toggle/path,
+unavailable/full feedback and contained width with the same Cascadia root stack.
+
 Keyfile search uses shared SettingToggleCard and Select. Its local list wrapper
 is a min-width:0 flex column with6px top spacing; status notes use muted/secondary
 tokens and anywhere wrapping. Candidate paths retain the existing Select menu

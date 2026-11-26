@@ -374,6 +374,8 @@ export interface IntegrationSettings {
 }
 
 export interface AppSettings {
+  /** KeePass AceLogging.Enabled; only redacted native event templates are logged. */
+  logging: { enabled: boolean };
   general: GeneralSettings;
   security: SecuritySettings;
   database: DatabaseDefaults;

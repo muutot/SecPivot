@@ -5,6 +5,31 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn logging_defaults_off_and_survives_legacy_config_and_restart() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    for old in [r#"{}"#, r#"{"logging":{}}"#] {
+        std::fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        assert!(!store.get().unwrap().logging.enabled);
+        for enabled in [true, false] {
+            let mut config = store.get().unwrap();
+            config.logging.enabled = enabled;
+            store.set(config).unwrap();
+            let reloaded = ConfigStore::load(dir.path().to_owned())
+                .unwrap()
+                .get()
+                .unwrap();
+            assert_eq!(reloaded.logging.enabled, enabled);
+            assert_eq!(
+                serde_json::to_value(reloaded).unwrap()["logging"]["enabled"],
+                enabled
+            );
+        }
+        assert!(!dir.path().join("Logs").exists());
+    }
+}
+#[test]
 fn keyfile_search_flags_load_legacy_defaults_and_survive_native_reload() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("conf")).unwrap();
@@ -1751,6 +1776,7 @@ fn load_with_mode_reports_portable_flag_and_paths() {
 #[test]
 fn config_parse_diagnostics_never_echo_input() {
     const CASE: &str = "SECPIVOT_CONFIG_DIAGNOSTIC_FIXTURE";
+    const LOGGING: &str = "SECPIVOT_CONFIG_DIAGNOSTIC_LOGGING";
     const MARKER: u64 = 4242424242424242;
     if let Ok(mode) = std::env::var(CASE) {
         let mut remote = serde_json::json!({
@@ -1768,6 +1794,8 @@ fn config_parse_diagnostics_never_echo_input() {
         }))
         .unwrap();
         let dir = TempDir::new().unwrap();
+        let enabled = std::env::var(LOGGING).as_deref() == Ok("1");
+        crate::diagnostics::global().configure(dir.path(), enabled);
         let conf = dir.path().join("conf");
         fs::create_dir(&conf).unwrap();
         let path = conf.join("config.json");
@@ -1791,10 +1819,32 @@ fn config_parse_diagnostics_never_echo_input() {
             assert_eq!(fs::read(path.with_extension("json.bak")).unwrap(), text);
             assert!(store.remote_settings("webdav/probe").is_err());
         }
+        if enabled {
+            let log =
+                fs::read_to_string(crate::diagnostics::global().status().path.unwrap()).unwrap();
+            assert!(!log.contains(&MARKER.to_string()));
+            assert!(!log.contains("probe-user"));
+            if mode != "valid" {
+                assert!(
+                    log.contains("category=Data")
+                        && log.contains("line=1")
+                        && log.contains("column="),
+                    "enabled diagnostics retain typed non-content category and location"
+                );
+            } else {
+                assert!(!log.contains("config.parse.failed"));
+            }
+        } else {
+            assert!(!dir.path().join("Logs").exists());
+        }
+        crate::diagnostics::global().configure(dir.path(), false);
         return;
     }
     let mut disclosures = 0;
-    for mode in ["invalid-secret", "invalid-access", "valid"] {
+    for (mode, enabled) in ["invalid-secret", "invalid-access", "valid"]
+        .into_iter()
+        .flat_map(|mode| [false, true].map(|enabled| (mode, enabled)))
+    {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -1802,6 +1852,7 @@ fn config_parse_diagnostics_never_echo_input() {
                 "--nocapture",
             ])
             .env(CASE, mode)
+            .env(LOGGING, if enabled { "1" } else { "0" })
             .output()
             .unwrap();
         assert!(
@@ -1814,13 +1865,11 @@ fn config_parse_diagnostics_never_echo_input() {
             "child fixture must actually execute"
         );
         let stderr = String::from_utf8(output.stderr).unwrap();
-        if mode != "valid" {
-            assert!(
-                stderr.contains("类别 Data") && stderr.contains("行 1") && stderr.contains("列 "),
-                "diagnostic must retain non-content category and location"
-            );
-        }
-        if stderr.contains(&MARKER.to_string()) {
+        assert!(
+            stderr.is_empty(),
+            "native diagnostics never bypass the local logging gate"
+        );
+        if stderr.contains(&MARKER.to_string()) || stdout.contains(&MARKER.to_string()) {
             disclosures += 1;
         }
     }

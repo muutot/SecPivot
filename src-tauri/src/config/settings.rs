@@ -1104,9 +1104,18 @@ impl Default for IntegrationSettings {
     }
 }
 
+/// KeePass AceLogging.Enabled, off in normal configurations.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LoggingSettings {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default)]
+    pub logging: LoggingSettings,
     #[serde(default)]
     pub general: GeneralSettings,
     #[serde(default)]
@@ -1133,6 +1142,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            logging: LoggingSettings::default(),
             general: GeneralSettings::default(),
             security: SecuritySettings::default(),
             database: DatabaseDefaults::default(),

@@ -1,5 +1,13 @@
 # Settings Shell and Panel Patterns
 
+GeneralSettingsPanel composes LoggingSettingsCard over shared SettingToggleCard
+and inline Feedback. It identifies the app-data Logs location, typed/redacted
+contents,1MiB cap and retained older files; native metadata shows the current path
+or unavailable/full feedback. Preference changes flush before inspection; mounted
+enabled cards poll every5s without repersisting. Generations discard stale replies
+and disposal clears the timer. Browser fallback disables the native control.
+The path owns only compact spacing and semantic secondary text/anywhere wrapping.
+
 The two keyfile-search preferences use existing SettingToggleCard on the desktop
 Security page. Both map to IntegrationSettings; removable is disabled while main
 search is off. Descriptions identify Windows drive-root scope and explicit choice.

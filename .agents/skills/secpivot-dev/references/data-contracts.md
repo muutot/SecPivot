@@ -1,5 +1,22 @@
 # Data Contracts
 
+`logging.enabled` mirrors KeePass AceLogging.Enabled, defaults false and survives
+partial/legacy configs in TS/Rust. updateLogging publishes through the existing
+persist queue; startup and successful set_config configure the process-wide
+DiagnosticLog from ConfigStore's data root. Enabled runs create a fresh exclusive
+Logs/secpivot-<UTC>-<pid>-<sequence>.log; disabled runs create nothing. Static event
+templates redact placeholders, with only typed config-error category/line/column/
+recovery fields allowed separately. No error Display, input values or log contents
+are exposed through IPC. Each file stops at1MiB; off/on starts another file without
+overwriting/deleting old logs. Unix files use0600. Write/open failures are nonfatal.
+`diagnostic_log_status() -> {enabled,active,path,limitReached}` returns metadata
+only. LoggingSettingsCard flushes a changed preference, then reads actual status;
+while enabled/mounted it polls every5s without repeated persistence. Generations
+discard replaced/disposed replies and feedback distinguishes unavailable/full.
+GeneralSettingsPanel composes the shared Toggle/Feedback card. Browser fallback
+cannot enable native logging. Synthetic filesystem/macro/config-child/host tests
+do not prove real WebView, mobile or vendor/framework diagnostic behavior.
+
 `integration.searchKeyFiles` defaults true and
 `searchKeyFilesOnRemovableMedia` false in TS/native configs, including old partial
 integration sections. Explicit choices persist unchanged; the removable flag is
@@ -1097,8 +1114,11 @@ Malformed config recovery reports only serde_json's category, line and column,
 plus the existing backup/default-start status. Do not format the full parser
 error: type errors can embed credential-field input values. Recovery retains
 the corrupt file and loads defaults; valid input and masked IPC are unchanged.
-The native regression captures actual child-process stderr and requires the
-child fixture to execute; an immutable module probe separately checks the log.
+The native regression requires isolated child fixtures to execute with logging
+off and on: both keep stderr silent; enabled cases inspect the actual local log
+for typed diagnostics and omitted input values. Disabled cases create no Logs
+directory. The immutable module probe remains historical evidence of the earlier
+stderr contract, not proof of the current optional local logging behavior.
 
 `config.rs` persists `conf/config.json` under the data root resolved by `config::resolve_data_dir`: portable mode (a `portable.flag` marker or a legacy `conf/config.json` beside the executable) keeps everything next to the executable so the folder travels as one unit; otherwise the per-user app-data dir is used (installed builds must not write into `Program Files`). The `app_info` command exposes `{ portable, configPath, dataDir }` to the About panel. The Rust `AppConfig` serde shape mirrors the frontend `AppSettings` (`src/lib/types/settings.ts`):
 
