@@ -1,5 +1,20 @@
 # Security Model
 
+KDF benchmark runs the existing KeePass transform with fixed synthetic key/salt;
+it never copies a database, vault password or master key into its worker.
+The originating session must be open before and after work, and renderer view/
+epoch guards reject closed-origin replies. Blocking measurements run outside
+vault/registry locks under one process-wide try-lock. Calibration caps benchmark
+memory at 256 MiB and lanes at 64, measures at most eight candidates, limits cost
+growth to 4× and checks elapsed 20 seconds between hashes. A running hash cannot
+be forcibly cancelled; closing the dialog discards its reply. Only explicit Apply
+suggestion changes the draft, and Save reuses clone/persist/adopt with the existing
+master key. Exact decimal-string costs avoid JavaScript rounding or native u32
+truncation; Argon2 byte remainders and imported versions are retained. Manual
+parameter writes use cryptographic bounds rather than benchmark allocation caps.
+Synthetic native save/reopen and frontend lifetime tests cover these paths;
+real IPC/device behavior and weak-KDF warning policy remain separate work.
+
 URL opening applies entry/global templates before a single independent scheme
 rule pass. Only an explicit override authorizes cmd://; a raw entry URL expanded
 from another field cannot execute a command. Plain destinations must parse as

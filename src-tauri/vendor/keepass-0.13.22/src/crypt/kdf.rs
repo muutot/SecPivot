@@ -14,6 +14,18 @@ pub(crate) trait Kdf {
     ) -> Result<GenericArray<u8, U32>, CryptographyError>;
 }
 
+impl crate::config::KdfConfig {
+    /// Measure this KDF using synthetic key material, through the same transform
+    /// used to open/save a KDBX file. No database or user credential is needed.
+    pub fn benchmark(&self) -> Result<std::time::Duration, CryptographyError> {
+        let kdf = self.get_kdf_seeded(&[9_u8; 32]);
+        let key = GenericArray::<u8, U32>::from([7_u8; 32]);
+        let start = std::time::Instant::now();
+        std::hint::black_box(kdf.transform_key(std::hint::black_box(&key))?);
+        Ok(start.elapsed())
+    }
+}
+
 pub struct AesKdf {
     pub seed: Vec<u8>,
     pub rounds: u64,
@@ -101,6 +113,34 @@ mod tests {
     use hybrid_array::{typenum::U32, Array as GenericArray};
 
     use super::{Argon2Kdf, Kdf};
+
+    #[test]
+    fn secpivot_benchmark_executes_the_real_transform_and_propagates_invalid_costs() {
+        for config in [
+            crate::config::KdfConfig::Aes { rounds: 1000 },
+            crate::config::KdfConfig::Argon2 {
+                iterations: 1,
+                memory: 65536,
+                parallelism: 1,
+                version: Version::Version13,
+            },
+            crate::config::KdfConfig::Argon2id {
+                iterations: 1,
+                memory: 65536,
+                parallelism: 1,
+                version: Version::Version13,
+            },
+        ] {
+            assert!(config.benchmark().unwrap() > std::time::Duration::ZERO);
+        }
+        let invalid = crate::config::KdfConfig::Argon2id {
+            iterations: u64::from(u32::MAX) + 1,
+            memory: 65536,
+            parallelism: 1,
+            version: Version::Version13,
+        };
+        assert!(invalid.benchmark().is_err());
+    }
 
     #[test]
     fn secpivot_argon2_rejects_overflowing_iterations_before_derivation() {

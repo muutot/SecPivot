@@ -3,17 +3,57 @@
 @@ -1 +1 @@
 -use std::convert::TryInto;
 +use std::convert::{TryFrom, TryInto};
-@@ -67,0 +68,3 @@
+@@ -16,0 +17,12 @@ pub(crate) trait Kdf {
++impl crate::config::KdfConfig {
++    /// Measure this KDF using synthetic key material, through the same transform
++    /// used to open/save a KDBX file. No database or user credential is needed.
++    pub fn benchmark(&self) -> Result<std::time::Duration, CryptographyError> {
++        let kdf = self.get_kdf_seeded(&[9_u8; 32]);
++        let key = GenericArray::<u8, U32>::from([7_u8; 32]);
++        let start = std::time::Instant::now();
++        std::hint::black_box(kdf.transform_key(std::hint::black_box(&key))?);
++        Ok(start.elapsed())
++    }
++}
++
+@@ -67,0 +80,3 @@ impl Kdf for Argon2Kdf {
 +        let mem_cost =
 +            u32::try_from(self.memory / 1024).map_err(|_| argon2::Error::MemoryTooMuch)?;
 +        let time_cost = u32::try_from(self.iterations).map_err(|_| argon2::Error::TimeTooLarge)?;
-@@ -80 +83 @@
+@@ -80 +95 @@ impl Kdf for Argon2Kdf {
 -            mem_cost: (self.memory / 1024) as u32,
 +            mem_cost,
-@@ -82 +85 @@
+@@ -82 +97 @@ impl Kdf for Argon2Kdf {
 -            time_cost: self.iterations as u32,
 +            time_cost,
-@@ -100,0 +104,42 @@
+@@ -101,0 +117,70 @@ mod tests {
++    #[test]
++    fn secpivot_benchmark_executes_the_real_transform_and_propagates_invalid_costs() {
++        for config in [
++            crate::config::KdfConfig::Aes { rounds: 1000 },
++            crate::config::KdfConfig::Argon2 {
++                iterations: 1,
++                memory: 65536,
++                parallelism: 1,
++                version: Version::Version13,
++            },
++            crate::config::KdfConfig::Argon2id {
++                iterations: 1,
++                memory: 65536,
++                parallelism: 1,
++                version: Version::Version13,
++            },
++        ] {
++            assert!(config.benchmark().unwrap() > std::time::Duration::ZERO);
++        }
++        let invalid = crate::config::KdfConfig::Argon2id {
++            iterations: u64::from(u32::MAX) + 1,
++            memory: 65536,
++            parallelism: 1,
++            version: Version::Version13,
++        };
++        assert!(invalid.benchmark().is_err());
++    }
 +
 +    #[test]
 +    fn secpivot_argon2_rejects_overflowing_iterations_before_derivation() {
@@ -56,6 +96,7 @@
 +            ));
 +        }
 +    }
++
 --- a/src/db/merge.rs
 +++ b/src/db/merge.rs
 @@ -7 +7,4 @@
@@ -64,10 +105,10 @@
 +    collections::{HashMap, HashSet},
 +    ops::Deref,
 +};
-@@ -13 +16 @@
+@@ -13 +16 @@ use crate::{
 -    db::{CustomIconId, Entry, EntryId, Group, GroupId, GroupRef, History, MoveGroupError, Times},
 +    db::{CustomIconId, Entry, EntryId, Group, GroupId, History, MoveGroupError, Times},
-@@ -95,14 +98,7 @@
+@@ -95,14 +98,7 @@ impl Database {
 -/// Get the last update time (modification or location change) of a group, considering its entries and subgroups.
 -fn get_last_update(group: GroupRef<'_>) -> Option<NaiveDateTime> {
 -    let last_update = group.times.last_modification.or(group.times.location_changed);
@@ -89,16 +130,16 @@
 +        .last_modification
 +        .or(times.location_changed)
 +        .is_some_and(|update| deletion.is_none_or(|deleted| update > deleted))
-@@ -114 +110,5 @@
+@@ -114 +110,5 @@ fn get_last_update(group: GroupRef<'_>) -> Option<NaiveDateTime> {
 -fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
 +fn merge_groups(
 +    dest_db: &mut Database,
 +    source_db: &Database,
 +    log: &mut MergeLog,
 +) -> Result<(), MergeError> {
-@@ -119,0 +120 @@
+@@ -119,0 +120 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +    let mut deletion_candidates = HashMap::new();
-@@ -126,22 +127,21 @@
+@@ -126,24 +127,5 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -            // get the last modification time of the group in source.
 -            let source_last_update = get_last_update(source);
 -
@@ -121,17 +162,14 @@
 -                }
 -                (None, None) => {
 -                    // both times are blank - do not re-add the group
+-                    continue;
+-                }
 +            // Remember even an initially rejected ancestor: a surviving child
 +            // may require its shell, which can only be deleted if it ends empty.
 +            deletion_candidates.insert(id, *deletion_time);
 +            if !survives_deletion(*deletion_time, &source.times) {
 +                continue;
-+            }
-+        }
-+
-+        groups_to_add.insert(id);
-+    }
-+
+@@ -155,0 +138,17 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +    // A surviving entry needs its parent even when every group in its ancestry
 +    // predates deletion. The add stack below restores those ancestors once.
 +    for entry in source_db.iter_all_entries() {
@@ -142,24 +180,27 @@
 +        if dest_db.entry(entry.id()).is_none() {
 +            if let Some(deleted) = dest_db.deleted_objects.get(&entry.id().uuid()) {
 +                if !survives_deletion(*deleted, &entry.times) {
-@@ -152,2 +152 @@
--
--        groups_to_add.insert(id);
++                    continue;
++                }
++            }
++        }
 +        groups_to_add.insert(parent_id);
-@@ -185 +184,2 @@
++    }
++
+@@ -185 +184,2 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -            #[allow(clippy::expect_used)] // id was selected from source_groups.difference(dest_groups)
 +            #[allow(clippy::expect_used)]
 +            // id was selected from source_groups.difference(dest_groups)
-@@ -198,0 +199 @@
+@@ -198,0 +199 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +            dest_group.previous_parent_group = source.previous_parent_group;
-@@ -217 +217,0 @@
+@@ -217 +217,0 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -    let mut to_delete = Vec::new();
-@@ -219,4 +218,0 @@
+@@ -219,4 +218,0 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -        #[allow(clippy::unwrap_used)] // id is guaranteed to exist
 -        let dest = dest_db.group_mut(id).unwrap();
 -
 -        // was the group deleted in source?
-@@ -224,16 +220 @@
+@@ -224,16 +220 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -            let dest_last_updated = get_last_update(dest.as_ref());
 -            if let (Some(deletion_time), Some(dest_last_updated)) = (deletion_time, dest_last_updated) {
 -                // if the group was deleted and then later modified in dest, do not delete it
@@ -177,7 +218,7 @@
 -                event_type: MergeEventType::Deleted,
 -            });
 +            deletion_candidates.insert(id, *deletion_time);
-@@ -248,9 +229,3 @@
+@@ -248,9 +229,3 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -    // perform all group deletions
 -    while let Some(id) = to_delete.pop() {
 -        if let Some(group) = dest_db.group_mut(id) {
@@ -190,31 +231,30 @@
 +    // Re-compute after additions. Keep candidate parents available for moves;
 +    // final empty-group deletion follows both entry and group relocation.
 +    let merged_groups = dest_db.groups.keys().cloned().collect::<HashSet<_>>();
-@@ -261 +236 @@
+@@ -261 +236 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -    for &id in dest_groups.intersection(&source_groups) {
 +    for &id in merged_groups.intersection(&source_groups) {
-@@ -286 +261 @@
+@@ -286 +261 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -                    if !dest_groups.contains(&parent_id) {
 +                    if !merged_groups.contains(&parent_id) {
-@@ -297 +272 @@
+@@ -297 +272 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -                    moves.push((id, parent_id));
 +                    moves.push((id, parent_id, source.previous_parent_group));
-@@ -311,0 +287,4 @@
+@@ -311,0 +287,4 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +        } else if source.times.location_changed > dest.times.location_changed {
 +            // A move away and back still supersedes an older third-device move.
 +            dest.times.location_changed = source.times.location_changed;
 +            dest.previous_parent_group = source.previous_parent_group;
-@@ -350 +329,4 @@
+@@ -350 +329,4 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -        dest.times.last_modification = source.times.last_modification.or(dest.times.last_modification);
 +        dest.times.last_modification = source
 +            .times
 +            .last_modification
 +            .or(dest.times.last_modification);
-@@ -364 +346 @@
+@@ -364 +346 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -    for (group_id, parent_id) in moves {
 +    for (group_id, parent_id, previous_parent) in moves {
-@@ -368 +350,49 @@
--    }
+@@ -367,0 +350,47 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +        group.previous_parent_group = previous_parent;
 +    }
 +
@@ -262,69 +302,69 @@
 +            // A temporary source-only ancestor never became a merged object.
 +            discarded_groups.insert(id);
 +        }
-+    }
+@@ -368,0 +398 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 +    log.events.retain(|event| !matches!(event.target, MergeEventTarget::Group(id) if discarded_groups.contains(&id)));
-@@ -374 +404,5 @@
+@@ -374 +404,5 @@ fn merge_groups(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog
 -fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
 +fn merge_entries(
 +    dest_db: &mut Database,
 +    source_db: &Database,
 +    log: &mut MergeLog,
 +) -> Result<(), MergeError> {
-@@ -426 +460,2 @@
+@@ -426 +460,2 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 -        #[allow(clippy::expect_used)] // id was selected from source_entries.difference(dest_entries)
 +        #[allow(clippy::expect_used)]
 +        // id was selected from source_entries.difference(dest_entries)
-@@ -451 +486,2 @@
+@@ -451 +486,2 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 -            if let (Some(deletion_time), Some(dest_update_time)) = (deletion_time, dest_update_time) {
 +            if let (Some(deletion_time), Some(dest_update_time)) = (deletion_time, dest_update_time)
 +            {
-@@ -494,0 +531 @@
+@@ -494,0 +531 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 +                        dest_entry.previous_parent_group = source_entry.previous_parent_group;
-@@ -508,0 +546,3 @@
+@@ -508,0 +546,3 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 +        } else if source_entry.times.location_changed > dest_entry.times.location_changed {
 +            dest_entry.times.location_changed = source_entry.times.location_changed;
 +            dest_entry.previous_parent_group = source_entry.previous_parent_group;
-@@ -538 +578,2 @@
+@@ -538 +578,2 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 -            log.warnings.push(format!("Source entry {} had no history.", id));
 +            log.warnings
 +                .push(format!("Source entry {} had no history.", id));
-@@ -549,4 +590 @@
+@@ -549,4 +590 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 -        let merged_location_timestamp = dest_entry
 -            .times
 -            .location_changed
 -            .or(source_entry.times.location_changed);
 +        let merged_location_timestamp = dest_entry.times.location_changed;
-@@ -592 +630,5 @@
+@@ -592 +630,5 @@ fn merge_entries(dest_db: &mut Database, source_db: &Database, log: &mut MergeLo
 -fn merge_history(dest: &History, source: &History, log: &mut MergeLog) -> Result<History, MergeError> {
 +fn merge_history(
 +    dest: &History,
 +    source: &History,
 +    log: &mut MergeLog,
 +) -> Result<History, MergeError> {
-@@ -674 +716,5 @@
+@@ -674 +716,5 @@ fn merge_history(dest: &History, source: &History, log: &mut MergeLog) -> Result
 -fn merge_icons(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog) -> Result<(), MergeError> {
 +fn merge_icons(
 +    dest_db: &mut Database,
 +    source_db: &Database,
 +    log: &mut MergeLog,
 +) -> Result<(), MergeError> {
-@@ -676 +722,5 @@
+@@ -676 +722,5 @@ fn merge_icons(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog)
 -    let source_icons = source_db.custom_icons.keys().cloned().collect::<HashSet<_>>();
 +    let source_icons = source_db
 +        .custom_icons
 +        .keys()
 +        .cloned()
 +        .collect::<HashSet<_>>();
-@@ -721 +771,2 @@
+@@ -721 +771,2 @@ fn merge_icons(dest_db: &mut Database, source_db: &Database, log: &mut MergeLog)
 -            if let (Some(deletion_time), Some(dest_last_modification)) = (deletion_time, dest_last_modification)
 +            if let (Some(deletion_time), Some(dest_last_modification)) =
 +                (deletion_time, dest_last_modification)
-@@ -796,0 +848 @@
+@@ -796,0 +848 @@ fn have_groups_diverged(a: &Group, b: &Group) -> bool {
 +    a.previous_parent_group = None;
-@@ -802,0 +855 @@
+@@ -802,0 +855 @@ fn have_groups_diverged(a: &Group, b: &Group) -> bool {
 +    b.previous_parent_group = None;
-@@ -809,11 +862 @@
+@@ -809,11 +862 @@ fn have_entries_diverged(a: &Entry, b: &Entry) -> bool {
 -    let new_times = Times::default();
 -
 -    let mut a = a.clone();
@@ -337,12 +377,11 @@
 -
 -    !a.eq(&b)
 +    !a.content_eq(b)
-@@ -830 +873,2 @@
+@@ -830 +873,2 @@ mod merge_tests {
 -    const ROOT_GROUP_ID: GroupId = GroupId::from_uuid(uuid!("00000000-0000-0000-0000-000000000001"));
 +    const ROOT_GROUP_ID: GroupId =
 +        GroupId::from_uuid(uuid!("00000000-0000-0000-0000-000000000001"));
-@@ -836,0 +881,228 @@
-+
+@@ -837,0 +882,228 @@ mod merge_tests {
 +    #[cfg(feature = "save_kdbx4")]
 +    fn secpivot_reopen(db: &Database) -> Database {
 +        let mut bytes = Vec::new();
@@ -570,18 +609,19 @@
 +            Some(GROUP2_ID)
 +        );
 +    }
-@@ -1514 +1786,3 @@
++
+@@ -1514 +1786,3 @@ mod merge_tests {
 -        assert!(!destination_db.deleted_objects.contains_key(&new_entry_id.uuid()));
 +        assert!(!destination_db
 +            .deleted_objects
 +            .contains_key(&new_entry_id.uuid()));
-@@ -1653 +1927,4 @@
+@@ -1653 +1927,4 @@ mod merge_tests {
 -        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            entry.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -1691,3 +1968,6 @@
+@@ -1691,3 +1968,6 @@ mod merge_tests {
 -        destination_db.entry_mut(ENTRY2_ID).unwrap().edit_tracking(|e| {
 -            e.set_unprotected("Title", "entry2_modified_in_destination");
 -        });
@@ -591,13 +631,13 @@
 +            .edit_tracking(|e| {
 +                e.set_unprotected("Title", "entry2_modified_in_destination");
 +            });
-@@ -1717 +1997,4 @@
+@@ -1717 +1997,4 @@ mod merge_tests {
 -        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            entry.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -1720,2 +2003,8 @@
+@@ -1720,2 +2003,8 @@ mod merge_tests {
 -        assert_eq!(entry.get(fields::TITLE), Some("entry2_modified_in_destination"));
 -        assert_eq!(entry.times.last_modification, Some(entry_modified_timestamp));
 +        assert_eq!(
@@ -608,19 +648,19 @@
 +            entry.times.last_modification,
 +            Some(entry_modified_timestamp)
 +        );
-@@ -1779 +2068,4 @@
+@@ -1779 +2068,4 @@ mod merge_tests {
 -        assert_eq!(entry.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            entry.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -1783 +2075,4 @@
+@@ -1783 +2075,4 @@ mod merge_tests {
 -        assert_eq!(entry.times.last_modification, Some(entry_modified_timestamp));
 +        assert_eq!(
 +            entry.times.last_modification,
 +            Some(entry_modified_timestamp)
 +        );
-@@ -1813,3 +2108,6 @@
+@@ -1813,3 +2108,6 @@ mod merge_tests {
 -        source_db.entry_mut(new_entry_id).unwrap().edit_tracking(|e| {
 -            e.set_unprotected("Title", "new_entry_modified_in_source");
 -        });
@@ -630,19 +670,19 @@
 +            .edit_tracking(|e| {
 +                e.set_unprotected("Title", "new_entry_modified_in_source");
 +            });
-@@ -1838 +2136,4 @@
+@@ -1838 +2136,4 @@ mod merge_tests {
 -        assert_eq!(entry.get(fields::TITLE), Some("new_entry_modified_in_source"));
 +        assert_eq!(
 +            entry.get(fields::TITLE),
 +            Some("new_entry_modified_in_source")
 +        );
-@@ -1899 +2200,4 @@
+@@ -1899 +2200,4 @@ mod merge_tests {
 -        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            group.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -1914,3 +2218,6 @@
+@@ -1914,3 +2218,6 @@ mod merge_tests {
 -        destination_db.entry_mut(ENTRY1_ID).unwrap().edit_tracking(|e| {
 -            e.set_unprotected("Title", "entry1_updated");
 -        });
@@ -652,7 +692,7 @@
 +            .edit_tracking(|e| {
 +                e.set_unprotected("Title", "entry1_updated");
 +            });
-@@ -1924 +2231,6 @@
+@@ -1924 +2231,6 @@ mod merge_tests {
 -        let merged_history = destination_db.entry(ENTRY1_ID).unwrap().history.clone().unwrap();
 +        let merged_history = destination_db
 +            .entry(ENTRY1_ID)
@@ -660,7 +700,7 @@
 +            .history
 +            .clone()
 +            .unwrap();
-@@ -1965 +2277,6 @@
+@@ -1965 +2277,6 @@ mod merge_tests {
 -        let merged_history = destination_db.entry(ENTRY1_ID).unwrap().history.clone().unwrap();
 +        let merged_history = destination_db
 +            .entry(ENTRY1_ID)
@@ -668,7 +708,7 @@
 +            .history
 +            .clone()
 +            .unwrap();
-@@ -1997,3 +2314,6 @@
+@@ -1997,3 +2314,6 @@ mod merge_tests {
 -        destination_db.entry_mut(ENTRY1_ID).unwrap().edit_tracking(|e| {
 -            e.set_unprotected("Title", "entry1_updated_from_destination");
 -        });
@@ -678,7 +718,7 @@
 +            .edit_tracking(|e| {
 +                e.set_unprotected("Title", "entry1_updated_from_destination");
 +            });
-@@ -2049,3 +2369,6 @@
+@@ -2049,3 +2369,6 @@ mod merge_tests {
 -        source_db.group_mut(SUBGROUP1_ID).unwrap().edit_tracking(|g| {
 -            g.name = "subgroup1_updated_name".to_string();
 -        });
@@ -688,13 +728,13 @@
 +            .edit_tracking(|g| {
 +                g.name = "subgroup1_updated_name".to_string();
 +            });
-@@ -2187 +2510,4 @@
+@@ -2187 +2510,4 @@ mod merge_tests {
 -        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            group.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -2202,3 +2528,6 @@
+@@ -2202,3 +2528,6 @@ mod merge_tests {
 -        source_db.group_mut(SUBGROUP1_ID).unwrap().edit_tracking(|g| {
 -            g.name = "subgroup1_updated_name".to_string();
 -        });
@@ -704,13 +744,13 @@
 +            .edit_tracking(|g| {
 +                g.name = "subgroup1_updated_name".to_string();
 +            });
-@@ -2244 +2573,4 @@
+@@ -2244 +2573,4 @@ mod merge_tests {
 -        assert_eq!(group.times.location_changed, Some(location_changed_timestamp));
 +        assert_eq!(
 +            group.times.location_changed,
 +            Some(location_changed_timestamp)
 +        );
-@@ -2282,2 +2614,10 @@
+@@ -2282,2 +2614,10 @@ mod merge_tests {
 -        source_db.group_mut(GROUP1_ID).unwrap().times.last_modification = None;
 -        source_db.group_mut(GROUP1_ID).unwrap().times.location_changed = None;
 +        source_db
@@ -723,7 +763,7 @@
 +            .unwrap()
 +            .times
 +            .location_changed = None;
-@@ -2325,2 +2665,10 @@
+@@ -2325,2 +2665,10 @@ mod merge_tests {
 -        source_db.entry_mut(ENTRY1_ID).unwrap().times.last_modification = None;
 -        source_db.entry_mut(ENTRY1_ID).unwrap().times.location_changed = None;
 +        source_db
@@ -738,14 +778,14 @@
 +            .location_changed = None;
 --- a/src/db/types/entry.rs
 +++ b/src/db/types/entry.rs
-@@ -12,3 +12,3 @@
+@@ -12,3 +12,3 @@ use crate::{
 -        fields, Attachment, AttachmentId, AutoType, Color, CustomDataItem, CustomIcon, CustomIconId,
 -        CustomIconMut, CustomIconNotFoundError, CustomIconRef, GroupId, GroupMut, GroupRef, History, Icon,
 -        Times, Value,
 +        fields, Attachment, AttachmentId, AutoType, Color, CustomDataItem, CustomIcon,
 +        CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, GroupId, GroupMut,
 +        GroupRef, History, Icon, Times, Value,
-@@ -127,0 +128,16 @@
+@@ -127,0 +128,16 @@ impl Entry {
 +    /// Compare entry content without timestamps, history or current/previous
 +    /// parent locations. Expiration is part of Times and must be checked by
 +    /// callers that include it in their version identity.
@@ -762,20 +802,20 @@
 +        a == b
 +    }
 +
-@@ -279 +295,4 @@
+@@ -279 +295,4 @@ impl EntryRef<'_> {
 -            (name.as_str(), AttachmentRef::new(self.database, attachment_id))
 +            (
 +                name.as_str(),
 +                AttachmentRef::new(self.database, attachment_id),
 +            )
-@@ -299 +318,5 @@
+@@ -299 +318,5 @@ impl Deref for EntryRef<'_> {
 -        let entry = self.database.entries.get(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found");
-@@ -385,0 +409,15 @@
+@@ -385,0 +409,15 @@ impl EntryMut<'_> {
 +        let retained_attachments: Vec<_> = historical
 +            .attachments
 +            .values()
@@ -791,16 +831,15 @@
 +                .or_default() += 1;
 +        }
 +
-@@ -390 +428,7 @@
--        }
+@@ -389,0 +428 @@ impl EntryMut<'_> {
 +            retained_attachments,
-+        }
-+    }
-+
+@@ -392,0 +432,5 @@ impl EntryMut<'_> {
 +    /// Refresh attachment ownership after directly rebuilding this entry's history.
 +    pub fn reindex_attachment_history(&mut self) {
 +        self.database.reindex_entry_attachments(self.id);
-@@ -427 +471,7 @@
++    }
++
+@@ -427 +471,7 @@ impl EntryMut<'_> {
 -        let attachments: Vec<AttachmentId> = self.attachments.values().copied().collect();
 +        let attachments: Vec<AttachmentId> = self
 +            .attachments
@@ -809,48 +848,48 @@
 +            .collect::<HashSet<_>>()
 +            .into_iter()
 +            .collect();
-@@ -434 +484,5 @@
+@@ -434 +484,5 @@ impl EntryMut<'_> {
 -    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
 +    pub fn add_attachment(
 +        &mut self,
 +        name: impl Into<String>,
 +        data: Value<Vec<u8>>,
 +    ) -> AttachmentMut<'_> {
-@@ -437 +491,2 @@
+@@ -437 +491,2 @@ impl EntryMut<'_> {
 -        let entries: HashSet<(EntryId, Option<usize>)> = vec![(self.id, None)].into_iter().collect();
 +        let entries: HashSet<(EntryId, Option<usize>)> =
 +            vec![(self.id, self.history_index)].into_iter().collect();
-@@ -455,0 +511 @@
+@@ -455,0 +511 @@ impl EntryMut<'_> {
 +        let history_index = self.history_index;
-@@ -458,0 +515,4 @@
+@@ -458,0 +515,4 @@ impl EntryMut<'_> {
 +            let pinned = self
 +                .database
 +                .pending_history_attachments
 +                .contains_key(&attachment_id);
-@@ -460 +520,3 @@
+@@ -460 +520,3 @@ impl EntryMut<'_> {
 -                attachment.entries.retain(|&(entry_id, _)| entry_id != id);
 +                attachment
 +                    .entries
 +                    .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
-@@ -463 +525 @@
+@@ -463 +525 @@ impl EntryMut<'_> {
 -                if attachment.entries.is_empty() {
 +                if attachment.entries.is_empty() && !pinned {
-@@ -474,0 +537 @@
+@@ -474,0 +537 @@ impl EntryMut<'_> {
 +        let history_index = self.history_index;
-@@ -487,0 +551,4 @@
+@@ -487,0 +551,4 @@ impl EntryMut<'_> {
 +        let pinned = self
 +            .database
 +            .pending_history_attachments
 +            .contains_key(&attachment_id);
-@@ -489 +556,3 @@
+@@ -489 +556,3 @@ impl EntryMut<'_> {
 -            attachment.entries.retain(|&(entry_id, _)| entry_id != id);
 +            attachment
 +                .entries
 +                .retain(|&(entry_id, index)| !(entry_id == id && index == history_index));
-@@ -492 +561 @@
+@@ -492 +561 @@ impl EntryMut<'_> {
 -            if attachment.entries.is_empty() {
 +            if attachment.entries.is_empty() && !pinned {
-@@ -506,3 +575,5 @@
+@@ -506,3 +575,5 @@ impl EntryMut<'_> {
 -                custom_icon.entries.retain(|&(entry_id, entry_history_index)| {
 -                    !(entry_id == id && entry_history_index == history_index)
 -                });
@@ -859,13 +898,13 @@
 +                    .retain(|&(entry_id, entry_history_index)| {
 +                        !(entry_id == id && entry_history_index == history_index)
 +                    });
-@@ -522 +593,4 @@
+@@ -522 +593,4 @@ impl EntryMut<'_> {
 -    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
 +    pub fn set_icon_custom(
 +        &mut self,
 +        custom_icon_id: CustomIconId,
 +    ) -> Result<(), CustomIconNotFoundError> {
-@@ -626 +700,7 @@
+@@ -626 +700,7 @@ impl EntryMut<'_> {
 -            if attachment.entries.is_empty() {
 +            let attachment_id = attachment.id();
 +            let leased = attachment
@@ -874,56 +913,55 @@
 +                .pending_history_attachments
 +                .contains_key(&attachment_id);
 +            if attachment.entries.is_empty() && !leased {
-@@ -631 +711,5 @@
+@@ -631 +711,5 @@ impl EntryMut<'_> {
 -        let entry = self.database.entries.remove(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .remove(&self.id)
 +            .expect("Entry not found");
-@@ -664 +748,5 @@
+@@ -664 +748,5 @@ impl Deref for EntryMut<'_> {
 -        let entry = self.database.entries.get(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found");
-@@ -680 +768,5 @@
+@@ -680 +768,5 @@ impl DerefMut for EntryMut<'_> {
 -        let entry = self.database.entries.get_mut(&self.id).expect("Entry not found");
 +        let entry = self
 +            .database
 +            .entries
 +            .get_mut(&self.id)
 +            .expect("Entry not found");
-@@ -698,0 +791 @@
+@@ -698,0 +791 @@ pub struct EntryTrack<'a> {
 +    retained_attachments: Vec<AttachmentId>,
-@@ -758 +851,5 @@
+@@ -758 +851,5 @@ impl EntryTrack<'_> {
 -    pub fn add_attachment(&mut self, name: impl Into<String>, data: Value<Vec<u8>>) -> AttachmentMut<'_> {
 +    pub fn add_attachment(
 +        &mut self,
 +        name: impl Into<String>,
 +        data: Value<Vec<u8>>,
 +    ) -> AttachmentMut<'_> {
-@@ -781 +878,4 @@
+@@ -781 +878,4 @@ impl EntryTrack<'_> {
 -    pub fn set_icon_custom(&mut self, custom_icon_id: CustomIconId) -> Result<(), CustomIconNotFoundError> {
 +    pub fn set_icon_custom(
 +        &mut self,
 +        custom_icon_id: CustomIconId,
 +    ) -> Result<(), CustomIconNotFoundError> {
-@@ -820 +920,4 @@
+@@ -820 +920,4 @@ impl Deref for EntryTrack<'_> {
 -        self.database.entries.get(&self.id).expect("Entry not found")
 +        self.database
 +            .entries
 +            .get(&self.id)
 +            .expect("Entry not found")
-@@ -827 +930,4 @@
+@@ -827 +930,4 @@ impl DerefMut for EntryTrack<'_> {
 -        self.database.entries.get_mut(&self.id).expect("Entry not found")
 +        self.database
 +            .entries
 +            .get_mut(&self.id)
 +            .expect("Entry not found")
-@@ -838,0 +945,39 @@
-+        }
+@@ -839,0 +946,39 @@ impl Drop for EntryTrack<'_> {
 +        for attachment_id in &self.retained_attachments {
 +            if let Some(count) = self
 +                .database
@@ -962,7 +1000,8 @@
 +            self.database
 +                .attachments
 +                .retain(|id, _| !released.contains(id) || owned.contains(id));
-@@ -875 +1020,7 @@
++        }
+@@ -875 +1020,7 @@ mod tests {
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -971,25 +1010,25 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -879 +1030,4 @@
+@@ -879 +1030,4 @@ mod tests {
 -        assert_eq!(db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(), "Entry 1");
 +        assert_eq!(
 +            db.entry(entry_id).unwrap().get(fields::TITLE).unwrap(),
 +            "Entry 1"
 +        );
-@@ -885 +1039,4 @@
+@@ -885 +1039,4 @@ mod tests {
 -                crate::db::Value::unprotected(format!("modified_{}", e.get(fields::USERNAME).unwrap())),
 +                crate::db::Value::unprotected(format!(
 +                    "modified_{}",
 +                    e.get(fields::USERNAME).unwrap()
 +                )),
-@@ -888 +1045,4 @@
+@@ -888 +1045,4 @@ mod tests {
 -            e.add_attachment("Attachment 1", Value::protected(b"Attachment data".to_vec()));
 +            e.add_attachment(
 +                "Attachment 1",
 +                Value::protected(b"Attachment data".to_vec()),
 +            );
-@@ -894 +1054,7 @@
+@@ -894 +1054,7 @@ mod tests {
 -            db.entry(entry_id).unwrap().history.clone().unwrap().entries.len(),
 +            db.entry(entry_id)
 +                .unwrap()
@@ -998,8 +1037,7 @@
 +                .unwrap()
 +                .entries
 +                .len(),
-@@ -927 +1093,213 @@
--}
+@@ -926,0 +1093,212 @@ mod tests {
 +
 +    #[test]
 +    fn secpivot_shared_attachment_keeps_other_entry_and_history_alive() {
@@ -1212,10 +1250,9 @@
 +            );
 +        }
 +    }
-+}
 --- a/src/db/types/mod.rs
 +++ b/src/db/types/mod.rs
-@@ -25 +25,15 @@
+@@ -25 +25,15 @@ pub use history::History;
 -pub use icon::{CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon};
 +
 +impl History {
@@ -1232,17 +1269,15 @@
 +pub use icon::{
 +    CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon,
 +};
-@@ -36 +50 @@
+@@ -36 +50 @@ use uuid::Uuid;
 -#[derive(Debug, Clone, PartialEq, Eq)]
 +#[derive(Debug, PartialEq, Eq)]
-@@ -50,0 +65,4 @@
+@@ -50,0 +65,4 @@ pub struct Database {
 +    /// Attachment leases held by not-yet-appended EntryTrack snapshots.
 +    #[cfg_attr(feature = "serialization", serde(skip))]
 +    pub(crate) pending_history_attachments: HashMap<AttachmentId, usize>,
 +
-@@ -61,0 +80,90 @@
-+}
-+
+@@ -63,0 +82,90 @@ pub struct Database {
 +/// Fail closed when a merge cannot map every current/historical binary.
 +#[cfg(feature = "_merge")]
 +#[derive(Debug, thiserror::Error)]
@@ -1331,13 +1366,13 @@
 +            deleted_objects: self.deleted_objects.clone(),
 +        }
 +    }
-@@ -91,0 +200 @@
-+            pending_history_attachments: HashMap::new(),
-@@ -109,0 +219 @@
-+            pending_history_attachments: HashMap::new(),
-@@ -141,0 +252,316 @@
-+    }
++}
 +
+@@ -91,0 +200 @@ impl Database {
++            pending_history_attachments: HashMap::new(),
+@@ -109,0 +219 @@ impl Database {
++            pending_history_attachments: HashMap::new(),
+@@ -143,0 +254,316 @@ impl Database {
 +    /// Rebuild one entry's current/historical reverse references and collect
 +    /// only attachments with no entry or in-flight history owner.
 +    pub(crate) fn reindex_entry_attachments(&mut self, id: EntryId) {
@@ -1652,7 +1687,9 @@
 +            map.insert(id, dest_id);
 +        }
 +        map
-@@ -287,0 +714,278 @@
++    }
++
+@@ -287,0 +714,278 @@ impl Database {
 +
 +#[cfg(all(test, feature = "_merge"))]
 +mod secpivot_merge_attachment_tests {
@@ -1933,47 +1970,45 @@
 +}
 --- a/src/format/xml_db/entry.rs
 +++ b/src/format/xml_db/entry.rs
-@@ -36 +36,5 @@
+@@ -36 +36,5 @@ pub struct Entry {
 -    #[serde(default, rename = "CustomIconUUID", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        rename = "CustomIconUUID",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -39 +43,5 @@
+@@ -39 +43,5 @@ pub struct Entry {
 -    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -42 +50,5 @@
+@@ -42 +50,5 @@ pub struct Entry {
 -    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -53 +65,5 @@
+@@ -53 +65,5 @@ pub struct Entry {
 -    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -129 +145,3 @@
+@@ -129 +145,3 @@ impl Entry {
 -            target.history = Some(crate::db::History { entries: Vec::new() });
 +            target.history = Some(crate::db::History {
 +                entries: Vec::new(),
 +            });
-@@ -272,2 +290,2 @@
+@@ -272,2 +290,2 @@ pub struct StringValue {
 -        rename = "$value",
 -        with = "cs_opt_string",
 +        rename = "$text",
 +        deserialize_with = "deserialize_field_text",
-@@ -276,0 +295,9 @@
-+}
-+
+@@ -278,0 +297,9 @@ pub struct StringValue {
 +// A dedicated text field owns whitespace too; optional metadata's trim rule
 +// is not appropriate for entry values. The reader patch preserves blank events.
 +fn deserialize_field_text<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -1981,21 +2016,24 @@
 +    D: serde::Deserializer<'de>,
 +{
 +    String::deserialize(deserializer).map(Some)
-@@ -328 +355,5 @@
++}
++
+@@ -328 +355,5 @@ pub struct AutoType {
 -    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_fromstr",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -331 +362,5 @@
+@@ -331 +362,5 @@ pub struct AutoType {
 -    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -423,0 +459,43 @@
+@@ -422,0 +458,43 @@ mod tests {
++    #[test]
 +    fn secpivot_string_values_keep_whitespace_without_changing_optional_metadata() {
 +        for value in [
 +            " ",
@@ -2038,24 +2076,23 @@
 +        assert_eq!(field.0.value.value.as_deref(), Some("IA=="));
 +    }
 +
-+    #[test]
-@@ -440 +518,2 @@
+@@ -440 +518,2 @@ mod tests {
 -        let deserialized_protected: Test<StringField> = quick_xml::de::from_str(xml_protected).unwrap();
 +        let deserialized_protected: Test<StringField> =
 +            quick_xml::de::from_str(xml_protected).unwrap();
-@@ -442 +521,4 @@
+@@ -442 +521,4 @@ mod tests {
 -        assert_eq!(deserialized_protected.0.value.value.unwrap(), "cGFzc3dvcmQ=");
 +        assert_eq!(
 +            deserialized_protected.0.value.value.unwrap(),
 +            "cGFzc3dvcmQ="
 +        );
-@@ -574 +656,4 @@
+@@ -574 +656,4 @@ mod tests {
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -577,2 +662,8 @@
+@@ -577,2 +662,8 @@ mod tests {
 -        assert_eq!(deserialized.0.foreground_color.unwrap().to_string(), "#FF0000");
 -        assert_eq!(deserialized.0.background_color.unwrap().to_string(), "#00FF00");
 +        assert_eq!(
@@ -2066,7 +2103,7 @@
 +            deserialized.0.background_color.unwrap().to_string(),
 +            "#00FF00"
 +        );
-@@ -584 +675,5 @@
+@@ -584 +675,5 @@ mod tests {
 -            deserialized.0.string_fields[0].value.value.as_ref().unwrap(),
 +            deserialized.0.string_fields[0]
 +                .value
@@ -2075,18 +2112,17 @@
 +                .unwrap(),
 --- a/src/format/xml_db/mod.rs
 +++ b/src/format/xml_db/mod.rs
-@@ -27 +27,2 @@
+@@ -27 +27,2 @@ use crate::{
 -        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta, timestamp::Timestamp,
 +        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta,
 +        timestamp::Timestamp,
-@@ -62,5 +62,0 @@
+@@ -62,5 +62,0 @@ pub fn to_xml(
 -    let kdbx = KeePassFile::db_to_xml(db, inner_encryptor)?;
 -    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
 -        .as_bytes()
 -        .to_vec();
 -
-@@ -73,0 +70,62 @@
-+
+@@ -74,0 +71,62 @@ pub fn to_xml(
 +    // In-memory IDs may have gaps after deletion. KDBX4 binary Ref values
 +    // address positions in this exact header array, not the original IDs.
 +    let dense_ids: HashMap<usize, usize> = attachments
@@ -2148,11 +2184,12 @@
 +        xml
 +    }
 +    .into_bytes();
-@@ -94 +152,2 @@
++
+@@ -94 +152,2 @@ impl KeePassFile {
 -        let mut db = crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
 +        let mut db =
 +            crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
-@@ -154,3 +213,6 @@
+@@ -154,3 +213,6 @@ impl KeePassFile {
 -        self.root
 -            .group
 -            .xml_to_db_handle(db.root_mut(), &attachments, &custom_icons, inner_decryptor)?;
@@ -2162,9 +2199,9 @@
 +            &custom_icons,
 +            inner_decryptor,
 +        )?;
-@@ -159,0 +222 @@
+@@ -159,0 +222 @@ impl KeePassFile {
 +        db.rebuild_attachment_references();
-@@ -183,3 +246,6 @@
+@@ -183,3 +246,6 @@ impl KeePassFile {
 -                    #[allow(clippy::indexing_slicing)] // We just checked that the index is in bounds
 -                    if let Some(crate::db::Icon::Custom(icon_id)) =
 -                        entry.history.as_ref().and_then(|h| h.entries[i].icon.as_ref())
@@ -2174,13 +2211,13 @@
 +                        .history
 +                        .as_ref()
 +                        .and_then(|h| h.entries[i].icon.as_ref())
-@@ -211 +277,4 @@
+@@ -211 +277,4 @@ impl KeePassFile {
 -    fn db_to_xml(db: &crate::db::Database, inner_cipher: &mut dyn Cipher) -> Result<Self, CryptographyError> {
 +    fn db_to_xml(
 +        db: &crate::db::Database,
 +        inner_cipher: &mut dyn Cipher,
 +    ) -> Result<Self, CryptographyError> {
-@@ -313,0 +383,117 @@
+@@ -313,0 +383,117 @@ mod tests {
 +    #[cfg(feature = "save_kdbx4")]
 +    #[test]
 +    fn secpivot_kdbx_scalar_writer_rejects_illegal_text_and_keys() {
@@ -2298,38 +2335,38 @@
 +        assert_eq!(entry.get("Reference"), Some("synthetic\nline\ntail"));
 +    }
 +
-@@ -320 +506,4 @@
+@@ -320 +506,4 @@ mod tests {
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -327 +516,2 @@
+@@ -327 +516,2 @@ mod tests {
 -            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 +            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +            0x0e, 0x0f,
-@@ -338 +528,2 @@
+@@ -338 +528,2 @@ mod tests {
 -                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
 +                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S")
 +                    .unwrap(),
-@@ -342 +533,2 @@
+@@ -342 +533,2 @@ mod tests {
 -        let serialized = quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
 +        let serialized =
 +            quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
-@@ -373 +565,3 @@
+@@ -373 +565,3 @@ mod tests {
 -        let mut cipher = crate::config::InnerCipherConfig::Plain.get_cipher(&[]).unwrap();
 +        let mut cipher = crate::config::InnerCipherConfig::Plain
 +            .get_cipher(&[])
 +            .unwrap();
-@@ -376 +570,2 @@
+@@ -376 +570,2 @@ mod tests {
 -        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects).unwrap();
 +        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects)
 +            .unwrap();
 --- a/src/format/xml_db/timestamp.rs
 +++ b/src/format/xml_db/timestamp.rs
-@@ -3,0 +4 @@
+@@ -3,0 +4 @@ use serde::{Deserialize, Serialize, Serializer};
 +use std::convert::TryInto;
-@@ -69,5 +70,7 @@
+@@ -69,5 +70,7 @@ impl<'de> Deserialize<'de> for Timestamp {
 -                // Cast the decoded base64 Vec into the array expected by i64::from_le_bytes
 -                let mut a: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
 -                #[allow(clippy::indexing_slicing)] // v is guaranteed to be at least 8 bytes long
@@ -2342,7 +2379,7 @@
 +                let ndt = chrono::Duration::try_seconds(i64::from_le_bytes(a))
 +                    .and_then(|duration| get_epoch_baseline().checked_add_signed(duration))
 +                    .ok_or_else(|| serde::de::Error::custom("KDBX timestamp is out of range"))?;
-@@ -109,0 +113,125 @@
+@@ -109,0 +113,125 @@ mod tests {
 +    fn decode_text(text: String) -> Result<Timestamp, serde::de::value::Error> {
 +        Timestamp::deserialize(serde::de::value::StringDeserializer::new(text))
 +    }
@@ -2468,7 +2505,7 @@
 +        );
 +    }
 +
-@@ -139 +267,2 @@
+@@ -139 +267,2 @@ mod tests {
 -            time: NaiveDateTime::parse_from_str("2023-10-05T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
 +            time: NaiveDateTime::parse_from_str("2023-10-05T12:34:56", "%Y-%m-%dT%H:%M:%S")
 +                .unwrap(),

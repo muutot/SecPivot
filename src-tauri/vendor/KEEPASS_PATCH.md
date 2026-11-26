@@ -13,6 +13,10 @@ Only these upstream files are changed:
   values with checked u32 conversions before derivation. Existing Argon2 errors
   carry the failure instead of silently reducing the cost by integer truncation.
   Direct tests cover Argon2d and Argon2id; normal parameters retain their values.
+  `KdfConfig::benchmark()` times the same seeded KDF transform with fixed synthetic
+  key/salt and black-boxes its result. This exposes credential-free calibration
+  without duplicating cryptography; the additional test executes AES/Argon2d/id
+  and verifies invalid cost propagation.
 
 - `src/db/types/entry.rs`: lease attachments until tracked snapshots are appended,
   remove only the addressed current/history reverse reference, and reindex after
@@ -93,7 +97,7 @@ truth for byte identity.
 
 Native application regressions cover replacement/removal, history deletion and
 retention, lease lifetime, sparse IDs, rejected writes and KDBX save/reopen.
-The twenty-nine dependency-specific tests can be run separately:
+The thirty dependency-specific tests can be run separately:
 
 ```powershell
 npm run test:keepass-patch

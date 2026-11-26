@@ -262,9 +262,30 @@ export type DatabaseCipher = "Aes256" | "Twofish" | "ChaCha20";
 /** Ciphers SecPivot offers when rewriting a database. */
 export type WritableDatabaseCipher = Exclude<DatabaseCipher, "Twofish">;
 
+export type DatabaseKdf = "Aes" | "Argon2" | "Argon2id";
+/** Exact KDBX u64 costs; strings preserve values beyond JS safe integers. */
+export type KdfParameters =
+  | { algorithm: "Aes"; rounds: string }
+  | {
+      algorithm: "Argon2" | "Argon2id";
+      iterations: string;
+      memoryBytes: string;
+      parallelism: number;
+      version: number;
+    };
+
+export interface KdfBenchmarkResult {
+  parameters: KdfParameters;
+  elapsedMs: number;
+  targetMs: number;
+  samples: number;
+  targetReached: boolean;
+}
+
 /** Read-only storage settings of the open database. */
 export interface DatabaseSettings {
   kdf: "Aes" | "Argon2" | "Argon2id";
+  kdfParameters: KdfParameters;
   cipher: DatabaseCipher;
   compression: "None" | "Gzip";
   historyMaxItems: number | null;
@@ -276,6 +297,7 @@ export interface DatabaseSettings {
 /** Partial database-settings write; omitted fields are kept, `null` resets. */
 export interface DatabaseSettingsPatch {
   kdf?: "Aes" | "Argon2" | "Argon2id";
+  kdfParameters?: KdfParameters;
   cipher?: WritableDatabaseCipher;
   compression?: "None" | "Gzip";
   historyMaxItems?: number | null;

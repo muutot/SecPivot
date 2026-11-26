@@ -360,6 +360,7 @@ pub struct AutotypeCandidate {
 pub struct DatabaseSettings {
     /// `"Aes"` / `"Argon2"` / `"Argon2id"`.
     pub kdf: String,
+    pub kdf_parameters: super::KdfParameters,
     /// `"Aes256"` / `"Twofish"` / `"ChaCha20"`.
     pub cipher: String,
     /// `"None"` / `"Gzip"`.
@@ -384,6 +385,8 @@ pub struct DatabaseSettingsPatch {
     /// `"Aes"` / `"Argon2"` / `"Argon2id"`; present value re-encrypts.
     #[serde(default)]
     pub kdf: Option<String>,
+    #[serde(default)]
+    pub kdf_parameters: Option<super::KdfParameters>,
     /// `"Aes256"` / `"ChaCha20"`; present value re-encrypts.
     #[serde(default)]
     pub cipher: Option<WritableDatabaseCipher>,
@@ -414,6 +417,7 @@ where
 impl DatabaseSettingsPatch {
     pub(crate) const fn is_empty(&self) -> bool {
         self.kdf.is_none()
+            && self.kdf_parameters.is_none()
             && self.cipher.is_none()
             && self.compression.is_none()
             && self.history_max_items.is_none()
@@ -423,7 +427,10 @@ impl DatabaseSettingsPatch {
     }
 
     pub(crate) const fn changes_storage(&self) -> bool {
-        self.kdf.is_some() || self.cipher.is_some() || self.compression.is_some()
+        self.kdf.is_some()
+            || self.kdf_parameters.is_some()
+            || self.cipher.is_some()
+            || self.compression.is_some()
     }
 }
 

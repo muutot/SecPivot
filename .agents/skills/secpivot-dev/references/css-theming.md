@@ -1,5 +1,11 @@
 # Project-wide UI Style and Theming
 
+DatabaseSettingsDialog's KDF costs use shared numeric TextField controls in an
+auto-fit grid with 100px minimum tracks (bounded by container width); benchmark
+and explicit Apply suggestion use field Buttons in a six-pixel wrapped row.
+Result text reuses secondary text/font tokens. Target and cost labels retain
+the existing compact dialog hierarchy; no new theme token or surface is added.
+
 The entry table supports an optional KeePass-style zebra striping (`alternatingRowColors`, default off): `EntryTable.svelte` shades odd rows with `color-mix(in srgb, var(--card-bg) 55%, transparent)` keyed off the stable virtual-row index (not `nth-child`, which shifts while scrolling); hover/selected states override it, no new color token. The group tree has optional connector lines (`groupTreeLines`, default off): `GroupTree` → `GroupNode` threads the `treeLines` prop and nested nodes use a single `inset 1px 0 0 var(--border-subtle)` box shadow. Both remain within the approved compact neutral language.
 
 DatabaseSettingsDialog composes `templates/form/RadioGroup.svelte` for its three

@@ -55,7 +55,7 @@ fn apply_persisted_database_settings(
     persisted: &Database,
     patch: &DatabaseSettingsPatch,
 ) {
-    if patch.kdf.is_some() {
+    if patch.kdf.is_some() || patch.kdf_parameters.is_some() {
         current.config.kdf_config = persisted.config.kdf_config.clone();
     }
     if patch.cipher.is_some() {
@@ -303,6 +303,7 @@ impl VaultSession {
         };
         Ok(Some(DatabaseSettings {
             kdf: kdf.to_owned(),
+            kdf_parameters: KdfParameters::from_config(&db.config.kdf_config)?,
             cipher: cipher.to_owned(),
             compression: compression.to_owned(),
             history_max_items: db.meta.history_max_items.map(|value| value as i64),
@@ -673,7 +674,16 @@ impl VaultSession {
         let templates_group = parse_templates_group(patch)?;
         let (mut db, target, revision) = self.prepare_change()?;
         apply_database_meta_patch(&mut db, patch, templates_group);
-        if let Some(kdf) = &patch.kdf {
+        if let Some(parameters) = &patch.kdf_parameters {
+            if patch
+                .kdf
+                .as_deref()
+                .is_some_and(|algorithm| algorithm != parameters.algorithm())
+            {
+                return Err("KDF algorithm and parameters do not match".into());
+            }
+            db.config.kdf_config = parameters.to_config()?;
+        } else if let Some(kdf) = &patch.kdf {
             apply_kdf(&mut db, kdf)?;
         }
         if let Some(cipher) = &patch.cipher {

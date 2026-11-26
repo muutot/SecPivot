@@ -20,6 +20,11 @@ mod history_selection_tests;
 #[cfg(desktop)]
 mod hosts;
 mod import;
+mod kdf;
+#[cfg(test)]
+mod kdf_storage_tests;
+pub(crate) use self::kdf::benchmark_kdf;
+pub use self::kdf::{KdfBenchmarkResult, KdfParameters};
 mod merge;
 mod persist;
 #[cfg(test)]

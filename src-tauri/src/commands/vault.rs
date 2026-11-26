@@ -289,6 +289,49 @@ pub(crate) fn get_database_settings(
     )
 }
 
+/// Measure synthetic KDF work without holding a vault lock or copying a key.
+#[tauri::command]
+pub(crate) async fn benchmark_database_kdf(
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+    parameters: vault::KdfParameters,
+    target_ms: u32,
+) -> Result<vault::KdfBenchmarkResult, String> {
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| {
+            target
+                .database_settings()?
+                .ok_or_else(|| "Database is not open".to_owned())
+                .map(|_| ())
+        },
+    )?;
+    static BENCHMARK_GATE: Mutex<()> = Mutex::new(());
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _permit = BENCHMARK_GATE
+            .try_lock()
+            .map_err(|_| "Another KDF benchmark is running".to_owned())?;
+        vault::benchmark_kdf(&parameters, target_ms)
+    })
+    .await
+    .map_err(|_| "KDF benchmark task failed".to_owned())??;
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| {
+            target
+                .database_settings()?
+                .ok_or_else(|| "Database is no longer open".to_owned())
+                .map(|_| ())
+        },
+    )?;
+    Ok(result)
+}
+
 /// Apply database-level settings changes (history cap, recycle-bin flag).
 #[tauri::command]
 pub(crate) async fn update_database_settings(

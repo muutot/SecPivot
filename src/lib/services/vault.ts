@@ -36,6 +36,8 @@ import type {
   MutationDelta,
   DatabaseSettings,
   DatabaseSettingsPatch,
+  KdfParameters,
+  KdfBenchmarkResult,
   VaultOpenResult,
   SessionInfo,
   RemoteObject,
@@ -96,6 +98,10 @@ interface VaultStore {
   getActiveSessionId: () => string | null;
   callInSession: <T>(sessionId: string, operation: () => Promise<T>) => Promise<T>;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
+  benchmarkDatabaseKdf: (
+    parameters: KdfParameters,
+    targetMs: number,
+  ) => Promise<KdfBenchmarkResult>;
   updateDatabaseSettings: (patch: DatabaseSettingsPatch) => Promise<VaultState>;
   open: (
     path: string,
@@ -767,6 +773,23 @@ export const vault: VaultStore = {
     if (!isTauriRuntime()) return null;
     const sessionId = captureSessionId();
     return backendInvoke<DatabaseSettings | null>("get_database_settings", { sessionId });
+  },
+
+  /** Credential-free calibration, bound to the original session lifetime. */
+  async benchmarkDatabaseKdf(
+    parameters: KdfParameters,
+    targetMs: number,
+  ): Promise<KdfBenchmarkResult> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featDbSettings");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await backendInvoke<KdfBenchmarkResult>("benchmark_database_kdf", {
+      sessionId,
+      parameters,
+      targetMs,
+    });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    return result;
   },
 
   /** Patch database storage settings; epoch-guarded commit. */

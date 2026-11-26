@@ -1,10 +1,22 @@
 # Settings Shell and Panel Patterns
 
+DatabaseSettingsDialog shows exact imported AES rounds or Argon2 iterations,
+memory MiB and parallelism, retaining Argon2 v1.0/v1.3. `kdf-parameters.ts` uses
+BigInt for lossless u64/byte conversions. Costs use shared TextField controls in
+a compact responsive grid; benchmark target and wrapped field Button actions
+reuse existing theme/size tokens. A 100–5000 ms target runs credential-free native
+calibration and presents the measured cost; Apply suggestion changes only draft
+inputs, while Save persists. Cost inputs and Save are disabled while measuring;
+Cancel/Escape may close and invalidate the reply without cancelling an active
+native hash. Changed inputs hide stale suggestions. Both locales show limits
+and a non-exact-target note. Browser preview does not implement native timing.
+
 The database settings modal uses `RadioGroup` for KDF, cipher and compression.
 Its compact buttons expose checked radio state and one Tab entry per group;
 arrows/Home/End synchronize selection/focus. Keep Twofish is a renderer-only
 choice mapped to the existing null cipher, so it never requests re-encryption.
-The original session/view guards and save patch logic remain unchanged.
+The original session/view guards remain; save patches additionally carry exact
+KDF costs when changed.
 
 Advanced search field scope and group Auto-Type enable/inherit choices compose
 the same RadioGroup in its 28px compact size. Search uses content-width choices;

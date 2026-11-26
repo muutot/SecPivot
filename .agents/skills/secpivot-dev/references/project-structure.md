@@ -1,5 +1,16 @@
 # Project Structure and Runtime Surfaces
 
+`vault/kdf.rs` owns exact tagged KDF parameter DTOs, cryptographic validation and
+credential-free timed calibration. The existing vendored KeePass `KdfConfig::benchmark`
+exposes the same transform used by KDBX, avoiding duplicate crypto implementation.
+`commands/vault.rs::benchmark_database_kdf` owns worker scheduling, the process-wide
+benchmark gate and originating-session checks. `vault/kdf_storage_tests.rs` exercises
+real timing, JSON parameter patches, KDBX save/reopen and concurrent completion.
+`utils/kdf-parameters.ts` owns BigInt cost validation and exact MiB/byte conversion;
+DatabaseSettingsDialog composes its draft/apply/save UI, and `services/vault.ts`
+binds benchmark replies to the originating session epoch. `tests/kdf-*.test.mjs`
+cover conversions, extracted production handlers and actual service IPC/lifetimes.
+
 `EntryTable.focusRowAt` subtracts the measured sticky header from the available
 row viewport; filtering's scroll clamp includes the same header height. Narrow
 summary mode contributes zero, while desktop and narrow full-column mode retain

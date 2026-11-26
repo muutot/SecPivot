@@ -4,6 +4,9 @@
     DatabaseSettings,
     DatabaseSettingsPatch,
     WritableDatabaseCipher,
+    KdfParameters,
+    KdfBenchmarkResult,
+    DatabaseKdf,
   } from "$lib/types/vault";
   import { vault } from "$lib/services/vault";
   import { KeyedViewGuard, sessionResourceKey } from "$lib/utils/session-state";
@@ -14,6 +17,7 @@
   import RadioGroup from "$lib/components/templates/form/RadioGroup.svelte";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
+  import { defaultKdfParameters, memoryMiB, readKdfParameters } from "$lib/utils/kdf-parameters";
 
   interface Props {
     onclose: () => void;
@@ -37,6 +41,66 @@
   let saving = $state(false);
 
   let kdf = $state<"Aes" | "Argon2" | "Argon2id">("Aes");
+  let roundsInput = $state("600000");
+  let iterationsInput = $state("3");
+  let memoryInput = $state("64");
+  let lanesInput = $state("4");
+  let kdfVersion = $state(19);
+  let targetInput = $state("1000");
+  let benchmarking = $state(false);
+  let benchmarkResult = $state<KdfBenchmarkResult | null>(null);
+  let benchmarkSignature = $state("");
+  const kdfParameters = $derived(
+    readKdfParameters(kdf, roundsInput, iterationsInput, memoryInput, lanesInput, kdfVersion),
+  );
+  const signature = $derived(JSON.stringify({ parameters: kdfParameters, target: targetInput }));
+  const canApplyBenchmark = $derived(benchmarkResult !== null && signature === benchmarkSignature);
+  const showBenchmark = $derived(
+    benchmarkResult !== null &&
+      (canApplyBenchmark ||
+        JSON.stringify(kdfParameters) === JSON.stringify(benchmarkResult.parameters)),
+  );
+  const validTarget = $derived(
+    /^\d+$/.test(targetInput) && Number(targetInput) >= 100 && Number(targetInput) <= 5000,
+  );
+
+  function adoptParameters(parameters: KdfParameters): void {
+    kdf = parameters.algorithm;
+    if (parameters.algorithm === "Aes") roundsInput = parameters.rounds;
+    else {
+      iterationsInput = parameters.iterations;
+      memoryInput = memoryMiB(parameters.memoryBytes);
+      lanesInput = String(parameters.parallelism);
+      kdfVersion = parameters.version;
+    }
+  }
+
+  function changeKdf(algorithm: DatabaseKdf): void {
+    if (settings) adoptParameters(defaultKdfParameters(algorithm, settings.kdfParameters));
+  }
+
+  async function benchmark(): Promise<void> {
+    if (benchmarking || saving || !sessionId || !kdfParameters || !validTarget) return;
+    const view = dialogView.capture();
+    if (!view) return;
+    const input = signature;
+    const parameters = kdfParameters;
+    benchmarking = true;
+    benchmarkResult = null;
+    error = "";
+    try {
+      const result = await vault.callInSession(sessionId, () =>
+        vault.benchmarkDatabaseKdf(parameters, Number(targetInput)),
+      );
+      if (!dialogView.isCurrent(view) || signature !== input) return;
+      benchmarkSignature = input;
+      benchmarkResult = result;
+    } catch (e) {
+      if (dialogView.isCurrent(view)) error = String(e);
+    } finally {
+      if (dialogView.isCurrent(view)) benchmarking = false;
+    }
+  }
   let cipher = $state<WritableDatabaseCipher | null>(null);
   let compression = $state<"None" | "Gzip">("Gzip");
   let historyInput = $state("");
@@ -66,7 +130,7 @@
           return;
         }
         settings = value;
-        kdf = value.kdf;
+        adoptParameters(value.kdfParameters);
         cipher = value.cipher === "Twofish" ? null : value.cipher;
         compression = value.compression;
         historyInput = value.historyMaxItems === null ? "" : String(value.historyMaxItems);
@@ -86,6 +150,7 @@
   const dirty = $derived(
     settings !== null &&
       (kdf !== settings.kdf ||
+        JSON.stringify(kdfParameters) !== JSON.stringify(settings.kdfParameters) ||
         (settings.cipher === "Twofish" ? cipher !== null : cipher !== settings.cipher) ||
         compression !== settings.compression ||
         (historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems ||
@@ -95,7 +160,7 @@
   );
 
   async function save(): Promise<void> {
-    if (saving || !settings) return;
+    if (saving || benchmarking || !settings || !kdfParameters) return;
     const view = dialogView.capture();
     if (!view) return;
     saving = true;
@@ -103,6 +168,8 @@
     try {
       const patch: DatabaseSettingsPatch = {};
       if (kdf !== settings.kdf) patch.kdf = kdf;
+      if (JSON.stringify(kdfParameters) !== JSON.stringify(settings.kdfParameters))
+        patch.kdfParameters = kdfParameters;
       if (cipher !== null && cipher !== settings.cipher) patch.cipher = cipher;
       if (compression !== settings.compression) patch.compression = compression;
       if ((historyInput === "" ? null : Number(historyInput)) !== settings.historyMaxItems) {
@@ -149,8 +216,96 @@
             value,
             label: value,
           }))}
-          bind:value={kdf}
+          value={kdf}
+          onchange={changeKdf}
+          disabled={benchmarking || saving}
         />
+      </div>
+      <div class="kdf-costs">
+        {#if kdf === "Aes"}
+          <label class="setting-block">
+            <span class="setting-label">{t(lang, "dbsettings.rounds")}</span>
+            <TextField
+              numeric
+              bind:value={roundsInput}
+              disabled={benchmarking || saving}
+              ariaLabel={t(lang, "dbsettings.rounds")}
+            />
+          </label>
+        {:else}
+          <label class="setting-block">
+            <span class="setting-label">{t(lang, "dbsettings.iterations")}</span>
+            <TextField
+              numeric
+              bind:value={iterationsInput}
+              disabled={benchmarking || saving}
+              ariaLabel={t(lang, "dbsettings.iterations")}
+            />
+          </label>
+          <label class="setting-block">
+            <span class="setting-label">{t(lang, "dbsettings.memory")}</span>
+            <TextField
+              numeric
+              bind:value={memoryInput}
+              disabled={benchmarking || saving}
+              ariaLabel={t(lang, "dbsettings.memory")}
+            />
+          </label>
+          <label class="setting-block">
+            <span class="setting-label">{t(lang, "dbsettings.lanes")}</span>
+            <TextField
+              numeric
+              bind:value={lanesInput}
+              disabled={benchmarking || saving}
+              ariaLabel={t(lang, "dbsettings.lanes")}
+            />
+          </label>
+          <p class="dialog-hint">Argon2 v{kdfVersion === 16 ? "1.0" : "1.3"}</p>
+        {/if}
+      </div>
+      {#if !kdfParameters}<p class="dialog-error">{t(lang, "dbsettings.invalidKdf")}</p>{/if}
+      <div class="setting-block">
+        <label>
+          <span class="setting-label">{t(lang, "dbsettings.target")}</span>
+          <TextField
+            numeric
+            bind:value={targetInput}
+            disabled={benchmarking || saving}
+            ariaLabel={t(lang, "dbsettings.target")}
+          />
+        </label>
+        <div class="benchmark-actions">
+          <Button
+            variant="field"
+            onclick={() => void benchmark()}
+            disabled={benchmarking || saving || !kdfParameters || !validTarget}
+            busy={benchmarking}
+          >
+            {t(lang, benchmarking ? "dbsettings.benchmarking" : "dbsettings.benchmark")}
+          </Button>
+          {#if canApplyBenchmark && benchmarkResult}
+            <Button
+              variant="field"
+              onclick={() => benchmarkResult && adoptParameters(benchmarkResult.parameters)}
+            >
+              {t(lang, "dbsettings.applyBenchmark")}
+            </Button>
+          {/if}
+        </div>
+        <p class="dialog-hint">{t(lang, "dbsettings.benchmarkNote")}</p>
+        {#if showBenchmark && benchmarkResult}
+          <p class="benchmark-result" role="status">
+            {t(lang, "dbsettings.benchmarkResult", {
+              ms: benchmarkResult.elapsedMs.toFixed(1),
+              cost:
+                benchmarkResult.parameters.algorithm === "Aes"
+                  ? benchmarkResult.parameters.rounds
+                  : benchmarkResult.parameters.iterations,
+            })}
+            {#if !benchmarkResult.targetReached}
+              {t(lang, "dbsettings.benchmarkApprox")}{/if}
+          </p>
+        {/if}
       </div>
       <div class="setting-block">
         <span class="setting-label">{t(lang, "database.cipher")}</span>
@@ -216,13 +371,35 @@
   {/snippet}
   {#snippet actions()}
     <Button onclick={onclose} disabled={saving}>{t(lang, "common.cancel")}</Button>
-    <Button variant="primary" onclick={() => void save()} disabled={saving || !settings || !dirty}>
+    <Button
+      variant="primary"
+      onclick={() => void save()}
+      disabled={saving || benchmarking || !settings || !dirty || !kdfParameters}
+    >
       {saving ? t(lang, "dbsettings.saving") : t(lang, "common.save")}
     </Button>
   {/snippet}
 </ModalShell>
 
 <style>
+  .kdf-costs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+    gap: 0 10px;
+  }
+
+  .benchmark-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .benchmark-result {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-secondary, 11px);
+  }
   .setting-block {
     margin-bottom: 14px;
   }

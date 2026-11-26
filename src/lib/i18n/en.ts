@@ -947,6 +947,21 @@ export const en: Record<I18nKey, string> = {
   "timeline.removed": " removed",
   "timeline.modified": " modified",
   "dbsettings.title": "Database settings",
+  "dbsettings.rounds": "AES transform rounds",
+  "dbsettings.iterations": "Iterations",
+  "dbsettings.memory": "Memory (MiB)",
+  "dbsettings.lanes": "Parallelism",
+  "dbsettings.target": "Target time (100–5000 ms)",
+  "dbsettings.benchmark": "Benchmark and suggest",
+  "dbsettings.benchmarking": "Benchmarking…",
+  "dbsettings.applyBenchmark": "Apply suggestion",
+  "dbsettings.benchmarkNote":
+    "Uses synthetic data on this device. Keeps memory and parallelism; changes take effect only after Save. Benchmark limit: 256 MiB / 64 lanes.",
+  "dbsettings.benchmarkResult": "Measured {ms} ms · suggested rounds/iterations: {cost}",
+  "dbsettings.benchmarkApprox":
+    "Minimum cost, measurement variation or calibration limit prevents an exact target.",
+  "dbsettings.invalidKdf":
+    "Enter valid integer costs and memory. Argon2 requires at least 8 KiB per lane; memory must resolve to whole bytes.",
   "dbsettings.desc": "Storage and history changes rewrite the database file",
   "dbsettings.loading": "Loading database settings…",
   "dbsettings.kdf": "Key derivation (KDF)",

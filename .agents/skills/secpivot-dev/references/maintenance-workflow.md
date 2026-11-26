@@ -50,7 +50,7 @@ QuickXML's package and byte-preserving patch are exempt from Git text/EOL
 normalization because its upstream files use CRLF. Check staged byte hashes,
 not only working files, before committing a package/provenance change.
 
-`npm run test:keepass-patch` and `npm run test:quickxml-patch` run the 29 KeePass
+`npm run test:keepass-patch` and `npm run test:quickxml-patch` run the 30 KeePass
 specialized tests and QuickXML's serialization-enabled library unit tests in
 disposable source copies, preserving the published standalone Cargo locks.
 Both run in `npm run verify`. The helper validates its created temporary root

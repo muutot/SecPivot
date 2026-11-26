@@ -129,13 +129,23 @@ impl<T: Payload> Drop for Observed<T> {
     }
 }
 #[derive(Clone)]
-pub(crate) struct Database(u8);
+pub(crate) struct Database {
+    marker: u8,
+    config: DatabaseConfig,
+}
+#[derive(Clone)]
+struct DatabaseConfig {
+    kdf_config: u8,
+}
 #[derive(Clone)]
 struct DatabaseKey;
 impl Database {
     fn parse(_: &[u8], _: DatabaseKey) -> Result<Self, String> {
         fail(Boundary::Parse)?;
-        Ok(Self(1))
+        Ok(Self {
+            marker: 1,
+            config: DatabaseConfig { kdf_config: 0 },
+        })
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -220,7 +230,7 @@ fn persist_snapshot(
     _: &SaveTarget,
     _: bool,
 ) -> Result<PersistOutcome, String> {
-    assert_eq!(db.0, 1);
+    assert_eq!(db.marker, 1);
     fail(Boundary::Persist)?;
     Ok(PersistOutcome {
         hash: [7; 32],
@@ -240,7 +250,7 @@ mod merge {
     use super::*;
     pub fn merge_databases(left: &Database, right: &Database) -> Result<Database, String> {
         fail(Boundary::Merge)?;
-        assert_eq!(left.0, right.0);
+        assert_eq!(left.marker, right.marker);
         Ok(left.clone())
     }
 }
@@ -268,8 +278,20 @@ struct VaultSession {
 }
 struct DatabaseSettingsPatch {
     kdf: Option<String>,
+    kdf_parameters: Option<KdfParameters>,
     cipher: Option<String>,
     compression: Option<String>,
+}
+// Cost validation/derivation is a stub here; real KDF behavior is covered by
+// vault::kdf and kdf_storage_tests. Credential ownership bodies stay extracted.
+struct KdfParameters;
+impl KdfParameters {
+    fn algorithm(&self) -> &'static str {
+        "Aes"
+    }
+    fn to_config(&self) -> Result<u8, String> {
+        Ok(0)
+    }
 }
 fn parse_templates_group(_: &DatabaseSettingsPatch) -> Result<(), String> {
     Ok(())
@@ -288,7 +310,10 @@ impl VaultSession {
     fn new(has_keyfile: bool) -> Self {
         let observation = current();
         Self {
-            db: Database(1),
+            db: Database {
+                marker: 1,
+                config: DatabaseConfig { kdf_config: 0 },
+            },
             password: Observed {
                 value: "synthetic-only".into(),
                 tracked: false,
@@ -360,6 +385,7 @@ fn prepare(session: &VaultSession, preparation: Preparation, has_keyfile: bool) 
             session
                 .prepare_database_settings_update(&DatabaseSettingsPatch {
                     kdf: None,
+                    kdf_parameters: None,
                     cipher: None,
                     compression: None,
                 })
@@ -386,16 +412,16 @@ fn consume(job: Job) -> Result<(), String> {
     current().entered.fetch_add(1, Ordering::SeqCst);
     match job {
         Job::Save(job) => persist::persist_save_with_db(job).map(|(db, outcome)| {
-            assert_eq!(db.0, 1);
+            assert_eq!(db.marker, 1);
             assert_eq!(outcome.hash, [7; 32]);
         }),
         Job::Refresh(job) => persist::persist_remote_refresh(job).map(|outcome| {
-            assert_eq!(outcome.db.0, 1);
+            assert_eq!(outcome.db.marker, 1);
             assert_eq!(outcome.base_hash, [0; 32]);
         }),
         Job::Merge(job) => persist::persist_remote_merge(job)
             .map(|outcome| {
-                assert_eq!(outcome.db.0, 1);
+                assert_eq!(outcome.db.marker, 1);
                 assert_eq!(outcome.base_hash, [7; 32]);
                 assert!(outcome.mirror_warning.is_none());
             })
