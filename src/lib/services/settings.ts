@@ -1396,7 +1396,13 @@ export const appSettings: AppSettingsStore = {
   },
 
   updateGeneral(key, value): void {
-    settings.update((s) => ({ ...s, general: { ...s.general, [key]: value } }));
+    settings.update((s) => ({
+      ...s,
+      general: {
+        ...s.general,
+        [key]: key === "savedSearches" ? normalizeSavedSearches(value as SavedSearch[]) : value,
+      },
+    }));
     schedulePersist();
   },
 

@@ -1,5 +1,14 @@
 # Data Contracts
 
+`settings.ts::updateGeneral("savedSearches", value)` normalizes names and query
+defaults before publishing the store, using the same normalization as load and
+persistence. Duplicate trimmed names receive ` N` suffixes in list order; no
+query is dropped or overwritten. AdvancedSearchDialog's name-keyed list and
+delete-by-name therefore observe one unique identity per query immediately.
+`tests/saved-searches.test.mjs` covers subscribers, production save/delete
+handlers and synthetic masked-config persistence/reload; the isolated browser
+check additionally exercises the real keyed component and native Enter input.
+
 `AppSettings.integration` mirrors KeePass `AceIntegration.UrlSchemeOverrides`:
 `urlOverrideEnabled` (master switch, default on), `builtInOverridesEnabled`
 (bitmask over the 27 official built-in rules, `0` = all off), and
