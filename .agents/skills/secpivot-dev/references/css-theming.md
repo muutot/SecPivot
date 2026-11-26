@@ -41,8 +41,9 @@ Keyboard activation retains focus on View/Hide and existing swap controls.
 
 This is the authoritative style reference for SecPivot UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
 
-The user-approved light preset uses neutral white/gray surfaces and gray selection/focus,
-and sans-serif UI text. `settings-bootstrap` publishes the exact mode through
+The user-approved light preset uses neutral white/gray surfaces and gray selection/focus.
+All themes share the root Cascadia Code / SFMono-Regular UI font stack; light
+must not override font-family. `settings-bootstrap` publishes the exact mode through
 `data-theme`; mode-scoped styles never activate for dark/custom. The existing
 21 tokens remain mirrored by Rust ThemeColors::light. Password/code fields keep
 the existing mono font. Light setting cards use 12px corners, 86%/58% translucent
