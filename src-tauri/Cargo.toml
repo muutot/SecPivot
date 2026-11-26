@@ -77,7 +77,12 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_Wind
 # Android's rustls-platform-verifier is unusable without Tauri-side JNI setup
 # (see src/net.rs), so reqwest is pinned to this bundled Mozilla root store.
 [target.'cfg(target_os = "android")'.dependencies]
-webpki-root-certs = "1"
+# 1.0.10 removes the distrusted emSign ECC G3 root. Keep a security floor
+# so a regenerated lock cannot select the older trust bundle.
+webpki-root-certs = "1.0.10"
+# reqwest's webpki path must also reject distrusted intermediate/root SPKIs.
+# This constraint shares rustls's existing crate; no additional TLS stack.
+rustls-webpki = { version = "0.103.16", default-features = false }
 
 # Desktop-only dependencies. `cfg(desktop)`/`cfg(mobile)` are set by the
 # tauri-build build script and are NOT visible to Cargo's target resolution,

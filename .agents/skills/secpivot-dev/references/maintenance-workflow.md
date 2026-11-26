@@ -106,6 +106,17 @@ explicit audit comparison; ordinary verification always extracts current sources
 
 ## Browser vs desktop truth
 
+`npm run test:android-tls` builds a disposable host Cargo fixture using locked
+reqwest/rustls/webpki versions and actual net.rs bodies. Only Android cfg becomes
+a fixture feature; no networking API is stubbed. Public DER fixtures verify the
+removed emSign ECC G3 root and all eight distrusted SPKIs. Both real async and
+blocking clients reject the synthetic localhost CA during TLS, while explicit
+fixture-only trust succeeds. Tests bypass proxies and never contact a provider,
+user vault, device or shared clipboard. The copied lock and synthetic private
+TLS key remain confined to the disposable test; the checked-in key is expressly
+non-production. This is host execution of Android configuration, not an Android
+target/APK/OS verifier or real provider result.
+
 `npm run test:clipboard-write` runs fourteen independent text/binary write checks
 in a disposable offline Cargo project with the repository's pinned zeroize.
 It extracts the complete platform clipboard module, replacing only the Win32

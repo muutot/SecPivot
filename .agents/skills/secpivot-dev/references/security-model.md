@@ -1,5 +1,14 @@
 # Security Model
 
+Android TLS dependency floors are webpki-root-certs1.0.10 and
+rustls-webpki0.103.16. The former removes emSign ECC G3; the latter rejects
+distrusted SPKIs anywhere in a validation path, including cross-signed keys.
+This is explicit distrust, not missing-SPKI parsing. The existing net.rs
+tls_certs_only/Mozilla-root policy remains intact; no invalid-certificate bypass
+or enterprise-CA support is added. A disposable host fixture executes the actual
+Android builder bodies with real localhost TLS and public DER checks. Device,
+provider and Android build evidence remain independent.
+
 Open-time weak-KDF approval carries only native lifetime, algorithm and public
 cost parameters. Native stage_weak_kdf takes the existing persistence permit,
 then validates the originating session/lifetime/exact costs and writable state

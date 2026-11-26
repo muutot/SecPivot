@@ -4,6 +4,17 @@ SecPivot（Svelte 5 + Tauri 2 + Rust）对安卓平台的可移植性评估、�
 
 ## 结论
 
+> 2026-11-26，SP-S125：Android 依赖已要求 `webpki-root-certs >=1.0.10`
+> 与 `rustls-webpki >=0.103.16`（各自 semver 系列内），当前锁为这两个补丁版本。
+> 根包移除 emSign ECC G3；verifier 拒绝证书路径中的不信任 SPKI，包含跨签公钥，
+> 并非“拒绝缺失 SPKI”。`test:android-tls` 用实际 net.rs 分支（仅 cfg 替换）
+> 在 host 执行真实 async/blocking localhost TLS：未知 CA 均拒绝，独立显式测试
+> 信任均成功；公开 DER 根包与八项不信任 SPKI 控制通过。脚本使用当前锁的版本，
+> 公开样本保留校验哈希/许可证，测试 key/cert 为专用合成凭据。没有连接用户 provider。
+> `cargo check --offline --locked --lib --target aarch64-linux-android` 在 aws-lc-sys
+> 因缺 `aarch64-linux-android-clang`/`clang.exe` 失败，尚未到项目源码；完整 Android
+> 编译、新 APK 与真机/provider 验证继续待办，host TLS 测试不能替代它们。
+
 - **核心可行**：Tauri 2 原生支持安卓；KeePass 打开/编辑/保存、TOTP、加密等纯逻辑（`keepass` crate、`crypto/`、`vault/`）跨平台直接复用。
 - **代价**：需补工具链、一次真实 Android 编译（借此清瘦 desktop 专用依赖）、前端触控 / 文件选择 / 后台锁适配、APK 出包与 CI。
 - **桌面零影响**：所有移动端改动已用 `#[cfg(desktop)]` / `#[cfg(mobile)]` / 平台限定 `capability` / `tauri.android.conf.json` 隔离；桌面分支行为不变，须在有网环境跑 `npm run verify` 回归确认。

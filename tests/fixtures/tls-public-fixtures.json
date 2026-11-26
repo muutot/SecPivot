@@ -1,0 +1,33 @@
+{
+  "description": "Public certificates/SPKI only. The localhost key/certificate are disposable synthetic TLS test credentials, unrelated to any vault or real server.",
+  "sources": [
+    {
+      "package": "webpki-root-certs",
+      "version": "1.0.9",
+      "url": "https://crates.io/api/v1/crates/webpki-root-certs/1.0.9/download",
+      "license": "CDLA-Permissive-2.0",
+      "licenseFile": "tls-root-data-license.txt",
+      "file": "tls-removed-emsign-g3.der",
+      "sha256": "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b"
+    },
+    {
+      "package": "rustls-webpki",
+      "version": "0.103.16",
+      "url": "https://crates.io/api/v1/crates/rustls-webpki/0.103.16/download",
+      "license": "ISC",
+      "licenseFile": "tls-webpki-license.txt",
+      "file": "tls-distrusted-spkis.der",
+      "sha256": "f250bcde4521148cd0b9ea0cb6d12dfa18433f0a4266690b39686cc7895ef7c8",
+      "names": [
+        "EMDVTLSCAG3B",
+        "EMDVTLSCAG3C",
+        "EMEVTLSCAG3B",
+        "EMEVTLSCAG3C",
+        "EMOVTLSCAG3B",
+        "EMOVTLSCAG3C",
+        "EMOVCSCAG3B",
+        "EMOVCSCAG3C"
+      ]
+    }
+  ]
+}

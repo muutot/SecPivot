@@ -6,7 +6,6 @@
 
 ## 一、明确待实现
 
-- [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
 - [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
@@ -15,6 +14,8 @@
 - [ ] 打印系统（KeePass 应急表打印约 20 项：Layout/Include*/Color*/Fonts/Sort）——当前只有离线 HTML 应急表导出
 
 ## 二、部分完成（剩余边界明确）
+
+- [~] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.10（移除 emSign ECC G3）与 `rustls-webpki` 0.103.16（拒绝不信任 SPKI）及最低安全版本约束已接入，其他锁依赖边保留。实际 Android builder 源码在 host 上的 async/blocking TLS、未知 CA 拒绝、八项不信任 SPKI 与根包回归通过；Android 目标编译仍缺 NDK clang，APK/真机/provider 待验
 
 - [~] 弱 KDF 警告（`AceSecurity.KeyTransformWeakWarning`）：默认开启的配置、改 KDF/主密钥提醒已接入；打开旧库时展示当前/推荐成本，同意后按同一算法升级并保留未保存状态，普通保存才写入文件/远程。原生寿命/参数校验、只读、旧保存排队、多标签及临时 KDBX/离线 remote 与实际前端接线回归通过。真实 WebView/provider 与官方客户端互操作仍待验证
 

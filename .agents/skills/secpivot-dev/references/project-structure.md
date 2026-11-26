@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+`scripts/test-android-tls.mjs` executes `tests/fixtures/android-tls.rs` over the
+actual net.rs Android branches in a disposable host Cargo package. Only cfg is
+substituted; all network/crypto APIs are real and versions follow Cargo.lock.
+Public DER provenance/licenses and a synthetic localhost TLS pair live under
+tests/fixtures; the script validates public sample hashes before execution.
+The four native fixture tests run through test:android-tls in the full verify
+gate. Android dependencies impose the reviewed root/verifier security floors.
+
 `vault/kdf_upgrade.rs` owns nonsecret lifetime-bound offers and an in-memory
 upgrade transaction serialized by the existing persistence permit; its nested
 tests cover real temporary KDBX/MemoryStorage and parked-session/older-save
