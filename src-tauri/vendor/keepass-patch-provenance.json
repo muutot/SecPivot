@@ -154,7 +154,7 @@
     {
       "path": "src/db/types/mod.rs",
       "upstream_sha256": "53f5fd72029a3de985b1fff7b9f5872f38f5d0385e07e5100d451514740424f9",
-      "patched_sha256": "8dc6f007293afa7339b66eca720124832522940af4a40065fd449631fb04f448"
+      "patched_sha256": "5c6821e301d0f34afd14d7662628d6ac366a501b0fea4e6d3747aa50076b3604"
     },
     {
       "path": "src/db/types/times.rs",
@@ -220,12 +220,12 @@
     {
       "path": "src/format/xml_db/meta.rs",
       "upstream_sha256": "9f10711e8e079af74df7b2da288398118ab9d54955f1ef8d38a3c51df738bbbd",
-      "patched_sha256": "31a600419d9fe63a364334dad4553506e29f43db02848d59a29e2b4544273b5a"
+      "patched_sha256": "4a84c235a5014d11b2c99f06bb7ce0a4879fe396b02aeee49bf82b5793de21a8"
     },
     {
       "path": "src/format/xml_db/mod.rs",
       "upstream_sha256": "8915a76daf1ef7d6b74d884af69b3bcbee7198a4a55366152abb0d955e28cc7e",
-      "patched_sha256": "ae1d84b0ac6b0d0d446d967c7ca5273710c4205dc51fb21227bb83012e732940"
+      "patched_sha256": "bd49cafc30b6b39bc1fdaf47749ffe69b89abbf828910404a0fac2127efc1c9d"
     },
     {
       "path": "src/format/xml_db/tags.rs",

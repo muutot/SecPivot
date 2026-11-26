@@ -205,6 +205,7 @@ function importPageFixture(pick, handlerName = "handleImportCsv", overrides = {}
     selectedGroup: null,
     ioHost: host,
     settings: { general: { language: "zh-CN" } },
+    isTauriRuntime: () => false,
     // The extracted handler and real service share one Error constructor in the app.
     Error,
     t,

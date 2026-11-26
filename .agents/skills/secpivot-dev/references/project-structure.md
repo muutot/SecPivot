@@ -1,5 +1,17 @@
 # Project Structure and Runtime Surfaces
 
+commands/import_xml.rs owns native XML path/display-name admission, bounded
+single-worker preparation and origin-lifetime completion; lib.rs registers
+import_keepass_xml_file. vault/import/keepass_xml.rs owns bounded PlainXml parsing,
+resource/identity/reference/policy validation and rollback-safe complete-tree
+publication. The local KeePass patch exposes prepared inner-XML parsing, scoped
+plain CustomData conversion and fresh-identity group-tree copying.
+The main page's XML handler routes Tauri to io.ts::importKeePassXml and the
+epoch-guarded vault service; browser demo keeps its partial flat conversion.
+keepass_xml_tests/import_xml_tests and io-xml/session-publication tests cover
+native synthetic storage/origin and actual frontend paths. A separately compiled
+official-library read/resave fixture verifies selected cross-client semantics.
+
 Native security.rs delegates complete XML export to the local KeePass patch's
 Database::export_plain_xml in db/types/mod.rs and to_plain_xml in format/xml_db/mod.rs.
 The existing full model/dense binary map is reused; a controlled event rewrite

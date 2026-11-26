@@ -11,6 +11,8 @@ import type {
   ImportEntryInput,
   OnePuxImportResult,
   OnePuxCounts,
+  KeePassXmlCounts,
+  KeePassXmlImportResult,
   EntryPatch,
   AttachmentInput,
   EntryFlags,
@@ -154,6 +156,11 @@ interface VaultStore {
   addEntry: (input: EntryInput) => Promise<VaultState>;
   saveEntry: (request: EntrySaveRequest) => Promise<EntrySaveResult>;
   addEntries: (inputs: ImportEntryInput[]) => Promise<VaultState>;
+  importKeePassXml: (
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ) => Promise<KeePassXmlCounts>;
   importOnePux: (
     path: string,
     fileName: string | null,
@@ -1367,6 +1374,24 @@ export const vault: VaultStore = {
     });
     state.set(applyBackendState(result));
     return result;
+  },
+
+  async importKeePassXml(
+    path: string,
+    fileName: string | null,
+    targetGroupUuid: string | null,
+  ): Promise<KeePassXmlCounts> {
+    if (!isTauriRuntime())
+      throw new Error(t(lang(), "browser.unsupported", { feature: t(lang(), "page.filterXml") }));
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const result = await invokeSession<KeePassXmlImportResult>(
+      "import_keepass_xml_file",
+      { path, fileName, targetGroupUuid },
+      sessionId,
+    );
+    commitSessionStateAtEpoch(sessionId, epoch, result.state);
+    return result.counts;
   },
 
   async importOnePux(

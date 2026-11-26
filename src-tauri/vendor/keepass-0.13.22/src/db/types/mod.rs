@@ -170,6 +170,211 @@ impl Clone for Database {
 }
 
 impl Database {
+    /// Parse validated unencrypted inner XML with its prepared binary pool.
+    /// Protected strings must be literal UTF-8 encoded as Base64 by the caller,
+    /// not stream ciphertext. The caller owns format/resource validation.
+    pub fn from_unencrypted_inner_xml(
+        xml: &[u8],
+        binaries: &[Value<Vec<u8>>],
+    ) -> Result<Self, crate::format::xml_db::ParseXmlError> {
+        crate::format::xml_db::parse_plain_inner_xml(
+            xml,
+            binaries,
+            &mut crate::crypt::ciphers::PlainCipher::new(&[])
+                .map_err(crate::format::xml_db::entry::UnprotectError::from)?,
+        )
+    }
+
+    /// Copy a complete prepared tree under fresh object identities. Source
+    /// database settings/deletion intent never replace the destination's.
+    pub fn import_group_tree(
+        &mut self,
+        mut source: Self,
+        target: GroupId,
+    ) -> Result<GroupId, &'static str> {
+        if !self.groups.contains_key(&target) {
+            return Err("Import target is missing");
+        }
+        if !self.pending_history_attachments.is_empty()
+            || !source.pending_history_attachments.is_empty()
+        {
+            return Err("Import cannot overlap attachment history leases");
+        }
+        for entry in source.entries.values() {
+            for version in
+                std::iter::once(entry).chain(entry.history.iter().flat_map(|h| h.entries.iter()))
+            {
+                if version
+                    .attachments
+                    .values()
+                    .any(|id| !source.attachments.contains_key(id))
+                {
+                    return Err("Import binary is missing");
+                }
+            }
+        }
+        let mut used: std::collections::HashSet<Uuid> = self
+            .groups
+            .keys()
+            .map(|id| id.uuid())
+            .chain(self.entries.keys().map(|id| id.uuid()))
+            .chain(self.custom_icons.keys().map(|id| id.uuid()))
+            .chain(self.deleted_objects.keys().copied())
+            .chain(source.groups.keys().map(|id| id.uuid()))
+            .chain(source.entries.keys().map(|id| id.uuid()))
+            .chain(source.custom_icons.keys().map(|id| id.uuid()))
+            .collect();
+        let mut fresh = || loop {
+            let id = Uuid::new_v4();
+            if used.insert(id) {
+                break id;
+            }
+        };
+        let groups: HashMap<GroupId, GroupId> = source
+            .groups
+            .keys()
+            .map(|id| (*id, GroupId::from_uuid(fresh())))
+            .collect();
+        let entries: HashMap<EntryId, EntryId> = source
+            .entries
+            .keys()
+            .map(|id| (*id, EntryId::from_uuid(fresh())))
+            .collect();
+        let icons: HashMap<CustomIconId, CustomIconId> = source
+            .custom_icons
+            .keys()
+            .map(|id| (*id, CustomIconId::from_uuid(fresh())))
+            .collect();
+        let refs: HashMap<Uuid, Uuid> = entries
+            .iter()
+            .map(|(old, new)| (old.uuid(), new.uuid()))
+            .collect();
+        let root = groups[&source.root];
+        let mut binaries = HashMap::new();
+        for (old, mut attachment) in source.attachments.drain() {
+            let new = AttachmentId::next_free(self);
+            binaries.insert(old, new);
+            attachment.id = new;
+            attachment.entries = attachment
+                .entries
+                .into_iter()
+                .filter_map(|(id, index)| entries.get(&id).map(|id| (*id, index)))
+                .collect();
+            self.attachments.insert(new, attachment);
+        }
+        for (old, mut icon) in source.custom_icons.drain() {
+            let id = icons[&old];
+            icon.id = id;
+            icon.entries = icon
+                .entries
+                .into_iter()
+                .filter_map(|(id, index)| entries.get(&id).map(|id| (*id, index)))
+                .collect();
+            icon.groups = icon
+                .groups
+                .into_iter()
+                .filter_map(|id| groups.get(&id).copied())
+                .collect();
+            self.custom_icons.insert(id, icon);
+        }
+        fn remap_entry(
+            entry: &mut Entry,
+            id: EntryId,
+            groups: &HashMap<GroupId, GroupId>,
+            icons: &HashMap<CustomIconId, CustomIconId>,
+            binaries: &HashMap<AttachmentId, AttachmentId>,
+            refs: &HashMap<Uuid, Uuid>,
+        ) {
+            entry.id = id;
+            entry.parent = groups[&entry.parent];
+            entry.previous_parent_group = entry
+                .previous_parent_group
+                .and_then(|id| groups.get(&id).copied());
+            if let Some(Icon::Custom(id)) = entry.icon {
+                entry.icon = icons.get(&id).copied().map(Icon::Custom);
+            }
+            for id in entry.attachments.values_mut() {
+                *id = binaries[id];
+            }
+            for (name, value) in &mut entry.fields {
+                // Managed URL policy JSON is literal data, not a placeholder field.
+                if name == "SecPivot.WebsiteRules" {
+                    continue;
+                }
+                let mut text = remap_import_references(value.get(), refs);
+                if name == "SecPivot.OriginalGroup" {
+                    if let Ok(id) = Uuid::parse_str(value.get()) {
+                        if let Some(new) = groups.get(&GroupId::from_uuid(id)) {
+                            *text = new.uuid().to_string();
+                        }
+                    }
+                }
+                if text.as_str() != value.get() {
+                    let owned = std::mem::take(&mut *text);
+                    *value = if value.is_protected() {
+                        Value::protected(owned)
+                    } else {
+                        Value::unprotected(owned)
+                    };
+                }
+            }
+            if let Some(autotype) = &mut entry.autotype {
+                if let Some(sequence) = &mut autotype.default_sequence {
+                    *sequence = std::mem::take(&mut *remap_import_references(sequence, refs));
+                }
+                for association in &mut autotype.associations {
+                    association.window =
+                        std::mem::take(&mut *remap_import_references(&association.window, refs));
+                    association.sequence =
+                        std::mem::take(&mut *remap_import_references(&association.sequence, refs));
+                }
+            }
+            if let Some(url) = &mut entry.override_url {
+                *url = std::mem::take(&mut *remap_import_references(url, refs));
+            }
+            if let Some(history) = &mut entry.history {
+                for old in &mut history.entries {
+                    remap_entry(old, id, groups, icons, binaries, refs);
+                }
+            }
+        }
+        for (old, mut entry) in source.entries.drain() {
+            let id = entries[&old];
+            remap_entry(&mut entry, id, &groups, &icons, &binaries, &refs);
+            self.entries.insert(id, entry);
+        }
+        for (old, mut group) in source.groups.drain() {
+            let id = groups[&old];
+            group.id = id;
+            group.parent = if old == source.root {
+                Some(target)
+            } else {
+                group.parent.and_then(|id| groups.get(&id).copied())
+            };
+            group.previous_parent_group = group
+                .previous_parent_group
+                .and_then(|id| groups.get(&id).copied());
+            group.last_top_visible_entry = group
+                .last_top_visible_entry
+                .and_then(|id| entries.get(&id).copied());
+            if let Some(sequence) = &mut group.default_autotype_sequence {
+                *sequence = std::mem::take(&mut *remap_import_references(sequence, &refs));
+            }
+            group.groups = group.groups.into_iter().map(|id| groups[&id]).collect();
+            group.entries = group.entries.into_iter().map(|id| entries[&id]).collect();
+            if let Some(Icon::Custom(id)) = group.icon {
+                group.icon = icons.get(&id).copied().map(Icon::Custom);
+            }
+            self.groups.insert(id, group);
+        }
+        self.groups
+            .get_mut(&target)
+            .ok_or("Import target is missing")?
+            .groups
+            .insert(root);
+        Ok(root)
+    }
+
     /// Export the complete database as plaintext KeePass XML, including history
     /// and binary data. The caller must obtain explicit consent and protect the
     /// returned bytes; this operation never writes a file or uses a master key.
@@ -739,6 +944,48 @@ impl Database {
         parent.groups = next;
         Ok(())
     }
+}
+
+fn remap_import_references(text: &str, ids: &HashMap<Uuid, Uuid>) -> zeroize::Zeroizing<String> {
+    let mut output = zeroize::Zeroizing::new(String::new());
+    let mut rest = text;
+    while let Some(start) = rest.find('{') {
+        output.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let end = match rest.find('}') {
+            Some(end) => end + 1,
+            None => break,
+        };
+        let token = &rest[..end];
+        let replacement = token
+            .get(..5)
+            .filter(|p| p.eq_ignore_ascii_case("{REF:"))
+            .and_then(|_| token.get(5..token.len() - 1))
+            .and_then(|body| body.split_once('@'))
+            .filter(|(field, _)| field.len() == 1)
+            .and_then(|(field, search)| {
+                search
+                    .split_once(':')
+                    .filter(|(kind, _)| kind.eq_ignore_ascii_case("I"))
+                    .map(|(_, id)| (field, id))
+            })
+            .and_then(|(field, id)| {
+                Uuid::parse_str(id)
+                    .ok()
+                    .and_then(|id| ids.get(&id))
+                    .map(|id| {
+                        format!(
+                            "{{REF:{}@I:{}}}",
+                            field,
+                            id.simple().to_string().to_uppercase()
+                        )
+                    })
+            });
+        output.push_str(replacement.as_deref().unwrap_or(token));
+        rest = &rest[end..];
+    }
+    output.push_str(rest);
+    output
 }
 
 #[cfg(test)]

@@ -1,5 +1,23 @@
 # Security Model
 
+Complete native XML import reads selected files into Zeroizing buffers and keeps
+prepared fields/binaries/source XML native-only. Literal protected strings and
+the complete original XML archive become protected KeePass Values; no plaintext
+IPC import rows, logging, automatic storage write or key adoption is added.
+DTD/external entities, ciphertext, duplicate schema identities, missing refs and
+resource-limit violations fail before publication with content-free categories.
+The native lifetime binds admission/completion even across same-ID reopen; a
+single owned permit remains in started blocking work until return. Source work
+may outlive close until it finishes; immediate cancellation is not claimed.
+Candidate publication rolls back data/cache/pending reload on snapshot refusal.
+Source global metadata/deletion intent is archived, not applied to destination.
+PlainXml CustomData uses text at preparation, while existing KDBX typed/Base64
+decoding and official newline/standard-protection defaults remain boundaries.
+Owned reader text/decoded buffers use Zeroizing; third-party serializer/parser
+temporaries and complete process-memory erasure remain outside this evidence.
+Official-library synthetic read/resave/native reopen does not prove real GUI,
+WebView/native picker, Android provider or all unknown extensions.
+
 Complete native XML export includes current/history protected fields, attachments
 and the original header binary pool, all as plaintext; the localized confirmation
 now explicitly names these contents. No master key is needed by the serializer,

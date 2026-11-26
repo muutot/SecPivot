@@ -40,6 +40,40 @@ pub fn parse_xml(
     Ok(kdbx.xml_to_db(inner_decryptor, header_attachments)?)
 }
 
+/// PlainXml CustomData values are text, even if they happen to be Base64.
+/// Keep KDBX's legacy typed decoder isolated from this import boundary.
+pub(crate) fn parse_plain_inner_xml(
+    data: &[u8],
+    header_attachments: &[Value<Vec<u8>>],
+    inner_decryptor: &mut dyn Cipher,
+) -> Result<crate::db::Database, ParseXmlError> {
+    let mut kdbx: KeePassFile = quick_xml::de::from_reader(data)?;
+    fn entry_plain(entry: &mut entry::Entry) {
+        if let Some(data) = &mut entry.custom_data {
+            data.plaintext_strings();
+        }
+        if let Some(history) = &mut entry.history {
+            for old in &mut history.entries {
+                entry_plain(old);
+            }
+        }
+    }
+    fn group_plain(group: &mut Group) {
+        if let Some(data) = &mut group.custom_data {
+            data.plaintext_strings();
+        }
+        for child in &mut group.children {
+            match child {
+                group::GroupOrEntry::Group(child) => group_plain(child),
+                group::GroupOrEntry::Entry(child) => entry_plain(child),
+            }
+        }
+    }
+    kdbx.meta.plaintext_custom_data();
+    group_plain(&mut kdbx.root.group);
+    Ok(kdbx.xml_to_db(inner_decryptor, header_attachments)?)
+}
+
 /// Errors that can occur during parsing of the inner XML database of a KDBX file
 #[derive(Debug, Error)]
 #[non_exhaustive]

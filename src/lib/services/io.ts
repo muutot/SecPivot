@@ -272,6 +272,50 @@ export async function pickImportFile(
   }
 }
 
+/** Complete native XML import: only selection identity and masked state cross IPC. */
+export async function importKeePassXml(
+  host: IoHost,
+  view: SessionViewToken,
+  baseGroupUuid: string | null,
+): Promise<void> {
+  if (!host.sessionView.isCurrent(view)) return;
+  const operation = host.operations.begin();
+  host.setBusy(true);
+  try {
+    if (!isTauriRuntime())
+      throw new Error(t(lang(), "browser.unsupported", { feature: t(lang(), "page.filterXml") }));
+    const picked = isAndroid()
+      ? await openDocument(["application/xml", "text/xml", "application/octet-stream"])
+      : await open({
+          multiple: false,
+          filters: [{ name: t(lang(), "page.filterXml"), extensions: ["xml"] }],
+        });
+    if (!host.sessionView.isCurrent(view) || !host.operations.isCurrent(operation) || !picked)
+      return;
+    const selection =
+      typeof picked === "string"
+        ? { uri: picked, name: null }
+        : Array.isArray(picked)
+          ? null
+          : picked;
+    if (!selection?.uri) return;
+    const counts = await vault.callInSession(view.sessionId, () =>
+      vault.importKeePassXml(selection.uri, selection.name ?? null, baseGroupUuid),
+    );
+    if (!host.sessionView.isCurrent(view) || !host.operations.isCurrent(operation)) return;
+    host.notify(t(lang(), "io.imported", { n: counts.items }));
+  } catch (e) {
+    if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
+      host.notify(
+        t(lang(), "io.importFailed", { e: e instanceof Error ? e.message : String(e) }),
+        "error",
+      );
+  } finally {
+    if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
+      host.setBusy(false);
+  }
+}
+
 /** Native ZIP import: the renderer handles a selection and masked result only. */
 export async function importOnePux(
   host: IoHost,

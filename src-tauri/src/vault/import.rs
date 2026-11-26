@@ -7,9 +7,11 @@ use std::collections::HashMap;
 
 mod bitwarden_links;
 mod fields;
+mod keepass_xml;
 mod onepassword;
 mod onepux;
 mod onepux_archive;
+pub use keepass_xml::{prepare_keepass_xml_import, KeePassXmlCounts, KeePassXmlImport};
 pub use onepassword::parse_1pif;
 pub use onepux::{prepare_1pux_import, OnePuxCounts, OnePuxImport};
 pub use onepux_archive::{parse_1pux_archive, OnePuxArchive};

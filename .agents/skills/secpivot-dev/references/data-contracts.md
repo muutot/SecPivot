@@ -1,5 +1,46 @@
 # Data Contracts
 
+`import_keepass_xml_file({sessionId,path,fileName?,targetGroupUuid?})` returns
+`{state:VaultState,counts:{groups,items,history,binaries}}`. Native XML selection
+uses only paths/provider display names; plaintext, attachments and import rows
+never cross IPC. commands/import_xml.rs checks the writable target and nonnil
+native history lifetime before bounded I/O, holds one blocking-worker permit
+until the worker returns, then rechecks the same lifetime/target at publication.
+Switching tabs can update the parked origin; close or same-ID reopen rejects it.
+The page and io/vault services separately guard picker, feedback and state epochs.
+Browser demo retains its explicitly partial flat XML conversion.
+
+vault/import/keepass_xml.rs accepts UTF-8 and BOM-marked UTF-16 PlainXml, one
+completed KeePassFile/Root/Group tree, literal ProtectInMemory strings, checked
+UTC dates and dense remapping of sparse Meta/Binaries and inline attachments.
+It rejects DTD/PI, foreign stream Protected strings, duplicate identities/fields,
+missing binary/icon references, nested/mismatched history and invalid native
+website policies before mutation. Recognizable old Generator-only SecPivot
+envelopes retain their unencrypted Base64 Protected-string compatibility.
+Bounds:64MiB input/individual binary,256MiB expanded binaries/icons,depth<64,
+262144 nodes,8192 groups/current entries/binaries/icons,16384 historical versions
+and65536 string fields. These are ceilings, not aggregate heap estimates.
+
+The patched Database parses prepared inner XML with PlainCipher, treating
+PlainXml CustomData as text even when it is valid Base64, then copies the full
+tree/current/history/binary/icon model with fresh UUIDs. Imported internal
+UUID field/auto-type/OverrideURL references and OriginalGroup are remapped;
+managed website-rule JSON remains literal and is never placeholder-rewritten.
+unknown extension identity semantics are preserved in the protected source XML
+archive, not guessed. Source database settings/key/deletion intent never replace
+the destination. Old omitted/empty group expansion defaults true as in KeePass.
+The import creates one source-archive entry under the copied root and publishes
+one dirty revision/full snapshot (including new icons), without saving. Snapshot
+failure restores DB/dirty/revision/time/cache/pending reload exactly.
+
+Independent KeePassLib2.59 reads the synthetic imported KDBX, checks tree/fresh
+UUIDs/current/history fields/protection/binaries/icons/dates/references and saves;
+native reopening is covered by tests/fixtures/xml-import-official.kdbx and its
+provenance JSON. Standard-field protection reset, unprotected newline/type
+normalization, absent-date defaults and foreign metadata remain client boundaries.
+Fresh IDs retain SecPivot copy-import behavior; official KeePass offers UUID-aware
+merge modes instead. Real GUI/WebView/Android provider remains unverified.
+
 Native `export_xml` retains its existing explicit-consent, session/path and void
 IPC contract. `VaultSession::export_xml_content` now delegates to the patched
 `Database::export_plain_xml() -> Result<Vec<u8>, DatabaseSaveError>`; no secret
@@ -22,7 +63,7 @@ those defaults and normalizes unprotected CRLF to LF. PlainXml does not preserve
 binary memory-protection flags. Native export itself preserves string CR via
 references and current/history per-field flags. CustomData retains the existing
 KDBX model encoding; this is not proof of all foreign extension/type semantics.
-Complete SecPivot XML import/browser-demo export, KeePass GUI/native IPC and
+Browser-demo XML export, KeePass GUI/native IPC and
 mobile-provider behavior remain separate open work.
 
 `general.quickFindExcludeExpired` mirrors KeePass MainWindow.QuickFindExcludeExpired,
@@ -1563,7 +1604,7 @@ after close or remote replacement. `setEntryWebsiteRules(uuid,rules)` rejects
 undefined before IPC and uses the existing epoch-guarded state commit. Browser
 preview rejects both methods explicitly; `callInSession` binds parked origins.
 These real-service/native orchestration tests use synthetic seams. The frontend
-editor uses save_entry and history uses the selection-bound rule reader. Source-format mapping and real WebView/client/provider execution remain pending; XML's complete renderer path remains separate.
+editor uses save_entry and history uses the selection-bound rule reader. Complete native XML imports now validate and preserve current/history policies; other source-format mapping and real WebView/client/provider execution remain pending.
 
 Attachment association accepts exactly one full `files/<documentId>__<fileName>`
 or triple-underscore path; missing/ambiguous identities, conflicting same-name

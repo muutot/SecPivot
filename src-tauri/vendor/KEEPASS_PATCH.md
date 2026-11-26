@@ -61,6 +61,14 @@ Only these upstream files are changed:
   Database::export_plain_xml exposes an explicitly plaintext, credential-free
   in-memory export; caller consent, destination writes and zeroizing ownership
   stay with the native application.
+  Database::from_unencrypted_inner_xml parses only caller-validated/normalized
+  PlainXml with the prepared dense binary pool. Database::import_group_tree
+  copies complete current/history trees, binaries and icons with fresh object
+  IDs and remapped ownership/internal UUID field/auto-type/OverrideURL references.
+  It rejects missing binary payloads and live history leases before mutation;
+  source settings/deletion intent are not adopted. First-party candidates own
+  target/lifetime/schema/resource validation, protected source archival and
+  publication rollback. Owned reference-rewrite buffers use Zeroizing.
 - `src/format/xml_db/mod.rs`: reconstruct attachment ownership on load and map
   every current/history `Binary Ref` to the exact dense inner-header position on
   save. Missing references fail before destination publication. Serialize raw CR
@@ -83,6 +91,11 @@ Only these upstream files are changed:
   Independent official-library import/resave/native reopen proves selected
   synthetic object fidelity; binary protection, standard-field client resets,
   unprotected newline normalization and foreign metadata semantics remain limits.
+  parse_plain_inner_xml scopes the PlainXml CustomData text conversion to this
+  prepared import; ordinary KDBX typed decoding is unchanged. Native tests cover
+  complete tree copying, sparse/inline/current/history binaries, fresh references,
+  protected empty values, icons and failed publication. Independent official
+  library read/resave and native reopen use a separate synthetic import fixture.
 - `src/format/xml_db/entry.rs`: deserialize entry values through dedicated
   `$text` and a direct String converter, preserving ASCII/Unicode whitespace.
   This works with the scoped QuickXML patch described in `QUICK_XML_PATCH.md`;
@@ -106,6 +119,9 @@ Only these upstream files are changed:
   native temporary KDBX and offline remote tests cover ordinary save, Save As,
   KDF/storage updates and read-only refusal. Expiry enforcement and consumption
   of this flag remain first-party work, not a claim of this preservation patch.
+  XML Meta/CustomData also expose an internal PlainXml-only text conversion;
+  Base64-looking custom values remain text at this import boundary. Existing
+  KDBX read/type interpretation and source archive preserve their separate limits.
 
 The other 51 upstream files are byte-for-byte unchanged. The provenance JSON
 records each original hash and the nine reviewed patched hashes. Run

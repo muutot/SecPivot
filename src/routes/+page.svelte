@@ -48,6 +48,7 @@
     downloadTextFile,
     importEntries as runImportEntries,
     importOnePux as runImportOnePux,
+    importKeePassXml as runImportKeePassXml,
     importRowsToEntries,
     pickImportFile,
     toCsvExportRows,
@@ -1193,6 +1194,11 @@
     const view = sessionView.capture();
     if (!view) return;
     const baseGroupUuid = selectedGroup;
+    if (isTauriRuntime()) {
+      await runImportKeePassXml(ioHost, view, baseGroupUuid);
+      return;
+    }
+    // Browser demo imports remain a partial flat preview; native XML uses the complete tree.
     const text = await pickImportFile(ioHost, view, [
       { name: t(settings.general.language, "page.filterXml"), extensions: ["xml"] },
     ]);

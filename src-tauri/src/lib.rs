@@ -518,6 +518,7 @@ pub fn run() {
             commands::save_entry,
             commands::import_entries,
             commands::import_1pux_file,
+            commands::import_keepass_xml_file,
             commands::update_entry,
             commands::update_entry_flags,
             commands::update_entries,

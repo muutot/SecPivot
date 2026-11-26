@@ -1259,7 +1259,7 @@
 +
 --- a/src/db/types/mod.rs
 +++ b/src/db/types/mod.rs
-@@ -25 +25,15 @@
+@@ -25 +25,15 @@ pub use history::History;
 -pub use icon::{CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon};
 +
 +impl History {
@@ -1276,15 +1276,15 @@
 +pub use icon::{
 +    CustomIcon, CustomIconId, CustomIconMut, CustomIconNotFoundError, CustomIconRef, Icon,
 +};
-@@ -36 +50 @@
+@@ -36 +50 @@ use uuid::Uuid;
 -#[derive(Debug, Clone, PartialEq, Eq)]
 +#[derive(Debug, PartialEq, Eq)]
-@@ -50,0 +65,4 @@
+@@ -50,0 +65,4 @@ pub struct Database {
 +    /// Attachment leases held by not-yet-appended EntryTrack snapshots.
 +    #[cfg_attr(feature = "serialization", serde(skip))]
 +    pub(crate) pending_history_attachments: HashMap<AttachmentId, usize>,
 +
-@@ -63,0 +82,90 @@
+@@ -63,0 +82,90 @@ pub struct Database {
 +/// Fail closed when a merge cannot map every current/historical binary.
 +#[cfg(feature = "_merge")]
 +#[derive(Debug, thiserror::Error)]
@@ -1375,7 +1375,212 @@
 +    }
 +}
 +
-@@ -64,0 +173,8 @@
+@@ -64,0 +173,213 @@ impl Database {
++    /// Parse validated unencrypted inner XML with its prepared binary pool.
++    /// Protected strings must be literal UTF-8 encoded as Base64 by the caller,
++    /// not stream ciphertext. The caller owns format/resource validation.
++    pub fn from_unencrypted_inner_xml(
++        xml: &[u8],
++        binaries: &[Value<Vec<u8>>],
++    ) -> Result<Self, crate::format::xml_db::ParseXmlError> {
++        crate::format::xml_db::parse_plain_inner_xml(
++            xml,
++            binaries,
++            &mut crate::crypt::ciphers::PlainCipher::new(&[])
++                .map_err(crate::format::xml_db::entry::UnprotectError::from)?,
++        )
++    }
++
++    /// Copy a complete prepared tree under fresh object identities. Source
++    /// database settings/deletion intent never replace the destination's.
++    pub fn import_group_tree(
++        &mut self,
++        mut source: Self,
++        target: GroupId,
++    ) -> Result<GroupId, &'static str> {
++        if !self.groups.contains_key(&target) {
++            return Err("Import target is missing");
++        }
++        if !self.pending_history_attachments.is_empty()
++            || !source.pending_history_attachments.is_empty()
++        {
++            return Err("Import cannot overlap attachment history leases");
++        }
++        for entry in source.entries.values() {
++            for version in
++                std::iter::once(entry).chain(entry.history.iter().flat_map(|h| h.entries.iter()))
++            {
++                if version
++                    .attachments
++                    .values()
++                    .any(|id| !source.attachments.contains_key(id))
++                {
++                    return Err("Import binary is missing");
++                }
++            }
++        }
++        let mut used: std::collections::HashSet<Uuid> = self
++            .groups
++            .keys()
++            .map(|id| id.uuid())
++            .chain(self.entries.keys().map(|id| id.uuid()))
++            .chain(self.custom_icons.keys().map(|id| id.uuid()))
++            .chain(self.deleted_objects.keys().copied())
++            .chain(source.groups.keys().map(|id| id.uuid()))
++            .chain(source.entries.keys().map(|id| id.uuid()))
++            .chain(source.custom_icons.keys().map(|id| id.uuid()))
++            .collect();
++        let mut fresh = || loop {
++            let id = Uuid::new_v4();
++            if used.insert(id) {
++                break id;
++            }
++        };
++        let groups: HashMap<GroupId, GroupId> = source
++            .groups
++            .keys()
++            .map(|id| (*id, GroupId::from_uuid(fresh())))
++            .collect();
++        let entries: HashMap<EntryId, EntryId> = source
++            .entries
++            .keys()
++            .map(|id| (*id, EntryId::from_uuid(fresh())))
++            .collect();
++        let icons: HashMap<CustomIconId, CustomIconId> = source
++            .custom_icons
++            .keys()
++            .map(|id| (*id, CustomIconId::from_uuid(fresh())))
++            .collect();
++        let refs: HashMap<Uuid, Uuid> = entries
++            .iter()
++            .map(|(old, new)| (old.uuid(), new.uuid()))
++            .collect();
++        let root = groups[&source.root];
++        let mut binaries = HashMap::new();
++        for (old, mut attachment) in source.attachments.drain() {
++            let new = AttachmentId::next_free(self);
++            binaries.insert(old, new);
++            attachment.id = new;
++            attachment.entries = attachment
++                .entries
++                .into_iter()
++                .filter_map(|(id, index)| entries.get(&id).map(|id| (*id, index)))
++                .collect();
++            self.attachments.insert(new, attachment);
++        }
++        for (old, mut icon) in source.custom_icons.drain() {
++            let id = icons[&old];
++            icon.id = id;
++            icon.entries = icon
++                .entries
++                .into_iter()
++                .filter_map(|(id, index)| entries.get(&id).map(|id| (*id, index)))
++                .collect();
++            icon.groups = icon
++                .groups
++                .into_iter()
++                .filter_map(|id| groups.get(&id).copied())
++                .collect();
++            self.custom_icons.insert(id, icon);
++        }
++        fn remap_entry(
++            entry: &mut Entry,
++            id: EntryId,
++            groups: &HashMap<GroupId, GroupId>,
++            icons: &HashMap<CustomIconId, CustomIconId>,
++            binaries: &HashMap<AttachmentId, AttachmentId>,
++            refs: &HashMap<Uuid, Uuid>,
++        ) {
++            entry.id = id;
++            entry.parent = groups[&entry.parent];
++            entry.previous_parent_group = entry
++                .previous_parent_group
++                .and_then(|id| groups.get(&id).copied());
++            if let Some(Icon::Custom(id)) = entry.icon {
++                entry.icon = icons.get(&id).copied().map(Icon::Custom);
++            }
++            for id in entry.attachments.values_mut() {
++                *id = binaries[id];
++            }
++            for (name, value) in &mut entry.fields {
++                // Managed URL policy JSON is literal data, not a placeholder field.
++                if name == "SecPivot.WebsiteRules" {
++                    continue;
++                }
++                let mut text = remap_import_references(value.get(), refs);
++                if name == "SecPivot.OriginalGroup" {
++                    if let Ok(id) = Uuid::parse_str(value.get()) {
++                        if let Some(new) = groups.get(&GroupId::from_uuid(id)) {
++                            *text = new.uuid().to_string();
++                        }
++                    }
++                }
++                if text.as_str() != value.get() {
++                    let owned = std::mem::take(&mut *text);
++                    *value = if value.is_protected() {
++                        Value::protected(owned)
++                    } else {
++                        Value::unprotected(owned)
++                    };
++                }
++            }
++            if let Some(autotype) = &mut entry.autotype {
++                if let Some(sequence) = &mut autotype.default_sequence {
++                    *sequence = std::mem::take(&mut *remap_import_references(sequence, refs));
++                }
++                for association in &mut autotype.associations {
++                    association.window =
++                        std::mem::take(&mut *remap_import_references(&association.window, refs));
++                    association.sequence =
++                        std::mem::take(&mut *remap_import_references(&association.sequence, refs));
++                }
++            }
++            if let Some(url) = &mut entry.override_url {
++                *url = std::mem::take(&mut *remap_import_references(url, refs));
++            }
++            if let Some(history) = &mut entry.history {
++                for old in &mut history.entries {
++                    remap_entry(old, id, groups, icons, binaries, refs);
++                }
++            }
++        }
++        for (old, mut entry) in source.entries.drain() {
++            let id = entries[&old];
++            remap_entry(&mut entry, id, &groups, &icons, &binaries, &refs);
++            self.entries.insert(id, entry);
++        }
++        for (old, mut group) in source.groups.drain() {
++            let id = groups[&old];
++            group.id = id;
++            group.parent = if old == source.root {
++                Some(target)
++            } else {
++                group.parent.and_then(|id| groups.get(&id).copied())
++            };
++            group.previous_parent_group = group
++                .previous_parent_group
++                .and_then(|id| groups.get(&id).copied());
++            group.last_top_visible_entry = group
++                .last_top_visible_entry
++                .and_then(|id| entries.get(&id).copied());
++            if let Some(sequence) = &mut group.default_autotype_sequence {
++                *sequence = std::mem::take(&mut *remap_import_references(sequence, &refs));
++            }
++            group.groups = group.groups.into_iter().map(|id| groups[&id]).collect();
++            group.entries = group.entries.into_iter().map(|id| entries[&id]).collect();
++            if let Some(Icon::Custom(id)) = group.icon {
++                group.icon = icons.get(&id).copied().map(Icon::Custom);
++            }
++            self.groups.insert(id, group);
++        }
++        self.groups
++            .get_mut(&target)
++            .ok_or("Import target is missing")?
++            .groups
++            .insert(root);
++        Ok(root)
++    }
++
 +    /// Export the complete database as plaintext KeePass XML, including history
 +    /// and binary data. The caller must obtain explicit consent and protect the
 +    /// returned bytes; this operation never writes a file or uses a master key.
@@ -1384,13 +1589,11 @@
 +        crate::format::xml_db::to_plain_xml(self)
 +    }
 +
-@@ -91,0 +208 @@
+@@ -91,0 +413 @@ impl Database {
 +            pending_history_attachments: HashMap::new(),
-@@ -109,0 +227 @@
+@@ -109,0 +432 @@ impl Database {
 +            pending_history_attachments: HashMap::new(),
-@@ -141,0 +260,316 @@
-+    }
-+
+@@ -143,0 +467,316 @@ impl Database {
 +    /// Rebuild one entry's current/historical reverse references and collect
 +    /// only attachments with no entry or in-flight history owner.
 +    pub(crate) fn reindex_entry_attachments(&mut self, id: EntryId) {
@@ -1705,8 +1908,9 @@
 +            map.insert(id, dest_id);
 +        }
 +        map
-@@ -287 +721,329 @@
--}
++    }
++
+@@ -286,0 +926,370 @@ impl Database {
 +
 +    /// Replace sibling order with an exact permutation, preserving all group metadata.
 +    pub fn reorder_groups(
@@ -1728,6 +1932,48 @@
 +        parent.groups = next;
 +        Ok(())
 +    }
++}
++
++fn remap_import_references(text: &str, ids: &HashMap<Uuid, Uuid>) -> zeroize::Zeroizing<String> {
++    let mut output = zeroize::Zeroizing::new(String::new());
++    let mut rest = text;
++    while let Some(start) = rest.find('{') {
++        output.push_str(&rest[..start]);
++        rest = &rest[start..];
++        let end = match rest.find('}') {
++            Some(end) => end + 1,
++            None => break,
++        };
++        let token = &rest[..end];
++        let replacement = token
++            .get(..5)
++            .filter(|p| p.eq_ignore_ascii_case("{REF:"))
++            .and_then(|_| token.get(5..token.len() - 1))
++            .and_then(|body| body.split_once('@'))
++            .filter(|(field, _)| field.len() == 1)
++            .and_then(|(field, search)| {
++                search
++                    .split_once(':')
++                    .filter(|(kind, _)| kind.eq_ignore_ascii_case("I"))
++                    .map(|(_, id)| (field, id))
++            })
++            .and_then(|(field, id)| {
++                Uuid::parse_str(id)
++                    .ok()
++                    .and_then(|id| ids.get(&id))
++                    .map(|id| {
++                        format!(
++                            "{{REF:{}@I:{}}}",
++                            field,
++                            id.simple().to_string().to_uppercase()
++                        )
++                    })
++            });
++        output.push_str(replacement.as_deref().unwrap_or(token));
++        rest = &rest[end..];
++    }
++    output.push_str(rest);
++    output
 +}
 +
 +#[cfg(test)]
@@ -2035,7 +2281,6 @@
 +            Some(&1)
 +        );
 +    }
-+}
 --- a/src/format/xml_db/entry.rs
 +++ b/src/format/xml_db/entry.rs
 @@ -36 +36,5 @@ pub struct Entry {
@@ -2310,86 +2555,106 @@
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -131,0 +207 @@ impl From<Meta> for crate::db::Meta {
+@@ -114,0 +190,8 @@ pub struct Meta {
++impl Meta {
++    pub(crate) fn plaintext_custom_data(&mut self) {
++        if let Some(data) = &mut self.custom_data {
++            data.plaintext_strings();
++        }
++    }
++}
++
+@@ -131,0 +215 @@ impl From<Meta> for crate::db::Meta {
 +            master_key_change_force_once: val.master_key_change_force_once,
-@@ -159 +235,4 @@ impl From<crate::db::Meta> for Meta {
+@@ -159 +243,4 @@ impl From<crate::db::Meta> for Meta {
 -            database_description_changed: db.database_description_changed.as_ref().map(|t| (*t).into()),
 +            database_description_changed: db
 +                .database_description_changed
 +                .as_ref()
 +                .map(|t| (*t).into()),
-@@ -166,0 +246 @@ impl From<crate::db::Meta> for Meta {
+@@ -166,0 +254 @@ impl From<crate::db::Meta> for Meta {
 +            master_key_change_force_once: db.master_key_change_force_once,
-@@ -173 +253,4 @@ impl From<crate::db::Meta> for Meta {
+@@ -173 +261,4 @@ impl From<crate::db::Meta> for Meta {
 -            entry_templates_group_changed: db.entry_templates_group_changed.as_ref().map(|t| (*t).into()),
 +            entry_templates_group_changed: db
 +                .entry_templates_group_changed
 +                .as_ref()
 +                .map(|t| (*t).into()),
-@@ -279 +362,2 @@ impl CustomData {
+@@ -248,0 +340,10 @@ impl CustomData {
++    pub(crate) fn plaintext_strings(&mut self) {
++        for item in &mut self.items {
++            if let CustomDataValue::Binary(bytes) = &mut item.value {
++                let bytes = zeroize::Zeroizing::new(std::mem::take(bytes));
++                item.value =
++                    CustomDataValue::String(base64_engine::STANDARD.encode(bytes.as_slice()));
++            }
++        }
++    }
++
+@@ -279 +380,2 @@ impl CustomData {
 -                let last_modification_time = item.last_modification_time.as_ref().map(|t| (*t).into());
 +                let last_modification_time =
 +                    item.last_modification_time.as_ref().map(|t| (*t).into());
-@@ -304 +388,2 @@ impl From<HashMap<String, crate::db::CustomDataItem>> for CustomData {
+@@ -304 +406,2 @@ impl From<HashMap<String, crate::db::CustomDataItem>> for CustomData {
 -                let last_modification_time = item.last_modification_time.as_ref().map(|t| (*t).into());
 +                let last_modification_time =
 +                    item.last_modification_time.as_ref().map(|t| (*t).into());
-@@ -345 +430,5 @@ struct CustomDataItem {
+@@ -345 +448,5 @@ struct CustomDataItem {
 -    #[serde(default, with = "cs_opt_string", skip_serializing_if = "Option::is_none")]
 +    #[serde(
 +        default,
 +        with = "cs_opt_string",
 +        skip_serializing_if = "Option::is_none"
 +    )]
-@@ -591 +680,2 @@ mod tests {
+@@ -591 +698,2 @@ mod tests {
 -                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f,
-@@ -614 +704,4 @@ mod tests {
+@@ -614 +722,4 @@ mod tests {
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -641,0 +735 @@ mod tests {
+@@ -641,0 +753 @@ mod tests {
 +            master_key_change_force_once: Some(true),
-@@ -652,2 +746,2 @@ mod tests {
+@@ -652,2 +764,2 @@ mod tests {
 -                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 -                        0x0e, 0x0f,
 +                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
 +                        0x0c, 0x0d, 0x0e, 0x0f,
-@@ -662 +756,2 @@ mod tests {
+@@ -662 +774,2 @@ mod tests {
 -                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 +                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
 +                0x1e, 0x1f,
-@@ -668 +763,2 @@ mod tests {
+@@ -668 +781,2 @@ mod tests {
 -                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
 +                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
 +                0x2e, 0x2f,
-@@ -674 +770,2 @@ mod tests {
+@@ -674 +788,2 @@ mod tests {
 -                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
 +                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
 +                0x3e, 0x3f,
-@@ -677 +774,2 @@ mod tests {
+@@ -677 +792,2 @@ mod tests {
 -                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
 +                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
 +                0x4e, 0x4f,
-@@ -723 +821,3 @@ mod tests {
+@@ -723 +839,3 @@ mod tests {
 -        assert!(serialized.contains("<DatabaseNameChanged>2023-10-05T12:34:56Z</DatabaseNameChanged>"));
 +        assert!(
 +            serialized.contains("<DatabaseNameChanged>2023-10-05T12:34:56Z</DatabaseNameChanged>")
 +        );
-@@ -725 +825,2 @@ mod tests {
+@@ -725 +843,2 @@ mod tests {
 -        assert!(serialized.contains("<DatabaseDescriptionChanged>cKSw3A4AAAA=</DatabaseDescriptionChanged>"));
 +        assert!(serialized
 +            .contains("<DatabaseDescriptionChanged>cKSw3A4AAAA=</DatabaseDescriptionChanged>"));
-@@ -727 +828,2 @@ mod tests {
+@@ -727 +846,2 @@ mod tests {
 -        assert!(serialized.contains("<DefaultUserNameChanged>2023-10-05T12:34:56Z</DefaultUserNameChanged>"));
 +        assert!(serialized
 +            .contains("<DefaultUserNameChanged>2023-10-05T12:34:56Z</DefaultUserNameChanged>"));
-@@ -732,0 +835 @@ mod tests {
+@@ -732,0 +853 @@ mod tests {
 +        assert!(serialized.contains("<MasterKeyChangeForceOnce>True</MasterKeyChangeForceOnce>"));
-@@ -738,4 +841,9 @@ mod tests {
+@@ -738,4 +859,9 @@ mod tests {
 -        assert!(serialized.contains("<EntryTemplatesGroup>ICEiIyQlJicoKSorLC0uLw==</EntryTemplatesGroup>"));
 -        assert!(serialized.contains("<EntryTemplatesGroupChanged>cKSw3A4AAAA=</EntryTemplatesGroupChanged>"));
 -        assert!(serialized.contains("<LastSelectedGroup>MDEyMzQ1Njc4OTo7PD0+Pw==</LastSelectedGroup>"));
@@ -2403,14 +2668,14 @@
 +        );
 +        assert!(serialized
 +            .contains("<LastTopVisibleGroup>QEFCQ0RFRkdISUpLTE1OTw==</LastTopVisibleGroup>"));
-@@ -746,2 +854,4 @@ mod tests {
+@@ -746,2 +872,4 @@ mod tests {
 -        assert!(serialized.contains(r#"<Binary ID="0" Compressed="False" Protected="False">AQIDBAU=</Binary>"#));
 -        assert!(serialized.contains(r#"<Binary ID="1" Compressed="True" Protected="True">ChQeKDI=</Binary>"#));
 +        assert!(serialized
 +            .contains(r#"<Binary ID="0" Compressed="False" Protected="False">AQIDBAU=</Binary>"#));
 +        assert!(serialized
 +            .contains(r#"<Binary ID="1" Compressed="True" Protected="True">ChQeKDI=</Binary>"#));
-@@ -750,0 +861,23 @@ mod tests {
+@@ -750,0 +879,23 @@ mod tests {
 +    #[test]
 +    #[cfg(feature = "save_kdbx4")]
 +    fn secpivot_master_key_change_force_once_round_trips_values() {
@@ -2434,31 +2699,31 @@
 +        }
 +    }
 +
-@@ -842 +975,4 @@ mod tests {
+@@ -842 +993,4 @@ mod tests {
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -848 +984,4 @@ mod tests {
+@@ -848 +1002,4 @@ mod tests {
 -            &[0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f]
 +            &[
 +                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
 +                0x1e, 0x1f
 +            ]
-@@ -856 +995,4 @@ mod tests {
+@@ -856 +1013,4 @@ mod tests {
 -            &[0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f]
 +            &[
 +                0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
 +                0x2e, 0x2f
 +            ]
-@@ -864 +1006,4 @@ mod tests {
+@@ -864 +1024,4 @@ mod tests {
 -            &[0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f]
 +            &[
 +                0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
 +                0x3e, 0x3f
 +            ]
-@@ -868 +1013,4 @@ mod tests {
+@@ -868 +1031,4 @@ mod tests {
 -            &[0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f]
 +            &[
 +                0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d,
@@ -2466,17 +2731,52 @@
 +            ]
 --- a/src/format/xml_db/mod.rs
 +++ b/src/format/xml_db/mod.rs
-@@ -27 +27,2 @@
+@@ -27 +27,2 @@ use crate::{
 -        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta, timestamp::Timestamp,
 +        custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta,
 +        timestamp::Timestamp,
-@@ -62,5 +62,0 @@
+@@ -41,0 +43,34 @@ pub fn parse_xml(
++/// PlainXml CustomData values are text, even if they happen to be Base64.
++/// Keep KDBX's legacy typed decoder isolated from this import boundary.
++pub(crate) fn parse_plain_inner_xml(
++    data: &[u8],
++    header_attachments: &[Value<Vec<u8>>],
++    inner_decryptor: &mut dyn Cipher,
++) -> Result<crate::db::Database, ParseXmlError> {
++    let mut kdbx: KeePassFile = quick_xml::de::from_reader(data)?;
++    fn entry_plain(entry: &mut entry::Entry) {
++        if let Some(data) = &mut entry.custom_data {
++            data.plaintext_strings();
++        }
++        if let Some(history) = &mut entry.history {
++            for old in &mut history.entries {
++                entry_plain(old);
++            }
++        }
++    }
++    fn group_plain(group: &mut Group) {
++        if let Some(data) = &mut group.custom_data {
++            data.plaintext_strings();
++        }
++        for child in &mut group.children {
++            match child {
++                group::GroupOrEntry::Group(child) => group_plain(child),
++                group::GroupOrEntry::Entry(child) => entry_plain(child),
++            }
++        }
++    }
++    kdbx.meta.plaintext_custom_data();
++    group_plain(&mut kdbx.root.group);
++    Ok(kdbx.xml_to_db(inner_decryptor, header_attachments)?)
++}
++
+@@ -62,5 +96,0 @@ pub fn to_xml(
 -    let kdbx = KeePassFile::db_to_xml(db, inner_encryptor)?;
 -    let xml = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?
 -        .as_bytes()
 -        .to_vec();
 -
-@@ -74,0 +71,62 @@
+@@ -74,0 +105,62 @@ pub fn to_xml(
 +    // In-memory IDs may have gaps after deletion. KDBX4 binary Ref values
 +    // address positions in this exact header array, not the original IDs.
 +    let dense_ids: HashMap<usize, usize> = attachments
@@ -2539,9 +2839,7 @@
 +    }
 +    .into_bytes();
 +
-@@ -84,0 +143,161 @@
-+}
-+
+@@ -86,0 +179,161 @@ struct KeePassFile {
 +/// PlainXml reuses the complete KDBX model and its single dense attachment map.
 +/// Only the controlled serializer's field protection and date encodings change;
 +/// arbitrary user field contents are never interpreted as XML or timestamps.
@@ -2701,11 +2999,13 @@
 +        Some(b"DeletedObject") => name == b"DeletionTime",
 +        _ => false,
 +    }
-@@ -94 +313,2 @@
++}
++
+@@ -94 +347,2 @@ impl KeePassFile {
 -        let mut db = crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
 +        let mut db =
 +            crate::db::Database::new_with_root_id(GroupId::from_uuid(self.root.group.uuid.0));
-@@ -154,3 +374,6 @@
+@@ -154,3 +408,6 @@ impl KeePassFile {
 -        self.root
 -            .group
 -            .xml_to_db_handle(db.root_mut(), &attachments, &custom_icons, inner_decryptor)?;
@@ -2715,9 +3015,9 @@
 +            &custom_icons,
 +            inner_decryptor,
 +        )?;
-@@ -159,0 +383 @@
+@@ -159,0 +417 @@ impl KeePassFile {
 +        db.rebuild_attachment_references();
-@@ -183,3 +407,6 @@
+@@ -183,3 +441,6 @@ impl KeePassFile {
 -                    #[allow(clippy::indexing_slicing)] // We just checked that the index is in bounds
 -                    if let Some(crate::db::Icon::Custom(icon_id)) =
 -                        entry.history.as_ref().and_then(|h| h.entries[i].icon.as_ref())
@@ -2727,13 +3027,13 @@
 +                        .history
 +                        .as_ref()
 +                        .and_then(|h| h.entries[i].icon.as_ref())
-@@ -211 +438,4 @@
+@@ -211 +472,4 @@ impl KeePassFile {
 -    fn db_to_xml(db: &crate::db::Database, inner_cipher: &mut dyn Cipher) -> Result<Self, CryptographyError> {
 +    fn db_to_xml(
 +        db: &crate::db::Database,
 +        inner_cipher: &mut dyn Cipher,
 +    ) -> Result<Self, CryptographyError> {
-@@ -307,0 +538,73 @@
+@@ -307,0 +572,73 @@ mod tests {
 +    #[cfg(feature = "save_kdbx4")]
 +    #[test]
 +    fn secpivot_plain_xml_keeps_empty_protected_and_literal_date_named_fields() {
@@ -2807,8 +3107,7 @@
 +        assert!(db.export_plain_xml().is_err());
 +        assert_eq!(db, before);
 +    }
-@@ -312,0 +616,117 @@
-+
+@@ -313,0 +651,117 @@ mod tests {
 +    #[cfg(feature = "save_kdbx4")]
 +    #[test]
 +    fn secpivot_kdbx_scalar_writer_rejects_illegal_text_and_keys() {
@@ -2925,30 +3224,31 @@
 +        let entry = root.entries().next().unwrap();
 +        assert_eq!(entry.get("Reference"), Some("synthetic\nline\ntail"));
 +    }
-@@ -320 +740,4 @@
++
+@@ -320 +774,4 @@ mod tests {
 -            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
 +            &[
 +                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +                0x0e, 0x0f
 +            ]
-@@ -327 +750,2 @@
+@@ -327 +784,2 @@ mod tests {
 -            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 +            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
 +            0x0e, 0x0f,
-@@ -338 +762,2 @@
+@@ -338 +796,2 @@ mod tests {
 -                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S").unwrap(),
 +                chrono::NaiveDateTime::parse_from_str("2026-08-15T12:34:56", "%Y-%m-%dT%H:%M:%S")
 +                    .unwrap(),
-@@ -342 +767,2 @@
+@@ -342 +801,2 @@ mod tests {
 -        let serialized = quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
 +        let serialized =
 +            quick_xml::se::to_string_with_root("DeletedObject", &deleted_object).unwrap();
-@@ -373 +799,3 @@
+@@ -373 +833,3 @@ mod tests {
 -        let mut cipher = crate::config::InnerCipherConfig::Plain.get_cipher(&[]).unwrap();
 +        let mut cipher = crate::config::InnerCipherConfig::Plain
 +            .get_cipher(&[])
 +            .unwrap();
-@@ -376 +804,2 @@
+@@ -376 +838,2 @@ mod tests {
 -        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects).unwrap();
 +        let xml = quick_xml::se::to_string_with_root("DeletedObjects", &kdbx.root.deleted_objects)
 +            .unwrap();

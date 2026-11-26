@@ -1,0 +1,24 @@
+{
+  "description": "Synthetic native XML import read and resaved by independently compiled KeePassLib 2.59; no user vaults or OS clipboard.",
+  "fixture": "xml-import-official.kdbx",
+  "fixture_sha256": "5c11be4d6cc02360c9f62e8f8e04e75772e8aad70dd75d89b8e19a7432617021",
+  "synthetic_master_password": "synthetic-master",
+  "official_source_git_commit": "d1eec63f1bd73dc2d5273eaf94528f616b553ce5",
+  "source_xml_sha256": "9a31fe3f7ff76b5e58bdf2d6049f64550e024ceeafa259882f867fe8389fe81e",
+  "native_imported_kdbx_sha256": "21b07f672da13a3f82acc8df42d810fad999e6c784b754e1a0d0ad22586abf5c",
+  "verified": [
+    "Full group hierarchy including empty same-name slash groups",
+    "Fresh UUIDs and remapped field and auto-type references",
+    "Current and historical protected fields and attachment bytes",
+    "Custom icon bytes and PlainXml custom-data text",
+    "Explicit UTC dates and native reopen of official resave",
+    "Protected source XML archive without adopting source settings"
+  ],
+  "limits": [
+    "Official load resets standard-field memory protection to defaults.",
+    "Official resave normalizes unprotected newlines.",
+    "Missing-date defaults and legacy KDBX CustomData type interpretation differ by client.",
+    "Foreign extension identities and unreferenced official-resave binary pools are not fully verified.",
+    "GUI, native picker and Android provider remain unverified."
+  ]
+}

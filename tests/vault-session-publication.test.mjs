@@ -61,6 +61,7 @@ globalThis.__TAURI_INTERNALS__ = {
         if (!deferRefresh) return Promise.resolve(sessions.get(args.sessionId) ?? null);
         break;
       case "add_entry":
+      case "import_keepass_xml_file":
       case "save_vault":
         break;
       case "merge_remote_vault": {
@@ -108,6 +109,22 @@ globalThis.__TAURI_INTERNALS__ = {
   },
 };
 const { vault } = await import("../src/lib/services/vault.ts");
+
+test("native XML import cannot publish into a closed lifetime or replace a new active tab", async () => {
+  const origin = await fixture();
+  const importing = vault.importKeePassXml("C:/synthetic/source.xml", null, "root");
+  const worker = pending.find((p) => p.command === "import_keepass_xml_file");
+  assert.equal(worker.sessionId, origin);
+  await vault.closeAll();
+  await vault.open("C:/synthetic/open.kdbx", "synthetic-master");
+  const current = vault.get();
+  worker.resolve({
+    state: snapshot(origin, 99),
+    counts: { groups: 1, items: 1, history: 0, binaries: 0 },
+  });
+  await assert.rejects(importing);
+  assert.deepEqual(vault.get(), current);
+});
 
 async function fixture() {
   deferRefresh = false;

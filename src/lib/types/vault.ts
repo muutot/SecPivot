@@ -1,3 +1,15 @@
+export interface KeePassXmlCounts {
+  groups: number;
+  items: number;
+  history: number;
+  binaries: number;
+}
+
+export interface KeePassXmlImportResult {
+  state: VaultState;
+  counts: KeePassXmlCounts;
+}
+
 export interface OnePuxCounts {
   accounts: number;
   vaults: number;

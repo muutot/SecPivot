@@ -187,6 +187,14 @@ pub struct Meta {
     custom_data: Option<CustomData>,
 }
 
+impl Meta {
+    pub(crate) fn plaintext_custom_data(&mut self) {
+        if let Some(data) = &mut self.custom_data {
+            data.plaintext_strings();
+        }
+    }
+}
+
 impl From<Meta> for crate::db::Meta {
     fn from(val: Meta) -> Self {
         // NOTE: custom icons and binary attachments are moved out of the Meta into the main
@@ -329,6 +337,16 @@ pub struct CustomData {
 }
 
 impl CustomData {
+    pub(crate) fn plaintext_strings(&mut self) {
+        for item in &mut self.items {
+            if let CustomDataValue::Binary(bytes) = &mut item.value {
+                let bytes = zeroize::Zeroizing::new(std::mem::take(bytes));
+                item.value =
+                    CustomDataValue::String(base64_engine::STANDARD.encode(bytes.as_slice()));
+            }
+        }
+    }
+
     fn xml_to_db(self) -> Vec<(String, crate::db::CustomDataItem)> {
         self.items
             .into_iter()
