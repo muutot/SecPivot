@@ -132,6 +132,15 @@
     opacity: 0.6;
   }
 
+  @media (forced-colors: none) {
+    :global(:root[data-theme="light"]) .radio-choice.active {
+      color: var(--card-bg);
+      border-color: var(--selection-color);
+      background: var(--selection-color);
+      box-shadow: 0 2px 5px color-mix(in srgb, var(--selection-color) 18%, transparent);
+    }
+  }
+
   @media (max-width: 360px) {
     .radio-choice {
       padding: 0 6px;

@@ -14,6 +14,13 @@ group inherit omission, boolean mapping and guarded save logic remain unchanged.
 
 Read this file and `css-theming.md` before changing settings markup or CSS.
 
+Light mode uses the approved blue-gray glass-inspired appearance through the
+existing semantic tokens: softly shaded cards, blue selected navigation/segments
+and sans-serif UI text. SettingsDialog owns its light-only shell/sidebar gradients;
+settings-shared.css owns card highlights and theme segment decoration. Compact
+spacing/control sizes stay unchanged. Dark/custom modes retain their existing
+styles; this does not enable native Windows material or change opacity settings.
+
 ## Navigation and ownership
 
 `SettingsDialog.svelte` is the parent shell for the settings page. Its primary categories:

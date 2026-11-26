@@ -1,5 +1,11 @@
 # Data Contracts
 
+The light ThemeColors preset is mirrored in TypeScript and Rust with the same
+21 existing keys. No config migration is needed: selecting light reads the
+built-in preset while saved custom theme colors remain untouched. Document
+bootstrap publishes general.theme as data-theme so light-only visual rules are
+removed when switching to dark/custom. No native opacity/material contract changes.
+
 `settings.ts::updateGeneral("savedSearches", value)` normalizes names and query
 defaults before publishing the store, using the same normalization as load and
 persistence. Duplicate trimmed names receive ` N` suffixes in list order; no

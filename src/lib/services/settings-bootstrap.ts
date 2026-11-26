@@ -21,6 +21,7 @@ export function applySettingsToDocument(): void {
   applyThemeColors(colors);
 
   const root = document.documentElement;
+  root.dataset.theme = s.general.theme;
   root.style.setProperty("--font-size-base", `${s.general.fontSizes.base}px`);
   root.style.setProperty("--font-size-secondary", `${s.general.fontSizes.secondary}px`);
   root.style.setProperty("--font-size-cardTitle", `${s.general.fontSizes.cardTitle}px`);
@@ -32,7 +33,7 @@ export function applySettingsToDocument(): void {
 
   if (s.general.theme === "light") {
     document.body.style.background =
-      "radial-gradient(circle at 50% -20%, rgba(255,255,255,0.4), transparent 38%), var(--bg-app)";
+      "radial-gradient(ellipse at 15% 0%, var(--surface-bg), transparent 65%), var(--bg-app)";
   } else {
     document.body.style.background = "";
   }

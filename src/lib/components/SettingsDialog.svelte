@@ -509,6 +509,32 @@
     line-height: 1.5;
   }
 
+  @media (forced-colors: none) {
+    :global(:root[data-theme="light"]) .settings-dialog {
+      background: linear-gradient(135deg, var(--surface-bg), var(--bg-settings) 65%, var(--bg-app));
+    }
+
+    :global(:root[data-theme="light"]) .settings-content {
+      background: transparent;
+    }
+
+    :global(:root[data-theme="light"]) .settings-sidebar {
+      background: linear-gradient(180deg, var(--surface-bg), var(--bg-settings));
+    }
+
+    :global(:root[data-theme="light"]) .settings-nav-item.active {
+      color: var(--card-bg);
+      background: var(--selection-color);
+      box-shadow: 0 3px 8px color-mix(in srgb, var(--selection-color) 16%, transparent);
+    }
+
+    :global(:root[data-theme="light"]) .settings-subnav-item.active {
+      color: var(--selection-color);
+      border-color: color-mix(in srgb, var(--selection-color) 30%, var(--border-subtle));
+      box-shadow: 0 1px 4px color-mix(in srgb, var(--text-primary) 5%, transparent);
+    }
+  }
+
   @media (max-width: 720px) {
     .settings-dialog {
       display: block;

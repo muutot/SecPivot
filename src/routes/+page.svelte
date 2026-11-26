@@ -2623,6 +2623,12 @@
     min-width: 680px;
   }
 
+  @media (forced-colors: none) {
+    :global(:root[data-theme="light"]) .app-shell {
+      background: linear-gradient(135deg, var(--surface-bg), var(--bg-settings) 65%, var(--bg-app));
+    }
+  }
+
   /* Android WebViews draw edge-to-edge; reserve the system bar insets. The
    * fallback keeps older WebViews (where `env()` is 0) usable, and the 30px
    * desktop drag bar is replaced by the real status bar height. */

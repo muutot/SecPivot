@@ -86,6 +86,19 @@
     background: color-mix(in srgb, var(--selection-color) 24%, var(--card-bg));
   }
 
+  @media (forced-colors: none) {
+    :global(:root[data-theme="light"]) .btn--primary {
+      color: var(--card-bg);
+      background: var(--selection-color);
+      box-shadow: 0 2px 5px color-mix(in srgb, var(--selection-color) 18%, transparent);
+    }
+
+    :global(:root[data-theme="light"]) .btn--primary:hover:not(:disabled) {
+      color: var(--card-bg);
+      background: color-mix(in srgb, var(--selection-color) 90%, var(--text-primary));
+    }
+  }
+
   .btn--danger {
     border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
     color: color-mix(in srgb, var(--danger-color) 80%, white);
