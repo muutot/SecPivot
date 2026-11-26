@@ -30,17 +30,23 @@ Keyboard activation retains focus on View/Hide and existing swap controls.
 
 This is the authoritative style reference for SecPivot UI. Read it before any markup or CSS change. The visual language is derived from the Clipboard Desktop project and is intentionally kept compatible so settings can share identical primitives.
 
-The user-approved light preset uses an ivory palette, warm-gray selection/focus,
+The user-approved light preset uses neutral white/gray surfaces and gray selection/focus,
 and sans-serif UI text. `settings-bootstrap` publishes the exact mode through
 `data-theme`; mode-scoped styles never activate for dark/custom. The existing
 21 tokens remain mirrored by Rust ThemeColors::light. Password/code fields keep
 the existing mono font. Light setting cards use 12px corners, 86%/58% translucent
-ivory gradients, 14px backdrop blur and quiet inset/drop shadows. Modal surfaces
-use 16px corners, 90%/82% ivory gradients, 18px surface blur and a lighter blurred
-backdrop. Shared RadioGroup/primary Button/theme choices use warm gray with pale text.
+white gradients, 14px backdrop blur and quiet inset/drop shadows. Modal surfaces
+use 16px corners, 90%/82% white gradients, 18px surface blur and a lighter blurred
+backdrop. Shared RadioGroup/theme choices use neutral gray with pale text.
+Primary Button uses a pale blue derived from linkColor; danger uses pale red,
+and warning uses pale yellow for the emergency-export action. Light action text
+uses textPrimary, including hover. These tints reuse existing semantic tokens;
+the shell, cards, inputs and sidebar never gain blue or brown background fills.
 Layouts, card padding and 28/30px controls stay compact. Glass decoration is gated
 off under forced colors. This is renderer styling, not Windows desktop acrylic.
-Preset text/surface contrast is at least 4.87:1; selected button text is 5.19:1.
+Preset text/surface contrast is at least 4.97:1; selected choice text is 5.33:1.
+Rendered light primary/danger/warning button text contrast is at least 10.60:1
+at rest; hover keeps dark text and the corresponding semantic tint.
 Browser inspection also measures composed card/control colors and theme switching.
 
 ## Style source-of-truth order
@@ -66,7 +72,7 @@ Preserve these characteristics unless the task explicitly requests a redesign:
 
 - Dense desktop utility layout with one continuous neutral surface, subtle borders, compact spacing, and restrained radii.
 - Near-black/dark-neutral surfaces with high-legibility primary text and progressively quieter secondary, muted, and faint text.
-- Dark preset: light-green `--accent` for product/focus emphasis and gray `--selection-color`; light preset: warm-gray accent/selection over ivory surfaces. Both use blue `--link-color` and semantic success/danger/warning colors.
+- Dark preset: light-green `--accent` for product/focus emphasis and gray `--selection-color`; light preset: neutral-gray accent/selection over white/gray surfaces. Both use blue `--link-color` and semantic success/danger/warning colors.
 - Toolbar row (the top chrome, itself the drag region via `data-tauri-drag-region="deep"`, frame-less window) owns left/right action groups (all 18 toolbar buttons `newEntry/save/saveAs/lock` + right group `toggleDetail/securityReport/similarPasswords/hibpCheck/expiredEntries/clearHistory/importMenu/exportMenu/dbSettings/appSettings/moreMenu` + window `windowMinimize/Maximize/Close` are ordered globally via `toolbarFullOrder` 18, assigned per-button sides via `toolbarSides` left/right, and per-item dividers via `toolbarFullSeparators` → `toolbar-divider` within same side; each `toolbarItems` entry (now 15 + 3 window) controls whether that action shows directly on the toolbar or is collected into the More menu / hidden for window buttons, `moreMenu` always visible and sortable; detail toggle uses `eye/eye-off` and is bound to `showDetailOnSelect` (click entry auto-shows detail, `selectionVersion` re-triggers same entry after close, `eye` enabled / `eye-off` disabled), close hover = `--danger-color`). The General → Toolbar secondary group provides the full 18-item sortable list with left/right switches and `|` dividers; old configs without `toolbarItems` derive initial values from the legacy `toolbarOverflowMenu` platform default, empty `toolbarFullOrder` restores default full order. Search is intentionally low-emphasis: this is a password manager, so it must not dominate the header. The vault file name lives in the status bar, not the toolbar.
 - The window is frame-less (`decorations: false`); `WindowControls.svelte` provides the shared minimize/maximize/close cluster with two variants: `toolbar` (bordered compact buttons matching `.icon-action`) and `chrome` (flat titlebar-style). The welcome/lock views get a 30px absolute top bar (`standalone-bar`) carrying the chrome variant and acting as the drag region; the settings shell deliberately shows NO window controls (only the ← back button) — window actions live in the main toolbar.
 - Three-pane main layout: group tree (left) → entry list (center) → detail (right). The group-tree title bar owns its local tools in the order new subgroup → expand all → collapse all; adding a group uses the current selection as its parent and is not duplicated in the global toolbar. Rows are transparent at rest, use `--hover-bg` on hover/focus, and mix selection color into the selected state. The detail pane is hideable via the toolbar `eye/eye-off` (now bound to `showDetailOnSelect` – click entry auto-shows detail, `selectionVersion` allows same entry to re-open after close) or the More-menu action (hidden collapses `--detail-width` to `0` and unmounts the pane); when visible its body is organized into tabs 字段 (fields) / 元属性 (meta) / 附件 (attachments) / 历史 (history), with the active tab underlined in `--selection-color`. On the attachments tab the whole area is a drag-and-drop dropzone (`.attachment-dropzone`): a dashed `--border-subtle` frame with `--font-size-tiny` hint text, highlighting `--selection-color` with a `color-mix` tint while a file drag hovers it, and adding dropped files in memory via `add_attachments` (fields never rewritten). On the fields tab the notes editor sits at the bottom of a column layout: fields scroll in the flex-1 region above, while `.notes-section` hugs its content (auto-sized, capped at ~45% of the detail body via `resizeNotes`, taller content scrolls internally) and needs no manual save (input + blur debounced auto-save via `update_entries`). The notes area is dual-mode: a read view (`notes-view`) renders the note text with inline clickable contacts — URLs open externally, emails/phones render as plain text — and clicking anywhere else on the note switches to the `notes-textarea` editor; blur or switching entries returns to the read view. The group tree and detail pane are additionally resizable via their `--group-width` / `--detail-width` variables and col-resize handles.
@@ -190,7 +196,7 @@ re-declare primitive classes:
   trailing action), `autofocus`; replaces `.text-input` and `.settings-input`.
 - `templates/form/Feedback.svelte` — success/danger banner, `inline` variant;
   replaces `.settings-feedback`.
-- `templates/action/Button.svelte` — variants `plain`/`primary`/`danger`
+- `templates/action/Button.svelte` — variants `plain`/`primary`/`danger`/`warning`
   (dialog footers), `action`/`field` (compact settings actions); replaces
   `.modal-button` and `.settings-action-button`.
 - `templates/menu/MenuItem.svelte` — viewport-menu row with `leading` snippet;

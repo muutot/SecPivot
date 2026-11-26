@@ -1,11 +1,13 @@
 # Data Contracts
 
-The ivory light ThemeColors preset is mirrored in TypeScript and Rust with the same
+The neutral white/gray light ThemeColors preset is mirrored in TypeScript and Rust with the same
 21 existing keys. No config migration is needed: selecting light reads the
 built-in preset while saved custom theme colors remain untouched. Document
 bootstrap publishes general.theme as data-theme so light-only visual rules are
-removed when switching to dark/custom. Warm-gray accents replace blue backgrounds;
-shell/sidebar/card translucency is renderer decoration. No native opacity/material contract changes.
+removed when switching to dark/custom. Gray accents and white/gray surfaces replace warm fills;
+shell/sidebar/card translucency is renderer decoration. Primary/danger/warning
+buttons derive pale blue/red/yellow from existing link/danger/warning tokens;
+there are no new persisted keys. No native opacity/material contract changes.
 
 `settings.ts::updateGeneral("savedSearches", value)` normalizes names and query
 defaults before publishing the store, using the same normalization as load and

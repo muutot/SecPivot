@@ -2471,7 +2471,7 @@
       <Button onclick={() => (emergencyExportOpen = false)}
         >{t(settings.general.language, "common.cancel")}</Button
       >
-      <Button variant="primary" onclick={() => void confirmExportEmergency()}
+      <Button variant="warning" onclick={() => void confirmExportEmergency()}
         >{t(settings.general.language, "page.export")}</Button
       >
     {/snippet}

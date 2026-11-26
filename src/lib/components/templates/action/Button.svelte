@@ -6,9 +6,10 @@
    *  - plain    dialog footer button
    *  - primary  emphasized dialog action
    *  - danger   destructive dialog action
+   *  - warning  cautionary dialog action
    *  - action   compact secondary action (settings rows)
    *  - field    action aligned with a 30px input */
-  export type ButtonVariant = "plain" | "primary" | "danger" | "action" | "field";
+  export type ButtonVariant = "plain" | "primary" | "danger" | "warning" | "action" | "field";
 
   interface Props {
     variant?: ButtonVariant;
@@ -63,7 +64,8 @@
   /* Dialog footer buttons (.modal-button) */
   .btn--plain,
   .btn--primary,
-  .btn--danger {
+  .btn--danger,
+  .btn--warning {
     height: 30px;
     padding: 0 14px;
     color: var(--text-secondary);
@@ -77,6 +79,16 @@
     background: var(--hover-bg);
   }
 
+  .btn--warning {
+    border-color: color-mix(in srgb, var(--warning-color) 50%, transparent);
+    background: color-mix(in srgb, var(--warning-color) 14%, var(--card-bg));
+  }
+
+  .btn--warning:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--warning-color) 20%, var(--card-bg));
+  }
+
   .btn--primary {
     border-color: var(--selection-color);
     background: color-mix(in srgb, var(--selection-color) 18%, var(--card-bg));
@@ -88,14 +100,29 @@
 
   @media (forced-colors: none) {
     :global(:root[data-theme="light"]) .btn--primary {
-      color: var(--card-bg);
-      background: var(--selection-color);
-      box-shadow: 0 2px 5px color-mix(in srgb, var(--selection-color) 18%, transparent);
+      color: var(--text-primary);
+      border-color: color-mix(in srgb, var(--link-color) 38%, var(--border-subtle));
+      background: color-mix(in srgb, var(--link-color) 16%, var(--card-bg));
+      box-shadow: 0 2px 5px color-mix(in srgb, var(--link-color) 8%, transparent);
     }
 
     :global(:root[data-theme="light"]) .btn--primary:hover:not(:disabled) {
-      color: var(--card-bg);
-      background: color-mix(in srgb, var(--selection-color) 90%, var(--text-primary));
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--link-color) 22%, var(--card-bg));
+    }
+
+    :global(:root[data-theme="light"]) .btn--danger {
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--danger-color) 12%, var(--card-bg));
+    }
+
+    :global(:root[data-theme="light"]) .btn--danger:hover:not(:disabled) {
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--danger-color) 18%, var(--card-bg));
+    }
+
+    :global(:root[data-theme="light"]) .btn--warning {
+      color: var(--text-primary);
     }
   }
 
@@ -106,7 +133,9 @@
   }
 
   .btn--plain:disabled,
-  .btn--primary:disabled {
+  .btn--primary:disabled,
+  .btn--danger:disabled,
+  .btn--warning:disabled {
     cursor: not-allowed;
     opacity: 0.6;
   }
