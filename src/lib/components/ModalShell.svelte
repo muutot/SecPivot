@@ -183,7 +183,12 @@
   @media (forced-colors: none) {
     :global(:root[data-theme="light"]) .modal-shell {
       border-radius: 16px;
-      background: linear-gradient(145deg, var(--card-bg), var(--surface-bg));
+      background: linear-gradient(
+        145deg,
+        color-mix(in srgb, var(--card-bg) 90%, transparent),
+        color-mix(in srgb, var(--surface-bg) 82%, transparent)
+      );
+      backdrop-filter: blur(18px);
       box-shadow:
         inset 0 1px 0 var(--card-bg),
         0 16px 48px color-mix(in srgb, var(--text-primary) 18%, transparent);

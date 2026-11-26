@@ -14,12 +14,15 @@ group inherit omission, boolean mapping and guarded save logic remain unchanged.
 
 Read this file and `css-theming.md` before changing settings markup or CSS.
 
-Light mode uses the approved blue-gray glass-inspired appearance through the
-existing semantic tokens: softly shaded cards, blue selected navigation/segments
+Light mode uses the approved ivory glass-inspired appearance through the
+existing semantic tokens: translucent warm-white cards, warm-gray selected navigation/segments
 and sans-serif UI text. SettingsDialog owns its light-only shell/sidebar gradients;
-settings-shared.css owns card highlights and theme segment decoration. Compact
+settings-shared.css owns card highlights, 14px backdrop blur and theme segment decoration. Compact
 spacing/control sizes stay unchanged. Dark/custom modes retain their existing
 styles; this does not enable native Windows material or change opacity settings.
+
+ModalShell follows the same ivory treatment with 90%/82% translucent gradient
+stops and 18px surface blur in light mode only, outside forced colors.
 
 ## Navigation and ownership
 

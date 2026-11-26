@@ -511,7 +511,12 @@
 
   @media (forced-colors: none) {
     :global(:root[data-theme="light"]) .settings-dialog {
-      background: linear-gradient(135deg, var(--surface-bg), var(--bg-settings) 65%, var(--bg-app));
+      background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--surface-bg) 90%, transparent),
+        color-mix(in srgb, var(--bg-settings) 82%, transparent) 65%,
+        color-mix(in srgb, var(--bg-app) 78%, transparent)
+      );
     }
 
     :global(:root[data-theme="light"]) .settings-content {
@@ -519,7 +524,11 @@
     }
 
     :global(:root[data-theme="light"]) .settings-sidebar {
-      background: linear-gradient(180deg, var(--surface-bg), var(--bg-settings));
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-bg) 72%, transparent),
+        color-mix(in srgb, var(--bg-settings) 58%, transparent)
+      );
     }
 
     :global(:root[data-theme="light"]) .settings-nav-item.active {
