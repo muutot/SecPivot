@@ -438,13 +438,24 @@
     }
   }
 
-  function openUrlExternal(): void {
+  async function openUrlExternal(): Promise<void> {
     if (!entry.url) return;
     // KeePass "Copy URLs instead of opening": clicking copies the URL and
     // keeps the sensitive-copy path (lock-after-copy / timed clear).
     if (s.general.copyUrlsInsteadOfOpening) {
       void copyValue(entry.url, true);
       return;
+    }
+    if (isTauriRuntime()) {
+      // Honor the entry's OverrideURL and the global scheme-override table
+      // before falling back to the system handler for a plain URL.
+      try {
+        const result = await vault.openEntryUrl(entry.uuid);
+        if (result.handled) return;
+      } catch {
+        showTip(t(lang, "detail.invalidUrl"), "error");
+        return;
+      }
     }
     openExternalUrl(entry.url);
   }

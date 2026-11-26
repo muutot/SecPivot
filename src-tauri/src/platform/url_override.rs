@@ -233,6 +233,146 @@ pub fn resolve_and_expand(
     }
 }
 
+/// Split a KeePass `cmd://` command line into program + arguments. Double
+/// quotes group arguments containing spaces; a quote can start anywhere in a
+/// token (KeePass/ShellExecute convention). Escaped quotes are intentionally
+/// not supported — the official docs warn that `\"` is interpreted
+/// inconsistently by target applications.
+pub fn parse_command_line(line: &str) -> Result<(String, Vec<String>), String> {
+    let mut tokens: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut has_token = false;
+    for c in line.chars() {
+        match c {
+            '"' => {
+                in_quotes = !in_quotes;
+                has_token = true;
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if has_token {
+                    tokens.push(std::mem::take(&mut current));
+                    has_token = false;
+                }
+            }
+            c => {
+                current.push(c);
+                has_token = true;
+            }
+        }
+    }
+    if in_quotes {
+        return Err("命令行引号未闭合".to_owned());
+    }
+    if has_token {
+        tokens.push(current);
+    }
+    if tokens.is_empty() || tokens[0].is_empty() {
+        return Err("命令行程序名为空".to_owned());
+    }
+    let program = tokens.remove(0);
+    Ok((program, tokens))
+}
+
+/// KeePass `{PASSWORD_ENC}`: DPAPI-protect the password with the fixed public
+/// entropy KeePass uses, then base64-encode. The ciphertext is only valid for
+/// the current Windows user and is meant for KeePass's `-pw-enc` parameter.
+/// On non-Windows platforms the placeholder stays empty (no OS key store).
+#[cfg(target_os = "windows")]
+pub fn password_enc(plain: &str) -> Result<String, String> {
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
+
+    if plain.is_empty() {
+        return Ok(String::new());
+    }
+    // KeePass StrUtil.m_pbOptEnt, published constant (not a secret).
+    const ENTROPY: &[u8] = &[0xA5, 0x74, 0x2E, 0xEC];
+    let cipher = super::dpapi::protect_bytes_with_entropy(plain.as_bytes(), ENTROPY)?;
+    Ok(BASE64.encode(cipher))
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn password_enc(_plain: &str) -> Result<String, String> {
+    Ok(String::new())
+}
+
+/// Best-effort browser executable detection for the built-in browser
+/// overrides. Returns paths only for executables that actually exist, so a
+/// missing browser yields an empty placeholder and a clear launch failure
+/// instead of silently opening the wrong application.
+pub fn detect_browser_paths() -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let candidates: &[(&str, &[&str])] = &[
+        (
+            "EDGE",
+            &[
+                "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+                "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+            ],
+        ),
+        (
+            "FIREFOX",
+            &[
+                "C:/Program Files/Mozilla Firefox/firefox.exe",
+                "C:/Program Files (x86)/Mozilla Firefox/firefox.exe",
+            ],
+        ),
+        (
+            "GOOGLECHROME",
+            &[
+                "C:/Program Files/Google/Chrome/Application/chrome.exe",
+                "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+            ],
+        ),
+        (
+            "INTERNETEXPLORER",
+            &["C:/Program Files (x86)/Internet Explorer/iexplore.exe"],
+        ),
+        (
+            "OPERA",
+            &[
+                "C:/Program Files/Opera/launcher.exe",
+                "C:/Program Files (x86)/Opera/launcher.exe",
+            ],
+        ),
+    ];
+    // Also honor LOCALAPPDATA for per-user installs.
+    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let local_candidates: Vec<(String, String)> = if local.is_empty() {
+        Vec::new()
+    } else {
+        vec![
+            (
+                "FIREFOX".to_owned(),
+                format!("{local}/Mozilla Firefox/firefox.exe"),
+            ),
+            (
+                "GOOGLECHROME".to_owned(),
+                format!("{local}/Google/Chrome/Application/chrome.exe"),
+            ),
+            (
+                "OPERA".to_owned(),
+                format!("{local}/Programs/Opera/launcher.exe"),
+            ),
+        ]
+    };
+    for (name, paths) in candidates {
+        for path in *paths {
+            if std::path::Path::new(path).is_file() {
+                out.insert((*name).to_owned(), (*path).to_owned());
+                break;
+            }
+        }
+    }
+    for (name, path) in &local_candidates {
+        if !out.contains_key(name) && std::path::Path::new(path).is_file() {
+            out.insert(name.clone(), path.clone());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

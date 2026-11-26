@@ -157,6 +157,9 @@ interface VaultStore {
   restoreEntryVersion: (uuid: string, selection: HistorySelection) => Promise<VaultState>;
   totpCode: (uuid: string) => Promise<TotpCode>;
   getEntryPassword: (uuid: string) => Promise<string>;
+  /** Resolve entry OverrideURL / global scheme overrides; `handled: true`
+   *  means the backend already launched the command or URL. */
+  openEntryUrl: (uuid: string) => Promise<{ handled: boolean }>;
   /** KeePass `Entry → Data Exchange → Copy Entry`: put the entries on the
    *  clipboard as a KDBX entry-exchange payload. The payload is built and
    *  written entirely in the backend (it is binary, so the renderer cannot
@@ -1394,6 +1397,15 @@ export const vault: VaultStore = {
     }
     const current = browserState ?? (await ensureBrowserLoaded());
     return findEntry(current.root, uuid)?.password ?? "";
+  },
+
+  /** Resolve the KeePass URL override chain on the backend. Returns whether
+   *  the backend handled the launch; if false, the caller opens the plain URL. */
+  async openEntryUrl(uuid: string): Promise<{ handled: boolean }> {
+    if (isTauriRuntime()) {
+      return invokeSession<{ handled: boolean }>("open_entry_url", { uuid });
+    }
+    return { handled: false };
   },
 
   async copyEntriesExchange(uuids: string[], encrypt: boolean): Promise<number> {

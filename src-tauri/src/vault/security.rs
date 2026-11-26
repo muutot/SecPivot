@@ -542,6 +542,15 @@ impl VaultSession {
 }
 
 impl VaultSession {
+    /// The entry's `OverrideURL` field, when set. KeePass runs this command
+    /// template instead of the URL field when opening an entry.
+    pub fn get_entry_override_url(&self, uuid: &str) -> Result<Option<String>, String> {
+        let db = self.require_db()?;
+        let id = parse_entry_id(uuid)?;
+        let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
+        Ok(entry.override_url.clone().filter(|s| !s.trim().is_empty()))
+    }
+
     pub fn get_entry_password(&self, uuid: &str) -> Result<String, String> {
         let db = self.require_db()?;
         let id = parse_entry_id(uuid)?;

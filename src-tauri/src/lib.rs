@@ -574,7 +574,9 @@ pub fn run() {
             #[cfg(desktop)]
             commands::rpc_sessions,
             #[cfg(desktop)]
-            commands::rpc_close_session
+            commands::rpc_close_session,
+            #[cfg(desktop)]
+            commands::open_entry_url
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

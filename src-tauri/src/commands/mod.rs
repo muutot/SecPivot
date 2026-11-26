@@ -24,6 +24,8 @@ pub(crate) mod remote;
 pub(crate) mod tcato;
 #[cfg(test)]
 mod tests;
+#[cfg(desktop)]
+pub(crate) mod url_open;
 pub(crate) mod vault;
 pub(crate) mod website_rules;
 
@@ -43,6 +45,8 @@ pub(crate) use self::qrcode::*;
 pub(crate) use self::remote::*;
 #[cfg(desktop)]
 pub(crate) use self::tcato::*;
+#[cfg(desktop)]
+pub(crate) use self::url_open::*;
 pub(crate) use self::vault::*;
 pub(crate) use self::website_rules::*;
 
