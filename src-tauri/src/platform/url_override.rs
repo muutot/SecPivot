@@ -397,9 +397,11 @@ mod tests {
 
     #[test]
     fn builtin_first_match_wins_and_custom_rules_follow() {
-        let mut integration = IntegrationSettings::default();
         // Two http built-ins enabled: EDGE (0x4000) comes before FIREFOX (0x8).
-        integration.built_in_overrides_enabled = 0x4000 | 0x8;
+        let mut integration = IntegrationSettings {
+            built_in_overrides_enabled: 0x4000 | 0x8,
+            ..IntegrationSettings::default()
+        };
         let tpl = resolve_override(&integration, "http://example.com").unwrap();
         assert_eq!(tpl, "cmd://{EDGE} \"{BASE}\"");
 
@@ -415,8 +417,10 @@ mod tests {
 
     #[test]
     fn disabled_master_switch_and_disabled_rules_do_not_match() {
-        let mut integration = IntegrationSettings::default();
-        integration.built_in_overrides_enabled = 0x8;
+        let mut integration = IntegrationSettings {
+            built_in_overrides_enabled: 0x8,
+            ..IntegrationSettings::default()
+        };
         integration.custom_overrides.push(UrlSchemeOverride {
             enabled: false,
             scheme: "http".into(),
@@ -451,9 +455,11 @@ mod tests {
     #[test]
     fn expand_base_and_entry_placeholders() {
         let tpl = "{EDGE} \"{BASE}\" {BASE:HOST} {USERNAME} {PASSWORD_ENC} {URL:SCM}";
-        let mut ctx = UrlOverrideContext::default();
-        ctx.app_dir = "C:\\Program Files\\SecPivot".into();
-        ctx.password_enc = "ENC".into();
+        let mut ctx = UrlOverrideContext {
+            app_dir: "C:\\Program Files\\SecPivot".into(),
+            password_enc: "ENC".into(),
+            ..UrlOverrideContext::default()
+        };
         ctx.browsers.insert("EDGE".into(), "msedge.exe".into());
         let expanded = expand(tpl, "https://example.com/p", &entry(), &ctx).unwrap();
         assert_eq!(
@@ -486,8 +492,10 @@ mod tests {
 
     #[test]
     fn resolve_and_expand_combines_both_steps() {
-        let mut integration = IntegrationSettings::default();
-        integration.built_in_overrides_enabled = 0x8; // FIREFOX http
+        let integration = IntegrationSettings {
+            built_in_overrides_enabled: 0x8, // FIREFOX http
+            ..IntegrationSettings::default()
+        };
         let mut ctx = UrlOverrideContext::default();
         ctx.browsers.insert("FIREFOX".into(), "firefox.exe".into());
         let out = resolve_and_expand(&integration, "http://example.com/", &entry(), &ctx)

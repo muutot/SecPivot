@@ -16,6 +16,28 @@ use crate::platform::url_override::{self, UrlOverrideContext};
 use std::process::Command;
 use std::sync::Mutex;
 
+/// One built-in override row for the settings panel (read-only metadata).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuiltInOverrideInfo {
+    pub flag: u64,
+    pub scheme: String,
+    pub url_override: String,
+}
+
+/// The 27 official built-in overrides, in KeePass source order.
+#[tauri::command]
+pub(crate) fn list_builtin_url_overrides() -> Vec<BuiltInOverrideInfo> {
+    crate::config::settings::BUILT_IN_URL_OVERRIDES
+        .iter()
+        .map(|o| BuiltInOverrideInfo {
+            flag: o.flag,
+            scheme: o.scheme.to_owned(),
+            url_override: o.url_override.to_owned(),
+        })
+        .collect()
+}
+
 /// What the frontend should do after this command returns.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

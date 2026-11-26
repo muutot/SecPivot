@@ -1272,6 +1272,26 @@ export const zhCN = {
   "pw.patternNoFit": "pattern 无法容纳必含字符 {char}",
   "pw.genPoolEmpty": "密码生成字符池为空",
   "pw.badBound": "随机字符池大小无效",
+  "urlOverrides.title": "URL 覆盖",
+  "urlOverrides.desc":
+    "KeePass「工具 → 选项 → 集成 → URL 覆盖」。按 URL 协议替换打开方式；可启用内置规则、添加自定义规则。",
+  "urlOverrides.toggle": "启用 URL 覆盖",
+  "urlOverrides.toggleDesc":
+    "关闭时所有覆盖规则（含条目级 OverrideURL）均不生效，URL 交给系统默认程序打开。",
+  "urlOverrides.builtin": "内置规则（KeePass 27 项）",
+  "urlOverrides.builtinDesc":
+    "官方内置规则默认全部关闭。勾选后按列表顺序匹配，排在前面的规则优先。",
+  "urlOverrides.custom": "自定义规则",
+  "urlOverrides.customDesc": "自定义规则在启用的内置规则之后匹配；协议相同的规则以先出现者为准。",
+  "urlOverrides.scheme": "协议",
+  "urlOverrides.template": "覆盖命令 / URL",
+  "urlOverrides.enabled": "启用",
+  "urlOverrides.add": "添加规则",
+  "urlOverrides.remove": "删除规则",
+  "urlOverrides.noCustom": "暂无自定义规则",
+  "urlOverrides.help":
+    "占位符：{BASE} 为被覆盖的 URL，{BASE:HOST} 等可取其中一部分；{URL} 为条目网址；{USERNAME}/{PASSWORD}/{TITLE}/{NOTES} 为条目字段；cmd:// 前缀表示启动外部命令。",
+  "nav.integrations.urlOverrides": "URL 覆盖",
 } as const;
 
 export type I18nKey = keyof typeof zhCN;

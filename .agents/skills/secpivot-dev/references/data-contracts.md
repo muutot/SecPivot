@@ -1,5 +1,24 @@
 # Data Contracts
 
+`AppSettings.integration` mirrors KeePass `AceIntegration.UrlSchemeOverrides`:
+`urlOverrideEnabled` (master switch, default on), `builtInOverridesEnabled`
+(bitmask over the 27 official built-in rules, `0` = all off), and
+`customOverrides` (`enabled` / `scheme` / `urlOverride` rows). The built-in
+table itself is code-defined in `config/settings.rs` and never persisted; a
+hand-edited mask is normalized against the 27 known flag bits on load. Custom
+rules are trimmed, lowercased, deduplicated by (scheme, target), and capped at 256. Both sides are covered by `check-contract` and config round-trip tests.
+
+Entry URL opening goes through the `open_entry_url` IPC command: the entry's
+`OverrideURL` template (when set) takes precedence, then the global scheme
+override chain (enabled built-ins first, then customs). Placeholders expand in
+`platform/url_override.rs`: `{BASE}`/`{BASE:PART}` for the URL being overridden,
+`{URL}`/`{URL:PART}` for the entry URL, `{USERNAME}`/`{PASSWORD}`/`{TITLE}`/
+`{NOTES}` entry fields, `{APPDIR}`, browser paths, and `{PASSWORD_ENC}` (Windows
+DPAPI with KeePass's fixed entropy). `cmd://` templates are split by
+`parse_command_line` and launched as a child process; a plain override target
+is restricted to http/https. Without an override the frontend opens http(s)
+only, preserving the shared-vault `javascript:`/`file:` guard.
+
 Group snapshots retain `searchingSetting: boolean | null` as the original KDBX
 tri-state and expose `enableSearching: boolean` as the effective value resolved
 over the complete tree. Only null inherits; an explicit true/false overrides the

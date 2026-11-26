@@ -1331,4 +1331,25 @@ export const en: Record<I18nKey, string> = {
   "pw.patternNoFit": "pattern cannot fit required character {char}",
   "pw.genPoolEmpty": "Password character pool is empty",
   "pw.badBound": "Invalid random pool size",
+  "urlOverrides.title": "URL Overrides",
+  "urlOverrides.desc":
+    "KeePass 'Tools → Options → Integration → URL Overrides'. Replace the open action by URL scheme; enable built-in rules or add custom ones.",
+  "urlOverrides.toggle": "Enable URL overrides",
+  "urlOverrides.toggleDesc":
+    "When off, all rules (including entry-level OverrideURL) are ignored and URLs are opened by the system handler.",
+  "urlOverrides.builtin": "Built-in rules (27 from KeePass)",
+  "urlOverrides.builtinDesc":
+    "All official built-in rules are disabled by default. Enabled rules are matched in list order; the first match wins.",
+  "urlOverrides.custom": "Custom rules",
+  "urlOverrides.customDesc":
+    "Custom rules are checked after enabled built-ins; among equal schemes the first rule wins.",
+  "urlOverrides.scheme": "Scheme",
+  "urlOverrides.template": "Override command / URL",
+  "urlOverrides.enabled": "Enabled",
+  "urlOverrides.add": "Add rule",
+  "urlOverrides.remove": "Remove rule",
+  "urlOverrides.noCustom": "No custom rules yet",
+  "urlOverrides.help":
+    "Placeholders: {BASE} is the overridden URL and {BASE:HOST} etc. take a part; {URL} is the entry URL; {USERNAME}/{PASSWORD}/{TITLE}/{NOTES} are entry fields; a cmd:// prefix launches an external command.",
+  "nav.integrations.urlOverrides": "URL Overrides",
 };

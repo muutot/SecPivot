@@ -10,6 +10,7 @@
   import RemoteSettingsPanel from "$lib/components/settings/RemoteSettingsPanel.svelte";
   import BridgeSettingsPanel from "$lib/components/settings/BridgeSettingsPanel.svelte";
   import RpcSettingsPanel from "$lib/components/settings/RpcSettingsPanel.svelte";
+  import UrlOverridesSettingsPanel from "$lib/components/settings/UrlOverridesSettingsPanel.svelte";
   import KeyboardSettingsPanel from "$lib/components/settings/KeyboardSettingsPanel.svelte";
   import AboutSettingsPanel from "$lib/components/settings/AboutSettingsPanel.svelte";
 
@@ -25,7 +26,7 @@
   type GeneralTab = "general" | "network";
   type AppearanceTab = "theme" | "display" | "window" | "layout" | "toolbar";
   type RemoteTab = "s3" | "webdav";
-  type IntegrationsTab = "http" | "rpc";
+  type IntegrationsTab = "http" | "rpc" | "url";
 
   interface Props {
     onclose: () => void;
@@ -149,6 +150,7 @@
       tabs: [
         { id: "http", label: "KeePassHttp" },
         { id: "rpc", label: "KeePassRPC" },
+        { id: "url", label: t(lang, "nav.integrations.urlOverrides") },
       ],
     },
     {
@@ -291,6 +293,8 @@
     {:else if active === "integrations"}
       {#if integrationsTab === "rpc"}
         <RpcSettingsPanel {onclose} showHeader={false} />
+      {:else if integrationsTab === "url"}
+        <UrlOverridesSettingsPanel {onclose} showHeader={false} />
       {:else}
         <BridgeSettingsPanel {onclose} showHeader={false} />
       {/if}

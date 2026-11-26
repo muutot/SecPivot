@@ -47,13 +47,13 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Integration（集成）
 
-| KeePass 项                                  | SecPivot 状态                                                |
-| ------------------------------------------- | ------------------------------------------------------------ |
-| Auto-Type global hotkey                     | ✅ `keyboard.autoTypeGlobal`                                 |
-| TCATO summon hotkey                         | ✅ `keyboard.tcatoSummonGlobal`（KeePass 双通道混淆对等）    |
-| Browser integration                         | ✅ `bridge` (KeePassHttp) / `rpc` (KeePassRPC)               |
-| URL overrides                               | ❌ 未实现（有 `overrideUrl` 字段但无全局 URL scheme 覆盖表） |
-| Auto-Type inter-key delay / abort-on-window | ❌ 未实现（KeePass.config.xml-only 高级项）                  |
+| KeePass 项                                  | SecPivot 状态                                                                                                                                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-Type global hotkey                     | ✅ `keyboard.autoTypeGlobal`                                                                                                                                                          |
+| TCATO summon hotkey                         | ✅ `keyboard.tcatoSummonGlobal`（KeePass 双通道混淆对等）                                                                                                                             |
+| Browser integration                         | ✅ `bridge` (KeePassHttp) / `rpc` (KeePassRPC)                                                                                                                                        |
+| URL overrides                               | ✅ `integration.urlOverrideEnabled` / `builtInOverridesEnabled`（27 内置）/ `customOverrides`；设置页 Integrations → URL Overrides，运行链 `open_entry_url`（条目级 → 内置 → 自定义） |
+| Auto-Type inter-key delay / abort-on-window | ❌ 未实现（KeePass.config.xml-only 高级项）                                                                                                                                           |
 
 ### Advanced（高级）
 
