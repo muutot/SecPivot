@@ -46,7 +46,9 @@ SecPivot 在多库关闭中额外验证整个会话集合及并发修改，失�
 MemoryStorage 回归覆盖保存重开、仅密钥文件和失败路径。
 `MasterKeyChangeForceOnce` 的未设置/False/True 已在依赖模型和 XML 转换中
 保留，实际 KDBX/离线远程保存、另存为、改 KDF 与只读回归通过。
-到期规则、提醒/强制执行和一次性标志消费仍待实现，不能据此标记完成。
+成功更换主密钥时，同次权威保存将 True 消费为 False，再回填会话；失败/
+只读拒绝保留原请求。真实 KDBX、仅密钥文件、并发及离线远程回归通过。
+到期规则和提醒/强制执行仍待实现，不能据此标记完成。
 
 `AceSecurity.MasterKeyTries` 按官方
 [AceSecurity.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceSecurity.cs)

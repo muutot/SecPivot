@@ -105,6 +105,7 @@ mod uuid {
 #[derive(Default)]
 pub(crate) struct Meta {
     master_key_changed: Option<chrono::NaiveDateTime>,
+    master_key_change_force_once: Option<bool>,
 }
 pub(crate) struct Database {
     id: u8,

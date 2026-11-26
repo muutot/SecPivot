@@ -91,6 +91,7 @@ impl Drop for ObservedBytes {
 #[derive(Default)]
 pub(crate) struct Meta {
     master_key_changed: Option<chrono::NaiveDateTime>,
+    master_key_change_force_once: Option<bool>,
 }
 #[derive(Default)]
 pub(crate) struct Database {

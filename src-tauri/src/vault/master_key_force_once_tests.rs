@@ -115,3 +115,125 @@ fn master_key_force_once_read_only_refusal_retains_flag_and_original_bytes() {
     assert_eq!(std::fs::read(&path).unwrap(), original);
     session.close();
 }
+
+#[test]
+fn master_key_force_once_successful_change_consumes_only_true_and_reopens() {
+    let dir = TempDir::new().unwrap();
+    for (index, flag) in [None, Some(false), Some(true)].into_iter().enumerate() {
+        let path = dir.path().join(format!("change-{index}.kdbx"));
+        std::fs::write(&path, bytes(flag)).unwrap();
+        let mut session = VaultSession::default();
+        session.open(&path, PASSWORD, None).unwrap();
+        session
+            .change_master_key("synthetic-new-force-once", None)
+            .unwrap();
+        let expected = flag.map(|_| false);
+        assert_flag(session.require_db().unwrap(), expected);
+        session.save().unwrap();
+        session.close();
+        session
+            .open(&path, "synthetic-new-force-once", None)
+            .unwrap();
+        assert_flag(session.require_db().unwrap(), expected);
+        session.close();
+    }
+}
+
+#[test]
+fn master_key_force_once_failed_change_keeps_request_credentials_and_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("failed-change.kdbx");
+    let original = bytes(Some(true));
+    std::fs::write(&path, &original).unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, PASSWORD, None).unwrap();
+    assert!(session
+        .change_master_key("synthetic-new", Some(&dir.path().join("missing.key")))
+        .is_err());
+    assert_flag(session.require_db().unwrap(), Some(true));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert!(session.change_master_key("synthetic-new", None).is_err());
+    assert_flag(session.require_db().unwrap(), Some(true));
+    assert!(session.password.as_deref() == Some(PASSWORD));
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    for _ in 0..3 {
+        session.note_save_failure();
+    }
+    assert!(session.change_master_key("synthetic-new", None).is_err());
+    assert_flag(session.require_db().unwrap(), Some(true));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    session.close();
+}
+
+#[test]
+fn master_key_force_once_concurrent_edit_completion_consumes_committed_request() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("concurrent-change.kdbx");
+    std::fs::write(&path, bytes(Some(true))).unwrap();
+    let mut session = VaultSession::default();
+    session.open(&path, PASSWORD, None).unwrap();
+    let (db, target, revision) = session.prepare_change().unwrap();
+    let (outcome, changed_at) = persist_change(db, "synthetic-new", None, &target).unwrap();
+    assert_flag(session.require_db().unwrap(), Some(true));
+    session
+        .add_group(&GroupInput {
+            parent_uuid: Some(ROOT_GROUP_UUID.into()),
+            icon: None,
+            name: "Concurrent edit".into(),
+        })
+        .unwrap();
+    let state = session
+        .complete_change("synthetic-new", None, revision, outcome, changed_at)
+        .unwrap();
+    assert!(state.dirty);
+    assert_eq!(state.root.children.len(), 1);
+    assert_flag(session.require_db().unwrap(), Some(false));
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-new", None).unwrap();
+    assert_flag(session.require_db().unwrap(), Some(false));
+    assert_eq!(session.state().unwrap().unwrap().root.children.len(), 1);
+    session.close();
+}
+
+#[test]
+fn master_key_force_once_offline_remote_keyfile_only_change_consumes_request() {
+    let dir = TempDir::new().unwrap();
+    let storage = Arc::new(MemoryStorage::default());
+    storage.put("synthetic.kdbx", &bytes(Some(true))).unwrap();
+    let keyfile = dir.path().join("synthetic.key");
+    std::fs::write(&keyfile, b"0123456789abcdef0123456789abcdef").unwrap();
+    let mut session = VaultSession::default();
+    session
+        .open_remote(
+            storage.clone(),
+            "synthetic.kdbx",
+            PASSWORD,
+            None,
+            RemoteMode::InMemory,
+            dir.path(),
+            0,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    session.change_master_key("", Some(&keyfile)).unwrap();
+    assert_flag(session.require_db().unwrap(), Some(false));
+    session.close();
+    session
+        .open_remote(
+            storage,
+            "synthetic.kdbx",
+            "",
+            Some(&keyfile),
+            RemoteMode::InMemory,
+            dir.path(),
+            0,
+            DEFAULT_BACKUP_TEMPLATE,
+        )
+        .unwrap();
+    assert_flag(session.require_db().unwrap(), Some(false));
+    session.close();
+}

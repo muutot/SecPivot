@@ -401,6 +401,11 @@ pub(crate) fn persist_change(
     // that was committed so concurrent edits and later saves retain it.
     let changed_at = Utc::now().naive_utc().trunc_subsecs(0);
     db.meta.master_key_changed = Some(changed_at);
+    // Consume the one-time request in the same authoritative write as the
+    // new key. A failed write leaves the live request available for retry.
+    if db.meta.master_key_change_force_once == Some(true) {
+        db.meta.master_key_change_force_once = Some(false);
+    }
     let outcome = persist_snapshot(&db, &key, target, false)?;
     Ok((outcome, changed_at))
 }

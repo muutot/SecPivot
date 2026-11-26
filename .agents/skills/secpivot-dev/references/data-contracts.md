@@ -4,7 +4,11 @@ KDBX Meta.master_key_change_force_once is Option<bool> in the patched dependency
 and XML conversion. Missing preserves the implicit false default; explicit
 false/true use the existing True/False converter and remain present on save.
 Ordinary local/remote saves, Save As and storage/KDF updates preserve this field.
-No public DTO/IPC, expiry execution or consumption behavior is added here.
+Successful persist_change consumes an explicit true request as explicit false
+in the authoritative new-key write; complete_change applies the same value to
+the live metadata alongside the exact committed date. Missing/false stay intact.
+Failed preparation/persistence and ordinary Save/Save As preserve the request;
+concurrent ordinary edits remain dirty. No public DTO/IPC or expiry UI yet.
 
 Local/remote creation initializes KDBX Meta.master_key_changed to a UTC value
 at whole-second precision. Master-key persistence consumes the prepared Database

@@ -4,8 +4,11 @@ The ninth reviewed KeePass patch preserves Meta.master_key_change_force_once
 in the core model and XML conversion. Native master_key_force_once_tests.rs
 covers absent/false/true across local/remote save/reopen, Save As, KDF/storage
 changes and read-only refusal. A dependency regression starts from literal XML
-and executes both model conversions. Enforcement and flag consumption are
-separate pending work; this patch is metadata fidelity only.
+and executes both model conversions. First-party persist_change/complete_change
+consume true only after an authoritative new-key commit. Additional native tests
+cover three-state local reopen, failed writes/read-only refusal, concurrent edits
+and offline remote keyfile-only change. Opening-time enforcement remains pending;
+the dependency patch itself is metadata fidelity only.
 
 vault/master_key_time_tests.rs exercises real temporary KDBX dates for local/
 remote creation, password/keyfile-only changes, concurrent completion, failed

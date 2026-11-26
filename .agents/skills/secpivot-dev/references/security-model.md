@@ -1,8 +1,10 @@
 # Security Model
 
 The one-time MasterKeyChangeForceOnce flag now survives KDBX parsing and saves,
-including absent versus explicit false/true. Preservation does not enforce an
-expired key or consume the request; those remain pending. Dependency tests
+including absent versus explicit false/true. A successful master-key change
+consumes true in the same write as the new key, then adopts false in the live
+session. Failures/read-only refusal preserve the request and credentials.
+Expiry evaluation and opening-time enforcement remain pending. Dependency tests
 begin with literal XML; native tests use disposable KDBX/MemoryStorage and do
 not establish official-client/provider/WebView behavior.
 

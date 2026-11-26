@@ -879,7 +879,11 @@ impl VaultSession {
     ) -> Result<VaultState, String> {
         // Update only the committed master-key metadata; edits made while the
         // worker saved must remain in the current database and stay dirty.
-        self.require_db_mut()?.meta.master_key_changed = Some(changed_at);
+        let meta = &mut self.require_db_mut()?.meta;
+        meta.master_key_changed = Some(changed_at);
+        if meta.master_key_change_force_once == Some(true) {
+            meta.master_key_change_force_once = Some(false);
+        }
         self.cached_snapshot = None;
         self.adopt_persisted(new_hash.into());
         // Swapping to the new master password must wipe the old one from
