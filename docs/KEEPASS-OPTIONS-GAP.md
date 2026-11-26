@@ -48,7 +48,12 @@ MemoryStorage 回归覆盖保存重开、仅密钥文件和失败路径。
 保留，实际 KDBX/离线远程保存、另存为、改 KDF 与只读回归通过。
 成功更换主密钥时，同次权威保存将 True 消费为 False，再回填会话；失败/
 只读拒绝保留原请求。真实 KDBX、仅密钥文件、并发及离线远程回归通过。
-到期规则和提醒/强制执行仍待实现，不能据此标记完成。
+全局 `MasterKeyExpiryRec` / `MasterKeyExpiryForce` 字符串默认禁用并在 TS/
+原生配置中保留。原生只读评估已接入数据库天数与全局 XML 时长/日期截止规则，
+强制优先；无效规则单独反馈，有效规则继续判断。真实临时 KDBX/离线 remote、
+.NET Framework `XmlConvert` 独立参考值及实际前端配置/会话守卫回归通过。
+设置界面、打开时提醒/强制更换与原生 WebView/provider/官方客户端运行仍待，
+不能据此标记整个条目完成。
 
 `AceSecurity.MasterKeyTries` 按官方
 [AceSecurity.cs](https://github.com/dlech/KeePass2.x/blob/VS2022/KeePass/App/Configuration/AceSecurity.cs)

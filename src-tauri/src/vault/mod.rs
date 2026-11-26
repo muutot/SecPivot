@@ -31,8 +31,10 @@ pub use self::kdf_upgrade::KdfUpgradeOffer;
 mod kdf_storage_tests;
 pub(crate) use self::kdf::benchmark_kdf;
 pub use self::kdf::{KdfBenchmarkResult, KdfParameters};
+mod master_key_expiry;
 #[cfg(test)]
 mod master_key_force_once_tests;
+pub use self::master_key_expiry::MasterKeyExpiryOffer;
 #[cfg(test)]
 mod master_key_time_tests;
 mod merge;

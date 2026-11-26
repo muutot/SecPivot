@@ -1,5 +1,16 @@
 # Project Structure and Runtime Surfaces
 
+`vault/master_key_expiry.rs` owns nonsecret read-only key-age offers, with
+`master_key_expiry/rules.rs` implementing KeePass database/global comparisons
+and XML duration/cutoff parsing. Its tests execute temporary KDBX/MemoryStorage
+and the independent .NET Framework vectors in
+`tests/fixtures/master-key-expiry-xml.json`; the captured local date and boundary
+offset keep partial-date/timezone reference values deterministic across hosts.
+The `get_master_key_expiry_offer` command reads native ConfigStore rules and
+resolves its explicit session. Vault service reads guard their renderer epochs.
+Config strings default empty on both sides; tests cover old configs, restart
+and invalid values. No configuration/prompt UI or opening-time enforcement yet.
+
 The ninth reviewed KeePass patch preserves Meta.master_key_change_force_once
 in the core model and XML conversion. Native master_key_force_once_tests.rs
 covers absent/false/true across local/remote save/reopen, Save As, KDF/storage

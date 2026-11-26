@@ -177,7 +177,7 @@ Family · Size · GraphicsUnit · Style · OverrideUIDefault —— SecPivot 仅
 | MasterPassword (AceMasterPassword)     | —     | 见下                                                                                                              |
 | MasterKeyTries                         | 3     | ⚠️ `security.masterKeyTries`：每次打开提示的提交预算，本地/远程/锁屏手动与 Hello 接入；真实 WebView/provider 待验 |
 | MasterKeyOnSecureDesktop               | false | ➖ 安全桌面不适用                                                                                                 |
-| MasterKeyExpiryRec / Force             | ""    | ❌ 主密码过期提醒/强制                                                                                            |
+| MasterKeyExpiryRec / Force             | ""    | ⚠️ 配置/原生到期评估已接入；设置界面与打开时提醒/强制更换仍待                                                     |
 | KeyTransformWeakWarning                | true  | ⚠️ `security.keyTransformWeakWarning`：改 KDF/主密钥及打开库升级提醒已接入；真实 WebView/provider 待验            |
 | ClipboardClearOnExit                   | true  | ✅ `clearOnLock` 近似（退出/锁定）                                                                                |
 | ClipboardClearAfterSeconds             | 12    | ✅ `clipboardClearSeconds`（默认 20）⚠️ 默认值不同                                                                |

@@ -1,5 +1,17 @@
 # Security Model
 
+Master-key expiry assessment is read-only. Native metadata and ConfigStore rules
+are evaluated in `vault/master_key_expiry.rs` and its rules child; a lifetime token
+and metadata-only DTO reach the originating renderer. No password/keyfile copy,
+dirty mutation, automatic storage write or policy enforcement is involved.
+Required supersedes recommended; invalid rules are reported separately and do
+not bypass a valid database/global rule. Missing imported dates are unknown.
+Temporary KDBX/MemoryStorage tests cover boundaries, absent/negative thresholds,
+ForceOnce, read-only state and no-write behavior. Independent .NET Framework
+XmlConvert vectors cover syntax, tick precision, overflow and cutoff parsing;
+these are synthetic rules, not native WebView/provider/official-client evidence.
+Opening-time reminder/forced-change integration remains pending.
+
 The one-time MasterKeyChangeForceOnce flag now survives KDBX parsing and saves,
 including absent versus explicit false/true. A successful master-key change
 consumes true in the same write as the new key, then adopts false in the live

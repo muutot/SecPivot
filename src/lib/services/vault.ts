@@ -39,6 +39,7 @@ import type {
   KdfParameters,
   KdfBenchmarkResult,
   KdfUpgradeOffer,
+  MasterKeyExpiryOffer,
   VaultOpenResult,
   SessionInfo,
   RemoteObject,
@@ -102,6 +103,7 @@ interface VaultStore {
   callInSession: <T>(sessionId: string, operation: () => Promise<T>) => Promise<T>;
   getDatabaseSettings: () => Promise<DatabaseSettings | null>;
   getKdfUpgradeOffer: () => Promise<KdfUpgradeOffer>;
+  getMasterKeyExpiryOffer: () => Promise<MasterKeyExpiryOffer>;
   upgradeWeakKdf: (offer: KdfUpgradeOffer) => Promise<VaultState>;
   benchmarkDatabaseKdf: (
     parameters: KdfParameters,
@@ -816,6 +818,17 @@ export const vault: VaultStore = {
     const sessionId = captureSessionId();
     const epoch = captureSessionEpoch(sessionId);
     const offer = await backendInvoke<KdfUpgradeOffer>("get_kdf_upgrade_offer", { sessionId });
+    if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
+    return offer;
+  },
+
+  async getMasterKeyExpiryOffer(): Promise<MasterKeyExpiryOffer> {
+    if (!isTauriRuntime()) throw browserUnsupported("browser.featDbSettings");
+    const sessionId = captureSessionId();
+    const epoch = captureSessionEpoch(sessionId);
+    const offer = await backendInvoke<MasterKeyExpiryOffer>("get_master_key_expiry_offer", {
+      sessionId,
+    });
     if (currentSessionEpoch(sessionId) !== epoch) throw new Error(t(lang(), "error.noOpenDb"));
     return offer;
   },

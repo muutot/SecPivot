@@ -113,6 +113,9 @@ export interface SecuritySettings {
   keyTransformWeakWarning: boolean;
   /** KeePass AceSecurity.MasterKeyTries: attempts per credential prompt, default 3. */
   masterKeyTries: number;
+  /** KeePass XML duration or UTC cutoff; empty disables the global rule. */
+  masterKeyExpiryRec: string;
+  masterKeyExpiryForce: string;
   /** Minimize the main window after the workspace locks (KeePass
    * `MinimizeAfterLocking`, default on). */
   minimizeAfterLocking: boolean;

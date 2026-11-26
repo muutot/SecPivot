@@ -5,6 +5,32 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn master_key_expiry_rules_load_legacy_defaults_and_survive_native_reload() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("conf")).unwrap();
+    std::fs::write(dir.path().join("conf/config.json"), r#"{"security":{}}"#).unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    assert!(config.security.master_key_expiry_rec.is_empty());
+    assert!(config.security.master_key_expiry_force.is_empty());
+    for (rec, force) in [
+        (" P30D ", "2026-01-01T00:00:00Z"),
+        ("invalid", "-PT.5S"),
+        ("", ""),
+    ] {
+        config.security.master_key_expiry_rec = rec.into();
+        config.security.master_key_expiry_force = force.into();
+        store.set(config.clone()).unwrap();
+        let reloaded = ConfigStore::load(dir.path().to_path_buf())
+            .unwrap()
+            .get()
+            .unwrap();
+        assert_eq!(reloaded.security.master_key_expiry_rec, rec);
+        assert_eq!(reloaded.security.master_key_expiry_force, force);
+    }
+}
+
+#[test]
 fn defaults_round_trip_and_persist() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

@@ -38,6 +38,7 @@ globalThis.__TAURI_INTERNALS__ = {
       case "benchmark_database_kdf":
       case "get_database_settings":
       case "get_kdf_upgrade_offer":
+      case "get_master_key_expiry_offer":
       case "upgrade_weak_kdf":
         return new Promise((resolve) => pending.push({ args, resolve }));
       case "close_vault":
@@ -57,6 +58,37 @@ globalThis.__TAURI_INTERNALS__ = {
 };
 const { vault } = await import("../src/lib/services/vault.ts");
 const parameters = { algorithm: "Aes", rounds: "9007199254740993" };
+
+test("expiry assessment IPC stays read-only and bound to the captured origin", async () => {
+  await vault.open("C:/synthetic/a.kdbx", "synthetic-only");
+  const a = vault.getActiveSessionId();
+  const run = vault.getMasterKeyExpiryOffer();
+  const request = pending.shift();
+  assert.deepEqual(request.args, { sessionId: a });
+  await vault.open("C:/synthetic/b.kdbx", "synthetic-only");
+  const b = vault.getActiveSessionId();
+  const offer = {
+    token: "synthetic-expiry-lifetime",
+    fileName: "a.kdbx",
+    changedAt: null,
+    recommended: false,
+    required: true,
+    forceOnce: true,
+    readOnly: false,
+    invalidRules: [],
+  };
+  request.resolve(offer);
+  assert.deepEqual(await run, offer);
+  assert.equal(vault.getActiveSessionId(), b);
+  assert.equal(vault.get().dirty, false);
+  const disposed = vault.getMasterKeyExpiryOffer();
+  const late = pending.shift();
+  const rejection = assert.rejects(disposed);
+  await vault.closeAll();
+  late.resolve(offer);
+  await rejection;
+  assert.equal(vault.get(), null);
+});
 const result = {
   parameters: { algorithm: "Aes", rounds: "1234567" },
   elapsedMs: 1000,

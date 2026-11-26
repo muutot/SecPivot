@@ -1,5 +1,28 @@
 # Data Contracts
 
+`security.masterKeyExpiryRec` / `masterKeyExpiryForce` mirror KeePass's global
+XML duration/date cutoff strings, default empty and persist unchanged on both
+TS and native sides. Invalid strings remain available for correction; only
+assessment parses them. Old partial security configs retain disabled defaults.
+`get_master_key_expiry_offer(sessionId: String)` reads ConfigStore and resolves
+the explicit originating session, returning nonsecret `token`, `fileName`,
+nullable `changedAt`, `recommended`, `required`, `forceOnce`, `readOnly` and
+`invalidRules` (`recommended`/`required`). Required takes priority. The service
+guards replies with the originating renderer epoch; it never republishes a vault.
+No storage writes, dirty revision, key copy, configuration UI or opening-time
+enforcement are added by this read-only assessment.
+
+Database day thresholds follow .NET TimeSpan.Days truncation and >= comparison;
+negative/missing thresholds disable them. Global durations use strict changed+
+duration < now, dates use strict changed < cutoff. XML duration years/months use
+365 days and 30 days after carrying complete years; components retain int32 and
+the total signed-int64 100ns bounds. Duration fractions truncate; date fractions
+round ties to even. XML date/time/partial-date forms and offsets follow observed
+.NET Framework XmlConvert, including local-date defaults and date-bound saturation.
+Missing imported key timestamps are reported as null and never given an invented
+age; ForceOnce can still require a change. Malformed/overflowing global rules
+return per-rule flags without disabling an independent valid/database rule.
+
 KDBX Meta.master_key_change_force_once is Option<bool> in the patched dependency
 and XML conversion. Missing preserves the implicit false default; explicit
 false/true use the existing True/False converter and remain present on save.

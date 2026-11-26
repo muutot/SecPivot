@@ -291,6 +291,18 @@ export interface KdfUpgradeOffer {
   readOnly: boolean;
 }
 
+/** Read-only native key-age assessment; no master password/keyfile content. */
+export interface MasterKeyExpiryOffer {
+  token: string;
+  fileName: string;
+  changedAt: string | null;
+  recommended: boolean;
+  required: boolean;
+  forceOnce: boolean;
+  readOnly: boolean;
+  invalidRules: ("recommended" | "required")[];
+}
+
 /** Read-only storage settings of the open database. */
 export interface DatabaseSettings {
   kdf: "Aes" | "Argon2" | "Argon2id";

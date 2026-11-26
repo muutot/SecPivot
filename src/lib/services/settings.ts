@@ -252,6 +252,8 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   repeatPasswordOnlyWhenHidden: true,
   keyTransformWeakWarning: true,
   masterKeyTries: 3,
+  masterKeyExpiryRec: "",
+  masterKeyExpiryForce: "",
   minimizeAfterLocking: true,
   showExpiredOnOpen: true,
   expirySoonDays: 7,
@@ -1070,6 +1072,14 @@ export function normalizeSettings(
       fallback.security.keyTransformWeakWarning,
     ),
     masterKeyTries: normalizeMasterKeyTries(s.masterKeyTries),
+    masterKeyExpiryRec:
+      typeof s.masterKeyExpiryRec === "string"
+        ? s.masterKeyExpiryRec
+        : fallback.security.masterKeyExpiryRec,
+    masterKeyExpiryForce:
+      typeof s.masterKeyExpiryForce === "string"
+        ? s.masterKeyExpiryForce
+        : fallback.security.masterKeyExpiryForce,
     minimizeAfterLocking: asBool(s.minimizeAfterLocking, fallback.security.minimizeAfterLocking),
     showExpiredOnOpen: asBool(s.showExpiredOnOpen, fallback.security.showExpiredOnOpen),
     expirySoonDays: clampInt(s.expirySoonDays ?? fallback.security.expirySoonDays, 0, 365, 7),

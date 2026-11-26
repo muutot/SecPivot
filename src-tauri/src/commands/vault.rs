@@ -305,6 +305,28 @@ pub(crate) fn get_kdf_upgrade_offer(
     )
 }
 
+/// Read native expiry metadata and global rules without copying credentials.
+#[tauri::command]
+pub(crate) fn get_master_key_expiry_offer(
+    config: tauri::State<'_, ConfigStore>,
+    vaults: tauri::State<'_, VaultSessions>,
+    session: tauri::State<'_, Mutex<VaultSession>>,
+    session_id: String,
+) -> Result<vault::MasterKeyExpiryOffer, String> {
+    let security = config.get()?.security;
+    with_vault_session(
+        vaults.inner(),
+        session.inner(),
+        Some(&session_id),
+        |target| {
+            target.master_key_expiry_offer(
+                &security.master_key_expiry_rec,
+                &security.master_key_expiry_force,
+            )
+        },
+    )
+}
+
 /// Stage the reviewed upgrade; no KDF transform, key copy or storage write.
 #[tauri::command]
 pub(crate) async fn upgrade_weak_kdf(

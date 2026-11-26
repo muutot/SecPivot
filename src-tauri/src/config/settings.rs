@@ -600,6 +600,9 @@ pub struct SecuritySettings {
     /// KeePass AceSecurity.MasterKeyTries: submitted opens per credential prompt.
     /// No persistent lockout or counter is stored; the renderer owns the prompt.
     pub master_key_tries: i32,
+    /// KeePass AceSecurity XML duration or UTC cutoff; empty disables the rule.
+    pub master_key_expiry_rec: String,
+    pub master_key_expiry_force: String,
     /// Minimize the main window after the workspace locks (KeePass
     /// `MinimizeAfterLocking`). Default on.
     #[serde(default = "default_true")]
@@ -636,6 +639,8 @@ impl Default for SecuritySettings {
             repeat_password_only_when_hidden: true,
             key_transform_weak_warning: true,
             master_key_tries: 3,
+            master_key_expiry_rec: String::new(),
+            master_key_expiry_force: String::new(),
             minimize_after_locking: true,
             show_expired_on_open: true,
             expiry_soon_days: 7,

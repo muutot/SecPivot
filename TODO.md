@@ -6,7 +6,7 @@
 
 ## 一、明确待实现
 
-- [ ] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）：前置 `MasterKeyChanged` 建库/改密钥写入与 `MasterKeyChangeForceOnce` 未设置/False/True 保真已修复；成功改密钥在同次权威保存中消费 True，失败/只读保留请求，真实临时 KDBX/离线 remote、仅密钥文件与并发回归通过；到期规则、提醒/强制执行仍待实现
+- [~] 主密码过期提醒/强制（`MasterKeyExpiryRec` / `MasterKeyExpiryForce`）：日期/一次性标志保真及成功改密钥同次消费已交付；全局字符串默认禁用、配置重载、数据库天数/全局 XML 时长与日期截止规则、强制优先及无效规则反馈已接入原生只读评估 IPC，真实临时 KDBX/离线 remote、.NET Framework 独立对照及会话守卫回归通过。设置界面、打开时提醒/强制更换、真实 WebView/provider 与官方客户端互操作仍待实现/验证
 - [ ] 自动搜索密钥文件（`SearchKeyFiles` / `SearchKeyFilesOnRemovableMedia`）
 - [ ] 本地保存备份：KeePass backup on save / count / template；当前仅 remote profiles 有 `backupCount`/`backupTemplate`，本地保存未实现
 - [ ] 自动重载已变更文件（`AutoReloadChangedFiles`）
