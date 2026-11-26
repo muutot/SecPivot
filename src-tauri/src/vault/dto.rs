@@ -83,6 +83,14 @@ pub struct VaultEntry {
     pub created: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
+    /// KeePass `LastAccessTime` column (`Times.LastAccess`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_access: Option<String>,
+    /// KeePass `Last Password Modification Time (Based on History)` column:
+    /// computed from history snapshots, falling back to the entry's last
+    /// modification time when no password change is recorded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_password_mod: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<String>,
     pub expired: bool,

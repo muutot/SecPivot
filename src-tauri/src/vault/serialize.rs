@@ -163,6 +163,29 @@ fn group_autotype_config(group: &GroupRef<'_>) -> Option<GroupAutoTypeConfig> {
     })
 }
 
+/// KeePass `EntryUtil.GetLastPasswordModTime` (official source): sort the
+/// history oldest→newest, start from the current entry's last modification,
+/// then walk history backwards while its password equals the current one,
+/// taking each snapshot's modification time. The first differing password
+/// marks the change; with no difference the value is the oldest snapshot's
+/// time (or the entry's own modification time when history is empty).
+fn last_password_mod_time(entry: &EntryRef<'_>) -> Option<chrono::NaiveDateTime> {
+    let current = entry.get(crate::vault::FIELD_PASSWORD).unwrap_or_default();
+    let mut dt = entry.times.last_modification;
+    let Some(history) = entry.history.as_ref() else {
+        return dt;
+    };
+    let mut snapshots: Vec<&Entry> = history.get_entries().iter().collect();
+    snapshots.sort_by_key(|h| h.times.last_modification);
+    for hist in snapshots.iter().rev() {
+        if hist.get(crate::vault::FIELD_PASSWORD).unwrap_or_default() != current {
+            break;
+        }
+        dt = hist.times.last_modification;
+    }
+    dt
+}
+
 pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
     VaultEntry {
         uuid: entry.id().uuid().to_string(),
@@ -183,6 +206,8 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
         },
         created: entry.times.creation.map(format_iso),
         modified: entry.times.last_modification.map(format_iso),
+        last_access: entry.times.last_access.map(format_iso),
+        last_password_mod: last_password_mod_time(entry).map(format_iso),
         tags: if entry.tags.is_empty() {
             None
         } else {

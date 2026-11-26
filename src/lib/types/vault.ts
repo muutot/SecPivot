@@ -58,6 +58,10 @@ export interface VaultEntry {
   foregroundColor?: string;
   created?: string;
   modified?: string;
+  /** KeePass `LastAccessTime` column. */
+  lastAccess?: string;
+  /** KeePass `Last Password Modification Time (Based on History)` column. */
+  lastPasswordMod?: string;
   expires?: string;
   expired?: boolean;
   tags?: string;

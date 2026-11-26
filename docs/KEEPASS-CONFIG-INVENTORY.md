@@ -119,7 +119,7 @@ MaxItemCount ✅ `recentFiles`（上限 12，本批对齐 KeePass 默认）· It
 
 Title · UserName · Password · Url · Notes · CreationTime · LastModificationTime · LastAccessTime · ExpiryTime · Uuid · Attachment · CustomString · PluginExt · OverrideUrl · Tags · ExpiryTimeDateOnly · Size · HistoryCount · AttachmentCount · LastPasswordModTime · AutoTypeEnabled · AutoTypeSequences
 
-SecPivot 内置列 16 种（title/username/password/url/totp/notes/tags/created/modified/expires/size + historyCount/attachmentCount/autoTypeEnabled/overrideUrl/uuid，B1 批次新增五种，默认隐藏 + custom:*）。仍缺：LastAccessTime、Attachment、LastPasswordModTime、AutoTypeSequences 等 4 种展示型列，可按需补。
+SecPivot 内置列 20 种：title/username/password/url/totp/notes/tags/created/modified/expires/size + historyCount/attachmentCount/autoTypeEnabled/overrideUrl/uuid（B1 批次五种，默认隐藏 + custom:*），外加 lastAccessTime / attachment / lastPasswordModTime / autoTypeSequences（本次补齐）。`lastAccessTime` 直接取 `Times.LastAccess`；`lastPasswordModTime` 按官方 `EntryUtil.GetLastPasswordModTime` 从历史快照反推（当前密码与历史一致则继续向前，取最旧一致快照的时间；无历史时回退到条目修改时间），仅时间值入快照、密码不外泄。KeePass 的 CustomString（用自定义列 `custom:*` 覆盖）、PluginExt（通用插件元数据只读，不单独列展示）与 ExpiryTimeDateOnly（沿用 `expires` 的日期展示）不再列为缺失。
 
 ---
 

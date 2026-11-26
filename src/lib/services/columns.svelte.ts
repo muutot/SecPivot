@@ -29,11 +29,15 @@ export const BUILTIN_COLUMNS: { id: string; label: string; sortable?: boolean }[
   { id: "tags", label: "Tags" },
   { id: "created", label: "Created" },
   { id: "modified", label: "Modified" },
+  { id: "lastAccessTime", label: "Last Access" },
+  { id: "lastPasswordModTime", label: "Password Modified" },
   { id: "expires", label: "Expires" },
   { id: "size", label: "Size" },
   { id: "historyCount", label: "History", sortable: false },
+  { id: "attachment", label: "Attachment", sortable: false },
   { id: "attachmentCount", label: "Attachments", sortable: false },
   { id: "autoTypeEnabled", label: "Auto-Type", sortable: false },
+  { id: "autoTypeSequences", label: "Auto-Type Sequences", sortable: false },
   { id: "overrideUrl", label: "Override URL" },
   { id: "uuid", label: "UUID" },
 ];
@@ -50,11 +54,15 @@ const COLUMN_LABEL_KEYS: Record<string, I18nKey> = {
   tags: "columns.tags",
   created: "columns.created",
   modified: "columns.modified",
+  lastAccessTime: "columns.lastAccessTime",
+  lastPasswordModTime: "columns.lastPasswordModTime",
   expires: "columns.expires",
   size: "columns.size",
   historyCount: "columns.historyCount",
+  attachment: "columns.attachment",
   attachmentCount: "columns.attachmentCount",
   autoTypeEnabled: "columns.autoTypeEnabled",
+  autoTypeSequences: "columns.autoTypeSequences",
   overrideUrl: "columns.overrideUrl",
   uuid: "columns.uuid",
 };
@@ -227,17 +235,38 @@ export function useEntryColumns(allEntries: () => VaultEntry[]): EntryColumns {
       // Protected values never reach the snapshot; show the masked marker.
       return field.protected ? "••••••" : field.value;
     }
-    if (colId === "created" || colId === "modified" || colId === "expires") {
-      return formatDateOnly(entry[colId] as string | undefined);
+    if (
+      colId === "created" ||
+      colId === "modified" ||
+      colId === "lastAccessTime" ||
+      colId === "lastPasswordModTime" ||
+      colId === "expires"
+    ) {
+      const time =
+        colId === "lastAccessTime"
+          ? entry.lastAccess
+          : colId === "lastPasswordModTime"
+            ? entry.lastPasswordMod
+            : (entry[colId] as string | undefined);
+      return formatDateOnly(time);
     }
     if (colId === "password") return entry.hasPassword || entry.password ? "••••••" : "";
     if (colId === "size") return entry.size == null ? "" : formatKeePassSize(entry.size);
     if (colId === "historyCount") return String(entry.historyCount ?? 0);
+    if (colId === "attachment") return (entry.attachments ?? []).map((a) => a.name).join(", ");
     if (colId === "attachmentCount") return String(entry.attachments?.length ?? 0);
     if (colId === "autoTypeEnabled")
       return entry.autoType?.enabled === false
         ? t(uiLocale(), "columns.autoTypeOff")
         : t(uiLocale(), "columns.autoTypeOn");
+    if (colId === "autoTypeSequences") {
+      if (entry.autoType?.enabled === false) return "";
+      const seq = entry.autoType?.defaultSequence;
+      if (seq) return seq;
+      return (entry.autoType?.associations ?? [])
+        .map((a) => `${a.window}: ${a.sequence}`)
+        .join(" | ");
+    }
     if (colId === "overrideUrl") return entry.overrideUrl ?? "";
     if (colId === "uuid") return entry.uuid;
     return String(entry[colId as keyof VaultEntry] ?? "");

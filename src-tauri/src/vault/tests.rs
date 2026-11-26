@@ -15536,3 +15536,87 @@ fn kdbx_scalar_historical_invalid_text_prevents_publication_without_losing_edits
         Some("synthetic\0history")
     );
 }
+
+/// The KeePass "Password Modified (Based on History)" column: walk history
+/// newest→oldest while the password is unchanged; the first differing
+/// snapshot marks the change. `lastAccessTime` comes straight from Times.
+#[test]
+fn snapshot_exposes_last_access_and_password_mod_time_from_history() {
+    use chrono::NaiveDate;
+    use keepass::db::History;
+
+    let dir = TempDir::new().unwrap();
+    let (mut session, _) = create_session(&dir);
+    let added = session
+        .add_entry(&EntryInput {
+            group_uuid: ROOT_GROUP_UUID.to_owned(),
+            title: "History".into(),
+            username: "u".into(),
+            password: "current".into(),
+            url: String::new(),
+            notes: String::new(),
+            totp: None,
+            expires: None,
+            icon: Some(None),
+            color: None,
+            tags: None,
+            custom_fields: vec![],
+            attachments: vec![],
+        })
+        .unwrap();
+    let uuid = added.root.entries[0].uuid.clone();
+
+    let at = |day: u32| {
+        NaiveDate::from_ymd_opt(2026, 1, day)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+    };
+    let id = parse_entry_id(&uuid).unwrap();
+    {
+        let db = session.require_db_mut().unwrap();
+        let base = db.entry(id).unwrap().clone();
+        // Snapshots: h1(3) has the OLD password, h2(5)/h3(7) carry the current
+        // one. The helper sorts by time then walks newest→oldest while the
+        // password matches, so the change is dated at the oldest matching
+        // snapshot (5), not at the differing one (3).
+        let mut h1 = base.clone();
+        h1.set_unprotected(FIELD_PASSWORD, "previous");
+        h1.times.last_modification = Some(at(3));
+        let mut h2 = base.clone();
+        h2.set_unprotected(FIELD_PASSWORD, "current");
+        h2.times.last_modification = Some(at(5));
+        let mut h3 = base.clone();
+        h3.set_unprotected(FIELD_PASSWORD, "current");
+        h3.times.last_modification = Some(at(7));
+        let mut h = History::default();
+        h.add_entry(h1);
+        h.add_entry(h2);
+        h.add_entry(h3);
+
+        let mut entry = db.entry_mut(id).unwrap();
+        entry.times.last_access = Some(at(10));
+        entry.times.last_modification = Some(at(9));
+        entry.history = Some(h);
+    }
+    let state = session.snapshot().unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert_eq!(entry.last_access.as_deref(), Some("2026-01-10T12:00:00Z"));
+    assert_eq!(
+        entry.last_password_mod.as_deref(),
+        Some("2026-01-05T12:00:00Z")
+    );
+
+    // With no history the fallback is the entry's own last modification.
+    {
+        let db = session.require_db_mut().unwrap();
+        db.entry_mut(id).unwrap().history = None;
+        session.bump_revision();
+    }
+    let state = session.snapshot().unwrap();
+    let entry = state.root.entries.iter().find(|e| e.uuid == uuid).unwrap();
+    assert_eq!(
+        entry.last_password_mod.as_deref(),
+        Some("2026-01-09T12:00:00Z")
+    );
+}
