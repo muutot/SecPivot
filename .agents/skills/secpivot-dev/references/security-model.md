@@ -1,5 +1,16 @@
 # Security Model
 
+URL opening applies entry/global templates before a single independent scheme
+rule pass. Only an explicit override authorizes cmd://; a raw entry URL expanded
+from another field cannot execute a command. Plain destinations must parse as
+http/https with a host and go through tauri-plugin-opener, without cmd /C start.
+Open errors omit destinations, arguments and placeholder contents. Existing
+vault/session selection remains authoritative; no credential is added to config
+or logs and the redundant separate entry-password fetch is removed. Synthetic
+native compiler/dispatch-choice tests do not launch a command or external URL,
+nor prove OS handler interoperability or full process-memory erasure. The URL
+command remains desktop-gated; Android execution is outside this feature.
+
 Group search settings control discoverability, not authorization. Native tree
 serialization and matching/REF resolve the nearest explicit setting; only None
 inherits, root default is true. Scope selection never reinterprets the effective

@@ -644,7 +644,8 @@ export const zhCN = {
   "nav.remote.description": "按协议分组管理远程连接、凭据与本地镜像设置。",
   "nav.integrations.label": "集成",
   "nav.integrations.title": "集成",
-  "nav.integrations.description": "浏览器桥接（KeePassHttp 与 KeePassRPC 兼容）与授权客户端管理。",
+  "nav.integrations.description":
+    "浏览器桥接（KeePassHttp 与 KeePassRPC）、授权客户端与 URL 打开规则。",
   "nav.about.label": "关于",
   "nav.about.title": "关于",
   "nav.about.description": "版本、技术栈与许可证信息。",
@@ -1277,16 +1278,19 @@ export const zhCN = {
   "pw.genPoolEmpty": "密码生成字符池为空",
   "pw.badBound": "随机字符池大小无效",
   "urlOverrides.title": "URL 覆盖",
-  "urlOverrides.desc":
-    "KeePass「工具 → 选项 → 集成 → URL 覆盖」。按 URL 协议替换打开方式；可启用内置规则、添加自定义规则。",
-  "urlOverrides.toggle": "启用 URL 覆盖",
-  "urlOverrides.toggleDesc":
-    "关闭时所有覆盖规则（含条目级 OverrideURL）均不生效，URL 交给系统默认程序打开。",
+  "urlOverrides.desc": "先应用条目或全局模板，再根据生成的 URL 匹配已启用的内置和自定义协议规则。",
+  "urlOverrides.toggle": "启用全局 URL 模板",
+  "urlOverrides.toggleDesc": "仅控制下方全局模板。关闭后，条目覆盖和已启用的协议规则仍然生效。",
+  "urlOverrides.global": "全局 URL 模板",
+  "urlOverrides.globalDesc":
+    "用于未设置自身覆盖的条目。留空使用条目网址；此处 {BASE} 和 {URL} 都指原始条目网址。",
+  "urlOverrides.globalPlaceholder": "留空使用条目网址",
   "urlOverrides.builtin": "内置规则（KeePass 27 项）",
   "urlOverrides.builtinDesc":
     "官方内置规则默认全部关闭。勾选后按列表顺序匹配，排在前面的规则优先。",
   "urlOverrides.custom": "自定义规则",
-  "urlOverrides.customDesc": "自定义规则在启用的内置规则之后匹配；协议相同的规则以先出现者为准。",
+  "urlOverrides.customDesc":
+    "匹配模板展开后的 URL，在已启用的内置规则之后检查；协议相同的规则以先出现者为准。",
   "urlOverrides.scheme": "协议",
   "urlOverrides.template": "覆盖命令 / URL",
   "urlOverrides.enabled": "启用",

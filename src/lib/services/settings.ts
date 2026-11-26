@@ -325,6 +325,7 @@ export const DEFAULT_FAVICON_SETTINGS: FaviconSettings = {
 
 export const DEFAULT_INTEGRATION_SETTINGS: IntegrationSettings = {
   urlOverrideEnabled: true,
+  urlOverride: "",
   builtInOverridesEnabled: 0,
   customOverrides: [],
 };
@@ -1125,6 +1126,10 @@ export function normalizeSettings(
       typeof source.integration?.urlOverrideEnabled === "boolean"
         ? source.integration.urlOverrideEnabled
         : (fallback.integration?.urlOverrideEnabled ?? true),
+    urlOverride:
+      typeof source.integration?.urlOverride === "string"
+        ? source.integration.urlOverride
+        : (fallback.integration?.urlOverride ?? ""),
     builtInOverridesEnabled: clampInt(
       source.integration?.builtInOverridesEnabled ?? fallback.integration?.builtInOverridesEnabled,
       0,

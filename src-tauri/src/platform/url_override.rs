@@ -37,7 +37,7 @@ impl fmt::Display for ExpandError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExpandError::UnclosedPlaceholder => write!(f, "URL 覆盖模板中 '{{' 没有对应的 '}}'"),
-            ExpandError::UnknownPlaceholder(p) => write!(f, "未知的 URL 占位符: {{{p}}}"),
+            ExpandError::UnknownPlaceholder(_) => write!(f, "URL 覆盖模板包含不支持的占位符"),
         }
     }
 }
@@ -56,12 +56,10 @@ pub fn scheme_of(url: &str) -> &str {
 }
 
 /// Return the first enabled override template matching `url`, or `None` when
-/// overrides are disabled or no rule matches. Built-ins are checked before
+/// no rule matches. The global-template switch does not gate scheme rules.
+/// Built-ins are checked before
 /// custom rules, each group in insertion order (KeePass semantics).
 pub fn resolve_override<'a>(integration: &'a IntegrationSettings, url: &str) -> Option<&'a str> {
-    if !integration.url_override_enabled {
-        return None;
-    }
     let scheme = scheme_of(url);
     if scheme.is_empty() {
         return None;
@@ -88,6 +86,9 @@ pub fn resolve_override<'a>(integration: &'a IntegrationSettings, url: &str) -> 
 
 /// The set of `{URL:...}` / `{BASE:...}` part selectors KeePass documents.
 fn url_part(url: &str, selector: &str) -> Option<String> {
+    if selector.is_empty() {
+        return Some(url.to_owned());
+    }
     // Try the standard parser first; it handles percent-decoding, port and
     // userinfo exactly as KeePass expects for http(s)-style URLs.
     if let Ok(parsed) = url::Url::parse(url) {
@@ -220,17 +221,53 @@ pub fn expand(
     Ok(out)
 }
 
-/// Resolve and expand in one step. `None` means no override matched.
-pub fn resolve_and_expand(
+/// A compiled destination; raw vault URLs never authorize command execution.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CompiledUrl {
+    pub url: String,
+    pub allow_command: bool,
+}
+
+/// Match KeePass OpenEntryUrl/CompileUrl: entry template, enabled global
+/// template, or raw URL; expand first, then apply one scheme rule to that
+/// intermediate URL. In the second stage BASE is intermediate, URL is original.
+/// None means empty URL or an unchanged plain URL for the frontend handler.
+pub fn compile_entry_url(
     integration: &IntegrationSettings,
-    url: &str,
+    entry_override: Option<&str>,
     entry: &crate::platform::autotype::AutotypeContext,
     ctx: &UrlOverrideContext,
-) -> Result<Option<String>, ExpandError> {
-    match resolve_override(integration, url) {
-        Some(template) => expand(template, url, entry, ctx).map(Some),
-        None => Ok(None),
+) -> Result<Option<CompiledUrl>, ExpandError> {
+    if entry.url.trim().is_empty() {
+        return Ok(None);
     }
+    let template = entry_override
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            (integration.url_override_enabled && !integration.url_override.trim().is_empty())
+                .then_some(integration.url_override.as_str())
+        });
+    let intermediate = expand(
+        template.unwrap_or(&entry.url).trim_start(),
+        &entry.url,
+        entry,
+        ctx,
+    )?;
+    if let Some(scheme_template) = resolve_override(integration, &intermediate) {
+        return expand(scheme_template.trim_start(), &intermediate, entry, ctx).map(|url| {
+            Some(CompiledUrl {
+                url,
+                allow_command: true,
+            })
+        });
+    }
+    if template.is_none() && intermediate == entry.url {
+        return Ok(None);
+    }
+    Ok(Some(CompiledUrl {
+        url: intermediate,
+        allow_command: template.is_some(),
+    }))
 }
 
 /// Split a KeePass `cmd://` command line into program + arguments. Double
@@ -416,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_master_switch_and_disabled_rules_do_not_match() {
+    fn global_switch_does_not_disable_scheme_rules() {
         let mut integration = IntegrationSettings {
             built_in_overrides_enabled: 0x8,
             ..IntegrationSettings::default()
@@ -431,6 +468,11 @@ mod tests {
             Some("cmd://{FIREFOX} \"{BASE}\"")
         );
         integration.url_override_enabled = false;
+        assert_eq!(
+            resolve_override(&integration, "http://example.com"),
+            Some("cmd://{FIREFOX} \"{BASE}\"")
+        );
+        integration.built_in_overrides_enabled = 0;
         assert_eq!(resolve_override(&integration, "http://example.com"), None);
     }
 
@@ -491,16 +533,174 @@ mod tests {
     }
 
     #[test]
-    fn resolve_and_expand_combines_both_steps() {
+    fn plain_url_uses_enabled_scheme_rule() {
         let integration = IntegrationSettings {
             built_in_overrides_enabled: 0x8, // FIREFOX http
             ..IntegrationSettings::default()
         };
         let mut ctx = UrlOverrideContext::default();
         ctx.browsers.insert("FIREFOX".into(), "firefox.exe".into());
-        let out = resolve_and_expand(&integration, "http://example.com/", &entry(), &ctx)
+        let mut entry = entry();
+        entry.url = "http://example.com/".into();
+        let out = compile_entry_url(&integration, None, &entry, &ctx)
             .unwrap()
             .unwrap();
-        assert_eq!(out, "cmd://firefox.exe \"http://example.com/\"");
+        assert_eq!(out.url, "cmd://firefox.exe \"http://example.com/\"");
+        assert!(out.allow_command);
+    }
+
+    #[test]
+    fn entry_then_global_template_priority_and_independent_switch() {
+        let mut integration = IntegrationSettings {
+            url_override: "https://global.test/{USERNAME}".into(),
+            ..IntegrationSettings::default()
+        };
+        let ctx = UrlOverrideContext::default();
+        for enabled in [true, false] {
+            integration.url_override_enabled = enabled;
+            let out = compile_entry_url(
+                &integration,
+                Some("https://entry.test/{TITLE}"),
+                &entry(),
+                &ctx,
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(out.url, "https://entry.test/Example");
+        }
+        assert_eq!(
+            compile_entry_url(&integration, None, &entry(), &ctx).unwrap(),
+            None
+        );
+        integration.url_override_enabled = true;
+        assert_eq!(
+            compile_entry_url(&integration, Some(" "), &entry(), &ctx)
+                .unwrap()
+                .unwrap()
+                .url,
+            "https://global.test/alice"
+        );
+        integration.url_override.clear();
+        assert_eq!(
+            compile_entry_url(&integration, None, &entry(), &ctx).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn scheme_matches_expanded_template_and_base_changes_only_in_second_stage() {
+        let mut integration = IntegrationSettings {
+            url_override: " {USERNAME}://relay.test/path".into(),
+            custom_overrides: vec![
+                UrlSchemeOverride {
+                    enabled: true,
+                    scheme: "https".into(),
+                    url_override: "cmd://wrong".into(),
+                },
+                UrlSchemeOverride {
+                    enabled: true,
+                    scheme: "alice".into(),
+                    url_override: "cmd://client \"{BASE}\" \"{URL}\" {BASE:HOST} {URL:HOST}".into(),
+                },
+                UrlSchemeOverride {
+                    enabled: true,
+                    scheme: "cmd".into(),
+                    url_override: "cmd://recursive".into(),
+                },
+            ],
+            ..IntegrationSettings::default()
+        };
+        let ctx = UrlOverrideContext::default();
+        let expected = format!(
+            "cmd://client \"alice://relay.test/path\" \"{}\" relay.test keepass.info",
+            entry().url
+        );
+        assert_eq!(
+            compile_entry_url(&integration, None, &entry(), &ctx)
+                .unwrap()
+                .unwrap()
+                .url,
+            expected
+        );
+        // Entry-level templates undergo the same single scheme pass even when global is off.
+        integration.url_override_enabled = false;
+        assert_eq!(
+            compile_entry_url(
+                &integration,
+                Some("{USERNAME}://relay.test/path"),
+                &entry(),
+                &ctx
+            )
+            .unwrap()
+            .unwrap()
+            .url,
+            expected
+        );
+    }
+
+    #[test]
+    fn template_base_and_url_preserve_original_bytes_and_command_spacing() {
+        let mut entry = entry();
+        entry.url = "HTTPS://EXAMPLE.test:443/?q=%2f&x=1".into();
+        let integration = IntegrationSettings {
+            url_override: "  cmd://client  \"{BASE}\"  \"{URL}\"  ".into(),
+            ..IntegrationSettings::default()
+        };
+        let out = compile_entry_url(&integration, None, &entry, &UrlOverrideContext::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            out.url,
+            format!("cmd://client  \"{}\"  \"{}\"  ", entry.url, entry.url)
+        );
+    }
+
+    #[test]
+    fn empty_entry_url_never_opens_even_with_templates() {
+        let mut entry = entry();
+        entry.url.clear();
+        let integration = IntegrationSettings {
+            url_override: "cmd://client".into(),
+            ..IntegrationSettings::default()
+        };
+        assert_eq!(
+            compile_entry_url(
+                &integration,
+                Some("cmd://other"),
+                &entry,
+                &UrlOverrideContext::default()
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn invalid_selected_templates_fail_without_falling_back_or_exposing_content() {
+        let integration = IntegrationSettings {
+            url_override: "{INVALID_SECRET}".into(),
+            ..IntegrationSettings::default()
+        };
+        let ctx = UrlOverrideContext::default();
+        let err = compile_entry_url(&integration, None, &entry(), &ctx).unwrap_err();
+        assert!(!err.to_string().contains("INVALID_SECRET"));
+        assert!(compile_entry_url(&integration, Some("{BASE"), &entry(), &ctx).is_err());
+    }
+
+    #[test]
+    fn raw_placeholder_expansion_does_not_authorize_a_command() {
+        let mut entry = entry();
+        entry.url = "{NOTES}".into();
+        entry.notes = "cmd://client".into();
+        let out = compile_entry_url(
+            &IntegrationSettings::default(),
+            None,
+            &entry,
+            &UrlOverrideContext::default(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out.url, "cmd://client");
+        assert!(!out.allow_command);
     }
 }

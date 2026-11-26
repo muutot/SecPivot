@@ -1048,13 +1048,15 @@ pub const BUILT_IN_URL_OVERRIDES: &[BuiltInOverride] = &[
     },
 ];
 
-/// KeePass `AceIntegration.UrlSchemeOverrides` persisted shape.
+/// KeePass `AceIntegration` global template and scheme overrides.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct IntegrationSettings {
-    /// KeePass `UrlOverrideEnabled` (default on): master switch.
+    /// KeePass `UrlOverrideEnabled` (default on): enables only the global template.
     #[serde(default = "default_true")]
     pub url_override_enabled: bool,
+    /// Single global template; preserve command spacing exactly on save/load.
+    pub url_override: String,
     /// Bitmask over [`BUILT_IN_URL_OVERRIDES`] flags; `0` = none enabled.
     pub built_in_overrides_enabled: u64,
     /// User overrides, evaluated after enabled built-ins; first match wins.
@@ -1065,6 +1067,7 @@ impl Default for IntegrationSettings {
     fn default() -> Self {
         Self {
             url_override_enabled: true,
+            url_override: String::new(),
             built_in_overrides_enabled: 0,
             custom_overrides: Vec::new(),
         }

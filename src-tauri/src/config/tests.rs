@@ -118,8 +118,9 @@ fn integration_url_overrides_survive_round_trip_and_normalize() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
     let mut config = store.get().unwrap();
-    // KeePass 2.54+ defaults: master on, all built-ins off, no custom rules.
+    // KeePass defaults: global switch on, empty template, all built-ins off.
     assert!(config.integration.url_override_enabled);
+    assert!(config.integration.url_override.is_empty());
     assert_eq!(config.integration.built_in_overrides_enabled, 0);
     assert!(config.integration.custom_overrides.is_empty());
 
@@ -151,6 +152,42 @@ fn integration_url_overrides_survive_round_trip_and_normalize() {
         config.integration.custom_overrides[1].url_override,
         "cmd://mstsc.exe /v:{BASE:HOST}"
     );
+}
+
+#[test]
+fn global_url_template_survives_exact_save_reload_when_disabled() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = store.get().unwrap();
+    let template = "  cmd://\"C:\\Program Files\\client.exe\"  \"{BASE}\"  \"{URL}\"  ";
+    config.integration.url_override = template.into();
+    config.integration.url_override_enabled = false;
+    assert_eq!(
+        store.set(config).unwrap().integration.url_override,
+        template
+    );
+    let again = ConfigStore::load(dir.path().to_path_buf())
+        .unwrap()
+        .get()
+        .unwrap();
+    assert_eq!(again.integration.url_override, template);
+    assert!(!again.integration.url_override_enabled);
+}
+
+#[test]
+fn legacy_config_without_global_template_loads_existing_scheme_rules() {
+    let dir = TempDir::new().unwrap();
+    let conf = dir.path().join("conf");
+    fs::create_dir_all(&conf).unwrap();
+    fs::write(conf.join("config.json"), r#"{"integration":{"urlOverrideEnabled":false,"builtInOverridesEnabled":8,"customOverrides":[{"enabled":true,"scheme":"ssh","urlOverride":"cmd://client {BASE}"}]}}"#).unwrap();
+    let config = ConfigStore::load(dir.path().to_path_buf())
+        .unwrap()
+        .get()
+        .unwrap();
+    assert!(config.integration.url_override.is_empty());
+    assert!(!config.integration.url_override_enabled);
+    assert_eq!(config.integration.built_in_overrides_enabled, 8);
+    assert_eq!(config.integration.custom_overrides.len(), 1);
 }
 
 #[test]

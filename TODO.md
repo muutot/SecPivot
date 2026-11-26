@@ -8,7 +8,6 @@
 
 - [ ] 当前数据库设置 · KDF benchmark：目标耗时基准测试、参数建议与应用流程；不得以固定 Argon2/AES-KDF 参数代替 benchmark 证据
 - [ ] Android TLS 信任链修复（SP-S125）：`webpki-root-certs` 1.0.9 → 1.0.10+（移除 emSign ECC Root CA G3）、`webpki` 0.103.15 → 0.103.16+（拒绝缺失 SPKI）；需兼容锁差异、TLS/远程回归、完整 verify 及 Android 目标/真机验证
-- [ ] 全局 URL 覆盖字符串：KeePass `UrlOverride`（KeeUrlOverride 单一全局串）未做独立输入；当前由 `integration.customOverrides` 通用规则覆盖
 - [ ] 关闭库时自动保存（`AceCloseDb.AutoSave`）：SecPivot 只有编辑后自动保存，无退出/关闭库时保存
 - [ ] 主密码重试次数限制（`AceSecurity.MasterKeyTries`）与主密码过期提醒/强制
 - [ ] 主密码重复输入校验增强（`RepeatPasswordOnlyWhenHidden`）

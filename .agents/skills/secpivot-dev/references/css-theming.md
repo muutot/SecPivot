@@ -44,6 +44,11 @@ Browser inspection also measures composed card/control colors and theme switchin
 
 ## Style source-of-truth order
 
+UrlOverridesSettingsPanel uses canonical setting-card/setting-heading/setting-icon
+classes and shared 30px TextFields. The global template uses mono; custom inputs
+stack below 480px with layout wrappers, preserving shared child-control ownership.
+Light card gradients/radii therefore apply without a local surface/token duplicate.
+
 1. `src/routes/+page.svelte` and the settings shell define the product's visual language.
 2. `src/lib/types/theme.ts::{DARK_THEME_COLORS,LIGHT_THEME_COLORS}` defines preset values.
 3. `src/lib/utils/theme.ts::applyThemeColors` defines the ThemeColors → CSS-variable mapping.

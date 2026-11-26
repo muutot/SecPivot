@@ -98,8 +98,26 @@
     onchange={(enabled) => change("urlOverrideEnabled", enabled)}
   />
 
-  <section class="override-card">
-    <div class="override-heading">
+  <section class="setting-card">
+    <div class="setting-heading override-heading">
+      <span class="setting-icon"><AppIcon name="link" size={17} /></span>
+      <div>
+        <strong>{t(lang, "urlOverrides.global")}</strong>
+        <p>{t(lang, "urlOverrides.globalDesc")}</p>
+      </div>
+    </div>
+    <TextField
+      value={integration.urlOverride}
+      placeholder={t(lang, "urlOverrides.globalPlaceholder")}
+      ariaLabel={t(lang, "urlOverrides.global")}
+      mono
+      size="control"
+      oninput={(event) => change("urlOverride", event.currentTarget.value)}
+    />
+  </section>
+
+  <section class="setting-card">
+    <div class="setting-heading override-heading">
       <span class="setting-icon"><AppIcon name="link" size={17} /></span>
       <div>
         <strong>{t(lang, "urlOverrides.builtin")}</strong>
@@ -128,8 +146,8 @@
     </div>
   </section>
 
-  <section class="override-card">
-    <div class="override-heading">
+  <section class="setting-card">
+    <div class="setting-heading override-heading">
       <span class="setting-icon"><AppIcon name="plus" size={17} /></span>
       <div>
         <strong>{t(lang, "urlOverrides.custom")}</strong>
@@ -150,21 +168,25 @@
               checked={rule.enabled}
               onchange={(event) => updateCustom(i, { enabled: event.currentTarget.checked })}
             />
-            <TextField
-              value={rule.scheme}
-              placeholder={t(lang, "urlOverrides.scheme")}
-              ariaLabel={t(lang, "urlOverrides.scheme")}
-              size="control"
-              oninput={(event) => updateCustom(i, { scheme: event.currentTarget.value })}
-            />
-            <TextField
-              value={rule.urlOverride}
-              placeholder={t(lang, "urlOverrides.template")}
-              ariaLabel={t(lang, "urlOverrides.template")}
-              mono
-              size="control"
-              oninput={(event) => updateCustom(i, { urlOverride: event.currentTarget.value })}
-            />
+            <div class="custom-scheme">
+              <TextField
+                value={rule.scheme}
+                placeholder={t(lang, "urlOverrides.scheme")}
+                ariaLabel={t(lang, "urlOverrides.scheme")}
+                size="control"
+                oninput={(event) => updateCustom(i, { scheme: event.currentTarget.value })}
+              />
+            </div>
+            <div class="custom-template">
+              <TextField
+                value={rule.urlOverride}
+                placeholder={t(lang, "urlOverrides.template")}
+                ariaLabel={t(lang, "urlOverrides.template")}
+                mono
+                size="control"
+                oninput={(event) => updateCustom(i, { urlOverride: event.currentTarget.value })}
+              />
+            </div>
             <Button
               variant="action"
               title={t(lang, "urlOverrides.remove")}
@@ -182,35 +204,15 @@
 </div>
 
 <style>
-  .override-card {
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--settings-control-radius, 6px);
-    background: var(--bg-card);
-    padding: 12px;
-  }
   .override-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     margin-bottom: 10px;
   }
   .override-heading > div {
     flex: 1;
     min-width: 0;
   }
-  .override-heading strong {
-    font-size: 13px;
-    color: var(--text-primary);
-  }
   .override-heading p {
-    margin: 2px 0 0;
-    font-size: 11px;
     line-height: 1.4;
-    color: var(--text-muted);
-  }
-  .setting-icon {
-    display: inline-flex;
-    color: var(--accent);
   }
   .override-table {
     display: flex;
@@ -221,7 +223,7 @@
   }
   .override-row {
     display: grid;
-    grid-template-columns: 28px 64px minmax(0, 1fr);
+    grid-template-columns: 54px 52px minmax(0, 1fr);
     align-items: center;
     gap: 6px;
     padding: 4px 6px;
@@ -256,6 +258,23 @@
     grid-template-columns: 20px 90px minmax(0, 1fr) 26px;
     align-items: center;
     gap: 6px;
+  }
+  .custom-scheme,
+  .custom-template {
+    min-width: 0;
+  }
+  @media (max-width: 480px) {
+    .custom-row {
+      grid-template-columns: 20px minmax(0, 1fr) 26px;
+    }
+    .custom-template {
+      grid-column: 2;
+      grid-row: 2;
+    }
+    .custom-row > :last-child {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+    }
   }
   .empty-note,
   .help-note {

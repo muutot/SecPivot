@@ -668,7 +668,7 @@ export const en: Record<I18nKey, string> = {
   "nav.integrations.label": "Integrations",
   "nav.integrations.title": "Integrations",
   "nav.integrations.description":
-    "Browser bridges (KeePassHttp and KeePassRPC compatible) and authorized-client management.",
+    "Browser bridges (KeePassHttp and KeePassRPC), authorized clients and URL opening rules.",
   "nav.about.label": "About",
   "nav.about.title": "About",
   "nav.about.description": "Version, stack, and license info.",
@@ -1337,16 +1337,20 @@ export const en: Record<I18nKey, string> = {
   "pw.badBound": "Invalid random pool size",
   "urlOverrides.title": "URL Overrides",
   "urlOverrides.desc":
-    "KeePass 'Tools → Options → Integration → URL Overrides'. Replace the open action by URL scheme; enable built-in rules or add custom ones.",
-  "urlOverrides.toggle": "Enable URL overrides",
+    "Apply an entry or global template, then match the resulting URL against enabled built-in and custom scheme rules.",
+  "urlOverrides.toggle": "Enable global URL template",
   "urlOverrides.toggleDesc":
-    "When off, all rules (including entry-level OverrideURL) are ignored and URLs are opened by the system handler.",
+    "Controls only the global template below. Entry overrides and enabled scheme rules remain active when this is off.",
+  "urlOverrides.global": "Global URL template",
+  "urlOverrides.globalDesc":
+    "Used for entries without their own override. Leave empty to use the entry URL. {BASE} and {URL} refer to the original entry URL here.",
+  "urlOverrides.globalPlaceholder": "Empty = use the entry URL",
   "urlOverrides.builtin": "Built-in rules (27 from KeePass)",
   "urlOverrides.builtinDesc":
     "All official built-in rules are disabled by default. Enabled rules are matched in list order; the first match wins.",
   "urlOverrides.custom": "Custom rules",
   "urlOverrides.customDesc":
-    "Custom rules are checked after enabled built-ins; among equal schemes the first rule wins.",
+    "Matches the URL after template expansion, after enabled built-ins. The first matching scheme wins.",
   "urlOverrides.scheme": "Scheme",
   "urlOverrides.template": "Override command / URL",
   "urlOverrides.enabled": "Enabled",

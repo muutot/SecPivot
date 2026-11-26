@@ -47,13 +47,13 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Integration（集成）
 
-| KeePass 项                                  | SecPivot 状态                                                                                                                                                                         |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auto-Type global hotkey                     | ✅ `keyboard.autoTypeGlobal`                                                                                                                                                          |
-| TCATO summon hotkey                         | ✅ `keyboard.tcatoSummonGlobal`（KeePass 双通道混淆对等）                                                                                                                             |
-| Browser integration                         | ✅ `bridge` (KeePassHttp) / `rpc` (KeePassRPC)                                                                                                                                        |
-| URL overrides                               | ✅ `integration.urlOverrideEnabled` / `builtInOverridesEnabled`（27 内置）/ `customOverrides`；设置页 Integrations → URL Overrides，运行链 `open_entry_url`（条目级 → 内置 → 自定义） |
-| Auto-Type inter-key delay / abort-on-window | ❌ 未实现（KeePass.config.xml-only 高级项）                                                                                                                                           |
+| KeePass 项                                  | SecPivot 状态                                                                                                                                                                                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-Type global hotkey                     | ✅ `keyboard.autoTypeGlobal`                                                                                                                                                                                                             |
+| TCATO summon hotkey                         | ✅ `keyboard.tcatoSummonGlobal`（KeePass 双通道混淆对等）                                                                                                                                                                                |
+| Browser integration                         | ✅ `bridge` (KeePassHttp) / `rpc` (KeePassRPC)                                                                                                                                                                                           |
+| URL overrides                               | ✅ `integration.urlOverrideEnabled` / `urlOverride`（单一全局模板）/ `builtInOverridesEnabled`（27 内置）/ `customOverrides`；桌面 `open_entry_url`：条目模板优先于启用的全局模板，展开后匹配一次内置/自定义协议规则；开关仅控制全局模板 |
+| Auto-Type inter-key delay / abort-on-window | ❌ 未实现（KeePass.config.xml-only 高级项）                                                                                                                                                                                              |
 
 ### Advanced（高级）
 

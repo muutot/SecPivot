@@ -16,7 +16,8 @@ handlers and synthetic masked-config persistence/reload; the isolated browser
 check additionally exercises the real keyed component and native Enter input.
 
 `AppSettings.integration` mirrors KeePass `AceIntegration.UrlSchemeOverrides`:
-`urlOverrideEnabled` (master switch, default on), `builtInOverridesEnabled`
+`urlOverrideEnabled` (global-template switch, default on), `urlOverride`
+(single global template, default empty, exact command spacing preserved), `builtInOverridesEnabled`
 (bitmask over the 27 official built-in rules, `0` = all off), and
 `customOverrides` (`enabled` / `scheme` / `urlOverride` rows). The built-in
 table itself is code-defined in `config/settings.rs` and never persisted; a
@@ -24,15 +25,26 @@ hand-edited mask is normalized against the 27 known flag bits on load. Custom
 rules are trimmed, lowercased, deduplicated by (scheme, target), and capped at 256. Both sides are covered by `check-contract` and config round-trip tests.
 
 Entry URL opening goes through the `open_entry_url` IPC command: the entry's
-`OverrideURL` template (when set) takes precedence, then the global scheme
-override chain (enabled built-ins first, then customs). Placeholders expand in
+`OverrideURL` template (when set) takes precedence over the enabled global
+`urlOverride` template; otherwise the original URL is used. `compile_entry_url`
+expands this first stage, then matches one scheme rule against the intermediate
+URL (enabled built-ins first, then customs). The global switch gates neither
+entry overrides nor scheme rules, matching official OpenEntryUrl/CompileUrl.
+An empty entry URL never opens. Placeholders expand in
 `platform/url_override.rs`: `{BASE}`/`{BASE:PART}` for the URL being overridden,
 `{URL}`/`{URL:PART}` for the entry URL, `{USERNAME}`/`{PASSWORD}`/`{TITLE}`/
 `{NOTES}` entry fields, `{APPDIR}`, browser paths, and `{PASSWORD_ENC}` (Windows
-DPAPI with KeePass's fixed entropy). `cmd://` templates are split by
+DPAPI with KeePass's fixed entropy). BASE is the original entry URL for entry/global
+templates and the intermediate URL for scheme rules; URL always remains original.
+There is no recursive scheme chaining. `cmd://` templates are split by
 `parse_command_line` and launched as a child process; a plain override target
-is restricted to http/https. Without an override the frontend opens http(s)
-only, preserving the shared-vault `javascript:`/`file:` guard.
+is restricted to valid http/https and uses tauri-plugin-opener rather than a cmd
+shell. Raw vault fields cannot authorize commands, including after placeholder
+expansion. Unchanged plain URLs use the frontend http(s) handler. Errors contain
+no expanded destination or placeholder contents. Native compiler/dispatch-choice
+tests, exact ConfigStore save/reload and legacy-load tests, actual frontend-store
+tests and browser light/dark/narrow checks cover this addition; no external URL
+or command is launched by these controls. The command remains desktop-gated.
 
 Group snapshots retain `searchingSetting: boolean | null` as the original KDBX
 tri-state and expose `enableSearching: boolean` as the effective value resolved

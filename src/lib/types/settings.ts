@@ -348,8 +348,10 @@ export interface UrlSchemeOverride {
  *  table is code-defined (27 entries, each with a bit flag); only the enabled
  *  bitmask and the user's overrides are persisted. */
 export interface IntegrationSettings {
-  /** Master switch (KeePass `UrlOverrideEnabled`, default on). */
+  /** Enables only the global template (KeePass `UrlOverrideEnabled`, default on). */
   urlOverrideEnabled: boolean;
+  /** Single global template (KeePass `UrlOverride`); empty means use the entry URL. */
+  urlOverride: string;
   /** Bitmask of enabled built-in overrides (KeePass `BuiltInOverridesEnabled`). */
   builtInOverridesEnabled: number;
   /** User overrides; evaluated after enabled built-ins, first match wins. */
