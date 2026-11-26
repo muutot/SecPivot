@@ -1,5 +1,14 @@
 # Security Model
 
+Remote backup filename admission precedes filesystem effects: positive-count
+templates cannot escape the mirror directory through separators/drive aliases,
+target device names or overwrite the current mirror. Retention only admits
+regular files with validated date/millisecond/suffix structure; current mirror,
+directory and symlink entries are excluded, and suffix ordering is numeric.
+Nonrotating names never authorize deletion. This bounds filename/retention
+semantics, not adversarial replacement of parent directories or whole-filesystem
+ownership. The native tests use disposable synthetic directories only.
+
 Native diagnostics default off. lib.rs defines a lexical eprintln macro before
 every module, routing existing sites through DiagnosticLog. format_args only
 type-checks/borrows payloads; their Display/Debug is never invoked and no raw data

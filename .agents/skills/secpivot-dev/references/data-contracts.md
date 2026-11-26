@@ -1,5 +1,16 @@
 # Data Contracts
 
+Remote mirror backup templates are validated before directory creation/writes
+when backupCount is positive. Expanded names must be one portable filename,
+not the current mirror; Windows separators, drive/device forms and trailing
+dot/space aliases are rejected on every host. Disabled backups ignore unused
+templates. Timestamped retention recognizes actual dotted millisecond stamps
+and the documented undotted legacy shape, with valid dates and numeric collision
+suffixes. It excludes the current mirror, directories, symlinks and nonmatching
+files. Constant-name templates retain their legacy write behavior but authorize
+no retention deletion. Config/IPC shapes and optional remote mirror warnings
+remain unchanged; this is not the independent local-vault backup setting.
+
 `logging.enabled` mirrors KeePass AceLogging.Enabled, defaults false and survives
 partial/legacy configs in TS/Rust. updateLogging publishes through the existing
 persist queue; startup and successful set_config configure the process-wide

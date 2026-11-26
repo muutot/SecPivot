@@ -49,7 +49,7 @@ pub(crate) fn remote_key_basename(key: &str) -> String {
 }
 
 /// Expand a backup name template. `{name}` → file stem, `{timestamp}` →
-/// `YYYYMMDDHHmmssSSS`, `{ext}` → extension without the dot (falls back to
+/// `YYYYMMDDHHmmss.SSS`, `{ext}` → extension without the dot (falls back to
 /// the caller's `default_ext` when the source file has none). Unknown tokens
 /// are kept verbatim so a typo cannot silently drop the extension.
 pub(crate) fn expand_backup_template(template: &str, name: &str, stamp: &str, ext: &str) -> String {
@@ -59,28 +59,100 @@ pub(crate) fn expand_backup_template(template: &str, name: &str, stamp: &str, ex
         .replace("{ext}", ext)
 }
 
-/// Whether `candidate` matches the shape a template produces: the template is
-/// filled in for `{name}`/`{ext}` and `{timestamp}` acts as a wildcard run.
+/// Whether `candidate` matches a template with a generated UTC timestamp.
 /// A template without `{timestamp}` matches only the exact filled name.
 pub(crate) fn template_matches(candidate: &str, name: &str, ext: &str, template: &str) -> bool {
     let filled = template.replace("{name}", name).replace("{ext}", ext);
-    match filled.split_once("{timestamp}") {
-        Some((before, after)) => {
-            candidate.len() >= before.len() + after.len()
-                && candidate.starts_with(before)
-                && candidate.ends_with(after)
-        }
-        None => candidate == filled,
+    if filled.contains("{timestamp}") {
+        backup_identity(candidate, &filled).is_some()
+    } else {
+        candidate == filled
     }
+}
+
+/// Accept both the actual dotted millisecond stamp and the older documented
+/// undotted shape. Numeric collision suffixes order after the same timestamp.
+fn backup_identity(candidate: &str, filled: &str) -> Option<(chrono::NaiveDateTime, u16, u32)> {
+    let (before, after) = filled.split_once("{timestamp}")?;
+    if after.contains("{timestamp}") {
+        return None;
+    }
+    let middle = candidate.strip_prefix(before)?.strip_suffix(after)?;
+    let (stamp, suffix) = match middle.split_once('_') {
+        Some((stamp, suffix)) => {
+            let number: u32 = suffix.parse().ok()?;
+            if number == 0 || suffix != number.to_string() {
+                return None;
+            }
+            (stamp, number)
+        }
+        None => (middle, 0),
+    };
+    if !stamp.is_ascii() {
+        return None;
+    }
+    let millis = match stamp.len() {
+        17 => &stamp[14..],
+        18 if stamp.as_bytes()[14] == b'.' => &stamp[15..],
+        _ => return None,
+    };
+    if !stamp[..14].bytes().all(|b| b.is_ascii_digit())
+        || !millis.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    Some((
+        chrono::NaiveDateTime::parse_from_str(&stamp[..14], "%Y%m%d%H%M%S").ok()?,
+        millis.parse().ok()?,
+        suffix,
+    ))
+}
+
+/// Windows path/device semantics must be rejected even on a POSIX host.
+fn valid_file_name(name: &str) -> bool {
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.ends_with(['.', ' '])
+        || name
+            .chars()
+            .any(|c| c.is_control() || "/\\:<>\"|?*".contains(c))
+    {
+        return false;
+    }
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    !matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        && !(base.len() == 4
+            && (base.starts_with("COM") || base.starts_with("LPT"))
+            && matches!(base.as_bytes()[3], b'1'..=b'9'))
+}
+
+fn validate_backup_template(
+    template: &str,
+    name: &str,
+    stem: &str,
+    ext: &str,
+) -> Result<(), String> {
+    let candidate = expand_backup_template(template, stem, "20000101000000.000", ext);
+    if template.matches("{timestamp}").count() > 1
+        || !valid_file_name(&candidate)
+        || candidate.eq_ignore_ascii_case(name)
+    {
+        return Err("备份模板必须生成同目录内的独立文件名，不能覆盖当前副本".into());
+    }
+    Ok(())
 }
 
 /// Pick a backup file path that does not collide with an existing file. When
 /// two saves land in the same millisecond the naive stamp equals the previous
 /// backup name and the rename would silently overwrite it (dropping retention
-/// below the target count); append `_1`, `_2`, … until the name is free. The
-/// `_N` suffix sorts after the plain stamp, so lexicographic pruning keeps the
-/// correct chronological newest. Templates without `{timestamp}` cannot rotate
-/// and keep the legacy single-name behavior (no loop).
+/// below the target count); append `_1`, `_2`, … until the name is free.
+/// Retention compares `_N` numerically within the same timestamp. Templates
+/// without `{timestamp}` keep the legacy single-name behavior (no loop).
 fn unique_backup_path(dir: &Path, template: &str, stem: &str, ext: &str, stamp: &str) -> PathBuf {
     let dest = dir.join(format!("{stem}.{ext}"));
     let expand = |suffix: u32| {
@@ -97,7 +169,7 @@ fn unique_backup_path(dir: &Path, template: &str, stem: &str, ext: &str, stamp: 
     let mut suffix = 0u32;
     loop {
         let candidate = expand(suffix);
-        if candidate != dest && !candidate.exists() {
+        if candidate != dest && std::fs::symlink_metadata(&candidate).is_err() {
             return candidate;
         }
         suffix += 1;
@@ -114,12 +186,11 @@ pub(crate) fn write_local_copy(
     backup_count: usize,
     backup_template: &str,
 ) -> Result<(), String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
     // A mirror name must be a bare file name on every platform. On Linux a
     // backslash is a legal file name character, so the parent check below
     // alone would accept `..\evil.kdbx`; callers are expected to pass
     // `remote_key_basename` output, which never contains separators.
-    if name.contains(['/', '\\', ':']) {
+    if !valid_file_name(name) {
         return Err(format!("远程文件名不合法: {name}"));
     }
     let dest = dir.join(name);
@@ -128,17 +199,21 @@ pub(crate) fn write_local_copy(
     if dest.parent() != Some(dir) {
         return Err(format!("远程文件名不合法: {name}"));
     }
+    let stem = dest
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(name)
+        .to_owned();
+    let ext = dest
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("kdbx")
+        .to_owned();
+    if backup_count > 0 {
+        validate_backup_template(backup_template, name, &stem, &ext)?;
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("创建本地目录失败: {e}"))?;
     if backup_count > 0 && dest.exists() {
-        let stem = dest
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(name)
-            .to_owned();
-        let ext = dest
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("kdbx")
-            .to_owned();
         let stamp = chrono::Utc::now().format("%Y%m%d%H%M%S%.3f").to_string();
         let backup = unique_backup_path(dir, backup_template, &stem, &ext, &stamp);
         if backup != dest {
@@ -165,23 +240,45 @@ pub(crate) fn prune_local_backups(
     keep: usize,
     backup_template: &str,
 ) -> Result<(), String> {
-    let mut backups: Vec<PathBuf> = std::fs::read_dir(dir)
+    // A constant name cannot rotate and must never authorize deletion of the
+    // current mirror or an unrelated same-name file.
+    if !backup_template.contains("{timestamp}") {
+        return Ok(());
+    }
+    validate_backup_template(backup_template, &format!("{stem}.{ext}"), stem, ext)?;
+    let filled = backup_template
+        .replace("{name}", stem)
+        .replace("{ext}", ext);
+    let current_name = format!("{stem}.{ext}");
+    let mut backups: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| format!("读取本地备份目录失败: {e}"))?
         .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|name| template_matches(name, stem, ext, backup_template))
+        .filter_map(|entry| {
+            if !entry.file_type().ok()?.is_file() {
+                return None;
+            }
+            let name = entry.file_name();
+            let name = name.to_str()?;
+            if name.eq_ignore_ascii_case(&current_name) || name.eq_ignore_ascii_case(stem) {
+                return None;
+            }
+            if !template_matches(name, stem, ext, backup_template) {
+                return None;
+            }
+            Some((backup_identity(name, &filled)?, entry.path()))
         })
         .collect();
-    backups.sort();
+    backups.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     let total = backups.len();
-    for path in backups.into_iter().take(total.saturating_sub(keep)) {
+    for (_, path) in backups.into_iter().take(total.saturating_sub(keep)) {
         let _ = std::fs::remove_file(path);
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "backup_path_tests.rs"]
+mod path_tests;
 
 #[cfg(test)]
 mod tests {
@@ -205,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn template_match_uses_timestamp_as_wildcard() {
+    fn template_match_recognizes_only_generated_timestamp_shapes() {
         let t = "{name}.{timestamp}.{ext}.bak";
         assert!(template_matches(
             "seed.20260101120000000.kdbx.bak",
@@ -213,7 +310,7 @@ mod tests {
             "kdbx",
             t
         ));
-        assert!(template_matches("seed.9.kdbx.bak", "seed", "kdbx", t));
+        assert!(!template_matches("seed.9.kdbx.bak", "seed", "kdbx", t));
         assert!(!template_matches(
             "other.20260101120000000.kdbx.bak",
             "seed",

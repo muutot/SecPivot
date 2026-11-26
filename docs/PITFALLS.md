@@ -143,6 +143,13 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
 
 ## Remote (S3)
 
+- **Backup templates are paths until validated.** A safe remote basename does
+  not make an expanded backup template safe. Reject separators, drive/device
+  forms and current-mirror aliases before creating directories or writing files.
+  Retention must validate the timestamp and numeric collision suffix, skip
+  directories/symlinks/current mirrors, and never treat arbitrary text as a
+  timestamp wildcard. Constant-name templates cannot authorize deletion.
+
 - **`Path::join`'s parent check alone does not reject `\`-containing names on Linux.** In `write_local_copy`, `dir.join("..\evil.kdbx")` has a parent on Windows but is a plain legal file name on Linux, so the `dest.parent() != Some(dir)` guard passed on Linux and the "rejects a name that would escape" test only held on Windows. The mirror name must be rejected explicitly when it contains `/`, `\` or `:` (all callers pass `remote_key_basename` output, which never does); when adding a path check, ask how the same input parses on a POSIX host before calling a Windows-only test green.
 - **The S3 transport is hand-rolled SigV4 over blocking reqwest/rustls — no `rust-s3`, no native-tls/openssl.** `rust-s3 0.34` was removed because it hardwires the tokio + native-tls backend (→ openssl), forcing a vendored OpenSSL build for Android. `remote/s3.rs` implements exactly the four operations the app needs (`ListObjectsV2`, `GetObject`, `PutObject`, plus bucket create/delete for the live test) with AWS Signature V4 over the shared `reqwest::blocking` client; path-style URLs so MinIO works. Do not re-introduce `rust-s3`.
 - **The S3 mock tests do not verify the SigV4 signature** — the mock only checks the request line (`list-type=2` / PUT / GET) and echoes canned XML/bytes. The signature math is exercised only by the live-server test (`s3_transport_round_trips_against_live_s3_server`), which skips itself when no S3 server listens on `127.0.0.1:9000`. Any change to `send()`/signing must re-run that live test on a real server (MinIO) for provider evidence; a green mock suite alone does not prove a valid signature.

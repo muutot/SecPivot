@@ -1,5 +1,11 @@
 # Project Structure and Runtime Surfaces
 
+remote/backup.rs owns portable mirror/backup filename admission and validated
+UTC/millisecond/numeric-suffix retention. backup_path_tests.rs is its test-only
+child for traversal/current-file/first-write/retention controls in disposable
+directories; it performs no provider or user-vault operation. Public backup
+helper signatures and remote persistence warning ownership are unchanged.
+
 `diagnostics.rs` owns optional process-wide local logging and metadata status,
 with nested synthetic filesystem/macro tests. Root lexical macros precede all
 modules, gating existing native eprintln sites and omitting format payloads.
