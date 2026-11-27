@@ -89,6 +89,11 @@ The release workflow's Windows `build` job is the extreme-release validation bec
 
 ## Local build and run model
 
+Validate native builds with the committed npm and Cargo locks. If installed npm
+versions drift, use `npm ci` in a clean source snapshot while preserving the
+user's installed dependencies. On this Windows workstation, set
+`CARGO_BUILD_JOBS=1` for native builds (see `maintenance-workflow.md`).
+
 Build profiles in `src-tauri/Cargo.toml` are split so local builds are fast and storage-light, and only the GitHub Actions release build applies extreme runtime optimization:
 
 - `npm run tauri dev` — local dev run. `[profile.dev]` keeps dependencies unoptimized (opt-level 0, no debug symbols) with `incremental` + `split-debuginfo = "unpacked"`, so the cached target is reused and rebuilds are as fast as possible.

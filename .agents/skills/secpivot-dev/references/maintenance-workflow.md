@@ -193,4 +193,17 @@ Use the sibling `version-release` skill (`.agents/skills/version-release/SKILL.m
 
 ## Packaging verification
 
+Tauri's version check compares installed npm packages with Rust dependencies.
+If local `node_modules` has drifted from `package-lock.json`, preserve it and
+verify a clean archived source snapshot with `npm ci`; never skip the mismatch
+gate or relax versions merely to make the build run. Validate snapshot source
+bytes against its recorded Git tree before sealing evidence.
+
+Use `CARGO_BUILD_JOBS=1` for native builds on this Windows workstation. The
+default parallel build exhausted system commitment (`0xc000012d`) and emitted
+secondary metadata/union-field diagnostics; a serial retry compiled and linked
+the same locked sources. Those resource errors do not justify patching upstream
+dependencies. `tauri build --no-bundle` proves native compilation/linking only;
+it does not prove WebView execution, NSIS packaging or the extreme CI profile.
+
 `npm run tauri -- build` produces the NSIS installer (`src-tauri/target/release/bundle/nsis/SecPivot_<version>_x64-setup.exe`) and exercises the custom `src-tauri/windows/installer.nsi` template. GitHub Actions workflows (`.github/workflows/*`) cannot execute locally; inspect the real run/job conclusions plus draft-release assets before changing TODO status. A locally valid YAML diff or a partially successful job is not release evidence: CI remains partial until the current HEAD passes, and release remains partial until every required Windows/portable/Android artifact exists and its job succeeded.
