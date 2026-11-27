@@ -14218,6 +14218,15 @@ fn merge_history_same_time_loser_preserves_both_versions_after_reopen() {
 
 #[test]
 fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
+    assert_merge_history_expiration_variants(false);
+}
+
+#[test]
+fn merge_history_unequal_current_preserves_same_time_expiration_variants() {
+    assert_merge_history_expiration_variants(true);
+}
+
+fn assert_merge_history_expiration_variants(unequal_current: bool) {
     let dir = TempDir::new().unwrap();
     let (base, id) = merge_base_db();
     let mut local = base.clone();
@@ -14234,6 +14243,11 @@ fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
         entry.times.expires = Some(false);
         entry.times.expiry = None;
     }
+    if unequal_current {
+        // Equal current content does not produce a losing-version backup. The
+        // historical expiry variants must survive the ordinary history union.
+        pin_times(&mut remote, id, merge_ts(50));
+    }
     for (a, b) in [(&local, &remote), (&remote, &local)] {
         let merged = merge_databases(a, b).unwrap();
         let path = dir.path().join("expiration-history.kdbx");
@@ -14247,7 +14261,18 @@ fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
         reopened.open(&path, "synthetic-only", None).unwrap();
         let entry = reopened.require_db().unwrap().entry(id).unwrap();
         let versions = entry.history.as_ref().unwrap().get_entries();
-        assert_eq!(versions.len(), 3);
+        if !unequal_current {
+            assert_eq!(versions.len(), 3);
+        }
+        let version_count = versions.len();
+        assert_eq!(
+            versions
+                .iter()
+                .filter(|e| e.times.last_modification == Some(merge_ts(20)))
+                .count(),
+            2,
+            "same-time historical expiry variants must both survive"
+        );
         for expected in [merge_ts(60), merge_ts(70)] {
             let index = versions
                 .iter()
@@ -14272,7 +14297,7 @@ fn merge_history_equal_time_expiration_variants_survive_reopen_and_restore() {
                 .unwrap()
                 .get_entries()
                 .len(),
-            3
+            version_count
         );
     }
 }

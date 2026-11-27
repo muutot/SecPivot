@@ -1152,6 +1152,13 @@ headers and later-created binaries. Completion must not collect before late
 owners are installed. These synthetic KDBX tests establish final file contents;
 old copies, backups and filesystem blocks remain outside this collection.
 
+Differing original source histories remain in temporary native merge clones even
+when current timestamps differ; content/expiration-aware union runs before final
+attachment collection. Same-time historical expiry variants must not disappear
+through the dependency's expiry-blind equality. No history plaintext or new
+credential data crosses IPC, config or logging. Current-content conflicts and
+failed publication retain the existing refusal/rollback rules.
+
 Merge location bookkeeping is independent of entry/group content timestamps.
 Newer same-parent moves retain LocationChanged and PreviousParentGroup through
 KDBX save/reopen, so an older third-device move cannot undo a return. Structural

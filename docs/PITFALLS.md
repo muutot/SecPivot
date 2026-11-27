@@ -47,6 +47,14 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
   Decode UTF-8/UTF-16/known legacy charsets without replacement, reject DTD without
   a resolver, and retain the existing field-specific diagnostic boundary.
 
+- **History equality must include expiry on every merge path.** Preserving
+  same-time history only when current timestamps match still loses expiry-only
+  variants in the ordinary unequal-current merge. Retain differing source history
+  before that merge and apply timestamp/content/expiry union afterward. Verify
+  both directions, KDBX reopen, restoration and repeated merges; official KeePass
+  itself keys its history union by timestamp, so extra retained variants are an
+  enhancement rather than a claim of cross-client duplicate preservation.
+
 - **WebDAV status belongs to one response or propstat.** Applying properties
   immediately let a404 block overwrite valid size/date or classify a file as a
   directory. Stage each block until its end and apply only explicit2xx results;

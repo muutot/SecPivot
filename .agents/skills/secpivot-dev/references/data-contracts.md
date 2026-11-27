@@ -1156,13 +1156,24 @@ The separate merge finalization contract handles prepared imports.
 prepare_attachment_merge returns an opaque in-memory AttachmentMergeState with
 the prepared binary IDs and destination's original unreferenced header IDs.
 complete_attachment_merge still installs source winners and releases preparation
-leases without early collection. After equal/losing history union and local bin
+leases without early collection. After source/losing history union and local bin
 restoration, finalize_attachment_merge validates no remaining leases or missing
 recursive owner payloads and collects unowned prepared IDs. Original destination
 orphan headers and binaries introduced after preparation remain. Source orphan
 headers retain the existing exclusion. Actual deleted entry/subtree merges and
 saved orphan-header fixtures cover both directions and repeated save/reopen;
 existing history/bin/current winner tests protect late owners.
+
+First-party collect_source_histories retains differing original source histories
+before the crate merge, regardless of current modification-time equality.
+union_history compares timestamp plus complete content and expiration after actual
+winners/deletions, before restoring the local bin and final attachment collection.
+This recovers same-time history variants whose only difference is expiry; the
+crate's ordinary unequal-current path otherwise treats them as duplicates.
+Synthetic KDBX save/reopen, both merge directions, history restore and repeated
+merge cover this path. Same-time current-content conflicts still refuse publication.
+This preserves more historical variants than official KeePass's timestamp-only
+history union; real client round trips remain an independent compatibility boundary.
 
 Patched native group merge decides each object's deletion independently. A newer
 deep entry/group edit restores its required ancestors, while unchanged siblings

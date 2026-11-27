@@ -724,12 +724,15 @@ local bin and unioning all retained history. Final collection validates leases
 and recursive owners, removes unowned prepared IDs, and preserves original local
 orphan headers and later-added binaries. Native bidirectional/repeated/reopened
 deletion and orphan-header tests accompany dependency lifetime/alias/error tests.
-The first-party vault/merge.rs adds history-only union at equal current times
-and content-aware deduplication of captured older current versions in either direction;
-current same-time content conflicts still fail before database publication.
+The first-party vault/merge.rs retains differing source histories before merge,
+then unions them for equal or unequal current times using content-aware
+deduplication; captured older current versions use that same identity in either direction.
+Current same-time content conflicts still fail before database publication.
 It completes current expiration from actual entry winners and rejects surviving
 equal-time expiration divergence after native deletion decisions; expiration is
 included in losing-version identity and its native save/reopen regressions.
+Historical expiration also participates in union identity when current times differ;
+bidirectional KDBX reopen/restore and repeated merge protect both same-time variants.
 Patched types/mod.rs provides History::from_entries for linear list construction
 after the wrapper sorts versions. Patched db/merge.rs merges same-parent location
 times independently of content, carries the winning move's previous parent

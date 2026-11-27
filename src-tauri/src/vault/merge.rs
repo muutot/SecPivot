@@ -121,16 +121,16 @@ fn collect_losing_versions(dest: &Database, source: &Database) -> Vec<(EntryId, 
     losers
 }
 
-/// The crate skips history union when current modification times match.
-/// Capture only the source histories that differ; a real current-content
-/// conflict still rejects the whole merge before these snapshots are applied.
-fn collect_equal_current_histories(dest: &Database, source: &Database) -> Vec<(EntryId, History)> {
+/// The crate skips history union when current times match and ignores expiry
+/// when deduplicating historical versions when those times differ. Retain the
+/// original source histories in both paths; current-content conflicts still
+/// reject the whole merge before these snapshots are applied.
+fn collect_source_histories(dest: &Database, source: &Database) -> Vec<(EntryId, History)> {
     source
         .iter_all_entries()
         .filter_map(|entry| {
             let local = dest.entry(entry.id())?;
-            let time = entry.times.last_modification?;
-            if local.times.last_modification != Some(time) || local.history == entry.history {
+            if local.history == entry.history {
                 return None;
             }
             entry
@@ -453,7 +453,7 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
         .prepare_attachment_merge(&mut source)
         .map_err(|error| format!("无法合并附件：{error}"))?;
     let losers = collect_losing_versions(&dest, &source);
-    let equal_histories = collect_equal_current_histories(&dest, &source);
+    let source_histories = collect_source_histories(&dest, &source);
     let expiration_conflicts = collect_equal_time_expiration_conflicts(&dest, &source);
     prepare_new_group_tags(&dest, &mut source);
     let log = dest.merge(&source).map_err(describe_merge_error)?;
@@ -495,7 +495,7 @@ pub(crate) fn merge_databases(local: &Database, remote: &Database) -> Result<Dat
         }
     }
 
-    for (id, history) in equal_histories {
+    for (id, history) in source_histories {
         if let Some(mut entry) = dest.entry_mut(id) {
             union_history(&mut entry, history.get_entries().iter().cloned());
         }
