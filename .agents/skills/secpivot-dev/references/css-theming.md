@@ -1,5 +1,56 @@
 # Project-wide UI Style and Theming
 
+## Independent liquid glass themes
+
+`liquid-dark` and `liquid-light` are independent built-in modes alongside
+`dark`, `light` and `custom`. They reuse the corresponding 21-color preset
+without modifying it or the saved custom palette. Exact `data-theme` selectors
+in `styles/liquid-glass.css` own their finish; legacy light selectors remain
+light-only. StyleKit's glassmorphism/liquid-glass and DeepLethe's Solid Glass
+are visual references, with original Svelte/CSS implementation and no new
+framework or component-library dependency.
+
+The optical variables are derived CSS values, not persisted palette fields:
+`--glass-filter`, `--glass-card-fill`, `--glass-surface-fill`,
+`--glass-sidebar-fill`, `--glass-rim`, `--glass-under`, `--glass-shade`,
+`--glass-card-shadow`, `--glass-surface-shadow`, `--glass-settings-canvas`,
+`--glass-menu-base` and `--glass-menu-decoration`. Cards use stable neutral
+translucent faces, directional one-pixel rims and lower-edge/contact shadows.
+Settings shell/sidebar and AppToolbar consume the same material. Reading
+panes and controls retain their existing dimensions, font, palette and layout.
+The two swatches depict fixed preset colors; they are palette previews only.
+Button keeps primary text on destructive actions in liquid-light for legibility;
+the original light-only action decoration remains separately scoped.
+
+`utils/liquid-glass.ts` exports the shared `liquidGlass` action and pure
+`createRimMap` geometry. ModalShell, Select, ViewportMenuShell and ContextMenu's
+cascade use the action. A local PNG displacement map has a neutral center and
+a maximum eight-pixel rounded rim; Chromium applies an SVG backdrop filter
+with four-pixel displacement and eight-pixel blur. Maps are bounded to
+1024px per side, refreshed on geometry/mode changes and disposed with all
+observers/listeners on unmount. Only geometry is rendered into the canvas;
+page pixels, vault fields and credentials are never captured or transmitted.
+Other engines use the CSS frosted finish. Reduced transparency, forced colors
+and non-default contrast preferences disable the new finish and SVG optics.
+
+ViewportMenuShell keeps refraction on a pointer-inert `::before` layer and
+scrolling in `.viewport-menu__content`. Filtering the root would create a
+containing block for its fixed cascades; preserve viewport positioning, menu
+keyboard ownership and internal scrolling when changing this surface.
+
+Isolated Chromium rendering covers both modes in Chinese/English and at320px,
+modal/ported listbox optics, cascade keyboard focus and long-menu internal
+scrolling. An optical grid comparison checks the rim against blur alone; closing
+the surfaces removes their filters. The automated browser forces reduced
+transparency, so full optics are inspected only in a fixture that overrides
+that query locally. The real settings route retains the opaque fallback. Native
+WebView execution and compositor performance remain separate evidence.
+
+References:
+[Glassmorphism](https://www.stylekit.top/zh/styles/glassmorphism),
+[Liquid Glass](https://www.stylekit.top/zh/styles/liquid-glass),
+[Solid Glass](https://github.com/deeplethe/solid-glass).
+
 ShowEntriesOfSubGroups composes the existing folder-icon SettingToggleCard.
 The More > View cascade composes existing ContextMenu/MenuItem checkbox chrome
 and check/folder icons; false exposes an unchecked menuitemcheckbox too. No new

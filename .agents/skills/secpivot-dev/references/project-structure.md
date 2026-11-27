@@ -1,5 +1,14 @@
 # Project Structure and Runtime Surfaces
 
+`lib/styles/liquid-glass.css`, imported by app.css, owns only the independent
+liquid-dark/liquid-light material variables and accessibility gates.
+`lib/utils/liquid-glass.ts` owns bounded, geometry-only rim maps and the
+resize/mode/media-aware Svelte action consumed by ModalShell, Select,
+ViewportMenuShell and ContextMenu cascades. ViewportMenuShell's content wrapper
+owns scrolling while its decorative pseudo-element owns refraction, preserving
+fixed cascade coordinates. Existing settings cards/sidebar and AppToolbar
+consume derived optical variables; original presets remain separately scoped.
+
 useEntryFilter.svelte.ts owns ShowEntriesOfSubGroups ordinary row membership,
 with independent concrete-group and descendant-preference getters. The page
 passes the live shared setting and reconciles hidden direct-browse selections

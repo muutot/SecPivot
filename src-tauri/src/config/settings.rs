@@ -1510,7 +1510,7 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
             "zh-CN".into()
         };
     config.general.theme = match config.general.theme.as_str() {
-        "dark" | "light" | "custom" => config.general.theme,
+        "dark" | "light" | "liquid-dark" | "liquid-light" | "custom" => config.general.theme,
         _ => "dark".into(),
     };
     config.general.window_effect = match config.general.window_effect.as_str() {

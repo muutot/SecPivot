@@ -312,7 +312,7 @@
     width: 100%;
     height: 100%;
     color: var(--text-primary);
-    background: var(--bg-settings);
+    background: var(--glass-settings-canvas, var(--bg-settings));
   }
 
   .settings-dialog--standalone {
@@ -325,7 +325,8 @@
     flex-direction: column;
     min-height: 0;
     border-right: 1px solid var(--border-subtle);
-    background: var(--surface-bg);
+    background: var(--glass-sidebar-fill, var(--surface-bg));
+    backdrop-filter: var(--glass-filter, none);
   }
 
   .settings-brand {
@@ -510,6 +511,10 @@
   }
 
   @media (forced-colors: none) {
+    :global(:root:is([data-theme="liquid-dark"], [data-theme="liquid-light"])) .settings-content {
+      background: transparent;
+    }
+
     :global(:root[data-theme="light"]) .settings-dialog {
       background: linear-gradient(
         135deg,

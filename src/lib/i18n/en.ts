@@ -398,6 +398,8 @@ export const en: Record<I18nKey, string> = {
   "settings.themeModeDesc": "Choose a built-in theme or custom colors",
   "settings.themeDark": "Dark",
   "settings.themeLight": "Light",
+  "settings.themeLiquidDark": "Dark liquid glass",
+  "settings.themeLiquidLight": "Light liquid glass",
   "settings.themeCustom": "Custom",
   "settings.customPalette": "Custom palette",
   "settings.customPaletteDesc": "Edit semantic theme colors with live preview",

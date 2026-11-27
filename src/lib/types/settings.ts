@@ -1,7 +1,7 @@
 import type { ThemeColors } from "./theme";
 import type { AdvancedSearchQuery } from "$lib/utils/entry-search";
 
-export type ThemeMode = "dark" | "light" | "custom";
+export type ThemeMode = "dark" | "light" | "liquid-dark" | "liquid-light" | "custom";
 export type WindowEffect = "off" | "acrylic" | "mica";
 export type Language = "en" | "zh-CN";
 export type Kdf = "Argon2id" | "Argon2" | "Aes";

@@ -1,0 +1,71 @@
+/* Independent material modes. The original dark/light/custom presets never
+   inherit these values; all pigment comes from the existing semantic palette. */
+:root[data-theme="liquid-dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="liquid-light"] {
+  color-scheme: light;
+}
+
+.swatch-liquid-dark {
+  background: linear-gradient(145deg, #656565, #111111);
+  box-shadow: inset 0 1px 0 var(--text-primary);
+}
+
+.swatch-liquid-light {
+  background: linear-gradient(145deg, #ffffff, #d2d2d2);
+  box-shadow: inset 0 1px 0 var(--text-primary);
+}
+
+:root[data-theme="liquid-light"] ::selection {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--selection-color) 26%, var(--card-bg));
+}
+
+@media (forced-colors: none) and (prefers-contrast: no-preference) {
+  @media not (prefers-reduced-transparency: reduce) {
+    @supports (backdrop-filter: blur(1px)) {
+      :root:is([data-theme="liquid-dark"], [data-theme="liquid-light"]) {
+        --glass-filter: blur(18px);
+        --glass-menu-base: transparent;
+        --glass-menu-decoration: "";
+        --glass-card-fill: color-mix(in srgb, var(--card-bg) 78%, transparent);
+        --glass-surface-fill: color-mix(in srgb, var(--surface-bg) 84%, transparent);
+        --glass-sidebar-fill: color-mix(in srgb, var(--surface-bg) 80%, transparent);
+        --glass-rim: color-mix(in srgb, var(--text-primary) 24%, transparent);
+        --glass-under: color-mix(in srgb, var(--bg-app) 65%, transparent);
+        --glass-shade: color-mix(in srgb, var(--bg-app) 70%, transparent);
+        --glass-card-shadow:
+          inset 0 1px 0 var(--glass-rim), inset 0 -1px 0 var(--glass-under),
+          0 3px 12px -5px var(--glass-shade);
+        --glass-surface-shadow:
+          inset 0 1px 0 var(--glass-rim), inset 0 -1px 0 var(--glass-under),
+          0 16px 40px -10px var(--glass-shade);
+        --glass-settings-canvas: radial-gradient(
+            ellipse at 10% 0%,
+            color-mix(in srgb, var(--hover-bg) 70%, transparent),
+            transparent 65%
+          )
+          var(--bg-settings);
+      }
+
+      :root[data-theme="liquid-light"] {
+        --glass-card-fill: color-mix(in srgb, var(--card-bg) 68%, transparent);
+        --glass-surface-fill: color-mix(in srgb, var(--surface-bg) 88%, transparent);
+        --glass-sidebar-fill: color-mix(in srgb, var(--surface-bg) 74%, transparent);
+        --glass-rim: color-mix(in srgb, var(--card-bg) 94%, transparent);
+        --glass-under: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        --glass-shade: color-mix(in srgb, var(--text-primary) 20%, transparent);
+      }
+
+      :root:is([data-theme="liquid-dark"], [data-theme="liquid-light"]) .modal-backdrop {
+        backdrop-filter: blur(4px);
+      }
+
+      :root[data-theme="liquid-light"] .modal-backdrop {
+        background: color-mix(in srgb, var(--text-primary) 22%, transparent);
+      }
+    }
+  }
+}

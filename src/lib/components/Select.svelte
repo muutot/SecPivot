@@ -1,5 +1,6 @@
 <script lang="ts" generics="T extends string | number">
   import AppIcon from "$lib/components/AppIcon.svelte";
+  import { liquidGlass } from "$lib/utils/liquid-glass";
 
   interface Props {
     value: T;
@@ -173,6 +174,7 @@
       tabindex="-1"
       bind:this={listEl}
       use:portalList
+      use:liquidGlass
       style="top:{pos.top}px; left:{pos.left}px; width:{pos.width}px;"
       onkeydown={onListKeydown}
     >
@@ -264,8 +266,9 @@
     padding: 6px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
-    background: var(--surface-bg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    background: var(--glass-surface-fill, var(--surface-bg));
+    backdrop-filter: var(--liquid-refraction-filter, var(--glass-filter, none));
+    box-shadow: var(--glass-surface-shadow, 0 8px 24px rgba(0, 0, 0, 0.28));
     animation: select-pop 120ms ease;
   }
 

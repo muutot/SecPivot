@@ -1626,6 +1626,27 @@ fn link_color_survives_deserialize_write_reload_and_old_configs_default() {
 }
 
 #[test]
+fn liquid_themes_survive_normalization_write_and_reload_without_changing_custom_colors() {
+    let dir = TempDir::new().unwrap();
+    let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();
+    let mut config = AppConfig::default();
+    config.general.theme_colors.accent = "#abcd12".into();
+    for theme in ["liquid-dark", "light", "liquid-light", "dark", "custom"] {
+        config.general.theme = theme.into();
+        let saved = store.set(config.clone()).unwrap();
+        assert_eq!(saved.general.theme, theme);
+        let reloaded = ConfigStore::load(dir.path().to_path_buf())
+            .unwrap()
+            .get()
+            .unwrap();
+        assert_eq!(reloaded.general.theme, theme);
+        assert_eq!(reloaded.general.theme_colors.accent, "#abcd12");
+    }
+    config.general.theme = "liquid".into();
+    assert_eq!(store.set(config).unwrap().general.theme, "dark");
+}
+
+#[test]
 fn toolbar_overflow_menu_uses_platform_default_and_survives_round_trip() {
     let dir = TempDir::new().unwrap();
     let store = ConfigStore::load(dir.path().to_path_buf()).unwrap();

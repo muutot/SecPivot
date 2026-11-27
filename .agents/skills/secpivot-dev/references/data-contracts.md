@@ -1,5 +1,15 @@
 # Data Contracts
 
+`GeneralSettings.theme` / Rust `general.theme` accepts `dark`, `light`,
+`liquid-dark`, `liquid-light` and `custom`. Frontend and Rust normalization
+preserve all five; missing/invalid values keep the canonical Dark default.
+`selectThemeColors` uses the existing light palette for both light modes,
+the existing dark palette for both dark modes and stored `themeColors` only
+for Custom. Selecting a built-in never replaces custom palettes. No field,
+default palette, schema version or native material/opacity setting is added.
+`tests/liquid-glass.test.mjs` covers frontend mode persistence/selection and
+geometry/lifecycle; native config tests cover normalization/write/reload.
+
 `SecPivot.LinkedFields` is protected, reserved same-entry metadata owned by
 vault/linked_fields.rs. Version1 contains `{version:1,links:[{name,target}]}`;
 targets are `{kind:"field",name}` or `{kind:"bitwardenFullName",fields:[four names]}`.

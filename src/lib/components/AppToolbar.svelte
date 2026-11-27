@@ -714,6 +714,9 @@
     padding: 8px 14px;
     border-top: 1px solid var(--border-subtle);
     border-bottom: 1px solid var(--border-subtle);
+    background: var(--glass-sidebar-fill, transparent);
+    backdrop-filter: var(--glass-filter, none);
+    box-shadow: inset 0 1px 0 var(--glass-rim, transparent);
   }
 
   .toolbar-divider {

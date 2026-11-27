@@ -99,6 +99,10 @@
   }
 
   @media (forced-colors: none) {
+    :global(:root[data-theme="liquid-light"]) .btn--danger {
+      color: var(--text-primary);
+    }
+
     :global(:root[data-theme="light"]) .btn--primary {
       color: var(--text-primary);
       border-color: color-mix(in srgb, var(--link-color) 38%, var(--border-subtle));

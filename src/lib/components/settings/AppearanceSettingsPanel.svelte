@@ -482,6 +482,22 @@
         </button>
         <button
           class="theme-segment"
+          class:active={general.theme === "liquid-dark"}
+          aria-pressed={general.theme === "liquid-dark"}
+          onclick={() => change("theme", "liquid-dark")}
+        >
+          <span class="swatch swatch-liquid-dark"></span>{t(lang, "settings.themeLiquidDark")}
+        </button>
+        <button
+          class="theme-segment"
+          class:active={general.theme === "liquid-light"}
+          aria-pressed={general.theme === "liquid-light"}
+          onclick={() => change("theme", "liquid-light")}
+        >
+          <span class="swatch swatch-liquid-light"></span>{t(lang, "settings.themeLiquidLight")}
+        </button>
+        <button
+          class="theme-segment"
           class:active={general.theme === "custom"}
           onclick={() => change("theme", "custom")}
         >
@@ -655,15 +671,21 @@
           {/snippet}
         </ModalShell>
       {/if}
-    {:else if general.theme === "dark"}
+    {:else if general.theme === "dark" || general.theme === "liquid-dark"}
       {@render presetPaletteCard(
-        t(lang, "settings.darkPalette"),
+        t(
+          lang,
+          general.theme === "liquid-dark" ? "settings.themeLiquidDark" : "settings.darkPalette",
+        ),
         t(lang, "settings.builtinReadonly"),
         DARK_THEME_COLORS,
       )}
-    {:else if general.theme === "light"}
+    {:else if general.theme === "light" || general.theme === "liquid-light"}
       {@render presetPaletteCard(
-        t(lang, "settings.lightPalette"),
+        t(
+          lang,
+          general.theme === "liquid-light" ? "settings.themeLiquidLight" : "settings.lightPalette",
+        ),
         t(lang, "settings.builtinReadonly"),
         LIGHT_THEME_COLORS,
       )}

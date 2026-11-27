@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { liquidGlass } from "$lib/utils/liquid-glass";
   import { tick } from "svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
   import AppIcon from "$lib/components/AppIcon.svelte";
@@ -184,6 +185,7 @@
             aria-label={item.label}
             tabindex="-1"
             use:submenuFlip
+            use:liquidGlass
           >
             {#each item.children as child (child.id)}
               <MenuItem
@@ -222,8 +224,9 @@
     padding: 4px;
     border: 1px solid var(--border-color);
     border-radius: var(--settings-control-radius, 6px);
-    background: var(--surface-bg);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    background: var(--glass-surface-fill, var(--surface-bg));
+    backdrop-filter: var(--liquid-refraction-filter, var(--glass-filter, none));
+    box-shadow: var(--glass-surface-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
   }
 
   .submenu-chevron {

@@ -80,7 +80,9 @@ header p {
   padding: 10px 13px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--settings-card-radius, 9px);
-  background: var(--card-bg);
+  background: var(--glass-card-fill, var(--card-bg));
+  backdrop-filter: var(--glass-filter, none);
+  box-shadow: var(--glass-card-shadow, none);
 }
 
 @media (forced-colors: none) {

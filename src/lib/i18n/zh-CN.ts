@@ -388,6 +388,8 @@ export const zhCN = {
   "settings.themeModeDesc": "选择内置主题或启用自定义配色",
   "settings.themeDark": "深色",
   "settings.themeLight": "浅色",
+  "settings.themeLiquidDark": "暗色液态玻璃",
+  "settings.themeLiquidLight": "浅色液态玻璃",
   "settings.themeCustom": "自定义",
   "settings.customPalette": "自定义配色",
   "settings.customPaletteDesc": "直接修改主题语义色，即时预览；切换编辑当前配色或已保存主题",

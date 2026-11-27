@@ -887,7 +887,10 @@ export function normalizeSettings(
     ...fallback.general,
     ...(typeof g === "object" ? g : {}),
     theme:
-      g.theme === "light" || g.theme === "custom"
+      g.theme === "light" ||
+      g.theme === "liquid-dark" ||
+      g.theme === "liquid-light" ||
+      g.theme === "custom"
         ? g.theme
         : g.theme === "dark"
           ? "dark"
@@ -1677,7 +1680,7 @@ export const appSettings: AppSettingsStore = {
 };
 
 export function selectThemeColors(s: AppSettings): ThemeColors {
-  if (s.general.theme === "light") return LIGHT_THEME_COLORS;
+  if (s.general.theme === "light" || s.general.theme === "liquid-light") return LIGHT_THEME_COLORS;
   if (s.general.theme === "custom") return s.general.themeColors;
   return DARK_THEME_COLORS;
 }

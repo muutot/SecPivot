@@ -4,6 +4,7 @@
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
   import { acquireEscapeScope } from "$lib/utils/escape-stack";
+  import { liquidGlass } from "$lib/utils/liquid-glass";
 
   export type ModalSize = "small" | "confirm" | "medium" | "large" | "report";
   export type ModalTone = "default" | "danger";
@@ -124,6 +125,7 @@
 <div class="modal-backdrop" class:modal-backdrop--prompt={prompt} role="presentation">
   <div
     bind:this={dialogRef}
+    use:liquidGlass
     class={`modal-shell modal-shell--${size}`}
     class:modal-shell--scrollable={scrollable}
     role="dialog"
@@ -170,8 +172,9 @@
     padding: 20px;
     border: 1px solid var(--border-color);
     border-radius: 13px;
-    background: var(--surface-bg);
-    box-shadow: 0 12px 40px color-mix(in srgb, #000 40%, transparent);
+    background: var(--glass-surface-fill, var(--surface-bg));
+    backdrop-filter: var(--liquid-refraction-filter, var(--glass-filter, none));
+    box-shadow: var(--glass-surface-shadow, 0 12px 40px color-mix(in srgb, #000 40%, transparent));
   }
 
   /* The dialog container receives initial focus for the focus trap; the
