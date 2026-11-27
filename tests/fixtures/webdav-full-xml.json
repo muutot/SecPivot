@@ -1,0 +1,153 @@
+[
+  { "name": "valid-empty", "xml": "<d:multistatus xmlns:d=\"DAV:\"/>", "reject": false },
+  {
+    "name": "valid-unicode-extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:synthetic\"><x:数据 名称=\"合成\">合法</x:数据></d:multistatus>",
+    "reject": false
+  },
+  {
+    "name": "valid-comment-pi-cdata",
+    "xml": "<?xml version=\"1.0\"?><!--before--><?synthetic test?><d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:synthetic\"><x:e><![CDATA[&unknown; <text>]]></x:e></d:multistatus><!--after-->",
+    "reject": false
+  },
+  {
+    "name": "valid-distinct-expanded-attributes",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:one\" xmlns:y=\"urn:two\"><e x:a=\"one\" y:a=\"two\"/></d:multistatus>",
+    "reject": false
+  },
+  {
+    "name": "duplicate-attributes",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"one\" a=\"two\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "duplicate-expanded-attributes",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\" xmlns:x=\"urn:same\" xmlns:y=\"urn:same\"><e x:a=\"one\" y:a=\"two\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "unbound-attribute-prefix",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e x:a=\"value\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-namespace-rebinding",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e xmlns:xml=\"urn:wrong\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-name",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><1bad/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-qname",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><d:a:b/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "unknown-extension-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>&undefined;</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "raw-ampersand-extension",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>one & two</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-reference-zero",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>&#0;</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-reference-surrogate",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>&#xD800;</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-reference-noncharacter",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>&#xFFFE;</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-raw-character",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>synthetic\u0001</e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-comment",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><!--bad--comment--></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-attribute-less-than",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"<value\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "unknown-attribute-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"&undefined;\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "doctype-empty-policy",
+    "xml": "<!DOCTYPE d:multistatus><d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": true
+  },
+  {
+    "name": "doctype-external-policy",
+    "xml": "<!DOCTYPE d:multistatus SYSTEM \"http://127.0.0.1:9/synthetic.dtd\"><d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": true
+  },
+  {
+    "name": "doctype-internal-policy",
+    "xml": "<!DOCTYPE d:multistatus [<!ENTITY x \"synthetic\">]><d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": true
+  },
+  {
+    "name": "unsupported-xml-version",
+    "xml": "<?xml version=\"1.1\"?><d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": true
+  },
+  {
+    "name": "xml-declaration-order",
+    "xml": "<?xml encoding=\"utf-8\" version=\"1.0\"?><d:multistatus xmlns:d=\"DAV:\"/>",
+    "reject": true
+  },
+  {
+    "name": "reserved-pi-target",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><?XML synthetic?></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "raw-cdata-end",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>bad ]]&gt; safe</e></d:multistatus>",
+    "reject": false
+  },
+  {
+    "name": "raw-cdata-end-invalid",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e>bad ]]></e></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "valid-escaped-attribute",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"one &amp; two\"/></d:multistatus>",
+    "reject": false
+  },
+  {
+    "name": "invalid-attribute-surrogate-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"&#xD800;\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "invalid-attribute-control-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"&#1;\"/></d:multistatus>",
+    "reject": true
+  },
+  {
+    "name": "valid-attribute-whitespace-reference",
+    "xml": "<d:multistatus xmlns:d=\"DAV:\"><e a=\"one&#9;two\"/></d:multistatus>",
+    "reject": false
+  }
+]

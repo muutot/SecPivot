@@ -56,6 +56,10 @@ url = "2"
 # Parse WebDAV PROPFIND multistatus responses (same minor as keepass's vendored
 # copy, so no extra crate version enters the lock).
 quick-xml = "=0.41.0"
+# Full WebDAV XML 1.0 syntax validation, with no DTD/entity resolver.
+roxmltree = { version = "=0.21.2", default-features = false, features = ["std"] }
+# Strict bounded response decoding; retain the version already in the lock.
+encoding_rs = "=0.8.41"
 # gzip for the KeePass "Data Exchange" clipboard payload (KeePass stores the
 # package gzipped; the same crate is already in the lock via `keepass`).
 flate2 = "1"

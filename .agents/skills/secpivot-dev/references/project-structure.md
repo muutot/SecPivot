@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+remote/webdav_xml.rs is a child of webdav.rs, owning strict response decoding,
+preflight byte/event/depth/attribute budgets and complete XML1.0 validation.
+roxmltree0.21.2 is pinned with std only; encoding_rs0.8.41 reuses the locked
+charset version. No DTD/entity resolver is enabled. webdav_xml_tests.rs covers
+whole-document syntax, encoding and wire/resource limits; the31-case strict JSON
+webdav-full-xml.json has independent Windows .NET Framework XmlReader controls.
+Semantic DAV extraction stays in webdav.rs; no IPC, config or UI change.
+
 remote/webdav.rs owns response/propstat HTTP status parsing and per-propstat
 pending properties. Present status contributes metadata only for2xx, failed response
 statuses exclude resources and invalid/duplicate statuses reject publication.

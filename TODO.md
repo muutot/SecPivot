@@ -41,7 +41,7 @@
 - [~] KeePassRPC（Phase 2）：协议级自洽 + 手动 UI 验证；真机 Kee 扩展验证不可行
 - [~] KeePassRPC 写路径（Phase 2b）：已交付；附加字段存 KDBX 字符串而非插件私有 KPRPC JSON 配置，更新覆盖字段但不清除陈旧自定义字段
 - [~] 远程密码空白保真（SP-S75）：真实 provider、移动密钥存储、历史已被 trim 值的恢复不在此完成范围
-- [~] WebDAV namespace/propstat/完整 XML 与真实 provider（SP-S71～S74）：DAV 命名空间/父级容器、完整属性文本与单文档根门禁已交付；逐 propstat 暂存属性，只采用显式 2xx 的类型/大小/时间，失败属性不覆盖成功值或隐藏普通文件，响应级失败排除资源。状态前后顺序、缺失状态兼容、无效/重复状态整份拒绝、外来扩展隔离及真实离线 PROPFIND 已覆盖，24 项 WebDAV 和配置的全部验证步骤通过；完整 XML 语法/未知方言、真实 provider/WebView/Android 仍待验证
+- [~] WebDAV namespace/propstat/完整 XML 与真实 provider（SP-S71～S74）：DAV 命名空间/父级容器、完整属性文本、逐 propstat 状态与单文档根门禁已交付；失败属性不覆盖成功值或隐藏普通文件，响应级失败排除资源，缺失状态兼容，无效/重复状态整份拒绝。完整 XML1.0 语法校验覆盖忽略的扩展，补查代理字符引用/保留 PI 名称，不支持 DTD/XML1.1；31 个独立 .NET Framework XmlReader 样例一致。严格无替换解码保留 UTF-8、两种 UTF-16 和旧字符集文件名；原始/解码各 8MiB、事件/节点/深度/属性及10000对象上限已接入，声明长度与分块响应、语法拒绝和真实离线 PROPFIND 通过。29 项 WebDAV 和配置的全部验证步骤通过；未知 DAV 扩展业务语义、真实 provider/WebView/Android 仍待验证
 - [~] 原生剪贴板写入（SP-S113）：未调用共享 OS 剪贴板，实际复制/客户端、外部相同内容代次、跨 renderer 顺序与手机 provider 未验证
 - [~] 原生另存为（SP-S114/S115）：实际文件写入、手机选择器/provider、跨客户端行为不由合成测试关闭
 - [~] 持久化状态回复排序（SP-S116）：真实 IPC 时序、手机 APK/选择器/provider 和其他平台不属于完成证明

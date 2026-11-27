@@ -951,8 +951,8 @@ Unknown references, invalid decoding and nested/truncated property content rejec
 the whole list with content-free errors. Missing/empty size/date hints and existing
 collection handling remain. `tests/fixtures/webdav-xml-text.json` supplies eight
 independent standard-XML controls; the native wire regression covers thirteen
-filename classes. Namespace/context/status handling is described below; full XML
-and provider compatibility remain separate. No IPC/schema/dependency
+filename classes. Namespace/context/status/full XML handling is described below;
+provider compatibility remains separate. No IPC/schema
 changes are involved.
 
 WebDAV list publication additionally requires exactly one completed multistatus
@@ -981,7 +981,7 @@ unqualified children under a DAV root are not DAV fields. Non-DAV roots and
 unbound prefixes reject without XML contents. Scalar errors remain content-free,
 and namespace parsing does not resolve external entities. The strict-JSON
 tests/fixtures/webdav-namespaces.json corpus covers sixteen independent controls.
-Status handling is described below; full XML/provider semantics remain separate.
+Status/full XML handling is described below; provider semantics remain separate.
 
 WebDAV DAV:status is interpreted only directly under response or propstat.
 Each propstat accumulates properties until its closing tag. When status is present,
@@ -997,6 +997,25 @@ complete text/CDATA/reference assembly and namespace/context checks still apply.
 remote/webdav_status_tests.rs covers ordering, mixed failures, type fallback,
 response statuses, malformed/duplicate lines, extension isolation and real
 no-auth loopback PROPFIND. No IPC, config, dependency or credential path changes.
+
+WebDAV list reads use read_response_capped, refusing declared/chunked bodies
+over8MiB before returning decoded text. webdav_xml.rs decodes without replacement:
+BOM/UTF-16 signatures precede HTTP charset, then XML-declared encoding/default
+UTF-8. UTF-16LE/BE with/without BOM and legacy known charsets retain exact names;
+invalid bytes or unknown explicit labels reject with a fixed error. Decoded UTF-8
+also caps8MiB. These are byte ceilings, not aggregate parser/decoder heap limits.
+Preflight caps262144 XML events,64 element levels,128 attributes per element and
+262144 total attributes, including ignored extension content. Outputs cap10000
+objects and do not return a prefix on refusal. The pinned roxmltree0.21.2 tree
+validator bounds262144 nodes, with DTD disabled and no entity resolver. A second
+strict reference/attribute/PI check covers surrogate substitution and reserved
+PI names that the tree parser alone accepts; XML1.0 legal scalars are mandatory.
+Known-field/envelope diagnostics remain; full-document failures expose only
+"WebDAV 列表 XML 文档无效". Arbitrary extensions are still ignored semantically
+but must be well formed. XML1.1/DTD documents are explicitly unsupported.
+31 independent Windows .NET Framework XmlReader cases plus real no-auth loopback
+encoding/size checks cover these paths. Real providers/WebView/Android and unknown
+DAV schema/extension semantics remain separate. No IPC or application setting changes.
 
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is

@@ -12,6 +12,9 @@ use quick_xml::NsReader;
 use quick_xml::Reader;
 use std::time::Duration;
 use url::Url;
+
+#[path = "webdav_xml.rs"]
+mod xml;
 // ---------------------------------------------------------------------------
 // WebDAV transport (reqwest blocking + PROPFIND multistatus parsing)
 // ---------------------------------------------------------------------------
@@ -151,9 +154,14 @@ impl RemoteStorage for WebDavStorage {
         if !status.is_success() {
             return Err(format!("WebDAV 列表失败: HTTP {status}"));
         }
-        let text = response
-            .text()
-            .map_err(|e| format!("WebDAV 列表响应读取失败: {e}"))?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|header| header.to_str().ok())
+            .map(str::to_owned);
+        let bytes =
+            super::read_response_capped(response, xml::MAX_LIST_BYTES as u64, "WebDAV 列表响应")?;
+        let text = xml::decode(&bytes, content_type.as_deref())?;
         parse_multistatus(&text, &self.base_url, &target)
     }
 
@@ -445,6 +453,7 @@ pub(crate) fn parse_multistatus(
     base_url: &str,
     request_url: &str,
 ) -> Result<Vec<RemoteObject>, String> {
+    xml::check_limits(body)?;
     let mut reader = NsReader::from_str(body);
     let request_key = href_to_key(base_url, request_url)?;
     let request_key = request_key.trim_matches('/').to_owned();
@@ -561,6 +570,9 @@ pub(crate) fn parse_multistatus(
                             && !h.ends_with('/')
                             && key.trim_matches('/') != request_key
                         {
+                            if objects.len() == xml::MAX_LIST_OBJECTS {
+                                return Err(xml::limit_error());
+                            }
                             objects.push(RemoteObject {
                                 key,
                                 size: properties.size.unwrap_or(0),
@@ -576,6 +588,7 @@ pub(crate) fn parse_multistatus(
     // Preserve the more specific simple-property failures while ensuring no
     // objects leave this function before the entire envelope is complete.
     validate_multistatus_document(body)?;
+    xml::validate(body)?;
     Ok(objects)
 }
 
@@ -665,3 +678,7 @@ pub(crate) fn href_to_key(base_url: &str, href: &str) -> Result<String, String> 
 #[cfg(test)]
 #[path = "webdav_status_tests.rs"]
 mod status_tests;
+
+#[cfg(test)]
+#[path = "webdav_xml_tests.rs"]
+mod xml_tests;

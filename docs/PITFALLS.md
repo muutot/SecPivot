@@ -38,6 +38,15 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
   transport construction. Exact empty means keep; whitespace-only means replace.
   Compare synthetic credential values without logging assertion operands.
 
+- **Ignored XML still needs syntax validation and quotas.** A streaming DAV
+  field reader skipped duplicate attributes, illegal references and broken PI
+  names inside extensions. Validate the whole document before returning keys,
+  and cap raw/decoded bytes, events, depth, attributes and objects before large
+  allocations. The tree parser alone replaces surrogate references and accepts
+  reserved PI names: keep independent strict checks and .NET oracle controls.
+  Decode UTF-8/UTF-16/known legacy charsets without replacement, reject DTD without
+  a resolver, and retain the existing field-specific diagnostic boundary.
+
 - **WebDAV status belongs to one response or propstat.** Applying properties
   immediately let a404 block overwrite valid size/date or classify a file as a
   directory. Stage each block until its end and apply only explicit2xx results;

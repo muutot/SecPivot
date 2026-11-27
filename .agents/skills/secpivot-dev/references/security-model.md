@@ -676,7 +676,19 @@ compatibility; explicit empty/malformed/duplicate status aborts the entire list
 with a fixed error and never exposes its reason phrase. DAV namespace/context
 selection and complete simple-text decoding apply to status too. Six native
 groups and bounded no-auth loopback PROPFIND checks use synthetic data only;
-real provider, all XML syntax and remote authorization remain separate.
+real provider and remote authorization remain separate; XML checks are below.
+
+WebDAV list bodies are capped at8MiB for both raw and decoded UTF-8 bytes; invalid
+encoding never produces replacement characters that could alias a file key.
+Known legacy charsets and UTF-16 remain supported by the pinned existing decoder.
+Preflight event/depth/attribute and output-count budgets apply to ignored content
+before semantic allocation. Complete XML1.0 validation uses pinned roxmltree with
+bounded nodes, DTD disabled and no external resolver. Additional strict numeric
+references/attribute values/PI names close the parser's two permissive boundaries.
+Syntax and encoding errors omit raw diagnostics, values and names; no new logging,
+provider access or credential path is introduced. These ceilings do not claim
+aggregate heap/time or framework/allocator erasure. Independent .NET controls and
+native loopback fixtures use synthetic data only, not user files or real providers.
 
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content
