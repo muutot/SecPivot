@@ -97,6 +97,11 @@ export const en: Record<I18nKey, string> = {
   "menu.exportEmergency": "Export HTML emergency sheet",
   "menu.hideDetail": "Hide detail pane",
   "menu.showDetail": "Show detail pane",
+  "menu.view": "View",
+  "menu.showSubgroupEntries": "Show entries of subgroups",
+  "settings.showEntriesOfSubGroups": "Show entries of subgroups",
+  "settings.showEntriesOfSubGroupsDesc":
+    "Include all descendant groups when browsing a group. Turn off to show direct entries only; All entries and search scopes stay independent.",
   "menu.securityReport": "Security report",
   "menu.similarPasswords": "Similar password check",
   "menu.import": "Import",

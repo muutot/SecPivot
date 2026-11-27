@@ -1,5 +1,11 @@
 # Security Model
 
+Direct-group browsing reconciles hidden selected UUIDs, focused entry and range
+anchor when the subgroup preference, group or snapshot changes. Hidden
+descendants cannot remain copy/edit/batch targets; clearing focus unmounts the
+existing detail/cache owner. This setting changes only row membership and
+contains no credentials; search/All entries scopes retain their existing rules.
+
 Native Bitwarden bindings are protected reserved `SecPivot.LinkedFields` metadata
 with bounded names-only local targets. No source string is a macro, executable
 expression or cross-entry reference. Current target reads use Zeroizing owned

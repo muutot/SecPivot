@@ -244,6 +244,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   showDetailOnSelect: true,
   focusSearchOnType: true,
   quickFindExcludeExpired: false,
+  showEntriesOfSubGroups: false,
   entryColumns: DEFAULT_ENTRY_COLUMNS,
   savedSearches: [],
   showGroupSeparators: true,
@@ -975,6 +976,10 @@ export function normalizeSettings(
       typeof g.quickFindExcludeExpired === "boolean"
         ? g.quickFindExcludeExpired
         : (fallback.general.quickFindExcludeExpired ?? false),
+    showEntriesOfSubGroups:
+      typeof g.showEntriesOfSubGroups === "boolean"
+        ? g.showEntriesOfSubGroups
+        : (fallback.general.showEntriesOfSubGroups ?? false),
     windowWidth: clampInt(g.windowWidth ?? fallback.general.windowWidth, 560, 2560, 1100),
     windowHeight: clampInt(g.windowHeight ?? fallback.general.windowHeight, 420, 1600, 720),
     panelWidths: {

@@ -14,6 +14,8 @@
 
 ## 二、部分完成（剩余边界明确）
 
+- [~] 显示子分组条目（`MainWindow.ShowEntriesOfSubGroups`）：默认关、TS/Rust 旧配置/双值重载、More → View 复选菜单与外观显示开关已接入。具体分组普通浏览仅直属/可选后代，全部条目与快速/高级搜索独立；隐藏选中项、详情焦点和范围锚点清理有实际编译的 page/filter/selection 回归。独立 KeePassLib2.59 直属/递归、空父组/虚拟结果对照和浅色/深色/定制、桌面/320px 五组鼠标/键盘预览通过。真实 WebView/跨平台运行仍待验
+
 - [~] 快速搜索排除过期条目（`MainWindow.QuickFindExcludeExpired`）：默认关闭、TS/Rust 配置及双值重载、外观显示页开关与工具栏搜索已接入。只对非空快速搜索生效，普通浏览和高级搜索独立；按搜索时到期时间及官方 <= 边界判断，旧快照标志不覆盖有效时间。实际编译 Svelte 筛选/store、原生 ConfigStore、时间边界/偏移/继承/替换/关闭及双主题320px预览通过；真实 WebView/跨平台运行仍待验
 
 - [~] 主密码重试次数（`AceSecurity.MasterKeyTries`）：默认 3 次、正 int32 配置及旧配置重载已接入；本地/最近/远程打开与锁屏手动/Hello 共用每次提示预算，耗尽后清空字段并结束本次提示，新打开意图重置。提交失败（含 I/O）计次，Hello 查询失败不计次；重复/过期提交有守卫。实际提交函数与 ConfigStore 回归已覆盖，真实 WebView/provider 仍待验；这是提示流程限制，不是永久锁库或离线防破解

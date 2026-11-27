@@ -1,5 +1,14 @@
 # Project-wide UI Style and Theming
 
+ShowEntriesOfSubGroups composes the existing folder-icon SettingToggleCard.
+The More > View cascade composes existing ContextMenu/MenuItem checkbox chrome
+and check/folder icons; false exposes an unchecked menuitemcheckbox too. No new
+surface, CSS rule, font, palette, metric or theme token is added. Directory
+separator and entry-row heights retain their existing half/full-height contract.
+Five isolated desktop/320px Chinese-light/English-dark/custom browser checks
+confirm contained settings/cascade widths, identical Cascadia stacks, mouse/
+keyboard toggles and Escape focus return. Native WebView remains separate.
+
 EntryEditorDialog linked fields reuse the existing custom row, field-hint,
 link icon and shared field Button. A scoped flex/wrap hint row owns only6px
 gaps/8px bottom spacing/anywhere wrapping below the field controls. No new

@@ -5,6 +5,27 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn show_entries_of_sub_groups_defaults_off_and_survives_config_reload() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("conf")).unwrap();
+    for old in [r#"{}"#, r#"{"general":{}}"#] {
+        fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        assert!(!store.get().unwrap().general.show_entries_of_sub_groups);
+        for enabled in [true, false] {
+            let mut config = store.get().unwrap();
+            config.general.show_entries_of_sub_groups = enabled;
+            store.set(config).unwrap();
+            let reloaded = ConfigStore::load(dir.path().to_owned()).unwrap();
+            assert_eq!(
+                reloaded.get().unwrap().general.show_entries_of_sub_groups,
+                enabled
+            );
+        }
+    }
+}
+
+#[test]
 fn quick_find_exclude_expired_legacy_and_explicit_values_survive_config_reload() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("conf")).unwrap();

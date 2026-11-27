@@ -133,18 +133,19 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 旧配置/双值原生重载、实际编译 Svelte 筛选与 store、时间边界/偏移/继承/
 替换/关闭及浅色/深色/320px预览已验证；真实 WebView/跨平台运行仍待。
 
-| KeePass 项                                      | SecPivot 状态                                                                                             |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| UI language / theme                             | ✅ `general.language` / `theme`                                                                           |
-| Minimize to tray                                | ✅ `security.minimizeToTray`                                                                              |
-| Show recent files / max count                   | ✅ `general.recentFiles`（上限 8）                                                                        |
-| Always on top                                   | ✅ `general.alwaysOnTop`（本批实现）：Appearance → Window 开关，经 `set_always_on_top` Tauri 命令即时生效 |
-| Drop to background after copy                   | ❌ 未实现（复制后切回上次窗口）                                                                           |
-| Confirm before cmd:// / {CMD:...} / {REF:P@...} | ❌ 未实现（TCATO/URL 执行确认）                                                                           |
-| Expiry soon days                                | ✅ `security.expirySoonDays`（默认7天，开库提醒消费）                                                     |
-| Toolbar / columns config                        | ✅ `toolbarItems` / `entryColumns`                                                                        |
-| Font sizes / density                            | ✅ `fontSizes` / `density`                                                                                |
-| Window effect / opacity                         | ✅ `windowEffect` / `windowOpacity`                                                                       |
+| KeePass 项                                      | SecPivot 状态                                                                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| UI language / theme                             | ✅ `general.language` / `theme`                                                                                |
+| Minimize to tray                                | ✅ `security.minimizeToTray`                                                                                   |
+| Show recent files / max count                   | ✅ `general.recentFiles`（上限 8）                                                                             |
+| Always on top                                   | ✅ `general.alwaysOnTop`（本批实现）：Appearance → Window 开关，经 `set_always_on_top` Tauri 命令即时生效      |
+| Drop to background after copy                   | ❌ 未实现（复制后切回上次窗口）                                                                                |
+| Confirm before cmd:// / {CMD:...} / {REF:P@...} | ❌ 未实现（TCATO/URL 执行确认）                                                                                |
+| Expiry soon days                                | ✅ `security.expirySoonDays`（默认7天，开库提醒消费）                                                          |
+| Toolbar / columns config                        | ✅ `toolbarItems` / `entryColumns`                                                                             |
+| Show entries of subgroups (View menu)           | ⚠️ `general.showEntriesOfSubGroups`，默认关；直属/后代浏览、视图复选菜单和原生配置重载已接入，真实 WebView待验 |
+| Font sizes / density                            | ✅ `fontSizes` / `density`                                                                                     |
+| Window effect / opacity                         | ✅ `windowEffect` / `windowOpacity`                                                                            |
 
 ### Integration（集成）
 

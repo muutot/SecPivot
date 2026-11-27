@@ -444,6 +444,8 @@ pub struct GeneralSettings {
     pub focus_search_on_type: bool,
     /// KeePass MainWindow.QuickFindExcludeExpired; default off.
     pub quick_find_exclude_expired: bool,
+    /// KeePass MainWindow.ShowEntriesOfSubGroups; ordinary browsing, default off.
+    pub show_entries_of_sub_groups: bool,
     /// KeepPass-style subgroup separator line above each group's entries (default on).
     #[serde(default = "default_true")]
     pub show_group_separators: bool,
@@ -533,6 +535,7 @@ impl Default for GeneralSettings {
             show_detail_on_select: true,
             focus_search_on_type: true,
             quick_find_exclude_expired: false,
+            show_entries_of_sub_groups: false,
             show_group_separators: true,
             group_separator_color: String::new(),
             alternating_row_colors: false,

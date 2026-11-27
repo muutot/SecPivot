@@ -18,6 +18,7 @@ export type VaultSelection = {
   selectionAnchor: string | null;
   selectionVersion: number;
   setSingleSelection(entry: VaultEntry | null): void;
+  reconcileVisibleSelection(visibleUuids?: readonly string[]): void;
   handleRowClick(event: MouseEvent, entry: VaultEntry): void;
 };
 
@@ -64,6 +65,14 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
     setSingleSelection(entry);
   }
 
+  function reconcileVisibleSelection(visibleUuids?: readonly string[]): void {
+    const visible = new Set(visibleUuids ?? options.visibleUuids());
+    const next = new Set([...selectedUuids].filter((uuid) => visible.has(uuid)));
+    if (next.size !== selectedUuids.size) selectedUuids = next;
+    if (selectedEntry && !visible.has(selectedEntry.uuid)) selectedEntry = null;
+    if (selectionAnchor && !visible.has(selectionAnchor)) selectionAnchor = null;
+  }
+
   return {
     get selectedEntry() {
       return selectedEntry;
@@ -90,6 +99,7 @@ export function useVaultSelection(options: VaultSelectionOptions): VaultSelectio
       selectionVersion = value;
     },
     setSingleSelection,
+    reconcileVisibleSelection,
     handleRowClick,
   };
 }

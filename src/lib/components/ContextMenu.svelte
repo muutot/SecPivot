@@ -14,6 +14,8 @@
     icon: IconName;
     destructive?: boolean;
     disabled?: boolean;
+    /** Defined for a checkable menu item, including its unchecked state. */
+    checked?: boolean;
     /** Cascade child list; a parent item toggles its submenu instead of
      *  dispatching an action. */
     children?: ContextMenuItem[];
@@ -65,7 +67,7 @@
       oldSubmenu.closest(".viewport-menu") === anchor.closest(".viewport-menu")
     ) {
       const next = item.disabled ? oldSubmenu.parentElement : anchor;
-      const button = next?.querySelector<HTMLButtonElement>('button[role="menuitem"]');
+      const button = next?.querySelector<HTMLButtonElement>('button[role^="menuitem"]');
       if (button) focusMenuItem(button);
     }
     openSubmenu = item.children?.length && !item.disabled ? item.id : null;
@@ -73,7 +75,7 @@
 
   function navigateSubmenu(event: KeyboardEvent): boolean {
     const target = event.target as HTMLElement;
-    const button = target.closest<HTMLButtonElement>('button[role="menuitem"]');
+    const button = target.closest<HTMLButtonElement>('button[role^="menuitem"]');
     const anchor = target.closest<HTMLElement>(".submenu-anchor");
     if (!anchor) return false;
     const parent = anchor.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
@@ -154,6 +156,8 @@
       >
         <MenuItem
           label={item.label}
+          role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+          checked={item.checked ?? false}
           destructive={item.destructive}
           disabled={item.disabled}
           submenuId={hasChildren ? `${menuId}-${index}` : undefined}
@@ -184,6 +188,8 @@
             {#each item.children as child (child.id)}
               <MenuItem
                 label={child.label}
+                role={child.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+                checked={child.checked ?? false}
                 destructive={child.destructive}
                 disabled={child.disabled}
                 onclick={() => dispatch(child.id)}

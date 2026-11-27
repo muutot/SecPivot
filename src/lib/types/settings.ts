@@ -286,6 +286,8 @@ export interface GeneralSettings {
   focusSearchOnType: boolean;
   /** KeePass QuickFindExcludeExpired; advanced searches keep their own filters. */
   quickFindExcludeExpired: boolean;
+  /** KeePass ShowEntriesOfSubGroups; ordinary group browsing, default off. */
+  showEntriesOfSubGroups: boolean;
   /** Render the full entry-table column grid on narrow screens too. */
   mobileColumns: boolean;
   /** Entry-table column layout (visible + px width per column id). */

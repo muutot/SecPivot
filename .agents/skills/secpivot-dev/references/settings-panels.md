@@ -1,5 +1,13 @@
 # Settings Shell and Panel Patterns
 
+Appearance display adds Show entries of subgroups after the separator toggle,
+using existing folder-icon SettingToggleCard and updateGeneral. Default off
+shows only direct entries for concrete group browsing; the description identifies
+independent All entries/search scopes. More > View exposes the same persisted
+setting as a checkbox menu item. It adds no CSS, font or palette token.
+Desktop/320px light/dark and custom previews verify shared checkbox state,
+mouse/Space switching and Right/Enter/Escape cascade navigation without overflow.
+
 BitwardenImportSettingsDialog collects source-account URI choices per import,
 not app preferences. It uses a medium scrollable ModalShell with shared Select
 for all six defaults, four-row TextField for comma-separated domain groups and

@@ -175,6 +175,25 @@ text caching and advanced predicates are preserved. Tests execute the compiled
 Svelte derivation/store with a fixed synthetic clock, plus native config reload;
 isolated actual-panel dark/light/320px rendering is not native WebView evidence.
 
+`general.showEntriesOfSubGroups` mirrors KeePass MainWindow.ShowEntriesOfSubGroups,
+default false in TS and container-defaulted Rust GeneralSettings. Strict boolean
+normalization and ConfigStore reload retain both explicit states. The Appearance
+display card and More > View checkable menu share updateGeneral/persistence.
+useEntryFilter receives concrete selectedGroup and the live preference; blank
+ordinary browsing limits candidate groups to that UUID when off. Null All entries
+retains the existing non-bin aggregation, and quick/advanced searches retain their
+subtree and enableSearching rules. This changes row membership, never vault data.
+The page's direct-browse effect reconciles selected UUIDs, focused entry and anchor
+against visible rows under untrack; hidden descendants cannot remain edit targets.
+useVaultSelection.reconcileVisibleSelection also owns explicit move/delete pruning.
+ContextMenuItem.checked, including false, maps to the existing MenuItem checkbox
+role/ARIA state. Cascade focus handling accepts regular and checkable rows.
+Independent KeePassLib2.59 GetEntries controls confirm direct/recursive, empty
+parent and virtual-result behavior. Compiled production filter/selection/page
+and config reload checks plus five isolated Chinese-light/English-dark/custom,
+desktop/320px browser cases cover this change. They do not prove native WebView
+or other platform execution.
+
 `general.autoReloadChangedFiles` is a default-off SecPivot enhancement in TS/Rust;
 the inspected official Configuration directory defines no matching property.
 GeneralSettingsPanel persists it through updateGeneral. FileReloadMonitor flushes

@@ -147,6 +147,8 @@ export function buildBlankMenuItems({
 export type ToolbarMenuInput = {
   /** Whether the detail panel is currently shown (drives the toggle label). */
   detailVisible: boolean;
+  /** KeePass View → Show Entries of Subgroups, ordinary browsing only. */
+  showEntriesOfSubGroups?: boolean;
   /** Whether a long operation is running (disables the security report). */
   busy: boolean;
   /** UI locale for labels. */
@@ -194,12 +196,26 @@ function exportItems(locale: Language): ContextMenuItem[] {
  *  to the toolbar (true) are omitted from the overflow to avoid duplication. */
 export function buildToolbarMenuItems({
   detailVisible,
+  showEntriesOfSubGroups = false,
   busy,
   locale,
   toolbarItems,
   toolbarOrder,
 }: ToolbarMenuInput): ContextMenuItem[] {
   const all: ContextMenuItem[] = [
+    {
+      id: "view",
+      label: t(locale, "menu.view"),
+      icon: "eye",
+      children: [
+        {
+          id: "toggle-subgroup-entries",
+          label: t(locale, "menu.showSubgroupEntries"),
+          checked: showEntriesOfSubGroups,
+          icon: showEntriesOfSubGroups ? "check" : "folder",
+        },
+      ],
+    },
     { id: "save-as", label: t(locale, "menu.saveAs"), icon: "copy" },
     {
       id: "toggle-detail",

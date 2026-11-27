@@ -794,6 +794,14 @@
     />
 
     <SettingToggleCard
+      icon="folder"
+      label={t(lang, "settings.showEntriesOfSubGroups")}
+      description={t(lang, "settings.showEntriesOfSubGroupsDesc")}
+      checked={general.showEntriesOfSubGroups}
+      onchange={(checked) => change("showEntriesOfSubGroups", checked)}
+    />
+
+    <SettingToggleCard
       icon="grid"
       label={t(lang, "settings.alternatingRows")}
       description={t(lang, "settings.alternatingRowsDesc")}

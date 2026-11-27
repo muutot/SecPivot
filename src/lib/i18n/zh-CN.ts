@@ -93,6 +93,11 @@ export const zhCN = {
   "menu.exportEmergency": "导出 HTML 应急表",
   "menu.hideDetail": "隐藏详情面板",
   "menu.showDetail": "显示详情面板",
+  "menu.view": "视图",
+  "menu.showSubgroupEntries": "显示子分组条目",
+  "settings.showEntriesOfSubGroups": "显示子分组条目",
+  "settings.showEntriesOfSubGroupsDesc":
+    "浏览分组时包含所有后代分组的条目。关闭时仅显示直属条目；全部条目和搜索范围不受影响。",
   "menu.securityReport": "安全报告",
   "menu.similarPasswords": "相似密码检查",
   "menu.import": "导入",

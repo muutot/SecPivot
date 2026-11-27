@@ -16,6 +16,10 @@ export type EntryFilterOptions = {
   currentVault: () => VaultState | null;
   /** Groups whose entries contribute to the result (selected subtree). */
   selectedSubtree: () => VaultGroup[];
+  /** Concrete group selection; null/omitted is the virtual All entries view. */
+  selectedGroup?: () => string | null;
+  /** Include descendant groups only in ordinary browsing; default off. */
+  showEntriesOfSubGroups?: () => boolean;
   /** Free-text query (trimmed downstream). */
   search: () => string;
   /** Structured advanced-search filter, or `null`. */
@@ -51,10 +55,13 @@ export function useEntryFilter(options: EntryFilterOptions): EntryFilter {
     const now = excludeExpired ? Date.now() : 0;
     const searching = Boolean(query || advancedQuery);
     const subtree = options.selectedSubtree();
+    const directGroup =
+      !searching && !options.showEntriesOfSubGroups?.() ? options.selectedGroup?.() : null;
     const result: { entry: VaultEntry }[] = [];
     // Compile the advanced query once per derivation, not once per entry.
     const preparedAdvanced = advancedQuery ? prepareAdvancedSearch(advancedQuery) : null;
     for (const group of subtree) {
+      if (directGroup && group.uuid !== directGroup) continue;
       // The snapshot resolves inheritance over the whole tree. Scope only
       // selects candidate groups and must not reinterpret explicit settings.
       if (searching && !group.enableSearching) continue;

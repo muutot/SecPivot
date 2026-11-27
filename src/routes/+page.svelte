@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { goto } from "$app/navigation";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
@@ -622,6 +622,8 @@
   const entryFilter = useEntryFilter({
     currentVault: () => currentVault,
     selectedSubtree: () => selectedSubtree,
+    selectedGroup: () => selectedGroup,
+    showEntriesOfSubGroups: () => settings.general.showEntriesOfSubGroups,
     search: () => search,
     advancedQuery: () => advancedQuery,
     quickFindExcludeExpired: () => settings.general.quickFindExcludeExpired,
@@ -733,6 +735,19 @@
    *  composable; see `useVaultSelection.svelte.ts`. */
   const selection = useVaultSelection({
     visibleUuids: () => sortedEntries.map((r) => r.entry.uuid),
+  });
+
+  // A direct-group view must not leave hidden descendants selected or editable
+  // when a preference, snapshot or group change removes them from the list.
+  $effect(() => {
+    const directBrowse =
+      selectedGroup !== null &&
+      !settings.general.showEntriesOfSubGroups &&
+      !search.trim() &&
+      !advancedQuery;
+    const visible = sortedEntries;
+    if (directBrowse)
+      untrack(() => selection.reconcileVisibleSelection(visible.map((row) => row.entry.uuid)));
   });
 
   /** Panel widths, detail visibility, mobile drawer and drag-resize logic live
@@ -1761,13 +1776,7 @@
 
   /** Remove selected uuids that are no longer present in the visible rows. */
   function pruneSelectionToVisible(): void {
-    const visible = new Set(sortedEntries.map((r) => r.entry.uuid));
-    const next = new Set([...selection.selectedUuids].filter((u) => visible.has(u)));
-    if (next.size === selection.selectedUuids.size) return;
-    selection.selectedUuids = next;
-    if (selection.selectedEntry && !visible.has(selection.selectedEntry.uuid)) {
-      selection.selectionAnchor = null;
-    }
+    selection.reconcileVisibleSelection();
   }
 
   async function toggleGroupExpanded(uuid: string, expanded: boolean): Promise<void> {
@@ -1873,6 +1882,7 @@
   const toolbarMenuItems = $derived<ContextMenuItem[]>(
     buildToolbarMenuItems({
       detailVisible: layout.detailVisible,
+      showEntriesOfSubGroups: settings.general.showEntriesOfSubGroups,
       busy,
       locale: settings.general.language,
       toolbarItems: {
@@ -1984,6 +1994,8 @@
   function handleToolbarMenuAction(id: string): void {
     if (id === "save-as") void handleSaveAs();
     else if (id === "toggle-detail") layout.detailVisible = !layout.detailVisible;
+    else if (id === "toggle-subgroup-entries")
+      appSettings.updateGeneral("showEntriesOfSubGroups", !settings.general.showEntriesOfSubGroups);
     else if (id === "security-report") void handleOpenReport();
     else if (id === "similar-passwords") similarOpen = true;
     else if (id === "hibp-check") hibpOpen = true;

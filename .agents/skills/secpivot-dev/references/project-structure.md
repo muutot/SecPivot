@@ -1,5 +1,16 @@
 # Project Structure and Runtime Surfaces
 
+useEntryFilter.svelte.ts owns ShowEntriesOfSubGroups ordinary row membership,
+with independent concrete-group and descendant-preference getters. The page
+passes the live shared setting and reconciles hidden direct-browse selections
+through useVaultSelection.reconcileVisibleSelection. Appearance display and
+menu-items.ts's always-available More > View cascade share updateGeneral.
+ContextMenu accepts optional checked state and reuses MenuItem's existing
+menuitemcheckbox role; no new surface/control/CSS token is introduced.
+tests/subgroup-browsing.test.mjs executes actual compiled filter/selection/page
+effect and menu dispatcher plus store publication/reload. Native config tests
+exercise old files and both boolean values.
+
 remote/webdav_xml.rs is a child of webdav.rs, owning strict response decoding,
 preflight byte/event/depth/attribute budgets and complete XML1.0 validation.
 roxmltree0.21.2 is pinned with std only; encoding_rs0.8.41 reuses the locked
