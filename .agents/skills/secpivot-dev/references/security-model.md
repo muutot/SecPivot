@@ -666,7 +666,17 @@ unknown subtrees, including DAV-looking descendants, are skipped. Fully unqualif
 legacy XML is isolated from DAV-root parsing. Wrong roots/unbound prefixes fail
 without content, and parser failures no longer expose raw reader diagnostics.
 Native loopback list/GET/PUT/readback verifies the intended file and untouched
-sibling; it is not provider authorization or full XML/status validation evidence.
+sibling; it is not provider authorization or full XML validation evidence.
+
+WebDAV property values remain staged per propstat until its status is known;
+when status is present, only2xx contributes metadata/type, regardless of field order.
+Failed properties do not hide ordinary files or overwrite successful metadata.
+A failed response status excludes the resource. Missing status retains existing
+compatibility; explicit empty/malformed/duplicate status aborts the entire list
+with a fixed error and never exposes its reason phrase. DAV namespace/context
+selection and complete simple-text decoding apply to status too. Six native
+groups and bounded no-auth loopback PROPFIND checks use synthetic data only;
+real provider, all XML syntax and remote authorization remain separate.
 
 KDBX serialization rejects actual XML 1.0-invalid text before publication with
 a content-free error. Old file bytes, live dirty edits and historical content

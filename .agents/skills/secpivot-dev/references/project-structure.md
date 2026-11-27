@@ -1,5 +1,13 @@
 # Project Structure and Runtime Surfaces
 
+remote/webdav.rs owns response/propstat HTTP status parsing and per-propstat
+pending properties. Present status contributes metadata only for2xx, failed response
+statuses exclude resources and invalid/duplicate statuses reject publication.
+Missing status retains existing compatibility. webdav_status_tests.rs is a
+test-only child module with pure status controls and no-auth loopback PROPFIND;
+the existing transport/namespace/XML-text tests remain in remote/tests.rs.
+No command, settings, UI or dependency ownership changes.
+
 vault/linked_fields.rs owns bounded literal same-entry bindings, current-value
 resolution, protected alias refresh and detach/retention. import.rs allocates
 native Bitwarden targets using import/bitwarden_links.rs's official ID table;

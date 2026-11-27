@@ -284,6 +284,64 @@ enum DavElement {
     Href,
     Size,
     Modified,
+    Status,
+}
+
+#[derive(Default)]
+struct DavProperties {
+    size: Option<usize>,
+    modified: Option<String>,
+    collection: bool,
+}
+
+impl DavProperties {
+    fn merge(&mut self, other: Self) {
+        if other.size.is_some() {
+            self.size = other.size;
+        }
+        if other.modified.is_some() {
+            self.modified = other.modified;
+        }
+        self.collection |= other.collection;
+    }
+}
+
+fn invalid_dav_status() -> String {
+    "WebDAV 列表状态码无效".to_owned()
+}
+
+/// RFC status lines carry a three-digit code; never expose the reason phrase.
+fn read_dav_status(reader: &mut NsReader<&[u8]>) -> Result<u16, String> {
+    let text = read_prop_text(reader)?;
+    let text = text.trim();
+    if text.chars().any(char::is_control) {
+        return Err(invalid_dav_status());
+    }
+    let mut parts = text.split_ascii_whitespace();
+    let version = parts.next().ok_or_else(invalid_dav_status)?;
+    let valid_version = version
+        .strip_prefix("HTTP/")
+        .and_then(|value| value.split_once('.'))
+        .is_some_and(|(major, minor)| {
+            !major.is_empty()
+                && !minor.is_empty()
+                && major.bytes().all(|byte| byte.is_ascii_digit())
+                && minor.bytes().all(|byte| byte.is_ascii_digit())
+        });
+    let code = parts.next().ok_or_else(invalid_dav_status)?;
+    if !valid_version || code.len() != 3 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(invalid_dav_status());
+    }
+    code.parse::<u16>()
+        .ok()
+        .filter(|code| (100..600).contains(code))
+        .ok_or_else(invalid_dav_status)
+}
+
+/// Preserve the existing missing-status compatibility, but explicit failures
+/// never provide metadata or select a resource. HTTP success alone is insufficient.
+fn dav_status_success(status: Option<u16>) -> bool {
+    status.is_none_or(|code| (200..300).contains(&code))
 }
 
 /// A familiar name in another container is still an unknown extension here.
@@ -298,6 +356,7 @@ fn expected_element(name: &str, parent: &[DavElement]) -> Option<DavElement> {
         ("collection", [Multistatus, Response, Propstat, Prop, ResourceType]) => Some(Collection),
         ("getcontentlength", [Multistatus, Response, Propstat, Prop]) => Some(Size),
         ("getlastmodified", [Multistatus, Response, Propstat, Prop]) => Some(Modified),
+        ("status", [Multistatus, Response] | [Multistatus, Response, Propstat]) => Some(Status),
         _ => None,
     }
 }
@@ -393,9 +452,10 @@ pub(crate) fn parse_multistatus(
     let mut qualified_root = None;
     let mut path = Vec::new();
     let mut href: Option<String> = None;
-    let mut size: Option<usize> = None;
-    let mut modified: Option<String> = None;
-    let mut collection = false;
+    let mut properties = DavProperties::default();
+    let mut pending_properties = DavProperties::default();
+    let mut response_status = None;
+    let mut propstat_status = None;
 
     loop {
         let (namespace, event) = reader
@@ -425,24 +485,39 @@ pub(crate) fn parse_multistatus(
                 match element {
                     DavElement::Response => {
                         href = None;
-                        size = None;
-                        modified = None;
-                        collection = false;
+                        properties = DavProperties::default();
+                        response_status = None;
+                    }
+                    DavElement::Propstat => {
+                        pending_properties = DavProperties::default();
+                        propstat_status = None;
                     }
                     DavElement::Href => {
                         href = Some(read_prop_text(&mut reader)?.trim().to_owned());
                         continue;
                     }
                     DavElement::Size => {
-                        size = read_prop_text(&mut reader)?.trim().parse().ok();
+                        pending_properties.size = read_prop_text(&mut reader)?.trim().parse().ok();
                         continue;
                     }
                     DavElement::Modified => {
                         let text = read_prop_text(&mut reader)?.trim().to_owned();
-                        modified = (!text.is_empty()).then_some(text);
+                        pending_properties.modified = (!text.is_empty()).then_some(text);
                         continue;
                     }
-                    DavElement::Collection => collection = true,
+                    DavElement::Collection => pending_properties.collection = true,
+                    DavElement::Status => {
+                        let status = if path.last() == Some(&DavElement::Propstat) {
+                            &mut propstat_status
+                        } else {
+                            &mut response_status
+                        };
+                        if status.is_some() {
+                            return Err(invalid_dav_status());
+                        }
+                        *status = Some(read_dav_status(&mut reader)?);
+                        continue;
+                    }
                     _ => {}
                 }
                 path.push(element);
@@ -457,9 +532,12 @@ pub(crate) fn parse_multistatus(
                 } else if namespace_matches(
                     &namespace,
                     qualified_root.ok_or_else(invalid_multistatus_document)?,
-                )? && expected_element(&name, &path) == Some(DavElement::Collection)
-                {
-                    collection = true;
+                )? {
+                    match expected_element(&name, &path) {
+                        Some(DavElement::Collection) => pending_properties.collection = true,
+                        Some(DavElement::Status) => return Err(invalid_dav_status()),
+                        _ => {}
+                    }
                 }
             }
             Event::End(_) => {
@@ -468,12 +546,16 @@ pub(crate) fn parse_multistatus(
                     qualified_root.ok_or_else(invalid_multistatus_document)?,
                 )?;
                 let element = path.pop().ok_or_else(invalid_multistatus_document)?;
-                if element == DavElement::Response {
+                if element == DavElement::Propstat {
+                    if dav_status_success(propstat_status) {
+                        properties.merge(std::mem::take(&mut pending_properties));
+                    }
+                } else if element == DavElement::Response && dav_status_success(response_status) {
                     if let Some(h) = href.as_deref() {
                         let key = href_to_key(base_url, h)?;
                         // Skip the collection itself, sub-collections, and
                         // any href that is not a plain file key.
-                        if !collection
+                        if !properties.collection
                             && !key.is_empty()
                             && !key.trim_matches('/').is_empty()
                             && !h.ends_with('/')
@@ -481,8 +563,8 @@ pub(crate) fn parse_multistatus(
                         {
                             objects.push(RemoteObject {
                                 key,
-                                size: size.unwrap_or(0),
-                                modified: modified.clone(),
+                                size: properties.size.unwrap_or(0),
+                                modified: properties.modified.clone(),
                             });
                         }
                     }
@@ -579,3 +661,7 @@ pub(crate) fn href_to_key(base_url: &str, href: &str) -> Result<String, String> 
     };
     Ok(relative.trim_start_matches('/').to_owned())
 }
+
+#[cfg(test)]
+#[path = "webdav_status_tests.rs"]
+mod status_tests;

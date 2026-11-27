@@ -38,6 +38,15 @@ Recurring traps discovered while developing SecPivot. Read before touching the r
   transport construction. Exact empty means keep; whitespace-only means replace.
   Compare synthetic credential values without logging assertion operands.
 
+- **WebDAV status belongs to one response or propstat.** Applying properties
+  immediately let a404 block overwrite valid size/date or classify a file as a
+  directory. Stage each block until its end and apply only explicit2xx results;
+  status can occur before or after prop. A response-level failure excludes the
+  resource, while unavailable properties keep the href with optional hints.
+  Preserve existing missing-status compatibility, reject explicit malformed or
+  duplicate status without its reason phrase, and test both orderings through
+  the real no-auth loopback transport.
+
 - **Expanded names and parent context define WebDAV fields.** Matching only
   local names let extension href/response/collection properties replace the
   real file or hide it. Resolve DAV namespaces, use expected parent containers,

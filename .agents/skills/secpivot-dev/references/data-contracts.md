@@ -951,8 +951,8 @@ Unknown references, invalid decoding and nested/truncated property content rejec
 the whole list with content-free errors. Missing/empty size/date hints and existing
 collection handling remain. `tests/fixtures/webdav-xml-text.json` supplies eight
 independent standard-XML controls; the native wire regression covers thirteen
-filename classes. Namespace/context handling is described below; full XML,
-propstat and provider compatibility remain separate. No IPC/schema/dependency
+filename classes. Namespace/context/status handling is described below; full XML
+and provider compatibility remain separate. No IPC/schema/dependency
 changes are involved.
 
 WebDAV list publication additionally requires exactly one completed multistatus
@@ -970,7 +970,7 @@ the parser's collection filter. The request-driven native HTTP fixture excludes
 non-slashed collections and keeps normal/extensionless files and metadata.
 Unavailable type/size/date remain optional; filename extension or zero size is
 never used to infer collection membership. Namespace/context handling is described
-below; propstat/provider limits remain, with no IPC/schema/dependency change.
+below; provider limits remain, with no IPC/schema/dependency change.
 
 WebDAV uses NsReader expanded names and expected parent containers for responses,
 href, propstat/prop metadata and resourcetype/collection. Unknown/unexpected
@@ -981,7 +981,22 @@ unqualified children under a DAV root are not DAV fields. Non-DAV roots and
 unbound prefixes reject without XML contents. Scalar errors remain content-free,
 and namespace parsing does not resolve external entities. The strict-JSON
 tests/fixtures/webdav-namespaces.json corpus covers sixteen independent controls.
-Propstat success/duplicate/full XML/provider semantics remain separate.
+Status handling is described below; full XML/provider semantics remain separate.
+
+WebDAV DAV:status is interpreted only directly under response or propstat.
+Each propstat accumulates properties until its closing tag. When status is present,
+only2xx contributes size/date/type; status may precede or follow prop.
+Unavailable properties remain optional and never hide an otherwise listed file.
+A non-2xx response-level status excludes that resource. Successful collection
+properties retain the existing collection filter. Entire missing-status blocks
+retain established compatibility rather than guessing a status code. Present
+empty/malformed/duplicate status rejects the complete list with the fixed
+"WebDAV 列表状态码无效" error; reason phrases never enter diagnostics.
+The three-digit100–599 code uses an HTTP numeric major.minor version token;
+complete text/CDATA/reference assembly and namespace/context checks still apply.
+remote/webdav_status_tests.rs covers ordering, mixed failures, type fallback,
+response statuses, malformed/duplicate lines, extension isolation and real
+no-auth loopback PROPFIND. No IPC, config, dependency or credential path changes.
 
 Welcome local/remote open and create forms accept a password, a selected keyfile,
 or both, matching native build_database_key and LockScreen. An empty password is
