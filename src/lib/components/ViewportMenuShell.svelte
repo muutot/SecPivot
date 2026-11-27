@@ -80,6 +80,7 @@
   .viewport-menu {
     position: fixed;
     z-index: 9999;
+    width: max-content;
     min-width: min(160px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
     max-height: calc(100dvh - 16px);

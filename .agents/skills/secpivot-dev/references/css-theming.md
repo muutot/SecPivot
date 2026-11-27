@@ -573,7 +573,16 @@ and heading-inline layout with shared Select and keyboard icon in Appearance Win
 existing control chrome. GroupNode consumes rename Escape and prevents a subsequent blur
 commit, retaining compact row styling. Five isolated Chinese-light/English-dark/
 custom desktop/320px browser cases retain the Cascadia stack, contained card/
-Select widths and control/modal/menu cancellation ownership. The existing English
-320px group context menu emits ResizeObserver notifications; ViewportMenuShell
-remains unchanged from the base and needs a separate layout fix. Native WebView
-and desktop window lifecycle remain separate runtime gates.
+Select widths and control/modal/menu cancellation ownership. Native WebView and desktop window lifecycle remain separate runtime gates.
+
+ViewportMenuShell and ContextMenu cascades use explicit max-content widths,
+bounded by the existing minimum/maximum widths. Moving a menu during viewport
+clamping therefore cannot change its shrink-to-fit width and recursively resize
+it. The shared scroll container, eight-pixel viewport margin, theme surfaces,
+fonts and menu keyboard ownership retain their existing contracts. Isolated
+mounted group/cascade/column menus cover content changes, viewport resizing,
+End-key scrolling, child Escape, focus return and actual activation. Five
+baseline theme/size cases reproduce ResizeObserver notifications; the width
+fix removes them in those five cases. Seven checks on the integrated source,
+including liquid-light/liquid-dark, also pass without notifications. Native
+WebView remains a separate check.
