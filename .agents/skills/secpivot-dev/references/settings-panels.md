@@ -362,3 +362,12 @@ Before adding CSS:
 4. Apply live document behavior or clearly mark restart-required behavior.
 5. Update `data-contracts.md` and `css-theming.md`/`settings-panels.md` when applicable.
 6. Run static/build checks plus rendered dark/light/custom and narrow-window verification when visual.
+
+Appearance > Window exposes general.escapeAction through a shared Select in
+canonical setting-card/heading-inline markup. The five localized values are
+None, Lock, Minimize, Minimize to tray and Exit; default Lock matches KeePass.
+The card is desktop-only because three choices act on native desktop chrome.
+Changes publish via appSettings.updateGeneral and persist with the matching
+Rust GeneralSettings field; the main window reads the current action on each
+plain, otherwise-unhandled Escape. No draft, credential or new control CSS is
+introduced.

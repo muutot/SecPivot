@@ -6,7 +6,8 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { vault, fileReloadApplying } from "$lib/services/vault";
+  import { vault, fileReloadApplying, isVaultClosePending } from "$lib/services/vault";
+  import { isFileReloadBlocked } from "$lib/services/file-reload";
   import { appSettings, isAndroid, isMobile, isTauriRuntime } from "$lib/services/settings";
   import { createDocument } from "$lib/services/saf";
   import type { EntryColumnState, Language } from "$lib/types/settings";
@@ -1399,30 +1400,10 @@
     flash(t(settings.general.language, "page.locatedGroup"));
   }
 
-  /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
-  function handleShortcutKeydown(event: KeyboardEvent): void {
-    if ($fileReloadApplying) {
-      event.preventDefault();
-      return;
-    }
-    if (event.defaultPrevented || isTcatoOverlay || !currentVault || $activeContextMenu !== null)
-      return;
-    // Close the group icon picker with Escape (mirrors the group modal input).
-    if (event.key === "Escape") {
-      if (groupIconDialogUuid && !groupIconSaving) {
-        groupIconDialogUuid = null;
-      }
-      return;
-    }
-    // Holding a key fires repeats: never dispatch the same shortcut twice, and
-    // never start a second action while another (import/favicon/save) is running.
-    if (event.repeat || busy) return;
-    // Any open modal blocks global shortcuts. The explicit state list below
-    // covers page-owned surfaces; the escape stack also covers dialogs owned
-    // by child components (entry detail's history/attachment previews, dialogs
-    // opened inside the editor, …) that this handler cannot see.
-    if (isAnyModalOpen()) return;
-    if (
+  /** Page-owned command surfaces, plus dialogs owned by child components. */
+  function isCommandSurfaceOpen(): boolean {
+    return Boolean(
+      isAnyModalOpen() ||
       editor.editorOpen ||
       groupModalOpen ||
       groupIconDialogUuid ||
@@ -1445,9 +1426,89 @@
       largeOpen ||
       timelineOpen ||
       hibpOpen ||
-      faviconDialog !== null
+      faviconDialog !== null,
+    );
+  }
+
+  let escapeActionPending = false;
+
+  async function handleEscapeAction(): Promise<void> {
+    const action = settings.general.escapeAction;
+    if (action === "none") return;
+    escapeActionPending = true;
+    try {
+      if (action === "lock") {
+        if (currentVault) await handleLock();
+      } else if (!isTauriRuntime() || isMobile()) {
+        flash(t(settings.general.language, "page.windowActionDesktop"), "error");
+      } else {
+        await invoke("perform_window_action", { action });
+      }
+    } catch {
+      flash(t(settings.general.language, "page.windowActionFailed"), "error");
+    } finally {
+      escapeActionPending = false;
+    }
+  }
+
+  /** Bubble phase lets the focused control cancel its edit/listbox first. */
+  function handleEscapeKeydown(event: KeyboardEvent): void {
+    if (
+      event.key !== "Escape" ||
+      event.defaultPrevented ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.shiftKey ||
+      event.metaKey ||
+      event.isComposing ||
+      event.repeat ||
+      isTcatoOverlay ||
+      $activeContextMenu !== null ||
+      $fileReloadApplying ||
+      busy ||
+      escapeActionPending ||
+      isVaultClosePending() ||
+      isCommandSurfaceOpen() ||
+      isFileReloadBlocked()
     )
       return;
+    // The standalone unlock fields own their credential draft. Main-window
+    // quick search is an ordinary control, as in KeePass, and permits locking.
+    const target = event.target as HTMLElement | null;
+    if (
+      !currentVault &&
+      target &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    )
+      return;
+    event.preventDefault();
+    void handleEscapeAction();
+  }
+
+  /** Dispatch recorded app shortcuts; skipped while typing or modals are open. */
+  function handleShortcutKeydown(event: KeyboardEvent): void {
+    if ($fileReloadApplying) {
+      event.preventDefault();
+      return;
+    }
+    if (event.defaultPrevented || isTcatoOverlay || !currentVault || $activeContextMenu !== null)
+      return;
+    // Close the group icon picker with Escape (mirrors the group modal input).
+    if (event.key === "Escape") {
+      if (groupIconDialogUuid && !groupIconSaving) {
+        event.preventDefault();
+        groupIconDialogUuid = null;
+      }
+      return;
+    }
+    // Holding a key fires repeats: never dispatch the same shortcut twice, and
+    // never start a second action while another (import/favicon/save) is running.
+    if (event.repeat || busy) return;
+    // Any open modal blocks global shortcuts. The explicit state list below
+    // covers page-owned surfaces; the escape stack also covers dialogs owned
+    // by child components (entry detail's history/attachment previews, dialogs
+    // opened inside the editor, …) that this handler cannot see.
+    if (isCommandSurfaceOpen()) return;
     const target = event.target as HTMLElement | null;
     if (
       target &&
@@ -2020,7 +2081,7 @@
   <title>SecPivot</title>
 </svelte:head>
 
-<svelte:window onkeydowncapture={handleShortcutKeydown} />
+<svelte:window onkeydowncapture={handleShortcutKeydown} onkeydown={handleEscapeKeydown} />
 
 {#if !isTcatoOverlay}<KdfOpenPrompt /><FileReloadMonitor />{/if}
 {#if !isTcatoOverlay}

@@ -225,6 +225,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   windowEffect: "off",
   windowOpacity: 100,
   alwaysOnTop: false,
+  escapeAction: "lock",
   rememberLastDatabase: true,
   autoReloadChangedFiles: false,
   recentFiles: [],
@@ -972,6 +973,14 @@ export function normalizeSettings(
       typeof g.autoReloadChangedFiles === "boolean"
         ? g.autoReloadChangedFiles
         : (fallback.general.autoReloadChangedFiles ?? false),
+    escapeAction:
+      g.escapeAction === "none" ||
+      g.escapeAction === "lock" ||
+      g.escapeAction === "minimize" ||
+      g.escapeAction === "minimizeToTray" ||
+      g.escapeAction === "exit"
+        ? g.escapeAction
+        : (fallback.general.escapeAction ?? "lock"),
     quickFindExcludeExpired:
       typeof g.quickFindExcludeExpired === "boolean"
         ? g.quickFindExcludeExpired

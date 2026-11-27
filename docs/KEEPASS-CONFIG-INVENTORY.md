@@ -97,7 +97,7 @@ MaxItemCount ✅ `recentFiles`（上限 12，本批对齐 KeePass 默认）· It
 | AlwaysOnTop                              | false   | ✅ `general.alwaysOnTop`（批次2）                                                                                              |
 | CloseButtonMinimizesWindow               | false   | ✅ `security.minimizeToTray`                                                                                                   |
 | EscMinimizesToTray（旧兼容）             | false   | ➖                                                                                                                             |
-| EscAction (None/Lock/Min/MinTray/Exit)   | Lock    | ❌ Esc 行为可配（SecPivot 固定关弹窗）                                                                                         |
+| EscAction (None/Lock/Min/MinTray/Exit)   | Lock    | ⚠️ `general.escapeAction` 五种操作、默认锁定；弹窗/编辑优先与原生退出保存门禁已接入，真实 WebView/平台待验                     |
 | MinimizeToTray                           | false   | ✅ `security.minimizeToTray`                                                                                                   |
 | ShowFullPathInTitle                      | false   | ⚠️ `general.showFullPathInTitle`：配置/开关及原生 setTitle 已接入；平台运行待验                                                |
 | DropToBackAfterClipboardCopy             | false   | ❌（旧 gap 列为候选）                                                                                                          |

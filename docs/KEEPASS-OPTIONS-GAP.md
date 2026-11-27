@@ -123,6 +123,16 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 
 ### Interface (1) / (2)（界面）
 
+`MainWindow.EscAction` 已映射为 `general.escapeAction`，默认 Lock；None、Lock、
+Minimize、MinimizeToTray、Exit 与官方 AceMainWindow/ProcessCmdKey 对齐。
+外观→窗口页使用共享 Select；主窗口只处理无修饰、非 IME/重复且未被控件
+消费的 Esc。弹窗、菜单与内联草稿保留优先级，独立解锁输入保留凭据草稿。
+锁定复用手动流程；显式桌面窗口命令拒绝非 main 窗口，退出请求 app.exit
+后仍经过既有原生保存/放弃/取消门禁，独立于关闭按钮的托盘偏好。收起到
+托盘要求实际图标并读取现有锁定设置，锁定事件发送失败恢复可见窗口。
+旧配置/五值重载、生产 page/手动锁定与原生命令/托盘函数的合成边界回归
+已通过；真实 WebView/托盘/退出生命周期及其他平台仍待验证。
+
 `MainWindow.QuickFindExcludeExpired` 默认 false，已映射为
 `general.quickFindExcludeExpired` 并接入外观→显示页和实际工具栏搜索。
 非空快速搜索按当前到期时间排除，等于当前时间也排除；普通浏览及高级
@@ -133,19 +143,20 @@ KeePass 的 Policy tab 是**管理员强制策略**（最小密码长度、字�
 旧配置/双值原生重载、实际编译 Svelte 筛选与 store、时间边界/偏移/继承/
 替换/关闭及浅色/深色/320px预览已验证；真实 WebView/跨平台运行仍待。
 
-| KeePass 项                                      | SecPivot 状态                                                                                                  |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| UI language / theme                             | ✅ `general.language` / `theme`                                                                                |
-| Minimize to tray                                | ✅ `security.minimizeToTray`                                                                                   |
-| Show recent files / max count                   | ✅ `general.recentFiles`（上限 8）                                                                             |
-| Always on top                                   | ✅ `general.alwaysOnTop`（本批实现）：Appearance → Window 开关，经 `set_always_on_top` Tauri 命令即时生效      |
-| Drop to background after copy                   | ❌ 未实现（复制后切回上次窗口）                                                                                |
-| Confirm before cmd:// / {CMD:...} / {REF:P@...} | ❌ 未实现（TCATO/URL 执行确认）                                                                                |
-| Expiry soon days                                | ✅ `security.expirySoonDays`（默认7天，开库提醒消费）                                                          |
-| Toolbar / columns config                        | ✅ `toolbarItems` / `entryColumns`                                                                             |
-| Show entries of subgroups (View menu)           | ⚠️ `general.showEntriesOfSubGroups`，默认关；直属/后代浏览、视图复选菜单和原生配置重载已接入，真实 WebView待验 |
-| Font sizes / density                            | ✅ `fontSizes` / `density`                                                                                     |
-| Window effect / opacity                         | ✅ `windowEffect` / `windowOpacity`                                                                            |
+| KeePass 项                                       | SecPivot 状态                                                                                                  |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| UI language / theme                              | ✅ `general.language` / `theme`                                                                                |
+| Minimize to tray                                 | ✅ `security.minimizeToTray`                                                                                   |
+| Show recent files / max count                    | ✅ `general.recentFiles`（上限 8）                                                                             |
+| Always on top                                    | ✅ `general.alwaysOnTop`（本批实现）：Appearance → Window 开关，经 `set_always_on_top` Tauri 命令即时生效      |
+| Escape key action (None/Lock/Minimize/Tray/Exit) | ⚠️ `general.escapeAction` 默认 Lock；五种操作、编辑/弹窗优先和原生退出保存门禁已接入，真实 WebView/平台待验    |
+| Drop to background after copy                    | ❌ 未实现（复制后切回上次窗口）                                                                                |
+| Confirm before cmd:// / {CMD:...} / {REF:P@...}  | ❌ 未实现（TCATO/URL 执行确认）                                                                                |
+| Expiry soon days                                 | ✅ `security.expirySoonDays`（默认7天，开库提醒消费）                                                          |
+| Toolbar / columns config                         | ✅ `toolbarItems` / `entryColumns`                                                                             |
+| Show entries of subgroups (View menu)            | ⚠️ `general.showEntriesOfSubGroups`，默认关；直属/后代浏览、视图复选菜单和原生配置重载已接入，真实 WebView待验 |
+| Font sizes / density                             | ✅ `fontSizes` / `density`                                                                                     |
+| Window effect / opacity                          | ✅ `windowEffect` / `windowOpacity`                                                                            |
 
 ### Integration（集成）
 

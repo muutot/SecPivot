@@ -1297,3 +1297,15 @@ reads reject disposed/replaced owners, writes share the existing Symbol epoch
 guard, and browser preview rejects native policy operations. Only presence hints
 enter current/history DTOs, including foreign malformed policy presence.
 Frontend policy editing and selection-bound historical rule reads are connected. Complete renderer XML migration and real WebView/provider proof remain pending; no full memory-erasure claim.
+
+Plain unhandled Escape defaults to the existing manual workspace-lock path;
+browser dirty-state confirmation and native save/discard/cancel remain in
+force. The main-page bubble handler runs after focused edit/listbox controls.
+Consumed keys, modal/menu owners, inline drafts, native close/reload/busy,
+repeat/IME/modifiers and the TCATO overlay suppress the workspace action.
+Standalone credential fields retain Escape ownership. A pending-action flag
+prevents duplicate async dispatch. Explicit desktop Exit requests app.exit,
+never destroys the window or bypasses ExitRequested. Tray hide requires a live
+icon and reads the existing lock preference before hiding; event failure
+restores visibility. Tests use synthetic native APIs and no OS clipboard or
+user vaults; real WebView/tray/exit lifecycle remains a separate runtime gate.

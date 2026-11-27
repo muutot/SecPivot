@@ -1200,3 +1200,15 @@ ports/IPv6 brackets in Hostname suggestions. The strict-JSON shared corpus in
 `tests/fixtures/url-authorities.json` runs in Rust and Node tests, with suggested
 alt rules verified through reopened synthetic KDBX Bridge/RPC adapters. Domain
 keeps its broader port scope; no new frontend component or IPC surface exists.
+
+`commands/window.rs` owns the desktop WindowAction wire enum and
+perform_window_action adapter for explicit minimize/tray/exit. lib.rs owns
+minimize_main_to_tray, shared with the close-button adapter; exit.rs retains
+the native exit/close transaction. +page.svelte owns isCommandSurfaceOpen,
+the bubble-phase handleEscapeKeydown and guarded handleEscapeAction; capture
+shortcuts keep their existing behavior. GroupNode consumes rename cancellation
+before bubbling. Appearance > Window composes the shared Select for all five
+general.escapeAction values; the desktop-only card is hidden on mobile.
+tests/escape-action.test.mjs executes actual production page/manual-lock
+bodies and native command/tray bodies with synthetic boundary APIs, plus the
+real settings store. It does not operate native windows or the OS clipboard.

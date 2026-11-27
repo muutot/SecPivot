@@ -199,7 +199,11 @@ test("page capture shortcuts respect menus owned by recursive group components",
     (node) => ts.isFunctionDeclaration(node) && node.name?.text === "handleShortcutKeydown",
   );
   assert.ok(handler);
-  const js = ts.transpileModule(handler.getText(ast), {
+  const surface = ast.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === "isCommandSurfaceOpen",
+  );
+  assert.ok(surface);
+  const js = ts.transpileModule(surface.getText(ast) + "\n" + handler.getText(ast), {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const context = {

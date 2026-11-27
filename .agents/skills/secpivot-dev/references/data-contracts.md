@@ -1903,3 +1903,15 @@ value types. Metadata-only and re-encryption paths consume the same DTO; normal
 kdf/cipher/compression option semantics and the icon deserializer are unchanged.
 Native wire/save/reopen regressions cover the boundary; constructing Some(None)
 in Rust alone is not proof of the JSON IPC reset contract.
+
+`general.escapeAction` maps MainWindow.EscAction to none/lock/minimize/
+minimizeToTray/exit and defaults to lock in TS/Rust. Strict TS and native
+normalization reject unknown values; old configs use the container default.
+The desktop-only `perform_window_action` command receives the calling
+WebviewWindow and a camelCase WindowAction enum, rejects non-main windows,
+and accepts only minimize/minimizeToTray/exit. Lock uses the existing manual
+lock/closeAll path. Explicit exit calls app.exit(0), preserving ExitRequested
+and its native save/discard/cancel gate. Tray transitions share
+minimize_main_to_tray with the close button, require a live tray/main window,
+read lockOnMinimizeToTray at transition time, and restore visibility if the
+lock event cannot be emitted. No credential or vault DTO is added.

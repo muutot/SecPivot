@@ -516,3 +516,13 @@ Rules:
 6. Run `npm run check` and `npm run build`.
 7. Perform rendered/runtime comparison in dark and light/custom theme when the change affects theme-facing UI; test the target window size and a narrow size.
 8. Run the documentation currency gate before commit.
+
+Escape key action uses the existing setting-card/setting-heading/setting-icon
+and heading-inline layout with shared Select and keyboard icon in Appearance Window. It adds no CSS, token, font, surface or metric; all five values reuse
+existing control chrome. GroupNode consumes rename Escape and prevents a subsequent blur
+commit, retaining compact row styling. Five isolated Chinese-light/English-dark/
+custom desktop/320px browser cases retain the Cascadia stack, contained card/
+Select widths and control/modal/menu cancellation ownership. The existing English
+320px group context menu emits ResizeObserver notifications; ViewportMenuShell
+remains unchanged from the base and needs a separate layout fix. Native WebView
+and desktop window lifecycle remain separate runtime gates.

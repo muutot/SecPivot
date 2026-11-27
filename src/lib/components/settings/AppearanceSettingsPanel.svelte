@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { appSettings, isHexColor } from "$lib/services/settings";
+  import { appSettings, isHexColor, isMobile } from "$lib/services/settings";
   import { t } from "$lib/i18n";
-  import type { GeneralSettings, WindowEffect } from "$lib/types/settings";
+  import type { EscapeAction, GeneralSettings, WindowEffect } from "$lib/types/settings";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import ModalShell from "$lib/components/ModalShell.svelte";
   import Select from "$lib/components/Select.svelte";
@@ -835,6 +835,32 @@
   {/if}
 
   {#if section === "window"}
+    {#if !isMobile()}
+      <section class="setting-card">
+        <div class="setting-heading">
+          <span class="setting-icon"><AppIcon name="keyboard" size={17} /></span>
+          <div class="heading-inline">
+            <div>
+              <strong>{t(lang, "settings.escapeAction")}</strong>
+              <p>{t(lang, "settings.escapeActionDesc")}</p>
+            </div>
+            <Select
+              ariaLabel={t(lang, "settings.escapeAction")}
+              value={general.escapeAction}
+              options={[
+                { value: "none", label: t(lang, "settings.escapeNone") },
+                { value: "lock", label: t(lang, "settings.escapeLock") },
+                { value: "minimize", label: t(lang, "window.minimize") },
+                { value: "minimizeToTray", label: t(lang, "settings.escapeTray") },
+                { value: "exit", label: t(lang, "settings.escapeExit") },
+              ]}
+              onchange={(v) => change("escapeAction", v as EscapeAction)}
+            />
+          </div>
+        </div>
+      </section>
+    {/if}
+
     <SettingToggleCard
       icon="eye"
       label={t(lang, "settings.alwaysOnTop")}

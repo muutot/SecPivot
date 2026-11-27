@@ -234,6 +234,9 @@ export interface CustomTheme {
   colors: ThemeColors;
 }
 
+/** KeePass MainWindow.EscAction; desktop window actions are explicit. */
+export type EscapeAction = "none" | "lock" | "minimize" | "minimizeToTray" | "exit";
+
 export interface GeneralSettings {
   language: Language;
   theme: ThemeMode;
@@ -253,6 +256,8 @@ export interface GeneralSettings {
   /** Keep the main window above other windows (KeePass Interface option).
    *  Applied live through the Tauri `set_always_on_top` command. */
   alwaysOnTop: boolean;
+  /** Unhandled plain Escape in the main window; KeePass default is lock. */
+  escapeAction: EscapeAction;
   rememberLastDatabase: boolean;
   /** Automatically reload external changes, merging unsaved edits in memory. */
   autoReloadChangedFiles: boolean;

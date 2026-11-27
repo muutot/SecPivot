@@ -371,18 +371,8 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
         .unwrap_or(false);
     if minimize_to_tray {
         api.prevent_close();
-        let _ = window.hide();
-        // KeePass "Lock workspace when minimizing to tray": reuse the same
-        // event the tray's explicit Lock item emits; the renderer's layout
-        // listener closes every vault session. Read the flag at hide time so
-        // a settings change takes effect without a restart.
-        let lock_on_hide = app
-            .state::<ConfigStore>()
-            .get()
-            .map(|cfg| cfg.security.lock_on_minimize_to_tray)
-            .unwrap_or(false);
-        if lock_on_hide {
-            let _ = app.emit(TRAY_LOCK_EVENT, ());
+        if minimize_main_to_tray(app).is_err() {
+            eprintln!("window: unable to minimize to tray");
         }
     } else {
         // Keep the renderer/window alive while native save or cancellation is
@@ -390,6 +380,32 @@ fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
         api.prevent_close();
         app.exit(0);
     }
+}
+
+/// Shared close-button / explicit Esc action. Refuse to hide without a live
+/// tray icon; lock preference is read at the time of this transition.
+#[cfg(desktop)]
+pub(crate) fn minimize_main_to_tray(app: &tauri::AppHandle) -> Result<(), String> {
+    if app.tray_by_id(TRAY_ID).is_none() {
+        return Err("WINDOW_ACTION_UNAVAILABLE".into());
+    }
+    let window = app
+        .get_webview_window("main")
+        .ok_or("WINDOW_ACTION_UNAVAILABLE")?;
+    let cfg = app.state::<ConfigStore>().get()?;
+    let lock_on_hide = cfg.security.lock_on_minimize_to_tray;
+    window.hide().map_err(|e| e.to_string())?;
+    if lock_on_hide {
+        if let Err(error) = app.emit(TRAY_LOCK_EVENT, ()) {
+            // Do not leave an unlocked window hidden if its lock request
+            // could not reach the existing renderer listener.
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            return Err(error.to_string());
+        }
+    }
+    Ok(())
 }
 // ---------------------------------------------------------------------------
 // App entry point
@@ -490,6 +506,8 @@ pub fn run() {
             commands::set_config,
             commands::set_window_opacity,
             commands::set_always_on_top,
+            #[cfg(desktop)]
+            commands::perform_window_action,
             commands::open_vault,
             commands::create_vault,
             commands::close_vault,

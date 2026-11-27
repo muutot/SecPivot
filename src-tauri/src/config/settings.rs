@@ -398,6 +398,8 @@ pub struct GeneralSettings {
     /// Keep the main window above other windows (KeePass Interface option).
     #[serde(default)]
     pub always_on_top: bool,
+    /// KeePass MainWindow.EscAction; default lock, normalized to five actions.
+    pub escape_action: String,
     #[serde(default = "default_true")]
     pub remember_last_database: bool,
     pub auto_reload_changed_files: bool,
@@ -516,6 +518,7 @@ impl Default for GeneralSettings {
             window_effect: "off".into(),
             window_opacity: 100,
             always_on_top: false,
+            escape_action: "lock".into(),
             remember_last_database: true,
             auto_reload_changed_files: false,
             recent_files: Vec::new(),
@@ -1513,6 +1516,10 @@ pub fn normalize_config(mut config: AppConfig) -> AppConfig {
     config.general.window_effect = match config.general.window_effect.as_str() {
         "off" | "acrylic" | "mica" => config.general.window_effect,
         _ => "off".into(),
+    };
+    config.general.escape_action = match config.general.escape_action.as_str() {
+        "none" | "lock" | "minimize" | "minimizeToTray" | "exit" => config.general.escape_action,
+        _ => "lock".into(),
     };
     config.general.theme_colors = normalize_colors(config.general.theme_colors);
     for preset in &mut config.general.custom_presets {

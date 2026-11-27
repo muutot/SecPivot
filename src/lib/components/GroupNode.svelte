@@ -266,6 +266,9 @@
   }
 
   function commitRename(): void {
+    // Escape removes the input before its ensuing blur is delivered. Only a
+    // still-active edit may commit; cancellation and Enter must not commit twice.
+    if (!renaming) return;
     const value = nameInput.trim();
     renaming = false;
     if (value && value !== group.name) onrename(group.uuid, value);
@@ -287,7 +290,10 @@
         bind:value={nameInput}
         onkeydown={(e) => {
           if (e.key === "Enter") commitRename();
-          if (e.key === "Escape") renaming = false;
+          if (e.key === "Escape") {
+            e.preventDefault();
+            renaming = false;
+          }
         }}
         onblur={commitRename}
         bind:this={inputEl}

@@ -5,6 +5,35 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn escape_action_defaults_to_lock_normalizes_and_survives_config_reload() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("conf")).unwrap();
+    for old in [
+        r#"{}"#,
+        r#"{"general":{}}"#,
+        r#"{"general":{"escapeAction":"unknown"}}"#,
+    ] {
+        fs::write(dir.path().join("conf/config.json"), old).unwrap();
+        let store = ConfigStore::load(dir.path().to_owned()).unwrap();
+        assert_eq!(store.get().unwrap().general.escape_action, "lock");
+        for action in ["none", "lock", "minimize", "minimizeToTray", "exit"] {
+            let mut config = store.get().unwrap();
+            config.general.escape_action = action.into();
+            store.set(config).unwrap();
+            assert_eq!(
+                ConfigStore::load(dir.path().to_owned())
+                    .unwrap()
+                    .get()
+                    .unwrap()
+                    .general
+                    .escape_action,
+                action
+            );
+        }
+    }
+}
+
+#[test]
 fn show_entries_of_sub_groups_defaults_off_and_survives_config_reload() {
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("conf")).unwrap();
