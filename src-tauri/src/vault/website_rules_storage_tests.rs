@@ -6,6 +6,7 @@ use tempfile::TempDir;
 
 fn config(rules: &[(&str, WebsiteMode)]) -> WebsiteRuleSet {
     WebsiteRuleSet {
+        bitwarden: None,
         version: 1,
         rules: rules
             .iter()
@@ -75,6 +76,7 @@ fn stored(session: &VaultSession, id: &str) -> String {
 fn native_pattern_rules_survive_kdbx_xml_and_both_real_browser_host_adapters() {
     let (dir, mut session, id) = session();
     let rules = WebsiteRuleSet {
+        bitwarden: None,
         version: 2,
         rules: vec![
             WebsiteRule {
@@ -375,6 +377,7 @@ fn setter_rejects_invalid_missing_read_only_and_snapshot_failure_atomically() {
         (
             id.clone(),
             WebsiteRuleSet {
+                bitwarden: None,
                 version: 3,
                 rules: vec![],
             },

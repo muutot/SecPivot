@@ -72,6 +72,7 @@
     VaultState,
     SecurityReport,
     FaviconProgress,
+    BitwardenUriSettings,
   } from "$lib/types/vault";
   import AppIcon from "$lib/components/AppIcon.svelte";
   import type { IconName } from "$lib/components/AppIcon.svelte";
@@ -89,6 +90,7 @@
   import VaultWelcome from "$lib/components/VaultWelcome.svelte";
   import KdfOpenPrompt from "$lib/components/KdfOpenPrompt.svelte";
   import FileReloadMonitor from "$lib/components/FileReloadMonitor.svelte";
+  import BitwardenImportSettingsDialog from "$lib/components/BitwardenImportSettingsDialog.svelte";
   import LockScreen from "$lib/components/LockScreen.svelte";
   import GroupTree from "$lib/components/GroupTree.svelte";
   import VaultTabs from "$lib/components/VaultTabs.svelte";
@@ -193,6 +195,32 @@
   let confirmState = $state<{ message: string; onconfirm: () => void } | null>(null);
   let autotypePick = $state<AutotypeCandidate[] | null>(null);
   let busy = $state(false);
+  let bitwardenPrompt = $state<{
+    view: SessionViewToken;
+    epoch: unknown;
+    resolve: (settings: BitwardenUriSettings | null) => void;
+  } | null>(null);
+
+  function finishBitwardenPrompt(
+    settings: BitwardenUriSettings | null,
+    prompt = bitwardenPrompt,
+  ): void {
+    if (prompt !== bitwardenPrompt) return;
+    bitwardenPrompt = null;
+    prompt?.resolve(settings);
+  }
+
+  $effect(() => {
+    const prompt = bitwardenPrompt;
+    void currentVaultEpoch;
+    if (
+      prompt &&
+      (!sessionView.isCurrent(prompt.view) ||
+        vault.getSessionEpoch(prompt.view.sessionId) !== prompt.epoch)
+    ) {
+      finishBitwardenPrompt(null);
+    }
+  });
   let reportOpen = $state(false);
   let remoteConflict = $state<string | null>(null);
   let similarOpen = $state(false);
@@ -222,6 +250,13 @@
     },
     notify: flash,
     currentState: () => currentVault,
+    requestBitwardenSettings: (view) => {
+      finishBitwardenPrompt(null);
+      if (!sessionView.isCurrent(view)) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        bitwardenPrompt = { view, epoch: vault.getSessionEpoch(view.sessionId), resolve };
+      });
+    },
   };
 
   /** Component hooks for the extracted favicon download flow. */
@@ -371,6 +406,7 @@
       if (value === activeSessionId) return;
       activeSessionId = value;
       sessionView.activate(value);
+      finishBitwardenPrompt(null);
       const view = sessionView.capture();
       if (view) void notifyExpiredEntries(view);
       // A long operation that started in the previous tab intentionally skips
@@ -454,6 +490,7 @@
       void unlistenAutotypePick?.then((stop) => stop());
       if (windowResizeTimer) clearTimeout(windowResizeTimer);
       sessionView.activate(null);
+      finishBitwardenPrompt(null);
     };
   });
 
@@ -1974,6 +2011,14 @@
 <svelte:window onkeydowncapture={handleShortcutKeydown} />
 
 {#if !isTcatoOverlay}<KdfOpenPrompt /><FileReloadMonitor />{/if}
+{#if !isTcatoOverlay}
+  {#each bitwardenPrompt ? [bitwardenPrompt] : [] as prompt (prompt)}
+    <BitwardenImportSettingsDialog
+      onconfirm={(settings) => finishBitwardenPrompt(settings, prompt)}
+      onclose={() => finishBitwardenPrompt(null, prompt)}
+    />
+  {/each}
+{/if}
 
 {#if isTcatoOverlay}
   <TcatoOverlay />

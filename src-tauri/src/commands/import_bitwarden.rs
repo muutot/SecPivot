@@ -1,7 +1,8 @@
 //! Native Bitwarden JSON selection carries a path/display name, never plaintext through IPC.
 use super::with_vault_session;
 use crate::vault::{
-    self, BitwardenCounts, BitwardenImport, VaultSession, VaultSessions, VaultState,
+    self, BitwardenCounts, BitwardenImport, BitwardenUriSettings, VaultSession, VaultSessions,
+    VaultState,
 };
 use serde::Serialize;
 use std::{
@@ -18,7 +19,12 @@ pub(crate) struct BitwardenImportResult {
     counts: BitwardenCounts,
 }
 
-fn prepare_file(path: &Path, file_name: Option<&str>) -> Result<BitwardenImport, String> {
+fn prepare_file(
+    path: &Path,
+    file_name: Option<&str>,
+    uri_settings: &BitwardenUriSettings,
+) -> Result<BitwardenImport, String> {
+    uri_settings.validate()?;
     let name = if vault::file_io::is_document_uri(path) {
         Path::new(file_name.ok_or("无法确定文档类型，请重新选择 Bitwarden JSON 文件")?)
     } else {
@@ -35,7 +41,7 @@ fn prepare_file(path: &Path, file_name: Option<&str>) -> Result<BitwardenImport,
         vault::file_io::read_with_limit(path, "Bitwarden JSON 文件", 64 * 1024 * 1024)
             .map_err(|_| "无法读取 Bitwarden JSON 文件或文件超过 64 MiB 上限")?,
     );
-    vault::prepare_bitwarden_import(&bytes)
+    vault::prepare_bitwarden_import(&bytes, uri_settings)
 }
 
 fn complete(
@@ -60,12 +66,14 @@ async fn import_for_session(
     path: String,
     file_name: Option<String>,
     target_group_uuid: Option<String>,
+    uri_settings: BitwardenUriSettings,
 ) -> Result<BitwardenImportResult, String> {
     static WORKER: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
     let target = target_group_uuid.unwrap_or_else(|| vault::ROOT_GROUP_UUID.to_owned());
     let lifetime = with_vault_session(vaults, session, Some(&session_id), |session| {
         session.native_import_lifetime(&target)
     })?;
+    uri_settings.validate()?;
     let permit = WORKER
         .get_or_init(|| Arc::new(tokio::sync::Semaphore::new(1)))
         .clone()
@@ -73,7 +81,7 @@ async fn import_for_session(
         .map_err(|_| "Bitwarden JSON 导入任务正在进行，请稍后重试")?;
     let plan = tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        prepare_file(Path::new(&path), file_name.as_deref())
+        prepare_file(Path::new(&path), file_name.as_deref(), &uri_settings)
     })
     .await
     .map_err(|_| "Bitwarden JSON 导入任务异常；未导入任何内容")??;
@@ -88,6 +96,7 @@ pub(crate) async fn import_bitwarden_file(
     path: String,
     file_name: Option<String>,
     target_group_uuid: Option<String>,
+    uri_settings: BitwardenUriSettings,
 ) -> Result<BitwardenImportResult, String> {
     import_for_session(
         vaults.inner(),
@@ -96,6 +105,7 @@ pub(crate) async fn import_bitwarden_file(
         path,
         file_name,
         target_group_uuid,
+        uri_settings,
     )
     .await
 }

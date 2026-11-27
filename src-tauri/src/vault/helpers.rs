@@ -322,7 +322,13 @@ pub(crate) fn entry_match_urls(entry: &keepass::db::EntryRef<'_>) -> Vec<String>
                             super::WebsiteMode::Never | super::WebsiteMode::Regex
                         )
                     })
-                    .map(|rule| rule.url.clone())
+                    .filter_map(|rule| {
+                        if rules.config().bitwarden.is_some() {
+                            super::bitwarden_uri::launch_url(&rule.url)
+                        } else {
+                            Some(rule.url.clone())
+                        }
+                    })
                     .collect()
             })
             .unwrap_or_default();

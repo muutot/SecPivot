@@ -11,6 +11,7 @@
 # reviewed patch keeps the same line endings and the provenance gate hashes all files.
 /src-tauri/vendor/quick-xml-0.41.0/** -text -eol whitespace=cr-at-eol
 /src-tauri/vendor/quick-xml-local.patch -text -eol whitespace=cr-at-eol
+/src-tauri/vendor/tldts-7.4.2/** -text -eol
 
 # Binary assets must never be line-ending normalized or diffed as text.
 *.png binary

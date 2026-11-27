@@ -1,4 +1,5 @@
 import type { HistoryRuleSource, WebsiteRuleSet } from "$lib/types/vault";
+import { copyBitwardenUriSettings } from "$lib/utils/bitwarden-uri-settings";
 
 export interface HistoryRuleViewState {
   visible: boolean;
@@ -58,7 +59,13 @@ export class HistoryRuleView {
         value:
           value === null
             ? null
-            : { version: value.version, rules: value.rules.map((rule) => ({ ...rule })) },
+            : {
+                version: value.version,
+                rules: value.rules.map((rule) => ({ ...rule })),
+                ...(value.bitwarden
+                  ? { bitwarden: copyBitwardenUriSettings(value.bitwarden) }
+                  : {}),
+              },
       });
     } catch {
       if (owns()) this.update({ loading: false, ready: false, error: true, value: null });

@@ -7,6 +7,23 @@ const policy = {
   version: 1,
   rules: [{ url: "https://synthetic.example/exact?x=1", mode: "exact" }],
 };
+
+test("history reads retain the source profile and detach every equivalent-domain group", async () => {
+  const f = fixture(),
+    task = f.view.load("version");
+  const source = {
+    version: 2,
+    rules: [{ url: "example.com:443/Original", mode: "site" }],
+    bitwarden: { defaultMatch: 0, equivalentDomains: [["example.com", "example.net"]] },
+  };
+  f.pending[0].resolve(source);
+  await task;
+  assert.deepEqual(f.last().value, source);
+  source.bitwarden.equivalentDomains[0][0] = "changed source";
+  assert.equal(f.last().value.bitwarden.equivalentDomains[0][0], "example.com");
+  f.view.hide();
+  assert.equal(f.last().value, null);
+});
 function fixture() {
   const pending = [],
     states = [];

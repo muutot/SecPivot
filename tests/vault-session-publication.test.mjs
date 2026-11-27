@@ -142,7 +142,10 @@ async function fixture() {
 test("native Bitwarden import respects close and replacement epochs without overwriting newer state", async () => {
   for (const replace of ["close", "reload"]) {
     const origin = await fixture();
-    const importing = vault.importBitwarden("C:/synthetic/source.json", null, "root");
+    const importing = vault.importBitwarden("C:/synthetic/source.json", null, "root", {
+      defaultMatch: 0,
+      equivalentDomains: [],
+    });
     const outcome = Promise.allSettled([importing]);
     const worker = pending.find((p) => p.command === "import_bitwarden_file");
     assert.equal(worker.sessionId, origin);

@@ -1,6 +1,9 @@
 //! Bounded native JSON import; source identities never become KeePass controls.
-use super::{onepux_archive::SecretJson, parse_bitwarden_rows, tree::SourceArchive};
-use crate::vault::{VaultSession, VaultState, FIELD_FAVORITE, FIELD_FAVORITE_TRUE, FIELD_OTP};
+use super::{onepux_archive::SecretJson, parse_bitwarden_rows_with_uris, tree::SourceArchive};
+use crate::vault::{
+    BitwardenUriSettings, VaultSession, VaultState, FIELD_FAVORITE, FIELD_FAVORITE_TRUE, FIELD_OTP,
+    FIELD_WEBSITE_RULES,
+};
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use keepass::db::{Database, Value};
 use serde::Serialize;
@@ -28,6 +31,7 @@ pub struct BitwardenCounts {
 pub struct BitwardenImport {
     database: Database,
     archive: Value<String>,
+    uri_settings_archive: Value<String>,
     counts: BitwardenCounts,
 }
 
@@ -156,7 +160,23 @@ impl Budget {
     }
 }
 
-pub fn prepare_bitwarden_import(bytes: &[u8]) -> Result<BitwardenImport, String> {
+fn reserve_uri_policy_bytes(total: &mut usize, next: usize, archived: usize) -> Result<(), String> {
+    let retained = total.checked_add(next).ok_or(LIMIT)?;
+    if archived
+        .checked_add(retained)
+        .is_none_or(|bytes| bytes > 128 * 1024 * 1024)
+    {
+        return Err(LIMIT.into());
+    }
+    *total = retained;
+    Ok(())
+}
+
+pub fn prepare_bitwarden_import(
+    bytes: &[u8],
+    uri_settings: &BitwardenUriSettings,
+) -> Result<BitwardenImport, String> {
+    uri_settings.validate()?;
     preflight(bytes)?;
     let source = std::str::from_utf8(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))
         .map_err(|_| INVALID)?;
@@ -279,8 +299,36 @@ pub fn prepare_bitwarden_import(bytes: &[u8]) -> Result<BitwardenImport, String>
     }
     let mut budget = Budget::default();
     let archive = budget.value(source.to_owned(), true)?;
-    let rows = parse_bitwarden_rows(root)?;
-    for ((mut row, item), tags) in rows.into_iter().zip(items).zip(memberships) {
+    let uri_settings_archive = budget.value(
+        serde_json::to_string(uri_settings).map_err(|_| INVALID)?,
+        true,
+    )?;
+    let mut uri_bytes = 0usize;
+    let uri_plans = items
+        .iter()
+        .map(|item| {
+            if item.get("type").and_then(Json::as_i64) == Some(1) {
+                let (primary, rules) =
+                    super::bitwarden_uris::prepare(item.get("login"), uri_settings)?;
+                reserve_uri_policy_bytes(&mut uri_bytes, rules.as_json().len(), budget.text)?;
+                // Retain serialized policy only, dropping its repeated source
+                // settings tree before preparing the next item. Reject the
+                // aggregate output budget before allocating another retained copy.
+                Ok(Some((primary, Zeroizing::new(rules.as_json().to_owned()))))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let rows = parse_bitwarden_rows_with_uris(root, |_, index| {
+        Ok(uri_plans[index]
+            .as_ref()
+            .map(|(primary, _)| primary.clone())
+            .unwrap_or_default())
+    })?;
+    for (((mut row, item), tags), uri_plan) in
+        rows.into_iter().zip(items).zip(memberships).zip(uri_plans)
+    {
         let group_id = folder_groups
             .get(text(item, "folderId")?)
             .copied()
@@ -308,6 +356,12 @@ pub fn prepare_bitwarden_import(bytes: &[u8]) -> Result<BitwardenImport, String>
             entry.fields.insert(
                 std::mem::take(&mut field.name),
                 budget.value(std::mem::take(&mut field.value), field.protected)?,
+            );
+        }
+        if let Some((_, mut rules)) = uri_plan {
+            entry.fields.insert(
+                FIELD_WEBSITE_RULES.into(),
+                budget.value(std::mem::take(&mut *rules), true)?,
             );
         }
         // Source labels may already use this name; never overwrite source data.
@@ -339,6 +393,7 @@ pub fn prepare_bitwarden_import(bytes: &[u8]) -> Result<BitwardenImport, String>
     Ok(BitwardenImport {
         database,
         archive,
+        uri_settings_archive,
         counts,
     })
 }
@@ -356,6 +411,7 @@ impl VaultSession {
                 title: "Bitwarden Source Archive",
                 key: "Bitwarden Source Export",
                 value: plan.archive,
+                companion: Some(("Bitwarden URI Source Settings", plan.uri_settings_archive)),
                 literal_fields: true,
             },
             target,

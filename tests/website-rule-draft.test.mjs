@@ -1,11 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WebsiteRulesDraft } from "../src/lib/utils/website-rule-draft.ts";
+import { register } from "node:module";
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
+const { WebsiteRulesDraft } = await import("../src/lib/utils/website-rule-draft.ts");
 
 const policy = {
   version: 1,
   rules: [{ url: "https://synthetic.example:443/A?x=%2f#b", mode: "exact" }],
 };
+
+test("Bitwarden profiles survive load, edits and template replacement with detached settings", async () => {
+  const source = {
+    version: 2,
+    rules: [{ url: "  example.com:443/A  ", mode: "host" }],
+    bitwarden: { defaultMatch: 0, equivalentDomains: [["example.com", "example.net"]] },
+  };
+  const f = fixture(true);
+  await f.draft.load(async () => source);
+  source.bitwarden.equivalentDomains[0][0] = "changed source";
+  f.state().bitwarden.equivalentDomains[0][1] = "changed publication";
+  f.draft.edit(0, { mode: "site" });
+  const change = f.draft.change();
+  assert.deepEqual(change.rules.bitwarden, {
+    defaultMatch: 0,
+    equivalentDomains: [["example.com", "example.net"]],
+  });
+  assert.equal(change.rules.rules[0].url, "  example.com:443/A  ");
+  change.rules.bitwarden.equivalentDomains[0][0] = "changed payload";
+  assert.equal(f.draft.change().rules.bitwarden.equivalentDomains[0][0], "example.com");
+  f.draft.replace({ version: 2, rules: [], bitwarden: { defaultMatch: 5, equivalentDomains: [] } });
+  assert.deepEqual(f.draft.change().rules.bitwarden, { defaultMatch: 5, equivalentDomains: [] });
+  const before = f.draft.change();
+  assert.throws(() =>
+    f.draft.replace({
+      version: 1,
+      rules: [],
+      bitwarden: { defaultMatch: 0, equivalentDomains: [] },
+    }),
+  );
+  assert.deepEqual(f.draft.change(), before);
+  f.draft.replace(null);
+  assert.deepEqual(f.draft.change(), { mode: "clear" });
+});
 function fixture(enabled = false) {
   let state;
   let current = true;

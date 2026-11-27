@@ -1,6 +1,6 @@
 # Data Contracts
 
-`import_bitwarden_file({sessionId,path,fileName?,targetGroupUuid?})` returns
+`import_bitwarden_file({sessionId,path,fileName?,targetGroupUuid?,uriSettings})` returns
 `{state:VaultState,counts:{folders,collections,items,unresolvedMemberships}}`.
 The menu routes to native selection/reading/preparation; plaintext rows never
 cross IPC. The legacy parse_bitwarden_json command remains for compatibility.
@@ -23,10 +23,30 @@ source JSON and their count is explicitly reported, without duplicating entries.
 Creation/revision RFC3339 dates become UTC native dates at second precision;
 their original subsecond/offset text remains archived. Types1–8/quality/favorites,
 OTP and existing protected custom/typed values share the strict mapping parser.
-Linked fields are still snapshots; multiple/explicit-match URIs remain rejected.
+Linked fields are still snapshots. Native login URI rows now retain all six modes
+and raw text in v2 policies with a frozen Bitwarden source profile. Required
+uriSettings is `{defaultMatch:0..5,equivalentDomains:string[][]}`; missing/null
+per-row match inherits this explicit default. The import dialog explains that
+exports omit account settings and asks for the effective default and enabled
+built-in/custom equivalent groups; blank groups mean no equivalents. Settings
+are protected with the source archive and policy, never application preferences.
+Site uses exact tldts7.4.2 private-PSL/Unicode/equivalent selection semantics,
+Host uses WHATWG host/default ports; source malformed/empty rows and invalid
+regexes remain retained nonmatches. Standard v1/v2 policies keep prior validation.
+Profile fields are allowed only in v2. Entry URL is a separate canonical safe
+HTTP(S) launch projection; full original row order/nullable metadata remains
+in protected Source Item JSON. Regex/Never are omitted from RPC launch lists.
+The page cancels source-setting prompts on supersession, tab/epoch changes and
+unmount; IO/service epochs reject stale selection/settings/publication. Draft
+edits/templates deep-copy profiles; editor/history label source semantics.
 Password-only history and attachment metadata are protected archives, never
-fabricated full native versions or attachment bytes. Full URI/dynamic-link and
+fabricated full native versions or attachment bytes. Dynamic-link and
 real client/WebView/Android provider compatibility remain pending.
+
+URI preparation retains serialized policies only, dropping each transient source
+settings tree before the next row; source archive plus retained policies charge
+the128MiB output ceiling before another retained copy is allocated. Final field
+insertion still uses the complete produced-value/field-count budget.
 
 Limits:64MiB input,depth<64,262144 conservative structural tokens before serde,
 8192 each folders/collections/items,4096 source fields or memberships per item,
@@ -1158,7 +1178,7 @@ Dynamic linkage after edits, URI matching modes, native history and attachments
 remain separate migration work; the native route now preserves collections as
 described above, while this legacy row parser remains unchanged in scope.
 
-Bitwarden URI import accepts at most one nonempty URI with absent/null `match`.
+The legacy parse_bitwarden_json row command accepts at most one nonempty URI with absent/null `match`.
 Explicit modes 0–5 and multiple nonempty URIs reject the entire parse with a
 record-numbered compatibility error. Malformed array/object/string/mode shapes
 and embedded whitespace reject as invalid rather than becoming native URL

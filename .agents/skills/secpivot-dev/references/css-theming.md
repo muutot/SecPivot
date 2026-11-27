@@ -1,5 +1,17 @@
 # Project-wide UI Style and Theming
 
+BitwardenImportSettingsDialog composes the existing medium/scrollable ModalShell,
+Select, TextField, Feedback and Button. Its scoped layout uses compact10px/6px
+gaps, semantic secondary/muted text and anywhere wrapping. WebsiteRulesPanel
+and HistoryVersionDialog reuse existing hints for Bitwarden source semantics.
+No font, palette, surface or theme token is added; controls retain shared chrome.
+Chinese light/English dark desktop and320px previews confirm identical Cascadia
+stacks,90px four-row source input, mouse/keyboard selection, invalid feedback,
+multiple-group confirmation and cancellation. The short English Import action
+keeps both footer buttons contained. History retains its source profile and
+shared scrolling; keyboard focus brings Close into view on narrow displays.
+These isolated synthetic previews do not prove native WebView/provider behavior.
+
 WebsiteRulesPanel's v2 Prefix/JavaScript Regex choices reuse shared Select and
 TextField controls. Regex shows an expression placeholder; the existing hint
 explains case-sensitive literal prefixes and case-insensitive JS expressions.

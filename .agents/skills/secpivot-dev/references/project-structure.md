@@ -9,8 +9,21 @@ before mutation and shares a regex matching deadline. helpers.rs omits expressio
 from RPC launch URLs. WebsiteRulesDraft upgrades new pattern edits and retains
 loaded/template v2; WebsiteRulesPanel and HistoryVersionDialog label both modes.
 Production service wire, native Bridge/RPC/KDBX/complete XML and isolated dual-theme
-desktop/320px rendering exercise this unit. Bitwarden import mapping remains
-separate pending work; no vendor patch, new IPC/config or theme token is added.
+desktop/320px rendering exercise this unit. Native Bitwarden mapping is now
+handled by import/bitwarden_uris.rs and vault/bitwarden_uri.rs as described below.
+
+vault/bitwarden_uri.rs owns validated explicit source settings, six-mode matching,
+WHATWG host, punycode decoding and a bounded dedicated domain-parser worker.
+It embeds the unmodified MIT tldts7.4.2 bundle; vendor/TLDTS_PROVENANCE.md and
+scripts/verify-tldts.mjs pin JS/license bytes, including staged-byte checks.
+Native import/bitwarden_uris.rs resolves raw URI rows into protected v2 profiles.
+WebsiteRulesDraft and HistoryRuleView preserve/deep-copy profiles; WebsiteRulesPanel and
+HistoryVersionDialog label their distinct source semantics. The main page owns
+BitwardenImportSettingsDialog promise lifecycle and io/vault services carry
+required validated settings. utils/bitwarden-uri-settings.ts parses/copies manual
+domain groups; no app-config schema/default migration is added. The61-case
+official-source oracle is tests/fixtures/bitwarden-uri-official.json; native and
+actual page/IO/draft tests cover matching, storage and prompt ownership.
 
 commands/import_bitwarden.rs registers import_bitwarden_file and owns bounded
 native path/display-name admission, worker and originating-session completion.
@@ -28,7 +41,7 @@ available. bitwarden_native_tests/import_bitwarden_tests, io-bitwarden and
 vault-session-publication tests exercise synthetic storage, IPC/entry routing,
 masked results, lifetime replacement and pending reload recovery. The strict JSON
 fixture is tests/fixtures/bitwarden-native.json; real client export/picker/provider,
-full URI modes/dynamic linkage and native history/attachment migration remain open.
+dynamic linkage and full source history/attachment migration remain open.
 
 commands/import_xml.rs owns native XML path/display-name admission, bounded
 single-worker preparation and origin-lifetime completion; lib.rs registers

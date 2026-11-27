@@ -2,6 +2,7 @@
 //! the IPC-facing commands as testable methods. Serialized shapes mirror
 //! `src/lib/types/vault.ts`.
 
+mod bitwarden_uri;
 mod breach;
 pub(crate) mod close;
 pub mod dto;
@@ -25,6 +26,7 @@ mod history_selection_tests;
 #[cfg(desktop)]
 mod hosts;
 mod import;
+pub use bitwarden_uri::BitwardenUriSettings;
 mod kdf;
 mod kdf_upgrade;
 pub(crate) mod local_backup;

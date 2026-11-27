@@ -14,6 +14,7 @@ import type {
   KeePassXmlCounts,
   KeePassXmlImportResult,
   BitwardenCounts,
+  BitwardenUriSettings,
   BitwardenImportResult,
   EntryPatch,
   AttachmentInput,
@@ -51,6 +52,7 @@ import type {
   WebsiteRuleSet,
   FileReloadResult,
 } from "$lib/types/vault";
+import { copyBitwardenUriSettings } from "$lib/utils/bitwarden-uri-settings";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
@@ -167,6 +169,7 @@ interface VaultStore {
     path: string,
     fileName: string | null,
     targetGroupUuid: string | null,
+    uriSettings: BitwardenUriSettings,
   ) => Promise<BitwardenCounts>;
   importOnePux: (
     path: string,
@@ -1387,6 +1390,7 @@ export const vault: VaultStore = {
     path: string,
     fileName: string | null,
     targetGroupUuid: string | null,
+    uriSettings: BitwardenUriSettings,
   ): Promise<BitwardenCounts> {
     if (!isTauriRuntime())
       throw new Error(
@@ -1396,7 +1400,7 @@ export const vault: VaultStore = {
     const epoch = captureSessionEpoch(sessionId);
     const result = await invokeSession<BitwardenImportResult>(
       "import_bitwarden_file",
-      { path, fileName, targetGroupUuid },
+      { path, fileName, targetGroupUuid, uriSettings: copyBitwardenUriSettings(uriSettings) },
       sessionId,
     );
     commitSessionStateAtEpoch(sessionId, epoch, result.state);

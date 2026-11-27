@@ -50,7 +50,10 @@ When a TODO cannot be verified in the current environment, leave it unchecked an
 
 `npm run verify` runs format checks, svelte-check, vite build, Node frontend behavior tests (`tests/*.test.mjs`), Rust tests, and clippy. If an environment prevents a required runtime/visual/platform check, report the missing evidence and keep the corresponding TODO unverified.
 
-It also runs the KeePass and QuickXML patch provenance gates: 60/43 package
+It also runs the unchanged tldts7.4.2 JS/MIT-license hash gate
+(`verify:tldts`); `node scripts/verify-tldts.mjs --staged` checks staged vendor
+bytes before committing. Vendor files are exempt from formatting/EOL changes.
+It runs the KeePass and QuickXML patch provenance gates: 60/43 package
 hashes, nine/one explicitly patched Rust files and Cargo wiring. Read
 `src-tauri/vendor/KEEPASS_PATCH.md` and `QUICK_XML_PATCH.md` before patch edits.
 Preserve untouched upstream bytes/licenses and update only reviewed patched

@@ -22,6 +22,11 @@ const native = {
 };
 globalThis.__TAURI_INTERNALS__ = native;
 const { importBitwarden } = await import("../src/lib/services/io.ts");
+const { vault } = await import("../src/lib/services/vault.ts");
+// This IO host models a listed open session; actual service admission/replacement
+// epochs are independently exercised by vault-session-publication.test.mjs.
+const openEpoch = Symbol("synthetic-open-session");
+vault.getSessionEpoch = () => openEpoch;
 const { SessionViewGuard, LatestOperationGuard } =
   await import("../src/lib/utils/session-state.ts");
 
@@ -52,6 +57,7 @@ function fixture(agent = "Android") {
     setBusy: (value) => busy.push(value),
     notify: (message, kind) => notices.push({ message, kind }),
     currentState: () => state,
+    requestBitwardenSettings: async () => ({ defaultMatch: 0, equivalentDomains: [] }),
   };
   return {
     host,
@@ -100,6 +106,7 @@ test("the production page and Android service pass only stable selection identit
     fileName: "Export.JSON",
     targetGroupUuid: "target-group",
     sessionId: "owner",
+    uriSettings: { defaultMatch: 0, equivalentDomains: [] },
   });
   assert.deepEqual(f.busy, [true, false]);
   assert.ok(f.notices[0].message.includes("3"));
@@ -225,4 +232,75 @@ test("current import failures are reported and browser mode never opens a native
   assert.equal(browser.notices[0].kind, "error");
   assert.ok(!browser.notices[0].message.includes("Error:"));
   assert.deepEqual(browser.busy, [true, false]);
+});
+
+test("source choices are required and cancellation or invalid choices cannot send an import", async () => {
+  for (const choice of [null, { defaultMatch: 6, equivalentDomains: [] }]) {
+    const f = fixture();
+    respond = async () => ({ uri: "content://synthetic/current", name: "current.json" });
+    f.host.requestBitwardenSettings = async () => choice;
+    await f.run();
+    assert.equal(calls.length, 1);
+    assert.deepEqual(f.busy, [true, false]);
+    assert.equal(f.notices.length, choice === null ? 0 : 1);
+  }
+  const f = fixture();
+  delete f.host.requestBitwardenSettings;
+  await f.run();
+  assert.equal(calls.length, 1);
+  assert.equal(f.notices[0].kind, "error");
+});
+
+test("switching, supersession or same-session replacement while choosing settings cannot import", async () => {
+  for (const action of ["switch", "supersede", "replace"]) {
+    const f = fixture();
+    let release;
+    let epoch = Symbol();
+    const previous = vault.getSessionEpoch;
+    vault.getSessionEpoch = () => epoch;
+    try {
+      respond = async (command) =>
+        command === "plugin:saf|open_document"
+          ? { uri: "content://synthetic/current", name: "current.json" }
+          : result;
+      f.host.requestBitwardenSettings = () => new Promise((resolve) => (release = resolve));
+      const old = f.run();
+      await new Promise((resolve) => setImmediate(resolve));
+      if (action === "switch") {
+        f.sessionView.activate("other");
+        f.sessionView.activate("owner");
+      }
+      if (action === "supersede") f.host.operations.begin();
+      if (action === "replace") epoch = Symbol();
+      release({ defaultMatch: 0, equivalentDomains: [] });
+      await old;
+      assert.equal(calls.length, 1);
+      assert.equal(f.notices.length, 0);
+    } finally {
+      vault.getSessionEpoch = previous;
+    }
+  }
+});
+
+test("explicit account choices cross IPC detached and never include source rows", async () => {
+  const f = fixture();
+  const choices = { defaultMatch: 5, equivalentDomains: [["example.com", "example.net"]] };
+  f.host.requestBitwardenSettings = async () => choices;
+  respond = async (command) =>
+    command === "plugin:saf|open_document"
+      ? { uri: "content://synthetic/current", name: "current.json" }
+      : result;
+  await f.run();
+  const payload = calls.find((call) => call.command === "import_bitwarden_file").args;
+  assert.deepEqual(payload.uriSettings, choices);
+  choices.equivalentDomains[0][0] = "changed";
+  assert.equal(payload.uriSettings.equivalentDomains[0][0], "example.com");
+  assert.deepEqual(Object.keys(payload).sort(), [
+    "fileName",
+    "path",
+    "sessionId",
+    "targetGroupUuid",
+    "uriSettings",
+  ]);
+  assert.rejects(() => vault.importBitwarden("synthetic.json", null, "root", undefined));
 });

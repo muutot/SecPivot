@@ -78,6 +78,9 @@ pub struct WebsiteRule {
 pub struct WebsiteRuleSet {
     pub version: u8,
     pub rules: Vec<WebsiteRule>,
+    /// A frozen source-account profile, not the standard native Site/Host semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bitwarden: Option<super::BitwardenUriSettings>,
 }
 
 /// Construction validates every rule before any caller can match a request.
@@ -123,6 +126,15 @@ impl ValidatedWebsiteRules {
         if config.rules.len() > MAX_RULES {
             return Err(LIMIT.into());
         }
+        if let Some(profile) = &config.bitwarden {
+            if config.version != 2 {
+                return Err(INVALID.into());
+            }
+            profile.validate()?;
+            if config.rules.iter().any(|r| r.mode == WebsiteMode::Site) {
+                super::bitwarden_uri::prepare_domain_engine()?;
+            }
+        }
         let mut total = 0usize;
         let mut authorities = Vec::with_capacity(config.rules.len());
         for rule in &config.rules {
@@ -137,7 +149,11 @@ impl ValidatedWebsiteRules {
                 .checked_add(rule.url.len())
                 .filter(|bytes| *bytes <= MAX_JSON_BYTES)
                 .ok_or(LIMIT)?;
-            if rule.mode == WebsiteMode::Regex {
+            if config.bitwarden.is_some() {
+                // Source URI text is not necessarily a URL. Bitwarden preserves
+                // empty/malformed destinations and regexes as nonmatching rows.
+                authorities.push(None);
+            } else if rule.mode == WebsiteMode::Regex {
                 if !super::ecma_regex::valid(&rule.url) {
                     return Err(INVALID.into());
                 }
@@ -169,8 +185,11 @@ impl ValidatedWebsiteRules {
         let Some(request) = destination(request_url) else {
             return false;
         };
-        let request_site = super::helpers::registrable_domain(&request.host);
         let deadline = Instant::now() + Duration::from_millis(100);
+        if let Some(profile) = &self.config.bitwarden {
+            return profile.matches(&self.config.rules, request_url, deadline);
+        }
+        let request_site = super::helpers::registrable_domain(&request.host);
         self.config
             .rules
             .iter()

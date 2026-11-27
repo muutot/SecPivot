@@ -66,6 +66,8 @@ regex = "1"
 # lookaround/backreferences. QuickJS-NG polls its interrupt hook during regexp
 # backtracking; the owned wrapper exposes only bounded constructor/test calls.
 rquickjs = { version = "=0.14.0", default-features = false, features = ["std"] }
+# RFC3492 label decoding only; reuse the existing locked URL dependency version.
+idna = "=1.1.0"
 # Static Mozilla PSL, including private tenants, wildcards and exceptions.
 # Pin the snapshot so credential-matching boundaries change only on review.
 psl = "=2.1.249"

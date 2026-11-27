@@ -1,4 +1,10 @@
-import type { WebsiteRule, WebsiteRuleSet, WebsiteRulesChange } from "$lib/types/vault";
+import type {
+  BitwardenUriSettings,
+  WebsiteRule,
+  WebsiteRuleSet,
+  WebsiteRulesChange,
+} from "$lib/types/vault";
+import { copyBitwardenUriSettings } from "$lib/utils/bitwarden-uri-settings";
 
 export interface WebsiteDraftState {
   enabled: boolean;
@@ -7,10 +13,19 @@ export interface WebsiteDraftState {
   loading: boolean;
   error: boolean;
   touched: boolean;
+  bitwarden: BitwardenUriSettings | null;
 }
 
 export function initialWebsiteDraft(enabled: boolean): WebsiteDraftState {
-  return { enabled, rules: [], ready: !enabled, loading: false, error: false, touched: false };
+  return {
+    enabled,
+    rules: [],
+    ready: !enabled,
+    loading: false,
+    error: false,
+    touched: false,
+    bitwarden: null,
+  };
 }
 
 /** Editor-local metadata only. No writes occur until the whole draft saves. */
@@ -36,7 +51,11 @@ export class WebsiteRulesDraft {
 
   private update(patch: Partial<WebsiteDraftState>): void {
     this.state = { ...this.state, ...patch };
-    this.publish({ ...this.state, rules: this.state.rules.map((rule) => ({ ...rule })) });
+    this.publish({
+      ...this.state,
+      rules: this.state.rules.map((rule) => ({ ...rule })),
+      bitwarden: this.state.bitwarden ? copyBitwardenUriSettings(this.state.bitwarden) : null,
+    });
   }
 
   async load(read: () => Promise<WebsiteRuleSet | null>): Promise<void> {
@@ -47,6 +66,8 @@ export class WebsiteRulesDraft {
     try {
       const value = await read();
       if (!owns()) return;
+      const bitwarden = value?.bitwarden ? copyBitwardenUriSettings(value.bitwarden) : null;
+      if (bitwarden && value?.version !== 2) throw new Error("Invalid source profile version");
       this.baselineEnabled = value !== null;
       this.version = value?.version ?? 1;
       this.update({
@@ -56,6 +77,7 @@ export class WebsiteRulesDraft {
         loading: false,
         error: false,
         touched: false,
+        bitwarden,
       });
     } catch {
       if (owns()) this.update({ loading: false, ready: false, error: true });
@@ -64,6 +86,8 @@ export class WebsiteRulesDraft {
 
   replace(value: WebsiteRuleSet | null): void {
     if (!this.alive || !this.current()) return;
+    const bitwarden = value?.bitwarden ? copyBitwardenUriSettings(value.bitwarden) : null;
+    if (bitwarden && value?.version !== 2) throw new Error("Invalid source profile version");
     this.operation++;
     this.version = value?.version ?? 1;
     this.update({
@@ -73,6 +97,7 @@ export class WebsiteRulesDraft {
       loading: false,
       error: false,
       touched: true,
+      bitwarden,
     });
   }
 
@@ -117,7 +142,16 @@ export class WebsiteRulesDraft {
       ? 2
       : this.version;
     return this.state.enabled
-      ? { mode: "set", rules: { version, rules: this.state.rules.map((rule) => ({ ...rule })) } }
+      ? {
+          mode: "set",
+          rules: {
+            version,
+            rules: this.state.rules.map((rule) => ({ ...rule })),
+            ...(this.state.bitwarden
+              ? { bitwarden: copyBitwardenUriSettings(this.state.bitwarden) }
+              : {}),
+          },
+        }
       : { mode: "clear" };
   }
 

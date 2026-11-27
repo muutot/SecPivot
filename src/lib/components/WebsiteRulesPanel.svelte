@@ -39,7 +39,10 @@
   const id = $props.id();
   const options = $derived([
     { value: "host" as WebsiteMode, label: t(lang, "editor.websiteHost") },
-    { value: "site" as WebsiteMode, label: t(lang, "editor.websiteSite") },
+    {
+      value: "site" as WebsiteMode,
+      label: t(lang, draftState.bitwarden ? "io.bitwardenDomain" : "editor.websiteSite"),
+    },
     { value: "exact" as WebsiteMode, label: t(lang, "editor.websiteExact") },
     { value: "prefix" as WebsiteMode, label: t(lang, "editor.websitePrefix") },
     { value: "regex" as WebsiteMode, label: t(lang, "editor.websiteRegex") },
@@ -138,7 +141,9 @@
           >{t(lang, "editor.websiteCount", { count: draftState.rules.length })}</span
         >
       </div>
-      <p class="website-hint">{t(lang, "editor.websiteModesHint")}</p>
+      <p class="website-hint">
+        {t(lang, draftState.bitwarden ? "editor.websiteBitwardenHint" : "editor.websiteModesHint")}
+      </p>
     {/if}
     {#if conflict}<Feedback inline message={t(lang, "editor.websiteOverrideConflict")} />{/if}
   {/if}

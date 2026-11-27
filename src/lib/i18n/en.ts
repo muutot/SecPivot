@@ -1375,6 +1375,23 @@ export const en: Record<I18nKey, string> = {
   "history.websiteRulesPresent": "Stored",
   "history.websiteRulesAbsent": "Not set",
   "editor.websiteEnable": "Use per-website matching rules",
+  "editor.websiteBitwardenHint":
+    "These rules retain Bitwarden matching: Domain uses private suffixes and the equivalent-domain groups supplied at import; Host normalizes default ports. Original URI text is preserved. Prefix is case-sensitive; JavaScript regex ignores case. Empty or invalid URI/regex rows do not match. Ignore skips this row. Existing block lists still apply.",
+  "io.bitwardenSettingsTitle": "Bitwarden website matching",
+  "io.bitwardenSettingsHint":
+    "Bitwarden JSON exports omit your account's default matching strategy and equivalent-domain settings. Confirm the effective settings from your source account.",
+  "io.bitwardenDefaultMatch": "Default for URLs without an explicit rule",
+  "io.bitwardenDomain": "Domain (Bitwarden)",
+  "io.bitwardenExplicitHint":
+    "An explicit rule on a URL takes priority. The chosen default applies only to missing or null rules.",
+  "io.bitwardenEquivalentDomains": "Equivalent-domain groups",
+  "io.bitwardenDomainsHint":
+    "One group per line, separated by commas. Include the enabled built-in and custom groups from your account; domain names are case-sensitive and retained as entered.",
+  "io.bitwardenDomainsMissing":
+    "Leaving this empty imports with no equivalent domains. These choices are stored with the imported rules, not as application preferences.",
+  "io.bitwardenSettingsInvalid":
+    "Invalid matching settings or domain groups. Check the names and size limits.",
+  "io.bitwardenConfirmImport": "Import",
   "editor.websiteHint":
     "Choose a matching scope for each URL. Rules apply when you save the entry.",
   "editor.websiteLegacy": "When disabled, use the entry URL and KeyVault matching settings.",

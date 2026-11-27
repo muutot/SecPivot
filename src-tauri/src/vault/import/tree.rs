@@ -7,6 +7,7 @@ pub(super) struct SourceArchive {
     pub title: &'static str,
     pub key: &'static str,
     pub value: Value<String>,
+    pub companion: Option<(&'static str, Value<String>)>,
     /// External JSON fields are literal data, never internal KeePass references.
     pub literal_fields: bool,
 }
@@ -76,6 +77,9 @@ impl VaultSession {
                 .fields
                 .insert("Title".into(), Value::unprotected(archive.title));
             entry.fields.insert(archive.key.into(), archive.value);
+            if let Some((key, value)) = archive.companion {
+                entry.fields.insert(key.into(), value);
+            }
             entry.quality_check = false;
         }
         let previous = self.db.replace(candidate);

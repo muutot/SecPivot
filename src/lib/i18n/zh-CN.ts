@@ -1309,6 +1309,21 @@ export const zhCN = {
   "history.websiteRulesPresent": "已存储",
   "history.websiteRulesAbsent": "未设置",
   "editor.websiteEnable": "使用逐网址匹配规则",
+  "editor.websiteBitwardenHint":
+    "这些规则保留 Bitwarden 语义：域名匹配采用私有后缀和导入时填写的等价域；主机匹配规范化默认端口。原始网址文字保持不变；文字前缀区分大小写，JavaScript 正则忽略大小写，空或无效的网址/正则行不匹配，忽略仅跳过本行。已有阻止列表仍生效。",
+  "io.bitwardenSettingsTitle": "Bitwarden 网址匹配",
+  "io.bitwardenSettingsHint":
+    "Bitwarden JSON 导出不包含账户的默认匹配策略及等价域设置。请确认来源账户实际生效的设置。",
+  "io.bitwardenDefaultMatch": "未指定规则的网址默认策略",
+  "io.bitwardenDomain": "域名（Bitwarden）",
+  "io.bitwardenExplicitHint": "网址已指定的规则优先；所选默认策略仅用于缺失或为 null 的规则。",
+  "io.bitwardenEquivalentDomains": "等价域分组",
+  "io.bitwardenDomainsHint":
+    "每行一组，域名用逗号分隔。请填写账户已启用的内置及自定义分组；域名区分大小写，按填写内容保留。",
+  "io.bitwardenDomainsMissing":
+    "留空表示不导入等价域。这些选择随导入的规则保存，不修改应用偏好设置。",
+  "io.bitwardenSettingsInvalid": "匹配设置或等价域分组无效，请检查域名及大小限制。",
+  "io.bitwardenConfirmImport": "按此设置导入",
   "editor.websiteHint": "每个网址单独选择匹配范围；保存条目时一并应用。",
   "editor.websiteLegacy": "未启用时，沿用条目网址及 KeyVault 匹配设置。",
   "editor.websiteEmpty": "规则列表为空时，此条目不参与网址自动填充。",

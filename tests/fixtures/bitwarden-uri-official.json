@@ -1,0 +1,939 @@
+{
+  "source": {
+    "repository": "https://github.com/bitwarden/clients",
+    "commit": "4035e2332dab338d9046a1d7319c644b4368682c",
+    "files": {
+      "libs/common/src/platform/misc/utils.ts": "386ecf67788b293e30ac02a7362f4eae4e6360543df18fb36dceacade6d44766",
+      "libs/common/src/vault/models/view/login-uri.view.ts": "00904cfd178823637598b36475ca8504cf79a7886c340370a5b853f2dbe01bc6",
+      "libs/common/src/autofill/utils/punycode.ts": "27ca1c771de24c3c517ab1dd2e4d5e88082e2e03a8e10801bc808372462cd2fa",
+      "libs/common/src/autofill/services/domain-settings.service.ts": "a1c3c1bff324b5e7df7aa69d5e49ead204d95b6f89b68e4a15cb0621a9812b96",
+      "libs/common/src/models/domain/domain-service.ts": "3497c35f855362a40ab5afd2ff7d0ad1b78c480a3d0a8417deae35cb92aba51d"
+    },
+    "tldts": "7.4.2",
+    "tldtsSha256": "fd2168b91e566b90616774678e73e7a91010ce20da3d35817b5ed8a2abc93856",
+    "generator": "Original TS AST methods transpiled unchanged; Node URL, original punycode helper, published tldts; actual getUrlEquivalentDomains with a synchronous observable adapter. No account/policy service or real export."
+  },
+  "cases": [
+    {
+      "name": "explicit-0",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-0",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-0",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "explicit-1",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-1",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 1,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-1",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "explicit-2",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 2,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-2",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 2,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-2",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 2,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "explicit-3",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 3,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-3",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 3,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-3",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 3,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "explicit-4",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-4",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 4,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-4",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "explicit-5",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": 5,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "default-5",
+      "uri": "https://www.example.com/a",
+      "target": "https://www.example.com/a",
+      "match": null,
+      "settings": {
+        "defaultMatch": 5,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "www.example.com",
+      "targetHost": "www.example.com"
+    },
+    {
+      "name": "empty-5",
+      "uri": "",
+      "target": "https://example.com",
+      "match": 5,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "subdomain",
+      "uri": "https://a.example.co.uk",
+      "target": "https://b.example.co.uk",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.co.uk",
+      "targetDomain": "example.co.uk",
+      "savedHost": "a.example.co.uk",
+      "targetHost": "b.example.co.uk"
+    },
+    {
+      "name": "private-tenants",
+      "uri": "https://a.github.io",
+      "target": "https://b.github.io",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "a.github.io",
+      "targetDomain": "b.github.io",
+      "savedHost": "a.github.io",
+      "targetHost": "b.github.io"
+    },
+    {
+      "name": "private-same",
+      "uri": "https://a.github.io",
+      "target": "https://www.a.github.io",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "a.github.io",
+      "targetDomain": "a.github.io",
+      "savedHost": "a.github.io",
+      "targetHost": "www.a.github.io"
+    },
+    {
+      "name": "wildcard",
+      "uri": "https://a.b.ck",
+      "target": "https://c.b.ck",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "a.b.ck",
+      "targetDomain": "c.b.ck",
+      "savedHost": "a.b.ck",
+      "targetHost": "c.b.ck"
+    },
+    {
+      "name": "exception",
+      "uri": "https://a.www.ck",
+      "target": "https://b.www.ck",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "www.ck",
+      "targetDomain": "www.ck",
+      "savedHost": "a.www.ck",
+      "targetHost": "b.www.ck"
+    },
+    {
+      "name": "localhost",
+      "uri": "http://localhost:80/a",
+      "target": "https://localhost:443/b",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "localhost",
+      "targetDomain": "localhost",
+      "savedHost": "localhost",
+      "targetHost": "localhost"
+    },
+    {
+      "name": "intranet",
+      "uri": "https://intranet/a",
+      "target": "https://intranet/b",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": null,
+      "savedHost": "intranet",
+      "targetHost": "intranet"
+    },
+    {
+      "name": "ipv4",
+      "uri": "http://127.0.0.1/a",
+      "target": "https://127.0.0.1/b",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "127.0.0.1",
+      "targetDomain": "127.0.0.1",
+      "savedHost": "127.0.0.1",
+      "targetHost": "127.0.0.1"
+    },
+    {
+      "name": "ipv6",
+      "uri": "http://[::1]:80/a",
+      "target": "https://[::1]/b",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "::1",
+      "targetDomain": "::1",
+      "savedHost": "[::1]",
+      "targetHost": "[::1]"
+    },
+    {
+      "name": "unicode",
+      "uri": "https://www.食狮.com.cn",
+      "target": "https://xn--85x722f.com.cn",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "食狮.com.cn",
+      "targetDomain": "xn--85x722f.com.cn",
+      "savedHost": "www.xn--85x722f.com.cn",
+      "targetHost": "xn--85x722f.com.cn"
+    },
+    {
+      "name": "unicode-upper",
+      "uri": "https://www.食狮.com.cn",
+      "target": "https://XN--85X722F.com.cn",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "食狮.com.cn",
+      "targetDomain": "xn--85x722f.com.cn",
+      "savedHost": "www.xn--85x722f.com.cn",
+      "targetHost": "xn--85x722f.com.cn"
+    },
+    {
+      "name": "unicode-munich",
+      "uri": "https://münchen.de",
+      "target": "https://xn--mnchen-3ya.de/a",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "münchen.de",
+      "targetDomain": "xn--mnchen-3ya.de",
+      "savedHost": "xn--mnchen-3ya.de",
+      "targetHost": "xn--mnchen-3ya.de"
+    },
+    {
+      "name": "blacklist",
+      "uri": "https://google.com",
+      "target": "https://script.google.com/a",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "google.com",
+      "targetDomain": "google.com",
+      "savedHost": "google.com",
+      "targetHost": "script.google.com"
+    },
+    {
+      "name": "blacklist-default-port",
+      "uri": "https://google.com",
+      "target": "https://script.google.com:443/a",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "google.com",
+      "targetDomain": "google.com",
+      "savedHost": "google.com",
+      "targetHost": "script.google.com"
+    },
+    {
+      "name": "blacklist-nondefault-port",
+      "uri": "https://google.com",
+      "target": "https://script.google.com:8443/a",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "google.com",
+      "targetDomain": "google.com",
+      "savedHost": "google.com",
+      "targetHost": "script.google.com:8443"
+    },
+    {
+      "name": "blacklist-exact",
+      "uri": "https://script.google.com/a",
+      "target": "https://script.google.com/a",
+      "match": 3,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "google.com",
+      "targetDomain": "google.com",
+      "savedHost": "script.google.com",
+      "targetHost": "script.google.com"
+    },
+    {
+      "name": "host-default-https",
+      "uri": "https://Example.com:443/a",
+      "target": "https://example.com/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "host-default-http",
+      "uri": "example.com:80/a",
+      "target": "http://example.com/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "host-port-mismatch",
+      "uri": "https://example.com:8443/a",
+      "target": "https://example.com/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com:8443",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "host-scheme",
+      "uri": "http://example.com/a",
+      "target": "https://example.com/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "host-ipv6",
+      "uri": "http://[::1]:8080/a",
+      "target": "https://[::1]:8080/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "::1",
+      "targetDomain": "::1",
+      "savedHost": "[::1]:8080",
+      "targetHost": "[::1]:8080"
+    },
+    {
+      "name": "host-bom",
+      "uri": "﻿https://Example.com:443/a﻿",
+      "target": "https://example.com/b",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "host-localhost-raw",
+      "uri": "localhost",
+      "target": "https://localhost/a",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "localhost",
+      "targetDomain": "localhost",
+      "savedHost": null,
+      "targetHost": "localhost"
+    },
+    {
+      "name": "exact-case",
+      "uri": "https://Example.com/A",
+      "target": "https://example.com/A",
+      "match": 3,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "exact-fragment",
+      "uri": "https://example.com/A?x=%2f#b",
+      "target": "https://example.com/A?x=%2F#b",
+      "match": 3,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "prefix-suffix",
+      "uri": "https://example.com",
+      "target": "https://example.com.attacker.test/a",
+      "match": 2,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": "example.com",
+      "targetDomain": "attacker.test",
+      "savedHost": "example.com",
+      "targetHost": "example.com.attacker.test"
+    },
+    {
+      "name": "prefix-case",
+      "uri": "https://example.com/A",
+      "target": "https://example.com/a",
+      "match": 2,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "regex-case",
+      "uri": "^HTTPS://example\\.com/A$",
+      "target": "https://example.com/a",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "regex-invalid",
+      "uri": "[",
+      "target": "https://example.com/a",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "regex-lookbehind",
+      "uri": "(?<=example\\.com/)login",
+      "target": "https://example.com/login",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": "(",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "regex-utf16",
+      "uri": "^https://example\\.com/..$",
+      "target": "https://example.com/😀",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "regex-surrogate",
+      "uri": "\\uD83D\\uDE00",
+      "target": "https://example.com/😀",
+      "match": 4,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": true,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "malformed-domain",
+      "uri": "not a uri",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "malformed-host",
+      "uri": "http://[oops",
+      "target": "https://example.com",
+      "match": 1,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "data-domain",
+      "uri": "data:text/plain,example.com",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": null,
+      "targetDomain": "example.com",
+      "savedHost": null,
+      "targetHost": "example.com"
+    },
+    {
+      "name": "never",
+      "uri": "https://example.com",
+      "target": "https://example.com",
+      "match": 5,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.com",
+      "targetDomain": "example.com",
+      "savedHost": "example.com",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "equivalents",
+      "uri": "https://example.net",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [["example.com", "example.net"]]
+      },
+      "expected": true,
+      "savedDomain": "example.net",
+      "targetDomain": "example.com",
+      "savedHost": "example.net",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "no-equivalents",
+      "uri": "https://example.net",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": []
+      },
+      "expected": false,
+      "savedDomain": "example.net",
+      "targetDomain": "example.com",
+      "savedHost": "example.net",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "equivalents-unicode",
+      "uri": "https://münchen.de",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [["example.com", "xn--mnchen-3ya.de"]]
+      },
+      "expected": true,
+      "savedDomain": "münchen.de",
+      "targetDomain": "example.com",
+      "savedHost": "xn--mnchen-3ya.de",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "groups-raw-membership",
+      "uri": "https://example.net",
+      "target": "https://xn--mnchen-3ya.de",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [["münchen.de", "example.net"]]
+      },
+      "expected": false,
+      "savedDomain": "example.net",
+      "targetDomain": "xn--mnchen-3ya.de",
+      "savedHost": "example.net",
+      "targetHost": "xn--mnchen-3ya.de"
+    },
+    {
+      "name": "groups-no-transitive",
+      "uri": "https://example.org",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [
+          ["example.com", "example.net"],
+          ["example.net", "example.org"]
+        ]
+      },
+      "expected": false,
+      "savedDomain": "example.org",
+      "targetDomain": "example.com",
+      "savedHost": "example.org",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "groups-union",
+      "uri": "https://example.org",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [
+          ["example.com", "example.net"],
+          ["example.com", "example.org"]
+        ]
+      },
+      "expected": true,
+      "savedDomain": "example.org",
+      "targetDomain": "example.com",
+      "savedHost": "example.org",
+      "targetHost": "example.com"
+    },
+    {
+      "name": "groups-case-sensitive",
+      "uri": "https://example.net",
+      "target": "https://example.com",
+      "match": 0,
+      "settings": {
+        "defaultMatch": 0,
+        "equivalentDomains": [["EXAMPLE.com", "example.net"]]
+      },
+      "expected": false,
+      "savedDomain": "example.net",
+      "targetDomain": "example.com",
+      "savedHost": "example.net",
+      "targetHost": "example.com"
+    }
+  ]
+}

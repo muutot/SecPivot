@@ -5,6 +5,12 @@ export interface BitwardenCounts {
   unresolvedMemberships: number;
 }
 
+export type BitwardenUriMatch = 0 | 1 | 2 | 3 | 4 | 5;
+export interface BitwardenUriSettings {
+  defaultMatch: BitwardenUriMatch;
+  equivalentDomains: string[][];
+}
+
 export interface BitwardenImportResult {
   state: VaultState;
   counts: BitwardenCounts;
@@ -52,6 +58,7 @@ export interface WebsiteRule {
 export interface WebsiteRuleSet {
   version: 1 | 2;
   rules: WebsiteRule[];
+  bitwarden?: BitwardenUriSettings;
 }
 
 export interface VaultEntry {

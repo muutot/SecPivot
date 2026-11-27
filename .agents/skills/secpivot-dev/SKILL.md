@@ -71,6 +71,7 @@ Also read `docs/PITFALLS.md` when relevant.
 npm run check
 npm run build
 npm run test:frontend
+npm run verify:tldts
 npm run test:keepass-patch
 npm run test:quickxml-patch
 npm run test:rust

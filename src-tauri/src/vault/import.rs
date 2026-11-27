@@ -8,6 +8,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 mod bitwarden_links;
 mod bitwarden_native;
+mod bitwarden_uris;
 mod fields;
 mod keepass_xml;
 mod onepassword;
@@ -82,6 +83,13 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
 }
 
 fn parse_bitwarden_rows(root: &serde_json::Value) -> Result<Vec<ImportRow>, String> {
+    parse_bitwarden_rows_with_uris(root, default_login_uri)
+}
+
+fn parse_bitwarden_rows_with_uris(
+    root: &serde_json::Value,
+    uri: impl Fn(&serde_json::Value, usize) -> Result<String, String>,
+) -> Result<Vec<ImportRow>, String> {
     for name in ["encrypted", "passwordProtected"] {
         match root.get(name) {
             Some(serde_json::Value::Bool(true)) => {
@@ -148,7 +156,7 @@ fn parse_bitwarden_rows(root: &serde_json::Value) -> Result<Vec<ImportRow>, Stri
             if !login.is_object() {
                 return Err(invalid());
             }
-            *url = default_login_uri(login, index)?;
+            *url = uri(login, index)?;
             *username = optional_string(login.get("username"))
                 .map_err(|()| invalid())?
                 .to_owned();

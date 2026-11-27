@@ -5,6 +5,7 @@ use serde_json::json;
 
 fn policy(rules: &[(&str, WebsiteMode)]) -> ValidatedWebsiteRules {
     ValidatedWebsiteRules::new(WebsiteRuleSet {
+        bitwarden: None,
         version: 1,
         rules: rules
             .iter()
@@ -203,6 +204,7 @@ fn empty_all_never_and_bounded_policies_have_explicit_results() {
     );
     let near_cap_url = format!("https://safe.example/{}", "a".repeat(3819));
     let near_cap = WebsiteRuleSet {
+        bitwarden: None,
         version: 1,
         rules: vec![
             WebsiteRule {

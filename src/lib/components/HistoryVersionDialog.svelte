@@ -83,7 +83,8 @@
 
   function ruleModeLabel(mode: WebsiteMode): string {
     if (mode === "host") return t(lang, "editor.websiteHost");
-    if (mode === "site") return t(lang, "editor.websiteSite");
+    if (mode === "site")
+      return t(lang, ruleView.value?.bitwarden ? "io.bitwardenDomain" : "editor.websiteSite");
     if (mode === "exact") return t(lang, "editor.websiteExact");
     if (mode === "prefix") return t(lang, "editor.websitePrefix");
     if (mode === "regex") return t(lang, "editor.websiteRegex");
@@ -527,6 +528,9 @@
                     >{t(lang, "editor.websiteRetry")}</Button
                   >
                 {:else if ruleView.ready}
+                  {#if ruleView.value?.bitwarden}
+                    <p class="website-source">{t(lang, "editor.websiteBitwardenHint")}</p>
+                  {/if}
                   {#if ruleView.value === null}
                     <p class="website-source">{t(lang, "history.websiteUnset")}</p>
                   {:else if ruleView.value.rules.length === 0}

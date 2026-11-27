@@ -7,8 +7,13 @@ blocking worker. Source JSON uses the shared duplicate-rejecting SecretJson guar
 owned row/local/custom strings are zeroized on drop/error, and passwords/OTP,
 hidden/typed values and complete source archives become protected KeePass Values.
 No plaintext import payload, automatic save, log, or source-key adoption is added.
-Linked fields remain protected snapshots; unsupported multiple/explicit-match
-URIs reject the document. Missing folders, duplicate identities, malformed metadata,
+Linked fields remain protected snapshots. Native URI plans preserve raw rows
+and explicit account settings as protected v2 source profiles; only a canonical
+credential-free HTTP(S) URL is used for the entry's launch projection. Renderer
+import IPC sends nonsecret settings plus selection/session/target identity, no
+source rows. Source-setting prompts release their pending promises on origin
+change/disposal and obsolete callbacks cannot settle newer prompts.
+Missing folders, duplicate identities, malformed metadata,
 known cross-organization memberships and illegal unprotected XML text fail before
 publication. Managed out-of-scope memberships remain protected and are reported.
 
@@ -18,7 +23,24 @@ XML retains its genuine internal-reference remapping. Exact rollback includes
 the pending external-reload offer/token and cached snapshot. Synthetic command,
 native KDBX and actual frontend service tests establish these ownership/publication
 controls, not third-party parser scratch, JavaScript/framework heap erasure,
-real Bitwarden export/native picker/provider behavior or full history/URI fidelity.
+real Bitwarden export/native picker/provider behavior or full source history/attachments.
+
+Bitwarden Domain runs the unchanged MIT tldts7.4.2 bundle in one dedicated
+bounded worker, initialized once without URI inputs. Module evaluation has a
+2s deadline, runtime32MiB/stack256KiB; an eight-slot request queue bounds pending
+work. Each request has at most129 strings of4096 UTF-8 bytes and shares the100ms
+policy deadline; busy/error/timeout never authorizes a match. Only fixed code
+runs, with arguments rather than user evaluation, host callbacks/loaders/network
+or filesystem. The bundle's parse allocates a fresh result and retains static
+tables/regexes plus boolean/numeric cursors, not URI strings. Pending exceptions
+are cleared and unreachable query values collected before the next request;
+owned native input strings/encoded output are Zeroizing. JS/allocator-wide
+erasure remains outside this evidence. Source regexes still use fresh bounded
+contexts and fail closed, including malformed/empty expressions. Existing
+HTTP(S)/no-userinfo request gates and block lists stay authoritative. Settings
+validation bounds groups/members128 each, names1024 bytes and32KiB total names.
+Official-source Node vectors, native KDBX/history/XML/Bridge/RPC and actual
+frontend lifecycle tests cover synthetic cases, not real clients/WebView/provider.
 
 Complete native XML import reads selected files into Zeroizing buffers and keeps
 prepared fields/binaries/source XML native-only. Literal protected strings and

@@ -24,7 +24,14 @@ import {
   type SessionViewToken,
 } from "$lib/utils/session-state";
 import { buildGroupPathIndex, findGroupIn } from "$lib/utils/tree";
-import type { CustomField, ImportEntryInput, ImportRow, VaultState } from "$lib/types/vault";
+import type {
+  BitwardenUriSettings,
+  CustomField,
+  ImportEntryInput,
+  ImportRow,
+  VaultState,
+} from "$lib/types/vault";
+import { copyBitwardenUriSettings } from "$lib/utils/bitwarden-uri-settings";
 import type { Language } from "$lib/types/settings";
 import { get } from "svelte/store";
 import { isAndroid, isTauriRuntime, appSettings } from "$lib/services/settings";
@@ -51,6 +58,7 @@ export type IoHost = {
   notify: (message: string, kind?: TipKind) => void;
   /** Current vault snapshot (or `null` when closed). */
   currentState: () => VaultState | null;
+  requestBitwardenSettings?: (view: SessionViewToken) => Promise<BitwardenUriSettings | null>;
 };
 
 /** Normalized import row shared by the CSV, KeePass-XML, Bitwarden and
@@ -279,6 +287,7 @@ export async function importBitwarden(
   baseGroupUuid: string | null,
 ): Promise<void> {
   if (!host.sessionView.isCurrent(view)) return;
+  const epoch = vault.getSessionEpoch(view.sessionId);
   const operation = host.operations.begin();
   host.setBusy(true);
   try {
@@ -301,10 +310,26 @@ export async function importBitwarden(
           ? null
           : picked;
     if (!selection?.uri) return;
+    if (vault.getSessionEpoch(view.sessionId) !== epoch) return;
+    if (!host.requestBitwardenSettings) throw new Error(t(lang(), "io.bitwardenSettingsInvalid"));
+    const chosen = await host.requestBitwardenSettings(view);
+    if (
+      !chosen ||
+      !host.sessionView.isCurrent(view) ||
+      !host.operations.isCurrent(operation) ||
+      vault.getSessionEpoch(view.sessionId) !== epoch
+    )
+      return;
+    const uriSettings = copyBitwardenUriSettings(chosen);
     const counts = await vault.callInSession(view.sessionId, () =>
-      vault.importBitwarden(selection.uri, selection.name ?? null, baseGroupUuid),
+      vault.importBitwarden(selection.uri, selection.name ?? null, baseGroupUuid, uriSettings),
     );
-    if (!host.sessionView.isCurrent(view) || !host.operations.isCurrent(operation)) return;
+    if (
+      !host.sessionView.isCurrent(view) ||
+      !host.operations.isCurrent(operation) ||
+      vault.getSessionEpoch(view.sessionId) !== epoch
+    )
+      return;
     host.notify(
       counts.unresolvedMemberships
         ? t(lang(), "io.bitwardenImported", {
@@ -314,7 +339,11 @@ export async function importBitwarden(
         : t(lang(), "io.imported", { n: counts.items }),
     );
   } catch (e) {
-    if (host.sessionView.isCurrent(view) && host.operations.isCurrent(operation))
+    if (
+      host.sessionView.isCurrent(view) &&
+      host.operations.isCurrent(operation) &&
+      vault.getSessionEpoch(view.sessionId) === epoch
+    )
       host.notify(
         t(lang(), "io.importFailed", { e: e instanceof Error ? e.message : String(e) }),
         "error",

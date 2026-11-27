@@ -1,5 +1,12 @@
 # Settings Shell and Panel Patterns
 
+BitwardenImportSettingsDialog collects source-account URI choices per import,
+not app preferences. It uses a medium scrollable ModalShell with shared Select
+for all six defaults, four-row TextField for comma-separated domain groups and
+inline Feedback on invalid input. It explicitly explains export omissions,
+per-row precedence and blank-equivalent behavior. Cancel/confirm settle the
+origin-bound page promise; supersession/tab/epoch/unmount also cancel it.
+
 AppearanceSettingsPanel's display section adds quickFindExcludeExpired after
 focusSearchOnType. It reuses search-icon SettingToggleCard and updateGeneral,
 default off. Its text distinguishes toolbar quick search from ordinary browsing

@@ -5,6 +5,7 @@ use tempfile::TempDir;
 
 fn policy(url: &str) -> WebsiteRuleSet {
     WebsiteRuleSet {
+        bitwarden: None,
         version: 1,
         rules: vec![WebsiteRule {
             url: url.into(),
@@ -104,6 +105,7 @@ fn historical_rule_read_returns_selected_content_and_both_sides_survive_reopen()
 fn historical_rule_absence_empty_and_malformed_are_distinct() {
     let (_dir, mut session, uuid) = fixture();
     let empty = WebsiteRuleSet {
+        bitwarden: None,
         version: 1,
         rules: vec![],
     };

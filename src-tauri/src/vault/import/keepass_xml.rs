@@ -718,6 +718,7 @@ impl VaultSession {
         self.import_prepared_tree(
             plan.database,
             SourceArchive {
+                companion: None,
                 title: "KeePass XML 导入来源",
                 key: "KeePass Source XML",
                 value: plan.archive,
