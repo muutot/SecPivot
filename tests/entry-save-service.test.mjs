@@ -106,6 +106,48 @@ test("native transaction refusal leaves the published state unchanged", async ()
   await assert.rejects(result, /Synthetic refusal/);
   assert.equal(vault.get(), before);
 });
+test("linked profiles are cloned before IPC and invalid graphs never reach native writes", async () => {
+  const id = await fixture();
+  const fields = {
+    version: 1,
+    links: [{ name: "alias", target: { kind: "field", name: "Password" } }],
+  };
+  const result = vault.saveEntry({ ...request, linkedFields: { mode: "set", fields } });
+  fields.links[0].target.name = "UserName";
+  assert.equal(pending[0].args.request.linkedFields.fields.links[0].target.name, "Password");
+  pending[0].resolve({ uuid: "synthetic-linked", state: snapshot(id, 2) });
+  await result;
+  fields.links[0].target.name = "alias";
+  await assert.rejects(
+    vault.saveEntry({ ...request, linkedFields: { mode: "set", fields } }),
+    /Invalid linked fields/,
+  );
+  assert.equal(calls.filter((c) => c.command === "save_entry").length, 1);
+});
+test("browser linked-profile operations refuse before publishing a partial editor draft", async () => {
+  await fixture();
+  await vault.closeAll();
+  delete globalThis.__TAURI_INTERNALS__;
+  try {
+    await vault.saveEntry(request);
+    const before = structuredClone(vault.get());
+    for (const payload of [
+      { ...request, linkedFields: { mode: "clear" } },
+      {
+        ...request,
+        input: {
+          ...input,
+          customFields: [{ name: "SecPivot.LinkedFields", value: "{}", protected: true }],
+        },
+      },
+    ]) {
+      await assert.rejects(vault.saveEntry(payload), /浏览器预览/);
+      assert.deepEqual(vault.get(), before);
+    }
+  } finally {
+    globalThis.__TAURI_INTERNALS__ = backend;
+  }
+});
 test("website draft changes cross IPC in the one editor save envelope", async () => {
   const id = await fixture();
   for (const websiteRules of [

@@ -11,6 +11,7 @@
     AttachmentInput,
     EntryAutoTypeConfig,
     WebsiteRulesChange,
+    LinkedFieldsChange,
   } from "$lib/types/vault";
   import { appSettings } from "$lib/services/settings";
   import { t } from "$lib/i18n";
@@ -31,6 +32,11 @@
   import TextField from "$lib/components/templates/form/TextField.svelte";
   import WebsiteRulesPanel from "$lib/components/WebsiteRulesPanel.svelte";
   import { initialWebsiteDraft, WebsiteRulesDraft } from "$lib/utils/website-rule-draft";
+  import {
+    LinkedFieldsDraft,
+    linkedFieldValue,
+    copyLinkedFields,
+  } from "$lib/utils/linked-field-draft";
 
   import Button from "$lib/components/templates/action/Button.svelte";
   import Feedback from "$lib/components/templates/form/Feedback.svelte";
@@ -51,6 +57,7 @@
       autotype: EntryAutoTypeConfig | null,
       flags?: EntryFlags | null,
       websiteRules?: WebsiteRulesChange | null,
+      linkedFields?: LinkedFieldsChange | null,
     ) => Promise<void> | void;
   }
 
@@ -176,6 +183,57 @@
   let customFields = $state<CustomField[]>(
     initialEntry?.customFields?.map((f) => ({ ...f })) ?? [],
   );
+  const linksDraft = new LinkedFieldsDraft(initialEntry?.linkedFields);
+  let linkedFields = $state(linksDraft.value);
+  function linkedTarget(name: string) {
+    return linkedFields?.links.find((link) => link.name === name.trim())?.target;
+  }
+  const linkedFieldsValid = $derived.by(() => {
+    try {
+      if (linkedFields) {
+        copyLinkedFields(linkedFields);
+        for (const link of linkedFields.links) {
+          const aliases = customFields.filter((f) => f.name.trim() === link.name);
+          if (aliases.length !== 1 || !aliases[0].protected) return false;
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  function currentFieldValue(field: CustomField): string {
+    const target = linkedTarget(field.name);
+    return target
+      ? linkedFieldValue(target, (name) =>
+          name === "UserName"
+            ? username.trim()
+            : name === "Password"
+              ? password
+              : (customFields.find((f) => f.name.trim() === name)?.value ?? ""),
+        )
+      : field.value;
+  }
+  function linkedTargetLabel(name: string): string {
+    const target = linkedTarget(name);
+    if (!target) return "";
+    return target.kind === "bitwardenFullName"
+      ? t(lang, "editor.linkedFullName")
+      : target.name === "UserName"
+        ? t(lang, "columns.username")
+        : target.name === "Password"
+          ? t(lang, "columns.password")
+          : target.name;
+  }
+  function unlinkCustomField(index: number): void {
+    if (!protectedFieldsReady || !passwordReady || templateLoading) return;
+    const field = customFields[index];
+    if (!field) return;
+    const value = currentFieldValue(field);
+    linksDraft.unlink(field.name);
+    linkedFields = linksDraft.value;
+    customFields = customFields.map((f, i) => (i === index ? { ...f, value } : f));
+  }
   /** Protected custom-field values are absent from `VaultEntry` snapshots, so
    * editing an existing entry must fetch them on demand. Saving before they
    * settle would overwrite protected values with empty strings (data-loss);
@@ -371,16 +429,21 @@
   }
 
   function updateCustomField(index: number, patch: Partial<CustomField>): void {
-    customFields = customFields.map((f, i) => (i === index ? { ...f, ...patch } : f));
+    if (!protectedFieldsReady || !passwordReady || templateLoading) return;
+    const field = customFields[index];
+    if (!field) return;
+    const value = currentFieldValue(field);
+    linksDraft.edit(field, patch);
+    linkedFields = linksDraft.value;
+    // Detaching preserves the current resolved value, including after target edits.
+    customFields = customFields.map((f, i) => (i === index ? { ...f, value, ...patch } : f));
   }
 
   function toggleCustomFieldProtected(index: number): void {
     const field = customFields[index];
     if (!field) return;
     const nowProtected = !field.protected;
-    customFields = customFields.map((f, i) =>
-      i === index ? { ...f, protected: nowProtected } : f,
-    );
+    updateCustomField(index, { protected: nowProtected });
     if (!nowProtected) {
       const next = new Set(revealedCustomFields);
       next.delete(index);
@@ -396,6 +459,8 @@
   }
 
   function removeCustomField(index: number): void {
+    linksDraft.unlink(customFields[index].name);
+    linkedFields = linksDraft.value;
     customFields = customFields.filter((_, i) => i !== index);
     const next = new Set<number>();
     for (const i of revealedCustomFields) {
@@ -698,7 +763,13 @@
               websiteRules: () =>
                 vault.callInSession(sessionId, () => vault.getEntryWebsiteRules(uuid)),
             })
-          : { password: "", totp: "", customFields: [], websiteRules: null };
+          : {
+              password: "",
+              totp: "",
+              customFields: [],
+              websiteRules: null,
+              linkedFields: undefined,
+            };
       if (!current()) return;
       title = template.title;
       username = template.username;
@@ -716,6 +787,8 @@
       customIconSelected = false;
       totp = resolved.totp;
       customFields = resolved.customFields;
+      linksDraft.replace(resolved.linkedFields);
+      linkedFields = linksDraft.value;
       websiteDraft.replace(resolved.websiteRules);
       revealedCustomFields = new Set();
       autoTypeEnabled = template.autoType?.enabled ?? true;
@@ -734,6 +807,7 @@
   function submit(): void {
     if (
       !editorCurrent ||
+      !linkedFieldsValid ||
       websiteConflict ||
       (!multi &&
         (!passwordReady ||
@@ -814,7 +888,7 @@
           customFields: customFields
             .map((f) => ({
               name: f.name.trim(),
-              value: f.value,
+              value: currentFieldValue(f),
               protected: f.protected ?? false,
             }))
             .filter((f) => f.name !== ""),
@@ -826,6 +900,7 @@
         autotype,
         { overrideUrl: overrideUrl.trim(), qualityCheck, foregroundColor: foregroundHex },
         websiteDraft.change(),
+        linksDraft.change(),
       ),
     );
   }
@@ -863,6 +938,7 @@
       aria-label={t(lang, "common.save")}
       title={t(lang, "common.save")}
       disabled={!editorCurrent ||
+        !linkedFieldsValid ||
         websiteConflict ||
         websiteUnavailable ||
         saving ||
@@ -991,6 +1067,7 @@
         >
       </div>
     {/if}
+    {#if !linkedFieldsValid}<Feedback inline message={t(lang, "editor.linkedInvalid")} />{/if}
 
     {#if !multi && activeTab === "websites"}
       <div role="tabpanel">
@@ -1533,6 +1610,7 @@
                   <TextField
                     placeholder={t(lang, "editor.fieldName")}
                     value={field.name}
+                    disabled={!protectedFieldsReady || !passwordReady || templateLoading}
                     oninput={(e) => updateCustomField(i, { name: e.currentTarget.value })}
                   />
                 </div>
@@ -1541,8 +1619,11 @@
                     mono
                     type={field.protected && !revealedCustomFields.has(i) ? "password" : "text"}
                     placeholder={t(lang, "editor.fieldValue")}
-                    value={field.value}
-                    disabled={field.protected && protectedFieldsLoading}
+                    value={currentFieldValue(field)}
+                    disabled={!!linkedTarget(field.name) ||
+                      !protectedFieldsReady ||
+                      !passwordReady ||
+                      templateLoading}
                     oninput={(e) => updateCustomField(i, { value: e.currentTarget.value })}
                   />
                 </div>
@@ -1563,6 +1644,7 @@
                 <button
                   class="icon-btn"
                   class:active={field.protected}
+                  disabled={!protectedFieldsReady || !passwordReady || templateLoading}
                   onclick={() => toggleCustomFieldProtected(i)}
                   aria-label={field.protected
                     ? t(lang, "editor.unprotectField")
@@ -1582,6 +1664,19 @@
                   <AppIcon name="x" size={13} />
                 </button>
               </div>
+              {#if linkedTarget(field.name)}
+                <div class="linked-field-hint">
+                  <span class="field-hint"
+                    ><AppIcon name="link" size={12} />
+                    {t(lang, "editor.linkedHint", { target: linkedTargetLabel(field.name) })}</span
+                  >
+                  <Button
+                    variant="field"
+                    disabled={!protectedFieldsReady || !passwordReady || templateLoading}
+                    onclick={() => unlinkCustomField(i)}>{t(lang, "editor.unlinkField")}</Button
+                  >
+                </div>
+              {/if}
             {/if}
           {/each}
           <button class="add-row-btn" onclick={addCustomField}>
@@ -1631,6 +1726,14 @@
 </ModalShell>
 
 <style>
+  .linked-field-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+  }
   .modal-icon-img {
     width: 16px;
     height: 16px;

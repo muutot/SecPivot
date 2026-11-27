@@ -1,5 +1,25 @@
 # Security Model
 
+Native Bitwarden bindings are protected reserved `SecPivot.LinkedFields` metadata
+with bounded names-only local targets. No source string is a macro, executable
+expression or cross-entry reference. Current target reads use Zeroizing owned
+temporary strings; protected alias refresh occurs only inside existing mutations,
+never during snapshot serialization. Literal alias replacement/unprotection/deletion
+detaches, while original protected source JSON/history remain unchanged. Current
+and historical snapshots mask aliases even if a foreign client unprotects them;
+malformed metadata masks all custom fields and explicit custom reads fail closed.
+Automatic refresh skips malformed foreign metadata without rewriting it. Imported
+XML/exchange validate bindings and protect aliases before publication. Entry editor
+set patches validate protected alias input before candidate mutation; RPC rejects
+managed metadata writes and validates existing bindings before tracked updates.
+Editor custom-field rename/value/protection and unlink actions wait for all hidden
+values and template resolution, preventing unresolved blanks from becoming literals.
+Other clients store snapshots but do not implement these dynamic semantics.
+EntryDetail separately invalidates secrets on same-entry snapshot replacement and
+rejects old asynchronous reads, preserving independent notes/inline drafts.
+No new logging, clipboard, provider, credential-config or key adoption path exists;
+synthetic checks are not real client/WebView/Android or whole-heap erasure evidence.
+
 The Bitwarden menu now sends only native selection identity/target/session and
 receives masked state/counts. commands/import_bitwarden.rs performs bounded
 Zeroizing reads and lifetime/writable-target checks before and after one owned
@@ -7,7 +27,7 @@ blocking worker. Source JSON uses the shared duplicate-rejecting SecretJson guar
 owned row/local/custom strings are zeroized on drop/error, and passwords/OTP,
 hidden/typed values and complete source archives become protected KeePass Values.
 No plaintext import payload, automatic save, log, or source-key adoption is added.
-Linked fields remain protected snapshots. Native URI plans preserve raw rows
+Native linked fields retain protected dynamic bindings above. Native URI plans preserve raw rows
 and explicit account settings as protected v2 source profiles; only a canonical
 credential-free HTTP(S) URL is used for the entry's launch projection. Renderer
 import IPC sends nonsecret settings plus selection/session/target identity, no
@@ -999,15 +1019,15 @@ unique custom fields, masked in ordinary snapshots and preserved in KDBX.
 Unknown nested extension values retain protected JSON. Types 2–8 disable native
 password-quality checks in the same validated batch insertion; login/default
 quality behavior remains enabled. Import-only metadata never changes ordinary
-full-field edit semantics. Schema tests use synthetic values; real exports,
-dynamic linked-field behavior, collections/history/attachments remain pending.
+full-field edit semantics. Schema tests use synthetic values; real exports/full
+source history/attachments remain pending; native links and collections are above.
 
-Bitwarden type-3 custom fields resolve official login/card/identity targets into
+Legacy Bitwarden type-3 custom fields resolve official login/card/identity targets into
 protected import-time copies, including username aliases. Their raw field.value
 is not authoritative. Invalid/cross-type IDs and non-string target contents reject
 before any rows are published; errors disclose record numbers only. The snapshots
 remain masked in VaultState and survive KDBX save/reopen. This protects migrated
-values, without promising dynamic synchronization when an original field changes.
+values; the native menu now additionally retains the dynamic bindings above.
 
 Opt-in registrable-domain browser matching must respect both public registration
 and private hosting tenant boundaries. The complete pinned static Mozilla PSL
@@ -1018,13 +1038,13 @@ subdomains and PSL exceptions still match. The default switch remains off;
 list updates require dependency review. Native extension/runtime URL authority
 and all remaining autofill authorization checks are separate evidence gaps.
 
-Bitwarden URI import must never silently weaken source match modes or discard
-destinations. Until native per-URI policies are implemented, explicit modes 0–5
-and multiple nonempty URIs fail the entire parse before any bulk import. Invalid
+The legacy Bitwarden row parser must never silently weaken source match modes
+or discard destinations. Explicit modes 0–5 and multiple nonempty URIs fail the
+entire legacy parse before bulk import; the native menu uses the profiles above. Invalid
 URI/mode shapes and embedded whitespace fail with content-free record numbers.
 Absent/null default mode with one URI and no-URI items remain supported; native
-matching itself is unchanged. This closes an unsafe migration path, not full
-Bitwarden URI compatibility or the broader autofill authorization audit.
+legacy matching itself is unchanged. This bounds the legacy migration path;
+the broader autofill authorization audit remains open.
 
 Shared `util::url_host` parses destination authority with the existing URL
 crate, excluding userinfo and canonicalizing IDNA/IP identities. Bare hosts,

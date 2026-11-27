@@ -652,7 +652,7 @@ impl VaultSession {
             return Ok(None);
         }
         let entry = db.entry(id).ok_or_else(|| "条目不存在".to_owned())?;
-        Ok(entry.get(trimmed).map(str::to_owned))
+        super::linked_fields::value(&entry, trimmed)
     }
 
     /// Analyze all entries server-side; no passwords leave the session.

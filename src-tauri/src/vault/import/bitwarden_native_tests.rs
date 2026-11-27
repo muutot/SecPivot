@@ -6,6 +6,140 @@ fn uri_settings() -> crate::vault::BitwardenUriSettings {
     }
 }
 
+#[test]
+fn native_linked_fields_cover_all_official_ids_missing_targets_and_allocated_name_collisions() {
+    use crate::vault::{LinkedFieldTarget, FIELD_LINKED_FIELDS};
+    let items = [(1, vec![100,101]), (3,(300..=305).collect()), (4,(400..=418).collect())].into_iter().map(|(kind, ids)| {
+        let fields = ids.into_iter().map(|id| serde_json::json!({"name":format!("alias-{id}"),"type":3,"linkedId":id,"value":"ignored-source-value"})).chain([
+          serde_json::json!({"name":"Card Number","type":0,"value":"synthetic-collision"}),
+          serde_json::json!({"name":"Identity First Name","type":1,"value":"synthetic-collision"})
+        ]).collect::<Vec<_>>();
+        serde_json::json!({"type":kind,"name":format!("Synthetic kind-{kind}"),"fields":fields,
+          "login":{"username":"synthetic-user","password":"synthetic-password","uris":[]},
+          "card":{"number":"synthetic-number"}, "identity":{"title":"  Dr ","firstName":"  Synthetic  ","lastName":"Person "}})
+    }).collect::<Vec<_>>();
+    let source = serde_json::json!({"items":items}).to_string();
+    let plan = prepare_bitwarden_import(source.as_bytes(), &uri_settings()).unwrap();
+    for entry in plan.database.iter_all_entries() {
+        let kind = if entry.get_title() == Some("Synthetic kind-1") {
+            1
+        } else if entry.get_title() == Some("Synthetic kind-3") {
+            3
+        } else {
+            4
+        };
+        let links = crate::vault::linked_fields::read(&entry).unwrap().unwrap();
+        assert_eq!(
+            links.links.len(),
+            match kind {
+                1 => 2,
+                3 => 6,
+                _ => 19,
+            }
+        );
+        for link in &links.links {
+            let id: i64 = link
+                .name
+                .strip_prefix("Bitwarden alias-")
+                .unwrap()
+                .parse()
+                .unwrap();
+            let expected = match id {
+                100 => "synthetic-user",
+                101 => "synthetic-password",
+                305 => "synthetic-number",
+                400 => "  Dr ",
+                416 => "  Synthetic  ",
+                417 => "Person ",
+                418 => "Dr    Synthetic   Person",
+                _ => "",
+            };
+            assert_eq!(
+                crate::vault::linked_fields::value(&entry, &link.name)
+                    .unwrap()
+                    .as_deref(),
+                Some(expected)
+            );
+            assert!(entry.fields[&link.name].is_protected());
+            if let LinkedFieldTarget::Field { name } = &link.target {
+                assert!(entry.fields.contains_key(name));
+                if id == 305 {
+                    assert_eq!(name, "Bitwarden Card Number (2)");
+                }
+            }
+        }
+        assert!(entry.fields[FIELD_LINKED_FIELDS].is_protected());
+    }
+    let (_dir, mut session, path) = session();
+    let lifetime = session.native_import_lifetime("root").unwrap();
+    session.import_bitwarden(plan, "root", lifetime).unwrap();
+    let identity = session
+        .require_db()
+        .unwrap()
+        .iter_all_entries()
+        .find(|e| e.get_title() == Some("Synthetic kind-4"))
+        .unwrap()
+        .id();
+    let target = match crate::vault::linked_fields::read(
+        &session.require_db().unwrap().entry(identity).unwrap(),
+    )
+    .unwrap()
+    .unwrap()
+    .links
+    .iter()
+    .find(|l| l.name == "Bitwarden alias-416")
+    .unwrap()
+    .target
+    .clone()
+    {
+        LinkedFieldTarget::Field { name } => name,
+        _ => panic!("expected direct target"),
+    };
+    session
+        .update_custom_field(&identity.to_string(), &target, "Edited synthetic", true)
+        .unwrap();
+    assert_eq!(
+        session
+            .get_custom_field_value(&identity.to_string(), "Bitwarden alias-416")
+            .unwrap()
+            .as_deref(),
+        Some("Edited synthetic")
+    );
+    assert_eq!(
+        session
+            .get_custom_field_value(&identity.to_string(), "Bitwarden alias-418")
+            .unwrap()
+            .as_deref(),
+        Some("Dr  Edited synthetic Person")
+    );
+    let source_archive = session
+        .require_db()
+        .unwrap()
+        .entry(identity)
+        .unwrap()
+        .get(SOURCE_ITEM)
+        .unwrap()
+        .to_owned();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&source_archive).unwrap()["identity"]
+            ["firstName"],
+        "  Synthetic  "
+    );
+    session.save().unwrap();
+    session.close();
+    session.open(&path, "synthetic-master", None).unwrap();
+    assert_eq!(
+        session
+            .get_custom_field_value(&identity.to_string(), "Bitwarden alias-416")
+            .unwrap()
+            .as_deref(),
+        Some("Edited synthetic")
+    );
+    let mut invalid = serde_json::from_str::<serde_json::Value>(&source).unwrap();
+    invalid["items"][2]["fields"][0]["linkedId"] = serde_json::json!(100);
+    assert!(prepare_bitwarden_import(invalid.to_string().as_bytes(), &uri_settings()).is_err());
+}
+
 fn fixture() -> Vec<u8> {
     include_bytes!("../../../../tests/fixtures/bitwarden-native.json").to_vec()
 }

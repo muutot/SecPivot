@@ -487,6 +487,7 @@ impl Preparation {
             return Err(LIMIT.into());
         }
         let mut names = HashSet::new();
+        let mut bindings = None;
         let mut files = HashSet::new();
         let override_url = node
             .one("OverrideURL")
@@ -525,7 +526,16 @@ impl Preparation {
                             return Err(INVALID.into());
                         }
                     }
-                    let protect = protected || literal || name == "SecPivot.WebsiteRules";
+                    if name == crate::vault::FIELD_LINKED_FIELDS {
+                        bindings = Some(
+                            crate::vault::LinkedFieldSet::from_json(&value.text)
+                                .map_err(|_| INVALID)?,
+                        );
+                    }
+                    let protect = protected
+                        || literal
+                        || name == "SecPivot.WebsiteRules"
+                        || name == crate::vault::FIELD_LINKED_FIELDS;
                     value.attrs.remove("ProtectInMemory");
                     value.attrs.remove("Protected");
                     if protect {
@@ -572,6 +582,31 @@ impl Preparation {
                 }
                 "Entry" | "Group" => return Err(INVALID.into()),
                 _ => {}
+            }
+        }
+        if let Some(bindings) = bindings {
+            for link in bindings.links {
+                if !names.contains(&link.name) {
+                    return Err(INVALID.into());
+                }
+                // Protect stored aliases even when an external client changed the flag.
+                let value = node
+                    .children
+                    .iter_mut()
+                    .find(|n| {
+                        n.name == "String"
+                            && n.one("Key").is_some_and(|k| k.text.as_str() == link.name)
+                    })
+                    .and_then(|n| n.one_mut("Value"))
+                    .ok_or(INVALID)?;
+                if !flag(value.attrs.get("Protected"))? {
+                    let encoded = STANDARD.encode(value.text.as_bytes());
+                    value.text.zeroize();
+                    *value.text = encoded;
+                    value
+                        .attrs
+                        .insert("Protected".into(), Zeroizing::new("True".into()));
+                }
             }
         }
         Ok(())

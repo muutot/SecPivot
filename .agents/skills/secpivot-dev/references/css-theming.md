@@ -1,5 +1,16 @@
 # Project-wide UI Style and Theming
 
+EntryEditorDialog linked fields reuse the existing custom row, field-hint,
+link icon and shared field Button. A scoped flex/wrap hint row owns only6px
+gaps/8px bottom spacing/anywhere wrapping below the field controls. No new
+font, palette, metric token, surface or inline icon crowding is introduced.
+EntryDetail reuses protected-badge chrome; history reuses the wrapped Metadata
+policy summary, change badge and value-swap button. Chinese light/English dark
+desktop/320px isolated browser checks retain identical Cascadia stacks, neutral
+white-gray glass, contained hints and working mouse/Enter unlink operations.
+History exposes same-value unlink counts and current/history switching. These
+synthetic previews do not prove desktop WebView/provider behavior.
+
 BitwardenImportSettingsDialog composes the existing medium/scrollable ModalShell,
 Select, TextField, Feedback and Button. Its scoped layout uses compact10px/6px
 gaps, semantic secondary/muted text and anywhere wrapping. WebsiteRulesPanel

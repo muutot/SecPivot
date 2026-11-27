@@ -98,6 +98,19 @@ test("single edit and creation forward website rules in the same transaction", a
     assert.deepEqual(f.calls, ["save", "selection"]);
   }
 });
+test("linked-field changes travel with both creation and editing through one save", async () => {
+  const links = {
+    mode: "set",
+    fields: { version: 1, links: [{ name: "alias", target: { kind: "field", name: "Password" } }] },
+  };
+  for (const create of [false, true]) {
+    const f = fixture(null);
+    if (create) f.editor.openCreate();
+    await f.editor.handleSave(input, null, autoType, {}, null, links);
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0].linkedFields, links);
+  }
+});
 
 test("failed editor save leaves the whole draft uncommitted", async () => {
   const f = fixture();

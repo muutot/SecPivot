@@ -2307,7 +2307,16 @@
       autotype: EntryAutoTypeConfig | null | undefined,
       flags: EntryFlags | null | undefined,
       websiteRules?: import("$lib/types/vault").WebsiteRulesChange | null,
-    ) => editor.handleSave(input, patch, autotype ?? null, flags ?? null, websiteRules ?? null)}
+      linkedFields?: import("$lib/types/vault").LinkedFieldsChange | null,
+    ) =>
+      editor.handleSave(
+        input,
+        patch,
+        autotype ?? null,
+        flags ?? null,
+        websiteRules ?? null,
+        linkedFields ?? null,
+      )}
   />
 {/if}
 

@@ -1,4 +1,5 @@
 import type { CustomField, VaultEntry, VaultGroup, WebsiteRuleSet } from "$lib/types/vault";
+import { copyLinkedFields } from "$lib/utils/linked-field-draft";
 
 /** Resolve every hidden value before a template can replace the editor draft.
  * A missing protected field/OTP is a failed read, never an empty default. */
@@ -15,6 +16,7 @@ export async function resolveTemplateSecrets(
   totp: string;
   customFields: CustomField[];
   websiteRules: WebsiteRuleSet | null;
+  linkedFields?: VaultEntry["linkedFields"];
 }> {
   const [password, totp, customFields, websiteRules] = await Promise.all([
     readers.password(),
@@ -41,7 +43,13 @@ export async function resolveTemplateSecrets(
         })
       : Promise.resolve(null),
   ]);
-  return { password, totp, customFields, websiteRules };
+  return {
+    password,
+    totp,
+    customFields,
+    websiteRules,
+    ...(entry.linkedFields ? { linkedFields: copyLinkedFields(entry.linkedFields) } : {}),
+  };
 }
 
 /**

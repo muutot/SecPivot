@@ -53,6 +53,7 @@ import type {
   FileReloadResult,
 } from "$lib/types/vault";
 import { copyBitwardenUriSettings } from "$lib/utils/bitwarden-uri-settings";
+import { copyLinkedFields } from "$lib/utils/linked-field-draft";
 import { ROOT_GROUP_NAME } from "$lib/types/vault";
 import { buildDemoVaultState } from "$lib/data/demo-vault";
 import { computeTotp } from "$lib/utils/totp";
@@ -1279,6 +1280,12 @@ export const vault: VaultStore = {
   },
 
   async saveEntry(request: EntrySaveRequest): Promise<EntrySaveResult> {
+    if (request.linkedFields?.mode === "set") {
+      request = {
+        ...request,
+        linkedFields: { mode: "set", fields: copyLinkedFields(request.linkedFields.fields) },
+      };
+    }
     if (isTauriRuntime()) {
       const sessionId = captureSessionId();
       const epoch = captureSessionEpoch(sessionId);
@@ -1294,6 +1301,11 @@ export const vault: VaultStore = {
     }
     const { target, input, autoType, flags } = request;
     if (request.websiteRules) throw browserUnsupported("browser.featWebsiteRules");
+    if (
+      request.linkedFields ||
+      input.customFields?.some((field) => field.name.trim() === "SecPivot.LinkedFields")
+    )
+      throw browserUnsupported("browser.featLinkedFields");
     if (target.mode !== "create" && target.mode !== "edit")
       throw new Error("invalid editor target");
     if (input.customFields?.some((field) => field.name.trim() === "SecPivot.WebsiteRules")) {

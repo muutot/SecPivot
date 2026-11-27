@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { register } from "node:module";
+register("./helpers/lib-alias-loader.mjs", import.meta.url);
 
 // Entry templates come from the direct children of the database's configured
 // entry-templates group (KeePass convention). Nested groups are not expanded,
@@ -26,6 +28,25 @@ it("resolves all template secrets atomically without modifying its snapshot", as
   assert.equal(result.totp, "synthetic otp");
   assert.equal(result.customFields[1].value, "synthetic field");
   assert.equal(template.customFields[1].value, "");
+});
+
+it("copies linked template targets independently alongside resolved alias values", async () => {
+  const template = {
+    ...entry("t"),
+    customFields: [{ name: "alias", protected: true, value: "" }],
+    linkedFields: {
+      version: 1,
+      links: [{ name: "alias", target: { kind: "field", name: "Password" } }],
+    },
+  };
+  const resolved = await resolveTemplateSecrets(template, {
+    password: async () => "synthetic",
+    totp: async () => null,
+    field: async () => "synthetic",
+  });
+  assert.equal(resolved.customFields[0].value, "synthetic");
+  resolved.linkedFields.links[0].target.name = "UserName";
+  assert.equal(template.linkedFields.links[0].target.name, "Password");
 });
 
 it("rejects partial template reads, including absent protected values", async () => {

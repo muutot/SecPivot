@@ -110,6 +110,8 @@ export interface VaultEntry {
    * sorted by key. Read-only — SecPivot never writes these. */
   customData?: CustomDataEntry[];
   customFields?: CustomField[];
+  /** Names/relations only; linked values stay protected and are read on demand. */
+  linkedFields?: LinkedFieldSet;
   attachments?: AttachmentInfo[];
   /** Number of historical snapshots (KeePass `HistoryCount` column). */
   historyCount?: number;
@@ -139,6 +141,19 @@ export interface CustomField {
    * the browser demo fallback keeps it inline. */
   protected?: boolean;
 }
+
+export type LinkedFieldTarget =
+  | { kind: "field"; name: string }
+  | { kind: "bitwardenFullName"; fields: [string, string, string, string] };
+export interface LinkedField {
+  name: string;
+  target: LinkedFieldTarget;
+}
+export interface LinkedFieldSet {
+  version: 1;
+  links: LinkedField[];
+}
+export type LinkedFieldsChange = { mode: "clear" } | { mode: "set"; fields: LinkedFieldSet };
 
 export interface AttachmentInfo {
   name: string;
@@ -509,6 +524,7 @@ export interface EntrySaveRequest {
   autoType?: EntryAutoTypeConfig | null;
   flags?: EntryFlags | null;
   websiteRules?: WebsiteRulesChange | null;
+  linkedFields?: LinkedFieldsChange | null;
 }
 
 /** Omitted/null keeps policy; an explicit clear restores legacy matching. */
@@ -588,6 +604,7 @@ export interface HistoryDiff {
   customFields: HistoryItemChange[];
   /** Native rule presence/content/protection changed; no rule values here. */
   websiteRules: boolean;
+  linkedFields: boolean;
   customData: HistoryItemChange[];
   attachments: HistoryItemChange[];
 }
@@ -601,6 +618,7 @@ export interface HistorySelection {
 export type HistoryRuleSource = "version" | "current";
 
 export interface HistoryVersion extends HistorySelection {
+  linkedFields?: LinkedFieldSet;
   modified: string | null;
   title: string;
   username: string;

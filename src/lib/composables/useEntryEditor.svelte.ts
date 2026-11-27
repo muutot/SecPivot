@@ -14,6 +14,7 @@ import type {
   EntryInput,
   EntryPatch,
   WebsiteRulesChange,
+  LinkedFieldsChange,
   VaultEntry,
   VaultState,
 } from "$lib/types/vault";
@@ -63,6 +64,7 @@ export type EntryEditor = {
     autotype: EntryAutoTypeConfig | null,
     flags?: EntryFlags | null,
     websiteRules?: WebsiteRulesChange | null,
+    linkedFields?: LinkedFieldsChange | null,
   ): Promise<void>;
 };
 
@@ -122,6 +124,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
     autotype: EntryAutoTypeConfig | null,
     flags?: EntryFlags | null,
     websiteRules?: WebsiteRulesChange | null,
+    linkedFields?: LinkedFieldsChange | null,
   ): Promise<void> {
     const view = options.sessionView.capture();
     if (!view) return;
@@ -138,6 +141,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
             autoType: autotype,
             flags,
             websiteRules,
+            linkedFields,
           }),
         );
         if (!options.sessionView.isCurrent(view)) return;
@@ -166,6 +170,7 @@ export function useEntryEditor(options: EntryEditorOptions): EntryEditor {
             autoType: autotype,
             flags,
             websiteRules,
+            linkedFields,
           }),
         );
         if (!options.sessionView.isCurrent(view)) return;

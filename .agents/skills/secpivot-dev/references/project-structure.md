@@ -1,5 +1,19 @@
 # Project Structure and Runtime Surfaces
 
+vault/linked_fields.rs owns bounded literal same-entry bindings, current-value
+resolution, protected alias refresh and detach/retention. import.rs allocates
+native Bitwarden targets using import/bitwarden_links.rs's official ID table;
+the legacy row route remains snapshots. entry_save.rs carries the explicit
+set/clear patch alongside fields/policy/attachments in one candidate publication.
+entries/serialize/hosts integrate refresh within their existing history mutations.
+import/keepass_xml.rs and exchange.rs validate and preserve managed metadata.
+dto/types add names-only current/history bindings and a link-change diff flag.
+utils/linked-field-draft.ts owns template copying/rename/unlink transitions;
+EntryEditorDialog renders compact hints and shared Unlink Buttons. EntryDetail
+invalidates secret caches on snapshot replacement, independently of draft identity.
+HistoryVersionDialog/ChangeTimelineDialog render link-only changes. Synthetic
+linked_fields_tests/native import/draft/service/cache tests cover these boundaries.
+
 vault/ecma_regex.rs owns bounded, fresh QuickJS-NG constructor/test calls for
 version2 Regex website policies; Prefix stays in website_rules.rs. ecma_regex_tests.rs consumes the
 independent32-case Node corpus in tests/fixtures/ecma-uri-regex.json. The pinned
@@ -41,7 +55,7 @@ available. bitwarden_native_tests/import_bitwarden_tests, io-bitwarden and
 vault-session-publication tests exercise synthetic storage, IPC/entry routing,
 masked results, lifetime replacement and pending reload recovery. The strict JSON
 fixture is tests/fixtures/bitwarden-native.json; real client export/picker/provider,
-dynamic linkage and full source history/attachment migration remain open.
+full source history/attachment migration remain open; native dynamic linkage is above.
 
 commands/import_xml.rs owns native XML path/display-name admission, bounded
 single-worker preparation and origin-lifetime completion; lib.rs registers
@@ -1096,8 +1110,8 @@ platform invokes. This is not Android provider/runtime verification.
 
 Bitwarden JSON import rejects true or invalid encryption markers before item
 mapping; account-encrypted files share the plaintext envelope and require this
-gate. Its command zeroizes incoming text. Dynamic linked-field fidelity and actual
-client exports remain pending; native multi-URI profiles are described above.
+gate. Its command zeroizes incoming text. Actual client exports remain pending;
+native dynamic links and multi-URI profiles are described above.
 The same parser's optional_string/optional_array helpers reject malformed common
 values instead of dropping them. Login/folder/field members and numeric 0–3
 custom types are validated before rows return; missing legacy type stays Text.
@@ -1121,7 +1135,7 @@ failed-batch tests verify KDBX reopen/default behavior without real user data.
 into protected snapshots for the existing custom-field allocator. It derives
 Identity FullName from source name parts and rejects unknown/malformed targets.
 `bitwarden_tests.rs` checks all target IDs, optional empty values, stale literals,
-invalid mixed documents and KDBX protection; dynamic linkage is not implemented.
+invalid mixed documents and KDBX protection; native dynamic linkage is above.
 
 `vault/helpers.rs::registrable_domain` uses the pinned `psl`/`psl-types` static
 Mozilla list, including private suffixes, wildcards and exceptions, for opt-in

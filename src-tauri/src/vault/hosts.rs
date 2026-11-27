@@ -146,6 +146,7 @@ impl BridgeHost for VaultSession {
                 let mut entry = tracked.as_mut();
                 entry.set(FIELD_USERNAME, Value::unprotected(login.to_owned()));
                 entry.set(FIELD_PASSWORD, Value::protected(password.to_owned()));
+                super::linked_fields::refresh(&mut entry);
             });
             // Browser-extension writes append history via `edit_tracking`;
             // apply the same retention caps as the app's own entry paths so
@@ -362,12 +363,14 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
     let login = match operation {
         RpcWriteOperation::Add { login, .. } | RpcWriteOperation::Update { login, .. } => login,
     };
-    if write_custom_fields(login)
-        .iter()
-        .any(|(name, _)| name.trim() == FIELD_WEBSITE_RULES)
-    {
+    if write_custom_fields(login).iter().any(|(name, _)| {
+        matches!(
+            name.trim(),
+            FIELD_WEBSITE_RULES | super::FIELD_LINKED_FIELDS
+        )
+    }) {
         return Err(RpcError::InvalidMessage(
-            "逐网址规则不能通过浏览器修改；原规则已保留".into(),
+            "受管理的条目规则不能通过浏览器修改；原规则已保留".into(),
         ));
     }
     match operation {
@@ -391,7 +394,7 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
             let mut entry = parent_group
                 .add_entry_with_id(*entry_id)
                 .map_err(|_| RpcError::InvalidMessage("新建条目 UUID 已存在，请重试".to_owned()))?;
-            apply_login_write(&mut entry, login, &login.urls.join(" "));
+            apply_login_write(&mut entry, login, &login.urls.join(" "), None);
             entry.set_icon_none();
             Ok(entry_id.uuid().to_string())
         }
@@ -409,6 +412,7 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
             };
             let merged_urls = merge_urls(&current, &login.urls, *url_merge_mode);
             let existing = db.entry(id).ok_or(RpcError::EntryNotFound)?;
+            let links = super::linked_fields::read(&existing).map_err(RpcError::InvalidMessage)?;
             let managed = existing.fields.contains_key(FIELD_WEBSITE_RULES);
             if managed && merged_urls != current {
                 return Err(RpcError::InvalidMessage(
@@ -427,7 +431,7 @@ fn apply_rpc_write(db: &mut Database, operation: &RpcWriteOperation) -> Result<S
             let mut entry = db.entry_mut(id).ok_or(RpcError::EntryNotFound)?;
             entry.edit_tracking(|tracked| {
                 let mut this = tracked.as_mut();
-                apply_login_write(&mut this, login, &stored_urls);
+                apply_login_write(&mut this, login, &stored_urls, links);
             });
             // Same retention caps as `set_login`: keep the RPC write path's
             // history bounded.
@@ -684,13 +688,25 @@ fn find_rpc_entry_urls(
 /// (space-joined so the read path sees every URL), first password field →
 /// Password, all username fields → UserName (last wins), remaining fields →
 /// custom strings named `displayName` (fallback `name`).
-fn apply_login_write(entry: &mut EntryMut<'_>, login: &RpcLoginWrite, urls: &str) {
+fn apply_login_write(
+    entry: &mut EntryMut<'_>,
+    login: &RpcLoginWrite,
+    urls: &str,
+    mut links: Option<super::LinkedFieldSet>,
+) {
     entry.set(FIELD_TITLE, Value::unprotected(login.title.clone()));
     entry.set(FIELD_URL, Value::unprotected(urls.to_owned()));
     entry.set(FIELD_USERNAME, Value::unprotected(write_username(login)));
     entry.set(FIELD_PASSWORD, Value::protected(write_password(login)));
     for (name, value) in write_custom_fields(login) {
+        // Browser custom-field writes are explicit literal replacements.
+        if let Some(links) = &mut links {
+            links.links.retain(|link| link.name != name);
+        }
         entry.set(name, Value::unprotected(value));
+    }
+    if let Some(links) = &links {
+        super::linked_fields::set(entry, Some(links));
     }
 }
 

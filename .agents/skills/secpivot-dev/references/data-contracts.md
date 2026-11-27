@@ -1,5 +1,38 @@
 # Data Contracts
 
+`SecPivot.LinkedFields` is protected, reserved same-entry metadata owned by
+vault/linked_fields.rs. Version1 contains `{version:1,links:[{name,target}]}`;
+targets are `{kind:"field",name}` or `{kind:"bitwardenFullName",fields:[four names]}`.
+It bounds4096 links,1024 UTF-8 bytes/name and64KiB encoded metadata; names are
+unique, trimmed/legal XML, and no alias can be a target (no chains/cycles).
+Only UserName/Password may be reserved targets. Missing targets resolve empty.
+Native Bitwarden import binds all official100/101,300–305,400–418 IDs to actual
+allocated names, creating protected empty editable targets when source values
+are absent. The legacy row parser retains import-time snapshots. Generated
+linked metadata shares a32MiB aggregate ceiling and the final produced-field budget.
+
+VaultEntry/HistoryVersion expose optional names-only `linkedFields`; HistoryDiff
+adds boolean `linkedFields`, so same-value unlinking appears in the timeline.
+`save_entry.request.linkedFields` missing/null preserves ordinary retention;
+`{mode:"set",fields}` or `{mode:"clear"}` is an explicit atomic editor patch.
+Set requires exactly one protected custom alias per binding. Generic literal
+alias edits, unprotection and deletion detach; target edits synchronize protected
+stored aliases inside the caller's existing history transaction. Original source
+JSON stays untouched. Explicit custom-value reads resolve the current local target
+literally. Native XML/current/history and entry exchange preserve/validate metadata
+and protect aliases. Other KeePass clients retain stored alias values but do not
+interpret SecPivot's dynamic bindings. No new command or application setting exists.
+
+LinkedFieldsDraft deep-copies templates, follows source/alias renames and freezes
+the current derived value on explicit unlink. Invalid transitional names keep
+the draft editable but gate saving. The editor saves current derived values and
+the binding patch together.
+Custom-field rename/value/protection changes and unlink wait for protected fields,
+the password and template resolution; pending or refused reads cannot freeze blanks.
+EntryDetail snapshot replacement invalidates secret caches without resetting
+notes/inline drafts; snapshot identity rejects obsolete
+pending field/password reads. Browser preview refuses managed binding operations.
+
 `import_bitwarden_file({sessionId,path,fileName?,targetGroupUuid?,uriSettings})` returns
 `{state:VaultState,counts:{folders,collections,items,unresolvedMemberships}}`.
 The menu routes to native selection/reading/preparation; plaintext rows never
@@ -23,7 +56,7 @@ source JSON and their count is explicitly reported, without duplicating entries.
 Creation/revision RFC3339 dates become UTC native dates at second precision;
 their original subsecond/offset text remains archived. Types1–8/quality/favorites,
 OTP and existing protected custom/typed values share the strict mapping parser.
-Linked fields are still snapshots. Native login URI rows now retain all six modes
+Native linked fields retain the dynamic metadata above. Native login URI rows retain all six modes
 and raw text in v2 policies with a frozen Bitwarden source profile. Required
 uriSettings is `{defaultMatch:0..5,equivalentDomains:string[][]}`; missing/null
 per-row match inherits this explicit default. The import dialog explains that
@@ -40,8 +73,8 @@ The page cancels source-setting prompts on supersession, tab/epoch changes and
 unmount; IO/service epochs reject stale selection/settings/publication. Draft
 edits/templates deep-copy profiles; editor/history label source semantics.
 Password-only history and attachment metadata are protected archives, never
-fabricated full native versions or attachment bytes. Dynamic-link and
-real client/WebView/Android provider compatibility remain pending.
+fabricated full native versions or attachment bytes. Real client/WebView/Android
+provider compatibility remains pending.
 
 URI preparation retains serialized policies only, dropping each transient source
 settings tree before the next row; source archive plus retained policies charge
@@ -1739,7 +1772,7 @@ validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent
 preserve legacy plaintext compatibility. Account-encrypted exports have the
 same items envelope and must never be treated as decrypted credentials. Native
-client exports and dynamic linked fields still need separate verification;
+client exports still need separate verification; legacy linked fields are snapshots,
 native multi-URI profiles are described above. This boundary does not implement
 decryption. Bitwarden custom
 labels use a source prefix and unique suffixes through `import/fields.rs` so

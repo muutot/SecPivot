@@ -259,6 +259,8 @@ pub(crate) fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) ->
         quality_check: historical.quality_check != current.quality_check,
         website_rules: historical.fields.get(FIELD_WEBSITE_RULES)
             != current.fields.get(FIELD_WEBSITE_RULES),
+        linked_fields: historical.fields.get(FIELD_LINKED_FIELDS)
+            != current.fields.get(FIELD_LINKED_FIELDS),
         custom_fields: diff_custom_fields(&historical_fields, &current_fields),
         custom_data: diff_custom_data(
             &custom_data_entries(&historical.custom_data),
@@ -290,6 +292,7 @@ pub(crate) fn history_diff(historical: &EntryRef<'_>, current: &EntryRef<'_>) ->
 impl VaultSession {
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<VaultState, String> {
         let rules = super::website_rules::input_rules(&input.custom_fields)?;
+        let links = super::linked_fields::input(&input.custom_fields)?;
         // Decode all attachment payloads before touching the database so a
         // bad payload aborts the whole mutation (no half-applied entry).
         let payloads = decode_attachments(&input.attachments)?;
@@ -305,6 +308,9 @@ impl VaultSession {
             let mut entry = group.add_entry();
             write_fields(&mut entry, input);
             sync_custom_fields(&mut entry, &input.custom_fields);
+            if let Some(links) = &links {
+                super::linked_fields::set(&mut entry, Some(links));
+            }
             if let Some(rules) = &rules {
                 entry.set(
                     FIELD_WEBSITE_RULES,
@@ -350,6 +356,10 @@ impl VaultSession {
             .iter()
             .map(|(input, _, _)| decode_attachments(&input.attachments))
             .collect::<Result<_, _>>()?;
+        let links: Vec<_> = inputs
+            .iter()
+            .map(|(input, _, _)| super::linked_fields::input(&input.custom_fields))
+            .collect::<Result<_, _>>()?;
         // Validate every target group up-front so a bad group aborts the
         // whole batch before any entry is inserted (no partial import).
         {
@@ -364,8 +374,8 @@ impl VaultSession {
         }
         {
             let db = self.require_db_mut()?;
-            for (((input, quality_check, favorite), payload), rules) in
-                inputs.iter().zip(&payloads).zip(&rules)
+            for ((((input, quality_check, favorite), payload), rules), links) in
+                inputs.iter().zip(&payloads).zip(&rules).zip(&links)
             {
                 let mut group = if input.group_uuid == ROOT_GROUP_UUID {
                     db.root_mut()
@@ -380,6 +390,9 @@ impl VaultSession {
                 }
                 write_fields(&mut entry, input);
                 sync_custom_fields(&mut entry, &input.custom_fields);
+                if let Some(links) = links {
+                    super::linked_fields::set(&mut entry, Some(links));
+                }
                 if let Some(rules) = rules {
                     entry.set(
                         FIELD_WEBSITE_RULES,
@@ -569,8 +582,10 @@ impl VaultSession {
         {
             let db = self.require_db_mut()?;
             let mut entry = db.entry_mut(id).ok_or_else(|| "条目不存在".to_owned())?;
+            super::linked_fields::read(&entry.as_ref())?;
             {
                 let mut tracked = entry.track_changes();
+                super::linked_fields::detach(&mut tracked.as_mut(), &field_name)?;
                 tracked.set(
                     field_name.clone(),
                     if protected {
@@ -579,6 +594,7 @@ impl VaultSession {
                         Value::unprotected(value.to_owned())
                     },
                 );
+                super::linked_fields::refresh(&mut tracked.as_mut());
                 tracked.times.last_modification = Some(Times::now());
             }
             // Trim after the tracking scope drops: `EntryTrack::drop` appends
@@ -742,6 +758,7 @@ impl VaultSession {
                 },
                 has_totp: entry_has_otp(&historical),
                 has_website_rules: historical.fields.contains_key(FIELD_WEBSITE_RULES),
+                linked_fields: super::linked_fields::read(&historical).ok().flatten(),
                 icon: match historical.icon() {
                     Some(Icon::BuiltIn(id)) => Some(*id as u32),
                     _ => None,
@@ -763,6 +780,7 @@ impl VaultSession {
                 quality_check: historical.quality_check,
                 custom_data: custom_data_entries(&historical.custom_data),
                 custom_fields: {
+                    let links = super::linked_fields::read(&historical);
                     let mut fields: Vec<CustomField> = historical
                         .fields
                         .iter()
@@ -770,7 +788,13 @@ impl VaultSession {
                             !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str())
                         })
                         .map(|(name, value)| {
-                            let protected = value.is_protected();
+                            let protected = value.is_protected()
+                                || links.is_err()
+                                || links
+                                    .as_ref()
+                                    .ok()
+                                    .and_then(|s| s.as_ref())
+                                    .is_some_and(|s| s.links.iter().any(|l| l.name == *name));
                             CustomField {
                                 name: name.clone(),
                                 // Protected values never leave the session —

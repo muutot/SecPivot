@@ -187,7 +187,17 @@ fn last_password_mod_time(entry: &EntryRef<'_>) -> Option<chrono::NaiveDateTime>
 }
 
 pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry {
+    let invalid_links = super::linked_fields::read(entry).is_err();
+    let linked_fields = super::linked_fields::read(entry)
+        .ok()
+        .flatten()
+        .map(|mut set| {
+            set.links
+                .retain(|link| entry.fields.contains_key(&link.name));
+            set
+        });
     VaultEntry {
+        linked_fields: linked_fields.clone(),
         uuid: entry.id().uuid().to_string(),
         group_uuid: group_uuid.to_owned(),
         title: entry.get_title().unwrap_or_default().to_owned(),
@@ -235,7 +245,11 @@ pub(crate) fn build_entry(entry: &EntryRef<'_>, group_uuid: &str) -> VaultEntry 
                 .iter()
                 .filter(|(name, _)| !name.is_empty() && !RESERVED_FIELDS.contains(&name.as_str()))
                 .map(|(name, value)| {
-                    let protected = value.is_protected();
+                    let protected = value.is_protected()
+                        || invalid_links
+                        || linked_fields
+                            .as_ref()
+                            .is_some_and(|set| set.links.iter().any(|link| link.name == *name));
                     CustomField {
                         name: name.clone(),
                         // Protected values never leave the session in the
@@ -659,6 +673,7 @@ pub(crate) fn apply_patch_fields(entry: &mut EntryMut<'_>, patch: &EntryPatch) {
     if let Some(tags) = &patch.tags {
         entry.tags = parse_tags(tags);
     }
+    super::linked_fields::refresh(entry);
 }
 
 /// Parse a comma-separated tag string into trimmed, non-empty tags.
@@ -695,6 +710,7 @@ pub(crate) fn parse_expiry(value: Option<&str>) -> Option<NaiveDateTime> {
 /// Replace the entry's custom fields with the given list, keeping standard
 /// columns (Title, UserName, …) untouched and dropping empty or reserved names.
 pub(crate) fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField]) {
+    let bindings = super::linked_fields::retain_for_fields(&entry.as_ref(), fields);
     let mut desired = HashMap::new();
     for field in fields {
         let name = field.name.trim().to_owned();
@@ -718,6 +734,9 @@ pub(crate) fn sync_custom_fields(entry: &mut EntryMut<'_>, fields: &[CustomField
                 Value::unprotected(value)
             },
         );
+    }
+    if let Some(bindings) = bindings {
+        super::linked_fields::set(entry, Some(&bindings));
     }
 }
 

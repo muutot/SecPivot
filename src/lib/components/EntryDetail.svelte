@@ -195,6 +195,22 @@
     });
   });
 
+  // Snapshot replacement invalidates secret reads independently of draft identity.
+  // An inline/notes draft must survive saves, while cached target values must not.
+  $effect(() => {
+    void entry;
+    untrack(() => {
+      revealPassword = false;
+      passwordLoaded = false;
+      passwordLoading = false;
+      fetchedPassword = "";
+      customFieldValues = {};
+      customFieldLoaded = {};
+      customFieldLoading = {};
+      customFieldRevealed = {};
+    });
+  });
+
   onDestroy(() => {
     // A draft typed less than 800ms before this component dies (tab switch,
     // idle lock, vault close) would otherwise be dropped: the debounce timer
@@ -297,17 +313,18 @@
     if (passwordLoaded) return fetchedPassword;
     if (passwordLoading) return null;
     const uuid = entry.uuid;
+    const snapshot = entry;
     const sessionId = detailSessionId();
     if (!sessionId) return null;
     passwordLoading = true;
     try {
       const value = await vault.callInSession(sessionId, () => vault.getEntryPassword(uuid));
-      if (!detailView.isCurrent(view)) return null;
+      if (!detailView.isCurrent(view) || entry !== snapshot) return null;
       fetchedPassword = value;
       passwordLoaded = true;
       return value;
     } finally {
-      if (detailView.isCurrent(view)) passwordLoading = false;
+      if (detailView.isCurrent(view) && entry === snapshot) passwordLoading = false;
     }
   }
 
@@ -321,6 +338,7 @@
     if (customFieldLoaded[name]) return customFieldValues[name] ?? null;
     if (customFieldLoading[name]) return null;
     const uuid = entry.uuid;
+    const snapshot = entry;
     const sessionId = detailSessionId();
     if (!sessionId) return null;
     customFieldLoading = { ...customFieldLoading, [name]: true };
@@ -328,12 +346,12 @@
       const value = await vault.callInSession(sessionId, () =>
         vault.getCustomFieldValue(uuid, name),
       );
-      if (!detailView.isCurrent(view)) return null;
+      if (!detailView.isCurrent(view) || entry !== snapshot) return null;
       customFieldValues = { ...customFieldValues, [name]: value ?? "" };
       customFieldLoaded = { ...customFieldLoaded, [name]: true };
       return value;
     } finally {
-      if (detailView.isCurrent(view)) {
+      if (detailView.isCurrent(view) && entry === snapshot) {
         customFieldLoading = { ...customFieldLoading, [name]: false };
       }
     }
@@ -1054,6 +1072,11 @@
               <div class="field-block">
                 <span class="field-label">
                   {field.name}
+                  {#if entry.linkedFields?.links.some((link) => link.name === field.name)}
+                    <span class="protected-badge" title={t(lang, "detail.linkedBadge")}>
+                      <AppIcon name="link" size={10} />
+                    </span>
+                  {/if}
                   {#if field.protected}
                     <span class="protected-badge" title={t(lang, "detail.protectedBadge")}>
                       <AppIcon name="lock" size={10} />

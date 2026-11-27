@@ -320,12 +320,16 @@ pub fn prepare_bitwarden_import(
             }
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let rows = parse_bitwarden_rows_with_uris(root, |_, index| {
-        Ok(uri_plans[index]
-            .as_ref()
-            .map(|(primary, _)| primary.clone())
-            .unwrap_or_default())
-    })?;
+    let rows = parse_bitwarden_rows_with_uris(
+        root,
+        |_, index| {
+            Ok(uri_plans[index]
+                .as_ref()
+                .map(|(primary, _)| primary.clone())
+                .unwrap_or_default())
+        },
+        true,
+    )?;
     for (((mut row, item), tags), uri_plan) in
         rows.into_iter().zip(items).zip(memberships).zip(uri_plans)
     {

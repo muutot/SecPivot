@@ -29,6 +29,8 @@ mod import;
 pub use bitwarden_uri::BitwardenUriSettings;
 mod kdf;
 mod kdf_upgrade;
+mod linked_fields;
+pub use linked_fields::{LinkedField, LinkedFieldSet, LinkedFieldTarget};
 pub(crate) mod local_backup;
 pub(crate) use self::kdf_upgrade::stage_weak_kdf;
 pub use self::kdf_upgrade::KdfUpgradeOffer;
@@ -171,10 +173,12 @@ const FIELD_ORIGINAL_GROUP: &str = "SecPivot.OriginalGroup";
 pub(crate) const FIELD_KPRPC_CONFIG: &str = "KPRPC JSON";
 /// Protected, managed per-website policy. Generic field edits cannot replace it.
 pub(crate) const FIELD_WEBSITE_RULES: &str = "SecPivot.WebsiteRules";
+/// Protected same-entry binding metadata; no macro or cross-entry evaluation.
+pub(crate) const FIELD_LINKED_FIELDS: &str = "SecPivot.LinkedFields";
 
 /// Standard columns and managed fields excluded from generic custom-field edits
 /// and snapshots. Native exports must preserve managed fields explicitly.
-pub(crate) const RESERVED_FIELDS: [&str; 9] = [
+pub(crate) const RESERVED_FIELDS: [&str; 10] = [
     FIELD_TITLE,
     FIELD_USERNAME,
     FIELD_PASSWORD,
@@ -184,6 +188,7 @@ pub(crate) const RESERVED_FIELDS: [&str; 9] = [
     FIELD_FAVORITE,
     FIELD_ORIGINAL_GROUP,
     FIELD_WEBSITE_RULES,
+    FIELD_LINKED_FIELDS,
 ];
 
 // Argon2 parameters for newly created vaults (OWASP-recommended).

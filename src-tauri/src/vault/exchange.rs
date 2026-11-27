@@ -860,6 +860,15 @@ fn parse_entry(
         }
         fields.push((field.key.clone(), field.value.value.clone(), protected));
     }
+    if let Some(bindings) = validate_linked_fields(&fields)? {
+        for field in &mut fields {
+            if field.0 == super::FIELD_LINKED_FIELDS
+                || bindings.links.iter().any(|l| l.name == field.0)
+            {
+                field.2 = true;
+            }
+        }
+    }
 
     let custom_data = parse_custom_data(entry.custom_data.as_ref(), remaining_binary_bytes)?;
     let auto_type = parse_auto_type(entry.auto_type.as_ref())?;
@@ -898,6 +907,33 @@ fn parse_entry(
             .map(|expires| expires == "True")
             .unwrap_or(false),
     })
+}
+
+fn validate_linked_fields(
+    fields: &[(String, String, bool)],
+) -> Result<Option<super::LinkedFieldSet>, String> {
+    let Some(raw) = fields
+        .iter()
+        .find(|f| f.0 == super::FIELD_LINKED_FIELDS)
+        .map(|f| f.1.as_str())
+    else {
+        return Ok(None);
+    };
+    if fields
+        .iter()
+        .filter(|f| f.0 == super::FIELD_LINKED_FIELDS)
+        .count()
+        != 1
+    {
+        return Err("链接字段无效；未插入任何条目".into());
+    }
+    let bindings = super::LinkedFieldSet::from_json(raw)?;
+    for link in &bindings.links {
+        if fields.iter().filter(|f| f.0 == link.name).count() != 1 {
+            return Err("链接字段无效；未插入任何条目".into());
+        }
+    }
+    Ok(Some(bindings))
 }
 
 /// Resolve the known metadata option before any target entry is inserted.
@@ -995,17 +1031,25 @@ fn decode_custom_binary(encoded: &str, remaining: &mut usize) -> Result<Vec<u8>,
 /// Insert one parsed entry into `group` under a fresh UUID, restoring fields,
 /// attachments, tags, custom data, auto-type, colours, expiry and the icon.
 pub fn insert_entry(group: &mut GroupMut<'_>, entry: &PastedEntry) -> Result<Uuid, String> {
+    // Parse validates the whole batch; direct native callers must validate too.
+    let bindings = validate_linked_fields(&entry.fields)?;
     let mut node = group.add_entry();
     for (key, value, protected) in &entry.fields {
         node.set(
             key.clone(),
-            if *protected {
+            if *protected
+                || key == super::FIELD_LINKED_FIELDS
+                || bindings
+                    .as_ref()
+                    .is_some_and(|s| s.links.iter().any(|l| l.name == *key))
+            {
                 Value::protected(value.clone())
             } else {
                 Value::unprotected(value.clone())
             },
         );
     }
+    super::linked_fields::refresh(&mut node);
     for (name, data, protected) in &entry.attachments {
         node.add_attachment(
             name.clone(),

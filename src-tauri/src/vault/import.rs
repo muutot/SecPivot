@@ -83,12 +83,13 @@ pub fn parse_bitwarden_json(text: &str) -> Result<Vec<ImportRow>, String> {
 }
 
 fn parse_bitwarden_rows(root: &serde_json::Value) -> Result<Vec<ImportRow>, String> {
-    parse_bitwarden_rows_with_uris(root, default_login_uri)
+    parse_bitwarden_rows_with_uris(root, default_login_uri, false)
 }
 
 fn parse_bitwarden_rows_with_uris(
     root: &serde_json::Value,
     uri: impl Fn(&serde_json::Value, usize) -> Result<String, String>,
+    retain_links: bool,
 ) -> Result<Vec<ImportRow>, String> {
     for name in ["encrypted", "passwordProtected"] {
         match root.get(name) {
@@ -121,6 +122,7 @@ fn parse_bitwarden_rows_with_uris(
     }
 
     let mut rows = Vec::new();
+    let mut retained_link_bytes = 0usize;
     for (index, item) in items.iter().enumerate() {
         let invalid = || format!("第 {} 条不是受支持的有效 Bitwarden 记录", index + 1);
         let kind = item
@@ -169,6 +171,8 @@ fn parse_bitwarden_rows_with_uris(
         }
 
         let mut names = fields::FieldNames::new("Bitwarden");
+        let mut aliases = Vec::new();
+        let mut typed_targets = HashMap::new();
         let mut custom_fields: Vec<ImportCustomField> = optional_array(item.get("fields"))
             .map_err(|()| invalid())?
             .iter()
@@ -193,7 +197,17 @@ fn parse_bitwarden_rows_with_uris(
                 } else {
                     source_value.to_owned()
                 };
-                Ok(names.field(name, value, matches!(field_type, 1 | 3)))
+                let mapped = names.field(name, value, matches!(field_type, 1 | 3));
+                if retain_links && field_type == 3 {
+                    aliases.push((
+                        mapped.name.clone(),
+                        field
+                            .get("linkedId")
+                            .and_then(serde_json::Value::as_i64)
+                            .ok_or_else(invalid)?,
+                    ));
+                }
+                Ok(mapped)
             })
             .collect::<Result<_, _>>()?;
 
@@ -237,11 +251,77 @@ fn parse_bitwarden_rows_with_uris(
                         let label = format!("{display} {}", field_label(key));
                         // Financial/identity/private-key data belongs behind the
                         // same explicit reveal boundary as hidden custom values.
-                        custom_fields.push(names.field(&label, value, true));
+                        let field = names.field(&label, value, true);
+                        typed_targets.insert(key.clone(), field.name.clone());
+                        custom_fields.push(field);
                     }
                 }
                 Some(_) => return Err(invalid()),
             }
+        }
+
+        if !aliases.is_empty() {
+            use super::{LinkedField, LinkedFieldSet, LinkedFieldTarget, FIELD_LINKED_FIELDS};
+            let mut links = Vec::new();
+            for (name, id) in aliases {
+                let (section, key) = bitwarden_links::target(kind, id).map_err(|_| invalid())?;
+                let target = if section == "login" {
+                    LinkedFieldTarget::Field {
+                        name: if key == "username" {
+                            "UserName"
+                        } else {
+                            "Password"
+                        }
+                        .into(),
+                    }
+                } else {
+                    let keys = if key == "fullName" {
+                        vec!["title", "firstName", "middleName", "lastName"]
+                    } else {
+                        vec![key]
+                    };
+                    let display = typed_section(kind).ok_or_else(invalid)?.1;
+                    let mut targets = Vec::new();
+                    for key in keys {
+                        let field_name = match typed_targets.get(key) {
+                            Some(name) => name.clone(),
+                            None => {
+                                // Keep an editable target even when its source attribute is absent/null.
+                                let field = names.field(
+                                    &format!("{display} {}", field_label(key)),
+                                    String::new(),
+                                    true,
+                                );
+                                typed_targets.insert(key.to_owned(), field.name.clone());
+                                let name = field.name.clone();
+                                custom_fields.push(field);
+                                name
+                            }
+                        };
+                        targets.push(field_name);
+                    }
+                    if key == "fullName" {
+                        LinkedFieldTarget::BitwardenFullName {
+                            fields: targets.try_into().map_err(|_| invalid())?,
+                        }
+                    } else {
+                        LinkedFieldTarget::Field {
+                            name: targets.remove(0),
+                        }
+                    }
+                };
+                links.push(LinkedField { name, target });
+            }
+            let mut raw = LinkedFieldSet { version: 1, links }.as_json()?;
+            retained_link_bytes = retained_link_bytes
+                .checked_add(raw.len())
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| "Bitwarden 链接字段超过导入资源上限；未导入任何内容".to_owned())?;
+            custom_fields.push(ImportCustomField {
+                name: FIELD_LINKED_FIELDS.into(),
+                value: std::mem::take(&mut *raw),
+                protected: true,
+            });
         }
 
         rows.push(ImportRow {

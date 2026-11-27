@@ -113,6 +113,7 @@
   const colorDiff = $derived(diff.color);
   const qualityCheckDiff = $derived(diff.qualityCheck);
   const websiteRulesDiff = $derived(diff.websiteRules === true);
+  const linkedFieldsDiff = $derived(diff.linkedFields === true);
   const favoriteDiff = $derived(diff.favorite);
   const passwordDiff = $derived(diff.password);
 
@@ -120,7 +121,13 @@
     titleDiff || usernameDiff || expiresDiff || urlDiff || notesDiff || tagsDiff || passwordDiff,
   );
   const metaGroupDiff = $derived(
-    hasTotpDiff || iconDiff || favoriteDiff || qualityCheckDiff || colorDiff || websiteRulesDiff,
+    hasTotpDiff ||
+      iconDiff ||
+      favoriteDiff ||
+      qualityCheckDiff ||
+      colorDiff ||
+      websiteRulesDiff ||
+      linkedFieldsDiff,
   );
 
   type FieldChange = "unchanged" | "added" | "removed" | "modified";
@@ -272,6 +279,7 @@
       (qualityCheckDiff ? 1 : 0) +
       (favoriteDiff ? 1 : 0) +
       (websiteRulesDiff ? 1 : 0) +
+      (linkedFieldsDiff ? 1 : 0) +
       customFieldChangedCount +
       customDataChangedCount +
       attachmentChangedCount,
@@ -565,6 +573,20 @@
           >
           {#if hasTotpDiff}{@render swapBtn("totp")}{/if}
         </div>
+        {#if linkedFieldsDiff || version.linkedFields?.links.length || entry.linkedFields?.links.length}
+          <div class="read-value website-policy" class:changed={linkedFieldsDiff}>
+            {#if linkedFieldsDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
+            <AppIcon name="link" size={12} />
+            <span class="read-text"
+              >{t(lang, "editor.linkedFields")}: {t(lang, "history.linkedCount", {
+                count:
+                  (showCurrent.linkedFields ? entry.linkedFields : version.linkedFields)?.links
+                    .length ?? 0,
+              })}</span
+            >
+            {#if linkedFieldsDiff}{@render swapBtn("linkedFields")}{/if}
+          </div>
+        {/if}
         <div class="read-value" class:changed={iconDiff}>
           {#if iconDiff}<span class="diff-badge">{t(lang, "history.changed")}</span>{/if}
           <AppIcon name="grid" size={12} />

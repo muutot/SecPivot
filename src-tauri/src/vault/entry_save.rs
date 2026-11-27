@@ -15,6 +15,21 @@ pub enum WebsiteRulesChange {
     Set { rules: WebsiteRuleSet },
 }
 
+#[derive(Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
+pub enum LinkedFieldsChange {
+    Clear {},
+    Set { fields: LinkedFieldSet },
+}
+
+fn deserialize_linked_fields_change<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<LinkedFieldsChange>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    serde_json::from_value(value)
+        .map_err(|_| serde::de::Error::custom("链接字段格式无效；未应用任何链接"))
+}
+
 fn deserialize_website_rules_change<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<WebsiteRulesChange>, D::Error> {
@@ -48,6 +63,8 @@ pub struct EntrySaveRequest {
     /// Missing/null preserves policy; clear and set are explicit draft edits.
     #[serde(default, deserialize_with = "deserialize_website_rules_change")]
     pub website_rules: Option<WebsiteRulesChange>,
+    #[serde(default, deserialize_with = "deserialize_linked_fields_change")]
+    pub linked_fields: Option<LinkedFieldsChange>,
 }
 
 #[derive(Serialize)]
@@ -64,9 +81,13 @@ fn write_editor_fields(
     autotype: &Option<AutoType>,
     foreground: Option<Option<Color>>,
     rules_change: Option<Option<&ValidatedWebsiteRules>>,
+    links_change: Option<Option<&LinkedFieldSet>>,
 ) {
     write_fields(entry, &request.input);
     sync_custom_fields(entry, &request.input.custom_fields);
+    if let Some(links) = links_change {
+        super::linked_fields::set(entry, links);
+    }
     sync_attachments(entry, &request.input.attachments, payloads);
     if let Some(rules) = rules_change {
         match rules {
@@ -118,6 +139,23 @@ impl VaultSession {
             super::website_rules::input_rules(&request.input.custom_fields)?
         } else {
             None // Generic content editing preserves the existing managed policy.
+        };
+        let input_links = if id.is_none() {
+            super::linked_fields::input(&request.input.custom_fields)?
+        } else {
+            None
+        };
+        if input_links.is_some() && request.linked_fields.is_some() {
+            return Err("链接字段来源重复；未应用任何链接".into());
+        }
+        let links_changed = request.linked_fields.is_some() || input_links.is_some();
+        let links = match &request.linked_fields {
+            Some(LinkedFieldsChange::Clear {}) => None,
+            Some(LinkedFieldsChange::Set { fields }) => {
+                fields.validate_input(&request.input.custom_fields)?;
+                Some(fields.clone())
+            }
+            None => input_links,
         };
         if input_rules.is_some() && request.website_rules.is_some() {
             return Err("网址规则来源重复；未应用任何规则".into());
@@ -182,6 +220,7 @@ impl VaultSession {
                     &autotype,
                     foreground,
                     changed.then_some(rules.as_ref()),
+                    links_changed.then_some(links.as_ref()),
                 );
                 tracked.times.last_modification = Some(keepass::db::Times::now());
             }
@@ -199,6 +238,7 @@ impl VaultSession {
                 &autotype,
                 foreground,
                 changed.then_some(rules.as_ref()),
+                links_changed.then_some(links.as_ref()),
             );
             entry.id().to_string()
         };

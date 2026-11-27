@@ -115,6 +115,9 @@ pub struct VaultEntry {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub custom_data: Vec<CustomDataEntry>,
     pub custom_fields: Vec<CustomField>,
+    /// Nonsecret same-entry field names only. Values remain protected/on-demand.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked_fields: Option<super::LinkedFieldSet>,
     pub attachments: Vec<AttachmentInfo>,
     /// Total byte size of the entry per the KeePass official client's
     /// `PwEntry.GetSize()` accounting (fields + attachments + history),
@@ -603,6 +606,8 @@ pub struct TotpCode {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryVersion {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked_fields: Option<super::LinkedFieldSet>,
     /// Position in the history list (0 = most recent snapshot).
     pub index: usize,
     /// Database lifetime/revision/entry/index expectation, unrelated to secrets.
@@ -674,6 +679,7 @@ pub struct HistoryDiff {
     pub quality_check: bool,
     /// Managed rule presence/content/protection changed; values stay native.
     pub website_rules: bool,
+    pub linked_fields: bool,
     pub custom_fields: Vec<HistoryItemChange>,
     pub custom_data: Vec<HistoryItemChange>,
     pub attachments: Vec<HistoryItemChange>,
