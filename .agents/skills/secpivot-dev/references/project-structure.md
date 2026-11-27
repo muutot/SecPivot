@@ -1096,8 +1096,8 @@ platform invokes. This is not Android provider/runtime verification.
 
 Bitwarden JSON import rejects true or invalid encryption markers before item
 mapping; account-encrypted files share the plaintext envelope and require this
-gate. Its command zeroizes incoming text. Dynamic linked-field/multi-URI
-fidelity and actual client exports remain separate pending work.
+gate. Its command zeroizes incoming text. Dynamic linked-field fidelity and actual
+client exports remain pending; native multi-URI profiles are described above.
 The same parser's optional_string/optional_array helpers reject malformed common
 values instead of dropping them. Login/folder/field members and numeric 0–3
 custom types are validated before rows return; missing legacy type stays Text.
@@ -1129,9 +1129,10 @@ Domain accuracy in the shared Bridge/RPC matcher. It borrows the domain slice
 and retains full IP/nonregistrable host identity. No runtime fetch or config/IPC
 schema change is involved. Credential-boundary tests use synthetic reopened KDBX.
 
-`vault/import.rs::default_login_uri` validates Bitwarden URI collections and
-rejects multiple destinations or explicit source match modes until native
-per-URI policy support exists. Errors contain only record numbers and reason;
+The legacy `vault/import.rs::default_login_uri` validates Bitwarden URI collections
+and still rejects multiple destinations or explicit source match modes. The
+native menu instead uses `parse_bitwarden_rows_with_uris` and
+`import/bitwarden_uris.rs` for all six source modes. Errors contain only record numbers and reason;
 the command returns no partial rows. `import/bitwarden_tests.rs` covers the
 negative command boundary plus supported default/no-URI KDBX round trips.
 

@@ -1638,7 +1638,8 @@ history displays the two new modes. RPC lists omit Regex/Never so expressions
 cannot become launch URLs. The read/write command envelope is unchanged.
 Node32-case oracle and native Bridge/RPC, KDBX and complete XML round trips are
 synthetic evidence. Bitwarden's native six-mode/default/equivalent-domain mapping
-remains separate: these two native modes alone do not complete URI migration.
+is implemented separately by the protected v2 source profiles described above;
+ordinary native Prefix/Regex modes do not substitute for those source semantics.
 `VaultSession::get_entry_website_rules(uuid)` returns Option<WebsiteRuleSet>;
 `set_entry_website_rules(uuid, Option<WebsiteRuleSet>)` validates an open/writable
 target, tracks bounded history in a candidate database and publishes one light
@@ -1738,8 +1739,9 @@ validates `encrypted` and `passwordProtected`: true rejects with a plaintext
 export instruction, present non-booleans reject as invalid, and false/absent
 preserve legacy plaintext compatibility. Account-encrypted exports have the
 same items envelope and must never be treated as decrypted credentials. Native
-client exports, dynamic linked-field and multi-URI fidelity still need separate
-verification; this boundary does not implement decryption. Bitwarden custom
+client exports and dynamic linked fields still need separate verification;
+native multi-URI profiles are described above. This boundary does not implement
+decryption. Bitwarden custom
 labels use a source prefix and unique suffixes through `import/fields.rs` so
 reserved/blank/duplicate labels retain their values without becoming native OTP
 or plugin configuration. Missing/null labels use `Field`. 1PIF uses the same
